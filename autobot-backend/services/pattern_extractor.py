@@ -9,15 +9,15 @@ Extracts code patterns from AutoBot codebase for ML training and completion.
 
 import ast
 import json
-import logging
 import re
 from collections import defaultdict
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class PatternExtractor:
@@ -31,14 +31,14 @@ class PatternExtractor:
     - Framework-specific patterns (FastAPI, Vue composables)
     """
 
-    def __init__(self, base_path: str = None):
+    def __init__(self, base_path: str = None) -> None:
         from constants.path_constants import PATH
 
         self.base_path = Path(base_path) if base_path else PATH.PROJECT_ROOT
         self.redis_client = get_redis_client(async_client=False, database="main")
         self.patterns: Dict[str, List[Dict]] = defaultdict(list)
 
-    def extract_from_codebase(self, languages: Optional[List[str]] = None) -> Dict[str, List[Dict]]:
+    def extract_from_codebase(self, languages: List[str] | None = None) -> Dict[str, List[Dict]]:
         """
         Extract patterns from entire codebase.
 

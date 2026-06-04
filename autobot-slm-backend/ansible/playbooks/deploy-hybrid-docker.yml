@@ -5,8 +5,8 @@
 
 - name: Deploy Docker Containers to VMs
   hosts: all
-  become: yes
-  gather_facts: yes
+  become: true
+  gather_facts: true
 
   vars:
     docker_compose_version: "2.29.1"
@@ -26,7 +26,8 @@
               - lsb-release
               - software-properties-common
             state: present
-            update_cache: yes
+            update_cache: true
+            cache_valid_time: 3600
 
         - name: Add Docker GPG key
           apt_key:
@@ -46,19 +47,19 @@
               - containerd.io
               - docker-compose-plugin
             state: present
-            update_cache: yes
+            update_cache: true
 
         - name: Add autobot user to docker group
           user:
             name: autobot
             groups: docker
-            append: yes
+            append: true
 
         - name: Start and enable Docker
           systemd:
             name: docker
             state: started
-            enabled: yes
+            enabled: true
 
         - name: Install Docker Compose
           get_url:
@@ -107,7 +108,7 @@
 # Deploy Redis Stack on VM3 (Database VM)
 - name: Deploy Redis Stack
   hosts: database
-  become: yes
+  become: true
   vars:
     container_name: autobot-redis
 
@@ -160,7 +161,7 @@
     - name: Wait for Redis to be ready
       wait_for:
         port: 6379
-        host: "{{ ansible_facts['default_ipv4'].address }}"
+        host: "{{ ansible_facts['default_ipv4'].address | default(ansible_host) }}"
         delay: 5
         timeout: 60
 
@@ -177,7 +178,7 @@
 # Deploy Frontend on VM1
 - name: Deploy Frontend
   hosts: frontend
-  become: yes
+  become: true
   vars:
     container_name: autobot-frontend
 
@@ -231,8 +232,8 @@
       synchronize:
         src: ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/
         dest: /tmp/autobot/
-        delete: no
-        recursive: yes
+        delete: false
+        recursive: true
       delegate_to: localhost
 
     - name: Build and start Frontend
@@ -240,14 +241,14 @@
         project_src: "{{ autobot_dir }}/compose"
         files:
           - frontend-docker-compose.yml
-        build: yes
+        build: true
         state: present
       become_user: autobot
 
     - name: Wait for Frontend to be ready
       wait_for:
         port: 5173
-        host: "{{ ansible_facts['default_ipv4'].address }}"
+        host: "{{ ansible_facts['default_ipv4'].address | default(ansible_host) }}"
         delay: 10
         timeout: 120
 
@@ -255,7 +256,7 @@
 # Deploy AI Stack and NPU Worker on VM4
 - name: Deploy AI Stack and NPU Worker
   hosts: aiml
-  become: yes
+  become: true
   vars:
     ai_container: autobot-ai-stack
     npu_container: autobot-npu-worker
@@ -353,8 +354,8 @@
       synchronize:
         src: ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/
         dest: /tmp/autobot/
-        delete: no
-        recursive: yes
+        delete: false
+        recursive: true
       delegate_to: localhost
 
     - name: Build and start AI Stack and NPU Worker
@@ -362,7 +363,7 @@
         project_src: "{{ autobot_dir }}/compose"
         files:
           - aiml-docker-compose.yml
-        build: yes
+        build: true
         state: present
       become_user: autobot
 
@@ -384,7 +385,7 @@
     - name: Wait for services to be ready
       wait_for:
         port: "{{ item }}"
-        host: "{{ ansible_facts['default_ipv4'].address }}"
+        host: "{{ ansible_facts['default_ipv4'].address | default(ansible_host) }}"
         delay: 10
         timeout: 120
       loop:
@@ -396,7 +397,7 @@
 # Deploy Browser Service on VM5
 - name: Deploy Browser Service
   hosts: browser
-  become: yes
+  become: true
   vars:
     container_name: autobot-browser
 
@@ -464,7 +465,7 @@
     - name: Wait for Browser service to be ready
       wait_for:
         port: 3000
-        host: "{{ ansible_facts['default_ipv4'].address }}"
+        host: "{{ ansible_facts['default_ipv4'].address | default(ansible_host) }}"
         delay: 10
         timeout: 120
 
@@ -472,7 +473,7 @@
 # Final validation and configuration
 - name: Validate All Services
   hosts: all
-  become: yes
+  become: true
 
   tasks:
     - name: Check Docker container status
@@ -506,7 +507,7 @@
     - name: Create service summary
       set_fact:
         service_summary: |
-          VM: {{ ansible_facts['hostname'] }} ({{ ansible_facts['default_ipv4'].address }})
+          VM: {{ ansible_facts['hostname'] }} ({{ ansible_facts['default_ipv4'].address | default(ansible_host) }})
           Services: {{ docker_status.stdout_lines | length - 1 }} containers running
           Status: Deployment complete
 

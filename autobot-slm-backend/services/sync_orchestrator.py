@@ -12,7 +12,7 @@ import logging
 import os
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Tuple
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -35,9 +35,9 @@ class SyncNodeContext:
         self.node_port: int = 22
         self.source_paths: list = []
         self.target_path: str = ""
-        self.post_sync_cmd: Optional[str] = None
+        self.post_sync_cmd: str | None = None
         self.auto_restart: bool = False
-        self.systemd_service: Optional[str] = None
+        self.systemd_service: str | None = None
 
 
 # Code cache directory
@@ -52,9 +52,7 @@ class SyncOrchestrator:
         self.cache_dir = CODE_CACHE_DIR
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
-    async def _get_node_and_role_info(
-        self, node_id: str, role_name: str
-    ) -> Tuple[bool, str, Optional[SyncNodeContext]]:
+    async def _get_node_and_role_info(self, node_id: str, role_name: str) -> Tuple[bool, str, SyncNodeContext | None]:
         """
         Get node and role information from database.
 
@@ -253,7 +251,7 @@ class SyncOrchestrator:
 
             await db.commit()
 
-    async def _get_source_node_info(self, db) -> Tuple[bool, str, Optional[dict]]:
+    async def _get_source_node_info(self, db) -> Tuple[bool, str, dict | None]:
         """
         Get active code source and node information from database.
 
@@ -320,7 +318,7 @@ class SyncOrchestrator:
             f"{cache_path}/",
         ]
 
-    async def _get_current_git_commit(self, node_ip: str, node_user: str, repo_path: str) -> Optional[str]:
+    async def _get_current_git_commit(self, node_ip: str, node_user: str, repo_path: str) -> str | None:
         """
         Get current git commit from source node via SSH.
 
@@ -406,7 +404,7 @@ class SyncOrchestrator:
         commit: str,
         node_ip: str,
         cache_path: Path,
-    ) -> Tuple[bool, str, Optional[str]]:
+    ) -> Tuple[bool, str, str | None]:
         """Execute rsync to pull code to cache. Helper for pull_from_source. Ref: #1088."""
         try:
             logger.info("Pulling code from %s to cache (commit: %s)", node_ip, commit[:12])
@@ -465,7 +463,7 @@ class SyncOrchestrator:
             logger.error("git pull error in %s: %s", repo_path, e)
             return False, "git pull failed"
 
-    async def _get_local_git_commit(self, repo_path: str) -> Optional[str]:
+    async def _get_local_git_commit(self, repo_path: str) -> str | None:
         """Get git HEAD commit from a local repo without SSH. Helper for #1194."""
         try:
             proc = await asyncio.create_subprocess_exec(
@@ -530,7 +528,7 @@ class SyncOrchestrator:
             node_info["commit"] = current_commit
         return current_commit
 
-    async def pull_from_source(self) -> Tuple[bool, str, Optional[str]]:
+    async def pull_from_source(self) -> Tuple[bool, str, str | None]:
         """Pull code from code-source node to SLM cache. Ref: #1088, #1194.
 
         When code source is local, runs git pull first to update from GitHub.
@@ -611,7 +609,7 @@ class SyncOrchestrator:
 
 
 # Singleton
-_orchestrator: Optional[SyncOrchestrator] = None
+_orchestrator: SyncOrchestrator | None = None
 
 
 def get_sync_orchestrator() -> SyncOrchestrator:

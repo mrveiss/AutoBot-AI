@@ -10,19 +10,19 @@ Contains decorators for function-level error boundaries and API error handling.
 
 import asyncio
 import functools
-import logging
 import time
 from typing import Callable
 
 from fastapi import HTTPException
 
 from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import RetryConfig, exponential_backoff_delay
 
 from .boundary_manager import get_error_boundary_manager
 from .types import APIErrorResponse, ErrorCategory, ErrorContext, RecoveryStrategy
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 async def _handle_async_attempt(

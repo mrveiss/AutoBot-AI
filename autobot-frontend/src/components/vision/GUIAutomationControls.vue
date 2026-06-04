@@ -8,15 +8,24 @@
       </div>
       <div class="header-actions">
         <button @click="$emit('refresh')" class="btn-refresh" :disabled="loading">
-          <i class="fas fa-sync-alt" :class="{ 'fa-spin': loading }"></i>
+          <Icon name="sync-alt" />
           {{ t('vision.guiAutomation.refresh') }}
         </button>
       </div>
     </div>
 
+    <!-- Action Error -->
+    <BaseAlert
+      v-if="actionError"
+      variant="error"
+      :message="actionError"
+      dismissible
+      @dismiss="actionError = null"
+    />
+
     <!-- Loading State -->
     <div v-if="loading" class="loading-state">
-      <i class="fas fa-spinner fa-spin"></i>
+      <Icon name="spinner" class="animate-spin" />
       <span>{{ t('vision.guiAutomation.analyzingScreen') }}</span>
     </div>
 
@@ -31,7 +40,7 @@
         >
           <div class="card-header">
             <div class="element-type-badge" :style="{ backgroundColor: getTypeColor(opportunity.element_type) }">
-              <i :class="getTypeIcon(opportunity.element_type)"></i>
+              <Icon :name="getTypeIcon(opportunity.element_type)" />
             </div>
             <div class="card-info">
               <span class="action-name">{{ opportunity.action }}</span>
@@ -46,11 +55,11 @@
           </div>
           <div class="card-actions">
             <button @click.stop="executeAction(opportunity)" class="btn-execute" :disabled="executing">
-              <i :class="executing ? 'fas fa-spinner fa-spin' : 'fas fa-play'"></i>
+              <i :class="executing ? 'fas fa-spinner fa-spin' : 'play'"></i>
               {{ executing ? t('vision.guiAutomation.verifying') : t('vision.guiAutomation.execute') }}
             </button>
             <button @click.stop="viewDetails(opportunity)" class="btn-details">
-              <i class="fas fa-info-circle"></i>
+              <Icon name="info-circle" />
               {{ t('vision.guiAutomation.details') }}
             </button>
           </div>
@@ -61,7 +70,7 @@
     <!-- Empty State -->
     <div v-else class="empty-state">
       <div class="empty-icon">
-        <i class="fas fa-robot"></i>
+        <Icon name="robot" />
       </div>
       <h4>{{ t('vision.guiAutomation.noOpportunities') }}</h4>
       <p>{{ t('vision.guiAutomation.noOpportunitiesHint') }}</p>
@@ -70,8 +79,8 @@
     <!-- Element Types Reference -->
     <div class="reference-section">
       <div class="reference-header" @click="showElementTypes = !showElementTypes">
-        <h4><i class="fas fa-cube"></i> {{ t('vision.guiAutomation.elementTypesRef') }}</h4>
-        <i :class="showElementTypes ? 'fas fa-chevron-up' : 'fas fa-chevron-down'"></i>
+        <h4><Icon name="cube" /> {{ t('vision.guiAutomation.elementTypesRef') }}</h4>
+        <Icon :name="showElementTypes ? 'chevron-up' : 'chevron-down'" />
       </div>
       <div v-if="showElementTypes" class="reference-content">
         <div class="types-grid">
@@ -81,7 +90,7 @@
             class="type-item"
           >
             <div class="type-icon" :style="{ backgroundColor: getTypeColor(type.value) }">
-              <i :class="getTypeIcon(type.value)"></i>
+              <Icon :name="getTypeIcon(type.value)" />
             </div>
             <div class="type-info">
               <span class="type-name">{{ type.name }}</span>
@@ -95,8 +104,8 @@
     <!-- Interaction Types Reference -->
     <div class="reference-section">
       <div class="reference-header" @click="showInteractionTypes = !showInteractionTypes">
-        <h4><i class="fas fa-mouse-pointer"></i> {{ t('vision.guiAutomation.interactionTypesRef') }}</h4>
-        <i :class="showInteractionTypes ? 'fas fa-chevron-up' : 'fas fa-chevron-down'"></i>
+        <h4><Icon name="mouse-pointer" /> {{ t('vision.guiAutomation.interactionTypesRef') }}</h4>
+        <Icon :name="showInteractionTypes ? 'chevron-up' : 'chevron-down'" />
       </div>
       <div v-if="showInteractionTypes" class="reference-content">
         <div class="interactions-grid">
@@ -105,7 +114,7 @@
             :key="interaction.value"
             class="interaction-item"
           >
-            <i :class="getInteractionIcon(interaction.value)"></i>
+            <Icon :name="getInteractionIcon(interaction.value)" />
             <span class="interaction-name">{{ interaction.name }}</span>
           </div>
         </div>
@@ -118,7 +127,7 @@
         <div class="modal-header">
           <h4>{{ t('vision.guiAutomation.automationDetails') }}</h4>
           <button @click="selectedOpportunity = null" class="btn-close">
-            <i class="fas fa-times"></i>
+            <Icon name="times" />
           </button>
         </div>
         <div class="modal-content">
@@ -145,7 +154,7 @@
         </div>
         <div class="modal-actions">
           <button @click="executeAction(selectedOpportunity)" class="btn-primary" :disabled="executing">
-            <i :class="executing ? 'fas fa-spinner fa-spin' : 'fas fa-play'"></i>
+            <i :class="executing ? 'fas fa-spinner fa-spin' : 'play'"></i>
             {{ executing ? t('vision.guiAutomation.verifying') : t('vision.guiAutomation.executeAction') }}
           </button>
           <button @click="selectedOpportunity = null" class="btn-secondary">
@@ -158,10 +167,12 @@
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue';
+import BaseAlert from '@/components/ui/BaseAlert.vue';
 import { ref, onMounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { createLogger } from '@/utils/debugUtils';
-import { useToast } from '@/composables/useToast';
+import { useNotificationBus } from '@/composables/useNotificationBus';
 import {
   visionMultimodalApiClient,
   type AutomationOpportunity,
@@ -171,7 +182,7 @@ import {
 
 const { t } = useI18n();
 const logger = createLogger('GUIAutomationControls');
-const { showToast } = useToast();
+const { showToast } = useNotificationBus();
 
 // Props
 const props = defineProps<{
@@ -186,6 +197,7 @@ const emit = defineEmits<{
 
 // State
 const selectedOpportunity = ref<AutomationOpportunity | null>(null);
+const actionError = ref<string | null>(null);
 const showElementTypes = ref(false);
 const showInteractionTypes = ref(false);
 const elementTypesList = ref<ElementTypeInfo[]>([]);
@@ -223,13 +235,14 @@ const executing = ref(false);
 const executeAction = async (opportunity: AutomationOpportunity) => {
   if (executing.value) return;
   executing.value = true;
+  actionError.value = null;
   try {
     const res = await visionMultimodalApiClient.detectElements({
       element_type: opportunity.element_type,
       min_confidence: opportunity.confidence * 0.8,
     });
     if (!res.success || !res.data) {
-      showToast(t('vision.guiAutomation.toastVerifyFailed', { error: res.error || 'Unknown error' }), 'error');
+      actionError.value = t('vision.guiAutomation.toastVerifyFailed', { error: res.error || 'Unknown error' });
       return;
     }
     const found = res.data.elements?.some(
@@ -249,7 +262,7 @@ const executeAction = async (opportunity: AutomationOpportunity) => {
     emit('refresh');
   } catch (err) {
     logger.error('Execute action failed:', err);
-    showToast(t('vision.guiAutomation.toastExecutionFailed'), 'error');
+    actionError.value = t('vision.guiAutomation.toastExecutionFailed');
   } finally {
     executing.value = false;
   }
@@ -273,32 +286,32 @@ const getTypeColor = (elementType: string): string => {
 
 const getTypeIcon = (elementType: string): string => {
   const icons: Record<string, string> = {
-    button: 'fas fa-square',
-    input: 'fas fa-i-cursor',
-    text: 'fas fa-font',
-    image: 'fas fa-image',
-    link: 'fas fa-link',
-    checkbox: 'fas fa-check-square',
-    dropdown: 'fas fa-caret-down',
-    menu: 'fas fa-bars',
-    icon: 'fas fa-icons',
-    window: 'fas fa-window-maximize',
+    button: 'square',
+    input: 'i-cursor',
+    text: 'font',
+    image: 'image',
+    link: 'link',
+    checkbox: 'check-square',
+    dropdown: 'caret-down',
+    menu: 'bars',
+    icon: 'icons',
+    window: 'window-maximize',
   };
-  return icons[elementType.toLowerCase()] || 'fas fa-cube';
+  return icons[elementType.toLowerCase()] || 'cube';
 };
 
 const getInteractionIcon = (interactionType: string): string => {
   const icons: Record<string, string> = {
-    click: 'fas fa-mouse-pointer',
-    double_click: 'fas fa-hand-pointer',
-    right_click: 'fas fa-hand-point-right',
-    type: 'fas fa-keyboard',
-    scroll: 'fas fa-arrows-alt-v',
-    hover: 'fas fa-hand-paper',
-    drag: 'fas fa-arrows-alt',
-    select: 'fas fa-check',
+    click: 'mouse-pointer',
+    double_click: 'hand-pointer',
+    right_click: 'hand-point-right',
+    type: 'keyboard',
+    scroll: 'arrows-alt-v',
+    hover: 'hand-paper',
+    drag: 'arrows-alt',
+    select: 'check',
   };
-  return icons[interactionType.toLowerCase()] || 'fas fa-hand-point-up';
+  return icons[interactionType.toLowerCase()] || 'hand-point-up';
 };
 
 const getConfidenceClass = (confidence: number): string => {

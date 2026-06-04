@@ -9,19 +9,19 @@ and automated testing environments, preventing test timeouts and CI/CD failures.
 """
 
 import asyncio
-import logging
-import os
 import queue
 import sys
 import threading
 from contextlib import contextmanager
-from typing import Dict, List, Optional
+from typing import Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
+from autobot_shared.ssot_config import config
 from constants.network_constants import NetworkConstants
 from utils.service_registry import get_service_url
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level frozensets for prompt pattern matching
 _YES_NO_KEYWORDS = frozenset({"yes", "no", "y/n"})
@@ -69,11 +69,11 @@ class TerminalInputHandler:
         testing_indicators = [
             "pytest" in sys.modules,
             "unittest" in sys.modules,
-            os.getenv("PYTEST_CURRENT_TEST") is not None,
-            os.getenv("CI") is not None,
-            os.getenv("GITHUB_ACTIONS") is not None,
-            os.getenv("JENKINS_URL") is not None,
-            os.getenv("TRAVIS") is not None,
+            bool(config.misc.pytest_current_test),
+            bool(config.misc.ci),
+            bool(config.misc.github_actions),
+            bool(config.misc.jenkins_url),
+            bool(config.misc.travis),
             "--test" in sys.argv,
             "--automated" in sys.argv,
             not sys.stdin.isatty(),  # Not attached to a terminal
@@ -118,7 +118,7 @@ class TerminalInputHandler:
         """
         # Use environment default for timeout if not specified
         if timeout is None:
-            timeout = float(os.getenv("AUTOBOT_INPUT_TIMEOUT", "30.0"))
+            timeout = float(config.misc.input_timeout or 30.0)
 
         # In testing mode, return mock or default responses
         if self.is_testing:
@@ -158,23 +158,23 @@ class TerminalInputHandler:
     def _get_prompt_pattern_defaults(self) -> list:
         """Get prompt pattern to default value mappings (Issue #315)."""
         return [
-            # (keywords_to_match, env_var, config_key, fallback)
+            # (keywords_to_match, config_value_or_None, config_key, fallback)
             (("yes", "no", "y/n"), None, None, "y"),
-            (("command",), "AUTOBOT_DEFAULT_COMMAND", "default_command", "help"),
+            (("command",), config.misc.default_command, "default_command", "help"),
             (
                 ("file", "path"),
-                "AUTOBOT_TEST_FILE_PATH",
+                config.misc.test_file_path,
                 "test_file_path",
                 "/tmp/test_file",  # nosec B108
             ),
-            (("name",), "AUTOBOT_TEST_USER_NAME", "test_user_name", "test_user"),
+            (("name",), config.misc.test_user_name, "test_user_name", "test_user"),
             (
                 ("port",),
-                "AUTOBOT_DEFAULT_PORT",
+                config.misc.default_port,
                 "default_port",
                 str(NetworkConstants.AI_STACK_PORT),
             ),
-            (("host",), "AUTOBOT_DEFAULT_HOST", "default_host", "localhost"),
+            (("host",), config.misc.default_host, "default_host", "localhost"),
         ]
 
     def _generate_intelligent_default(self, prompt: str) -> str:
@@ -188,28 +188,21 @@ class TerminalInputHandler:
         # Check choice pattern with digits
         if "choice" in prompt_lower and any(char.isdigit() for char in prompt):
             numbers = [char for char in prompt if char.isdigit()]
-            return (
-                numbers[0]
-                if numbers
-                else os.getenv("AUTOBOT_DEFAULT_CHOICE", _get_config_default("default_choice", "1"))
-            )
+            return numbers[0] if numbers else config.misc.default_choice or _get_config_default("default_choice", "1")
 
         # Check command pattern (requires both keywords)
         if "enter" in prompt_lower and "command" in prompt_lower:
-            return os.getenv(
-                "AUTOBOT_DEFAULT_COMMAND",
-                _get_config_default("default_command", "help"),
-            )
+            return config.misc.default_command or _get_config_default("default_command", "help")
 
         # Check other patterns via lookup table (Issue #315)
         for (
             keywords,
-            env_var,
+            config_value,
             config_key,
             fallback,
         ) in self._get_prompt_pattern_defaults():
-            if env_var and any(kw in prompt_lower for kw in keywords):
-                return os.getenv(env_var, _get_config_default(config_key, fallback))
+            if config_value is not None and any(kw in prompt_lower for kw in keywords):
+                return config_value or _get_config_default(config_key, fallback)
 
         return ""  # Empty string for unknown prompts
 
@@ -265,12 +258,7 @@ class TerminalInputHandler:
         """
         # Use environment default for timeout if not specified
         if timeout is None:
-            timeout = float(
-                os.getenv(
-                    "AUTOBOT_INPUT_TIMEOUT",
-                    _get_config_default("default_timeout", "30.0"),
-                )
-            )
+            timeout = float(config.misc.input_timeout or 30.0)
 
         if self.is_testing:
             return self._get_testing_response(prompt, default)
@@ -304,8 +292,8 @@ class TerminalInputHandler:
 
     def configure_for_testing(
         self,
-        responses: Optional[List[str]] = None,
-        defaults: Optional[Dict[str, str]] = None,
+        responses: List[str] | None = None,
+        defaults: Dict[str, str] | None = None,
     ):
         """
         Configure handler for testing environment.
@@ -344,7 +332,7 @@ def safe_input(prompt: str = "", timeout: float = None, default: str = "") -> st
     """
     # Use environment default for timeout if not specified
     if timeout is None:
-        timeout = float(os.getenv("AUTOBOT_INPUT_TIMEOUT", "30.0"))
+        timeout = float(config.misc.input_timeout or 30.0)
 
     handler = get_terminal_input_handler()
     try:
@@ -368,7 +356,7 @@ async def safe_input_async(prompt: str = "", timeout: float = None, default: str
     """
     # Use environment default for timeout if not specified
     if timeout is None:
-        timeout = float(os.getenv("AUTOBOT_INPUT_TIMEOUT", _get_config_default("default_timeout", "30.0")))
+        timeout = float(config.misc.input_timeout or 30.0)
 
     handler = get_terminal_input_handler()
     return await handler.get_input_async(prompt, timeout, default)
@@ -398,32 +386,20 @@ def configure_testing_defaults():
 
     # Common testing defaults - use configuration-driven fallbacks
     testing_defaults = {
-        "yes/no": os.getenv("AUTOBOT_DEFAULT_YES_NO", _get_config_default("default_yes_no", "y")),
-        "y/n": os.getenv("AUTOBOT_DEFAULT_YES_NO", _get_config_default("default_yes_no", "y")),
-        "continue": os.getenv("AUTOBOT_DEFAULT_CONTINUE", _get_config_default("default_continue", "y")),
-        "choice": os.getenv("AUTOBOT_DEFAULT_CHOICE", _get_config_default("default_choice", "1")),
-        "select": os.getenv("AUTOBOT_DEFAULT_CHOICE", _get_config_default("default_choice", "1")),
-        "enter your choice": os.getenv("AUTOBOT_DEFAULT_CHOICE", _get_config_default("default_choice", "1")),
-        "command": os.getenv("AUTOBOT_DEFAULT_COMMAND", _get_config_default("default_command", "help")),
-        "filename": os.getenv(
-            "AUTOBOT_TEST_FILENAME",
-            _get_config_default("test_filename", "test_file.txt"),
-        ),
-        "path": os.getenv(
-            "AUTOBOT_TEST_PATH",
-            _get_config_default("test_path", "/tmp/test"),  # nosec B108
-        ),
-        "name": os.getenv("AUTOBOT_TEST_USER_NAME", _get_config_default("test_user_name", "test_user")),
-        "port": os.getenv(
-            "AUTOBOT_AI_STACK_PORT",
-            _get_config_default("default_port", str(NetworkConstants.AI_STACK_PORT)),
-        ),
-        "host": os.getenv(
-            "AUTOBOT_AI_STACK_HOST",
-            _get_config_default("default_host", NetworkConstants.AI_STACK_VM_IP),
-        ),
+        "yes/no": config.misc.default_yes_no or _get_config_default("default_yes_no", "y"),
+        "y/n": config.misc.default_yes_no or _get_config_default("default_yes_no", "y"),
+        "continue": config.misc.default_continue or _get_config_default("default_continue", "y"),
+        "choice": config.misc.default_choice or _get_config_default("default_choice", "1"),
+        "select": config.misc.default_choice or _get_config_default("default_choice", "1"),
+        "enter your choice": config.misc.default_choice or _get_config_default("default_choice", "1"),
+        "command": config.misc.default_command or _get_config_default("default_command", "help"),
+        "filename": config.misc.test_filename or _get_config_default("test_filename", "test_file.txt"),
+        "path": config.misc.test_path or _get_config_default("test_path", "/tmp/test"),  # nosec B108
+        "name": config.misc.test_user_name or _get_config_default("test_user_name", "test_user"),
+        "port": str(config.port.aistack) or _get_config_default("default_port", str(NetworkConstants.AI_STACK_PORT)),
+        "host": config.vm.aistack or _get_config_default("default_host", NetworkConstants.AI_STACK_VM_IP),
         "url": get_service_url("ai-stack"),
-        "email": os.getenv("AUTOBOT_TEST_EMAIL", _get_config_default("test_email", "test@example.com")),
+        "email": config.misc.test_email or _get_config_default("test_email", "test@example.com"),
     }
 
     handler.default_responses.update(testing_defaults)
@@ -443,7 +419,7 @@ def patch_builtin_input():
 
     def patched_input(prompt=""):
         """Replacement input function with timeout support."""
-        timeout = float(os.getenv("AUTOBOT_INPUT_TIMEOUT", _get_config_default("default_timeout", "30.0")))
+        timeout = float(config.misc.input_timeout or 30.0)
         return safe_input(prompt, timeout=timeout, default="")
 
     builtins.input = patched_input

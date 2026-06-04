@@ -17,10 +17,11 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
+from autobot_shared.ssot_config import config
 from constants.network_constants import NetworkConstants
 from constants.path_constants import PATH
 from utils.service_registry import get_service_url
@@ -78,7 +79,7 @@ class PhaseCapability:
     validation_target: str  # path, URL, function name, etc.
     required: bool = True
     implemented: bool = False
-    last_validated: Optional[datetime] = None
+    last_validated: datetime | None = None
     validation_details: str = ""
 
 
@@ -91,7 +92,7 @@ class DevelopmentPhaseInfo:
     description: str
     capabilities: List[PhaseCapability] = field(default_factory=list)
     completion_percentage: float = 0.0
-    last_validated: Optional[datetime] = None
+    last_validated: datetime | None = None
     validation_results: List[ValidationResult] = field(default_factory=list)
     prerequisites: List[DevelopmentPhase] = field(default_factory=list)
     is_active: bool = False
@@ -104,7 +105,7 @@ class ProjectStateManager:
     def __init__(self, db_path: str = None):
         """Initialize project state manager with database and phase definitions."""
         if db_path is None:
-            db_path = os.getenv("AUTOBOT_PROJECT_STATE_DB_PATH", "data/project_state.db")
+            db_path = config.project_state_db_path
         self.db_path = db_path
         # Use centralized PathConstants (Issue #380)
         self.project_root = PATH.PROJECT_ROOT
@@ -736,7 +737,7 @@ class ProjectStateManager:
 
         return completion_rate >= 0.9  # 90% threshold
 
-    def suggest_next_phase(self) -> Optional[DevelopmentPhase]:
+    def suggest_next_phase(self) -> DevelopmentPhase | None:
         """Suggest the next phase to work on"""
         # Find completed phases
         completed_phases = {p for p, info in self.phases.items() if info.is_completed}
@@ -798,7 +799,7 @@ class ProjectStateManager:
             "next_suggested": suggested_next.value if suggested_next else None,
         }
 
-    def _check_status_cache(self) -> Optional[Dict[str, Any]]:
+    def _check_status_cache(self) -> Dict[str, Any] | None:
         """Check if cached status data is available and valid."""
         current_time = time.time()
         if (
@@ -808,7 +809,7 @@ class ProjectStateManager:
             return _project_status_cache["data"]
         return None
 
-    def _get_last_validation_time(self) -> Optional[datetime]:
+    def _get_last_validation_time(self) -> datetime | None:
         """Get the most recent validation timestamp across all phases."""
         validated_times = [info.last_validated for info in self.phases.values() if info.last_validated]
         return max(validated_times, default=None) if validated_times else None

@@ -8,17 +8,17 @@ Uses heartbeat and event-driven patterns instead of arbitrary timeouts
 
 import asyncio
 import json
-import logging
 import time
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Callable, Dict, FrozenSet, Optional, Set
+from typing import Any, Callable, Dict, FrozenSet, Set
 
 from fastapi import WebSocket, WebSocketDisconnect
 
+from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import TimingConstants
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ConnectionState(Enum):
@@ -54,7 +54,7 @@ class WebSocketManager:
     Replaces timeout-based message handling with event-driven patterns.
     """
 
-    def __init__(self, config: Optional[HeartbeatConfig] = None):
+    def __init__(self, config: HeartbeatConfig | None = None):
         """Initialize WebSocket manager with heartbeat configuration."""
         self.config = config or HeartbeatConfig()
         self.active_connections: Dict[str, WebSocket] = {}
@@ -62,7 +62,7 @@ class WebSocketManager:
         self.last_heartbeat_sent: Dict[str, float] = {}
         self.last_heartbeat_received: Dict[str, float] = {}
         self.missed_heartbeats: Dict[str, int] = {}
-        self.heartbeat_task: Optional[asyncio.Task] = None
+        self.heartbeat_task: asyncio.Task | None = None
         self.message_handlers: Dict[str, Callable] = {}
         self._shutdown = False
 
@@ -328,7 +328,7 @@ class WebSocketManager:
         self.message_handlers[message_type] = handler
         logger.info("📝 Registered handler for message type: %s", message_type)
 
-    async def broadcast_message(self, message: Dict[str, Any], exclude: Optional[Set[str]] = None):
+    async def broadcast_message(self, message: Dict[str, Any], exclude: Set[str] | None = None):
         """Broadcast message to all active connections (thread-safe)"""
         exclude = exclude or set()
         message["timestamp"] = time.time()

@@ -6,18 +6,17 @@ Cache management endpoints
 """
 
 import asyncio
-import logging
-from typing import Optional
 
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 
 from ..storage import get_redis_connection
 from .shared import _in_memory_storage
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter()
 
@@ -29,7 +28,7 @@ router = APIRouter()
     error_code_prefix="CODEBASE",
 )
 async def clear_codebase_cache(
-    source_id: Optional[str] = Query(None, description="#1772: clear only this source's cache"),
+    source_id: str | None = Query(None, description="#1772: clear only this source's cache"),
 ):
     """Clear codebase analysis cache from storage.
 

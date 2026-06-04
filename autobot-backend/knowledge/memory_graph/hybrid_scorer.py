@@ -20,14 +20,14 @@ keyword score contributes.
 """
 
 import json
-import logging
 import math
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # Scoring weights
@@ -97,7 +97,7 @@ class HybridScorer(AsyncRedisClientMixin):
         query: str,
         intent: Any,  # QueryIntent — avoid circular import; duck-typed
         candidates: List[Dict[str, Any]],
-        query_embedding: Optional[List[float]],
+        query_embedding: List[float] | None,
         limit: int = 10,
     ) -> List["SearchResult"]:
         """
@@ -218,7 +218,7 @@ class HybridScorer(AsyncRedisClientMixin):
 # ---------------------------------------------------------------------------
 
 
-def cosine_similarity(vec_a: Optional[List[float]], vec_b: Optional[List[float]]) -> float:
+def cosine_similarity(vec_a: List[float] | None, vec_b: List[float] | None) -> float:
     """
     Compute cosine similarity between two float vectors.
 
@@ -296,7 +296,7 @@ def _build_explanation(
 async def _fetch_entity_embedding(
     entity_id: str,
     redis_client: Any,
-) -> Optional[List[float]]:
+) -> List[float] | None:
     """
     Retrieve a pre-computed entity embedding from Redis.
 

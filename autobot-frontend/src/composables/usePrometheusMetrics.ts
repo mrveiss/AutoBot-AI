@@ -13,7 +13,7 @@
 
 import { ref, computed, onMounted, getCurrentInstance } from 'vue'
 import type { Ref, ComputedRef } from 'vue'
-import { useApi } from './useApi'
+import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
 import { useWebSocket } from '@/composables/useWebSocket'
@@ -239,7 +239,7 @@ export function usePrometheusMetrics(
   } = options
 
   // Get API client
-  const api = useApi()
+  const api = useApiClient()
 
   // State
   const dashboard = ref<DashboardOverview | null>(null)
@@ -526,7 +526,7 @@ export function usePrometheusMetrics(
  * Lighter weight for components that just need basic metrics
  */
 export function useSystemMetrics(pollInterval = 10000) {
-  const api = useApi()
+  const api = useApiClient()
 
   const metrics = ref<SystemMetrics | null>(null)
   const { isLoading, wrap } = useLoadingState()
@@ -570,7 +570,7 @@ export function useSystemMetrics(pollInterval = 10000) {
  * Optimized for the service status panel
  */
 export function useServiceHealth(pollInterval = 15000) {
-  const api = useApi()
+  const api = useApiClient()
 
   const services = ref<ServiceHealth[]>([])
   const summary = ref<Pick<ServicesSummary, 'total_services' | 'healthy_services' | 'degraded_services' | 'critical_services' | 'overall_status' | 'health_percentage'> | null>(null)
@@ -636,7 +636,7 @@ export function useServiceHealth(pollInterval = 15000) {
  * internal monitor. AlertManager alerts include richer metadata.
  */
 export function useAlerts(pollInterval = 30000) {
-  const api = useApi()
+  const api = useApiClient()
 
   const alerts = ref<PerformanceAlert[]>([])
   const criticalCount = ref(0)

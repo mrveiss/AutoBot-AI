@@ -15,15 +15,16 @@ Parent Epic: #217 - Advanced Code Intelligence
 """
 
 import ast
-import logging
 import os
 import re
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Set
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 
 # Issue #380: Pre-compiled regex patterns for non-descriptive test name detection
 _BAD_TEST_NAME_PATTERNS = [
@@ -311,9 +312,9 @@ class TestPatternAnalyzer:
 
     def __init__(
         self,
-        exclude_dirs: Optional[List[str]] = None,
-        exclude_patterns: Optional[List[str]] = None,
-        test_file_patterns: Optional[List[str]] = None,
+        exclude_dirs: List[str] | None = None,
+        exclude_patterns: List[str] | None = None,
+        test_file_patterns: List[str] | None = None,
     ):
         """
         Initialize the TestPatternAnalyzer.
@@ -441,7 +442,7 @@ class TestPatternAnalyzer:
     # Anti-Pattern Detection Methods
     # =========================================================================
 
-    def _detect_empty_test(self, func: ast.FunctionDef, file_path: str) -> Optional[TestAntiPatternResult]:
+    def _detect_empty_test(self, func: ast.FunctionDef, file_path: str) -> TestAntiPatternResult | None:
         """Detect tests with no assertions or only pass statements."""
         assertions = self._count_assertions(func)
         body_is_pass = len(func.body) == 1 and isinstance(func.body[0], ast.Pass)
@@ -462,7 +463,7 @@ class TestPatternAnalyzer:
             )
         return None
 
-    def _detect_no_assertion(self, func: ast.FunctionDef, file_path: str) -> Optional[TestAntiPatternResult]:
+    def _detect_no_assertion(self, func: ast.FunctionDef, file_path: str) -> TestAntiPatternResult | None:
         """Detect tests without any assertions."""
         assertions = self._count_assertions(func)
 
@@ -488,7 +489,7 @@ class TestPatternAnalyzer:
                 )
         return None
 
-    def _detect_overly_complex_test(self, func: ast.FunctionDef, file_path: str) -> Optional[TestAntiPatternResult]:
+    def _detect_overly_complex_test(self, func: ast.FunctionDef, file_path: str) -> TestAntiPatternResult | None:
         """Detect tests that are too complex."""
         lines = self._get_function_lines(func)
         branches = self._count_branches(func)
@@ -506,7 +507,7 @@ class TestPatternAnalyzer:
             )
         return None
 
-    def _detect_multiple_assertions(self, func: ast.FunctionDef, file_path: str) -> Optional[TestAntiPatternResult]:
+    def _detect_multiple_assertions(self, func: ast.FunctionDef, file_path: str) -> TestAntiPatternResult | None:
         """Detect tests with too many assertions (may test multiple things)."""
         assertions = self._count_assertions(func)
 
@@ -528,7 +529,7 @@ class TestPatternAnalyzer:
 
     def _detect_flaky_patterns(
         self, func: ast.FunctionDef, file_path: str, content: str
-    ) -> Optional[TestAntiPatternResult]:
+    ) -> TestAntiPatternResult | None:
         """Detect patterns that may cause flaky tests."""
         # Get the source lines for this function
         if hasattr(func, "end_lineno") and func.end_lineno:
@@ -552,7 +553,7 @@ class TestPatternAnalyzer:
             )
         return None
 
-    def _detect_sleep_calls(self, func: ast.FunctionDef, file_path: str) -> Optional[TestAntiPatternResult]:
+    def _detect_sleep_calls(self, func: ast.FunctionDef, file_path: str) -> TestAntiPatternResult | None:
         """Detect explicit sleep calls in tests."""
         for node in ast.walk(func):
             if isinstance(node, ast.Call):
@@ -572,7 +573,7 @@ class TestPatternAnalyzer:
 
     def _detect_external_dependencies(
         self, func: ast.FunctionDef, file_path: str, content: str
-    ) -> Optional[TestAntiPatternResult]:
+    ) -> TestAntiPatternResult | None:
         """Detect external network dependencies in tests."""
         if hasattr(func, "end_lineno") and func.end_lineno:
             lines = content.split("\n")[func.lineno - 1 : func.end_lineno]
@@ -595,7 +596,7 @@ class TestPatternAnalyzer:
 
     def _detect_database_dependencies(
         self, func: ast.FunctionDef, file_path: str, content: str
-    ) -> Optional[TestAntiPatternResult]:
+    ) -> TestAntiPatternResult | None:
         """Detect database dependencies in tests."""
         if hasattr(func, "end_lineno") and func.end_lineno:
             lines = content.split("\n")[func.lineno - 1 : func.end_lineno]
@@ -616,7 +617,7 @@ class TestPatternAnalyzer:
             )
         return None
 
-    def _detect_missing_docstring(self, func: ast.FunctionDef, file_path: str) -> Optional[TestAntiPatternResult]:
+    def _detect_missing_docstring(self, func: ast.FunctionDef, file_path: str) -> TestAntiPatternResult | None:
         """Detect tests without docstrings."""
         docstring = ast.get_docstring(func)
 
@@ -633,7 +634,7 @@ class TestPatternAnalyzer:
             )
         return None
 
-    def _detect_test_naming_issues(self, func: ast.FunctionDef, file_path: str) -> Optional[TestAntiPatternResult]:
+    def _detect_test_naming_issues(self, func: ast.FunctionDef, file_path: str) -> TestAntiPatternResult | None:
         """Detect poor test naming conventions."""
         name = func.name
 

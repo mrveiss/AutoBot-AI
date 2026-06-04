@@ -9,14 +9,14 @@ Uses the analytics Redis database (DB 11) with keys:
   code_sources:index     — Set of all source IDs
 """
 
-import logging
-from typing import List, Optional
+from typing import List
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 
 from .source_models import CodeSource, SourceAccess
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _SOURCES_KEY_PREFIX = "code_source:"
 _SOURCES_INDEX_KEY = "code_sources:index"
@@ -42,7 +42,7 @@ async def save_source(source: CodeSource) -> bool:
 update_source = save_source
 
 
-async def get_source(source_id: str) -> Optional[CodeSource]:
+async def get_source(source_id: str) -> CodeSource | None:
     """Retrieve a CodeSource by ID. Returns None if not found."""
     redis = await get_async_redis_client(database="analytics")
     if redis is None:
@@ -54,7 +54,7 @@ async def get_source(source_id: str) -> Optional[CodeSource]:
     return CodeSource.model_validate_json(data.decode("utf-8") if isinstance(data, bytes) else data)
 
 
-def _is_visible(source: CodeSource, owner_id: Optional[str]) -> bool:
+def _is_visible(source: CodeSource, owner_id: str | None) -> bool:
     """Return True if the source should appear in the list for owner_id."""
     if owner_id is None:
         return True
@@ -67,7 +67,7 @@ def _is_visible(source: CodeSource, owner_id: Optional[str]) -> bool:
     return False
 
 
-async def list_sources(owner_id: Optional[str] = None) -> List[CodeSource]:
+async def list_sources(owner_id: str | None = None) -> List[CodeSource]:
     """Return all accessible code sources, optionally scoped to owner_id."""
     redis = await get_async_redis_client(database="analytics")
     if redis is None:
@@ -82,7 +82,7 @@ async def list_sources(owner_id: Optional[str] = None) -> List[CodeSource]:
     return sources
 
 
-async def get_default_source_id() -> Optional[str]:
+async def get_default_source_id() -> str | None:
     """Return the ID of the most recently indexed source, or None (#2653)."""
     sources = await list_sources()
     if not sources:

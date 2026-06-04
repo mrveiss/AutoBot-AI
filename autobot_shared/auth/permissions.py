@@ -2,12 +2,23 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
-Canonical Permission and Role enums shared across all AutoBot services (GH #6511).
+Canonical Permission/Role definitions for AutoBot (#6511).
 
-Both autobot-backend and autobot-slm-backend must import from this module so
-that a permission added here is automatically enforced by every service.
+Single source of truth for all permission names and role-to-permission mappings
+shared by autobot-backend and autobot-slm-backend.  Before this module existed,
+``Permission`` and ``Role`` lived only in ``autobot-backend/auth_rbac.py``; the
+SLM backend used bare permission strings from the database that were never
+cross-checked against the main backend's enum values, creating security drift.
 
-Naming convention: CATEGORY_RESOURCE_ACTION  →  "category.resource.action"
+Adding a new permission
+-----------------------
+1. Add a member to ``Permission`` here.
+2. Grant it to the appropriate roles in ``ROLE_PERMISSIONS``.
+3. Both backends automatically see the change on next deploy — no second edit.
+
+Removing or renaming a permission
+----------------------------------
+Search for callers of the old name across both backends before deleting.
 """
 
 from enum import Enum
@@ -15,11 +26,12 @@ from typing import Dict, List
 
 
 class Permission(str, Enum):
-    """All API permissions in the AutoBot system.
+    """All API permissions in the system.
 
-    Adding a permission here registers it for both the main backend and the SLM
-    backend.  Do NOT define permissions in service-local files; that is the
-    security drift pattern this module was created to eliminate.
+    Naming convention: CATEGORY_RESOURCE_ACTION
+    - CATEGORY: functional area (API, KNOWLEDGE, ANALYTICS, …)
+    - RESOURCE: specific resource being accessed
+    - ACTION: READ, WRITE, EXECUTE, DELETE, MANAGE
     """
 
     # === API Core ===
@@ -39,19 +51,19 @@ class Permission(str, Enum):
     ANALYTICS_MANAGE = "analytics.manage"
     ANALYTICS_LOGS = "analytics.logs"
 
-    # === Agents ===
+    # === Agent ===
     AGENT_VIEW = "agent.view"
     AGENT_EXECUTE = "agent.execute"
     AGENT_MANAGE = "agent.manage"
     AGENT_TERMINAL = "agent.terminal"
 
-    # === Workflows ===
+    # === Workflow ===
     WORKFLOW_VIEW = "workflow.view"
     WORKFLOW_CREATE = "workflow.create"
     WORKFLOW_EXECUTE = "workflow.execute"
     WORKFLOW_MANAGE = "workflow.manage"
 
-    # === Files ===
+    # === File Operations ===
     FILES_VIEW = "files.view"
     FILES_DOWNLOAD = "files.download"
     FILES_UPLOAD = "files.upload"
@@ -86,25 +98,7 @@ class Permission(str, Enum):
     SANDBOX_EXECUTE = "sandbox.execute"
     SANDBOX_MANAGE = "sandbox.manage"
 
-    # === Chat ===
-    CHAT_USE = "chat.use"
-    CHAT_HISTORY = "chat.history"
-
-    # === Teams / Organisations ===
-    TEAMS_READ = "teams.read"
-    TEAMS_CREATE = "teams.create"
-    TEAMS_MANAGE = "teams.manage"
-    TEAMS_DELETE = "teams.delete"
-
-    # === Audit ===
-    AUDIT_READ = "audit.read"
-    AUDIT_WRITE = "audit.write"
-
-    # === Settings ===
-    SETTINGS_READ = "settings.read"
-    SETTINGS_WRITE = "settings.write"
-
-    # === Shell Execution (dangerous — no single-user bypass) ===
+    # === Shell Execution (dangerous — no single-user bypass allowed) ===
     SHELL_EXECUTE = "allow_shell_execute"
 
 
@@ -119,10 +113,111 @@ class Role(str, Enum):
     READONLY = "readonly"
 
 
-# Canonical role-to-permission mapping.
-# Both backends derive their permission sets from this dict.
-# SLM system-role seeding also reads from here — see
-# autobot-slm-backend/user_management/models/role.py.
+# Canonical role-to-permission mappings.
+# Both autobot-backend (auth_rbac.py) and autobot-slm-backend import this dict
+# so that a permission added here is enforced by both services automatically.
+# Default system permissions for database seeding.
+# Tuple layout: (name, resource, action, description)
+SYSTEM_PERMISSIONS: List[tuple] = [
+    # User management
+    ("users:read", "users", "read", "View users"),
+    ("users:create", "users", "create", "Create users"),
+    ("users:update", "users", "update", "Update users"),
+    ("users:delete", "users", "delete", "Delete users"),
+    # Team management
+    ("teams:read", "teams", "read", "View teams"),
+    ("teams:create", "teams", "create", "Create teams"),
+    ("teams:manage", "teams", "manage", "Manage team members"),
+    ("teams:delete", "teams", "delete", "Delete teams"),
+    # Knowledge base
+    ("knowledge:read", "knowledge", "read", "View knowledge base"),
+    ("knowledge:write", "knowledge", "write", "Add/edit knowledge"),
+    ("knowledge:delete", "knowledge", "delete", "Delete knowledge entries"),
+    # Chat
+    ("chat:use", "chat", "use", "Use chat functionality"),
+    ("chat:history", "chat", "history", "View chat history"),
+    # Files
+    ("files:view", "files", "view", "View files"),
+    ("files:upload", "files", "upload", "Upload files"),
+    ("files:download", "files", "download", "Download files"),
+    ("files:delete", "files", "delete", "Delete files"),
+    # Settings
+    ("settings:read", "settings", "read", "View settings"),
+    ("settings:write", "settings", "write", "Modify settings"),
+    # Admin
+    ("admin:access", "admin", "access", "Access admin panel"),
+    ("admin:users", "admin", "users", "Manage all users"),
+    ("admin:organization", "admin", "organization", "Manage organization"),
+    # Audit (Issue #683: Role-Based Access Control)
+    ("audit:read", "audit", "read", "View audit logs"),
+    ("audit:write", "audit", "write", "Manage audit logs (cleanup)"),
+]
+
+# Default system roles with their permissions for database seeding.
+SYSTEM_ROLES: Dict[str, Dict] = {
+    "admin": {
+        "description": "Full administrative access",
+        "priority": 100,
+        "permissions": [
+            "users:read",
+            "users:create",
+            "users:update",
+            "users:delete",
+            "teams:read",
+            "teams:create",
+            "teams:manage",
+            "teams:delete",
+            "knowledge:read",
+            "knowledge:write",
+            "knowledge:delete",
+            "chat:use",
+            "chat:history",
+            "files:view",
+            "files:upload",
+            "files:download",
+            "files:delete",
+            "settings:read",
+            "settings:write",
+            "admin:access",
+            "admin:users",
+            "admin:organization",
+            "audit:read",
+            "audit:write",
+        ],
+    },
+    "user": {
+        "description": "Standard user access",
+        "priority": 50,
+        "permissions": [
+            "users:read",
+            "teams:read",
+            "knowledge:read",
+            "knowledge:write",
+            "chat:use",
+            "chat:history",
+            "files:view",
+            "files:upload",
+            "files:download",
+            "settings:read",
+        ],
+    },
+    "readonly": {
+        "description": "Read-only access",
+        "priority": 10,
+        "permissions": [
+            "users:read",
+            "teams:read",
+            "knowledge:read",
+            "chat:history",
+            "files:view",
+            "files:download",
+            "settings:read",
+        ],
+    },
+    # Issue #744: Guest role REMOVED - security vulnerability
+    # Unauthenticated requests must be rejected, not assigned guest permissions
+}
+
 ROLE_PERMISSIONS: Dict[Role, List[Permission]] = {
     Role.ADMIN: [
         Permission.API_READ,
@@ -167,16 +262,6 @@ ROLE_PERMISSIONS: Dict[Role, List[Permission]] = {
         Permission.SANDBOX_VIEW,
         Permission.SANDBOX_EXECUTE,
         Permission.SANDBOX_MANAGE,
-        Permission.CHAT_USE,
-        Permission.CHAT_HISTORY,
-        Permission.TEAMS_READ,
-        Permission.TEAMS_CREATE,
-        Permission.TEAMS_MANAGE,
-        Permission.TEAMS_DELETE,
-        Permission.AUDIT_READ,
-        Permission.AUDIT_WRITE,
-        Permission.SETTINGS_READ,
-        Permission.SETTINGS_WRITE,
         Permission.SHELL_EXECUTE,
     ],
     Role.OPERATOR: [
@@ -201,10 +286,6 @@ ROLE_PERMISSIONS: Dict[Role, List[Permission]] = {
         Permission.BATCH_EXECUTE,
         Permission.SANDBOX_VIEW,
         Permission.SANDBOX_EXECUTE,
-        Permission.CHAT_USE,
-        Permission.CHAT_HISTORY,
-        Permission.TEAMS_READ,
-        Permission.SETTINGS_READ,
     ],
     Role.ANALYST: [
         Permission.API_READ,
@@ -219,9 +300,6 @@ ROLE_PERMISSIONS: Dict[Role, List[Permission]] = {
         Permission.SECURITY_VIEW,
         Permission.MCP_READ,
         Permission.BATCH_VIEW,
-        Permission.CHAT_HISTORY,
-        Permission.AUDIT_READ,
-        Permission.SETTINGS_READ,
     ],
     Role.EDITOR: [
         Permission.API_READ,
@@ -238,26 +316,17 @@ ROLE_PERMISSIONS: Dict[Role, List[Permission]] = {
         Permission.MCP_READ,
         Permission.BATCH_VIEW,
         Permission.BATCH_CREATE,
-        Permission.CHAT_USE,
-        Permission.CHAT_HISTORY,
-        Permission.SETTINGS_READ,
     ],
     Role.USER: [
         Permission.API_READ,
         Permission.KNOWLEDGE_READ,
-        Permission.KNOWLEDGE_WRITE,
         Permission.ANALYTICS_VIEW,
         Permission.AGENT_VIEW,
         Permission.WORKFLOW_VIEW,
         Permission.FILES_VIEW,
         Permission.FILES_DOWNLOAD,
-        Permission.FILES_UPLOAD,
         Permission.MCP_READ,
         Permission.BATCH_VIEW,
-        Permission.CHAT_USE,
-        Permission.CHAT_HISTORY,
-        Permission.TEAMS_READ,
-        Permission.SETTINGS_READ,
     ],
     Role.READONLY: [
         Permission.API_READ,
@@ -266,9 +335,5 @@ ROLE_PERMISSIONS: Dict[Role, List[Permission]] = {
         Permission.AGENT_VIEW,
         Permission.WORKFLOW_VIEW,
         Permission.FILES_VIEW,
-        Permission.FILES_DOWNLOAD,
-        Permission.CHAT_HISTORY,
-        Permission.TEAMS_READ,
-        Permission.SETTINGS_READ,
     ],
 }

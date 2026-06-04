@@ -13,6 +13,7 @@
  * - Include/exclude metadata option
  */
 
+import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, watch } from 'vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
@@ -82,19 +83,19 @@ const formatOptions = computed(() => [
   {
     value: 'markdown' as const,
     label: t('knowledge.modals.export.formatMarkdown'),
-    icon: 'fas fa-file-alt',
+    icon: 'file-alt',
     description: t('knowledge.modals.export.formatMarkdownDesc')
   },
   {
     value: 'json' as const,
     label: t('knowledge.modals.export.formatJson'),
-    icon: 'fas fa-file-code',
+    icon: 'file-code',
     description: t('knowledge.modals.export.formatJsonDesc')
   },
   {
     value: 'txt' as const,
     label: t('knowledge.modals.export.formatPlainText'),
-    icon: 'fas fa-file',
+    icon: 'file',
     description: t('knowledge.modals.export.formatPlainTextDesc')
   }
 ])
@@ -205,19 +206,19 @@ watch(() => props.modelValue, (isOpen) => {
   <BaseModal
     v-model="isOpen"
     :title="modalTitle"
-    size="small"
+    size="sm"
     @close="closeModal"
   >
     <div class="export-modal">
       <!-- Error Message -->
       <div v-if="error" class="alert alert-error">
-        <i class="fas fa-exclamation-circle"></i>
+        <Icon name="exclamation-circle" />
         {{ error }}
       </div>
 
       <!-- Document Count -->
       <div class="export-summary">
-        <i class="fas fa-file-export"></i>
+        <Icon name="file-export" />
         <span>{{ $t('knowledge.modals.export.documentCount', { count: documentCount }) }}</span>
       </div>
 
@@ -237,12 +238,12 @@ watch(() => props.modelValue, (isOpen) => {
               v-model="selectedFormat"
               class="sr-only"
             />
-            <i :class="format.icon" class="format-icon"></i>
+            <Icon :name="format.icon" />
             <div class="format-info">
               <span class="format-label">{{ format.label }}</span>
               <span class="format-desc">{{ format.description }}</span>
             </div>
-            <i v-if="selectedFormat === format.value" class="fas fa-check check-icon"></i>
+            <Icon name="check" class="check-icon" v-if="selectedFormat === format.value" />
           </label>
         </div>
       </div>
@@ -272,8 +273,8 @@ watch(() => props.modelValue, (isOpen) => {
           @click="performExport"
           :disabled="isExporting || documentCount === 0"
         >
-          <i v-if="isExporting" class="fas fa-spinner fa-spin"></i>
-          <i v-else class="fas fa-download"></i>
+          <Icon name="spinner" class="animate-spin" v-if="isExporting" />
+          <Icon name="download" v-else />
           {{ $t('knowledge.modals.export.export') }}
         </BaseButton>
       </div>

@@ -20,12 +20,14 @@ Key Features:
 - Supervised mode for guided dangerous actions
 """
 
-import logging
+from __future__ import annotations
+
 import time
 from dataclasses import dataclass
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Tuple
 
+from autobot_shared.logging_manager import get_logger
 from secure_command_executor import CommandRisk
 from type_defs.common import Metadata
 
@@ -33,7 +35,7 @@ from type_defs.common import Metadata
 if TYPE_CHECKING:
     from autobot_shared.ssot_config import PermissionMode
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Performance optimization: O(1) lookup for subcommand patterns (Issue #326)
 SUBCOMMAND_TOOLS = {"git", "docker", "kubectl", "npm", "yarn"}
@@ -152,7 +154,7 @@ class CommandApprovalManager:
         ),
     }
 
-    def __init__(self, custom_permissions: Optional[Dict[AgentRole, AgentPermissions]] = None):
+    def __init__(self, custom_permissions: Dict[AgentRole, AgentPermissions] | None = None) -> None:
         """
         Initialize command approval manager.
 
@@ -199,7 +201,7 @@ class CommandApprovalManager:
     def check_permission(
         agent_role: AgentRole,
         command_risk: CommandRisk,
-        permissions: Optional[Dict[AgentRole, AgentPermissions]] = None,
+        permissions: Dict[AgentRole, AgentPermissions] | None = None,
     ) -> Tuple[bool, str]:
         """
         Check if agent has permission to execute command at given risk level.
@@ -248,7 +250,7 @@ class CommandApprovalManager:
     def needs_approval(
         agent_role: AgentRole,
         command_risk: CommandRisk,
-        permissions: Optional[Dict[AgentRole, AgentPermissions]] = None,
+        permissions: Dict[AgentRole, AgentPermissions] | None = None,
     ) -> bool:
         """
         Check if command needs user approval based on role and risk.
@@ -474,7 +476,7 @@ class CommandApprovalManager:
             return False
 
     @staticmethod
-    def get_permission_mode() -> Optional["PermissionMode"]:
+    def get_permission_mode() -> "PermissionMode" | None:
         """
         Get the current permission mode.
 
@@ -495,7 +497,7 @@ class CommandApprovalManager:
         command: str,
         tool: str = "Bash",
         is_admin: bool = False,
-    ) -> Tuple[Optional[str], Optional[Dict[str, Any]]]:
+    ) -> Tuple[str | None, Dict[str, Any] | None]:
         """
         Check command against Claude Code-style permission rules.
 
@@ -609,7 +611,7 @@ class CommandApprovalManager:
         user_id: str,
         risk_level: str,
         tool: str = "Bash",
-        comment: Optional[str] = None,
+        comment: str | None = None,
     ) -> bool:
         """
         Store command approval in memory for future auto-approval.

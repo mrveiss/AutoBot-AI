@@ -4,7 +4,6 @@ import SkeletonLoader from './SkeletonLoader.vue';
 const meta = {
   title: 'Components/UI/SkeletonLoader',
   component: SkeletonLoader,
-  tags: ['autodocs'],
   argTypes: {
     variant: {
       control: 'select',

@@ -11,13 +11,13 @@ Related Issue: #4338 - autonomous skill extraction from conversations
 """
 
 import json
-import logging
 from dataclasses import dataclass
-from typing import Dict, List, Optional
+from typing import Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from services.ai_stack_client import AIStackClient, AIStackError
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -78,7 +78,7 @@ class SkillExtractor:
         "sequence",
     }
 
-    def __init__(self, ai_stack_client: Optional[AIStackClient] = None):
+    def __init__(self, ai_stack_client: AIStackClient | None = None) -> None:
         """Initialize skill extractor with AI Stack client."""
         self.ai_client = ai_stack_client or AIStackClient()
 

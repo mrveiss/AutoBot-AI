@@ -10,17 +10,17 @@ Supports: nmap, masscan, nuclei, nikto, gobuster, searchsploit (extensible)
 Issue: #260
 """
 
-import logging
 import re
 import xml.etree.ElementTree as ET  # nosec B405 - parsing trusted nmap output
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.time_utils import now_utc
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Pre-compiled regex patterns for security tool parsing
 _NUCLEI_FORMAT_RE = re.compile(r"\[\w+\]\s+\[[^\]]+\]\s+\[")
@@ -33,11 +33,11 @@ class ParsedHost:
     """Parsed host information from tool output."""
 
     ip: str
-    hostname: Optional[str] = None
+    hostname: str | None = None
     status: str = "up"
-    mac_address: Optional[str] = None
-    vendor: Optional[str] = None
-    os_guess: Optional[str] = None
+    mac_address: str | None = None
+    vendor: str | None = None
+    os_guess: str | None = None
     ports: list[dict[str, Any]] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
 
@@ -49,10 +49,10 @@ class ParsedPort:
     port: int
     protocol: str = "tcp"
     state: str = "open"
-    service: Optional[str] = None
-    version: Optional[str] = None
-    product: Optional[str] = None
-    extra_info: Optional[str] = None
+    service: str | None = None
+    version: str | None = None
+    product: str | None = None
+    extra_info: str | None = None
     scripts: list[dict[str, Any]] = field(default_factory=list)
 
 
@@ -61,8 +61,8 @@ class ParsedVulnerability:
     """Parsed vulnerability information."""
 
     host: str
-    port: Optional[int] = None
-    cve_id: Optional[str] = None
+    port: int | None = None
+    cve_id: str | None = None
     title: str = ""
     severity: str = "unknown"
     description: str = ""
@@ -80,7 +80,7 @@ class ParsedToolOutput:
     hosts: list[ParsedHost] = field(default_factory=list)
     vulnerabilities: list[ParsedVulnerability] = field(default_factory=list)
     raw_output: str = ""
-    command: Optional[str] = None
+    command: str | None = None
     scan_stats: dict[str, Any] = field(default_factory=dict)
     errors: list[str] = field(default_factory=list)
 
@@ -154,7 +154,7 @@ class BaseToolParser(ABC):
     def _create_output(
         self,
         scan_type: str = "unknown",
-        command: Optional[str] = None,
+        command: str | None = None,
     ) -> ParsedToolOutput:
         """Create a new ParsedToolOutput with defaults."""
         return ParsedToolOutput(
@@ -245,7 +245,7 @@ class NmapParser(BaseToolParser):
 
         return result
 
-    def _parse_xml_host(self, host_elem: ET.Element) -> Optional[ParsedHost]:
+    def _parse_xml_host(self, host_elem: ET.Element) -> ParsedHost | None:
         """Parse a single host from XML."""
         # Get IP address
         addr_elem = host_elem.find("address[@addrtype='ipv4']")
@@ -287,7 +287,7 @@ class NmapParser(BaseToolParser):
 
         return host
 
-    def _parse_xml_port(self, port_elem: ET.Element) -> Optional[dict[str, Any]]:
+    def _parse_xml_port(self, port_elem: ET.Element) -> dict[str, Any] | None:
         """Parse a single port from XML."""
         port_num = port_elem.get("portid")
         protocol = port_elem.get("protocol", "tcp")
@@ -362,7 +362,7 @@ class NmapParser(BaseToolParser):
 
         return result
 
-    def _parse_text_host_line(self, line: str) -> Optional[ParsedHost]:
+    def _parse_text_host_line(self, line: str) -> ParsedHost | None:
         """
         Parse a host line from nmap text output.
 
@@ -416,7 +416,7 @@ class NmapParser(BaseToolParser):
     def _parse_text(self, output: str) -> ParsedToolOutput:
         """Parse nmap normal text output."""
         result = self._create_output(scan_type="text")
-        current_host: Optional[ParsedHost] = None
+        current_host: ParsedHost | None = None
 
         for line in output.split("\n"):
             line = line.strip()
@@ -798,7 +798,7 @@ class ToolParserRegistry:
         """Register a new parser."""
         self._parsers.append(parser)
 
-    def detect_and_parse(self, output: str) -> Optional[ParsedToolOutput]:
+    def detect_and_parse(self, output: str) -> ParsedToolOutput | None:
         """
         Auto-detect tool and parse output.
 
@@ -820,7 +820,7 @@ class ToolParserRegistry:
         logger.warning("No parser matched the output")
         return None
 
-    def parse_with_tool(self, output: str, tool: str) -> Optional[ParsedToolOutput]:
+    def parse_with_tool(self, output: str, tool: str) -> ParsedToolOutput | None:
         """
         Parse output with a specific tool parser.
 
@@ -844,8 +844,8 @@ get_parser_registry = lazy_singleton(ToolParserRegistry)
 
 def parse_tool_output(
     output: str,
-    tool: Optional[str] = None,
-) -> Optional[ParsedToolOutput]:
+    tool: str | None = None,
+) -> ParsedToolOutput | None:
     """
     Convenience function to parse tool output.
 

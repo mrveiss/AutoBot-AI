@@ -17,19 +17,31 @@ Key design choices
 - ``record_event()`` is the async implementation for direct await use.
 - ``query_audit_log()`` filters in-memory after a Redis range scan — acceptable
   given the expected event volume and the 90-day retention window.
+
+.. deprecated::
+    Use ``services.audit.unified_audit`` directly (GH#8290 Phase 2).
+    This module will be removed in Phase 3 once all callers are migrated.
 """
 
+import warnings
+
+warnings.warn(
+    "services.audit.audit_log is deprecated (GH#8290). " "Import from services.audit.unified_audit instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)
+
 import json
-import logging
 import time
 import uuid
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from autobot_shared.fire_and_forget import run_redis_write
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 AUDIT_LOG_TTL_SECONDS = 90 * 24 * 3600  # 90-day retention
 _GLOBAL_KEY = "audit_log:global"
@@ -49,16 +61,19 @@ class AuditAction(str, Enum):
     USER_DELETE = "user.delete"
     CONFIG_CHANGE = "config.change"
     ADMIN_ACTION = "admin.action"
+    RUN_JWT_MINT = "run_jwt.mint"
+    RUN_JWT_REVOKE = "run_jwt.revoke"
+    RUN_JWT_REFRESH = "run_jwt.refresh"
 
 
 async def record_event(
     user_id: str,
     action: AuditAction,
-    resource_type: Optional[str] = None,
-    resource_id: Optional[str] = None,
-    metadata: Optional[Dict[str, Any]] = None,
-    ip_address: Optional[str] = None,
-    session_id: Optional[str] = None,
+    resource_type: str | None = None,
+    resource_id: str | None = None,
+    metadata: Dict[str, Any] | None = None,
+    ip_address: str | None = None,
+    session_id: str | None = None,
     outcome: str = "success",
 ) -> None:
     """Write a single audit record to Redis.
@@ -117,11 +132,11 @@ async def record_event(
 def audit_record(
     user_id: str,
     action: AuditAction,
-    resource_type: Optional[str] = None,
-    resource_id: Optional[str] = None,
-    metadata: Optional[Dict[str, Any]] = None,
-    ip_address: Optional[str] = None,
-    session_id: Optional[str] = None,
+    resource_type: str | None = None,
+    resource_id: str | None = None,
+    metadata: Dict[str, Any] | None = None,
+    ip_address: str | None = None,
+    session_id: str | None = None,
     outcome: str = "success",
 ) -> None:
     """Fire-and-forget wrapper around :func:`record_event`.
@@ -156,10 +171,10 @@ def audit_record(
 
 
 async def query_audit_log(
-    user_id: Optional[str] = None,
-    action: Optional[AuditAction] = None,
-    from_ts: Optional[float] = None,
-    to_ts: Optional[float] = None,
+    user_id: str | None = None,
+    action: AuditAction | None = None,
+    from_ts: float | None = None,
+    to_ts: float | None = None,
     limit: int = 100,
     offset: int = 0,
 ) -> List[Dict[str, Any]]:

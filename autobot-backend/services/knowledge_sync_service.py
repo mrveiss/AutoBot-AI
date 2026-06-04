@@ -43,7 +43,7 @@ class KnowledgeSyncService:
     4. Integration with AutoBot's service ecosystem
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize knowledge sync service with sync state and configuration."""
         self.incremental_sync = None
         self.rag_optimizer = None
@@ -82,7 +82,7 @@ class KnowledgeSyncService:
             logger.error("Failed to initialize sync service: %s", e)
             return False
 
-    async def start_daemon(self, interval_minutes: int = 15):
+    async def start_daemon(self, interval_minutes: int = 15) -> None:
         """Start the background sync daemon."""
         if self.is_running:
             logger.warning("Sync daemon already running")
@@ -117,7 +117,7 @@ class KnowledgeSyncService:
             self.is_running = False
             logger.info("Sync daemon stopped")
 
-    async def stop_daemon(self):
+    async def stop_daemon(self) -> None:
         """Stop the background sync daemon."""
         if not self.is_running:
             return
@@ -134,7 +134,7 @@ class KnowledgeSyncService:
 
         logger.info("Sync daemon stopped")
 
-    async def _background_sync(self):
+    async def _background_sync(self) -> None:
         """Perform background sync operation."""
         try:
             logger.info("Starting background sync...")
@@ -548,7 +548,7 @@ async def get_sync_history(limit: int = 20):
 
 
 # Integration with AutoBot's main application
-def register_sync_service_routes(app):
+def register_sync_service_routes(app) -> None:
     """Register sync service routes with the main FastAPI app."""
     app.include_router(router)
     logger.info("Knowledge sync service routes registered")

@@ -11,14 +11,14 @@ per Issue #490 - code generator producing library module. Low priority.
 
 import asyncio
 import json
-import logging
 from pathlib import Path
 
 from code_analyzer import CodeAnalyzer
 
 from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Command execution function names to search for (Issue #398: extracted data)
 COMMAND_FUNCTION_NAMES = [
@@ -159,10 +159,10 @@ import asyncio
 import os
 import re
 import subprocess
-from typing import Any, Dict, Optional, List, Union
+from typing import Any, Dict, List, Union
 import logging
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def strip_ansi_codes(text: str) -> str:
@@ -173,9 +173,9 @@ def strip_ansi_codes(text: str) -> str:
 
 async def execute_shell_command(
     command: Union[str, List[str]],
-    timeout: Optional[int] = 30,
-    cwd: Optional[str] = None,
-    env: Optional[Dict[str, str]] = None,
+    timeout: int | None = 30,
+    cwd: str | None = None,
+    env: Dict[str, str] | None = None,
     capture_output: bool = True,
     strip_ansi: bool = True
 ) -> Dict[str, Any]:
@@ -271,9 +271,9 @@ async def execute_shell_command(
 
 def execute_shell_command_sync(
     command: Union[str, List[str]],
-    timeout: Optional[int] = 30,
-    cwd: Optional[str] = None,
-    env: Optional[Dict[str, str]] = None,
+    timeout: int | None = 30,
+    cwd: str | None = None,
+    env: Dict[str, str] | None = None,
     capture_output: bool = True,
     strip_ansi: bool = True
 ) -> Dict[str, Any]:

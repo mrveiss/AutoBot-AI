@@ -2,7 +2,7 @@
   <div class="deduplication-manager">
     <div class="manager-header">
       <h3>
-        <i class="fas fa-copy"></i>
+        <Icon name="copy" />
         {{ $t('knowledge.deduplication.title') }}
       </h3>
       <div class="header-actions">
@@ -14,7 +14,7 @@
           :loading="scanning"
           class="btn-scan"
         >
-          <i v-if="!scanning" class="fas fa-search"></i>
+          <Icon name="search" v-if="!scanning" />
           {{ $t('knowledge.deduplication.scanForIssues') }}
         </BaseButton>
       </div>
@@ -22,13 +22,13 @@
 
     <!-- Scanning State -->
     <div v-if="scanning && !scanned" class="scanning-state">
-      <i class="fas fa-spinner fa-spin"></i>
+      <Icon name="spinner" class="animate-spin" />
       {{ $t('knowledge.deduplication.scanningState') }}
     </div>
 
     <!-- Error State -->
     <div v-else-if="error" class="error-state">
-      <i class="fas fa-exclamation-circle"></i>
+      <Icon name="exclamation-circle" />
       {{ error }}
     </div>
 
@@ -38,7 +38,7 @@
       <div class="section duplicates-section">
         <div class="section-header">
           <h4>
-            <i class="fas fa-clone"></i>
+            <Icon name="clone" />
             {{ $t('knowledge.deduplication.duplicateDocuments') }}
           </h4>
           <span class="count-badge" :class="{ 'has-issues': duplicateStats.total_duplicates > 0 }">
@@ -71,7 +71,7 @@
             >
               <div class="group-header">
                 <div class="group-title">
-                  <i class="fas fa-folder"></i>
+                  <Icon name="folder" />
                   <strong>{{ dup.category }}</strong>
                   <span class="separator">›</span>
                   {{ dup.title }}
@@ -83,7 +83,7 @@
               </div>
               <div class="group-details">
                 <div class="kept-fact">
-                  <i class="fas fa-check-circle"></i>
+                  <Icon name="check-circle" />
                   {{ $t('knowledge.deduplication.keeping', { id: dup.kept_fact_id?.substring(0, 8) }) }}
                   <span class="timestamp">({{ formatDate(dup.kept_created_at) }})</span>
                 </div>
@@ -99,7 +99,7 @@
               :loading="cleaning"
               class="btn-cleanup"
             >
-              <i v-if="!cleaning" class="fas fa-trash-alt"></i>
+              <Icon name="trash" v-if="!cleaning" />
               {{ cleaning ? $t('knowledge.deduplication.removingDuplicates') : $t('knowledge.deduplication.removeAllDuplicates') }}
             </BaseButton>
           </div>
@@ -116,7 +116,7 @@
       <div class="section orphans-section">
         <div class="section-header">
           <h4>
-            <i class="fas fa-unlink"></i>
+            <Icon name="unlink" />
             {{ $t('knowledge.deduplication.orphanedDocuments') }}
           </h4>
           <span class="count-badge" :class="{ 'has-issues': orphanStats.orphaned_count > 0 }">
@@ -144,7 +144,7 @@
               class="orphan-item"
             >
               <div class="orphan-header">
-                <i class="fas fa-file-circle-xmark"></i>
+                <Icon name="file" />
                 <span class="orphan-title">{{ orphan.title }}</span>
               </div>
               <div class="orphan-details">
@@ -156,13 +156,13 @@
 
           <div class="action-buttons">
             <BaseButton
-              variant="danger"
+              variant="error"
               @click="cleanupOrphans"
               :disabled="cleaning"
               :loading="cleaning"
               class="btn-cleanup"
             >
-              <i v-if="!cleaning" class="fas fa-trash-alt"></i>
+              <Icon name="trash" v-if="!cleaning" />
               {{ cleaning ? $t('knowledge.deduplication.removingOrphans') : $t('knowledge.deduplication.removeAllOrphans') }}
             </BaseButton>
           </div>
@@ -178,13 +178,14 @@
 
     <!-- Initial State -->
     <div v-else class="initial-state">
-      <i class="fas fa-info-circle"></i>
+      <Icon name="info-circle" />
       <p>{{ $t('knowledge.deduplication.initialStateMessage') }}</p>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { formatDate } from '@/utils/formatHelpers'

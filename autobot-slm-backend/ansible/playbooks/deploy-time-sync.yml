@@ -4,8 +4,8 @@
 
 - name: "Deploy Time Synchronization Across AutoBot Infrastructure"
   hosts: production_vms
-  become: yes
-  gather_facts: yes
+  become: true
+  gather_facts: true
 
   vars:
     # Override time_sync configuration if needed

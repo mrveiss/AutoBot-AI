@@ -2,6 +2,13 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 # Enhanced API modules with NPU semantic search and analytics
+"""
+AutoBot REST API package — all router modules exported here.
+
+Central registry of API modules mounted by app_factory; importing from
+this package guarantees consistent router registration order.
+"""
+
 __all__ = [
     "chat",
     "system",

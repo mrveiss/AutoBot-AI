@@ -13,7 +13,7 @@
 #   ansible-playbook -i inventory/slm-nodes.yml playbooks/provision-fleet-roles.yml
 #
 # Limit to specific nodes:
-#   --limit "02-Frontend,04-Databases"
+#   --limit "frontend,databases"
 #
 # Tag filtering (--tags) works correctly with include_role because
 # every include_role task carries an apply: block that propagates
@@ -30,7 +30,7 @@
 # a visible warning).  Mirrors the pattern in update-all-nodes.yml.
 # -------------------------------------------------------------------
 - name: "Play 0 - Pre-flight: Sync code_source from GitHub"
-  hosts: localhost
+  hosts: slm_server
   gather_facts: false
 
   vars:
@@ -66,8 +66,8 @@
       ansible.builtin.file:
         path: "{{ git_repo_root }}"
         state: directory
-        owner: "{{ ansible_user_id | default('autobot') }}"
-        group: "{{ ansible_user_id | default('autobot') }}"
+        owner: "{{ lookup('env', 'USER') | default('autobot') }}"
+        group: "{{ lookup('env', 'USER') | default('autobot') }}"
         recurse: true
       become: true
       failed_when: false
@@ -107,9 +107,9 @@
         repo: "{{ github_repo }}"
         dest: "{{ git_repo_root }}"
         version: "{{ deploy_ref }}"
-        update: yes
-        force: yes
-      ignore_errors: yes
+        update: true
+        force: true
+      ignore_errors: true
       register: github_sync
       tags: [always]
 
@@ -174,6 +174,30 @@
       ansible.builtin.debug:
         msg: "Deploying from commit: {{ deploy_info.stdout }}"
       when: github_sync is not failed
+      tags: [always]
+
+    # GH#9284: When GitHub sync fails, validate that stale code_source
+    # has critical frontend dependencies (vega fix from 267b2044a).
+    # Prevents late build failures with cryptic Rolldown errors.
+    - name: "[PRE-FLIGHT] Validate stale code_source has critical dependencies"
+      block:
+        - name: "[PRE-FLIGHT] Check if package.json has vega dependency"
+          ansible.builtin.command:
+            cmd: jq -e '.dependencies.vega' {{ git_repo_root }}/autobot-frontend/package.json
+          register: vega_check
+          changed_when: false
+          failed_when: false
+
+        - name: "[PRE-FLIGHT] Abort if code_source missing critical frontend deps"
+          ansible.builtin.fail:
+            msg: >-
+              CRITICAL: Stale code_source missing vega dependency (GH#9284).
+              Frontend build will fail at Phase 4b with Rolldown import error.
+              Fix: Restore internet connectivity and re-run provisioning to sync latest code from {{ deploy_ref }}.
+              Current commit: {{ deploy_info.stdout }}
+              Required commit: 267b2044a or later (fix(frontend): add vega as explicit dep)
+          when: vega_check.rc != 0
+      when: github_sync is failed
       tags: [always]
 
 # -------------------------------------------------------------------
@@ -330,6 +354,15 @@
       when: role_vnc_active | bool
       tags: ['vnc', 'provision']
 
+    - name: "App | Deploy xrdp role (GH#1525 — RDP on port 3389)"
+      ansible.builtin.include_role:
+        name: xrdp
+        apply:
+          tags: ['xrdp', 'rdp', 'provision']
+      # #7051: gate via shared role-active fact (group_vars/all.yml)
+      when: role_xrdp_active | bool
+      tags: ['xrdp', 'rdp', 'provision']
+
 # -------------------------------------------------------------------
 # Phase 4b: Frontend
 # -------------------------------------------------------------------
@@ -413,26 +446,8 @@
       when: _is_slm_frontend_colocated | bool
       tags: ['frontend', 'slm-nginx', 'provision']
 
-    # include_vars above resets frontend_backend_host to 127.0.0.1 (the default).
-    # On WSL2 mirrored networking 127.0.0.1 is ECONNREFUSED; must re-override (#5608).
-    - name: "SLM | Read /proc/version to detect WSL2 for nginx re-render (#5608)"
-      ansible.builtin.slurp:
-        src: /proc/version
-      register: _phase4c_proc_version
-      changed_when: false
-      failed_when: false
-      when: _is_slm_frontend_colocated | bool
-      tags: ['frontend', 'slm-nginx', 'provision']
-
-    - name: "SLM | Set frontend_backend_host=10.255.255.254 on WSL2 hosts (#5608)"
-      ansible.builtin.set_fact:
-        frontend_backend_host: "10.255.255.254"
-      when:
-        - _is_slm_frontend_colocated | bool
-        - _phase4c_proc_version.content is defined
-        - (_phase4c_proc_version.content | b64decode | lower) is search('microsoft')
-        - frontend_backend_host == '127.0.0.1'
-      tags: ['frontend', 'slm-nginx', 'provision']
+    # MVA-1423/MVA-1454: uvicorn now binds to 0.0.0.0 on WSL2 so nginx
+    # reaches it via 127.0.0.1. No frontend_backend_host override needed.
 
     - name: "SLM | Re-render SLM nginx config for co-located mode (#3012)"
       ansible.builtin.template:
@@ -690,7 +705,7 @@
 # Phase 7: Summary
 # -------------------------------------------------------------------
 - name: "Provision Summary"
-  hosts: localhost
+  hosts: slm_server
   connection: local
   gather_facts: false
 

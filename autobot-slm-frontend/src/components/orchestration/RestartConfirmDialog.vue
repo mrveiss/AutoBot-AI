@@ -71,7 +71,7 @@ const emit = defineEmits<{
               :disabled="isProcessing"
               class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
             >
-              Cancel
+              {{ $t('orchestration.restartConfirmDialog.cancel') }}
             </button>
             <button
               @click="emit('confirm')"

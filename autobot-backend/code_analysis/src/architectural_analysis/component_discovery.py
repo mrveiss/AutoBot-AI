@@ -9,9 +9,10 @@ Extracted from ArchitecturalPatternAnalyzer as part of Issue #394.
 """
 
 import ast
-import logging
 from pathlib import Path
-from typing import List, Optional
+from typing import List
+
+from autobot_shared.logging_manager import get_logger
 
 from .cohesion_calculator import CohesionCalculator
 from .complexity_calculator import ComplexityCalculator
@@ -19,7 +20,7 @@ from .dependency_analyzer import DependencyAnalyzer
 from .pattern_detector import PatternDetector
 from .types import ArchitecturalComponent
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ComponentDiscovery:
@@ -144,7 +145,7 @@ class ComponentDiscovery:
 
     def _extract_single_node(
         self, node: ast.AST, tree: ast.AST, file_path: str, content: str
-    ) -> Optional[ArchitecturalComponent]:
+    ) -> ArchitecturalComponent | None:
         """Extract a single node as a component."""
         if isinstance(node, ast.ClassDef):
             return self._analyze_class_component(node, file_path, content)
@@ -154,7 +155,7 @@ class ComponentDiscovery:
 
     def _analyze_class_component(
         self, node: ast.ClassDef, file_path: str, content: str
-    ) -> Optional[ArchitecturalComponent]:
+    ) -> ArchitecturalComponent | None:
         """Analyze a class as an architectural component."""
         try:
             # Extract dependencies
@@ -193,7 +194,7 @@ class ComponentDiscovery:
 
     def _analyze_function_component(
         self, node: ast.FunctionDef, file_path: str, content: str
-    ) -> Optional[ArchitecturalComponent]:
+    ) -> ArchitecturalComponent | None:
         """Analyze a function as an architectural component."""
         try:
             # Extract dependencies
@@ -216,9 +217,7 @@ class ComponentDiscovery:
             logger.error(f"Error analyzing function {node.name}: {e}")
             return None
 
-    def _analyze_module_component(
-        self, file_path: str, tree: ast.AST, content: str
-    ) -> Optional[ArchitecturalComponent]:
+    def _analyze_module_component(self, file_path: str, tree: ast.AST, content: str) -> ArchitecturalComponent | None:
         """Analyze a module as an architectural component."""
         try:
             module_name = Path(file_path).stem

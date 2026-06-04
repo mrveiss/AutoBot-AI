@@ -32,14 +32,14 @@ Endpoints:
 - POST   /api/npu/pool/reload - Hot-reload pool configuration (Issue #168)
 """
 
-import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import JSONResponse
 
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_management.types import DATABASE_MAPPING
 from autobot_shared.ssot_config import DEFAULT_EMBEDDING_MODEL, DEFAULT_LLM_MODEL
 from autobot_shared.time_utils import utc_timestamp
@@ -64,7 +64,7 @@ from .schemas_system import (
     NPUWorkerUnpairResponse,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Create router with /api/npu prefix
 router = APIRouter()
@@ -316,7 +316,7 @@ async def test_worker(
         raise_internal_error("Failed to test worker")
 
 
-@router.get("/npu/workers/{worker_id}/metrics", response_model=Optional[NPUWorkerMetrics])
+@router.get("/npu/workers/{worker_id}/metrics", response_model=NPUWorkerMetrics | None)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_worker_metrics",
@@ -847,7 +847,7 @@ class WorkerHealthInfo:
     """Health information from a worker."""
 
     platform: str
-    existing_worker_id: Optional[str]
+    existing_worker_id: str | None
     already_paired: bool
 
 

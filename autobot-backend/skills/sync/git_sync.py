@@ -4,15 +4,15 @@
 """Git repository skill sync (Phase 3)."""
 
 import asyncio
-import logging
 import os
 import tempfile
 from typing import Any, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from skills.sync.base_sync import BaseRepoSync
 from skills.sync.local_sync import LocalDirSync
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class GitRepoSync(BaseRepoSync):

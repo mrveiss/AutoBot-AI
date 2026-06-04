@@ -11,6 +11,8 @@ from typing import List
 
 import pytest
 
+from autobot_shared.ssot_config import config
+
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -24,9 +26,9 @@ from utils.terminal_input_handler import (
 def configure_test_environment():
     """Configure the test environment for non-blocking input."""
     # Set environment variables to indicate testing
-    os.environ["CI"] = "1"
-    os.environ["TESTING"] = "1"
-    os.environ["PYTEST_RUNNING"] = "1"
+    config.ci = "1"
+    config.testing = "1"
+    config.pytest_running = "1"
 
     # Configure terminal input handler for testing
     handler = get_terminal_input_handler()
@@ -59,9 +61,9 @@ def non_interactive_environment():
     original_env = os.environ.copy()
 
     # Set testing environment variables
-    os.environ["CI"] = "1"
-    os.environ["TESTING"] = "1"
-    os.environ["PYTEST_RUNNING"] = "1"
+    config.ci = "1"
+    config.testing = "1"
+    config.pytest_running = "1"
 
     yield
 
@@ -123,7 +125,7 @@ TEST_RESPONSES = {
     "yes_no": ["y", "n", "yes", "no"],
     "choices": ["1", "2", "3", "4", "5"],
     "commands": ["help", "status", "exit", "quit"],
-    "files": ["test.txt", "/tmp/test", "example.json"],
+    "files": ["test.txt", "/tmp/test", "example.json"],  # nosec B108 - test/controlled code uses tmpdir intentionally
     "names": ["test_user", "admin", "user"],
     "urls": ["http://localhost:8080", "http://example.com"],
     "default": ["", "default", "skip"],

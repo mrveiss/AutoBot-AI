@@ -11,20 +11,20 @@ Part of Issue #381 - God Class Refactoring
 
 import asyncio
 import json
-import logging
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List
 
 import aiofiles
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.path_validator import validate_relative_path
 from autobot_shared.ssot_config import PROJECT_ROOT
 
 from .models import StateSnapshot
 from .types import TrackingMetric
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def _build_error_tracking_lines(error_data: Dict[str, Any]) -> List[str]:

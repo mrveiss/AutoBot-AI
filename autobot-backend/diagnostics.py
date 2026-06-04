@@ -14,9 +14,11 @@ import subprocess  # nosec B404 - controlled system diagnostics
 import sys
 import time
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import psutil
+
+from autobot_shared.logging_manager import get_logger
 
 try:
     from autobot_shared.redis_client import get_redis_client
@@ -26,11 +28,11 @@ try:
         RetryConfig,
         TimingConstants,
     )
-    from event_manager import get_event_manager
+    from events.bus import PersistStrategy, publish_event
 except ImportError as e:
     logging.warning(f"Import error in diagnostics: {e}")
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class PerformanceOptimizedDiagnostics:
@@ -131,7 +133,8 @@ class PerformanceOptimizedDiagnostics:
     async def _publish_permission_request(self, task_id: str, report: Dict[str, Any], attempt: int) -> asyncio.Future:
         """Publish permission request and return future (Issue #315 - extracted helper)."""
         permission_future = asyncio.Future()
-        await get_event_manager().publish(
+        await publish_event(
+            "global",
             "log_message",
             {
                 "task_id": task_id,
@@ -144,6 +147,7 @@ class PerformanceOptimizedDiagnostics:
                 "max_attempts": self.permission_retry_attempts,
                 "timeout_seconds": self.max_user_permission_timeout,
             },
+            persist=PersistStrategy.NONE,
         )
         logger.info(
             "Permission request sent for task %s (attempt %d/%d)",
@@ -164,7 +168,8 @@ class PerformanceOptimizedDiagnostics:
         )
 
         if attempt < self.permission_retry_attempts - 1:
-            await get_event_manager().publish(
+            await publish_event(
+                "global",
                 "log_message",
                 {
                     "level": "WARNING",
@@ -173,6 +178,7 @@ class PerformanceOptimizedDiagnostics:
                         f"({self.permission_retry_attempts - attempt - 1} attempts remaining)"
                     ),
                 },
+                persist=PersistStrategy.NONE,
             )
             await asyncio.sleep(RetryConfig.BACKOFF_BASE)
             return True  # Should retry
@@ -222,7 +228,8 @@ class PerformanceOptimizedDiagnostics:
 
     async def _handle_permission_timeout_fallback(self, task_id: str, elapsed_time: float):
         """Handle user permission timeout with intelligent fallback"""
-        await get_event_manager().publish(
+        await publish_event(
+            "global",
             "log_message",
             {
                 "level": "WARNING",
@@ -232,6 +239,7 @@ class PerformanceOptimizedDiagnostics:
                     f"This prevents system hangs. Previous timeout was 600s (10 minutes)."
                 ),
             },
+            persist=PersistStrategy.NONE,
         )
 
         # Log performance improvement
@@ -342,7 +350,7 @@ class PerformanceOptimizedDiagnostics:
             logger.error("Performance analysis error: %s", e)
             return {"error": "Performance analysis failed"}
 
-    def _get_memory_recommendation(self) -> Optional[Dict[str, str]]:
+    def _get_memory_recommendation(self) -> Dict[str, str] | None:
         """
         Generate memory optimization recommendation if usage exceeds threshold.
 
@@ -361,7 +369,7 @@ class PerformanceOptimizedDiagnostics:
             }
         return None
 
-    def _get_gpu_recommendation(self) -> Optional[Dict[str, str]]:
+    def _get_gpu_recommendation(self) -> Dict[str, str] | None:
         """
         Generate GPU optimization recommendation if utilization is low.
 
@@ -381,7 +389,7 @@ class PerformanceOptimizedDiagnostics:
             }
         return None
 
-    def _get_cpu_recommendation(self) -> Optional[Dict[str, str]]:
+    def _get_cpu_recommendation(self) -> Dict[str, str] | None:
         """
         Generate CPU optimization recommendation for high-core systems.
 

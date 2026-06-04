@@ -13,14 +13,15 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
-import logging
 import time
-from typing import TYPE_CHECKING, Any, List, Optional
+from typing import TYPE_CHECKING, Any, List
+
+from autobot_shared.logging_manager import get_logger
 
 if TYPE_CHECKING:
     from services.knowledge.synthesis_schema_loader import CollectionConfig
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _KB_SYNTHESIS_COLLECTION = "kb_synthesis"
 
@@ -52,14 +53,14 @@ class KBSynthesizer:
     def __init__(
         self,
         llm_service: Any,
-        provenance_log: "Optional[Any]" = None,
+        provenance_log: "Any | None" = None,
     ) -> None:
         self._llm = llm_service
-        self._collection: Optional[Any] = None
+        self._collection: Any | None = None
         # Cache of named collections keyed by collection name.
         self._named_collections: dict[str, Any] = {}
         # Issue #4678: lazy-init AnalyzerService (same LLM service).
-        self._analyzer: Optional[Any] = None
+        self._analyzer: Any | None = None
         # Issue #4681: track last run_id per collection for parent→child chain.
         self._last_run_id: dict[str, str] = {}
         # Lazy import to avoid circular deps at module load time.
@@ -73,7 +74,7 @@ class KBSynthesizer:
     # BaseSynthesizer ABC interface
     # ------------------------------------------------------------------
 
-    async def _get_collection(self, collection_name: Optional[str] = None) -> Any:
+    async def _get_collection(self, collection_name: str | None = None) -> Any:
         """Return a ChromaDB collection (lazy-init).
 
         Args:
@@ -103,7 +104,7 @@ class KBSynthesizer:
             )
         return self._named_collections[name]
 
-    async def _index_documents(self, docs: List[Any], collection_name: Optional[str] = None) -> None:
+    async def _index_documents(self, docs: List[Any], collection_name: str | None = None) -> None:
         """Persist synthesized SummaryPage dicts into ChromaDB.
 
         Args:
@@ -130,7 +131,7 @@ class KBSynthesizer:
         self,
         topic: str,
         limit: int = 3,
-        collection_names: Optional[List[str]] = None,
+        collection_names: List[str] | None = None,
     ) -> str:
         """Return synthesized KB summaries as a RAG context string.
 
@@ -143,7 +144,7 @@ class KBSynthesizer:
             collection_names: Extra collection names to query in addition to
                 the default.  Duplicates are skipped.
         """
-        all_names: List[Optional[str]] = [None]  # None → default collection
+        all_names: List[str | None] = [None]  # None → default collection
         seen = {self.COLLECTION_NAME}
         for name in collection_names or []:
             if name and name not in seen:
@@ -167,7 +168,7 @@ class KBSynthesizer:
     async def synthesize_docs(
         self,
         file_paths: List[str],
-        collection_config: "Optional[CollectionConfig]" = None,
+        collection_config: "CollectionConfig | None" = None,
     ) -> None:
         """Synthesize indexed KB docs into topic-summary pages (best-effort).
 
@@ -301,7 +302,7 @@ class KBSynthesizer:
         )
         return (all_variants[best_vid], best_vid)
 
-    def _resolve_prompt(self, collection_config: "Optional[CollectionConfig]") -> str:
+    def _resolve_prompt(self, collection_config: "CollectionConfig | None") -> str:
         """Return the synthesis prompt for this cluster.
 
         Uses the collection config's ``prompt_template`` when provided;
@@ -325,7 +326,7 @@ class KBSynthesizer:
     async def _synthesize_cluster(
         self,
         file_paths: List[str],
-        collection_config: "Optional[CollectionConfig]" = None,
+        collection_config: "CollectionConfig | None" = None,
     ) -> None:
         """Build one summary page from a batch of docs.
 
@@ -350,7 +351,7 @@ class KBSynthesizer:
                 {"role": "system", "content": prompt},
                 {"role": "user", "content": docs_text},
             ]
-        override_model: Optional[str] = collection_config.synthesis_model if collection_config is not None else None
+        override_model: str | None = collection_config.synthesis_model if collection_config is not None else None
         chat_kwargs: dict = {"messages": messages, "temperature": 0.3, "max_tokens": 600}
         if override_model:
             chat_kwargs["model"] = override_model
@@ -376,7 +377,7 @@ class KBSynthesizer:
             "synthesized_at": time.time(),
             "doc_count": len(file_paths),
         }
-        target_collection: Optional[str] = None
+        target_collection: str | None = None
         if collection_config is not None:
             target = collection_config.synthesis_target.strip()
             if target:
@@ -392,7 +393,7 @@ class KBSynthesizer:
         collection_key = target_collection or self.COLLECTION_NAME
         prompt_name = collection_config.name if collection_config is not None else "default"
         # Issue #4681: link this run to its predecessor for lineage chain.
-        parent_run_id: Optional[str] = self._last_run_id.get(collection_key)
+        parent_run_id: str | None = self._last_run_id.get(collection_key)
         await self._provenance_log.log_run(
             run_id=cluster_id,
             source_docs=file_paths[:_MAX_DOCS_PER_CLUSTER],
@@ -458,7 +459,7 @@ class KBSynthesizer:
         return "kb_syn_" + hashlib.md5(key.encode(), usedforsecurity=False).hexdigest()[:12]
 
     async def _query_summaries(
-        self, query: str, limit: int = 3, collection_name: Optional[str] = None
+        self, query: str, limit: int = 3, collection_name: str | None = None
     ) -> List[tuple[str, dict]]:
         """Query a synthesis collection; return list of (document, metadata).
 
@@ -493,7 +494,7 @@ class KBSynthesizer:
 # Module-level singleton
 # ---------------------------------------------------------------------------
 
-_kb_synthesizer: Optional[KBSynthesizer] = None
+_kb_synthesizer: KBSynthesizer | None = None
 
 
 def get_kb_synthesizer(llm_service: Any) -> KBSynthesizer:

@@ -4,7 +4,7 @@
     <div class="message-header">
       <div class="flex items-center gap-1.5">
         <div class="message-avatar" :class="avatarClass">
-          <i :class="senderIcon" aria-hidden="true"></i>
+          <Icon :name="senderIcon" />
         </div>
         <div class="message-info">
           <span class="sender-name">
@@ -27,7 +27,7 @@
           :aria-label="$t('chat.message.edit')"
           :title="$t('chat.message.edit')"
         >
-          <i class="fas fa-edit" aria-hidden="true"></i>
+          <Icon name="edit" />
         </BaseButton>
         <BaseButton
           variant="ghost"
@@ -37,7 +37,7 @@
           :aria-label="$t('chat.message.copy')"
           :title="$t('chat.message.copy')"
         >
-          <i class="fas fa-copy" aria-hidden="true"></i>
+          <Icon name="copy" />
         </BaseButton>
         <!-- Issue #3245: Save assistant response as a persistent AI document -->
         <BaseButton
@@ -50,7 +50,7 @@
           title="Save as document"
           @click="handleSaveAsDocument"
         >
-          <i class="fas fa-file-alt" aria-hidden="true"></i>
+          <Icon name="file-alt" />
         </BaseButton>
         <BaseButton
           variant="ghost"
@@ -60,7 +60,7 @@
           :aria-label="$t('chat.message.delete')"
           :title="$t('chat.message.delete')"
         >
-          <i class="fas fa-trash" aria-hidden="true"></i>
+          <Icon name="trash" />
         </BaseButton>
       </div>
     </div>
@@ -97,15 +97,15 @@
       <div v-if="showMetadata" class="message-metadata">
         <div class="metadata-items">
           <span v-if="message.metadata?.model" class="metadata-item">
-            <i class="fas fa-robot" aria-hidden="true"></i>
+            <Icon name="robot" />
             {{ message.metadata.model }}
           </span>
           <span v-if="message.metadata?.tokens" class="metadata-item">
-            <i class="fas fa-coins" aria-hidden="true"></i>
+            <Icon name="dollar-sign" />
             {{ $t('chat.message.tokens', { count: message.metadata.tokens }) }}
           </span>
           <span v-if="message.metadata?.duration" class="metadata-item">
-            <i class="fas fa-clock" aria-hidden="true"></i>
+            <Icon name="clock" />
             {{ message.metadata.duration }}ms
           </span>
         </div>
@@ -168,6 +168,7 @@
  * Issue #184: Split oversized Vue components
  */
 
+import Icon from '@/components/ui/Icon.vue'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { ChatMessage } from '@/stores/useChatStore'
@@ -248,15 +249,15 @@ const avatarClass = computed(() => `message-avatar ${props.message.sender}`)
 
 const senderIcon = computed(() => {
   const icons: Record<string, string> = {
-    user: 'fas fa-user',
-    assistant: 'fas fa-robot',
-    system: 'fas fa-cog',
-    error: 'fas fa-exclamation-triangle',
-    thought: 'fas fa-brain',
-    'tool-code': 'fas fa-code',
-    'tool-output': 'fas fa-terminal'
+    user: 'user',
+    assistant: 'robot',
+    system: 'cog',
+    error: 'exclamation-triangle',
+    thought: 'brain',
+    'tool-code': 'code',
+    'tool-output': 'terminal'
   }
-  return icons[props.message.sender] || 'fas fa-comment'
+  return icons[props.message.sender] || 'comment'
 })
 
 const senderName = computed(() => {
@@ -310,13 +311,13 @@ const formattedContent = computed(() => {
 
   // Strip ANSI escape codes
   content = content
-    .replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '')
-    .replace(/\x1b\][0-9;]*[^\x07]*\x07/g, '')
-    .replace(/\x1b\][0-9;]*[^\x07\x1b]*(?:\x1b\\)?/g, '')
-    .replace(/\x1b[=>]/g, '')
-    .replace(/\x1b[()][AB012]/g, '')
+    .replace(/\u001b\[[0-9;]*[a-zA-Z]/g, '')
+    .replace(/\u001b\][0-9;]*[^\u0007]*\u0007/g, '')
+    .replace(/\u001b\][0-9;]*[^\u0007\u001b]*(?:\u001b\\)?/g, '')
+    .replace(/\u001b[=>]/g, '')
+    .replace(/\u001b[()][AB012]/g, '')
     .replace(/\[[?\d;]*[hlHJ]/g, '')
-    .replace(/\]0;[^\x07\n]*\x07?/g, '')
+    .replace(/\]0;[^\u0007\n]*\u0007?/g, '')
     .trim()
 
   // Strip TOOL_CALL tags

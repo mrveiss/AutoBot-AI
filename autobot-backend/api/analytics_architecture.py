@@ -17,14 +17,12 @@ Key Features:
 
 import ast
 import asyncio
-import logging
-import os
 import re
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import aiofiles
 from fastapi import APIRouter, Depends, Query
@@ -32,7 +30,6 @@ from fastapi import APIRouter, Depends, Query
 from api.schemas_analytics import (
     AnalyticsArchitectureConsistencyResponse,
     AnalyticsArchitectureDiagramResponse,
-    AnalyticsArchitectureHealthResponse,
     AnalyticsArchitectureLayersResponse,
     AnalyticsArchitecturePatternsResponse,
     AnalyticsArchitectureQuickScanResponse,
@@ -46,9 +43,11 @@ from api.schemas_analytics import (
 )
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 from autobot_shared.status_enums import Severity
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter()
 
@@ -362,14 +361,14 @@ class ArchitectureAnalyzer:
     def __init__(self, base_path: str = None):
         """Initialize architecture analyzer with base path."""
         if base_path is None:
-            base_path = os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot")
+            base_path = config.base_dir
         self.base_path = Path(base_path)
         self.file_analyses: Dict[str, FileAnalysis] = {}
         self.pattern_matches: List[PatternMatch] = []
         self.layers: List[ArchitectureLayer] = []
 
     def _determine_target_patterns(
-        self, patterns_to_detect: Optional[List[PatternType]], include_autobot: bool
+        self, patterns_to_detect: List[PatternType] | None, include_autobot: bool
     ) -> List[PatternType]:
         """Determine which patterns to detect (Issue #398: extracted)."""
         if patterns_to_detect:
@@ -418,7 +417,7 @@ class ArchitectureAnalyzer:
     async def analyze(
         self,
         paths: List[str],
-        patterns_to_detect: Optional[List[PatternType]] = None,
+        patterns_to_detect: List[PatternType] | None = None,
         include_autobot_patterns: bool = True,
     ) -> ArchitectureReport:
         """Analyze architecture of specified paths (Issue #398: refactored)."""
@@ -560,7 +559,7 @@ class ArchitectureAnalyzer:
                 matches = self._match_pattern(analysis, content, PATTERN_TEMPLATES[pattern_type])
                 analysis.patterns_found.extend(matches)
 
-    async def _analyze_file(self, file_path: str, target_patterns: List[PatternType]) -> Optional[FileAnalysis]:
+    async def _analyze_file(self, file_path: str, target_patterns: List[PatternType]) -> FileAnalysis | None:
         """Analyze a single Python file (Issue #398: refactored)."""
         try:
             async with aiofiles.open(file_path, "r", encoding="utf-8", errors="ignore") as f:
@@ -719,7 +718,7 @@ class ArchitectureAnalyzer:
         template: PatternTemplate,
         analysis: FileAnalysis,
         content: str,
-    ) -> Optional[PatternMatch]:
+    ) -> PatternMatch | None:
         """Match module-level patterns (Issue #398: extracted)."""
         if analysis.classes or not template.code_patterns:
             return None
@@ -820,7 +819,7 @@ class ArchitectureAnalyzer:
 
         return {"violations": violations, "consistent_count": consistent_count}
 
-    def _process_layer_definition(self, layer_def: Dict[str, Any]) -> Optional[ArchitectureLayer]:
+    def _process_layer_definition(self, layer_def: Dict[str, Any]) -> ArchitectureLayer | None:
         """
         Process a layer definition and extract components.
 
@@ -1059,7 +1058,7 @@ class ArchitectureAnalyzer:
 # Global Instance
 # =============================================================================
 
-_analyzer: Optional[ArchitectureAnalyzer] = None
+_analyzer: ArchitectureAnalyzer | None = None
 _analyzer_lock = asyncio.Lock()
 
 
@@ -1238,7 +1237,7 @@ async def get_diagram(
 )
 async def check_consistency(
     admin_check: bool = Depends(check_admin_permission),
-    pattern: Optional[PatternType] = Query(None, description="Specific pattern"),
+    pattern: PatternType | None = Query(None, description="Specific pattern"),
 ) -> Dict[str, Any]:
     """
     Check consistency of pattern implementations.
@@ -1261,33 +1260,4 @@ async def check_consistency(
     return {
         "consistency_results": [c.model_dump() for c in consistency],
         "total_checked": len(consistency),
-    }
-
-
-@router.get("/health", response_model=AnalyticsArchitectureHealthResponse, summary="Health check")
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="health_check",
-    error_code_prefix="ANALYTICS_ARCHITECTURE",
-)
-async def health_check(
-    admin_check: bool = Depends(check_admin_permission),
-) -> Dict[str, Any]:
-    """
-    Check the health of the architecture analyzer.
-
-    Deprecated: Use /api/system/health for system-wide health checks.
-    This per-module endpoint will be removed in a future release. (#3333)
-
-    Issue #744: Requires admin authentication.
-    """
-    logger.warning(
-        "Deprecated health endpoint called: /api/architecture/health — " "use /api/system/health instead (#3333)"
-    )
-    return {
-        "status": "healthy",
-        "available_patterns": len(PatternType),
-        "templates_loaded": len(PATTERN_TEMPLATES),
-        "deprecated": True,
-        "use_instead": "/api/system/health",
     }

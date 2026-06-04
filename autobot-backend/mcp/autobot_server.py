@@ -30,12 +30,16 @@ Observability:
 
 import asyncio
 import json
-import logging
-import os
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
-logger = logging.getLogger(__name__)
+from autobot_shared.auth.jwt_core import JWTDecodeError, JWTExpiredError
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.ssot_config import config
+from services.run_jwt import validate_run_jwt
+
+logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -44,11 +48,21 @@ logger = logging.getLogger(__name__)
 _RATE_LIMIT = 50  # requests per 60-second window per token
 _WINDOW_SECONDS = 60.0
 
-# Scope → tool prefixes
+# Legacy scope → tool prefix (simple token format "secret:kb,memory,agents")
 _SCOPE_MAP: Dict[str, str] = {
     "kb": "kb.",
     "memory": "memory.",
     "agents": "agents.",
+}
+
+# Run JWT scope → tool prefixes (SEC-2 Phase 2, #6473)
+_RUN_JWT_SCOPE_TO_PREFIXES: Dict[str, List[str]] = {
+    "mcp:knowledge": ["kb", "memory"],
+    "agent:invoke": ["agents"],
+    "mcp:filesystem": ["filesystem"],
+    "mcp:web_fetch": ["web_fetch"],
+    "task:read": ["task"],
+    "task:write": ["task"],
 }
 
 # ---------------------------------------------------------------------------
@@ -255,7 +269,36 @@ class AutoBotMCPServer:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _validate_token(token: str) -> Optional[List[str]]:
+    def _map_run_jwt_scopes(jwt_scopes: List[str]) -> List[str]:
+        """Convert run JWT scope claims into the tool-prefix list used by _check_scope."""
+        granted: List[str] = []
+        for scope in jwt_scopes:
+            for prefix in _RUN_JWT_SCOPE_TO_PREFIXES.get(scope, []):
+                if prefix not in granted:
+                    granted.append(prefix)
+        return granted
+
+    @staticmethod
+    async def _resolve_run_jwt(token: str) -> Tuple[List[str] | None, str | None]:
+        """Validate a run JWT and return (tool_prefixes, error_message).
+
+        Returns (prefixes, None) on success, (None, error) on failure.
+        Callers should map None prefixes to a -32001 auth error.
+        """
+        try:
+            claims = await validate_run_jwt(token)
+        except JWTExpiredError:
+            return None, "Forbidden: run JWT has expired"
+        except JWTDecodeError as exc:
+            return None, f"Forbidden: {exc}"
+        jwt_scopes = claims.get("scope") or []
+        if not isinstance(jwt_scopes, list):
+            jwt_scopes = []
+        prefixes = AutoBotMCPServer._map_run_jwt_scopes([str(s) for s in jwt_scopes])
+        return prefixes, None
+
+    @staticmethod
+    def _validate_token(token: str) -> List[str] | None:
         """Return the list of granted scopes for *token*, or None if invalid.
 
         Token format: ``<secret>:<scope1>,<scope2>`` where the secret
@@ -273,11 +316,54 @@ class AutoBotMCPServer:
             secret_part, scopes_part = token.split(":", 1)
         except ValueError:
             return None
-        expected = os.environ.get("AUTOBOT_MCP_TOKEN", "dev")
+        expected = config.mcp_token
         if secret_part != expected:
             return None
         scopes = [s.strip() for s in scopes_part.split(",") if s.strip()]
         return scopes if scopes else None
+
+    async def _validate_redis_token(self, token: str) -> Optional[List[str]]:
+        """Look up *token* in Redis and return its scopes, or None if not found.
+
+        Token format: ``<secret>:<scope1>,<scope2>`` — the secret portion is
+        the Redis lookup key under ``mcp:token:by_secret:{secret}``.  On a
+        successful lookup ``last_used`` is updated in-place.
+
+        This method is called as a fallback when ``_validate_token()`` rejects
+        the token (i.e. the secret does not match the static env-var secret).
+        Redis-issued tokens created via ``POST /api/mcp/tokens`` are validated
+        here, enabling runtime token issuance and revocation without restart.
+        """
+        if not token:
+            return None
+        try:
+            secret_part, _ = token.split(":", 1)
+        except ValueError:
+            return None
+
+        try:
+            redis = await get_async_redis_client(database="main")
+            if redis is None:
+                logger.warning("_validate_redis_token: Redis unavailable")
+                return None
+
+            key = f"mcp:token:by_secret:{secret_part}"
+            raw = await redis.get(key)
+            if raw is None:
+                return None
+
+            record = json.loads(raw if isinstance(raw, str) else raw.decode("utf-8"))
+            scopes: List[str] = record.get("scopes") or []
+            if not scopes:
+                return None
+
+            # Update last_used timestamp
+            record["last_used"] = time.time()
+            await redis.set(key, json.dumps(record, ensure_ascii=False))
+            return scopes
+        except Exception as exc:
+            logger.warning("_validate_redis_token: unexpected error: %s", exc)
+            return None
 
     def _check_scope(self, scopes: List[str], tool_name: str) -> bool:
         """Return True if *scopes* grants access to *tool_name*."""
@@ -320,12 +406,28 @@ class AutoBotMCPServer:
         Returns:
             JSON-RPC response dict (always includes ``jsonrpc`` and ``id``).
         """
-        scopes = self._validate_token(auth_token)
-        if scopes is None:
-            return _err(-32001, "Unauthorized: invalid or missing token", req_id)
+        # SEC-2 Phase 2 (#6473): prefer run JWT over legacy static token.
+        # Agents pass run_jwt as a top-level JSON-RPC param; the scheduler also
+        # exposes it via AUTOBOT_RUN_JWT for in-process callers (base_agent.get_mcp_token).
+        run_jwt_token = params.pop("run_jwt", None) if isinstance(params, dict) else None
 
-        token_key = auth_token[:16]  # use prefix for rate-limit bucket key
-        if self._is_rate_limited(token_key):
+        using_run_jwt = False
+        if run_jwt_token:
+            scopes, error = await self._resolve_run_jwt(run_jwt_token)
+            if error:
+                return _err(-32001, error, req_id)
+            using_run_jwt = True
+            rate_key = run_jwt_token[:16]
+        else:
+            scopes = self._validate_token(auth_token)
+            if scopes is None:
+                # Fallback: check Redis-issued tokens (Issue #6453)
+                scopes = await self._validate_redis_token(auth_token)
+            if scopes is None:
+                return _err(-32001, "Unauthorized: invalid or missing token", req_id)
+            rate_key = auth_token[:16]
+
+        if self._is_rate_limited(rate_key):
             return _err(-32029, "Rate limit exceeded (50 req/min)", req_id)
 
         if method in ("initialize", "tools/list"):
@@ -343,7 +445,7 @@ class AutoBotMCPServer:
         if method == "tools/call":
             tool_name = params.get("name", "")
             arguments = params.get("arguments", {})
-            return await self._dispatch_tool(tool_name, arguments, scopes, req_id)
+            return await self._dispatch_tool(tool_name, arguments, scopes, req_id, using_run_jwt=using_run_jwt)
 
         return _err(-32601, f"Method not found: {method}", req_id)
 
@@ -357,10 +459,14 @@ class AutoBotMCPServer:
         arguments: Dict[str, Any],
         scopes: List[str],
         req_id: Any,
+        using_run_jwt: bool = False,
     ) -> Dict[str, Any]:
         if tool_name not in self.TOOLS:
             return _err(-32602, f"Unknown tool: {tool_name}", req_id)
         if not self._check_scope(scopes, tool_name):
+            if using_run_jwt:
+                # 403 Forbidden: valid run JWT but insufficient scope for this tool
+                return _err(-32003, f"Forbidden: run JWT lacks scope for tool: {tool_name}", req_id)
             return _err(-32001, f"Scope denied for tool: {tool_name}", req_id)
 
         t0 = time.monotonic()
@@ -386,7 +492,7 @@ class AutoBotMCPServer:
     async def _kb_search(
         self,
         query: str,
-        filters: Optional[Dict[str, Any]] = None,
+        filters: Dict[str, Any] | None = None,
         limit: int = 10,
     ) -> Any:
         from knowledge._composed import get_knowledge_base
@@ -432,7 +538,7 @@ class AutoBotMCPServer:
             return {"error": "Entity not found", "name": name}
         return entity
 
-    async def _memory_timeline(self, entity: str, range: Optional[str] = None) -> Any:
+    async def _memory_timeline(self, entity: str, range: str | None = None) -> Any:
         from autobot_memory_graph import AutoBotMemoryGraph
 
         graph = AutoBotMemoryGraph()
@@ -508,7 +614,7 @@ class AutoBotMCPServer:
             "count": len(visited),
         }
 
-    async def _memory_verbatim_search(self, query: str, session_filter: Optional[str] = None) -> Any:
+    async def _memory_verbatim_search(self, query: str, session_filter: str | None = None) -> Any:
         from memory.verbatim_store import VerbatimStore
 
         store = VerbatimStore()
@@ -537,7 +643,7 @@ class AutoBotMCPServer:
         """Read JSON-RPC requests from stdin line-by-line, write responses to stdout."""
         import sys
 
-        token = os.environ.get("AUTOBOT_MCP_TOKEN", "")
+        token = config.mcp_token
         loop = asyncio.get_event_loop()
 
         reader = asyncio.StreamReader()
@@ -574,7 +680,11 @@ class AutoBotMCPServer:
     # HTTP transport
     # ------------------------------------------------------------------
 
-    async def serve_http(self, host: str = "0.0.0.0", port: int = 8200) -> None:
+    async def serve_http(
+        self,
+        host: str = "0.0.0.0",
+        port: int = 8200,  # nosec B104 - intentional bind to all interfaces for service/test
+    ) -> None:
         """Run an aiohttp server accepting ``POST /mcp/tool`` requests."""
         from aiohttp import web
 
@@ -598,6 +708,8 @@ class AutoBotMCPServer:
                 code = response["error"].get("code", -32000)
                 if code == -32001:
                     status = 401
+                elif code == -32003:
+                    status = 403
                 elif code == -32029:
                     status = 429
             return web.Response(

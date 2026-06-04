@@ -19,7 +19,7 @@ import os
 import socket
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import aiohttp
 
@@ -46,8 +46,8 @@ class BackendTelemetryClient:
         worker_url: str,
         platform: str = "windows",
         heartbeat_interval: int = 30,
-        service_id: Optional[str] = None,
-        service_key: Optional[str] = None,
+        service_id: str | None = None,
+        service_key: str | None = None,
     ):
         """
         Initialize telemetry client.
@@ -75,8 +75,8 @@ class BackendTelemetryClient:
         self._auth_enabled = bool(service_id and service_key)
 
         self.backend_url = f"http://{backend_host}:{backend_port}"
-        self._session: Optional[aiohttp.ClientSession] = None
-        self._heartbeat_task: Optional[asyncio.Task] = None
+        self._session: aiohttp.ClientSession | None = None
+        self._heartbeat_task: asyncio.Task | None = None
         self._running = False
         self._start_time = time.time()
 
@@ -99,9 +99,7 @@ class BackendTelemetryClient:
                 self.service_id,
             )
         else:
-            logger.warning(
-                "Service authentication DISABLED - telemetry may be rejected by backend"
-            )
+            logger.warning("Service authentication DISABLED - telemetry may be rejected by backend")
 
     async def start(self) -> None:
         """Start the telemetry client and heartbeat loop."""
@@ -142,12 +140,12 @@ class BackendTelemetryClient:
 
     def update_metrics(
         self,
-        current_load: Optional[int] = None,
-        tasks_completed: Optional[int] = None,
-        tasks_failed: Optional[int] = None,
-        npu_available: Optional[bool] = None,
-        loaded_models: Optional[List[str]] = None,
-        metrics: Optional[Dict[str, Any]] = None,
+        current_load: int | None = None,
+        tasks_completed: int | None = None,
+        tasks_failed: int | None = None,
+        npu_available: bool | None = None,
+        loaded_models: List[str] | None = None,
+        metrics: Dict[str, Any] | None = None,
     ) -> None:
         """
         Update metrics to be sent with next heartbeat.
@@ -194,9 +192,7 @@ class BackendTelemetryClient:
         # Generate HMAC-SHA256 signature
         # Format: HMAC-SHA256(service_key, "service_id:method:path:timestamp")
         message = f"{self.service_id}:{method}:{path}:{timestamp}"
-        signature = hmac.new(
-            self.service_key.encode(), message.encode(), hashlib.sha256
-        ).hexdigest()
+        signature = hmac.new(self.service_key.encode(), message.encode(), hashlib.sha256).hexdigest()
 
         return {
             "X-Service-ID": self.service_id,
@@ -219,9 +215,7 @@ class BackendTelemetryClient:
                 else:
                     self._consecutive_failures += 1
                     # Exponential backoff up to max
-                    self._retry_delay = min(
-                        self._retry_delay * 2, self._max_retry_delay
-                    )
+                    self._retry_delay = min(self._retry_delay * 2, self._max_retry_delay)
 
             except asyncio.CancelledError:
                 break
@@ -262,9 +256,7 @@ class BackendTelemetryClient:
             path = "/api/npu/workers/heartbeat"
             url = f"{self.backend_url}{path}"
             auth_headers = self._generate_auth_headers("POST", path)
-            async with self._session.post(
-                url, json=heartbeat_data, headers=auth_headers
-            ) as response:
+            async with self._session.post(url, json=heartbeat_data, headers=auth_headers) as response:
                 if response.status == 200:
                     data = await response.json()
                     logger.debug(
@@ -322,9 +314,7 @@ class BackendTelemetryClient:
             path = "/api/npu/workers"
             url = f"{self.backend_url}{path}"
             auth_headers = self._generate_auth_headers("POST", path)
-            async with self._session.post(
-                url, json=registration_data, headers=auth_headers
-            ) as response:
+            async with self._session.post(url, json=registration_data, headers=auth_headers) as response:
                 if response.status in (200, 201):
                     logger.info("Successfully registered with backend")
                     return True
@@ -365,11 +355,11 @@ SERVICE_KEY_FILE_PATHS = [
 # Thread-safe global state (Issue #68 - Race condition fix)
 # =============================================================================
 _telemetry_lock = asyncio.Lock()
-_telemetry_client: Optional[BackendTelemetryClient] = None
-_local_ip_cache: Optional[str] = None  # Cache to avoid repeated socket calls
+_telemetry_client: BackendTelemetryClient | None = None
+_local_ip_cache: str | None = None  # Cache to avoid repeated socket calls
 
 
-def _load_service_credentials(config: dict) -> tuple[Optional[str], Optional[str]]:
+def _load_service_credentials(config: dict) -> tuple[str | None, str | None]:
     """
     Load service authentication credentials.
 
@@ -388,15 +378,15 @@ def _load_service_credentials(config: dict) -> tuple[Optional[str], Optional[str
         Tuple of (service_id, service_key) or (None, None) if not found
     """
     # Try environment variables first
-    service_id = os.environ.get("SERVICE_ID")
-    service_key = os.environ.get("SERVICE_KEY")
+    service_id = os.environ.get("SERVICE_ID")  # ssot-config-exempt: NPU worker SERVICE_* namespace
+    service_key = os.environ.get("SERVICE_KEY")  # ssot-config-exempt: NPU worker SERVICE_* namespace
 
     if service_id and service_key:
         logger.info("Loaded service credentials from environment variables")
         return service_id, service_key
 
     # Try SERVICE_KEY_FILE environment variable
-    key_file = os.environ.get("SERVICE_KEY_FILE")
+    key_file = os.environ.get("SERVICE_KEY_FILE")  # ssot-config-exempt: NPU worker SERVICE_* namespace
     if not key_file:
         # Try config file
         backend_config = config.get("backend", {})
@@ -429,7 +419,7 @@ def _load_service_credentials(config: dict) -> tuple[Optional[str], Optional[str
     return None, None
 
 
-def _read_key_from_file(key_file: str) -> Optional[str]:
+def _read_key_from_file(key_file: str) -> str | None:
     """
     Read service key from .env-style file.
 
@@ -489,7 +479,7 @@ def _get_local_ip(backend_host: str) -> str:
                 logger.debug("Suppressed exception in try block", exc_info=True)
 
 
-async def get_telemetry_client(config: dict) -> Optional[BackendTelemetryClient]:
+async def get_telemetry_client(config: dict) -> BackendTelemetryClient | None:
     """
     Get or create the global telemetry client.
 
@@ -547,9 +537,7 @@ async def get_telemetry_client(config: dict) -> Optional[BackendTelemetryClient]
             worker_id=worker_id,
             worker_url=worker_url,
             platform="windows",
-            heartbeat_interval=backend_config.get(
-                "health_check_interval", DEFAULT_HEARTBEAT_INTERVAL
-            ),
+            heartbeat_interval=backend_config.get("health_check_interval", DEFAULT_HEARTBEAT_INTERVAL),
             service_id=service_id,
             service_key=service_key,
         )

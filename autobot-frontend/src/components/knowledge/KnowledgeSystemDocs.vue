@@ -15,6 +15,7 @@
  * - Copy to clipboard
  */
 
+import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted, watch } from 'vue'
 import { useExpansion } from '@/composables/useExpansion'
 import { useI18n } from 'vue-i18n'
@@ -246,12 +247,12 @@ async function exportAllDocs(format: 'json' | 'markdown'): Promise<void> {
 
 function getDocIcon(type: string): string {
   const icons: Record<string, string> = {
-    'markdown': 'fas fa-file-alt',
-    'api': 'fas fa-code',
-    'guide': 'fas fa-book',
-    'reference': 'fas fa-book-open',
-    'tutorial': 'fas fa-graduation-cap',
-    'default': 'fas fa-file'
+    'markdown': 'file-alt',
+    'api': 'code',
+    'guide': 'book',
+    'reference': 'book-open',
+    'tutorial': 'graduation-cap',
+    'default': 'file'
   }
   return icons[type] || icons.default
 }
@@ -290,7 +291,7 @@ onMounted(() => {
       </div>
       <div class="header-actions">
         <div class="search-box">
-          <i class="fas fa-search"></i>
+          <Icon name="search" />
           <input
             v-model="searchQuery"
             type="text"
@@ -300,15 +301,15 @@ onMounted(() => {
         </div>
         <div class="export-dropdown" v-if="selectedCategory">
           <BaseButton variant="outline-solid" class="export-btn">
-            <i class="fas fa-download"></i>
+            <Icon name="download" />
             {{ $t('knowledge.systemDocs.exportAll') }}
           </BaseButton>
           <div class="dropdown-menu">
             <button @click="exportAllDocs('markdown')">
-              <i class="fas fa-file-alt"></i> Markdown
+              <Icon name="file-alt" /> Markdown
             </button>
             <button @click="exportAllDocs('json')">
-              <i class="fas fa-file-code"></i> JSON
+              <Icon name="file-code" /> JSON
             </button>
           </div>
         </div>
@@ -317,10 +318,10 @@ onMounted(() => {
 
     <!-- Error Message -->
     <div v-if="error" class="error-banner">
-      <i class="fas fa-exclamation-circle"></i>
+      <Icon name="exclamation-circle" />
       {{ error }}
       <button @click="error = null" class="close-btn">
-        <i class="fas fa-times"></i>
+        <Icon name="times" />
       </button>
     </div>
 
@@ -329,7 +330,7 @@ onMounted(() => {
       <!-- Category Sidebar -->
       <aside class="docs-sidebar">
         <div v-if="isLoading && categories.length === 0" class="loading-state">
-          <i class="fas fa-spinner fa-spin"></i>
+          <Icon name="spinner" class="animate-spin" />
           <span>{{ $t('knowledge.systemDocs.loadingCategories') }}</span>
         </div>
 
@@ -349,9 +350,9 @@ onMounted(() => {
                 class="expand-btn"
                 @click.stop="toggleCategory(category.id)"
               >
-                <i :class="isCategoryExpanded(category.id) ? 'fas fa-chevron-down' : 'fas fa-chevron-right'"></i>
+                <Icon :name="isCategoryExpanded(category.id) ? 'chevron-down' : 'chevron-right'" />
               </button>
-              <i :class="category.icon || 'fas fa-folder'" class="category-icon"></i>
+              <i :class="category.icon || 'folder'" class="category-icon"></i>
               <span class="category-name">{{ category.name }}</span>
               <span class="doc-count">{{ category.docCount || 0 }}</span>
             </div>
@@ -368,7 +369,7 @@ onMounted(() => {
                 :class="{ selected: selectedCategory?.id === child.id }"
                 @click="selectCategory(child)"
               >
-                <i :class="child.icon || 'fas fa-folder'" class="category-icon"></i>
+                <i :class="child.icon || 'folder'" class="category-icon"></i>
                 <span class="category-name">{{ child.name }}</span>
                 <span class="doc-count">{{ child.docCount || 0 }}</span>
               </div>
@@ -380,7 +381,7 @@ onMounted(() => {
       <!-- Document List -->
       <div class="docs-list">
         <div v-if="isLoading" class="loading-state">
-          <i class="fas fa-spinner fa-spin"></i>
+          <Icon name="spinner" class="animate-spin" />
           <span>{{ $t('knowledge.systemDocs.loadingDocs') }}</span>
         </div>
 
@@ -404,7 +405,7 @@ onMounted(() => {
             :class="{ selected: selectedDoc?.id === doc.id }"
             @click="selectDoc(doc)"
           >
-            <i :class="getDocIcon(doc.type)" class="doc-icon"></i>
+            <Icon :name="getDocIcon(doc.type)" />
             <div class="doc-info">
               <span class="doc-title">{{ doc.title }}</span>
               <span class="doc-path">{{ doc.path }}</span>
@@ -416,7 +417,7 @@ onMounted(() => {
       <!-- Document Preview -->
       <div class="docs-preview">
         <div v-if="!hasSelectedDoc" class="preview-empty">
-          <i class="fas fa-file-alt"></i>
+          <Icon name="file-alt" />
           <p>{{ $t('knowledge.systemDocs.selectDocument') }}</p>
         </div>
 
@@ -430,7 +431,7 @@ onMounted(() => {
                 :class="{ success: copySuccess }"
                 @click="copyToClipboard"
               >
-                <i :class="copySuccess ? 'fas fa-check' : 'fas fa-copy'"></i>
+                <Icon :name="copySuccess ? 'check' : 'copy'" />
                 {{ copySuccess ? $t('knowledge.systemDocs.copied') : $t('knowledge.systemDocs.copy') }}
               </BaseButton>
               <BaseButton
@@ -439,7 +440,7 @@ onMounted(() => {
                 @click="exportDoc('markdown')"
                 :disabled="isExporting"
               >
-                <i class="fas fa-download"></i>
+                <Icon name="download" />
                 {{ $t('knowledge.systemDocs.export') }}
               </BaseButton>
             </div>
@@ -447,11 +448,11 @@ onMounted(() => {
 
           <div class="preview-meta">
             <span v-if="selectedDoc?.path" class="meta-item">
-              <i class="fas fa-folder"></i>
+              <Icon name="folder" />
               {{ selectedDoc.path }}
             </span>
             <span class="meta-item">
-              <i class="fas fa-file-word"></i>
+              <Icon name="file-word" />
               {{ $t('knowledge.systemDocs.words', { count: docWordCount }) }}
             </span>
           </div>

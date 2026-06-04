@@ -12,12 +12,12 @@ and targeted testing suggestions.
 import asyncio
 import hashlib
 import json
-import logging
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+from celery.result import AsyncResult
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from api.schemas_analytics import (
     BugPredictionAnalysisResponse,
@@ -37,12 +37,14 @@ from api.schemas_analytics import (
 )
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 from constants.threshold_constants import TimingConstants
 from constants.ttl_constants import TTL_5_MINUTES
-from utils.background_task_manager import BackgroundTaskManager
+from tasks.analytics_tasks import run_bug_prediction_analysis
+from utils.celery_task_status import celery_result_to_status, get_latest_task_result, store_latest_task_id
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/bug-prediction", tags=["bug-prediction", "analytics"])
 
@@ -50,11 +52,7 @@ router = APIRouter(prefix="/bug-prediction", tags=["bug-prediction", "analytics"
 BUG_PREDICTION_CACHE_PREFIX = "codebase:bug_prediction:cache"
 BUG_PREDICTION_CACHE_TTL = TTL_5_MINUTES
 
-# Issue #1418: Background task manager for batched analysis
-_bg_manager = BackgroundTaskManager(
-    redis_prefix="bug_pred_task:",
-    task_timeout=600,
-)
+_REDIS_PREFIX = "bug_pred_task:"
 _BATCH_SIZE = 50
 
 # Performance optimization: O(1) lookup for control flow keywords (Issue #326)
@@ -72,7 +70,7 @@ def _get_bug_prediction_cache_key(path: str, include_pattern: str, limit: int) -
     to prevent stale data across different query parameters.
     """
     raw = f"{path}:{include_pattern}:{limit}"
-    param_hash = hashlib.md5(raw.encode()).hexdigest()[:12]
+    param_hash = hashlib.md5(raw.encode(), usedforsecurity=False).hexdigest()[:12]
     return f"{BUG_PREDICTION_CACHE_PREFIX}:{param_hash}"
 
 
@@ -906,58 +904,6 @@ def _build_analysis_result(
     }
 
 
-async def _run_batched_bug_analysis(
-    task_id: str,
-    path: str,
-    include_pattern: str,
-    limit: int,
-) -> None:
-    """Run bug prediction in batches with progress tracking (#1418)."""
-    try:
-        await _bg_manager.update_progress(task_id, "Gathering file data", 5)
-        bug_history, change_freq, files_to_analyze = await asyncio.gather(
-            get_git_bug_history(),
-            get_file_change_frequency(),
-            asyncio.to_thread(_find_files_sync, path, include_pattern, limit),
-        )
-
-        if not files_to_analyze:
-            await _bg_manager.complete_task(
-                task_id,
-                _no_data_response(f"No files matching '{include_pattern}' found in '{path}'"),
-            )
-            return
-
-        total = len(files_to_analyze)
-        analyzed_files: list[dict[str, Any]] = []
-
-        for batch_start in range(0, total, _BATCH_SIZE):
-            batch_end = min(batch_start + _BATCH_SIZE, total)
-            batch = files_to_analyze[batch_start:batch_end]
-            step = f"Analyzing files {batch_start + 1}-{batch_end} of {total}"
-            pct = 10 + int((batch_start / total) * 85)
-            await _bg_manager.update_progress(task_id, step, pct)
-            batch_results = await _analyze_files_parallel(batch, change_freq, bug_history)
-            analyzed_files.extend(batch_results)
-
-        await _bg_manager.update_progress(task_id, "Finalizing results", 95)
-        result = _build_analysis_result(analyzed_files, total, limit)
-
-        asyncio.create_task(
-            _safe_store_prediction_history(
-                total_files=total,
-                high_risk_count=result["high_risk_count"],
-                risk_distribution=result.pop("_risk_dist"),
-                analyzed_files=analyzed_files,
-            )
-        )
-
-        await _bg_manager.complete_task(task_id, result)
-    except Exception as e:
-        logger.error("Batched bug analysis failed: %s", e, exc_info=True)
-        await _bg_manager.fail_task(task_id, str(e))
-
-
 @router.get("/cached", response_model=BugPredictionCachedResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -966,7 +912,7 @@ async def _run_batched_bug_analysis(
 )
 async def get_cached_bug_prediction():
     """Return the latest completed bug prediction result (#1540)."""
-    cached = await _bg_manager.get_latest_result()
+    cached = await get_latest_task_result(_REDIS_PREFIX)
     if cached and cached.get("result"):
         return {
             "status": "success",
@@ -984,16 +930,15 @@ async def get_cached_bug_prediction():
     error_code_prefix="ANALYTICS_BUG_PREDICTION",
 )
 async def start_bug_analysis(
-    background_tasks: BackgroundTasks,
     admin_check: bool = Depends(check_admin_permission),
     path: str = Query(".", description="Path to analyze"),
     include_pattern: str = Query("*.py", description="File pattern to include"),
     limit: int = Query(10000, ge=1, le=100000, description="Maximum files to analyze"),
 ):
-    """Start batched bug prediction analysis as background task (#1418)."""
-    task_id = await _bg_manager.create_task(params={"path": path, "include_pattern": include_pattern, "limit": limit})
-    background_tasks.add_task(_run_batched_bug_analysis, task_id, path, include_pattern, limit)
-    return {"task_id": task_id, "status": "pending"}
+    """Enqueue bug prediction analysis as a Celery task (GH#6505)."""
+    result = run_bug_prediction_analysis.delay(path, include_pattern, limit)
+    await store_latest_task_id(_REDIS_PREFIX, result.id)
+    return {"task_id": result.id, "status": "pending"}
 
 
 @router.get("/status/{task_id}", response_model=BugPredictionStatusResponse)
@@ -1006,11 +951,11 @@ async def get_bug_prediction_status(
     task_id: str,
     admin_check: bool = Depends(check_admin_permission),
 ):
-    """Get bug prediction task status (#1418)."""
-    task = await _bg_manager.get_status(task_id)
-    if task is None:
+    """Get bug prediction task status."""
+    status = celery_result_to_status(AsyncResult(task_id))
+    if status is None or status["status"] == "pending":
         raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
-    return task
+    return status
 
 
 @router.post("/tasks/clear-stuck", response_model=BugPredictionClearStuckResponse)
@@ -1023,12 +968,8 @@ async def clear_stuck_bug_tasks(
     force: bool = Query(default=False, description="Force clear ALL running tasks"),
     admin_check: bool = Depends(check_admin_permission),
 ):
-    """Clear stuck bug prediction tasks (#1418)."""
-    cleaned = await _bg_manager.clear_stuck(force=force)
-    return {
-        "cleared_count": cleaned,
-        "message": f"Cleared {cleaned} task(s)" + (" (forced)" if force else ""),
-    }
+    """No-op: Celery handles stuck-task recovery automatically (GH#6505)."""
+    return {"cleared_count": 0, "message": "Celery handles task recovery automatically"}
 
 
 @router.get("/high-risk", response_model=BugPredictionHighRiskResponse)

@@ -7,9 +7,7 @@ Users API Endpoints
 REST API for user management operations.
 """
 
-import logging
 import uuid
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
@@ -29,6 +27,7 @@ from api.user_management.dependencies import (
     require_platform_admin,
     require_user_management_enabled,
 )
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.models.pagination import PaginationParams
 from user_management.middleware.rate_limit import (
     PasswordChangeRateLimiter,
@@ -49,7 +48,7 @@ from user_management.services.user_service import (
 )
 
 router = APIRouter(prefix="/users", tags=["Users"])
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # -------------------------------------------------------------------------
@@ -66,7 +65,7 @@ logger = logging.getLogger(__name__)
 )
 async def list_users(
     pagination: PaginationParams = Depends(),
-    search: Optional[str] = Query(None, description="Search by email, username, or name"),
+    search: str | None = Query(None, description="Search by email, username, or name"),
     include_inactive: bool = Query(False, description="Include inactive users"),
     user_service: UserService = Depends(get_user_service),
 ):

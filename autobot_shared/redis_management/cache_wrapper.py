@@ -26,7 +26,7 @@ Usage::
 import dataclasses
 import json
 import logging
-from typing import Any, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -65,7 +65,7 @@ class RedisCache:
                      to store without expiry.
     """
 
-    def __init__(self, client: Any, default_ttl: Optional[int] = None) -> None:
+    def __init__(self, client: Any, default_ttl: int | None = None) -> None:
         self._client = client
         self._default_ttl = default_ttl
 
@@ -90,7 +90,7 @@ class RedisCache:
             logger.warning("Cache get failed for %s: %s", key, exc)
             return default
 
-    async def set_json(self, key: str, data: Any, ttl: Optional[int] = None) -> bool:
+    async def set_json(self, key: str, data: Any, ttl: int | None = None) -> bool:
         """JSON-encode *data* and store it at *key* in Redis.
 
         Args:

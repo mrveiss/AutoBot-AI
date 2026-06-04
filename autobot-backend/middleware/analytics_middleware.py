@@ -7,14 +7,15 @@ Automatically tracks API calls for pattern analysis and performance monitoring
 """
 
 import asyncio
-import logging
 import time
 from typing import Callable
 
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 
 
 class AnalyticsMiddleware(BaseHTTPMiddleware):

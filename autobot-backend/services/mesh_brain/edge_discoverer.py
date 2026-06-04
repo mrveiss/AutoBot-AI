@@ -8,11 +8,12 @@ edges from usage patterns; EdgeDiscoverer promotes the strongest ones to named
 relationship types by asking an LLM to classify the pair of chunks.
 """
 
-import logging
 from dataclasses import dataclass
 from typing import Callable, Coroutine, Protocol
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 
 # Relationship labels offered to the LLM as constrained choices.
 _KNOWN_LABELS = (

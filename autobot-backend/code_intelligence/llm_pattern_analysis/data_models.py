@@ -15,7 +15,7 @@ Extracted from llm_pattern_analyzer.py as part of Issue #381 refactoring.
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 from code_intelligence.llm_pattern_analysis.types import (
     HIGH_PRIORITY_LEVELS,
@@ -103,7 +103,7 @@ class PromptTemplate:
     variable_count: int
     usage_count: int = 0
     avg_token_count: int = 0
-    file_path: Optional[str] = None
+    file_path: str | None = None
     line_number: int = 0
     issues: List[PromptIssueType] = field(default_factory=list)
 
@@ -217,7 +217,7 @@ class UsagePattern:
     file_path: str
     line_number: int
     code_snippet: str
-    model_used: Optional[str] = None
+    model_used: str | None = None
     frequency: str = "unknown"
     token_estimate: int = 0
     optimization_potential: float = 0.0
@@ -246,7 +246,7 @@ class RetryPattern:
     backoff_strategy: str  # exponential, linear, fixed, none
     retry_conditions: List[str] = field(default_factory=list)
     has_timeout: bool = False
-    timeout_value: Optional[float] = None
+    timeout_value: float | None = None
     issues: List[str] = field(default_factory=list)
 
     def is_optimal(self) -> bool:

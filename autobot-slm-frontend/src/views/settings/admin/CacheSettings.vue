@@ -205,7 +205,7 @@ onMounted(async () => {
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
       </svg>
       {{ error }}
-      <button @click="error = null" class="ml-auto text-red-500 hover:text-red-700">
+      <button @click="error = null" class="ml-auto text-red-500 hover:text-red-700" aria-label="Dismiss error">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
         </svg>
@@ -226,28 +226,26 @@ onMounted(async () => {
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
         </svg>
         <div>
-          <h3 class="font-semibold text-yellow-800">Cache API Unavailable</h3>
+          <h3 class="font-semibold text-yellow-800">{{ $t('settings.admin.cacheSettings.cacheAPIUnavailable') }}</h3>
           <p class="text-yellow-700 mt-1">
-            The cache management API is not available in the current backend configuration.
-            Cache features are disabled to prevent errors.
+            {{ $t('settings.admin.cacheSettings.theCacheManagementAPI') }}
           </p>
           <p class="text-sm text-yellow-600 mt-2">
-            This is normal when using the fast backend for development.
-            Cache functionality would be available in the full backend configuration.
+            {{ $t('settings.admin.cacheSettings.thisIsNormalWhen') }}
           </p>
         </div>
       </div>
 
       <!-- Alternative Info -->
       <div class="mt-6 space-y-3">
-        <h4 class="font-medium text-yellow-800">Alternative Cache Information</h4>
+        <h4 class="font-medium text-yellow-800">{{ $t('settings.admin.cacheSettings.alternativeCacheInformation') }}</h4>
         <div class="grid gap-3">
           <div class="flex items-start gap-3 p-3 bg-white/50 rounded-lg">
             <svg class="w-5 h-5 text-yellow-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
             <div class="text-sm text-yellow-700">
-              <strong>Browser Cache:</strong> Your browser is still caching API responses and static assets automatically.
+              <strong>{{ $t('settings.admin.cacheSettings.browserCache') }}</strong> {{ $t('settings.admin.cacheSettings.yourBrowserIsStill') }}
             </div>
           </div>
           <div class="flex items-start gap-3 p-3 bg-white/50 rounded-lg">
@@ -255,7 +253,7 @@ onMounted(async () => {
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" />
             </svg>
             <div class="text-sm text-yellow-700">
-              <strong>Redis Cache:</strong> Redis databases are still operational for session storage and data persistence.
+              <strong>{{ $t('settings.admin.cacheSettings.redisCache') }}</strong> {{ $t('settings.admin.cacheSettings.redisDatabasesAreStill') }}
             </div>
           </div>
         </div>
@@ -273,14 +271,14 @@ onMounted(async () => {
     <template v-if="cacheApiAvailable && !loading">
       <!-- Cache Configuration -->
       <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
-        <h2 class="text-lg font-semibold text-gray-900 mb-4">Cache Configuration</h2>
+        <h2 class="text-lg font-semibold text-gray-900 mb-4">{{ $t('settings.admin.cacheSettings.cacheConfiguration') }}</h2>
 
         <div class="space-y-4">
           <!-- Enable Caching -->
           <div class="flex items-center justify-between pb-4 border-b border-gray-100">
             <div>
-              <label class="block text-sm font-medium text-gray-900">Enable Caching</label>
-              <p class="text-xs text-gray-500 mt-1">Turn caching on or off globally</p>
+              <label class="block text-sm font-medium text-gray-900">{{ $t('settings.admin.cacheSettings.enableCaching') }}</label>
+              <p class="text-xs text-gray-500 mt-1">{{ $t('settings.admin.cacheSettings.turnCachingOnOr') }}</p>
             </div>
             <label class="relative inline-flex items-center cursor-pointer">
               <input type="checkbox" v-model="cacheConfig.enabled" class="sr-only peer" />
@@ -291,8 +289,8 @@ onMounted(async () => {
           <!-- Default TTL -->
           <div class="flex items-center justify-between pb-4 border-b border-gray-100">
             <div>
-              <label class="block text-sm font-medium text-gray-900">Default TTL</label>
-              <p class="text-xs text-gray-500 mt-1">Time to live in seconds (10-86400)</p>
+              <label class="block text-sm font-medium text-gray-900">{{ $t('settings.admin.cacheSettings.defaultTTL') }}</label>
+              <p class="text-xs text-gray-500 mt-1">{{ $t('settings.admin.cacheSettings.timeToLiveIn') }}</p>
             </div>
             <input
               v-model.number="cacheConfig.ttl_seconds"
@@ -306,8 +304,8 @@ onMounted(async () => {
           <!-- Max Cache Size -->
           <div class="flex items-center justify-between pb-4 border-b border-gray-100">
             <div>
-              <label class="block text-sm font-medium text-gray-900">Max Cache Size</label>
-              <p class="text-xs text-gray-500 mt-1">Maximum size in MB (10-1000)</p>
+              <label class="block text-sm font-medium text-gray-900">{{ $t('settings.admin.cacheSettings.maxCacheSize') }}</label>
+              <p class="text-xs text-gray-500 mt-1">{{ $t('settings.admin.cacheSettings.maximumSizeInMB') }}</p>
             </div>
             <input
               v-model.number="cacheConfig.max_size_mb"
@@ -321,16 +319,16 @@ onMounted(async () => {
           <!-- Eviction Policy -->
           <div class="flex items-center justify-between">
             <div>
-              <label class="block text-sm font-medium text-gray-900">Eviction Policy</label>
-              <p class="text-xs text-gray-500 mt-1">How to remove items when cache is full</p>
+              <label class="block text-sm font-medium text-gray-900">{{ $t('settings.admin.cacheSettings.evictionPolicy') }}</label>
+              <p class="text-xs text-gray-500 mt-1">{{ $t('settings.admin.cacheSettings.howToRemoveItems') }}</p>
             </div>
             <select
               v-model="cacheConfig.eviction_policy"
               class="w-40 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
             >
-              <option value="lru">LRU (Least Recently Used)</option>
-              <option value="lfu">LFU (Least Frequently Used)</option>
-              <option value="fifo">FIFO (First In First Out)</option>
+              <option value="lru">{{ $t('settings.admin.cacheSettings.lRULeastRecentlyUsed') }}</option>
+              <option value="lfu">{{ $t('settings.admin.cacheSettings.lFULeastFrequentlyUsed') }}</option>
+              <option value="fifo">{{ $t('settings.admin.cacheSettings.fIFOFirstInFirst') }}</option>
             </select>
           </div>
         </div>
@@ -348,7 +346,7 @@ onMounted(async () => {
             <svg v-else class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
             </svg>
-            Save Configuration
+            {{ $t('settings.admin.cacheSettings.saveConfiguration') }}
           </button>
         </div>
       </div>
@@ -356,7 +354,7 @@ onMounted(async () => {
       <!-- Cache Statistics -->
       <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
         <div class="flex items-center justify-between mb-4">
-          <h2 class="text-lg font-semibold text-gray-900">Cache Statistics</h2>
+          <h2 class="text-lg font-semibold text-gray-900">{{ $t('settings.admin.cacheSettings.cacheStatistics') }}</h2>
           <button
             @click="fetchCacheStats"
             class="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 flex items-center gap-2 text-sm"
@@ -364,40 +362,40 @@ onMounted(async () => {
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
-            Refresh
+            {{ $t('settings.admin.cacheSettings.refresh') }}
           </button>
         </div>
 
         <div v-if="cacheStats" class="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div class="p-4 bg-gray-50 rounded-lg">
-            <p class="text-sm text-gray-500">Total Entries</p>
+            <p class="text-sm text-gray-500">{{ $t('settings.admin.cacheSettings.totalEntries') }}</p>
             <p class="text-2xl font-semibold text-gray-900">{{ cacheStats.entries || 0 }}</p>
           </div>
           <div class="p-4 bg-gray-50 rounded-lg">
-            <p class="text-sm text-gray-500">Cache Size</p>
+            <p class="text-sm text-gray-500">{{ $t('settings.admin.cacheSettings.cacheSize') }}</p>
             <p class="text-2xl font-semibold text-gray-900">{{ formatBytes((cacheStats.size_mb || 0) * 1024 * 1024) }}</p>
           </div>
           <div class="p-4 bg-gray-50 rounded-lg">
-            <p class="text-sm text-gray-500">Hit Rate</p>
+            <p class="text-sm text-gray-500">{{ $t('settings.admin.cacheSettings.hitRate') }}</p>
             <p class="text-2xl font-semibold" :class="hitRate >= 80 ? 'text-green-600' : hitRate >= 50 ? 'text-yellow-600' : 'text-red-600'">
               {{ hitRate.toFixed(1) }}%
             </p>
           </div>
           <div class="p-4 bg-gray-50 rounded-lg">
-            <p class="text-sm text-gray-500">Cache Hits</p>
+            <p class="text-sm text-gray-500">{{ $t('settings.admin.cacheSettings.cacheHits') }}</p>
             <p class="text-2xl font-semibold text-primary-600">{{ cacheStats.hits || 0 }}</p>
           </div>
         </div>
 
         <div v-else class="text-center py-8 text-gray-500">
-          No statistics available
+          {{ $t('settings.admin.cacheSettings.noStatisticsAvailable') }}
         </div>
       </div>
 
       <!-- Redis Database Caches -->
       <div class="bg-white rounded-lg shadow-xs border border-gray-200 overflow-hidden">
         <div class="p-4 bg-gray-50 border-b border-gray-200">
-          <h2 class="text-lg font-semibold text-gray-900">Redis Database Caches</h2>
+          <h2 class="text-lg font-semibold text-gray-900">{{ $t('settings.admin.cacheSettings.redisDatabaseCaches') }}</h2>
         </div>
 
         <div class="p-6">
@@ -431,13 +429,13 @@ onMounted(async () => {
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                 </svg>
-                Clear
+                {{ $t('settings.admin.cacheSettings.clear') }}
               </button>
             </div>
           </div>
 
           <div v-else class="text-center py-8 text-gray-500">
-            No Redis databases available
+            {{ $t('settings.admin.cacheSettings.noRedisDatabasesAvailable') }}
           </div>
 
           <!-- Clear All Redis -->
@@ -450,7 +448,7 @@ onMounted(async () => {
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" />
               </svg>
-              Clear All Redis Databases
+              {{ $t('settings.admin.cacheSettings.clearAllRedisDatabases') }}
             </button>
           </div>
         </div>
@@ -459,7 +457,7 @@ onMounted(async () => {
       <!-- Application Caches -->
       <div class="bg-white rounded-lg shadow-xs border border-gray-200 overflow-hidden">
         <div class="p-4 bg-gray-50 border-b border-gray-200">
-          <h2 class="text-lg font-semibold text-gray-900">Application Caches</h2>
+          <h2 class="text-lg font-semibold text-gray-900">{{ $t('settings.admin.cacheSettings.applicationCaches') }}</h2>
         </div>
 
         <div class="p-6">
@@ -472,7 +470,7 @@ onMounted(async () => {
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
               </svg>
-              Clear Knowledge Cache
+              {{ $t('settings.admin.cacheSettings.clearKnowledgeCache') }}
             </button>
 
             <button
@@ -483,7 +481,7 @@ onMounted(async () => {
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
               </svg>
-              Clear LLM Cache
+              {{ $t('settings.admin.cacheSettings.clearLLMCache') }}
             </button>
 
             <button
@@ -495,7 +493,7 @@ onMounted(async () => {
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
-              Clear Config Cache
+              {{ $t('settings.admin.cacheSettings.clearConfigCache') }}
             </button>
           </div>
 
@@ -508,7 +506,7 @@ onMounted(async () => {
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
               </svg>
-              Refresh Stats
+              {{ $t('settings.admin.cacheSettings.refreshStats') }}
             </button>
             <button
               @click="warmupCaches"
@@ -522,7 +520,7 @@ onMounted(async () => {
               <svg v-else class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z" />
               </svg>
-              Warm Up Caches
+              {{ $t('settings.admin.cacheSettings.warmUpCaches') }}
             </button>
           </div>
         </div>

@@ -237,7 +237,36 @@ repositories:
     repo: "deb https://apt.repos.intel.com/openvino/2024 {{ ansible_facts['distribution_release'] }} main"
 
 # ==========================================
-# SHARED ROLE-ACTIVE FACTS (#7031)
+# CANONICAL ROLE NAMES (#7053)
+# ==========================================
+# All node_roles entries MUST use the canonical form below.
+# Short-form aliases (e.g. 'backend') are DEPRECATED; new gates and
+# inventory entries must use the canonical 'autobot-X' prefix.
+#
+# Canonical names:
+#   autobot-backend         (deploys /opt/autobot/autobot-backend/)
+#   autobot-frontend        (deploys /opt/autobot/autobot-frontend/)
+#   autobot-ai-stack        (deploys /opt/autobot/autobot-ai-stack/)
+#   autobot-npu-worker      (deploys /opt/autobot/autobot-npu-worker/)
+#   autobot-browser-worker  (deploys /opt/autobot/autobot-browser-worker/)
+#   autobot-tts-worker      (deploys /opt/autobot/autobot-tts-worker/)
+#   vnc                     (VNC/display — no autobot- prefix by convention)
+#   llm                     (LLM runtime — no autobot- prefix by convention)
+#   redis                   (Redis service — no autobot- prefix by convention)
+#
+# Short-form → canonical mapping (for reference only; authoritative copy
+# is also in tools/lint/check_canonical_role_names.py):
+_role_aliases:
+  backend: autobot-backend
+  frontend: autobot-frontend
+  ai-stack: autobot-ai-stack
+  npu-worker: autobot-npu-worker
+  browser: autobot-browser-worker
+  browser-service: autobot-browser-worker
+  tts-worker: autobot-tts-worker
+
+# ==========================================
+# SHARED ROLE-ACTIVE FACTS (#7031, #7053)
 # ==========================================
 # Per-host booleans answering "is role X deployed on this host?".
 # Used by both:
@@ -246,9 +275,13 @@ repositories:
 #
 # Single source of truth — keeps provision and cleanup decisions in sync.
 # Each fact mirrors the union of role checks the provision gate uses:
-#   1. Short role name in node_roles (e.g. 'backend')
-#   2. autobot-prefixed role name in node_roles (e.g. 'autobot-backend')
+#   1. Short role name in node_roles (e.g. 'backend')     ← DEPRECATED (#7053)
+#   2. autobot-prefixed role name in node_roles (e.g. 'autobot-backend') ← CANONICAL
 #   3. Inventory group membership (e.g. groups['main'], groups['backend'])
+#
+# The OR-chain below (short + canonical forms) is kept for backward
+# compatibility with any hosts still configured with the short form.
+# New inventory entries MUST use the canonical form (see _role_aliases above).
 #
 # History: prior to #7031, cleanup gates used only check (1), missing
 # (2) and (3). Co-located/single-host installs (where install.sh writes
@@ -303,6 +336,11 @@ role_vnc_active: >-
      (inventory_hostname in (groups.get('main', []) | default([]))) or
      (inventory_hostname in (groups.get('backend', []) | default([]))) or
      (inventory_hostname in (groups.get('vnc_nodes', []) | default([]))) }}
+
+role_xrdp_active: >-
+  {{ ('xrdp' in (node_roles | default([]))) or
+     ('autobot-xrdp' in (node_roles | default([]))) or
+     (inventory_hostname in (groups.get('rdp_nodes', []) | default([]))) }}
 
 role_llm_active: >-
   {{ ('llm' in (node_roles | default([]))) or

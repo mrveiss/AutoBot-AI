@@ -4,24 +4,28 @@ import BaseAlert from './BaseAlert.vue';
 const meta = {
   title: 'Components/UI/BaseAlert',
   component: BaseAlert,
-  tags: ['autodocs'],
   argTypes: {
-    type: {
+    variant: {
       control: 'select',
-      options: ['success', 'error', 'warning', 'info'],
-      description: 'Alert type',
+      options: ['success', 'info', 'warning', 'error', 'critical'],
+      description: 'Alert variant',
+    },
+    size: {
+      control: 'select',
+      options: ['default', 'compact'],
+      description: 'Size variant — compact hides the title and uses reduced padding (for inline field errors)',
     },
     title: {
       control: 'text',
-      description: 'Alert title',
+      description: 'Alert title (hidden in compact size)',
     },
     message: {
       control: 'text',
       description: 'Alert message',
     },
-    closable: {
+    dismissible: {
       control: 'boolean',
-      description: 'Show close button',
+      description: 'Show dismiss button',
     },
     icon: {
       control: 'boolean',
@@ -36,7 +40,7 @@ type Story = StoryObj<any>;
 
 export const Success: Story = {
   args: {
-    type: 'success',
+    variant: 'success',
     title: 'Success',
     message: 'Operation completed successfully',
   },
@@ -44,7 +48,7 @@ export const Success: Story = {
 
 export const Error: Story = {
   args: {
-    type: 'error',
+    variant: 'error',
     title: 'Error',
     message: 'An error occurred while processing your request',
   },
@@ -52,7 +56,7 @@ export const Error: Story = {
 
 export const Warning: Story = {
   args: {
-    type: 'warning',
+    variant: 'warning',
     title: 'Warning',
     message: 'Please review this information before proceeding',
   },
@@ -60,7 +64,7 @@ export const Warning: Story = {
 
 export const Info: Story = {
   args: {
-    type: 'info',
+    variant: 'info',
     title: 'Information',
     message: 'Here is some important information for you',
   },
@@ -68,20 +72,52 @@ export const Info: Story = {
 
 export const Closable: Story = {
   args: {
-    type: 'info',
+    variant: 'info',
     title: 'Closable Alert',
     message: 'This alert can be dismissed by clicking the close button',
-    closable: true,
+    dismissible: true,
   },
 };
 
 export const NoIcon: Story = {
   args: {
-    type: 'success',
+    variant: 'success',
     title: 'Success',
     message: 'Operation completed without displaying an icon',
     icon: false,
   },
+};
+
+/** Compact size — intended for inline field-level errors below form inputs */
+export const CompactError: Story = {
+  args: {
+    variant: 'error',
+    size: 'compact',
+    message: 'This field is required',
+  },
+};
+
+export const CompactWarning: Story = {
+  args: {
+    variant: 'warning',
+    size: 'compact',
+    message: 'Value exceeds recommended limit',
+  },
+};
+
+/** All compact variants side by side */
+export const CompactAllVariants: Story = {
+  render: () => ({
+    components: { BaseAlert },
+    template: `
+      <div class="space-y-2">
+        <BaseAlert variant="error" size="compact" message="Email address is required" />
+        <BaseAlert variant="warning" size="compact" message="Password must be at least 8 characters" />
+        <BaseAlert variant="info" size="compact" message="Username is already taken" />
+        <BaseAlert variant="success" size="compact" message="Field validated successfully" />
+      </div>
+    `,
+  }),
 };
 
 export const AllTypes: Story = {
@@ -89,10 +125,10 @@ export const AllTypes: Story = {
     components: { BaseAlert },
     template: `
       <div class="space-y-4">
-        <BaseAlert type="success" title="Success" message="This is a success alert message" closable />
-        <BaseAlert type="error" title="Error" message="This is an error alert message" closable />
-        <BaseAlert type="warning" title="Warning" message="This is a warning alert message" closable />
-        <BaseAlert type="info" title="Information" message="This is an info alert message" closable />
+        <BaseAlert variant="success" title="Success" message="This is a success alert message" dismissible />
+        <BaseAlert variant="error" title="Error" message="This is an error alert message" dismissible />
+        <BaseAlert variant="warning" title="Warning" message="This is a warning alert message" dismissible />
+        <BaseAlert variant="info" title="Information" message="This is an info alert message" dismissible />
       </div>
     `,
   }),

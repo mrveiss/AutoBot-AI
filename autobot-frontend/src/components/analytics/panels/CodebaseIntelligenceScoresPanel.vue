@@ -7,7 +7,7 @@
 <template>
   <div class="code-intelligence-scores-section analytics-section">
     <h3>
-      <i class="fas fa-shield-alt"></i> {{ $t('analytics.codebase.intelligence.scoresTitle') }}
+      <Icon name="shield-alt" /> {{ $t('analytics.codebase.intelligence.scoresTitle') }}
       <button
         @click="emit('refresh-all')"
         :disabled="securityLoading || performanceLoading || redisLoading"
@@ -18,7 +18,7 @@
           :class="
             securityLoading || performanceLoading || redisLoading
               ? 'fas fa-spinner fa-spin'
-              : 'fas fa-sync-alt'
+              : 'sync-alt'
           "
         ></i>
       </button>
@@ -28,7 +28,7 @@
       <!-- Security Score Card -->
       <div class="score-card security-card">
         <div class="score-header">
-          <i class="fas fa-shield-alt"></i>
+          <Icon name="shield-alt" />
           <span>{{ $t('analytics.codebase.intelligence.security') }}</span>
           <button
             @click="emit('refresh-security')"
@@ -36,14 +36,14 @@
             class="card-refresh-btn"
             :title="$t('analytics.codebase.intelligence.refreshSecurity')"
           >
-            <i :class="securityLoading ? 'fas fa-spinner fa-spin' : 'fas fa-sync-alt'"></i>
+            <i :class="securityLoading ? 'fas fa-spinner fa-spin' : 'sync-alt'"></i>
           </button>
         </div>
         <div v-if="securityLoading" class="score-loading">
-          <i class="fas fa-spinner fa-spin"></i>
+          <Icon name="spinner" class="animate-spin" />
         </div>
         <div v-else-if="securityError" class="score-error">
-          <i class="fas fa-exclamation-triangle"></i>
+          <Icon name="exclamation-triangle" />
           <span>{{ securityError }}</span>
         </div>
         <div v-else-if="securityScore" class="score-content">
@@ -55,13 +55,13 @@
           />
           <div class="score-details">
             <span class="detail-item critical" v-if="securityScore.critical_issues > 0">
-              <i class="fas fa-times-circle"></i> {{ securityScore.critical_issues }} critical
+              <Icon name="times-circle" /> {{ securityScore.critical_issues }} critical
             </span>
             <span class="detail-item warning" v-if="securityScore.high_issues > 0">
-              <i class="fas fa-exclamation-circle"></i> {{ securityScore.high_issues }} high
+              <Icon name="exclamation-circle" /> {{ securityScore.high_issues }} high
             </span>
             <span class="detail-item info">
-              <i class="fas fa-file-code"></i> {{ securityScore.files_analyzed }} files
+              <Icon name="file-code" /> {{ securityScore.files_analyzed }} files
             </span>
           </div>
           <button
@@ -74,8 +74,8 @@
                 securityFindingsLoading
                   ? 'fas fa-spinner fa-spin'
                   : showSecurityDetails
-                  ? 'fas fa-chevron-up'
-                  : 'fas fa-chevron-down'
+                  ? 'chevron-up'
+                  : 'chevron-down'
               "
             ></i>
             {{
@@ -93,7 +93,7 @@
       <!-- Performance Score Card -->
       <div class="score-card performance-card">
         <div class="score-header">
-          <i class="fas fa-tachometer-alt"></i>
+          <Icon name="tachometer-alt" />
           <span>{{ $t('analytics.codebase.intelligence.performanceLabel') }}</span>
           <button
             @click="emit('refresh-performance')"
@@ -101,14 +101,14 @@
             class="card-refresh-btn"
             :title="$t('analytics.codebase.intelligence.refreshPerformance')"
           >
-            <i :class="performanceLoading ? 'fas fa-spinner fa-spin' : 'fas fa-sync-alt'"></i>
+            <i :class="performanceLoading ? 'fas fa-spinner fa-spin' : 'sync-alt'"></i>
           </button>
         </div>
         <div v-if="performanceLoading" class="score-loading">
-          <i class="fas fa-spinner fa-spin"></i>
+          <Icon name="spinner" class="animate-spin" />
         </div>
         <div v-else-if="performanceError" class="score-error">
-          <i class="fas fa-exclamation-triangle"></i>
+          <Icon name="exclamation-triangle" />
           <span>{{ performanceError }}</span>
         </div>
         <div v-else-if="performanceScore" class="score-content">
@@ -120,10 +120,10 @@
           />
           <div class="score-details">
             <span class="detail-item warning" v-if="performanceScore.total_issues > 0">
-              <i class="fas fa-exclamation-triangle"></i> {{ performanceScore.total_issues }} issues
+              <Icon name="exclamation-triangle" /> {{ performanceScore.total_issues }} issues
             </span>
             <span class="detail-item info">
-              <i class="fas fa-file-code"></i> {{ performanceScore.files_analyzed }} files
+              <Icon name="file-code" /> {{ performanceScore.files_analyzed }} files
             </span>
           </div>
           <button
@@ -136,8 +136,8 @@
                 performanceFindingsLoading
                   ? 'fas fa-spinner fa-spin'
                   : showPerformanceDetails
-                  ? 'fas fa-chevron-up'
-                  : 'fas fa-chevron-down'
+                  ? 'chevron-up'
+                  : 'chevron-down'
               "
             ></i>
             {{
@@ -155,7 +155,7 @@
       <!-- Redis Health Score Card -->
       <div class="score-card redis-card">
         <div class="score-header">
-          <i class="fas fa-database"></i>
+          <Icon name="database" />
           <span>{{ $t('analytics.codebase.intelligence.redisUsage') }}</span>
           <button
             @click="emit('refresh-redis')"
@@ -163,14 +163,14 @@
             class="card-refresh-btn"
             :title="$t('analytics.codebase.intelligence.refreshRedis')"
           >
-            <i :class="redisLoading ? 'fas fa-spinner fa-spin' : 'fas fa-sync-alt'"></i>
+            <i :class="redisLoading ? 'fas fa-spinner fa-spin' : 'sync-alt'"></i>
           </button>
         </div>
         <div v-if="redisLoading" class="score-loading">
-          <i class="fas fa-spinner fa-spin"></i>
+          <Icon name="spinner" class="animate-spin" />
         </div>
         <div v-else-if="redisError" class="score-error">
-          <i class="fas fa-exclamation-triangle"></i>
+          <Icon name="exclamation-triangle" />
           <span>{{ redisError }}</span>
         </div>
         <div v-else-if="redisHealth" class="score-content">
@@ -182,10 +182,10 @@
           />
           <div class="score-details">
             <span class="detail-item warning" v-if="redisHealth.total_issues > 0">
-              <i class="fas fa-exclamation-triangle"></i> {{ redisHealth.total_issues }} issues
+              <Icon name="exclamation-triangle" /> {{ redisHealth.total_issues }} issues
             </span>
             <span class="detail-item info">
-              <i class="fas fa-file-code"></i> {{ redisHealth.total_files }} files
+              <Icon name="file-code" /> {{ redisHealth.total_files }} files
             </span>
           </div>
           <button
@@ -198,8 +198,8 @@
                 redisOptimizationsLoading
                   ? 'fas fa-spinner fa-spin'
                   : showRedisDetails
-                  ? 'fas fa-chevron-up'
-                  : 'fas fa-chevron-down'
+                  ? 'chevron-up'
+                  : 'chevron-down'
               "
             ></i>
             {{
@@ -217,14 +217,14 @@
       <!-- Health Score Card (#3073) -->
       <div class="score-card health-card">
         <div class="score-header">
-          <i class="fas fa-heartbeat"></i>
+          <Icon name="heartbeat" />
           <span>{{ $t('analytics.codebase.intelligence.healthScore') }}</span>
           <button
             @click="emit('load-health-score')"
             class="card-refresh-btn"
             :title="$t('analytics.codebase.intelligence.refreshHealthScore')"
           >
-            <i class="fas fa-sync-alt"></i>
+            <Icon name="sync-alt" />
           </button>
         </div>
         <div v-if="healthScore" class="score-content">
@@ -235,16 +235,16 @@
           />
           <div class="score-details">
             <span class="detail-item critical" v-if="healthScore.issues_count.critical > 0">
-              <i class="fas fa-times-circle"></i> {{ healthScore.issues_count.critical }} critical
+              <Icon name="times-circle" /> {{ healthScore.issues_count.critical }} critical
             </span>
             <span class="detail-item warning" v-if="healthScore.issues_count.high > 0">
-              <i class="fas fa-exclamation-circle"></i> {{ healthScore.issues_count.high }} high
+              <Icon name="exclamation-circle" /> {{ healthScore.issues_count.high }} high
             </span>
             <span class="detail-item info">
-              <i class="fas fa-file-code"></i> {{ healthScore.total_files }} files
+              <Icon name="file-code" /> {{ healthScore.total_files }} files
             </span>
             <span class="detail-item info">
-              <i class="fas fa-clock"></i> {{ healthScore.technical_debt_hours }}h debt
+              <Icon name="clock" /> {{ healthScore.technical_debt_hours }}h debt
             </span>
           </div>
         </div>
@@ -256,14 +256,14 @@
       <!-- Quality Score Card (#3073) -->
       <div class="score-card quality-card">
         <div class="score-header">
-          <i class="fas fa-gem"></i>
+          <Icon name="star" />
           <span>{{ $t('analytics.codebase.intelligence.qualityScore') }}</span>
           <button
             @click="emit('load-quality-score')"
             class="card-refresh-btn"
             :title="$t('analytics.codebase.intelligence.refreshQualityScore')"
           >
-            <i class="fas fa-sync-alt"></i>
+            <Icon name="sync-alt" />
           </button>
         </div>
         <div v-if="qualityScore" class="score-content">
@@ -333,10 +333,10 @@
             <i
               :class="
                 qualityScore.trend === 'improving'
-                  ? 'fas fa-arrow-up'
+                  ? 'arrow-up'
                   : qualityScore.trend === 'declining'
-                  ? 'fas fa-arrow-down'
-                  : 'fas fa-minus'
+                  ? 'arrow-down'
+                  : 'minus'
               "
             ></i>
             {{ qualityScore.trend }}
@@ -352,17 +352,17 @@
     <div v-if="showSecurityDetails" class="findings-panel security-findings-panel">
       <div class="findings-header">
         <h4>
-          <i class="fas fa-shield-alt"></i>
+          <Icon name="shield-alt" />
           {{ $t('analytics.codebase.intelligence.securityFindings') }}
         </h4>
         <span class="findings-count">{{ securityFindings?.length ?? 0 }} findings</span>
       </div>
       <div v-if="securityFindingsLoading" class="findings-loading">
-        <i class="fas fa-spinner fa-spin"></i>
+        <Icon name="spinner" class="animate-spin" />
         {{ $t('analytics.codebase.intelligence.loadingSecurityFindings') }}
       </div>
       <div v-else-if="!securityFindings?.length" class="findings-empty">
-        <i class="fas fa-check-circle"></i>
+        <Icon name="check-circle" />
         {{ $t('analytics.codebase.intelligence.noSecurityVulnerabilities') }}
       </div>
       <div v-else class="findings-list">
@@ -380,15 +380,15 @@
           </div>
           <div class="finding-description">{{ finding.description }}</div>
           <div class="finding-location">
-            <i class="fas fa-file-code"></i>
+            <Icon name="file-code" />
             {{ finding.file_path }}
             <span v-if="finding.line">:{{ finding.line }}</span>
           </div>
           <div v-if="finding.recommendation" class="finding-recommendation">
-            <i class="fas fa-lightbulb"></i> {{ finding.recommendation }}
+            <Icon name="lightbulb" /> {{ finding.recommendation }}
           </div>
           <div v-if="finding.owasp_category" class="finding-owasp">
-            <i class="fas fa-tag"></i> OWASP: {{ finding.owasp_category }}
+            <Icon name="tag" /> OWASP: {{ finding.owasp_category }}
           </div>
         </div>
       </div>
@@ -398,17 +398,17 @@
     <div v-if="showPerformanceDetails" class="findings-panel performance-findings-panel">
       <div class="findings-header">
         <h4>
-          <i class="fas fa-tachometer-alt"></i>
+          <Icon name="tachometer-alt" />
           {{ $t('analytics.codebase.intelligence.performanceIssues') }}
         </h4>
         <span class="findings-count">{{ performanceFindings?.length ?? 0 }} issues</span>
       </div>
       <div v-if="performanceFindingsLoading" class="findings-loading">
-        <i class="fas fa-spinner fa-spin"></i>
+        <Icon name="spinner" class="animate-spin" />
         {{ $t('analytics.codebase.intelligence.loadingPerformanceIssues') }}
       </div>
       <div v-else-if="!performanceFindings?.length" class="findings-empty">
-        <i class="fas fa-check-circle"></i>
+        <Icon name="check-circle" />
         {{ $t('analytics.codebase.intelligence.noPerformanceIssues') }}
       </div>
       <div v-else class="findings-list">
@@ -426,7 +426,7 @@
           </div>
           <div class="finding-description">{{ finding.description }}</div>
           <div class="finding-location">
-            <i class="fas fa-file-code"></i>
+            <Icon name="file-code" />
             {{ finding.file_path }}
             <span v-if="finding.line">:{{ finding.line }}</span>
             <span v-if="finding.function_name" class="function-name">
@@ -434,7 +434,7 @@
             </span>
           </div>
           <div v-if="finding.recommendation" class="finding-recommendation">
-            <i class="fas fa-lightbulb"></i> {{ finding.recommendation }}
+            <Icon name="lightbulb" /> {{ finding.recommendation }}
           </div>
         </div>
       </div>
@@ -444,17 +444,17 @@
     <div v-if="showRedisDetails" class="findings-panel redis-findings-panel">
       <div class="findings-header">
         <h4>
-          <i class="fas fa-database"></i>
+          <Icon name="database" />
           {{ $t('analytics.codebase.intelligence.redisOptimizations') }}
         </h4>
         <span class="findings-count">{{ redisOptimizations?.length ?? 0 }} suggestions</span>
       </div>
       <div v-if="redisOptimizationsLoading" class="findings-loading">
-        <i class="fas fa-spinner fa-spin"></i>
+        <Icon name="spinner" class="animate-spin" />
         {{ $t('analytics.codebase.intelligence.loadingRedisOptimizations') }}
       </div>
       <div v-else-if="!redisOptimizations?.length" class="findings-empty">
-        <i class="fas fa-check-circle"></i>
+        <Icon name="check-circle" />
         {{ $t('analytics.codebase.intelligence.noRedisOptimizations') }}
       </div>
       <div v-else class="findings-list">
@@ -473,12 +473,12 @@
           </div>
           <div class="finding-description">{{ opt.description }}</div>
           <div class="finding-location">
-            <i class="fas fa-file-code"></i>
+            <Icon name="file-code" />
             {{ opt.file_path }}
             <span v-if="opt.line">:{{ opt.line }}</span>
           </div>
           <div v-if="opt.recommendation" class="finding-recommendation">
-            <i class="fas fa-lightbulb"></i> {{ opt.recommendation }}
+            <Icon name="lightbulb" /> {{ opt.recommendation }}
           </div>
         </div>
       </div>
@@ -487,7 +487,7 @@
     <!-- Suggestions Section (#3073) -->
     <div v-if="suggestions && suggestions.length > 0" class="suggestions-section">
       <h4>
-        <i class="fas fa-lightbulb"></i>
+        <Icon name="lightbulb" />
         {{ $t('analytics.codebase.intelligence.suggestionsTitle') }}
         <span class="suggestions-count">{{ suggestions.length }}</span>
       </h4>
@@ -507,7 +507,7 @@
           <div class="suggestion-title">{{ suggestion.title }}</div>
           <div class="suggestion-description">{{ suggestion.description }}</div>
           <div class="suggestion-impact">
-            <i class="fas fa-chart-line"></i> {{ suggestion.impact }}
+            <Icon name="chart-line" /> {{ suggestion.impact }}
           </div>
         </div>
       </div>
@@ -516,14 +516,14 @@
     <!-- Analysis History Section (#3073) -->
     <div v-if="analysisHistory && analysisHistory.length > 0" class="analysis-history-section">
       <h4>
-        <i class="fas fa-history"></i>
+        <Icon name="history" />
         {{ $t('analytics.codebase.intelligence.analysisHistoryTitle') }}
         <button
           @click="emit('load-analysis-history')"
           class="card-refresh-btn"
           style="margin-left: 8px;"
         >
-          <i class="fas fa-sync-alt"></i>
+          <Icon name="sync-alt" />
         </button>
       </h4>
       <div class="history-list">
@@ -553,6 +553,7 @@
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { ref } from 'vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import HealthScoreGauge from '@/components/analytics/HealthScoreGauge.vue'

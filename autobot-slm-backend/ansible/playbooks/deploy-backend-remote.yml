@@ -16,11 +16,11 @@
 
 - name: Deploy Backend Services to Main Machine (Remote)
   hosts: autobot-host
-  gather_facts: yes
+  gather_facts: true
 
   vars:
     # Override inventory setting for deployment
-    ansible_become: yes
+    ansible_become: true
     # Backend configuration
     backend_user: autobot
     backend_group: autobot

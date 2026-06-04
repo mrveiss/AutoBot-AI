@@ -13,9 +13,11 @@ multiple collections (many-to-many relationship).
 """
 
 import json
-import logging
 import uuid
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List
+
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.time_utils import now_utc
 
 from autobot_shared.time_utils import now_utc
 
@@ -23,7 +25,7 @@ if TYPE_CHECKING:
     import aioredis
     import redis
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class CollectionsMixin:
@@ -56,10 +58,10 @@ class CollectionsMixin:
         self,
         collection_id: str,
         name: str,
-        description: Optional[str],
-        icon: Optional[str],
-        color: Optional[str],
-        metadata: Optional[Dict[str, Any]],
+        description: str | None,
+        icon: str | None,
+        color: str | None,
+        metadata: Dict[str, Any] | None,
     ) -> Dict[str, Any]:
         """Build collection data dict for storage (Issue #398: extracted)."""
         now = now_utc().isoformat()
@@ -84,10 +86,10 @@ class CollectionsMixin:
     async def create_collection(
         self,
         name: str,
-        description: Optional[str] = None,
-        icon: Optional[str] = None,
-        color: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        description: str | None = None,
+        icon: str | None = None,
+        color: str | None = None,
+        metadata: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
         """Create a new collection (Issue #398: refactored)."""
         if not self._aioredis_client:
@@ -191,11 +193,11 @@ class CollectionsMixin:
 
     def _build_collection_updates(
         self,
-        name: Optional[str],
-        description: Optional[str],
-        icon: Optional[str],
-        color: Optional[str],
-        metadata: Optional[Dict[str, Any]],
+        name: str | None,
+        description: str | None,
+        icon: str | None,
+        color: str | None,
+        metadata: Dict[str, Any] | None,
     ) -> Dict[str, Any]:
         """Build updates dict for collection (Issue #398: extracted)."""
         updates = {"updated_at": now_utc().isoformat()}
@@ -214,11 +216,11 @@ class CollectionsMixin:
     async def update_collection(
         self,
         collection_id: str,
-        name: Optional[str] = None,
-        description: Optional[str] = None,
-        icon: Optional[str] = None,
-        color: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        name: str | None = None,
+        description: str | None = None,
+        icon: str | None = None,
+        color: str | None = None,
+        metadata: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
         """Update collection metadata (Issue #398: refactored)."""
         if not self._aioredis_client:
@@ -427,7 +429,7 @@ class CollectionsMixin:
             logger.error("Failed to remove facts from collection '%s': %s", collection_id, e)
             return {"success": False, "message": "Collection operation failed"}
 
-    async def _fetch_fact_for_collection(self, fid: str, include_content: bool) -> Optional[Dict[str, Any]]:
+    async def _fetch_fact_for_collection(self, fid: str, include_content: bool) -> Dict[str, Any] | None:
         """Fetch a single fact for collection display (Issue #398: extracted)."""
         fact_data = await self.redis().hgetall(f"fact:{fid}")
         if not fact_data:
@@ -547,7 +549,7 @@ class CollectionsMixin:
         fid: str,
         include_content: bool,
         include_metadata: bool,
-    ) -> Optional[Dict[str, Any]]:
+    ) -> Dict[str, Any] | None:
         """Export a single fact with optional content/metadata (Issue #398: extracted)."""
         fact_data = await self.redis().hgetall(f"fact:{fid}")
         if not fact_data:
@@ -694,7 +696,7 @@ class CollectionsMixin:
     # PRIVATE HELPER METHODS (Issue #412)
     # =========================================================================
 
-    async def _get_collection_data(self, collection_id: str) -> Optional[Dict[str, Any]]:
+    async def _get_collection_data(self, collection_id: str) -> Dict[str, Any] | None:
         """Get collection data from Redis hash."""
         data = await self.redis().hgetall(f"collection:{collection_id}")
         if not data:

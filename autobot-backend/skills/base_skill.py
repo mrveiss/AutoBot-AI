@@ -9,17 +9,17 @@ Skills are self-contained AI capability modules with manifest-driven
 configuration, dependency tracking, and lifecycle management.
 """
 
-import logging
 from abc import ABC, abstractmethod
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from pydantic import BaseModel, Field
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class SkillStatus(str, Enum):
@@ -40,7 +40,7 @@ class SkillConfigField(BaseModel):
     default: Any = Field(None, description="Default value")
     description: str = Field("", description="Human-readable description")
     required: bool = Field(False, description="Whether this field is required")
-    choices: Optional[List[str]] = Field(None, description="Allowed values")
+    choices: List[str] | None = Field(None, description="Allowed values")
 
 
 class SkillManifest(BaseModel):
@@ -68,7 +68,7 @@ class SkillHealth(BaseModel):
     name: str
     status: SkillStatus
     version: str = ""
-    message: Optional[str] = None
+    message: str | None = None
     last_checked: datetime = Field(default_factory=now_utc)
     config_valid: bool = True
     dependencies_met: bool = True
@@ -88,7 +88,7 @@ class BaseSkill(ABC):
         self._status = SkillStatus.AVAILABLE
         self._config: Dict[str, Any] = {}
         self._enabled = False
-        self.logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
+        self.logger = get_logger(f"{__name__}.{self.__class__.__name__}")
 
     @staticmethod
     @abstractmethod

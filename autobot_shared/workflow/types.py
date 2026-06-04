@@ -54,6 +54,30 @@ class ExecutionStrategy(Enum):
     ADAPTIVE = "adaptive"
 
 
+class WorkflowPlanState(Enum):
+    """Lifecycle state for a WorkflowPlan (#7431, ADR-006 §Phase 3).
+
+    Provides a first-class enum surface over the plain ``status: str`` field so
+    callers can branch on lifecycle state without string literals.  The ``state``
+    property on ``WorkflowPlan`` returns the appropriate member.
+
+    ``READY`` — plan is runnable (all tasks have skill bindings or fall back to
+        capability-based routing; status == "pending").
+    ``BLOCKED_ON_SKILL_GENERATION`` — one or more tasks are awaiting an async
+        Phase 3 gap-fill; executor must not run the plan until it resumes
+        (status == "blocked").
+    ``IN_PROGRESS`` — plan is actively executing (status == "in_progress").
+    ``COMPLETED`` — plan reached a terminal success state (status == "completed").
+    ``FAILED`` — plan reached a terminal failure state (status == "failed").
+    """
+
+    READY = "ready"
+    BLOCKED_ON_SKILL_GENERATION = "blocked_on_skill_generation"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
 @dataclass
 class PromptSpec:
     """Structured prompt for a workflow task.
@@ -64,7 +88,7 @@ class PromptSpec:
     """
 
     user_prompt: str
-    system_prompt: Optional[str] = None
+    system_prompt: str | None = None
     template_vars: Dict[str, Any] = field(default_factory=dict)
     version: str = "1"
 
@@ -95,17 +119,17 @@ class WorkflowTask:
     task_id: str
     description: str = ""
 
-    agent_type: Optional[str] = None
-    action: Optional[str] = None
-    command: Optional[str] = None
+    agent_type: str | None = None
+    action: str | None = None
+    command: str | None = None
 
-    prompt: Optional[PromptSpec] = None
-    tools_allowed: Optional[List[str]] = None
+    prompt: PromptSpec | None = None
+    tools_allowed: List[str] | None = None
     tools_denied: List[str] = field(default_factory=list)
 
     inputs: Dict[str, Any] = field(default_factory=dict)
-    expected_outputs: Optional[Dict[str, str]] = None
-    outputs: Optional[Dict[str, Any]] = None
+    expected_outputs: Dict[str, str] | None = None
+    outputs: Dict[str, Any] | None = None
 
     dependencies: List[str] = field(default_factory=list)
     requires_approval: bool = False
@@ -118,9 +142,35 @@ class WorkflowTask:
     estimated_duration_seconds: float = 0.0
 
     status: str = "pending"
-    error: Optional[str] = None
-    start_time: Optional[float] = None
-    end_time: Optional[float] = None
+    error: str | None = None
+    start_time: float | None = None
+    end_time: float | None = None
+
+    # Skill binding (#7268 Phase 1, ADR-006: Skill-Bound Planning).
+    # Populated at plan time by StrategyPlanner via skill_router lookup
+    # (dry_run=True — no auto-enable, no Phase 3 gap-fill at plan time).
+    # ``skill_name`` is the registered skill name; ``skill_action`` is the
+    # action to invoke at execute time; ``skill_resolution_method`` records
+    # how it was resolved (``"keyword"`` / ``"llm"`` / ``None``).
+    # WorkflowExecutor consumes ``skill_name``/``skill_action`` since #7430.
+    skill_name: str | None = None
+    skill_action: str | None = None
+    skill_resolution_method: str | None = None
+
+    # Async gap-fill marker (#7431 Phase 3, ADR-006). Set when the planner
+    # found no matching skill for the task's intent and triggered Phase 3
+    # of ``skill_router`` (research → autonomous-skill-development) as a
+    # background job. The enclosing ``WorkflowPlan.status`` flips to
+    # ``"blocked"`` while at least one task carries this id. Cleared when
+    # the resume path re-binds the task (clears + re-runs ``bind_skills``).
+    # ``skill_name`` and ``pending_skill_id`` are mutually exclusive on a
+    # skill-binding step.
+    pending_skill_id: str | None = None
+
+    # GOAP planner fields (GH#7354). Populated by GOAPPlanner.build_workflow_tasks();
+    # empty sets on capability-mapping plans so existing code needs no changes.
+    preconditions: List[str] = field(default_factory=list)
+    effects: List[str] = field(default_factory=list)
 
     # Skill binding (#7268 Phase 1, ADR-006: Skill-Bound Planning).
     # Populated at plan time by StrategyPlanner via skill_router lookup
@@ -270,8 +320,36 @@ class WorkflowPlan:
     approved: bool = False
     status: str = "pending"
 
-    created_at_epoch: Optional[float] = None
+    # GOAP planner metadata (GH#7354). ``is_goap_plan`` distinguishes plans
+    # produced by GOAPPlanner from capability-mapping plans — WorkflowRunner
+    # only invokes the replanner on GOAP-produced plans.  ``goap_goal`` is
+    # the frozenset of goal facts used at plan time; stored as a list for
+    # JSON compatibility.  Both default to non-GOAP values so existing plans
+    # (and tests) require no changes.
+    is_goap_plan: bool = False
+    goap_goal: List[str] = field(default_factory=list)
+
+    created_at_epoch: float | None = None
     metadata: Dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def state(self) -> WorkflowPlanState:
+        """Typed lifecycle state derived from the plain ``status`` string.
+
+        Maps the string-valued ``status`` field to the canonical
+        ``WorkflowPlanState`` enum so callers can branch on first-class values
+        instead of comparing raw strings (#7431, ADR-006 §Phase 3).  Unknown
+        status values fall back to ``READY`` so legacy callers that set custom
+        statuses don't raise.
+        """
+        _map = {
+            "pending": WorkflowPlanState.READY,
+            "blocked": WorkflowPlanState.BLOCKED_ON_SKILL_GENERATION,
+            "in_progress": WorkflowPlanState.IN_PROGRESS,
+            "completed": WorkflowPlanState.COMPLETED,
+            "failed": WorkflowPlanState.FAILED,
+        }
+        return _map.get(self.status, WorkflowPlanState.READY)
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialize to a JSON-compatible dict (#7124).
@@ -295,6 +373,8 @@ class WorkflowPlan:
             "approval_required": self.approval_required,
             "approved": self.approved,
             "status": self.status,
+            "is_goap_plan": self.is_goap_plan,
+            "goap_goal": self.goap_goal,
             "created_at_epoch": self.created_at_epoch,
             "metadata": self.metadata,
         }

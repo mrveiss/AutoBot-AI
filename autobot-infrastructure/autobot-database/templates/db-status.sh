@@ -35,10 +35,10 @@ fi
 echo ""
 
 # ChromaDB status
-echo "ChromaDB (8000):"
+echo "ChromaDB (8100):"
 if systemctl is-active --quiet autobot-chromadb 2>/dev/null; then
     echo "  Service: RUNNING"
-    if curl -s "http://127.0.0.1:8000/api/v1/heartbeat" 2>/dev/null | grep -q "nanosecond"; then
+    if curl -s "http://127.0.0.1:8100/api/v2/heartbeat" 2>/dev/null | grep -q "nanosecond"; then
         echo "  Health: HEALTHY"
     else
         echo "  Health: NOT RESPONDING"

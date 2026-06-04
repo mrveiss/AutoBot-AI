@@ -12,10 +12,10 @@ Issue #357: Wrapped blocking SQLite operations with asyncio.to_thread().
 
 import asyncio
 import json
-import logging
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 from constants.path_constants import PATH
 from constants.threshold_constants import TimingConstants
@@ -72,7 +72,7 @@ except ImportError:
         return None
 
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class EnhancedProjectStateTracker:
@@ -299,9 +299,9 @@ class EnhancedProjectStateTracker:
         change_type: StateChangeType,
         description: str,
         after_state: Dict[str, Any],
-        before_state: Optional[Dict[str, Any]] = None,
-        user_id: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        before_state: Dict[str, Any] | None = None,
+        user_id: str | None = None,
+        metadata: Dict[str, Any] | None = None,
     ):
         """Record a state change event using asyncio.to_thread()."""
         change = StateChange(
@@ -385,7 +385,7 @@ class EnhancedProjectStateTracker:
         except Exception as e:
             logger.error("Error saving milestone: %s", e)
 
-    async def track_error(self, error: Exception, context: Optional[Dict[str, Any]] = None):
+    async def track_error(self, error: Exception, context: Dict[str, Any] | None = None):
         """Track an error occurrence for error rate calculation (thread-safe)."""
         try:
             async with self._counter_lock:
@@ -413,7 +413,7 @@ class EnhancedProjectStateTracker:
         except Exception as e:
             logger.error("Failed to track error: %s", e)
 
-    async def track_api_call(self, endpoint: str, method: str = "GET", response_status: Optional[int] = None):
+    async def track_api_call(self, endpoint: str, method: str = "GET", response_status: int | None = None):
         """Track an API call for metrics (thread-safe)."""
         try:
             async with self._counter_lock:
@@ -429,8 +429,8 @@ class EnhancedProjectStateTracker:
     async def track_user_interaction(
         self,
         interaction_type: str,
-        user_id: Optional[str] = None,
-        context: Optional[Dict[str, Any]] = None,
+        user_id: str | None = None,
+        context: Dict[str, Any] | None = None,
     ):
         """Track a user interaction for metrics (thread-safe)."""
         try:

@@ -3,13 +3,20 @@
     <!-- Workflow List -->
     <div class="runner-sidebar">
       <div class="sidebar-header">
-        <h4><i class="fas fa-tasks"></i> {{ $t('workflow.runner.activeWorkflows') }}</h4>
-        <button class="btn-refresh" @click="$emit('refresh')" :disabled="loading">
-          <i class="fas fa-sync-alt" :class="{ 'fa-spin': loading }"></i>
+        <h4><Icon name="tasks" /> {{ $t('workflow.runner.activeWorkflows') }}</h4>
+        <button
+          class="btn-refresh"
+          @click="$emit('refresh')"
+          :disabled="loading"
+          :aria-label="$t('common.refresh')"
+          :title="$t('common.refresh')"
+          type="button"
+        >
+          <Icon name="sync-alt" />
         </button>
       </div>
       <div v-if="workflows.length === 0" class="empty-list">
-        <i class="fas fa-inbox"></i>
+        <Icon name="inbox" />
         <p>{{ $t('workflow.runner.noActiveWorkflows') }}</p>
       </div>
       <div v-else class="workflow-list">
@@ -17,7 +24,7 @@
              :class="{ active: currentWorkflow?.workflow_id === wf.workflow_id, paused: wf.is_paused }"
              @click="selectWorkflow(wf)">
           <div class="wf-status" :class="getStatusClass(wf)">
-            <i :class="getStatusIcon(wf)"></i>
+            <Icon :name="getStatusIcon(wf)" />
           </div>
           <div class="wf-info">
             <span class="wf-name">{{ wf.name }}</span>
@@ -33,7 +40,7 @@
     <!-- Workflow Detail -->
     <div class="runner-main">
       <div v-if="!currentWorkflow" class="no-selection">
-        <i class="fas fa-hand-pointer"></i>
+        <Icon name="hand-paper" />
         <h3>{{ $t('workflow.runner.selectWorkflow') }}</h3>
         <p>{{ $t('workflow.runner.selectWorkflowDescription') }}</p>
       </div>
@@ -45,28 +52,28 @@
             <h2>{{ currentWorkflow.name }}</h2>
             <p>{{ currentWorkflow.description }}</p>
             <div class="header-meta">
-              <span><i class="fas fa-calendar"></i> {{ $t('workflow.runner.started') }} {{ formatTime(currentWorkflow.started_at) }}</span>
-              <span><i class="fas fa-cog"></i> {{ currentWorkflow.automation_mode }}</span>
+              <span><Icon name="calendar" /> {{ $t('workflow.runner.started') }} {{ formatTime(currentWorkflow.started_at) }}</span>
+              <span><Icon name="cog" /> {{ currentWorkflow.automation_mode }}</span>
               <span v-if="currentWorkflow.phase" class="phase-badge" :class="currentWorkflow.phase">
-                <i class="fas fa-project-diagram"></i> {{ formatPhase(currentWorkflow.phase) }}
+                <Icon name="project-diagram" /> {{ formatPhase(currentWorkflow.phase) }}
               </span>
               <span v-if="currentWorkflow.active_service" class="service-badge">
-                <i class="fas fa-server"></i> {{ currentWorkflow.active_service }}
+                <Icon name="server" /> {{ currentWorkflow.active_service }}
               </span>
             </div>
           </div>
           <div class="header-actions">
             <button class="btn-notif" @click="showNotifConfig = true" :aria-label="$t('workflow.notifications.title')">
-              <i class="fas fa-bell"></i>
+              <Icon name="bell" />
             </button>
             <button v-if="currentWorkflow.is_paused" class="btn-success" @click="$emit('resume-workflow', currentWorkflow.workflow_id)">
-              <i class="fas fa-play"></i> {{ $t('workflow.runner.resume') }}
+              <Icon name="play" /> {{ $t('workflow.runner.resume') }}
             </button>
             <button v-else class="btn-warning" @click="$emit('pause-workflow', currentWorkflow.workflow_id)">
-              <i class="fas fa-pause"></i> {{ $t('workflow.runner.pause') }}
+              <Icon name="pause" /> {{ $t('workflow.runner.pause') }}
             </button>
             <button class="btn-danger" @click="$emit('cancel-workflow', currentWorkflow.workflow_id)">
-              <i class="fas fa-stop"></i> {{ $t('workflow.runner.cancel') }}
+              <Icon name="stop" /> {{ $t('workflow.runner.cancel') }}
             </button>
           </div>
         </div>
@@ -86,16 +93,16 @@
 
         <!-- Steps List -->
         <div class="steps-container">
-          <h4><i class="fas fa-list-ol"></i> {{ $t('workflow.runner.executionSteps') }}</h4>
+          <h4><Icon name="list-ol" /> {{ $t('workflow.runner.executionSteps') }}</h4>
           <div class="steps-list">
             <div v-for="(step, i) in currentWorkflow.steps" :key="step.step_id" class="step-item" :class="step.status">
               <div class="step-indicator">
                 <div class="step-icon" :class="step.status">
-                  <i v-if="step.status === 'completed'" class="fas fa-check"></i>
-                  <i v-else-if="step.status === 'failed'" class="fas fa-times"></i>
-                  <i v-else-if="step.status === 'executing'" class="fas fa-spinner fa-spin"></i>
-                  <i v-else-if="step.status === 'waiting_approval'" class="fas fa-clock"></i>
-                  <i v-else-if="step.status === 'skipped'" class="fas fa-forward"></i>
+                  <Icon name="check" v-if="step.status === 'completed'" />
+                  <Icon name="times" v-else-if="step.status === 'failed'" />
+                  <Icon name="spinner" class="animate-spin" v-else-if="step.status === 'executing'" />
+                  <Icon name="clock" v-else-if="step.status === 'waiting_approval'" />
+                  <Icon name="forward" v-else-if="step.status === 'skipped'" />
                   <span v-else>{{ i + 1 }}</span>
                 </div>
                 <div v-if="i < currentWorkflow.steps.length - 1" class="step-line" :class="step.status"></div>
@@ -107,17 +114,17 @@
                 </div>
                 <code class="step-command">{{ step.command }}</code>
                 <div class="step-meta">
-                  <span class="risk" :class="step.risk_level"><i class="fas fa-shield-alt"></i> {{ step.risk_level }}</span>
-                  <span v-if="step.started_at"><i class="fas fa-play"></i> {{ formatTime(step.started_at) }}</span>
-                  <span v-if="step.completed_at"><i class="fas fa-check"></i> {{ formatTime(step.completed_at) }}</span>
+                  <span class="risk" :class="step.risk_level"><Icon name="shield-alt" /> {{ step.risk_level }}</span>
+                  <span v-if="step.started_at"><Icon name="play" /> {{ formatTime(step.started_at) }}</span>
+                  <span v-if="step.completed_at"><Icon name="check" /> {{ formatTime(step.completed_at) }}</span>
                 </div>
                 <!-- Approval Actions -->
                 <div v-if="step.status === 'waiting_approval' && step.requires_confirmation" class="step-actions">
                   <button class="btn-success btn-sm" @click="$emit('approve-step', currentWorkflow.workflow_id, step.step_id)">
-                    <i class="fas fa-check"></i> {{ $t('workflow.runner.approve') }}
+                    <Icon name="check" /> {{ $t('workflow.runner.approve') }}
                   </button>
                   <button class="btn-secondary btn-sm" @click="$emit('skip-step', currentWorkflow.workflow_id, step.step_id)">
-                    <i class="fas fa-forward"></i> {{ $t('workflow.runner.skip') }}
+                    <Icon name="forward" /> {{ $t('workflow.runner.skip') }}
                   </button>
                 </div>
                 <!-- Execution Result -->
@@ -143,6 +150,7 @@
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { ref, computed } from 'vue';
 import type { ActiveWorkflow } from '@/composables/useWorkflowBuilder';
 import NotificationConfigModal from './NotificationConfigModal.vue';
@@ -180,10 +188,10 @@ function getStatusClass(wf: ActiveWorkflow): string {
 }
 
 function getStatusIcon(wf: ActiveWorkflow): string {
-  if (wf.is_cancelled) return 'fas fa-times';
-  if (wf.is_paused) return 'fas fa-pause';
-  if (wf.completed_at) return 'fas fa-check';
-  return 'fas fa-spinner fa-spin';
+  if (wf.is_cancelled) return 'times';
+  if (wf.is_paused) return 'pause';
+  if (wf.completed_at) return 'check';
+  return 'spinner';
 }
 
 function formatStatus(status: string): string {

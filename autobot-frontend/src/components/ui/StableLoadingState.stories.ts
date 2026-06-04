@@ -4,7 +4,6 @@ import StableLoadingState from './StableLoadingState.vue';
 const meta = {
   title: 'Components/UI/StableLoadingState',
   component: StableLoadingState,
-  tags: ['autodocs'],
   argTypes: {
     isLoading: {
       control: 'boolean',

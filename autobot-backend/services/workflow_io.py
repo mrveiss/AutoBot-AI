@@ -34,13 +34,14 @@ Usage:
 import csv
 import io
 import json
-import logging
 import re
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # Field type enumeration
@@ -95,11 +96,11 @@ class InputFieldSchema:
     required: bool = False
     default: Any = None
     description: str = ""
-    min_value: Optional[float] = None
-    max_value: Optional[float] = None
-    min_length: Optional[int] = None
-    max_length: Optional[int] = None
-    pattern: Optional[str] = None
+    min_value: float | None = None
+    max_value: float | None = None
+    min_length: int | None = None
+    max_length: int | None = None
+    pattern: str | None = None
     options: List[str] = field(default_factory=list)
 
     # ------------------------------------------------------------------

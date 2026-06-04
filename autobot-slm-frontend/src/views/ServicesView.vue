@@ -458,9 +458,9 @@ onUnmounted(() => {
     <!-- Header -->
     <div class="flex items-center justify-between mb-6">
       <div>
-        <h1 class="text-2xl font-bold text-gray-900">Fleet Services</h1>
+        <h1 class="text-2xl font-bold text-gray-900">{{ $t('servicesView.fleetServices') }}</h1>
         <p class="text-sm text-gray-500 mt-1">
-          Manage systemd services across all fleet nodes - grouped by host
+          {{ $t('servicesView.manageSystemdServicesAcross') }}
         </p>
       </div>
       <div class="flex items-center gap-3">
@@ -482,7 +482,7 @@ onUnmounted(() => {
             @change="toggleAutoRefresh"
             class="w-4 h-4 text-primary-600 border-gray-300 rounded-sm focus:ring-primary-500"
           />
-          Auto-refresh
+          {{ $t('servicesView.autoRefresh') }}
         </label>
         <button
           @click="fetchServices"
@@ -502,7 +502,7 @@ onUnmounted(() => {
               d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
             />
           </svg>
-          Refresh
+          {{ $t('servicesView.refresh') }}
         </button>
       </div>
     </div>
@@ -510,23 +510,23 @@ onUnmounted(() => {
     <!-- Summary Cards -->
     <div class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
       <div class="card p-4">
-        <div class="text-sm text-gray-500">Nodes</div>
+        <div class="text-sm text-gray-500">{{ $t('servicesView.nodes') }}</div>
         <div class="text-2xl font-bold text-gray-900">{{ summaryStats.nodes }}</div>
       </div>
       <div class="card p-4">
-        <div class="text-sm text-gray-500">Total Services</div>
+        <div class="text-sm text-gray-500">{{ $t('servicesView.totalServices') }}</div>
         <div class="text-2xl font-bold text-gray-900">{{ summaryStats.totalServices }}</div>
       </div>
       <div class="card p-4 border-l-4 border-green-500">
-        <div class="text-sm text-gray-500">Running</div>
+        <div class="text-sm text-gray-500">{{ $t('servicesView.running') }}</div>
         <div class="text-2xl font-bold text-green-600">{{ summaryStats.running }}</div>
       </div>
       <div class="card p-4 border-l-4 border-gray-400">
-        <div class="text-sm text-gray-500">Stopped</div>
+        <div class="text-sm text-gray-500">{{ $t('servicesView.stopped') }}</div>
         <div class="text-2xl font-bold text-gray-600">{{ summaryStats.stopped }}</div>
       </div>
       <div class="card p-4 border-l-4 border-red-500">
-        <div class="text-sm text-gray-500">Failed</div>
+        <div class="text-sm text-gray-500">{{ $t('servicesView.failed') }}</div>
         <div class="text-2xl font-bold text-red-600">{{ summaryStats.failed }}</div>
       </div>
     </div>
@@ -542,7 +542,7 @@ onUnmounted(() => {
       class="mb-4 px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 flex items-center justify-between"
     >
       <span>{{ errorMessage }}</span>
-      <button @click="errorMessage = null" class="text-red-500 hover:text-red-700">
+      <button @click="errorMessage = null" class="text-red-500 hover:text-red-700" aria-label="Dismiss error">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
         </svg>
@@ -604,7 +604,7 @@ onUnmounted(() => {
 
         <!-- Status Filter -->
         <div class="flex items-center gap-2">
-          <label class="text-sm text-gray-600">Status:</label>
+          <label class="text-sm text-gray-600">{{ $t('servicesView.status') }}</label>
           <select
             v-model="statusFilter"
             class="border-gray-300 rounded-lg focus:ring-primary-500 focus:border-primary-500"
@@ -618,11 +618,11 @@ onUnmounted(() => {
         <!-- Expand/Collapse -->
         <div class="flex items-center gap-2">
           <button @click="expandAll" class="text-sm text-primary-600 hover:text-primary-800">
-            Expand All
+            {{ $t('servicesView.expandAll') }}
           </button>
           <span class="text-gray-300">|</span>
           <button @click="collapseAll" class="text-sm text-primary-600 hover:text-primary-800">
-            Collapse All
+            {{ $t('servicesView.collapseAll') }}
           </button>
         </div>
       </div>
@@ -634,7 +634,7 @@ onUnmounted(() => {
         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
       </svg>
-      <p class="text-gray-500">Loading fleet services...</p>
+      <p class="text-gray-500">{{ $t('servicesView.loadingFleetServices') }}</p>
     </div>
 
     <!-- Empty State -->
@@ -642,9 +642,9 @@ onUnmounted(() => {
       <svg class="w-16 h-16 mx-auto text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" />
       </svg>
-      <h3 class="text-lg font-medium text-gray-900 mb-2">No services found</h3>
+      <h3 class="text-lg font-medium text-gray-900 mb-2">{{ $t('servicesView.noServicesFound') }}</h3>
       <p class="text-gray-500">
-        No services match your current filters. Try adjusting the category or search criteria.
+        {{ $t('servicesView.noServicesMatchYour') }}
       </p>
     </div>
 
@@ -722,7 +722,7 @@ onUnmounted(() => {
               <span v-if="isRestartingAll && restartAllNodeId === node.nodeId && restartAllProgress">
                 {{ restartAllProgress.completed }}/{{ restartAllProgress.total }}
               </span>
-              <span v-else>Restart All</span>
+              <span v-else>{{ $t('servicesView.restartAll') }}</span>
             </button>
           </div>
         </button>
@@ -732,10 +732,10 @@ onUnmounted(() => {
           <table class="w-full">
             <thead>
               <tr class="bg-gray-50 text-xs text-gray-500 uppercase">
-                <th class="px-4 py-2 text-left">Service</th>
-                <th class="px-4 py-2 text-left w-24">Category</th>
-                <th class="px-4 py-2 text-left w-24">Status</th>
-                <th class="px-4 py-2 text-right w-32">Actions</th>
+                <th class="px-4 py-2 text-left">{{ $t('servicesView.service') }}</th>
+                <th class="px-4 py-2 text-left w-24">{{ $t('servicesView.category') }}</th>
+                <th class="px-4 py-2 text-left w-24">{{ $t('servicesView.status1') }}</th>
+                <th class="px-4 py-2 text-right w-32">{{ $t('servicesView.actions') }}</th>
               </tr>
             </thead>
             <tbody>
@@ -770,14 +770,14 @@ onUnmounted(() => {
                         :disabled="isCategoryChanging"
                         class="w-full px-3 py-1.5 text-left text-xs hover:bg-gray-50 rounded-t-lg"
                       >
-                        AutoBot
+                        {{ $t('servicesView.autoBot') }}
                       </button>
                       <button
                         @click="handleCategoryChange(service.service_name, 'system')"
                         :disabled="isCategoryChanging"
                         class="w-full px-3 py-1.5 text-left text-xs hover:bg-gray-50 rounded-b-lg border-t border-gray-100"
                       >
-                        System
+                        {{ $t('servicesView.system') }}
                       </button>
                     </div>
                   </div>
@@ -893,15 +893,15 @@ onUnmounted(() => {
 
               <div class="flex-1">
                 <h3 class="text-lg font-semibold text-gray-900">
-                  Restart All Services
+                  {{ $t('servicesView.restartAllServices') }}
                 </h3>
                 <p class="mt-2 text-sm text-gray-600">
-                  Are you sure you want to restart all services on
+                  {{ $t('servicesView.areYouSureYou') }}
                   <strong>{{ restartAllTargetNode?.hostname }}</strong>?
                 </p>
                 <p class="mt-2 text-sm text-gray-500">
-                  Services will be restarted sequentially. The SLM agent will be restarted
-                  <strong>last</strong> to ensure the node remains manageable during the process.
+                  {{ $t('servicesView.servicesWillBeRestarted') }}
+                  <strong>last</strong> {{ $t('servicesView.toEnsureTheNode') }}
                 </p>
               </div>
             </div>
@@ -912,13 +912,13 @@ onUnmounted(() => {
                 @click="cancelRestartAll"
                 class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
               >
-                Cancel
+                {{ $t('servicesView.cancel') }}
               </button>
               <button
                 @click="confirmRestartAll"
                 class="px-4 py-2 text-sm font-medium text-white bg-orange-600 rounded-lg hover:bg-orange-700"
               >
-                Restart All Services
+                {{ $t('servicesView.restartAllServices') }}
               </button>
             </div>
           </div>

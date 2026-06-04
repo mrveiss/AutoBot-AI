@@ -15,7 +15,7 @@ Extracted from performance_monitor.py as part of Issue #381 refactoring.
 """
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 
 @dataclass
@@ -33,10 +33,10 @@ class GPUMetrics:
     power_draw_watts: float
     gpu_clock_mhz: int
     memory_clock_mhz: int
-    fan_speed_percent: Optional[int] = None
-    encoder_utilization: Optional[int] = None
-    decoder_utilization: Optional[int] = None
-    performance_state: Optional[str] = None  # P0-P12
+    fan_speed_percent: int | None = None
+    encoder_utilization: int | None = None
+    decoder_utilization: int | None = None
+    performance_state: str | None = None  # P0-P12
     thermal_throttling: bool = False
     power_throttling: bool = False
 
@@ -135,14 +135,14 @@ class SystemPerformanceMetrics:
 
     # ALL OPTIONAL FIELDS LAST (with default values)
     # CPU Optional
-    cpu_temperature_celsius: Optional[float] = None
+    cpu_temperature_celsius: float | None = None
     per_core_usage: List[float] = field(default_factory=list)
 
     # Memory Optional
-    memory_bandwidth_gb_s: Optional[float] = None
+    memory_bandwidth_gb_s: float | None = None
 
     # Storage Optional
-    nvme_temperature_celsius: Optional[float] = None
+    nvme_temperature_celsius: float | None = None
 
     # AutoBot Process Performance
     autobot_processes: List[Dict[str, Any]] = field(default_factory=list)

@@ -11,16 +11,16 @@ Contains classes for analyzing metrics and generating alerts/recommendations:
 Extracted from performance_monitor.py as part of Issue #381 refactoring.
 """
 
-import logging
 import time
 from typing import Any, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from utils.performance_monitoring.types import (
     CRITICAL_SERVICE_STATUSES,
     DEFAULT_PERFORMANCE_BASELINES,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class AlertAnalyzer:

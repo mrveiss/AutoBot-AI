@@ -8,12 +8,21 @@ Integrates with backend VNC proxy for browser and desktop observation
 """
 
 import asyncio
-import logging
 from datetime import datetime, timedelta, timezone
 from typing import List
 
 import aiohttp
 from fastapi import APIRouter, Depends, HTTPException
+
+from services.mcp_bridge_manifest import MCPBridgeManifest
+
+MANIFEST = MCPBridgeManifest(
+    name="vnc_mcp",
+    version="1.0.0",
+    description="VNC Observation and Browser Context",
+    features=["vnc_status", "observe_activity", "browser_context"],
+    endpoint="/api/vnc/mcp/tools",
+)
 
 from api.schemas_system import (
     BrowserVncContextResponse,
@@ -36,11 +45,12 @@ from api.schemas_system import (
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_client import get_http_client
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import parse_utc_iso
 from constants.network_constants import NetworkConstants
 from type_defs.common import Metadata
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 router = APIRouter(
     tags=["vnc_mcp", "mcp", "vnc"],
     dependencies=[Depends(check_admin_permission)],

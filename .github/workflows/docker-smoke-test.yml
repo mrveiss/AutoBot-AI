@@ -18,25 +18,88 @@ concurrency:
 jobs:
   smoke-test:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.0.2
+
+      - name: Free disk space
+        uses: ./.github/actions/free-disk-space
+        with:
+          min-free-gb: '15'  # Increased from 10GB due to MVA-2869
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd  # v4
+        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5  # v4
+
+      - name: Cache Docker layers
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-
 
       - name: Create .env from .env.example
         run: cp .env.example .env
 
+      - name: Ensure cache directory exists
+        run: mkdir -p /tmp/.buildx-cache
+
+      - name: Build images with layer cache
+        run: |
+          echo "=== Building backend image ==="
+          docker buildx build \
+            --cache-from type=local,src=/tmp/.buildx-cache \
+            --cache-to   type=local,dest=/tmp/.buildx-cache-new,mode=min \
+            --file docker/backend/Dockerfile \
+            --tag autobot/backend:latest \
+            --load \
+            .
+          echo "Backend build complete. Disk space:"
+          df -h / | grep -v Filesystem
+
+          echo ""
+          echo "=== Building SLM image ==="
+          docker buildx build \
+            --cache-from type=local,src=/tmp/.buildx-cache \
+            --cache-to   type=local,dest=/tmp/.buildx-cache-new,mode=min \
+            --file docker/slm/Dockerfile \
+            --tag autobot/slm:latest \
+            --load \
+            .
+          echo "SLM build complete. Disk space:"
+          df -h / | grep -v Filesystem
+
+          echo ""
+          echo "=== Building frontend image ==="
+          docker buildx build \
+            --cache-from type=local,src=/tmp/.buildx-cache \
+            --cache-to   type=local,dest=/tmp/.buildx-cache-new,mode=min \
+            --file docker/frontend/Dockerfile \
+            --tag autobot/frontend:latest \
+            --load \
+            .
+          echo "Frontend build complete. Disk space:"
+          df -h / | grep -v Filesystem
+
+          echo ""
+          echo "=== Rotating cache ==="
+          # Rotate cache so next run gets the freshest layers (mode=min keeps only
+          # final exported layers; mode=max kept all intermediate layers and exhausted disk)
+          rm -rf /tmp/.buildx-cache
+          mv /tmp/.buildx-cache-new /tmp/.buildx-cache
+
+          echo "Final disk space:"
+          df -h
+
       - name: Start services with Docker Compose
-        run: docker compose --env-file docker/.env.docker up -d --build
+        run: docker compose --env-file docker/.env.docker up -d
 
       - name: Wait for services to be healthy
         run: |
           echo "Waiting for services to start..."
-          max_attempts=45
+          max_attempts=90
           attempt=0
 
           while [ $attempt -lt $max_attempts ]; do
@@ -66,7 +129,7 @@ jobs:
             sleep 10
           done
 
-          echo "Services failed to become healthy within 7.5 minutes (450s)"
+          echo "Services failed to become healthy within 15 minutes (900s)"
           echo ""
           echo "=== Docker Compose Logs ==="
           docker compose --env-file docker/.env.docker logs

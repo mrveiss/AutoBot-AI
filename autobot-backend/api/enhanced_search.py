@@ -9,7 +9,7 @@ Provides NPU-accelerated semantic search endpoints for AutoBot
 
 import asyncio
 import time
-from typing import List, Optional
+from typing import List
 
 from fastapi import APIRouter, HTTPException
 
@@ -19,7 +19,6 @@ from api.schemas_knowledge import (
     EnhancedSearchBenchmarkResponse,
     EnhancedSearchConnectivityResponse,
     EnhancedSearchHardwareStatusResponse,
-    EnhancedSearchHealthResponse,
     EnhancedSearchOptimizeResponse,
     EnhancedSearchPerformanceAnalyticsResponse,
     NPUOptimizationRequest,
@@ -39,7 +38,7 @@ logger = get_llm_logger("enhanced_search_api")
 router = APIRouter(tags=["Enhanced Search"])
 
 
-def _parse_force_device(force_device_str: Optional[str]) -> Optional[HardwareDevice]:
+def _parse_force_device(force_device_str: str | None) -> HardwareDevice | None:
     """
     Parse and validate force_device parameter (Issue #665: extracted helper).
 
@@ -334,7 +333,7 @@ async def test_npu_connectivity():
 
 
 def _evaluate_device_timing(
-    stats: Optional[Metadata],
+    stats: Metadata | None,
     device_name: str,
     low_threshold: float,
     high_threshold: float,
@@ -469,32 +468,3 @@ register_singleton_probe("enhanced_search", get_npu_search_engine, async_getter=
 
 
 # Health check endpoint
-@router.get("/health", response_model=EnhancedSearchHealthResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="health_check",
-    error_code_prefix="ENHANCED_SEARCH",
-)
-async def health_check():
-    """Health check for enhanced search service."""
-    try:
-        search_engine = await get_npu_search_engine()
-        statistics = await search_engine.get_search_statistics()
-
-        return {
-            "status": "healthy",
-            "service": "enhanced_search",
-            "npu_search_engine_ready": True,
-            "knowledge_base_ready": statistics.get("knowledge_base_ready", False),
-            "cache_size": statistics.get("cache_stats", {}).get("cache_size", 0),
-            "timestamp": time.time(),
-        }
-
-    except Exception as e:
-        logger.error("Health check failed: %s", e)
-        return {
-            "status": "unhealthy",
-            "service": "enhanced_search",
-            "error": "Internal server error",
-            "timestamp": time.time(),
-        }

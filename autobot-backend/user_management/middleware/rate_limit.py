@@ -11,13 +11,13 @@ Delegates to the shared ``autobot_shared.rate_limiter.RateLimiter`` for the
 core sliding-window logic (Issue #4460).
 """
 
-import logging
 import uuid
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.rate_limiter import RateLimiter as _SharedRateLimiter
 from autobot_shared.redis_client import get_async_redis_client
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Shared delegate scoped to user rate-limit operations (Issue #4460).
 # PasswordChangeRateLimiter uses Redis directly for its fixed-attempt counter

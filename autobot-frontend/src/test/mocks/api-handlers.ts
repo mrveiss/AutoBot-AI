@@ -1,6 +1,7 @@
 import { http, HttpResponse } from 'msw'
 // Issue #156 Fix: Corrected Python-style import to TypeScript syntax
-import { NetworkConstants, ServiceURLs } from '@/constants/network'
+import {  ServiceURLs } from '@/constants/network'
+import { canvasHandlers } from './canvas-handlers'
 import {
   createMockApiResponse,
   createMockChatMessage,
@@ -13,6 +14,8 @@ import {
 const API_BASE = process.env.VITE_API_BASE_URL || ServiceURLs.BACKEND_LOCAL
 
 export const handlers = [
+  // Canvas API endpoints (MVA-360)
+  ...canvasHandlers,
   // Chat API endpoints
   http.post(`${API_BASE}/api/chat`, async ({ request }) => {
     const body = await request.json() as any

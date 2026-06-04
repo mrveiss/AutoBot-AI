@@ -20,17 +20,17 @@ Public API (preserved):
     - get_gpu_semantic_chunker()
 """
 
-import os
+from autobot_shared.ssot_config import config
 
 # GPU optimization environment variables (must be set before torch import)
-os.environ["CUDA_LAUNCH_BLOCKING"] = "0"  # Allow async CUDA operations
-os.environ["CUDA_CACHE_DISABLE"] = "0"  # Enable CUDA kernel caching
+config.cuda_launch_blocking = "0"  # Allow async CUDA operations
+config.cuda_cache_disable = "0"  # Enable CUDA kernel caching
 
 import asyncio
 import concurrent.futures
 import threading
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import numpy as np
 
@@ -273,7 +273,7 @@ class GPUSemanticChunker(SemanticChunkerBase):
     # GPU-specific performance telemetry
     # ------------------------------------------------------------------
 
-    async def chunk_text(self, text: str, metadata: Optional[Dict[str, Any]] = None) -> List[SemanticChunk]:
+    async def chunk_text(self, text: str, metadata: Dict[str, Any] | None = None) -> List[SemanticChunk]:
         """Override to add GPU-specific timing/perf logging around the shared pipeline."""
         start_time = time.time()
         logger.info("Starting GPU semantic chunking (%s characters)", len(text))

@@ -8,9 +8,10 @@ Handles simple conversational responses with lightweight Llama 3.2 1B model.
 Focuses on quick, natural interactions without complex reasoning.
 """
 
-import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import (
     get_agent_endpoint_explicit,
     get_agent_model_explicit,
@@ -21,9 +22,10 @@ from prompt_manager import get_language_instruction, resolve_language
 from services.llm_service import get_llm_service
 
 from .base_agent import AgentRequest
+from .payloads import AgentStatus, ChatPayload
 from .standardized_agent import ActionHandler, StandardizedAgent
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ChatAgent(StandardizedAgent):
@@ -88,34 +90,28 @@ class ChatAgent(StandardizedAgent):
         return self.capabilities.copy()
 
     def _build_chat_payload(self, response_text: str, response: Any) -> Dict[str, Any]:
-        """
-        Build the chat-specific payload dict.
+        """Build the chat-specific payload dict (#6648, #620, #6703).
 
-        Returned as the ``result`` field of the AgentResponse the base class
-        ``StandardizedAgent._build_success_response`` constructs (#6648). The
-        prior name shadowed the base method with an incompatible signature,
-        crashing every AI Stack chat request with a TypeError.
-
-        Issue #620.
-        Issue #4501: response is an LLMResponse object — use attribute access.
+        Constructs a typed ChatPayload then returns model_dump() so the
+        public API contract (Dict[str, Any]) is unchanged.
         """
         if isinstance(response, dict):
             token_usage = response.get("usage", {})
         else:
             token_usage = getattr(response, "usage", {})
-        return {
-            "status": "success",
-            "response": response_text,
-            "response_text": response_text,
-            "agent_type": "chat",
-            "model_used": self.model_name,
-            "token_usage": token_usage,
-            "metadata": {
+        return ChatPayload(
+            status=AgentStatus.SUCCESS,
+            agent_type="chat",
+            model_used=self.model_name,
+            response=response_text,
+            response_text=response_text,
+            token_usage=token_usage,
+            metadata={
                 "agent": "ChatAgent",
                 "processing_time": "fast",
                 "complexity": "low",
             },
-        }
+        ).model_dump()
 
     def _build_error_response(self, error: Exception) -> Dict[str, Any]:
         """
@@ -134,8 +130,8 @@ class ChatAgent(StandardizedAgent):
     async def process_chat_message(
         self,
         message: str,
-        context: Optional[List[Dict[str, str]]] = None,
-        chat_history: Optional[List[Dict[str, Any]]] = None,
+        context: List[Dict[str, str]] | None = None,
+        chat_history: List[Dict[str, Any]] | None = None,
     ) -> Dict[str, Any]:
         """
         Process a conversational message and generate appropriate response.
@@ -221,7 +217,7 @@ For complex technical tasks, analysis, or system commands, you should "
 
         return messages
 
-    def _try_extract_message_content(self, response: Dict) -> Optional[str]:
+    def _try_extract_message_content(self, response: Dict) -> str | None:
         """Try to extract content from message dict (Issue #334 - extracted helper)."""
         if "message" not in response:
             return None
@@ -231,7 +227,7 @@ For complex technical tasks, analysis, or system commands, you should "
         content = message.get("content")
         return content.strip() if content else None
 
-    def _try_extract_choices_content(self, response: Dict) -> Optional[str]:
+    def _try_extract_choices_content(self, response: Dict) -> str | None:
         """Try to extract content from choices list (Issue #334 - extracted helper)."""
         if "choices" not in response:
             return None
@@ -361,19 +357,5 @@ For complex technical tasks, analysis, or system commands, you should "
         return len(message.split()) <= 10
 
 
-# Singleton instance (thread-safe)
-import threading
-
-_chat_agent_instance = None
-_chat_agent_lock = threading.Lock()
-
-
-def get_chat_agent() -> ChatAgent:
-    """Get the singleton Chat Agent instance (thread-safe)."""
-    global _chat_agent_instance
-    if _chat_agent_instance is None:
-        with _chat_agent_lock:
-            # Double-check after acquiring lock
-            if _chat_agent_instance is None:
-                _chat_agent_instance = ChatAgent()
-    return _chat_agent_instance
+get_chat_agent = lazy_singleton(ChatAgent)
+"""Get the singleton Chat Agent instance (thread-safe)."""

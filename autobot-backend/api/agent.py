@@ -17,7 +17,7 @@ import json
 import logging
 import shlex
 import time
-from typing import List, Optional
+from typing import List
 
 import aiohttp
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
@@ -43,16 +43,18 @@ from api.schemas_agent import (
 from api.schemas_common import AgentMessageResponse, DataResponse
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import utc_timestamp
 from constants.threshold_constants import TimingConstants
 from dependencies import get_config, get_knowledge_base
+from events.bus import PersistStrategy, get_event_bus
+from exceptions import InternalError, SubprocessError
 from monitoring.prometheus_metrics import get_metrics_manager
 from services.ai_stack_client import AIStackError, get_ai_stack_client
-from utils.chat_exceptions import InternalError, SubprocessError
 from utils.response_helpers import create_success_response, handle_ai_stack_error
 
 router = APIRouter()
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Prometheus metrics instance
 prometheus_metrics = get_metrics_manager()
@@ -131,7 +133,7 @@ AGENT_CAPABILITIES = {
 
 
 async def _kill_timed_out_process(
-    process: Optional[asyncio.subprocess.Process],
+    process: asyncio.subprocess.Process | None,
 ) -> None:
     """Kill a timed out subprocess safely (Issue #315: extracted)."""
     if not process:
@@ -143,7 +145,7 @@ async def _kill_timed_out_process(
         pass  # Process already terminated
 
 
-def _validate_command_request(command: Optional[str], security_layer, user_role: str) -> Optional[JSONResponse]:
+def _validate_command_request(command: str | None, security_layer, user_role: str) -> JSONResponse | None:
     """
     Validate command request: check if command provided and user has permission.
 
@@ -181,19 +183,14 @@ def _validate_command_request(command: Optional[str], security_layer, user_role:
     return None
 
 
-async def _publish_event_safe(event_manager, event_name: str, data: dict) -> None:
+async def _publish_event_safe(event_name: str, data: dict) -> None:
     """
     Publish event with error handling (non-critical operation).
 
     Issue #281: Extracted helper for safe event publishing.
-
-    Args:
-        event_manager: Event manager instance
-        event_name: Name of event to publish
-        data: Event data
     """
     try:
-        await event_manager.publish(event_name, data)
+        await get_event_bus().publish("global", event_name, data, persist=PersistStrategy.NONE)
     except Exception as e:
         logger.warning("Failed to publish %s event: %s", event_name, e)
 
@@ -215,7 +212,7 @@ async def _run_subprocess(command: str, security_layer, user_role: str) -> tuple
     Raises:
         SubprocessError: If subprocess creation or execution fails
     """
-    process: Optional[asyncio.subprocess.Process] = None
+    process: asyncio.subprocess.Process | None = None
     try:
         cmd_parts = shlex.split(command)
         process = await asyncio.create_subprocess_exec(
@@ -327,7 +324,7 @@ def _build_error_response(
     )
 
 
-def _check_approval_permission(security_layer, user_role: str, task_id: str, approved: bool) -> Optional[JSONResponse]:
+def _check_approval_permission(security_layer, user_role: str, task_id: str, approved: bool) -> JSONResponse | None:
     """
     Check if user has permission to approve/deny commands.
 
@@ -410,7 +407,6 @@ async def _publish_approval_to_redis(
 
 
 async def _handle_command_result(
-    event_manager,
     security_layer,
     user_role: str,
     command: str,
@@ -424,7 +420,6 @@ async def _handle_command_result(
     Issue #620.
 
     Args:
-        event_manager: Event manager instance
         security_layer: Security layer for audit logging
         user_role: User's role
         command: Executed command
@@ -441,7 +436,6 @@ async def _handle_command_result(
     if returncode == 0:
         response = _build_success_response(command, output, security_layer, user_role)
         await _publish_event_safe(
-            event_manager,
             "command_execution_end",
             {"command": command, "status": "success", "output": output},
         )
@@ -449,7 +443,6 @@ async def _handle_command_result(
 
     response = _build_error_response(command, output, error, returncode, security_layer, user_role)
     await _publish_event_safe(
-        event_manager,
         "command_execution_end",
         {
             "command": command,
@@ -532,7 +525,7 @@ def _record_goal_metrics(task_start_time: float, status: str) -> None:
     )
 
 
-def _check_goal_permission(security_layer, user_role: str, goal: str) -> Optional[JSONResponse]:
+def _check_goal_permission(security_layer, user_role: str, goal: str) -> JSONResponse | None:
     """
     Check if user has permission to submit a goal.
 
@@ -557,23 +550,17 @@ def _check_goal_permission(security_layer, user_role: str, goal: str) -> Optiona
     return None
 
 
-async def _publish_goal_events(event_manager, goal: str, use_phi2: bool) -> None:
+async def _publish_goal_events(goal: str, use_phi2: bool) -> None:
     """
     Publish goal-related events (user_message and goal_received).
 
     Issue #620.
-
-    Args:
-        event_manager: Event manager instance
-        goal: Goal string
-        use_phi2: Whether to use Phi-2 model
     """
-    await _publish_event_safe(event_manager, "user_message", {"message": goal})
-    await _publish_event_safe(event_manager, "goal_received", {"goal": goal, "use_phi2": use_phi2})
+    await _publish_event_safe("user_message", {"message": goal})
+    await _publish_event_safe("goal_received", {"goal": goal, "use_phi2": use_phi2})
 
 
 async def _handle_goal_result(
-    event_manager,
     security_layer,
     user_role: str,
     goal: str,
@@ -586,7 +573,6 @@ async def _handle_goal_result(
     Issue #620.
 
     Args:
-        event_manager: Event manager instance
         security_layer: Security layer for audit logging
         user_role: User's role
         goal: Original goal string
@@ -599,7 +585,7 @@ async def _handle_goal_result(
     response_message, tool_output_content, tool_name = _process_tool_result(result_dict)
 
     if tool_output_content and tool_name != "respond_conversationally":
-        await _publish_event_safe(event_manager, "tool_output", {"output": tool_output_content})
+        await _publish_event_safe("tool_output", {"output": tool_output_content})
 
     security_layer.audit_log(
         "submit_goal",
@@ -608,7 +594,7 @@ async def _handle_goal_result(
         {"goal": goal, "result": response_message},
     )
 
-    await _publish_event_safe(event_manager, "goal_completed", {"goal": goal, "result": response_message})
+    await _publish_event_safe("goal_completed", {"goal": goal, "result": response_message})
 
     _record_goal_metrics(task_start_time, "success")
 
@@ -690,8 +676,6 @@ async def receive_goal(
         JSONResponse: Returns a 403 error if permission is denied, or a 500
             error if an internal error occurs.
     """
-    from event_manager import get_event_manager
-
     orchestrator = getattr(request.app.state, "orchestrator", None)
     if orchestrator is None:
         raise HTTPException(
@@ -712,7 +696,7 @@ async def receive_goal(
     logging.info(f"Received goal via API: {goal}")
 
     # Publish events (Issue #620: uses helper)
-    await _publish_goal_events(get_event_manager(), goal, use_phi2)
+    await _publish_goal_events(goal, use_phi2)
 
     # Track task execution start time for Prometheus metrics
     task_start_time = time.time()
@@ -721,7 +705,7 @@ async def receive_goal(
     result_dict = await _execute_goal_with_error_handling(orchestrator, goal, task_start_time)
 
     # Process and return result (Issue #620: uses helper)
-    return await _handle_goal_result(get_event_manager(), security_layer, user_role, goal, result_dict, task_start_time)
+    return await _handle_goal_result(security_layer, user_role, goal, result_dict, task_start_time)
 
 
 @router.post("/pause", response_model=AgentMessageResponse)
@@ -741,8 +725,6 @@ async def pause_agent_api(
     without actual functionality. Full implementation will be added with
     backend integration.
     """
-    from event_manager import get_event_manager
-
     security_layer = request.app.state.security_layer
     orchestrator = getattr(request.app.state, "orchestrator", None)
     if orchestrator is None:
@@ -765,11 +747,7 @@ async def pause_agent_api(
         ) from e
 
     security_layer.audit_log("agent_pause", user_role, "success", {})
-    # Publish event (non-critical)
-    try:
-        await get_event_manager().publish("agent_paused", {"message": "Agent operation paused."})
-    except Exception as e:
-        logger.warning("Failed to publish agent_paused event: %s", e)
+    await _publish_event_safe("agent_paused", {"message": "Agent operation paused."})
     return {"message": "Agent paused successfully."}
 
 
@@ -790,8 +768,6 @@ async def resume_agent_api(
     actual functionality.
     Full implementation will be added with backend integration.
     """
-    from event_manager import get_event_manager
-
     security_layer = request.app.state.security_layer
     orchestrator = getattr(request.app.state, "orchestrator", None)
     if orchestrator is None:
@@ -814,11 +790,7 @@ async def resume_agent_api(
         ) from e
 
     security_layer.audit_log("agent_resume", user_role, "success", {})
-    # Publish event (non-critical)
-    try:
-        await get_event_manager().publish("agent_resumed", {"message": "Agent operation resumed."})
-    except Exception as e:
-        logger.warning("Failed to publish agent_resumed event: %s", e)
+    await _publish_event_safe("agent_resumed", {"message": "Agent operation resumed."})
     return {"message": "Agent resumed successfully."}
 
 
@@ -891,8 +863,6 @@ async def execute_command(
                       a 403 error if permission is denied,
                       or a 500 error if an internal error occurs.
     """
-    from event_manager import get_event_manager
-
     security_layer = request.app.state.security_layer
     command = command_data.get("command")
 
@@ -900,24 +870,18 @@ async def execute_command(
     validation_error = _validate_command_request(command, security_layer, user_role)
     if validation_error:
         if not command:
-            await _publish_event_safe(
-                get_event_manager(),
-                "error",
-                {"message": "No command provided for execution."},
-            )
+            await _publish_event_safe("error", {"message": "No command provided for execution."})
         return validation_error
 
     # Publish start event (Issue #281: uses helper)
-    await _publish_event_safe(get_event_manager(), "command_execution_start", {"command": command})
+    await _publish_event_safe("command_execution_start", {"command": command})
     logging.info(f"Executing command: {command}")
 
     # Execute subprocess (Issue #281: uses helper)
     stdout, stderr, returncode = await _run_subprocess(command, security_layer, user_role)
 
     # Handle result and publish completion event (Issue #620: uses helper)
-    return await _handle_command_result(
-        get_event_manager(), security_layer, user_role, command, stdout, stderr, returncode
-    )
+    return await _handle_command_result(security_layer, user_role, command, stdout, stderr, returncode)
 
 
 # ====================================================================

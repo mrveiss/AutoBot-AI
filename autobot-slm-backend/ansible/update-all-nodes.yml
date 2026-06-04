@@ -63,8 +63,8 @@
         repo: "{{ github_repo }}"
         dest: "{{ git_repo_root }}"
         version: "{{ deploy_ref }}"
-        update: yes
-      ignore_errors: yes
+        update: true
+      ignore_errors: true
       register: github_sync
       tags: [always]
 
@@ -244,6 +244,16 @@
         src: "{{ deploy_tmp }}/shared.tar.gz"
         dest: "{{ code_base_dir }}/"
       tags: [shared, library]
+
+    # Issue #9225: slm-agent needs autobot_shared in PYTHONPATH
+    - name: "[PLAY 1] SLM Agent | Create autobot_shared symlink for agent imports"
+      ansible.builtin.file:
+        src: "{{ code_base_dir }}/autobot_shared"
+        dest: "{{ code_base_dir }}/autobot-slm-agent/autobot_shared"
+        state: link
+        force: true
+      become: true
+      tags: [shared, library, slm-agent]
 
     # =========================================================================
     # SLM AGENT - Issue #1164: Keep agent code in sync on every fleet update
@@ -489,6 +499,17 @@
         'browser_worker' in group_names or
         'aiml' in group_names
       tags: [shared, library]
+
+    # Issue #9225: slm-agent needs autobot_shared in PYTHONPATH
+    - name: "[PLAY 2] SLM Agent | Create autobot_shared symlink for agent imports"
+      ansible.builtin.file:
+        src: "{{ code_base_dir }}/autobot_shared"
+        dest: "{{ code_base_dir }}/autobot-slm-agent/autobot_shared"
+        state: link
+        force: true
+      become: true
+      when: slm_node_id is defined
+      tags: [shared, library, slm-agent]
 
     # =========================================================================
     # SLM AGENT - Issue #1164: Keep agent code in sync on every fleet update

@@ -9,17 +9,20 @@ to be scheduled for future execution, queued for orderly processing,
 and managed with priority-based execution.
 """
 
+from __future__ import annotations
+
 import asyncio
-import logging
 import threading
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 import heapq
 import json
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Callable, Dict, List
 from uuid import uuid4
 
 from autobot_shared.singleton_factory import lazy_singleton
@@ -47,14 +50,14 @@ class ScheduledWorkflow:
 
     id: str
     name: str
-    template_id: Optional[str]
+    template_id: str | None
     user_message: str
     scheduled_time: datetime
     priority: WorkflowPriority
     status: WorkflowStatus
     created_at: datetime
     complexity: TaskComplexity = TaskComplexity.SIMPLE
-    user_id: Optional[str] = None
+    user_id: str | None = None
     variables: Dict[str, Any] = None
     auto_approve: bool = False
     max_retries: int = RetryConfig.DEFAULT_RETRIES  # Issue #376
@@ -181,15 +184,15 @@ class WorkflowScheduleRequest:
     """
 
     user_message: str
-    scheduled_time: Union[datetime, str]
-    priority: Union[WorkflowPriority, str] = WorkflowPriority.NORMAL
-    complexity: Union[TaskComplexity, str] = TaskComplexity.SIMPLE
-    template_id: Optional[str] = None
-    variables: Optional[Dict[str, Any]] = None
+    scheduled_time: datetime | str
+    priority: WorkflowPriority | str = WorkflowPriority.NORMAL
+    complexity: TaskComplexity | str = TaskComplexity.SIMPLE
+    template_id: str | None = None
+    variables: Dict[str, Any] | None = None
     auto_approve: bool = False
-    tags: Optional[List[str]] = None
-    dependencies: Optional[List[str]] = None
-    user_id: Optional[str] = None
+    tags: List[str] | None = None
+    dependencies: List[str] | None = None
+    user_id: str | None = None
     estimated_duration_minutes: int = WorkflowConfig.DEFAULT_ESTIMATED_DURATION_MIN
     timeout_minutes: int = WorkflowConfig.DEFAULT_TIMEOUT_MIN
     max_retries: int = RetryConfig.DEFAULT_RETRIES
@@ -200,7 +203,7 @@ class WorkflowQueue:
 
     def __init__(
         self,
-        completed_workflows: Optional[Dict[str, "ScheduledWorkflow"]] = None,
+        completed_workflows: Dict[str, "ScheduledWorkflow"] | None = None,
     ):
         """Initialize workflow queue with empty queues and default settings.
 
@@ -226,7 +229,7 @@ class WorkflowQueue:
         heapq.heappush(self._queue, queued_workflow)
         workflow.status = WorkflowStatus.QUEUED
 
-    def get_next(self) -> Optional[ScheduledWorkflow]:
+    def get_next(self) -> ScheduledWorkflow | None:
         """Get the next workflow to execute"""
         if self._paused or len(self._running) >= self._max_concurrent:
             return None
@@ -412,9 +415,9 @@ class WorkflowScheduler:
         self.completed_workflows: Dict[str, ScheduledWorkflow] = {}
         # Pass completed_workflows by reference so the queue always sees live state (#2180)
         self.queue = WorkflowQueue(completed_workflows=self.completed_workflows)
-        self._scheduler_task: Optional[asyncio.Task] = None
+        self._scheduler_task: asyncio.Task | None = None
         self._running = False
-        self._workflow_executor: Optional[Callable] = None
+        self._workflow_executor: Callable | None = None
         self._file_lock = threading.Lock()  # Lock for file operations
 
         # Load existing workflows
@@ -445,14 +448,14 @@ class WorkflowScheduler:
             except asyncio.CancelledError:
                 logger.debug("Scheduler task cancelled during shutdown")
 
-        # Save state before stopping
-        self._save_workflows()
+        # Issue #8165: run blocking file I/O off the event loop.
+        await asyncio.to_thread(self._save_workflows)
 
     def _parse_schedule_params(
         self,
-        scheduled_time: Union[datetime, str],
-        priority: Union[WorkflowPriority, str],
-        complexity: Union[TaskComplexity, str],
+        scheduled_time: datetime | str,
+        priority: WorkflowPriority | str,
+        complexity: TaskComplexity | str,
     ) -> tuple:
         """Parse and normalize schedule parameters (Issue #398: extracted).
 
@@ -508,17 +511,17 @@ class WorkflowScheduler:
 
     def _resolve_workflow_params(
         self,
-        request: Optional["WorkflowScheduleRequest"],
-        user_message: Optional[str],
-        scheduled_time: Optional[Union[datetime, str]],
-        priority: Union[WorkflowPriority, str],
-        complexity: Union[TaskComplexity, str],
-        template_id: Optional[str],
-        variables: Optional[Dict[str, Any]],
+        request: "WorkflowScheduleRequest" | None,
+        user_message: str | None,
+        scheduled_time: datetime | str | None,
+        priority: WorkflowPriority | str,
+        complexity: TaskComplexity | str,
+        template_id: str | None,
+        variables: Dict[str, Any] | None,
         auto_approve: bool,
-        tags: Optional[List[str]],
-        dependencies: Optional[List[str]],
-        user_id: Optional[str],
+        tags: List[str] | None,
+        dependencies: List[str] | None,
+        user_id: str | None,
         kwargs: Dict[str, Any],
     ) -> Dict[str, Any]:
         """
@@ -561,12 +564,12 @@ class WorkflowScheduler:
         scheduled_time: datetime,
         priority: WorkflowPriority,
         complexity: TaskComplexity,
-        template_id: Optional[str],
-        variables: Optional[Dict[str, Any]],
+        template_id: str | None,
+        variables: Dict[str, Any] | None,
         auto_approve: bool,
-        tags: Optional[List[str]],
-        dependencies: Optional[List[str]],
-        user_id: Optional[str],
+        tags: List[str] | None,
+        dependencies: List[str] | None,
+        user_id: str | None,
     ) -> Dict[str, Any]:
         """
         Build workflow parameters dictionary from resolved values. Issue #620.
@@ -620,18 +623,18 @@ class WorkflowScheduler:
 
     def schedule_workflow(
         self,
-        request: Optional[WorkflowScheduleRequest] = None,
+        request: WorkflowScheduleRequest | None = None,
         *,  # Force keyword-only args for backwards compatibility
-        user_message: Optional[str] = None,
-        scheduled_time: Optional[Union[datetime, str]] = None,
-        priority: Union[WorkflowPriority, str] = WorkflowPriority.NORMAL,
-        complexity: Union[TaskComplexity, str] = TaskComplexity.SIMPLE,
-        template_id: Optional[str] = None,
-        variables: Optional[Dict[str, Any]] = None,
+        user_message: str | None = None,
+        scheduled_time: datetime | str | None = None,
+        priority: WorkflowPriority | str = WorkflowPriority.NORMAL,
+        complexity: TaskComplexity | str = TaskComplexity.SIMPLE,
+        template_id: str | None = None,
+        variables: Dict[str, Any] | None = None,
         auto_approve: bool = False,
-        tags: Optional[List[str]] = None,
-        dependencies: Optional[List[str]] = None,
-        user_id: Optional[str] = None,
+        tags: List[str] | None = None,
+        dependencies: List[str] | None = None,
+        user_id: str | None = None,
         **kwargs,
     ) -> str:
         """Schedule a workflow for future execution. Issue #620: Refactored.
@@ -682,8 +685,8 @@ class WorkflowScheduler:
     def reschedule_workflow(
         self,
         workflow_id: str,
-        new_time: Union[datetime, str],
-        new_priority: Optional[Union[WorkflowPriority, str]] = None,
+        new_time: datetime | str,
+        new_priority: WorkflowPriority | str | None = None,
     ) -> bool:
         """Reschedule an existing workflow"""
         if workflow_id not in self.scheduled_workflows:
@@ -716,15 +719,15 @@ class WorkflowScheduler:
         self._save_workflows()
         return True
 
-    def get_workflow(self, workflow_id: str) -> Optional[ScheduledWorkflow]:
+    def get_workflow(self, workflow_id: str) -> ScheduledWorkflow | None:
         """Get a workflow by ID"""
         return self.scheduled_workflows.get(workflow_id)
 
     def list_scheduled_workflows(
         self,
-        status: Optional[WorkflowStatus] = None,
-        user_id: Optional[str] = None,
-        tags: Optional[List[str]] = None,
+        status: WorkflowStatus | None = None,
+        user_id: str | None = None,
+        tags: List[str] | None = None,
     ) -> List[ScheduledWorkflow]:
         """List scheduled workflows with optional filtering"""
         workflows = list(self.scheduled_workflows.values())
@@ -809,7 +812,7 @@ class WorkflowScheduler:
 
                 if result and result.get("success"):
                     self.queue.complete_workflow(workflow.id, WorkflowStatus.COMPLETED)
-                    self._move_to_completed(workflow)
+                    await self._move_to_completed(workflow)
                     logger.info("Workflow %s completed successfully", workflow.id)
                 else:
                     # Handle failure with retry logic
@@ -832,15 +835,18 @@ class WorkflowScheduler:
         else:
             # Mark as failed
             self.queue.complete_workflow(workflow.id, WorkflowStatus.FAILED)
-            self._move_to_completed(workflow)
+            await self._move_to_completed(workflow)
             logger.warning("Workflow %s failed after %s retries", workflow.id, workflow.retry_count)
 
-    def _move_to_completed(self, workflow: ScheduledWorkflow) -> None:
-        """Move workflow to completed storage"""
+    async def _move_to_completed(self, workflow: ScheduledWorkflow) -> None:
+        """Move workflow to completed storage.
+
+        Issue #8165: async so the blocking file write runs via asyncio.to_thread.
+        """
         self.completed_workflows[workflow.id] = workflow
         if workflow.id in self.scheduled_workflows:
             del self.scheduled_workflows[workflow.id]
-        self._save_workflows()
+        await asyncio.to_thread(self._save_workflows)
 
     def _parse_time_string(self, time_str: str) -> datetime:
         """Parse various time string formats"""
@@ -949,7 +955,7 @@ get_workflow_scheduler = lazy_singleton(WorkflowScheduler)
 # Autonomous improvement loop integration (Issue #4680)
 # ---------------------------------------------------------------------------
 
-_autonomous_loop_task: Optional[asyncio.Task] = None
+_autonomous_loop_task: asyncio.Task | None = None
 
 
 async def _autonomous_loop_runner(llm_service: Any) -> None:
@@ -986,7 +992,7 @@ async def _autonomous_loop_runner(llm_service: Any) -> None:
             return False
 
     logger.info("AutonomousLoopRunner: background task started")
-    _last_fired_minute: Optional[int] = None
+    _last_fired_minute: int | None = None
 
     while True:
         try:

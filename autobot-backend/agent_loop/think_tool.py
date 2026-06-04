@@ -20,14 +20,14 @@ The Think Tool:
 - Provides audit trail for debugging
 """
 
-import logging
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any
 
 from agent_loop.types import ThinkCategory, ThinkResult
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import DEFAULT_LLM_MODEL
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # =============================================================================
@@ -194,8 +194,8 @@ class ThinkTool:
 
     def __init__(
         self,
-        llm_client: Optional[Any] = None,
-        config: Optional[ThinkToolConfig] = None,
+        llm_client: Any | None = None,
+        config: ThinkToolConfig | None = None,
     ):
         """
         Initialize the Think Tool.
@@ -212,8 +212,8 @@ class ThinkTool:
         self,
         category: ThinkCategory,
         context: str,
-        task_id: Optional[str] = None,
-        additional_prompt: Optional[str] = None,
+        task_id: str | None = None,
+        additional_prompt: str | None = None,
     ) -> ThinkResult:
         """
         Perform structured reasoning for a decision point.
@@ -265,8 +265,8 @@ class ThinkTool:
         self,
         category: ThinkCategory,
         context: str,
-        task_id: Optional[str] = None,
-    ) -> Optional[ThinkResult]:
+        task_id: str | None = None,
+    ) -> ThinkResult | None:
         """
         Think only if the category is mandatory.
 
@@ -286,7 +286,7 @@ class ThinkTool:
         """Check if a category requires mandatory thinking."""
         return category in self.config.mandatory_categories
 
-    def get_history(self, task_id: Optional[str] = None) -> list[ThinkResult]:
+    def get_history(self, task_id: str | None = None) -> list[ThinkResult]:
         """Get think history, optionally filtered by task."""
         if task_id:
             return [r for r in self._think_history if r.task_id == task_id]
@@ -300,7 +300,7 @@ class ThinkTool:
         self,
         base_prompt: str,
         context: str,
-        additional_prompt: Optional[str],
+        additional_prompt: str | None,
     ) -> str:
         """Build the full prompt for the LLM."""
         parts = [
@@ -352,7 +352,7 @@ class ThinkTool:
 
         # Use Ollama directly via the shared helper
         from autobot_shared.ssot_config import get_config
-        from llm_providers.ollama_helpers import call_ollama_generate
+        from llm_shared.ollama_helpers import call_ollama_generate
 
         ssot = get_config()
         return await call_ollama_generate(
@@ -368,7 +368,7 @@ class ThinkTool:
         self,
         response: str,
         category: ThinkCategory,
-        task_id: Optional[str],
+        task_id: str | None,
     ) -> ThinkResult:
         """Parse the LLM response into a ThinkResult."""
         # Extract sections from response
@@ -435,8 +435,8 @@ class ThinkTool:
 
 async def think_before_git(
     context: str,
-    think_tool: Optional[ThinkTool] = None,
-    task_id: Optional[str] = None,
+    think_tool: ThinkTool | None = None,
+    task_id: str | None = None,
 ) -> ThinkResult:
     """
     Convenience function to think before git operations.
@@ -455,8 +455,8 @@ async def think_before_git(
 
 async def think_before_completion(
     context: str,
-    think_tool: Optional[ThinkTool] = None,
-    task_id: Optional[str] = None,
+    think_tool: ThinkTool | None = None,
+    task_id: str | None = None,
 ) -> ThinkResult:
     """
     Convenience function to think before reporting completion.
@@ -475,8 +475,8 @@ async def think_before_completion(
 
 async def think_before_transition(
     context: str,
-    think_tool: Optional[ThinkTool] = None,
-    task_id: Optional[str] = None,
+    think_tool: ThinkTool | None = None,
+    task_id: str | None = None,
 ) -> ThinkResult:
     """
     Convenience function to think before transitioning modes.
@@ -495,8 +495,8 @@ async def think_before_transition(
 
 async def think_causally(
     context: str,
-    think_tool: Optional[ThinkTool] = None,
-    task_id: Optional[str] = None,
+    think_tool: ThinkTool | None = None,
+    task_id: str | None = None,
 ) -> ThinkResult:
     """
     Convenience function for causal reasoning — WHY not just WHAT.

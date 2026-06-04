@@ -18,7 +18,7 @@ LanguageSwitcher.vue - Globe icon language switcher for nav bar
         :aria-expanded="open"
         aria-haspopup="listbox"
       >
-        <i class="fas fa-globe" aria-hidden="true"></i>
+        <Icon name="globe" />
       </button>
 
       <Transition name="lang-dropdown">
@@ -38,11 +38,9 @@ LanguageSwitcher.vue - Globe icon language switcher for nav bar
             :class="{ 'lang-option--active': lang.code === currentLanguage }"
             @click="select(lang.code)"
           >
-            <i
-              v-if="lang.code === currentLanguage"
-              class="fas fa-check lang-option__check"
-              aria-hidden="true"
-            ></i>
+            <Icon name="check" class="lang-option__check" v-if="lang.code === currentLanguage"
+              
+              aria-hidden="true" />
             <span class="lang-option__name">{{ lang.name }}</span>
           </li>
         </ul>
@@ -52,7 +50,7 @@ LanguageSwitcher.vue - Globe icon language switcher for nav bar
     <!-- Mobile: inline row with select -->
     <template v-else>
       <div class="lang-mobile-row">
-        <i class="fas fa-globe lang-mobile-icon" aria-hidden="true"></i>
+        <Icon name="globe" class="lang-mobile-icon" />
         <select
           :value="currentLanguage"
           @change="select(($event.target as HTMLSelectElement).value)"
@@ -73,6 +71,7 @@ LanguageSwitcher.vue - Globe icon language switcher for nav bar
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { usePreferences } from '@/composables/usePreferences'

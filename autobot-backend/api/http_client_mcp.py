@@ -26,8 +26,7 @@ Issue #49 - Additional MCP Bridges (Browser, HTTP, Database, Git)
 
 import asyncio
 import json
-import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 from urllib.parse import urlparse
 
 import aiohttp
@@ -45,14 +44,24 @@ from api.schemas_workflows import (
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_client import get_http_client
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
 from constants.network_constants import NetworkConstants
+from services.mcp_bridge_manifest import MCPBridgeManifest
 from type_defs.common import JSONObject, Metadata
 from utils.template_loader import load_mcp_tools, mcp_tools_exist
 
 from .schemas_code import HTTPClientMCPStatusResponse, HTTPRequestResultResponse
 
-logger = logging.getLogger(__name__)
+MANIFEST = MCPBridgeManifest(
+    name="http_client_mcp",
+    version="1.0.0",
+    description="HTTP Client - Secure REST API Interactions",
+    features=["get", "post", "put", "patch", "delete", "head", "rate_limiting"],
+    endpoint="/api/http_client/mcp/tools",
+)
+
+logger = get_logger(__name__)
 router = APIRouter(
     tags=["http_client_mcp", "mcp"],
     dependencies=[Depends(check_admin_permission)],
@@ -116,7 +125,7 @@ DEFAULT_TIMEOUT = 30  # seconds
 MAX_TIMEOUT = 120  # seconds
 
 
-def _try_parse_json(body: Optional[str]) -> Optional[JSONObject]:
+def _try_parse_json(body: str | None) -> JSONObject | None:
     """Attempt to parse body as JSON. (Issue #315 - extracted to reduce nesting)"""
     if not body:
         return None
@@ -131,9 +140,9 @@ def _build_request_kwargs(
     url: str,
     headers: Dict[str, str],
     timeout: int,
-    params: Optional[Dict[str, str]] = None,
-    json_body: Optional[JSONObject] = None,
-    form_data: Optional[Dict[str, str]] = None,
+    params: Dict[str, str] | None = None,
+    json_body: JSONObject | None = None,
+    form_data: Dict[str, str] | None = None,
 ) -> Dict[str, Any]:
     """
     Build request kwargs dictionary for aiohttp session.request.
@@ -171,8 +180,8 @@ def _build_request_kwargs(
 def _build_http_response(
     response,
     method: str,
-    body: Optional[str],
-    json_response: Optional[JSONObject],
+    body: str | None,
+    json_response: JSONObject | None,
 ) -> JSONObject:
     """
     Build standardized HTTP response dictionary.
@@ -578,10 +587,10 @@ async def get_http_client_mcp_tools() -> List[HTTPClientMCPTool]:
 async def execute_http_request(
     method: str,
     url: str,
-    headers: Optional[Dict[str, str]] = None,
-    params: Optional[Dict[str, str]] = None,
-    json_body: Optional[JSONObject] = None,
-    form_data: Optional[Dict[str, str]] = None,
+    headers: Dict[str, str] | None = None,
+    params: Dict[str, str] | None = None,
+    json_body: JSONObject | None = None,
+    form_data: Dict[str, str] | None = None,
     timeout: int = DEFAULT_TIMEOUT,
 ) -> JSONObject:
     """

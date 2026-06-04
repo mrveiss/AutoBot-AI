@@ -14,13 +14,13 @@ differences are ``async def`` and ``await``.
 from __future__ import annotations
 
 import asyncio
-import logging
-from typing import Any, List, Optional, Sequence
+from typing import Any, List, Sequence
 
+from autobot_shared.logging_manager import get_logger
 from knowledge.backends.async_base import AsyncBaseClient, AsyncBaseCollection
 from knowledge.backends.base import Embedding, Metadata, Where, WhereDocument
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class AsyncChromaDBCollection(AsyncBaseCollection):
@@ -39,9 +39,9 @@ class AsyncChromaDBCollection(AsyncBaseCollection):
         self,
         *,
         ids: Sequence[str],
-        documents: Optional[Sequence[str]] = None,
-        metadatas: Optional[Sequence[Metadata]] = None,
-        embeddings: Optional[Sequence[Embedding]] = None,
+        documents: Sequence[str] | None = None,
+        metadatas: Sequence[Metadata] | None = None,
+        embeddings: Sequence[Embedding] | None = None,
     ) -> None:
         await self._raw.add(
             ids=list(ids),
@@ -54,9 +54,9 @@ class AsyncChromaDBCollection(AsyncBaseCollection):
         self,
         *,
         ids: Sequence[str],
-        documents: Optional[Sequence[str]] = None,
-        metadatas: Optional[Sequence[Metadata]] = None,
-        embeddings: Optional[Sequence[Embedding]] = None,
+        documents: Sequence[str] | None = None,
+        metadatas: Sequence[Metadata] | None = None,
+        embeddings: Sequence[Embedding] | None = None,
     ) -> None:
         await self._raw.upsert(
             ids=list(ids),
@@ -69,9 +69,9 @@ class AsyncChromaDBCollection(AsyncBaseCollection):
         self,
         *,
         ids: Sequence[str],
-        documents: Optional[Sequence[str]] = None,
-        metadatas: Optional[Sequence[Metadata]] = None,
-        embeddings: Optional[Sequence[Embedding]] = None,
+        documents: Sequence[str] | None = None,
+        metadatas: Sequence[Metadata] | None = None,
+        embeddings: Sequence[Embedding] | None = None,
     ) -> None:
         await self._raw.update(
             ids=list(ids),
@@ -83,12 +83,12 @@ class AsyncChromaDBCollection(AsyncBaseCollection):
     async def get(
         self,
         *,
-        ids: Optional[Sequence[str]] = None,
-        where: Optional[Where] = None,
-        where_document: Optional[WhereDocument] = None,
-        limit: Optional[int] = None,
-        offset: Optional[int] = None,
-        include: Optional[Sequence[str]] = None,
+        ids: Sequence[str] | None = None,
+        where: Where | None = None,
+        where_document: WhereDocument | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
+        include: Sequence[str] | None = None,
     ) -> dict:
         # AsyncChromaCollection.get has defaults for include — pass only the
         # fields caller set, letting the wrapper apply its own default when
@@ -111,12 +111,12 @@ class AsyncChromaDBCollection(AsyncBaseCollection):
     async def query(
         self,
         *,
-        query_embeddings: Optional[Sequence[Embedding]] = None,
-        query_texts: Optional[Sequence[str]] = None,
+        query_embeddings: Sequence[Embedding] | None = None,
+        query_texts: Sequence[str] | None = None,
         n_results: int = 10,
-        where: Optional[Where] = None,
-        where_document: Optional[WhereDocument] = None,
-        include: Optional[Sequence[str]] = None,
+        where: Where | None = None,
+        where_document: WhereDocument | None = None,
+        include: Sequence[str] | None = None,
     ) -> dict:
         kwargs: dict = {"n_results": n_results}
         if query_embeddings is not None:
@@ -131,12 +131,34 @@ class AsyncChromaDBCollection(AsyncBaseCollection):
             kwargs["include"] = list(include)
         return await self._raw.query(**kwargs)
 
+    async def query_batch(
+        self,
+        query_embeddings: Sequence[Embedding],
+        n_results: int = 10,
+        where: Where | None = None,
+        where_document: WhereDocument | None = None,
+        include: Sequence[str] | None = None,
+    ) -> dict:
+        """Issue #8153: batch multiple embeddings into a single ChromaDB call.
+
+        Delegates to ``AsyncChromaCollection.query_batch()`` which wraps the
+        underlying synchronous ``collection.query()`` in one ``asyncio.to_thread``
+        dispatch regardless of how many embeddings are in the batch.
+        """
+        return await self._raw.query_batch(
+            query_embeddings=[list(e) for e in query_embeddings],
+            n_results=n_results,
+            where=where,
+            where_document=where_document,
+            include=list(include) if include is not None else None,
+        )
+
     async def delete(
         self,
         *,
-        ids: Optional[Sequence[str]] = None,
-        where: Optional[Where] = None,
-        where_document: Optional[WhereDocument] = None,
+        ids: Sequence[str] | None = None,
+        where: Where | None = None,
+        where_document: WhereDocument | None = None,
     ) -> None:
         kwargs: dict = {}
         if ids is not None:
@@ -172,12 +194,17 @@ class AsyncChromaDBClient(AsyncBaseClient):
         self,
         name: str,
         *,
-        metadata: Optional[Metadata] = None,
-        embedding_function: Optional[Any] = None,
+        metadata: Metadata | None = None,
+        embedding_function: Any | None = None,
     ) -> AsyncBaseCollection:
+        from datetime import datetime, timezone
+
+        provenance: dict = {"created_at": datetime.now(timezone.utc).isoformat()}
+        if metadata:
+            provenance.update(metadata)
         raw_col = await self._raw.get_or_create_collection(
             name=name,
-            metadata=metadata,
+            metadata=provenance,
             embedding_function=embedding_function,
         )
         return AsyncChromaDBCollection(raw_col)
@@ -193,13 +220,18 @@ class AsyncChromaDBClient(AsyncBaseClient):
         self,
         name: str,
         *,
-        metadata: Optional[Metadata] = None,
-        embedding_function: Optional[Any] = None,
+        metadata: Metadata | None = None,
+        embedding_function: Any | None = None,
     ) -> AsyncBaseCollection:
+        from datetime import datetime, timezone
+
+        provenance: dict = {"created_at": datetime.now(timezone.utc).isoformat()}
+        if metadata:
+            provenance.update(metadata)
         try:
             raw_col = await self._raw.create_collection(
                 name=name,
-                metadata=metadata,
+                metadata=provenance,
                 embedding_function=embedding_function,
             )
         except Exception as exc:

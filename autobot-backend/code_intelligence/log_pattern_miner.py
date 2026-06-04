@@ -19,7 +19,6 @@ Features:
 - Session flow tracking
 """
 
-import logging
 import re
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
@@ -27,9 +26,11 @@ from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from statistics import mean, stdev
-from typing import Any, Optional
+from typing import Any
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 
 
 # ============================================================================
@@ -93,11 +94,11 @@ class LogEntry:
     message: str
     raw_line: str
     line_number: int
-    file_path: Optional[str] = None
-    session_id: Optional[str] = None
-    duration_ms: Optional[float] = None
-    endpoint: Optional[str] = None
-    status_code: Optional[int] = None
+    file_path: str | None = None
+    session_id: str | None = None
+    duration_ms: float | None = None
+    endpoint: str | None = None
+    status_code: int | None = None
     extra_data: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -185,7 +186,7 @@ class SessionFlow:
 
     session_id: str
     start_time: datetime
-    end_time: Optional[datetime]
+    end_time: datetime | None
     endpoints: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
     total_duration_ms: float = 0.0
@@ -286,7 +287,7 @@ class LogParser:
     SLOW_REQUEST_THRESHOLD_MS = 100.0
 
     @classmethod
-    def parse_line(cls, line: str, line_number: int, file_path: Optional[str] = None) -> Optional[LogEntry]:
+    def parse_line(cls, line: str, line_number: int, file_path: str | None = None) -> LogEntry | None:
         """Parse a single log line."""
         line = line.strip()
         if not line:
@@ -310,7 +311,7 @@ class LogParser:
         match: re.Match,
         raw_line: str,
         line_number: int,
-        file_path: Optional[str],
+        file_path: str | None,
     ) -> LogEntry:
         """Create LogEntry from standard format match."""
         timestamp_str, logger_name, level_str, message = match.groups()
@@ -363,7 +364,7 @@ class LogParser:
         match: re.Match,
         raw_line: str,
         line_number: int,
-        file_path: Optional[str],
+        file_path: str | None,
     ) -> LogEntry:
         """Create LogEntry from Python logging format match."""
         level_str, logger_name, message = match.groups()
@@ -463,7 +464,7 @@ class LogPatternMiner:
                 entries.append(entry)
         return entries
 
-    def _parse_all_sources(self, log_files: Optional[list[str]], content: Optional[str]) -> int:
+    def _parse_all_sources(self, log_files: list[str] | None, content: str | None) -> int:
         """Parse all log sources and populate entries.
 
         Args:
@@ -541,7 +542,7 @@ class LogPatternMiner:
             summary=summary,
         )
 
-    def analyze(self, log_files: Optional[list[str]] = None, content: Optional[str] = None) -> MiningResult:
+    def analyze(self, log_files: list[str] | None = None, content: str | None = None) -> MiningResult:
         """Analyze logs and extract patterns.
 
         Args:
@@ -962,8 +963,8 @@ class LogPatternMiner:
 
 
 def analyze_logs(
-    log_files: Optional[list[str]] = None,
-    content: Optional[str] = None,
+    log_files: list[str] | None = None,
+    content: str | None = None,
     slow_threshold_ms: float = 100.0,
 ) -> MiningResult:
     """

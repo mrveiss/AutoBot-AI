@@ -9,18 +9,18 @@ Sessions have a configurable TTL; expired sessions are treated as
 absent and are cleaned up by cleanup_expired_sessions().
 """
 
-import logging
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
 from models.process_run import AgentSession
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _DEFAULT_TTL = 3600
 
@@ -50,7 +50,7 @@ class AgentSessionService:
         logger.info("Session saved: agent=%s task=%s ttl=%ss", agent_id, task_id, ttl_seconds)
         return str(session_id)
 
-    async def load_session(self, agent_id: str, task_id: str) -> Optional[Dict[str, Any]]:
+    async def load_session(self, agent_id: str, task_id: str) -> Dict[str, Any] | None:
         """
         Return session state for (agent_id, task_id), or None if absent/expired (#1406).
 
@@ -116,7 +116,7 @@ class AgentSessionService:
 # -- Module-level helpers --------------------------------------------------
 
 
-async def _fetch_session(session: Any, agent_id: str, task_id: str) -> Optional[AgentSession]:
+async def _fetch_session(session: Any, agent_id: str, task_id: str) -> AgentSession | None:
     """Fetch an AgentSession row for (agent_id, task_id) (#1406)."""
     result = await session.execute(
         select(AgentSession)

@@ -333,6 +333,23 @@ function getEnvBoolean(key: string, defaultValue: boolean): boolean {
 }
 
 // =============================================================================
+// Runtime Protocol Helper
+// =============================================================================
+
+/**
+ * Detect the HTTP protocol at runtime from window.location.
+ * Falls back to VITE_HTTP_PROTOCOL for SSR / non-browser contexts.
+ * Exported so callers outside ssot-config can reuse the same detection logic
+ * without importing the full config singleton.
+ */
+export function runtimeHttpProto(): string {
+  if (typeof window !== 'undefined' && window.location?.protocol) {
+    return window.location.protocol === 'https:' ? 'https' : 'http';
+  }
+  return getEnv('VITE_HTTP_PROTOCOL', 'http');
+}
+
+// =============================================================================
 // Configuration Builder
 // =============================================================================
 
@@ -423,19 +440,6 @@ function buildConfig(): AutoBotConfig {
   const debug = getEnvBoolean('VITE_DEBUG', false);
   const httpProtocol = getEnv('VITE_HTTP_PROTOCOL', 'http');
 
-  // #6795: derive protocol at runtime from window.location to avoid the
-  // mixed-content trap that previously hit websocketUrl (#6642). The
-  // build-time VITE_HTTP_PROTOCOL stays as fallback for SSR / non-browser
-  // contexts where window is undefined. All browser-facing URL builders
-  // below use this helper so behaviour is consistent regardless of how the
-  // env var is set at build time.
-  const runtimeHttpProto = (): string => {
-    if (typeof window !== 'undefined' && window.location?.protocol) {
-      return window.location.protocol === 'https:' ? 'https' : 'http';
-    }
-    return httpProtocol;
-  };
-
   // Build the config object with computed URL getters
   const configObj: AutoBotConfig = {
     vm,
@@ -470,17 +474,7 @@ function buildConfig(): AutoBotConfig {
     },
 
     get websocketUrl(): string {
-      // #6642: detect protocol from window.location at runtime, not from
-      // build-time VITE_HTTP_PROTOCOL. The env var defaults to 'http' and
-      // produced ws:// URLs that browsers blocked as mixed-content when the
-      // page itself was served over HTTPS. Mirror the runtime detection that
-      // getBackendWsUrl() already uses so behaviour stays correct regardless
-      // of the build-time env.
-      const isHttps =
-        typeof window !== 'undefined'
-          ? window.location.protocol === 'https:'
-          : httpProtocol === 'https';
-      if (isHttps) {
+      if (runtimeHttpProto() === 'https') {
         const host =
           typeof window !== 'undefined' ? window.location.host : vm.main;
         return `wss://${host}/api/ws`;
@@ -517,7 +511,7 @@ function buildConfig(): AutoBotConfig {
       // Nginx proxies / -> slm-admin:5174, /api/ -> slm-server:8000
       // Issue #1875: When vm.slm is empty, use relative /slm path
       if (!vm.slm) return '/slm';
-      return `https://${vm.slm}`;
+      return `${runtimeHttpProto()}://${vm.slm}`;
     },
   };
 

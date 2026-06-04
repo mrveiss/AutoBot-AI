@@ -10,7 +10,7 @@ Data structures for tool calls and dependency tracking.
 import uuid
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from typing import Any, Optional
+from typing import Any
 
 from constants.status_enums import TaskStatus
 
@@ -44,11 +44,11 @@ class ToolCall:
     # Execution state - Issue #670: Use centralized enum
     status: str = TaskStatus.PENDING.value
     result: Any = None
-    error: Optional[str] = None
+    error: str | None = None
     execution_time_ms: float = 0.0
 
     # Parallel group
-    parallel_group_id: Optional[str] = None
+    parallel_group_id: str | None = None
 
     def to_dict(self) -> dict:
         return {

@@ -7,7 +7,7 @@ MCP (Model Context Protocol) Type Definitions for AutoBot
 Provides strongly-typed MCP tool and response structures.
 """
 
-from typing import Any, Dict, List, Literal, Optional, Union
+from typing import Any, Dict, List, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -22,13 +22,13 @@ class MCPPropertyDefinition(BaseModel):
     """JSON Schema property definition for MCP tools."""
 
     type: str = Field(..., description="JSON Schema type")
-    description: Optional[str] = None
-    default: Optional[Any] = None
-    enum: Optional[List[Any]] = None
+    description: str | None = None
+    default: Any | None = None
+    enum: List[Any] | None = None
     # Use Any for self-referential fields to avoid Pydantic recursion issues
-    items: Optional[Any] = None  # Would be MCPPropertyDefinition
-    properties: Optional[Metadata] = None  # Would be Dict[str, MCPPropertyDefinition]
-    required: Optional[List[str]] = None
+    items: Any | None = None  # Would be MCPPropertyDefinition
+    properties: Metadata | None = None  # Would be Dict[str, MCPPropertyDefinition]
+    required: List[str] | None = None
 
 
 class MCPInputSchema(BaseModel):
@@ -48,8 +48,8 @@ class MCPToolDefinition(BaseModel):
     name: MCPToolName
     description: str
     input_schema: MCPInputSchema = Field(alias="inputSchema")
-    category: Optional[str] = None
-    tags: Optional[List[str]] = None
+    category: str | None = None
+    tags: List[str] | None = None
 
 
 class MCPSuccessResponse(BaseModel):
@@ -69,13 +69,13 @@ class MCPErrorResponse(BaseModel):
 
     success: bool = False
     error: str
-    error_code: Optional[str] = None
+    error_code: str | None = None
     is_error: bool = Field(True, alias="isError")
-    details: Optional[Metadata] = None
+    details: Metadata | None = None
 
 
 # Union type for MCP tool responses
-MCPToolResponse = Union[MCPSuccessResponse, MCPErrorResponse]
+MCPToolResponse = MCPSuccessResponse | MCPErrorResponse
 
 
 class MCPTextContent(BaseModel):
@@ -102,13 +102,13 @@ class MCPResourceContent(BaseModel):
 
     type: Literal["resource"] = "resource"
     uri: MCPResourceUri
-    mime_type: Optional[str] = Field(None, alias="mimeType")
-    text: Optional[str] = None
-    blob: Optional[str] = None  # Base64 encoded
+    mime_type: str | None = Field(None, alias="mimeType")
+    text: str | None = None
+    blob: str | None = None  # Base64 encoded
 
 
 # Content types that can appear in MCP responses
-MCPContent = Union[MCPTextContent, MCPImageContent, MCPResourceContent]
+MCPContent = MCPTextContent | MCPImageContent | MCPResourceContent
 
 
 class MCPToolCallRequest(BaseModel):
@@ -124,7 +124,7 @@ class MCPToolCallResult(BaseModel):
     tool_name: MCPToolName
     success: bool
     content: List[MCPContent] = Field(default_factory=list)
-    execution_time_ms: Optional[float] = None
+    execution_time_ms: float | None = None
     is_error: bool = False
 
 
@@ -135,24 +135,24 @@ class MCPResourceDefinition(BaseModel):
 
     uri: MCPResourceUri
     name: str
-    description: Optional[str] = None
-    mime_type: Optional[str] = Field(None, alias="mimeType")
+    description: str | None = None
+    mime_type: str | None = Field(None, alias="mimeType")
 
 
 class MCPPromptDefinition(BaseModel):
     """MCP prompt definition structure."""
 
     name: str
-    description: Optional[str] = None
-    arguments: Optional[List[Dict[str, str]]] = None
+    description: str | None = None
+    arguments: List[Dict[str, str]] | None = None
 
 
 class MCPCapabilities(BaseModel):
     """MCP server capabilities structure."""
 
-    tools: Optional[List[MCPToolDefinition]] = None
-    resources: Optional[List[MCPResourceDefinition]] = None
-    prompts: Optional[List[MCPPromptDefinition]] = None
+    tools: List[MCPToolDefinition] | None = None
+    resources: List[MCPResourceDefinition] | None = None
+    prompts: List[MCPPromptDefinition] | None = None
 
 
 # Note: model_rebuild() removed - using Any for self-referential fields instead

@@ -7,35 +7,41 @@ Enhanced Orchestration API
 Advanced multi-agent orchestration endpoints with improved coordination and strategies.
 """
 
-import logging
-
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 
 from api.schemas_workflows import AgentRecommendationRequest, WorkflowRequest
 from auth_middleware import check_admin_permission, get_current_user
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.missing_dep import optional_import
 
-try:
-    from orchestrator import create_and_execute_workflow, get_orchestrator_sync
-
-    # Issue #5040: Single Orchestrator conductor; provides all multi-agent
-    # workflow methods (create_workflow_plan, execute_workflow,
-    # get_performance_report, get_agent_recommendations, etc.).
-    orchestrator = get_orchestrator_sync()
+# Issue #5040: Single Orchestrator conductor; provides all multi-agent workflow
+# methods (create_workflow_plan, execute_workflow, get_performance_report, etc.).
+_orch = optional_import("orchestrator", ["create_and_execute_workflow", "get_orchestrator_sync"])
+create_and_execute_workflow = _orch["create_and_execute_workflow"]  # type: ignore[assignment]
+if _orch["get_orchestrator_sync"]:
+    orchestrator = _orch["get_orchestrator_sync"]()  # type: ignore[assignment]
     _ORCHESTRATOR_AVAILABLE = True
-except ImportError as _e:
-    from autobot_shared.missing_dep import MissingDep as _MissingDep
-
+else:
+    orchestrator = _orch["get_orchestrator_sync"]  # MissingDep stub  # type: ignore[assignment]
     _ORCHESTRATOR_AVAILABLE = False
-    create_and_execute_workflow = _MissingDep("create_and_execute_workflow", _e)  # type: ignore[assignment]
-    orchestrator = _MissingDep("orchestrator", _e)  # type: ignore[assignment]
-    logging.getLogger(__name__).warning("orchestrator module not available")
+    get_logger(__name__).warning("orchestrator module not available")
 
 from api.schemas_common import DataResponse
+from api.schemas_workflows import (
+    OrchestrationActiveWorkflowsResponse,
+    OrchestrationAgentPerformanceResponse,
+    OrchestrationAgentRecommendResponse,
+    OrchestrationCapabilitiesResponse,
+    OrchestrationExamplesResponse,
+    OrchestrationStatusResponse,
+    OrchestrationStrategiesResponse,
+    OrchestrationWorkflowPlanResponse,
+)
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter()
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @with_error_handling(
@@ -139,7 +145,7 @@ async def execute_workflow(
         raise HTTPException(status_code=500, detail="Workflow execution failed")
 
 
-@router.post("/workflow/plan", response_model=DataResponse)
+@router.post("/workflow/plan", response_model=DataResponse[OrchestrationWorkflowPlanResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="create_workflow_plan",
@@ -200,7 +206,7 @@ async def create_workflow_plan(
         raise HTTPException(status_code=500, detail="Plan creation failed")
 
 
-@router.get("/agents/performance", response_model=DataResponse)
+@router.get("/agents/performance", response_model=DataResponse[OrchestrationAgentPerformanceResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_agent_performance",
@@ -231,7 +237,7 @@ async def get_agent_performance(
         raise HTTPException(status_code=500, detail="Failed to get performance report")
 
 
-@router.post("/agents/recommend", response_model=DataResponse)
+@router.post("/agents/recommend", response_model=DataResponse[OrchestrationAgentRecommendResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="recommend_agents",
@@ -283,7 +289,7 @@ async def recommend_agents(
         raise HTTPException(status_code=500, detail="Failed to get recommendations")
 
 
-@router.get("/workflow/active", response_model=DataResponse)
+@router.get("/workflow/active", response_model=DataResponse[OrchestrationActiveWorkflowsResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_active_workflows",
@@ -334,7 +340,7 @@ async def get_active_workflows(
         raise HTTPException(status_code=500, detail="Failed to get active workflows")
 
 
-@router.get("/strategies", response_model=DataResponse)
+@router.get("/strategies", response_model=DataResponse[OrchestrationStrategiesResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_execution_strategies",
@@ -379,7 +385,7 @@ async def get_execution_strategies(
     return JSONResponse(status_code=200, content={"strategies": strategies, "default": "adaptive"})
 
 
-@router.get("/capabilities", response_model=DataResponse)
+@router.get("/capabilities", response_model=DataResponse[OrchestrationCapabilitiesResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_agent_capabilities",
@@ -445,7 +451,7 @@ async def get_agent_capabilities(
         raise HTTPException(status_code=500, detail="Failed to get capabilities")
 
 
-@router.get("/status", response_model=DataResponse)
+@router.get("/status", response_model=DataResponse[OrchestrationStatusResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_orchestration_status",
@@ -500,7 +506,7 @@ async def get_orchestration_status(
         raise HTTPException(status_code=500, detail="Failed to get status")
 
 
-@router.get("/examples", response_model=DataResponse)
+@router.get("/examples", response_model=DataResponse[OrchestrationExamplesResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_orchestration_examples",

@@ -7,7 +7,6 @@ Secure Sandbox API
 API endpoints for executing commands in the secure Docker sandbox environment.
 """
 
-import logging
 from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -25,6 +24,7 @@ from api.schemas_workflows import (
 )
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from constants.network_constants import NetworkConstants
 from secure_sandbox_executor import (
     SandboxConfig,
@@ -39,7 +39,7 @@ from utils.response_builder import (
 )
 
 router = APIRouter()
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @router.post("/execute", response_model=SandboxExecutionResponse)

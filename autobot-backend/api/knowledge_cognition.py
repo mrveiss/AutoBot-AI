@@ -10,7 +10,6 @@ Provides endpoints for the Cognition Store seeding layer:
   POST /api/knowledge/cognition-store/seed     — trigger (re-)seed from manifest
 """
 
-import logging
 import os
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException
@@ -22,10 +21,11 @@ from api.schemas_knowledge import (
 )
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from constants.path_constants import PATH
 from services.knowledge.cognition_seeder import get_cognition_seeder
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(tags=["knowledge-cognition"])
 

@@ -13,8 +13,8 @@
       @click="expanded = !expanded"
     >
       <span class="reasoning-trace__icon" aria-hidden="true">
-        <i v-if="isActive" class="fas fa-circle-notch fa-spin reasoning-trace__spin-icon"></i>
-        <i v-else class="fas fa-brain"></i>
+        <Icon name="circle-notch" class="animate-spin reasoning-trace__spin-icon" v-if="isActive" />
+        <Icon name="brain" v-else />
       </span>
       <span class="reasoning-trace__title">{{ $t('reasoningTrace.title') }}</span>
       <span class="reasoning-trace__count">{{ entries.length }}</span>
@@ -36,7 +36,7 @@
           role="listitem"
         >
           <span class="reasoning-trace__entry-icon" aria-hidden="true">
-            <i :class="iconForKind(entry.kind)"></i>
+            <Icon :name="iconForKind(entry.kind)" />
           </span>
           <span class="reasoning-trace__entry-body">
             <span class="reasoning-trace__entry-label">{{ entry.label }}</span>
@@ -55,7 +55,7 @@
             :class="entry.success ? 'reasoning-trace__entry-status--ok' : 'reasoning-trace__entry-status--error'"
             :aria-label="entry.success ? $t('reasoningTrace.success') : $t('reasoningTrace.error')"
           >
-            <i :class="entry.success ? 'fas fa-check' : 'fas fa-times'" aria-hidden="true"></i>
+            <Icon :name="entry.success ? 'check' : 'times'" />
           </span>
         </div>
       </div>
@@ -92,20 +92,21 @@ const expanded = ref(true)
 
 function iconForKind(kind: TraceEntryKind): string {
   const map: Record<TraceEntryKind, string> = {
-    step_start: 'fas fa-play-circle',
-    step_complete: 'fas fa-check-circle',
-    tool_call: 'fas fa-wrench',
-    tool_result: 'fas fa-reply',
-    llm_chunk: 'fas fa-comment-dots',
-    plan: 'fas fa-list-ol',
+    step_start: 'play-circle',
+    step_complete: 'check-circle',
+    tool_call: 'wrench',
+    tool_result: 'reply',
+    llm_chunk: 'comment-dots',
+    plan: 'list-ol',
   }
-  return map[kind] ?? 'fas fa-circle'
+  return map[kind] ?? 'circle'
 }
 
 function formatDuration(ms: number): string {
   if (ms < 1000) return `${Math.round(ms)}ms`
   return `${(ms / 1000).toFixed(1)}s`
 }
+import Icon from '@/components/ui/Icon.vue'
 </script>
 
 <style scoped>

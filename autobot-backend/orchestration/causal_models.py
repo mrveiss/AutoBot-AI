@@ -22,7 +22,7 @@ This module provides:
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 
 class CausalEffectType(str, Enum):
@@ -63,7 +63,7 @@ class CausalEffect:
     source_step_id: str
     target_step_id: str
     effect_type: CausalEffectType
-    condition: Optional[str] = None
+    condition: str | None = None
     description: str = ""
     state_mutations: List[str] = field(default_factory=list)
 
@@ -87,7 +87,7 @@ class Dependency:
     source_step_id: str
     target_step_id: str
     dep_type: DependencyType
-    causal_effect: Optional[CausalEffect] = None
+    causal_effect: CausalEffect | None = None
 
     def __str__(self) -> str:
         return f"{self.source_step_id} --[{self.dep_type.value}]--> {self.target_step_id}"

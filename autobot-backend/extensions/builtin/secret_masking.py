@@ -8,13 +8,13 @@ Issue #658: Built-in extension that masks sensitive information
 in responses before they are displayed to users.
 """
 
-import logging
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from extensions.base import Extension, HookContext
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class SecretMaskingExtension(Extension):
@@ -239,7 +239,7 @@ class SecretMaskingExtension(Extension):
 
         return masked_text
 
-    async def on_before_response_send(self, ctx: HookContext) -> Optional[str]:
+    async def on_before_response_send(self, ctx: HookContext) -> str | None:
         """
         Mask secrets before sending response.
 
@@ -260,7 +260,7 @@ class SecretMaskingExtension(Extension):
 
         return None
 
-    async def on_after_llm_response(self, ctx: HookContext) -> Optional[str]:
+    async def on_after_llm_response(self, ctx: HookContext) -> str | None:
         """
         Mask secrets in LLM responses.
 
@@ -280,7 +280,7 @@ class SecretMaskingExtension(Extension):
 
         return None
 
-    async def on_after_tool_execute(self, ctx: HookContext) -> Optional[str]:
+    async def on_after_tool_execute(self, ctx: HookContext) -> str | None:
         """
         Mask secrets in tool results.
 

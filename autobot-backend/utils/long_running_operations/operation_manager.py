@@ -13,8 +13,9 @@ import logging
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import TimingConstants
 
 from .checkpoint_manager import OperationCheckpointManager
@@ -27,7 +28,7 @@ from .types import (
     OperationType,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -43,8 +44,8 @@ class OperationExecutionContext:
         self,
         step: str,
         processed: int,
-        total: Optional[int] = None,
-        metrics: Optional[Dict] = None,
+        total: int | None = None,
+        metrics: Dict | None = None,
         message: str = "",
     ) -> None:
         """Update operation progress."""
@@ -62,7 +63,7 @@ class OperationExecutionContext:
         self,
         intermediate_results: Dict[str, Any],
         next_step: str,
-        context_data: Optional[Dict[str, Any]] = None,
+        context_data: Dict[str, Any] | None = None,
     ) -> str:
         """Save operation checkpoint."""
         timestamp = datetime.now(tz=timezone.utc).strftime("%Y%m%d_%H%M%S")
@@ -87,7 +88,7 @@ class OperationExecutionContext:
         """Check if this is a resumed operation."""
         return "resume_checkpoint" in self.operation.metadata
 
-    def get_resume_data(self) -> Optional[OperationCheckpoint]:
+    def get_resume_data(self) -> OperationCheckpoint | None:
         """Get resume checkpoint data."""
         return self.operation.metadata.get("resume_checkpoint")
 
@@ -193,7 +194,7 @@ class LongRunningOperationManager:
         description: str,
         operation_function: Callable,
         priority: OperationPriority = OperationPriority.NORMAL,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: Dict[str, Any] | None = None,
         execute_immediately: bool = False,
     ) -> str:
         """Create a new long-running operation."""
@@ -445,15 +446,15 @@ class LongRunningOperationManager:
         await self.background_queue.put(new_operation_id)
         return new_operation_id
 
-    async def get_operation(self, operation_id: str) -> Optional[LongRunningOperation]:
+    async def get_operation(self, operation_id: str) -> LongRunningOperation | None:
         """Get operation by ID."""
         async with self._lock:
             return self.operations.get(operation_id)
 
     async def list_operations(
         self,
-        status_filter: Optional[OperationStatus] = None,
-        operation_type_filter: Optional[OperationType] = None,
+        status_filter: OperationStatus | None = None,
+        operation_type_filter: OperationType | None = None,
     ) -> List[LongRunningOperation]:
         """List operations with optional filtering."""
         async with self._lock:

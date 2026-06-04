@@ -68,17 +68,17 @@ VALID_YAML = """\
 
 
 class TestLoadSuccess:
-    def test_returns_synthesis_schema(self, tmp_path):
+    def test_returns_synthesis_schema(self, tmp_path) -> None:
         path = _write_yaml(tmp_path, VALID_YAML)
         schema = load_synthesis_schema(path)
         assert isinstance(schema, SynthesisSchema)
 
-    def test_collection_count(self, tmp_path):
+    def test_collection_count(self, tmp_path) -> None:
         path = _write_yaml(tmp_path, VALID_YAML)
         schema = load_synthesis_schema(path)
         assert len(schema.collections) == 3
 
-    def test_first_collection_fields(self, tmp_path):
+    def test_first_collection_fields(self, tmp_path) -> None:
         path = _write_yaml(tmp_path, VALID_YAML)
         schema = load_synthesis_schema(path)
         col: CollectionConfig = schema.collections[0]
@@ -87,7 +87,7 @@ class TestLoadSuccess:
         assert col.synthesis_target == "autobot_synthesis_architecture"
         assert "{documents}" in col.prompt_template
 
-    def test_all_collections_have_required_fields(self, tmp_path):
+    def test_all_collections_have_required_fields(self, tmp_path) -> None:
         path = _write_yaml(tmp_path, VALID_YAML)
         schema = load_synthesis_schema(path)
         for col in schema.collections:
@@ -98,20 +98,20 @@ class TestLoadSuccess:
 
 
 class TestFallbackOnMissingFile:
-    def test_returns_empty_schema(self, tmp_path):
+    def test_returns_empty_schema(self, tmp_path) -> None:
         missing = tmp_path / "nonexistent.yaml"
         schema = load_synthesis_schema(missing)
         assert isinstance(schema, SynthesisSchema)
         assert schema.collections == []
 
-    def test_no_exception_raised(self, tmp_path):
+    def test_no_exception_raised(self, tmp_path) -> None:
         missing = tmp_path / "nonexistent.yaml"
         # Should not raise
         load_synthesis_schema(missing)
 
 
 class TestValidationError:
-    def test_unknown_key_raises_value_error(self, tmp_path):
+    def test_unknown_key_raises_value_error(self, tmp_path) -> None:
         bad_yaml = """\
             collections:
               - name: test_col
@@ -125,7 +125,7 @@ class TestValidationError:
         with pytest.raises(ValueError, match="unknown keys"):
             load_synthesis_schema(path)
 
-    def test_missing_required_key_raises_value_error(self, tmp_path):
+    def test_missing_required_key_raises_value_error(self, tmp_path) -> None:
         incomplete_yaml = """\
             collections:
               - name: test_col
@@ -137,7 +137,7 @@ class TestValidationError:
         with pytest.raises(ValueError, match="missing required keys"):
             load_synthesis_schema(path)
 
-    def test_missing_collections_key_raises_value_error(self, tmp_path):
+    def test_missing_collections_key_raises_value_error(self, tmp_path) -> None:
         bad_yaml = """\
             not_collections:
               - name: something
@@ -150,13 +150,13 @@ class TestValidationError:
 class TestSynthesisModelOverride:
     """synthesis_model is optional; validates non-empty when present."""
 
-    def test_synthesis_model_omitted_defaults_to_none(self, tmp_path):
+    def test_synthesis_model_omitted_defaults_to_none(self, tmp_path) -> None:
         path = _write_yaml(tmp_path, VALID_YAML)
         schema = load_synthesis_schema(path)
         for col in schema.collections:
             assert col.synthesis_model is None
 
-    def test_synthesis_model_parsed_when_present(self, tmp_path):
+    def test_synthesis_model_parsed_when_present(self, tmp_path) -> None:
         yaml_with_model = """\
             collections:
               - name: high_quality_col
@@ -170,7 +170,7 @@ class TestSynthesisModelOverride:
         schema = load_synthesis_schema(path)
         assert schema.collections[0].synthesis_model == "claude-opus-4-6"
 
-    def test_synthesis_model_empty_string_raises(self, tmp_path):
+    def test_synthesis_model_empty_string_raises(self, tmp_path) -> None:
         yaml_empty_model = """\
             collections:
               - name: bad_col
@@ -184,7 +184,7 @@ class TestSynthesisModelOverride:
         with pytest.raises(ValueError, match="non-empty string"):
             load_synthesis_schema(path)
 
-    def test_synthesis_model_whitespace_raises(self, tmp_path):
+    def test_synthesis_model_whitespace_raises(self, tmp_path) -> None:
         yaml_ws_model = """\
             collections:
               - name: bad_col
@@ -198,7 +198,7 @@ class TestSynthesisModelOverride:
         with pytest.raises(ValueError, match="non-empty string"):
             load_synthesis_schema(path)
 
-    def test_mixed_collections_some_with_model(self, tmp_path):
+    def test_mixed_collections_some_with_model(self, tmp_path) -> None:
         mixed_yaml = """\
             collections:
               - name: col_with_model
@@ -233,7 +233,7 @@ class TestPathExistenceWarnings:
             '    prompt_template: "test {documents}"\n'
         )
 
-    def test_no_warning_for_existing_path(self, tmp_path, caplog):
+    def test_no_warning_for_existing_path(self, tmp_path, caplog) -> None:
         real_dir = tmp_path / "existing_docs"
         real_dir.mkdir()
         schema_path = _write_yaml(tmp_path, self._yaml_with_paths("existing_docs"))
@@ -244,7 +244,7 @@ class TestPathExistenceWarnings:
         warnings = [r for r in caplog.records if r.levelname == "WARNING" and "does not exist" in r.message]
         assert warnings == [], f"Unexpected warnings: {[r.message for r in warnings]}"
 
-    def test_warning_for_missing_path(self, tmp_path, caplog):
+    def test_warning_for_missing_path(self, tmp_path, caplog) -> None:
         schema_path = _write_yaml(tmp_path, self._yaml_with_paths("nonexistent_dir"))
         import logging
 
@@ -256,7 +256,7 @@ class TestPathExistenceWarnings:
         assert len(warnings) == 1
         assert "nonexistent_dir" in warnings[0].message
 
-    def test_warning_per_missing_path_in_mixed_list(self, tmp_path, caplog):
+    def test_warning_per_missing_path_in_mixed_list(self, tmp_path, caplog) -> None:
         real_dir = tmp_path / "real_docs"
         real_dir.mkdir()
         schema_path = _write_yaml(

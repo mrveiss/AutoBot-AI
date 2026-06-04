@@ -12,11 +12,12 @@ Issue #688: User ownership model for chat-derived knowledge
 
 import asyncio
 import json
-import logging
 from enum import Enum
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Set
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 
 
 class AccessLevel(str, Enum):
@@ -79,7 +80,7 @@ class KnowledgeOwnership:
         owner_id: str,
         visibility: str,
         source_type: str,
-        organization_id: Optional[str],
+        organization_id: str | None,
         group_ids: List[str],
         shared_with: List[str],
     ) -> None:
@@ -118,9 +119,9 @@ class KnowledgeOwnership:
         owner_id: str,
         visibility: str = VisibilityLevel.PRIVATE,
         source_type: str = SourceType.MANUAL,
-        shared_with: Optional[List[str]] = None,
-        organization_id: Optional[str] = None,
-        group_ids: Optional[List[str]] = None,
+        shared_with: List[str] | None = None,
+        organization_id: str | None = None,
+        group_ids: List[str] | None = None,
         access_level: str = AccessLevel.USER,
     ) -> None:
         """Set ownership metadata and update Redis indexes.
@@ -165,7 +166,7 @@ class KnowledgeOwnership:
         self,
         access_level: str,
         is_authenticated: bool,
-    ) -> Optional[bool]:
+    ) -> bool | None:
         """Helper for check_access. Ref: #1088.
 
         Returns True if access_level alone grants access, None otherwise.
@@ -182,11 +183,11 @@ class KnowledgeOwnership:
         self,
         user_id: str,
         visibility: str,
-        owner_id: Optional[str],
+        owner_id: str | None,
         shared_with: List,
-        fact_org_id: Optional[str],
+        fact_org_id: str | None,
         fact_group_ids: List,
-        user_org_id: Optional[str],
+        user_org_id: str | None,
         user_group_ids: List[str],
         is_authenticated: bool,
     ) -> bool:
@@ -222,8 +223,8 @@ class KnowledgeOwnership:
         fact_id: str,
         user_id: str,
         fact_metadata: Dict,
-        user_org_id: Optional[str] = None,
-        user_group_ids: Optional[List[str]] = None,
+        user_org_id: str | None = None,
+        user_group_ids: List[str] | None = None,
         is_authenticated: bool = True,
     ) -> bool:
         """Check if user has access to a fact.
@@ -300,8 +301,8 @@ class KnowledgeOwnership:
     async def share_fact(
         self,
         fact_id: str,
-        user_ids: Optional[List[str]] = None,
-        group_ids: Optional[List[str]] = None,
+        user_ids: List[str] | None = None,
+        group_ids: List[str] | None = None,
         fact_metadata: Dict = None,
     ) -> Dict:
         """Share a fact with additional users and/or groups.
@@ -381,8 +382,8 @@ class KnowledgeOwnership:
     async def unshare_fact(
         self,
         fact_id: str,
-        user_ids: Optional[List[str]] = None,
-        group_ids: Optional[List[str]] = None,
+        user_ids: List[str] | None = None,
+        group_ids: List[str] | None = None,
         fact_metadata: Dict = None,
     ) -> Dict:
         """Remove users and/or groups from fact sharing list.
@@ -433,7 +434,7 @@ class KnowledgeOwnership:
 
         return fact_metadata
 
-    async def get_user_facts(self, user_id: str, limit: Optional[int] = None, offset: int = 0) -> List[str]:
+    async def get_user_facts(self, user_id: str, limit: int | None = None, offset: int = 0) -> List[str]:
         """Get all fact IDs owned by a user.
 
         Args:
@@ -460,7 +461,7 @@ class KnowledgeOwnership:
 
         return fact_ids
 
-    async def get_shared_facts(self, user_id: str, limit: Optional[int] = None, offset: int = 0) -> List[str]:
+    async def get_shared_facts(self, user_id: str, limit: int | None = None, offset: int = 0) -> List[str]:
         """Get all fact IDs shared with a user.
 
         Args:
@@ -487,7 +488,7 @@ class KnowledgeOwnership:
 
         return fact_ids
 
-    async def get_chat_knowledge_facts(self, limit: Optional[int] = None, offset: int = 0) -> List[str]:
+    async def get_chat_knowledge_facts(self, limit: int | None = None, offset: int = 0) -> List[str]:
         """Get all chat-derived fact IDs.
 
         Args:
@@ -514,7 +515,7 @@ class KnowledgeOwnership:
         return fact_ids
 
     async def get_organization_facts(
-        self, organization_id: str, limit: Optional[int] = None, offset: int = 0
+        self, organization_id: str, limit: int | None = None, offset: int = 0
     ) -> List[str]:
         """Get all fact IDs for an organization.
 
@@ -544,7 +545,7 @@ class KnowledgeOwnership:
 
         return fact_ids
 
-    async def get_group_facts(self, group_id: str, limit: Optional[int] = None, offset: int = 0) -> List[str]:
+    async def get_group_facts(self, group_id: str, limit: int | None = None, offset: int = 0) -> List[str]:
         """Get all fact IDs for a group/team.
 
         Issue #679: Group-level knowledge access.
@@ -573,7 +574,7 @@ class KnowledgeOwnership:
 
         return fact_ids
 
-    async def get_system_facts(self, limit: Optional[int] = None, offset: int = 0) -> List[str]:
+    async def get_system_facts(self, limit: int | None = None, offset: int = 0) -> List[str]:
         """Get all system-wide fact IDs.
 
         Issue #679: System-level knowledge access.
@@ -606,8 +607,8 @@ class KnowledgeOwnership:
         fact_ids: List[str],
         user_id: str,
         redis_client,
-        user_org_id: Optional[str] = None,
-        user_group_ids: Optional[List[str]] = None,
+        user_org_id: str | None = None,
+        user_group_ids: List[str] | None = None,
     ) -> Set[str]:
         """Filter list of facts to only those accessible by user.
 
@@ -654,9 +655,9 @@ class KnowledgeOwnership:
     async def get_all_accessible_facts(
         self,
         user_id: str,
-        user_org_id: Optional[str] = None,
-        user_group_ids: Optional[List[str]] = None,
-        limit: Optional[int] = None,
+        user_org_id: str | None = None,
+        user_group_ids: List[str] | None = None,
+        limit: int | None = None,
         offset: int = 0,
     ) -> List[str]:
         """Get all facts accessible to a user across all scopes.

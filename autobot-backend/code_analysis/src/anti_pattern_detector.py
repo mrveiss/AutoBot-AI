@@ -19,12 +19,32 @@ Each anti-pattern includes:
 """
 
 import ast
-import logging
+import re
 import time
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Set, Tuple
+
+from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.status_enums import Severity  # #7253: consolidated onto canonical (#6689)
+
+# Anti-pattern severity → 0-100 integer score. Kept as a module-level helper
+# rather than an enum method so the canonical `Severity` enum stays clean
+# (canonical `to_score()` returns 0.0–0.9 floats, a different scale).
+_ANTI_PATTERN_SCORES: Dict[Severity, int] = {
+    Severity.CRITICAL: 100,
+    Severity.HIGH: 75,
+    Severity.MEDIUM: 50,
+    Severity.LOW: 25,
+}
+
+
+def anti_pattern_score(severity: Severity) -> int:
+    """Numeric anti-pattern score for `severity` (higher = worse, 0-100 scale)."""
+    return _ANTI_PATTERN_SCORES[severity]
+
 
 from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.status_enums import Severity  # #7253: consolidated onto canonical (#6689)
@@ -46,7 +66,7 @@ def anti_pattern_score(severity: Severity) -> int:
 
 
 # Initialize configuration
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level tuple for complexity calculation
 _COMPLEXITY_BRANCH_TYPES = (ast.If, ast.While, ast.For, ast.ExceptHandler)
@@ -76,27 +96,136 @@ _ENTRY_POINT_SUFFIXES = (
 )
 
 
-class AntiPatternType(Enum):
-    """Types of anti-patterns detected"""
+# Issue #6748: Vue <script setup> composable-opportunity detector regexes
+_VUE_SCRIPT_SETUP_RE = re.compile(r"<script\b[^>]*\bsetup\b[^>]*>", re.IGNORECASE)
+_VUE_SCRIPT_END_RE = re.compile(r"</script\s*>", re.IGNORECASE)
+_VUE_COMP_CALL_RE = re.compile(
+    r"(?:const|let|var)\s+\w+\s*(?::[^=]+)?\s*=\s*"
+    r"(ref|reactive|computed|watch(?:Effect)?|on(?:Mounted|Unmounted|BeforeMount|Created))"
+    r"(<[^>]*>)?\s*\(",
+)
+_COMPOSABLE_THRESHOLD = 5
+_COMPOSABLE_EXCL_DIRS = frozenset({"composables", "node_modules", ".git", "__pycache__"})
 
+
+def _extract_script_setup(content: str) -> str | None:
+    """Return the text inside <script setup> … </script>, or None if absent."""
+    m_start = _VUE_SCRIPT_SETUP_RE.search(content)
+    if m_start is None:
+        return None
+    m_end = _VUE_SCRIPT_END_RE.search(content, m_start.end())
+    if m_end is None:
+        return None
+    return content[m_start.end() : m_end.start()]
+
+
+# Issue #6758: AST cache to avoid re-parsing files in cross-file finalize pass
+# Cache key: (file_path, mtime) -> AST. This prevents double-parsing when both
+# per-file and cross-file rules analyze the same file.
+_AST_CACHE: Dict[Tuple[str, float], ast.AST] = {}
+_AST_CACHE_MAX_SIZE = 10000  # Prevent unbounded memory growth
+
+
+def get_or_parse_ast(file_path: str, content: str) -> ast.AST:
+    """Get cached AST or parse and cache it (Issue #6758).
+
+    Avoids re-parsing the same file when both per-file and cross-file
+    rules need the AST. Uses file mtime as cache key component to detect
+    file changes.
+
+    Args:
+        file_path: Path to the Python file
+        content: File content (already read by caller)
+
+    Returns:
+        Parsed AST for the file
+    """
+    try:
+        mtime = Path(file_path).stat().st_mtime
+    except (OSError, FileNotFoundError):
+        # If we can't stat the file, just parse and don't cache
+        return ast.parse(content, filename=file_path)
+
+    key = (file_path, mtime)
+
+    # Return cached result if available
+    if key in _AST_CACHE:
+        return _AST_CACHE[key]
+
+    # Parse and cache (with size limit to prevent memory leaks)
+    if len(_AST_CACHE) >= _AST_CACHE_MAX_SIZE:
+        # Clear cache when it reaches max size (simple strategy: purge all)
+        # This ensures the cache doesn't grow unbounded on very large codebases
+        _AST_CACHE.clear()
+
+    tree = ast.parse(content, filename=file_path)
+    _AST_CACHE[key] = tree
+    return tree
+
+
+def clear_ast_cache() -> None:
+    """Clear the AST cache (Issue #6758).
+
+    Call this at the start of a new scan run to avoid stale cached ASTs
+    from previous analyses.
+    """
+    _AST_CACHE.clear()
+
+
+class AntiPatternType(Enum):
+    """Types of anti-patterns detected.
+
+    Canonical SSOT (GH#6757): merged from code_analysis/src (per-file rules)
+    and code_intelligence/anti_pattern_detection (cross-file/naming rules).
+    Both modules previously kept diverged copies of this enum.
+    """
+
+    # --- Structural bloaters ---
     GOD_CLASS = "god_class"
+    LONG_METHOD = "long_method"
+    LONG_PARAMETER_LIST = "long_parameter_list"
+    LARGE_FILE = "large_file"
+    DEEP_NESTING = "deep_nesting"
+    # DATA_CLUMP / DATA_CLUMPS: canonical name is DATA_CLUMP ("data_clump");
+    # legacy code_intelligence used DATA_CLUMPS — kept as alias for migration.
+    DATA_CLUMP = "data_clump"
+    DATA_CLUMPS = "data_clumps"  # legacy alias from code_intelligence (GH#6757)
+    PRIMITIVE_OBSESSION = "primitive_obsession"
+
+    # --- Couplers ---
     FEATURE_ENVY = "feature_envy"
     CIRCULAR_DEPENDENCY = "circular_dependency"
     SHOTGUN_SURGERY = "shotgun_surgery"
+    MESSAGE_CHAINS = "message_chains"
+    INAPPROPRIATE_INTIMACY = "inappropriate_intimacy"
+
+    # --- Dispensables ---
     SPECULATIVE_GENERALITY = "speculative_generality"
     DEAD_CODE = "dead_code"
-    DATA_CLUMP = "data_clump"
-    LONG_METHOD = "long_method"
-    LONG_PARAMETER_LIST = "long_parameter_list"
-    PRIMITIVE_OBSESSION = "primitive_obsession"
     LAZY_CLASS = "lazy_class"
     REFUSED_BEQUEST = "refused_bequest"
-    # Issue #6661: Liskov Substitution Principle violations
+    # DUPLICATE_ABSTRACTION: legacy name from code_intelligence; canonical is
+    # DUPLICATE_CLASS_SHAPE (added in #6684).
+    DUPLICATE_CLASS_SHAPE = "duplicate_class_shape"
+    DUPLICATE_ABSTRACTION = "duplicate_abstraction"  # legacy alias (GH#6757)
+    DUPLICATE_ENUM = "duplicate_enum"
+
+    # --- Naming issues (from code_intelligence NamingDetector) ---
+    INCONSISTENT_NAMING = "inconsistent_naming"
+    SINGLE_LETTER_VARIABLE = "single_letter_variable"
+    MAGIC_NUMBER = "magic_number"
+
+    # --- Code clarity ---
+    COMPLEX_CONDITIONAL = "complex_conditional"
+    MISSING_DOCSTRING = "missing_docstring"
+
+    # --- LSP violations (Issue #6661) ---
     LSP_SIGNATURE_INCOMPATIBLE = "lsp_signature_incompatible"
     LSP_EXCEPTION_CONTRACT_CHANGED = "lsp_exception_contract_changed"
-    # Issue #6684: consolidation opportunities (missing-inheritance siblings to LSP)
-    DUPLICATE_ENUM = "duplicate_enum"
-    DUPLICATE_CLASS_SHAPE = "duplicate_class_shape"
+
+    # --- Architecture-level (Issue #6871, #6748) ---
+    UNWIRED_TRACKER = "unwired_tracker"
+    COMPOSABLE_OPPORTUNITY = "composable_opportunity"
 
 
 @dataclass
@@ -265,10 +394,17 @@ class AntiPatternDetector:
     GOD_CLASS_METHOD_THRESHOLD = 20
     GOD_CLASS_ATTR_THRESHOLD = 15
     GOD_CLASS_LOC_THRESHOLD = 500
-    LONG_METHOD_THRESHOLD = 50  # lines
+    GOD_CLASS_LINE_THRESHOLD = 500  # alias for api.code_intelligence compat
+    LONG_METHOD_THRESHOLD = 50
     LONG_PARAM_LIST_THRESHOLD = 5
-    FEATURE_ENVY_THRESHOLD = 3  # external refs > self refs * threshold
-    LAZY_CLASS_METHOD_THRESHOLD = 2  # classes with fewer methods
+    LONG_PARAMETER_THRESHOLD = 5  # alias for api.code_intelligence compat
+    LARGE_FILE_THRESHOLD = 1000  # alias for api.code_intelligence compat
+    DEEP_NESTING_THRESHOLD = 4  # alias for api.code_intelligence compat
+    MESSAGE_CHAIN_THRESHOLD = 4  # alias for api.code_intelligence compat
+    COMPLEX_CONDITIONAL_THRESHOLD = 3  # alias for api.code_intelligence compat
+    MAGIC_NUMBER_THRESHOLD = 3  # alias for api.code_intelligence compat
+    FEATURE_ENVY_THRESHOLD = 3
+    LAZY_CLASS_METHOD_THRESHOLD = 2
     LAZY_CLASS_LOC_THRESHOLD = 20
 
     def __init__(self, redis_client=None):
@@ -307,6 +443,9 @@ class AntiPatternDetector:
         """
         start_time = time.time()
 
+        # Issue #6758: Clear AST cache at start of new scan run
+        clear_ast_cache()
+
         # #6734: use `is None` sentinel instead of `or` idiom — explicit
         # `exclude_patterns=[]` should disable exclusion, not silently
         # apply the defaults (the `or` form treated empty list as falsy).
@@ -339,6 +478,10 @@ class AntiPatternDetector:
         # Issue #6684: consolidation opportunities (missing-inheritance siblings to LSP)
         anti_patterns.extend(await self._detect_duplicate_enums())
         anti_patterns.extend(await self._detect_duplicate_class_shapes())
+        # Issue #6871: modules with zero production callers (closed tracker, unwired code)
+        anti_patterns.extend(await self._detect_unwired_trackers(root_path))
+        # Issue #6748: repeated Vue reactive boilerplate that should be a composable
+        anti_patterns.extend(await self._detect_composable_opportunities(root_path))
 
         # Phase 3: Generate report
         analysis_time = time.time() - start_time
@@ -374,6 +517,9 @@ class AntiPatternDetector:
         Returns:
             List of AntiPatternInstance for ChromaDB persistence.
         """
+        # Issue #6758: Clear AST cache at start of new scan run
+        clear_ast_cache()
+
         # Default-arg handling: same `is None` discipline as analyze() (#6734)
         if patterns is None:
             patterns = ["**/*.py"]
@@ -386,6 +532,10 @@ class AntiPatternDetector:
         results.extend(await self._detect_lsp_violations())
         results.extend(await self._detect_duplicate_enums())
         results.extend(await self._detect_duplicate_class_shapes())
+        # Issue #6871: include unwired-tracker findings in the cross-file pass
+        results.extend(await self._detect_unwired_trackers(root_path))
+        # Issue #6748: repeated Vue reactive boilerplate
+        results.extend(await self._detect_composable_opportunities(root_path))
         return results
 
     async def _parse_codebase(self, root_path: str, patterns: List[str], exclude_patterns: List[str]) -> None:
@@ -432,13 +582,14 @@ class AntiPatternDetector:
         path_str = str(file_path)
         return any(pattern in path_str for pattern in exclude_patterns)
 
-    async def _parse_file(self, file_path: str) -> Optional[ModuleInfo]:
+    async def _parse_file(self, file_path: str) -> ModuleInfo | None:
         """Parse a single Python file"""
         try:
             with open(file_path, "r", encoding="utf-8") as f:
                 content = f.read()
 
-            tree = ast.parse(content, filename=file_path)
+            # Issue #6758: Use cache to avoid re-parsing in cross-file pass
+            tree = get_or_parse_ast(file_path, content)
             module_name = Path(file_path).stem
 
             # Extract imports
@@ -498,7 +649,7 @@ class AntiPatternDetector:
             method_calls[method.name] = calls
         return method_calls, external_references
 
-    def _analyze_class(self, node: ast.ClassDef, file_path: str, content: str) -> Optional[ClassInfo]:
+    def _analyze_class(self, node: ast.ClassDef, file_path: str, content: str) -> ClassInfo | None:
         """Analyze a class definition"""
         try:
             # Extract methods (#6661: include AsyncFunctionDef so the LSP
@@ -707,7 +858,7 @@ class AntiPatternDetector:
 
         return issues
 
-    def _analyze_feature_envy(self, method: ast.FunctionDef, cls_info: ClassInfo) -> Optional[Tuple[str, int, int]]:
+    def _analyze_feature_envy(self, method: ast.FunctionDef, cls_info: ClassInfo) -> Tuple[str, int, int] | None:
         """Analyze a method for feature envy"""
         self_refs = 0
         external_refs: Dict[str, int] = {}
@@ -1003,11 +1154,13 @@ class AntiPatternDetector:
         # Report param groups that appear multiple times
         for params, methods in param_groups.items():
             if len(methods) >= 3:  # Appears in 3+ methods
+                _cls_name = methods[0].split(".")[0] if methods else ""
+                _cls = next((v for v in self.classes.values() if v.name == _cls_name), None)
                 issues.append(
                     AntiPatternInstance(
                         pattern_type=AntiPatternType.DATA_CLUMP,
                         severity=Severity.MEDIUM if len(methods) > 5 else Severity.LOW,
-                        file_path=(self.classes[methods[0].split(".")[0]].file_path if methods else ""),
+                        file_path=(_cls.file_path if _cls else ""),
                         line_number=1,
                         entity_name=", ".join(params),
                         description=(f"Parameter group ({', '.join(params)}) appears in {len(methods)} methods"),
@@ -1150,13 +1303,13 @@ class AntiPatternDetector:
         doc = ast.get_docstring(method) or ""
         return exc_name in doc
 
-    def _find_parent_method(self, parent: ClassInfo, name: str) -> Optional[ast.AST]:
+    def _find_parent_method(self, parent: ClassInfo, name: str) -> ast.AST | None:
         for m in parent.methods:
             if isinstance(m, (ast.FunctionDef, ast.AsyncFunctionDef)) and m.name == name:
                 return m
         return None
 
-    def _resolve_parent(self, child: ClassInfo) -> Optional[ClassInfo]:
+    def _resolve_parent(self, child: ClassInfo) -> ClassInfo | None:
         """Look up the FIRST in-codebase parent class. Returns None when
         the parent is external (stdlib/library) — those are out of scope."""
         for base_name in child.base_classes:
@@ -1254,8 +1407,8 @@ class AntiPatternDetector:
                             line_number=child_method.lineno,
                             entity_name=f"{child.name}.{child_method.name}",
                             description=(
-                                f"Override of {parent.name}.{child_method.name} accepts "
-                                f"{child_total_positional} positional args but the parent "
+                                f"Override of {parent.name}.{child_method.name} drops required positional params: "
+                                f"accepts {child_total_positional} positional args but the parent "
                                 f"requires {parent_required}. A factory call like "
                                 "``cls(arg1, arg2)`` against the parent contract will "
                                 "crash with TypeError on this subclass."
@@ -1330,9 +1483,23 @@ class AntiPatternDetector:
             "NamedTuple",
         }
     )
-    _SHAPE_MIN_METHODS = 5
+    # #6780: lowered from 5 → 2 so small identical-shape boilerplate clusters
+    # are detected.  Classes with fewer than _SHAPE_MIN_METHODS_STRICT methods
+    # use a strict Jaccard threshold of 1.0 (exact match) to avoid false
+    # positives for FastAPI endpoint classes that share a few method names by
+    # design.  The relaxed threshold applies only above _SHAPE_MIN_METHODS_STRICT.
+    _SHAPE_MIN_METHODS = 2
+    _SHAPE_MIN_METHODS_STRICT = 5
     _SHAPE_JACCARD_THRESHOLD = 0.7
-    _ENUM_JACCARD_THRESHOLD = 0.7
+    # #6755 round 3: bumped from 0.7 to 0.85 to suppress priority-scale
+    # FPs. Enums like ``SandboxSecurityLevel`` (high/low/medium),
+    # ``WorkflowPriority`` (high/low/normal/urgent), ``KnowledgePriority``
+    # (critical/high/low/medium) share value strings but describe
+    # semantically distinct scales — not duplicates. At 0.85, only
+    # near-identical value sets get flagged. Combined with #7501's
+    # parent-child / Protocol-impl exclusions, autobot-backend
+    # ``duplicate_enum`` findings dropped 432 → 3 → 0.
+    _ENUM_JACCARD_THRESHOLD = 0.85
     _ENUM_MIN_VALUES = 3
 
     def _is_enum_class(self, cls_info: ClassInfo) -> bool:
@@ -1342,13 +1509,15 @@ class AntiPatternDetector:
     def _enum_value_set(self, cls_info: ClassInfo) -> Set[str]:
         """Extract the set of enum *value* string literals from a class body.
 
-        Re-parses the source file (cheap; cached at the file level by the
-        OS/page cache).  Falls back to attribute names when values are not
-        string literals — that still gives a useful overlap signal.
+        Uses cached AST from per-file pass (Issue #6758) to avoid re-parsing.
+        Falls back to attribute names when values are not string literals —
+        that still gives a useful overlap signal.
         """
         try:
             with open(cls_info.file_path, "r", encoding="utf-8") as f:
-                tree = ast.parse(f.read(), filename=cls_info.file_path)
+                content = f.read()
+            # Issue #6758: Use cache to avoid re-parsing in cross-file pass
+            tree = get_or_parse_ast(cls_info.file_path, content)
         except Exception:
             return set()
 
@@ -1357,8 +1526,8 @@ class AntiPatternDetector:
                 continue
             values: Set[str] = set()
             for stmt in node.body:
-                target_name: Optional[str] = None
-                value_node: Optional[ast.AST] = None
+                target_name: str | None = None
+                value_node: ast.AST | None = None
                 if isinstance(stmt, ast.Assign) and len(stmt.targets) == 1:
                     tgt = stmt.targets[0]
                     if isinstance(tgt, ast.Name):
@@ -1534,8 +1703,15 @@ class AntiPatternDetector:
                 # intended relationship, not a duplicate.
                 if self._is_protocol_impl_pair(cls_a, cls_b):
                     continue
+                # #6780: small classes (below strict threshold) require exact
+                # match (Jaccard=1.0) to suppress FastAPI-handler false positives.
+                threshold = (
+                    self._SHAPE_JACCARD_THRESHOLD
+                    if max(len(names_a), len(names_b)) >= self._SHAPE_MIN_METHODS_STRICT
+                    else 1.0
+                )
                 similarity = self._jaccard(names_a, names_b)
-                if similarity < self._SHAPE_JACCARD_THRESHOLD:
+                if similarity < threshold:
                     continue
                 shared = sorted(names_a & names_b)
                 pair_key = tuple(sorted([full_a, full_b]))
@@ -1579,6 +1755,259 @@ class AntiPatternDetector:
                 )
 
         return issues
+
+    # ========== Unwired Tracker Detection (Issue #6871) ==========
+
+    # Regex matching issue/tracker references in file headers (first N lines).
+    # Mirrors the ISSUE_REF_RE in pipeline-scripts/audit_unwired_trackers.py
+    # but scoped to the most common forms for simplicity.
+    _ISSUE_REF_RE = re.compile(
+        r"(?:^|\W)(?:Issue|Closes|Fixes|Resolves|See|Related|Tracking)\s+#(\d+)\b"
+        r"|(?:^|\s)#(\d+):"
+        r"|\(#(\d+)\)"
+        r"|\[#(\d+)\]"
+        r"|/issues/(\d+)\b",
+        re.MULTILINE,
+    )
+
+    # Ambiguous module stems — skipped to avoid false positives (mirrors audit script).
+    _AMBIGUOUS_STEMS = frozenset(
+        {
+            "__init__",
+            "types",
+            "utils",
+            "common",
+            "base",
+            "config",
+            "constants",
+            "helpers",
+            "main",
+            "index",
+        }
+    )
+
+    # Number of lines from the top of each file to scan for issue references.
+    _TRACKER_SCAN_LINES = 40
+
+    def _extract_issue_refs(self, file_path: Path) -> List[int]:
+        """Return list of issue numbers found in the first _TRACKER_SCAN_LINES of the file."""
+        try:
+            with file_path.open("r", encoding="utf-8") as f:
+                head = "".join(line for _, line in zip(range(self._TRACKER_SCAN_LINES), f))
+        except (OSError, UnicodeDecodeError):
+            return []
+        refs: List[int] = []
+        for m in self._ISSUE_REF_RE.finditer(head):
+            n = m.group(1) or m.group(2) or m.group(3) or m.group(4) or m.group(5)
+            if n:
+                refs.append(int(n))
+        # Dedupe while preserving order
+        return list(dict.fromkeys(refs))
+
+    async def _detect_unwired_trackers(self, root_path: str = ".") -> List[AntiPatternInstance]:
+        """Detect Python modules whose header cites an issue tracker but has
+        zero production callers (Issue #6871 — Tier 4 of #6836).
+
+        A module is flagged when:
+        - Its first _TRACKER_SCAN_LINES contain an Issue #N reference, AND
+        - Its stem is not in _AMBIGUOUS_STEMS, AND
+        - No other non-test Python module in root_path imports it.
+
+        Severity is LOW: the module may still be valid scaffolding. The finding
+        guides human review rather than demanding immediate deletion.
+        """
+        issues: List[AntiPatternInstance] = []
+        root = Path(root_path)
+        if not root.exists():
+            return issues
+
+        # Collect all Python source files (non-test) under root_path.
+        py_files: List[Path] = []
+        for f in root.rglob("*.py"):
+            path_str = str(f)
+            if any(pat in path_str for pat in _DEFAULT_EXCLUDE_PATTERNS):
+                continue
+            py_files.append(f)
+
+        # Separate candidates (files with issue refs) from the full corpus.
+        # We build a lookup: stem → set of files that import it (by stem name).
+        stem_to_importers: dict = {}
+        for f in py_files:
+            stem = f.stem
+            if stem in self._AMBIGUOUS_STEMS:
+                continue
+            if stem not in stem_to_importers:
+                stem_to_importers[stem] = set()
+
+        # Single pass: parse each file for its imports to build the caller index.
+        for f in py_files:
+            try:
+                content = f.read_text(encoding="utf-8")
+                tree = ast.parse(content, filename=str(f))
+            except Exception:
+                continue
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Import):
+                    for alias in node.names:
+                        imported_stem = alias.name.split(".")[-1]
+                        if imported_stem in stem_to_importers:
+                            stem_to_importers[imported_stem].add(str(f))
+                elif isinstance(node, ast.ImportFrom) and node.module:
+                    imported_stem = node.module.split(".")[-1]
+                    if imported_stem in stem_to_importers:
+                        stem_to_importers[imported_stem].add(str(f))
+                    # also check names imported from the module
+                    for alias in node.names:
+                        name_stem = alias.name
+                        if name_stem in stem_to_importers:
+                            stem_to_importers[name_stem].add(str(f))
+
+        # Identify candidate files with issue refs AND zero external callers.
+        for f in py_files:
+            stem = f.stem
+            if stem in self._AMBIGUOUS_STEMS:
+                continue
+            refs = self._extract_issue_refs(f)
+            if not refs:
+                continue
+            callers = stem_to_importers.get(stem, set())
+            # Remove self-reference
+            callers = {c for c in callers if c != str(f)}
+            if callers:
+                continue  # has at least one production caller
+
+            issues.append(
+                AntiPatternInstance(
+                    pattern_type=AntiPatternType.UNWIRED_TRACKER,
+                    severity=Severity.LOW,
+                    file_path=str(f),
+                    line_number=1,
+                    entity_name=stem,
+                    description=(
+                        f"Module '{stem}' cites tracker #{refs[0]} in its header "
+                        f"but has 0 production callers in the analyzed codebase. "
+                        f"The associated tracker may have been closed prematurely."
+                    ),
+                    metrics={
+                        "tracker_number": refs[0],
+                        "all_tracker_refs": refs,
+                        "production_callers": 0,
+                    },
+                    suggestion=(
+                        "Either wire this module into a production code path, "
+                        f"reopen tracker #{refs[0]} if the integration was unfinished, "
+                        "or document the deliberate deferral with a comment."
+                    ),
+                    refactoring_effort="low",
+                )
+            )
+
+        logger.info("[#6871] Unwired-tracker scan: %d findings in %s", len(issues), root_path)
+        return issues
+
+    # ========== COMPOSABLE_OPPORTUNITY detector (#6748) ==========
+
+    async def _detect_composable_opportunities(self, root_path: str = ".") -> List[AntiPatternInstance]:
+        """Cluster Vue components that repeat the same reactive boilerplate.
+
+        Walks autobot-frontend/src/components/**/*.vue, extracts each
+        <script setup> block, normalises the composition-API calls into a
+        frozenset signature, and flags any signature that appears in
+        _COMPOSABLE_THRESHOLD or more distinct component files.
+        """
+        frontend_root = self._find_vue_components_root(root_path)
+        if frontend_root is None:
+            return []
+
+        sig_to_files: Dict[str, List[str]] = {}
+        for vue_file in sorted(frontend_root.rglob("*.vue")):
+            if any(part in _COMPOSABLE_EXCL_DIRS for part in vue_file.parts):
+                continue
+            sig = self._vue_file_signature(vue_file)
+            if not sig:
+                continue
+            sig_key = "|".join(sorted(sig))
+            sig_to_files.setdefault(sig_key, []).append(str(vue_file))
+
+        results: List[AntiPatternInstance] = []
+        for sig_key, files in sig_to_files.items():
+            if len(files) < _COMPOSABLE_THRESHOLD:
+                continue
+            sig = frozenset(sig_key.split("|"))
+            name = self._suggest_composable_name(sig)
+            results.append(
+                AntiPatternInstance(
+                    pattern_type=AntiPatternType.COMPOSABLE_OPPORTUNITY,
+                    severity=Severity.LOW,
+                    file_path=files[0],
+                    line_number=1,
+                    entity_name=name,
+                    description=(
+                        f"{len(files)} components share the same reactive boilerplate "
+                        f"({sig_key[:80]}). Extract to {name}()."
+                    ),
+                    metrics={
+                        "component_count": len(files),
+                        "files": files[:10],
+                        "pattern_hash": sig_key,
+                    },
+                    suggestion=(
+                        f"Create `composables/{name}.ts` and replace the repeated "
+                        f"reactive block with a single import."
+                    ),
+                    refactoring_effort="low",
+                    related_entities=files[:10],
+                )
+            )
+
+        logger.info("[#6748] Composable-opportunity scan: %d findings", len(results))
+        return results
+
+    @staticmethod
+    def _find_vue_components_root(root_path: str) -> Path | None:
+        """Walk up from root_path to find autobot-frontend/src/components/."""
+        p = Path(root_path).resolve()
+        for _ in range(6):
+            candidate = p / "autobot-frontend" / "src" / "components"
+            if candidate.is_dir():
+                return candidate
+            p = p.parent
+        return None
+
+    @staticmethod
+    def _vue_file_signature(vue_file: Path) -> frozenset[str]:
+        """Return normalised frozenset of composition-API calls in vue_file's <script setup>."""
+        try:
+            content = vue_file.read_text(encoding="utf-8")
+        except OSError:
+            return frozenset()
+        script = _extract_script_setup(content)
+        if script is None:
+            return frozenset()
+        calls: Set[str] = set()
+        for m in _VUE_COMP_CALL_RE.finditer(script):
+            api = m.group(1)
+            raw_generic = (m.group(2) or "").strip("<> ")
+            # Replace | with _or_ so the |-joined sig_key can be safely split
+            generic = raw_generic.replace(" ", "").replace("|", "_or_").lower()
+            calls.add(f"{api}_{generic}" if generic else api)
+        return frozenset(calls)
+
+    @staticmethod
+    def _suggest_composable_name(sig: frozenset[str]) -> str:
+        """Heuristically derive a composable name from its signature."""
+        normalised = {s.lower() for s in sig}
+        # loading + error pattern
+        if any("string" in s and "null" in s for s in normalised) and any(
+            s in ("ref", "ref_bool", "ref_false", "ref_true", "ref_boolean") for s in normalised
+        ):
+            return "useLoadingState"
+        ref_count = sum(1 for s in normalised if s.startswith("ref"))
+        if ref_count >= 2:
+            return "useSharedState"
+        if any("watch" in s for s in normalised):
+            return "useReactiveWatcher"
+        return "useSharedPattern"
 
     # ========== Report Generation ==========
 
@@ -1657,6 +2086,11 @@ class AntiPatternDetector:
             "dead_code",
             "🟢 LOW: Remove Dead Code - " "Delete verified unused classes and functions",
         ),
+        # Issue #6871: unwired tracker modules
+        (
+            "unwired_tracker",
+            "🟢 LOW: Wire or document tracker-closed modules with zero production callers",
+        ),
     ]
 
     def _generate_recommendations(
@@ -1694,7 +2128,7 @@ class AntiPatternDetector:
             except Exception as e:
                 logger.warning(f"Failed to cache results: {e}")
 
-    async def get_cached_report(self) -> Optional[AntiPatternReport]:
+    async def get_cached_report(self) -> AntiPatternReport | None:
         """Retrieve cached analysis report"""
         if self.redis_client:
             try:
@@ -1707,6 +2141,59 @@ class AntiPatternDetector:
             except Exception as e:
                 logger.warning(f"Failed to retrieve cached results: {e}")
         return None
+
+    def analyze_file(self, file_path: str) -> Dict[str, Any]:
+        """Per-file analysis compatibility shim (#6757).
+
+        Runs the per-file detectors (god_class, feature_envy, long_method,
+        long_parameter_list, lazy_class) on a single file without the
+        cross-file rules that require a whole-codebase index.
+
+        Returns a dict compatible with the legacy ``code_intelligence``
+        per-file analyzer shape expected by callers in ``analyzers.py`` and
+        ``code_evolution_miner.py``.
+        """
+        import asyncio
+
+        async def _inner() -> List[AntiPatternInstance]:
+            clear_ast_cache()
+            detector = AntiPatternDetector()
+            module_info = await detector._parse_file(file_path)
+            if not module_info:
+                return []
+            detector.modules = {module_info.name: module_info}
+            detector.classes = {f"{module_info.name}.{cls.name}": cls for cls in module_info.classes}
+            detector.all_defined_names = {cls.name for cls in module_info.classes}
+            detector.all_defined_names.update(module_info.functions)
+
+            patterns: List[AntiPatternInstance] = []
+            patterns.extend(await detector._detect_god_classes())
+            patterns.extend(await detector._detect_feature_envy())
+            patterns.extend(await detector._detect_long_methods())
+            patterns.extend(await detector._detect_long_parameter_lists())
+            patterns.extend(await detector._detect_lazy_classes())
+            return patterns
+
+        try:
+            loop = asyncio.new_event_loop()
+            try:
+                patterns = loop.run_until_complete(_inner())
+            finally:
+                loop.close()
+        except Exception as exc:
+            logger.error("analyze_file error for %s: %s", file_path, exc)
+            patterns = []
+
+        summary: Dict[str, int] = {}
+        for p in patterns:
+            k = p.pattern_type.value
+            summary[k] = summary.get(k, 0) + 1
+
+        return {
+            "file_path": file_path,
+            "anti_patterns": [p.to_dict() for p in patterns],
+            "summary": summary,
+        }
 
 
 # Convenience function for CLI usage

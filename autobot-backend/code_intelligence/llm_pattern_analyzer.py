@@ -22,12 +22,12 @@ All classes are now in the llm_pattern_analysis/ package. This module provides
 backward compatibility by re-exporting all classes.
 """
 
-import logging
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from code_intelligence.llm_pattern_analysis.calculators import (
     CostCalculator,
     TokenTracker,
@@ -72,7 +72,7 @@ from code_intelligence.llm_pattern_analysis.types import (
     UsagePatternType,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Backward compatibility aliases for module-level patterns
 _REDUNDANT_PATTERNS = REDUNDANT_PATTERNS
@@ -139,7 +139,7 @@ class LLMPatternAnalyzer:
     insights into LLM usage patterns and optimization opportunities.
     """
 
-    def __init__(self, project_root: Optional[Path] = None):
+    def __init__(self, project_root: Path | None = None):
         """
         Initialize the analyzer.
 
@@ -192,8 +192,8 @@ class LLMPatternAnalyzer:
 
     def _get_default_directories_and_exclusions(
         self,
-        directories: Optional[List[Path]],
-        exclude_patterns: Optional[List[str]],
+        directories: List[Path] | None,
+        exclude_patterns: List[str] | None,
     ) -> tuple[List[Path], List[str]]:
         """
         Get default directories and exclusion patterns.
@@ -261,8 +261,8 @@ class LLMPatternAnalyzer:
 
     def analyze(
         self,
-        directories: Optional[List[Path]] = None,
-        exclude_patterns: Optional[List[str]] = None,
+        directories: List[Path] | None = None,
+        exclude_patterns: List[str] | None = None,
     ) -> AnalysisResult:
         """Analyze the codebase for LLM patterns. Issue #620."""
         start_time = time.time()
@@ -385,8 +385,8 @@ class LLMPatternAnalyzer:
 
 
 def analyze_llm_patterns(
-    project_root: Optional[Path] = None,
-    directories: Optional[List[Path]] = None,
+    project_root: Path | None = None,
+    directories: List[Path] | None = None,
 ) -> AnalysisResult:
     """
     Convenience function to analyze LLM patterns.

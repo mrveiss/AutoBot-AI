@@ -7,7 +7,6 @@ Root-Level API Endpoints
 Registers root-level endpoints that frontend expects directly under /api
 """
 
-import logging
 import time
 from datetime import datetime, timezone
 from typing import Any, Dict
@@ -15,9 +14,10 @@ from typing import Any, Dict
 from fastapi import FastAPI, Request
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from circuit_breaker import get_circuit_breaker_manager
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def _get_circuit_breaker_states() -> Dict[str, Any]:
@@ -59,14 +59,14 @@ def _build_services_status(state: Any) -> Dict[str, str]:
     }
 
 
-def _build_capabilities(ai_stack_ready: bool, ai_agents_ready: bool) -> Dict[str, bool]:
+def _build_capabilities(ai_stack_ready: bool, ai_agents_ready: bool, npu_ready: bool) -> Dict[str, bool]:
     """Build capabilities dict from AI readiness flags."""
     return {
         "rag_enhanced_search": ai_stack_ready,
         "multi_agent_coordination": ai_agents_ready,
         "knowledge_extraction": ai_stack_ready,
         "enhanced_chat": ai_stack_ready,
-        "npu_acceleration": ai_agents_ready,
+        "npu_acceleration": npu_ready,
     }
 
 
@@ -125,6 +125,7 @@ def register_root_endpoints(app: FastAPI) -> None:
         services = _build_services_status(state)
         ai_stack_ready = services.get("ai_stack") == "connected"
         ai_agents_ready = services.get("ai_stack_agents") == "ready"
+        npu_ready = bool(getattr(state, "npu_worker_ready", False))
         return {
             "status": "healthy",
             "timestamp": datetime.now(tz=timezone.utc).isoformat(),
@@ -136,7 +137,7 @@ def register_root_endpoints(app: FastAPI) -> None:
             # consumers don't conflate this with the (much larger) total in
             # /api/agents/registry. (#6749 follow-up — Chrome-plugin TODO #8.)
             "ai_stack_agent_count": _get_agent_count(state),
-            "capabilities": _build_capabilities(ai_stack_ready, ai_agents_ready),
+            "capabilities": _build_capabilities(ai_stack_ready, ai_agents_ready, npu_ready),
             "circuit_breakers": _get_circuit_breaker_states(),
         }
 
@@ -174,22 +175,26 @@ def register_root_endpoints(app: FastAPI) -> None:
     @app.get("/api/health/feature-routers")
     @with_error_handling(category=ErrorCategory.SYSTEM)
     async def feature_routers_health():
-        """Surface feature-router load status (#6797).
+        """Cross-worker feature-router load status (#6797, #6808).
 
         Returns the structured load-results registry populated by
         ``load_feature_routers()``. Until this endpoint existed, the
         graceful-fallback pattern from #281 silently dropped failed routers
         (boot succeeded with /api/* endpoints absent — see #6583, #6664-6667).
-        SLM dashboards and operators can now poll this endpoint to detect
-        partial-boot state without scraping logs.
+
+        #6808: results are now aggregated across all uvicorn workers via Redis
+        so a poll is not subject to per-worker sampling variance. Divergent
+        worker states (one worker missing a router) are visible with
+        worker-PID provenance in the ``workers`` field.
         """
         from initialization.router_registry.feature_routers import (
             FEATURE_ROUTER_CONFIGS,
-            get_feature_router_load_results,
+            get_cross_worker_load_results,
         )
 
-        results = get_feature_router_load_results()
-        loaded_count = sum(1 for r in results if r["loaded"])
+        cross = get_cross_worker_load_results()
+        aggregated = cross["aggregated"]
+        loaded_count = sum(1 for r in aggregated if r["loaded"])
         expected = len(FEATURE_ROUTER_CONFIGS)
         return {
             "timestamp": datetime.now(tz=timezone.utc).isoformat(),
@@ -197,7 +202,10 @@ def register_root_endpoints(app: FastAPI) -> None:
             "loaded": loaded_count,
             "failed": expected - loaded_count,
             "all_loaded": loaded_count == expected,
-            "routers": results,
+            "worker_count": cross["worker_count"],
+            "redis_available": cross["redis_available"],
+            "routers": aggregated,
+            "workers": cross["workers"],
         }
 
     @app.get("/api/version")

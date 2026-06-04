@@ -16,7 +16,7 @@ frontend already tolerates pass-through values.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -40,12 +40,12 @@ class KnowledgeStatsResponse(BaseModel):
     total_vectors: int = 0
     categories: List[str] = Field(default_factory=list)
     db_size: int = 0
-    last_updated: Optional[str] = None
-    redis_db: Optional[Any] = None
-    index_name: Optional[str] = None
-    initialized: Optional[bool] = None
+    last_updated: str | None = None
+    redis_db: Any | None = None
+    index_name: str | None = None
+    initialized: bool | None = None
     rag_available: bool = False
-    vectorization_stats: Optional[Dict[str, Any]] = None
+    vectorization_stats: Dict[str, Any] | None = None
 
 
 class TestCategoriesResponse(BaseModel):
@@ -79,8 +79,8 @@ class KnowledgeHealthResponse(BaseModel):
     rag_status: str = "unknown"
     total_facts: int = 0
     db_size: int = 0
-    kb_implementation: Optional[str] = None
-    message: Optional[str] = None
+    kb_implementation: str | None = None
+    message: str | None = None
 
 
 class MachineProfileCapabilities(BaseModel):
@@ -118,7 +118,7 @@ class ManPagesSummaryEnvelope(BaseModel):
     total_man_pages: int = 0
     system_commands: int = 0
     indexed_count: int = 0
-    last_indexed: Optional[str] = None
+    last_indexed: str | None = None
     integration_active: bool = False
 
 
@@ -128,7 +128,7 @@ class ManPagesSummaryResponse(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     status: str = Field(..., description="'success' | 'error'")
-    message: Optional[str] = None
+    message: str | None = None
     man_pages_summary: ManPagesSummaryEnvelope = Field(default_factory=ManPagesSummaryEnvelope)
 
 
@@ -139,7 +139,7 @@ class MachineKnowledgeInitComponents(BaseModel):
 
     system_commands: int = 0
     # ``man_pages`` is a string marker ("background_task") — not a count.
-    man_pages: Optional[str] = None
+    man_pages: str | None = None
 
 
 class MachineKnowledgeInitResponse(BaseModel):
@@ -150,7 +150,7 @@ class MachineKnowledgeInitResponse(BaseModel):
     status: str = Field(..., description="'success' | 'error'")
     message: str = ""
     items_added: int = 0
-    components: Optional[MachineKnowledgeInitComponents] = None
+    components: MachineKnowledgeInitComponents | None = None
 
 
 class ManPagesIntegrateResponse(BaseModel):
@@ -165,7 +165,7 @@ class ManPagesIntegrateResponse(BaseModel):
     status: str = Field(..., description="'success' | 'error'")
     message: str = ""
     integration_started: bool = False
-    background: Optional[bool] = None
+    background: bool | None = None
 
 
 class ImportStatusResponse(BaseModel):
@@ -201,5 +201,5 @@ class OrgKnowledgeConfigResponse(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     org_id: str = "__default__"
-    stored: Optional[Dict[str, Any]] = None
+    stored: Dict[str, Any] | None = None
     effective: Dict[str, Any] = Field(default_factory=dict)

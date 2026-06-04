@@ -8,9 +8,9 @@ Executes tasks on Modal serverless platform.
 Supports cost tracking and automatic scaling.
 """
 
-import logging
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Tuple
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc, utc_timestamp
 
 try:
@@ -26,13 +26,13 @@ from services.execution.base_backend import (
     ExecutionTask,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ModalBackend(ExecutionBackend):
     """Execute tasks on Modal serverless platform (Issue #4343)."""
 
-    def __init__(self, api_token: Optional[str] = None):
+    def __init__(self, api_token: str | None = None) -> None:
         """Initialize Modal backend.
 
         Args:
@@ -201,7 +201,7 @@ class ModalBackend(ExecutionBackend):
                     namespace = {"__name__": "__modal__"}
                     namespace.update(task.env_vars)
 
-                    exec(task.code, namespace)
+                    exec(task.code, namespace)  # nosec B102
 
                 stdout_output = stdout_capture.getvalue()
                 stderr_output = stderr_capture.getvalue()

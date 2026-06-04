@@ -24,9 +24,7 @@ from base import (
 )
 
 
-async def analyze_codebase(
-    directory: str, file_pattern: str = "*.py"
-) -> Dict[str, Any]:
+async def analyze_codebase(directory: str, file_pattern: str = "*.py") -> Dict[str, Any]:
     """
     Multi-step code analysis workflow:
     1. Search files matching pattern
@@ -77,9 +75,7 @@ async def analyze_codebase(
                 "read_text_file",
                 {"path": file_path},
             )
-            file_contents[file_path] = content_result.get("content", "")[
-                :2000
-            ]  # First 2000 chars
+            file_contents[file_path] = content_result.get("content", "")[:2000]  # First 2000 chars
             print(f"   ✅ Read: {file_path.split('/')[-1]}")
         except Exception as e:
             print(f"   ❌ Failed to read {file_path}: {e}")
@@ -99,9 +95,7 @@ async def analyze_codebase(
     total_thoughts = 5
     for thought_num in range(1, total_thoughts + 1):
         try:
-            thought_content = generate_analysis_thought(
-                thought_num, total_thoughts, files_to_analyze, file_contents
-            )
+            thought_content = generate_analysis_thought(thought_num, total_thoughts, files_to_analyze, file_contents)
             thought_result = await call_mcp_tool(
                 "sequential_thinking_mcp",
                 "sequential_thinking",
@@ -151,9 +145,7 @@ async def analyze_codebase(
 
     # Step 5: Generate Analysis Report
     print("\n📊 Step 5: Generating analysis report...")
-    report = generate_analysis_report(
-        directory, files_to_analyze, file_contents, analysis_thoughts
-    )
+    report = generate_analysis_report(directory, files_to_analyze, file_contents, analysis_thoughts)
     workflow.add_step("generate_report", "success", {"report_length": len(report)})
 
     workflow.complete()
@@ -242,9 +234,7 @@ def generate_analysis_thought(
         )
 
 
-def compile_findings(
-    directory: str, files: List[str], thoughts: List[Dict[str, Any]]
-) -> str:
+def compile_findings(directory: str, files: List[str], thoughts: List[Dict[str, Any]]) -> str:
     """Compile analysis findings into a knowledge base entry"""
 
     findings = f"""
@@ -341,9 +331,7 @@ async def main():
 
     # Remove report from JSON (already printed)
     results_for_json = {k: v for k, v in results.items() if k != "report"}
-    await write_file_safe(
-        output_path, json.dumps(results_for_json, indent=2, default=str)
-    )
+    await write_file_safe(output_path, json.dumps(results_for_json, indent=2, default=str))
     print(f"\nResults saved to: {output_path}")
 
 

@@ -9,12 +9,12 @@ GPU-accelerated audio processing with Whisper and Wav2Vec2 models.
 Part of Issue #381 - God Class Refactoring
 """
 
-import logging
 import time
 from typing import Any, Dict, Tuple
 
 import numpy as np
 
+from autobot_shared.logging_manager import get_logger
 from config import get_config_section
 
 from ..base import BaseModalProcessor
@@ -58,10 +58,10 @@ try:
     AUDIO_MODELS_AVAILABLE = True
 except ImportError:
     AUDIO_MODELS_AVAILABLE = False
-    logger = logging.getLogger(__name__)
+    logger = get_logger(__name__)
     logger.warning("Audio models not available. Install with: pip install transformers librosa")
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class VoiceProcessor(BaseModalProcessor):
@@ -97,18 +97,24 @@ class VoiceProcessor(BaseModalProcessor):
         try:
             # Load Whisper model for speech recognition
             self.logger.info("Loading Whisper model...")
-            self.whisper_processor = WhisperProcessor.from_pretrained("openai/whisper-base")
-            self.whisper_model = WhisperForConditionalGeneration.from_pretrained(
+            self.whisper_processor = WhisperProcessor.from_pretrained(
+                "openai/whisper-base", resume_download=True
+            )  # nosec B615 - HuggingFace model loaded by name; revision pinning managed operationally
+            self.whisper_model = WhisperForConditionalGeneration.from_pretrained(  # nosec B615
                 "openai/whisper-base",
                 torch_dtype=(torch.float16 if torch.cuda.is_available() else torch.float32),
+                resume_download=True,
             ).to(self.device)
 
             # Load Wav2Vec2 model for audio embeddings and feature extraction
             self.logger.info("Loading Wav2Vec2 model...")
-            self.wav2vec_processor = Wav2Vec2Processor.from_pretrained("facebook/wav2vec2-base-960h", use_fast=True)
-            self.wav2vec_model = Wav2Vec2ForCTC.from_pretrained(
+            self.wav2vec_processor = Wav2Vec2Processor.from_pretrained(  # nosec B615
+                "facebook/wav2vec2-base-960h", use_fast=True, resume_download=True
+            )
+            self.wav2vec_model = Wav2Vec2ForCTC.from_pretrained(  # nosec B615
                 "facebook/wav2vec2-base-960h",
                 torch_dtype=(torch.float16 if torch.cuda.is_available() else torch.float32),
+                resume_download=True,
             ).to(self.device)
 
             # Set models to evaluation mode

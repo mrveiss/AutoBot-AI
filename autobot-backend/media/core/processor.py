@@ -7,9 +7,10 @@
 
 """Base processor interface for media components."""
 
-import logging
 from abc import ABC, abstractmethod
 from typing import Any
+
+from autobot_shared.logging_manager import get_logger
 
 
 class MediaProcessor(ABC):
@@ -28,7 +29,7 @@ class MediaProcessor(ABC):
             processor_name: Name identifier for this processor
         """
         self.processor_name = processor_name
-        self.logger = logging.getLogger(f"{__name__}.{processor_name}")
+        self.logger = get_logger(f"{__name__}.{processor_name}")
 
     @abstractmethod
     async def process(self, data: Any) -> Any:

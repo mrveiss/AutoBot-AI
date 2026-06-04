@@ -19,7 +19,7 @@ import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_llm_logger
 from autobot_shared.singleton_factory import lazy_singleton
@@ -67,7 +67,7 @@ class TemporalMetadata:
     ttl_hours: float = 168.0  # 1 week default
     freshness_score: float = 1.0
     update_frequency: float = 0.0  # Updates per day
-    invalidation_time: Optional[float] = None
+    invalidation_time: float | None = None
 
     def is_expired(self) -> bool:
         """Check if content has exceeded its TTL."""
@@ -492,7 +492,7 @@ class TemporalKnowledgeManager:
 
         logger.info("Temporal background processing stopped")
 
-    def get_content_status(self, content_id: str) -> Optional[Dict[str, Any]]:
+    def get_content_status(self, content_id: str) -> Dict[str, Any] | None:
         """Get detailed status for specific content."""
         if content_id not in self.temporal_metadata:
             return None

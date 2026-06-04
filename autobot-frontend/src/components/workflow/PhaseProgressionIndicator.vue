@@ -12,7 +12,7 @@
     <!-- Header -->
     <div class="phase-header">
       <h2 class="phase-title">
-        <i class="fas fa-rocket"></i>
+        <Icon name="rocket" />
         {{ $t('workflow.phaseProgression.title') }}
       </h2>
       <div class="header-controls">
@@ -22,8 +22,8 @@
           class="btn-load-validation"
           aria-label="Load validation data"
         >
-          <i v-if="loading" class="fas fa-spinner fa-spin"></i>
-          <i v-else class="fas fa-play"></i>
+          <Icon name="spinner" class="animate-spin" v-if="loading" />
+          <Icon name="play" v-else />
           {{ loading ? $t('workflow.phaseProgression.loading') : $t('workflow.phaseProgression.loadData') }}
         </button>
         <div v-if="phases.length > 0" class="overall-maturity">
@@ -43,11 +43,11 @@
     <!-- Error State -->
     <div v-if="hasLoadError && !loading" class="error-notice" role="alert">
       <div class="error-content">
-        <i class="fas fa-exclamation-triangle"></i>
+        <Icon name="exclamation-triangle" />
         <h3>{{ $t('workflow.phaseProgression.errorTitle') }}</h3>
         <p>{{ $t('workflow.phaseProgression.errorBody') }}</p>
         <button @click="retryLoad" class="btn-retry">
-          <i class="fas fa-redo"></i>
+          <Icon name="redo" />
           {{ $t('workflow.phaseProgression.retry') }}
         </button>
       </div>
@@ -59,7 +59,7 @@
       class="no-data-state"
     >
       <div class="no-data-content">
-        <i class="fas fa-info-circle"></i>
+        <Icon name="info-circle" />
         <h3>{{ $t('workflow.phaseProgression.readyTitle') }}</h3>
         <p>{{ $t('workflow.phaseProgression.readyHint') }}</p>
       </div>
@@ -76,7 +76,7 @@
         <!-- Phase Header -->
         <div class="phase-card-header">
           <div class="phase-icon">
-            <i :class="getPhaseIcon(phase.name)"></i>
+            <Icon :name="getPhaseIcon(phase.name)" />
           </div>
           <div class="phase-info">
             <h3 class="phase-name">{{ phase.name }}</h3>
@@ -130,7 +130,7 @@
     <!-- Loading Overlay -->
     <div v-if="loading" class="loading-overlay" aria-live="polite">
       <div class="loading-spinner">
-        <i class="fas fa-spinner fa-spin"></i>
+        <Icon name="spinner" class="animate-spin" />
         <span>{{ $t('workflow.phaseProgression.loading') }}</span>
       </div>
     </div>
@@ -138,6 +138,7 @@
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import ApiClient from '@/utils/ApiClient'
@@ -198,7 +199,8 @@ async function loadValidationData(): Promise<void> {
       const overview = data.report.system_overview
       systemMaturity.value = overview?.overall_maturity ?? 0
 
-      phases.value = (data.report.phase_details ?? []).map((p) => ({
+      type PhaseDetail = NonNullable<NonNullable<typeof data.report>['phase_details']>[number]
+      phases.value = (data.report.phase_details ?? []).map((p: PhaseDetail) => ({
         name: p.display_name ?? p.name ?? t('workflow.phaseProgression.unknownPhase'),
         completion_percentage: p.completion_percentage ?? 0,
         status:
@@ -241,23 +243,23 @@ async function retryLoad(): Promise<void> {
 // ── Display helpers ────────────────────────────────────────────────────────
 
 const PHASE_ICONS: Record<string, string> = {
-  'Phase 1': 'fas fa-server',
-  'Phase 2': 'fas fa-database',
-  'Phase 3': 'fas fa-brain',
-  'Phase 4': 'fas fa-shield-alt',
-  'Phase 5': 'fas fa-tachometer-alt',
-  'Phase 6': 'fas fa-chart-line',
-  'Phase 7': 'fas fa-desktop',
-  'Phase 8': 'fas fa-sitemap',
-  'Phase 9': 'fas fa-robot',
-  'Phase 10': 'fas fa-cloud',
+  'Phase 1': 'server',
+  'Phase 2': 'database',
+  'Phase 3': 'brain',
+  'Phase 4': 'shield-alt',
+  'Phase 5': 'tachometer-alt',
+  'Phase 6': 'chart-line',
+  'Phase 7': 'desktop',
+  'Phase 8': 'sitemap',
+  'Phase 9': 'robot',
+  'Phase 10': 'cloud',
 }
 
 function getPhaseIcon(name: string): string {
   for (const [key, icon] of Object.entries(PHASE_ICONS)) {
     if (name.startsWith(key)) return icon
   }
-  return 'fas fa-cog'
+  return 'cog'
 }
 
 function getPhaseCardClass(phase: PhaseEntry): string[] {

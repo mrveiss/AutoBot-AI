@@ -16,7 +16,7 @@ Covers:
 """
 
 import json
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
@@ -25,10 +25,13 @@ from api.marketplace import (
     _BUILTIN_CATALOG,
     _CATALOG_KEY,
     _CATALOG_TTL,
-    _INSTALLED_KEY,
+    _INSTALLED_KEY_PREFIX,
+    _LEGACY_INSTALLED_KEY,
     CatalogCategory,
     CatalogSort,
     _get_catalog,
+    _installed_key,
+    _migrate_legacy_installed,
     _plugin_source_url,
     get_catalog_entry,
     install_plugin,
@@ -37,11 +40,13 @@ from api.marketplace import (
     list_installed,
     uninstall_plugin,
 )
+from api.marketplace_sources import BUILTIN_SOURCE_ID
 from api.schemas_workflows import (
     InstallRequest,
     MarketplaceCatalogResponse,
     MarketplaceEntry,
 )
+from tests.fixtures import make_async_redis
 
 # Derived from CatalogCategory / CatalogSort enums (#6534) — replaces the
 # pre-enum ``_VALID_CATEGORIES`` / ``_VALID_SORT`` constants the tests used
@@ -55,18 +60,51 @@ _VALID_SORT = {s.value for s in CatalogSort}
 # ---------------------------------------------------------------------------
 
 
-def _make_redis(catalog: list | None = None, installed: set | None = None) -> AsyncMock:
-    """Return an AsyncMock Redis client pre-configured with catalog/installed data."""
-    redis = AsyncMock()
-    if catalog is not None:
-        redis.get.return_value = json.dumps(catalog).encode()
-    else:
-        redis.get.return_value = None
-    members = {m.encode() for m in (installed or set())}
-    redis.smembers.return_value = members
-    redis.set.return_value = True
-    redis.sadd.return_value = 1
-    redis.srem.return_value = 1
+async def _async_iter(items):
+    """Async generator used to mock Redis scan_iter."""
+    for item in items:
+        yield item
+
+
+def _make_redis(
+    catalog: list | None = None,
+    installed: set | None = None,
+    installed_by_source: dict | None = None,
+) -> AsyncMock:
+    """Return an AsyncMock Redis client pre-configured with catalog/installed data.
+
+    #7366: installed_by_source maps source_id -> set[name] for multi-source tests.
+    The legacy ``installed`` kwarg seeds the builtin source key for backward compat.
+    """
+    get_returns = json.dumps(catalog).encode() if catalog is not None else None
+    redis = make_async_redis(get_returns=get_returns)
+
+    # Build per-source mapping
+    by_source: dict[str, set[str]] = {}
+    if installed:
+        by_source[BUILTIN_SOURCE_ID] = set(installed)
+    if installed_by_source:
+        for src, names in installed_by_source.items():
+            by_source.setdefault(src, set()).update(names)
+
+    # scan_iter must be a sync call returning an async iterator (not an AsyncMock)
+    scan_keys = [f"{_INSTALLED_KEY_PREFIX}{src}".encode() for src in by_source]
+    redis.scan_iter = MagicMock(side_effect=lambda match="": _async_iter(scan_keys))
+
+    # smembers returns the right set depending on which key is requested
+    async def _smembers(key):
+        key_str = key.decode() if isinstance(key, bytes) else key
+        src = key_str.removeprefix(_INSTALLED_KEY_PREFIX)
+        return {m.encode() for m in by_source.get(src, set())}
+
+    # Also handle legacy key lookup in migration
+    async def _smembers_with_legacy(key):
+        key_str = key.decode() if isinstance(key, bytes) else key
+        if key_str == _LEGACY_INSTALLED_KEY:
+            return set()  # no legacy data by default
+        return await _smembers(key)
+
+    redis.smembers.side_effect = _smembers_with_legacy
     return redis
 
 
@@ -473,7 +511,8 @@ class TestInstallPlugin:
         redis = _make_redis(catalog=None, installed=set())
         with patch("api.marketplace.get_async_redis_client", new=AsyncMock(return_value=redis)):
             await install_plugin(InstallRequest(plugin_name="logger-plugin"))
-        redis.sadd.assert_awaited_once_with(_INSTALLED_KEY, "logger-plugin")
+        # #7366: key is namespaced by source_id (default=builtin)
+        redis.sadd.assert_awaited_once_with(_installed_key(BUILTIN_SOURCE_ID), "logger-plugin")
 
     @pytest.mark.asyncio
     async def test_download_counter_incremented(self):
@@ -501,10 +540,10 @@ class TestInstallPlugin:
     @pytest.mark.asyncio
     async def test_raises_500_on_redis_write_error(self):
         redis = AsyncMock()
-        # First call (get_catalog): returns nothing → fallback to builtin
         redis.get.return_value = None
-        redis.set.return_value = True  # seed succeeds
-        # Second client call for sadd → fails
+        redis.set.return_value = True
+        redis.smembers.return_value = set()  # migration: no legacy data
+        redis.scan_iter = MagicMock(side_effect=lambda match="": _async_iter([]))
         redis.sadd.side_effect = ConnectionError("Redis down")
         with patch("api.marketplace.get_async_redis_client", new=AsyncMock(return_value=redis)):
             with pytest.raises(HTTPException) as exc_info:
@@ -522,31 +561,135 @@ class TestUninstallPlugin:
     async def test_uninstalls_installed_plugin(self):
         redis = _make_redis(installed={"hello-plugin"})
         with patch("api.marketplace.get_async_redis_client", new=AsyncMock(return_value=redis)):
-            result = await uninstall_plugin("hello-plugin")
+            result = await uninstall_plugin("hello-plugin", source_id=BUILTIN_SOURCE_ID)
         assert result == {"status": "uninstalled", "plugin": "hello-plugin"}
 
     @pytest.mark.asyncio
     async def test_srem_called_with_plugin_name(self):
         redis = _make_redis(installed={"hello-plugin"})
         with patch("api.marketplace.get_async_redis_client", new=AsyncMock(return_value=redis)):
-            await uninstall_plugin("hello-plugin")
-        redis.srem.assert_awaited_once_with(_INSTALLED_KEY, "hello-plugin")
+            # Pass source_id explicitly (direct handler calls skip FastAPI's Query unwrap)
+            await uninstall_plugin("hello-plugin", source_id=BUILTIN_SOURCE_ID)
+        # #7366: key is namespaced by source_id
+        redis.srem.assert_awaited_once_with(_installed_key(BUILTIN_SOURCE_ID), "hello-plugin")
 
     @pytest.mark.asyncio
     async def test_raises_404_when_not_installed(self):
         redis = _make_redis(installed=set())
         with patch("api.marketplace.get_async_redis_client", new=AsyncMock(return_value=redis)):
             with pytest.raises(HTTPException) as exc_info:
-                await uninstall_plugin("hello-plugin")
+                await uninstall_plugin("hello-plugin", source_id=BUILTIN_SOURCE_ID)
         assert exc_info.value.status_code == 404
         assert "hello-plugin" in exc_info.value.detail
 
     @pytest.mark.asyncio
     async def test_raises_500_on_redis_srem_error(self):
         redis = AsyncMock()
-        redis.smembers.return_value = {b"hello-plugin"}
+        builtin_key = _installed_key(BUILTIN_SOURCE_ID).encode()
+
+        async def _smembers(key):
+            key_str = key.decode() if isinstance(key, bytes) else key
+            if key_str == _LEGACY_INSTALLED_KEY:
+                return set()
+            return {b"hello-plugin"}
+
+        redis.smembers.side_effect = _smembers
+        redis.scan_iter = MagicMock(side_effect=lambda match="": _async_iter([builtin_key]))
         redis.srem.side_effect = ConnectionError("Redis down")
+        redis.delete.return_value = 1
         with patch("api.marketplace.get_async_redis_client", new=AsyncMock(return_value=redis)):
             with pytest.raises(HTTPException) as exc_info:
                 await uninstall_plugin("hello-plugin")
         assert exc_info.value.status_code == 500
+
+
+# ---------------------------------------------------------------------------
+# #7366 — Per-source key collision tests
+# ---------------------------------------------------------------------------
+
+
+class TestInstalledKeyCollision:
+    """Regression tests for #7366 — same plugin name in two different sources."""
+
+    def test_installed_key_helper(self):
+        assert _installed_key("builtin") == "marketplace:installed:builtin"
+        assert _installed_key("abc-123") == "marketplace:installed:abc-123"
+        assert _installed_key("builtin") != _installed_key("other-source")
+
+    @pytest.mark.asyncio
+    async def test_same_name_two_sources_stored_separately(self):
+        """Installing 'hello-plugin' from builtin and a custom source writes to different keys."""
+        builtin_redis = _make_redis(catalog=None, installed=set())
+        custom_redis = _make_redis(catalog=None, installed=set())
+
+        with patch("api.marketplace.get_async_redis_client", new=AsyncMock(return_value=builtin_redis)):
+            await install_plugin(InstallRequest(plugin_name="hello-plugin", source_id=BUILTIN_SOURCE_ID))
+
+        # For a custom source we need to mock _resolve_catalog; test key routing only
+        custom_redis.sadd.return_value = 1
+        custom_source_id = "custom-source-uuid"
+        expected_custom_key = _installed_key(custom_source_id)
+        expected_builtin_key = _installed_key(BUILTIN_SOURCE_ID)
+
+        # Verify the builtin install wrote to the builtin key
+        builtin_redis.sadd.assert_awaited_once_with(expected_builtin_key, "hello-plugin")
+
+        # Keys must differ
+        assert expected_builtin_key != expected_custom_key
+
+    @pytest.mark.asyncio
+    async def test_list_installed_merges_across_sources(self):
+        """GET /installed returns union of all source sets (#7366)."""
+        redis = _make_redis(
+            installed_by_source={
+                BUILTIN_SOURCE_ID: {"hello-plugin", "logger-plugin"},
+                "custom-src": {"hello-plugin", "custom-tool"},
+            }
+        )
+        with patch("api.marketplace.get_async_redis_client", new=AsyncMock(return_value=redis)):
+            result = await list_installed()
+        # Same name from two sources appears once in merged list
+        assert sorted(result["installed"]) == sorted(["hello-plugin", "logger-plugin", "custom-tool"])
+
+    @pytest.mark.asyncio
+    async def test_uninstall_one_source_leaves_other_intact(self):
+        """Uninstalling from builtin does not touch the custom-source key."""
+        redis = _make_redis(
+            installed_by_source={
+                BUILTIN_SOURCE_ID: {"hello-plugin"},
+                "custom-src": {"hello-plugin"},
+            }
+        )
+        with patch("api.marketplace.get_async_redis_client", new=AsyncMock(return_value=redis)):
+            result = await uninstall_plugin("hello-plugin", source_id=BUILTIN_SOURCE_ID)
+        assert result == {"status": "uninstalled", "plugin": "hello-plugin"}
+        # srem only called with the builtin key, not the custom one
+        redis.srem.assert_awaited_once_with(_installed_key(BUILTIN_SOURCE_ID), "hello-plugin")
+
+    @pytest.mark.asyncio
+    async def test_migrate_legacy_installed_moves_to_builtin(self):
+        """#7366: legacy marketplace:installed members migrate to marketplace:installed:builtin."""
+        redis = AsyncMock()
+        redis.smembers.return_value = {b"hello-plugin", b"logger-plugin"}
+        redis.sadd.return_value = 2
+        redis.delete.return_value = 1
+
+        await _migrate_legacy_installed(redis)
+
+        redis.sadd.assert_awaited_once()
+        call_args = redis.sadd.call_args
+        assert call_args[0][0] == _installed_key(BUILTIN_SOURCE_ID)
+        migrated = set(call_args[0][1:])
+        assert migrated == {"hello-plugin", "logger-plugin"}
+        redis.delete.assert_awaited_once_with(_LEGACY_INSTALLED_KEY)
+
+    @pytest.mark.asyncio
+    async def test_migrate_legacy_installed_noop_when_empty(self):
+        """Migration does nothing when legacy key has no members."""
+        redis = AsyncMock()
+        redis.smembers.return_value = set()
+
+        await _migrate_legacy_installed(redis)
+
+        redis.sadd.assert_not_awaited()
+        redis.delete.assert_not_awaited()

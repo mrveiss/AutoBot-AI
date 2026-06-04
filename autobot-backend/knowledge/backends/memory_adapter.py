@@ -18,7 +18,7 @@ Semantics match the contract documented in ``knowledge.backends.base``:
 from __future__ import annotations
 
 import math
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Sequence
 
 from knowledge.backends.base import (
     BaseClient,
@@ -42,7 +42,7 @@ def _cosine_distance(a: Sequence[float], b: Sequence[float]) -> float:
     return 1.0 - (num / (da * db))
 
 
-def _match_where(meta: Optional[Metadata], where: Optional[Where]) -> bool:
+def _match_where(meta: Metadata | None, where: Where | None) -> bool:
     """Minimal ``where`` filter: equality on top-level keys only.
 
     Full ChromaDB where syntax (``$and``, ``$or``, ``$in`` ...) is out of
@@ -62,22 +62,22 @@ def _match_where(meta: Optional[Metadata], where: Optional[Where]) -> bool:
 class InMemoryCollection(BaseCollection):
     """Deterministic in-memory implementation of ``BaseCollection``."""
 
-    def __init__(self, name: str, metadata: Optional[Metadata] = None) -> None:
+    def __init__(self, name: str, metadata: Metadata | None = None) -> None:
         self.name = name
         self.metadata = metadata or {}
         # Parallel dicts keyed by id — keeps add/upsert/update O(1).
-        self._documents: Dict[str, Optional[str]] = {}
-        self._metadatas: Dict[str, Optional[Metadata]] = {}
-        self._embeddings: Dict[str, Optional[List[float]]] = {}
+        self._documents: Dict[str, str | None] = {}
+        self._metadatas: Dict[str, Metadata | None] = {}
+        self._embeddings: Dict[str, List[float] | None] = {}
 
     # ------------------------------------------------------------------ helpers
 
     def _store(
         self,
         ids: Sequence[str],
-        documents: Optional[Sequence[str]],
-        metadatas: Optional[Sequence[Metadata]],
-        embeddings: Optional[Sequence[Embedding]],
+        documents: Sequence[str] | None,
+        metadatas: Sequence[Metadata] | None,
+        embeddings: Sequence[Embedding] | None,
         *,
         allow_overwrite: bool,
     ) -> None:
@@ -113,9 +113,9 @@ class InMemoryCollection(BaseCollection):
         self,
         *,
         ids: Sequence[str],
-        documents: Optional[Sequence[str]] = None,
-        metadatas: Optional[Sequence[Metadata]] = None,
-        embeddings: Optional[Sequence[Embedding]] = None,
+        documents: Sequence[str] | None = None,
+        metadatas: Sequence[Metadata] | None = None,
+        embeddings: Sequence[Embedding] | None = None,
     ) -> None:
         self._store(ids, documents, metadatas, embeddings, allow_overwrite=False)
 
@@ -123,9 +123,9 @@ class InMemoryCollection(BaseCollection):
         self,
         *,
         ids: Sequence[str],
-        documents: Optional[Sequence[str]] = None,
-        metadatas: Optional[Sequence[Metadata]] = None,
-        embeddings: Optional[Sequence[Embedding]] = None,
+        documents: Sequence[str] | None = None,
+        metadatas: Sequence[Metadata] | None = None,
+        embeddings: Sequence[Embedding] | None = None,
     ) -> None:
         self._store(ids, documents, metadatas, embeddings, allow_overwrite=True)
 
@@ -133,9 +133,9 @@ class InMemoryCollection(BaseCollection):
         self,
         *,
         ids: Sequence[str],
-        documents: Optional[Sequence[str]] = None,
-        metadatas: Optional[Sequence[Metadata]] = None,
-        embeddings: Optional[Sequence[Embedding]] = None,
+        documents: Sequence[str] | None = None,
+        metadatas: Sequence[Metadata] | None = None,
+        embeddings: Sequence[Embedding] | None = None,
     ) -> None:
         # Build id → index map, detect duplicates in the same call.
         # list.index() only returns the first occurrence, so duplicate ids
@@ -152,7 +152,7 @@ class InMemoryCollection(BaseCollection):
             return
         idx = [id_to_idx[_id] for _id in existing_ids]
 
-        def _pick(seq: Optional[Sequence[Any]]) -> Optional[List[Any]]:
+        def _pick(seq: Sequence[Any] | None) -> List[Any] | None:
             return [seq[i] for i in idx] if seq is not None else None
 
         self._store(
@@ -168,12 +168,12 @@ class InMemoryCollection(BaseCollection):
     def get(
         self,
         *,
-        ids: Optional[Sequence[str]] = None,
-        where: Optional[Where] = None,
-        where_document: Optional[WhereDocument] = None,
-        limit: Optional[int] = None,
-        offset: Optional[int] = None,
-        include: Optional[Sequence[str]] = None,
+        ids: Sequence[str] | None = None,
+        where: Where | None = None,
+        where_document: WhereDocument | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
+        include: Sequence[str] | None = None,
     ) -> Dict[str, Any]:
         include = list(include) if include is not None else ["documents", "metadatas"]
         candidate_ids: List[str] = list(ids) if ids is not None else list(self._documents.keys())
@@ -197,12 +197,12 @@ class InMemoryCollection(BaseCollection):
     def query(
         self,
         *,
-        query_embeddings: Optional[Sequence[Embedding]] = None,
-        query_texts: Optional[Sequence[str]] = None,
+        query_embeddings: Sequence[Embedding] | None = None,
+        query_texts: Sequence[str] | None = None,
         n_results: int = 10,
-        where: Optional[Where] = None,
-        where_document: Optional[WhereDocument] = None,
-        include: Optional[Sequence[str]] = None,
+        where: Where | None = None,
+        where_document: WhereDocument | None = None,
+        include: Sequence[str] | None = None,
     ) -> Dict[str, Any]:
         if query_embeddings is None and query_texts is None:
             raise ValueError("either query_embeddings or query_texts is required")
@@ -217,10 +217,10 @@ class InMemoryCollection(BaseCollection):
         candidate_ids = [_id for _id in self._documents.keys() if _match_where(self._metadatas.get(_id), where)]
 
         out_ids: List[List[str]] = []
-        out_docs: List[List[Optional[str]]] = []
-        out_metas: List[List[Optional[Metadata]]] = []
+        out_docs: List[List[str | None]] = []
+        out_metas: List[List[Metadata | None]] = []
         out_dist: List[List[float]] = []
-        out_embs: List[List[Optional[List[float]]]] = []
+        out_embs: List[List[List[float] | None]] = []
 
         for q_vec in query_embeddings:
             scored = []
@@ -250,9 +250,9 @@ class InMemoryCollection(BaseCollection):
     def delete(
         self,
         *,
-        ids: Optional[Sequence[str]] = None,
-        where: Optional[Where] = None,
-        where_document: Optional[WhereDocument] = None,
+        ids: Sequence[str] | None = None,
+        where: Where | None = None,
+        where_document: WhereDocument | None = None,
     ) -> None:
         if ids is None and where is None:
             raise ValueError("delete requires ids or where")
@@ -289,8 +289,8 @@ class InMemoryClient(BaseClient):
         self,
         name: str,
         *,
-        metadata: Optional[Metadata] = None,
-        embedding_function: Optional[Any] = None,
+        metadata: Metadata | None = None,
+        embedding_function: Any | None = None,
     ) -> BaseCollection:
         col = self._collections.get(name)
         if col is None:
@@ -308,8 +308,8 @@ class InMemoryClient(BaseClient):
         self,
         name: str,
         *,
-        metadata: Optional[Metadata] = None,
-        embedding_function: Optional[Any] = None,
+        metadata: Metadata | None = None,
+        embedding_function: Any | None = None,
     ) -> BaseCollection:
         if name in self._collections:
             raise ValueError(f"collection already exists: {name}")

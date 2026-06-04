@@ -13,7 +13,6 @@ combined with a registration prefix of /project-state, yielding incorrect
 URLs. This module exposes the correct /api/project/* paths.
 """
 
-import logging
 from typing import Dict
 
 from fastapi import APIRouter, HTTPException
@@ -24,10 +23,11 @@ from api.schemas_system import (
     ProjectStatusResponse,
 )
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import utc_timestamp
 from project_state_manager import get_project_state_manager
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter()
 

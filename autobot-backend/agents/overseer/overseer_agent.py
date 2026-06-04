@@ -15,19 +15,19 @@ Responsibilities:
 """
 
 import json
-import logging
 import re
 import uuid
-from typing import Any, AsyncGenerator, Dict, Optional
+from typing import Any, AsyncGenerator, Dict
 
 from autobot_shared.http_client import get_http_client
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import DEFAULT_LLM_MODEL
 from constants.api_constants import PATH_OLLAMA_GENERATE
 from dependencies import get_config
 
 from .types import AgentTask, OverseerUpdate, StepResult, StepStatus, TaskPlan
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def _build_previous_context(task: AgentTask, completed_results: Dict[str, StepResult]) -> Dict[str, Dict[str, Any]]:
@@ -96,7 +96,7 @@ class OverseerAgent:
             session_id: The chat session ID for context
         """
         self.session_id = session_id
-        self.current_plan: Optional[TaskPlan] = None
+        self.current_plan: TaskPlan | None = None
         self._http_client = None
 
     def _get_http_client(self):
@@ -125,7 +125,7 @@ class OverseerAgent:
         except Exception:
             return DEFAULT_LLM_MODEL
 
-    async def analyze_query(self, query: str, context: Optional[Dict[str, Any]] = None) -> TaskPlan:
+    async def analyze_query(self, query: str, context: Dict[str, Any] | None = None) -> TaskPlan:
         """
         Analyze a user query and create a task plan.
 
@@ -160,7 +160,7 @@ class OverseerAgent:
             # Create a simple single-step fallback plan
             return self._create_fallback_plan(query)
 
-    def _build_decomposition_prompt(self, query: str, context: Optional[Dict[str, Any]] = None) -> str:
+    def _build_decomposition_prompt(self, query: str, context: Dict[str, Any] | None = None) -> str:
         """Build the prompt for task decomposition."""
         context_info = ""
         if context:
@@ -302,7 +302,7 @@ Examples:
         task: AgentTask,
         completed_results: Dict[str, StepResult],
         plan_id: str,
-    ) -> tuple[bool, Optional[OverseerUpdate]]:
+    ) -> tuple[bool, OverseerUpdate | None]:
         """
         Validate that all task dependencies are met.
 
@@ -530,7 +530,7 @@ Examples:
 
         logger.info("[OverseerAgent] Completed execution of plan: %s", plan.plan_id)
 
-    def get_plan_summary(self) -> Optional[str]:
+    def get_plan_summary(self) -> str | None:
         """Get a summary of the current plan."""
         if not self.current_plan:
             return None

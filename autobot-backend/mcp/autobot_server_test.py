@@ -196,3 +196,93 @@ async def test_unknown_method_returns_error():
     resp = await server.handle_request("unknown/method", {}, VALID_TOKEN)
     assert "error" in resp
     assert resp["error"]["code"] == -32601
+
+
+# ---------------------------------------------------------------------------
+# Run JWT auth (SEC-2 Phase 2, #6473)
+# ---------------------------------------------------------------------------
+
+_FAKE_KB_CLAIMS = {
+    "jti": "test-jti",
+    "run_id": "r1",
+    "task_id": "t1",
+    "agent_id": "a1",
+    "tenant_id": "x",
+    "scope": ["mcp:knowledge"],
+}
+_FAKE_AGENT_CLAIMS = {
+    "jti": "test-jti2",
+    "run_id": "r2",
+    "task_id": "t2",
+    "agent_id": "a2",
+    "tenant_id": "x",
+    "scope": ["agent:invoke"],
+}
+
+
+@pytest.mark.asyncio
+async def test_run_jwt_correct_scope_passes():
+    """Agent with mcp:knowledge JWT can call kb.* tools."""
+    server = make_server()
+    with patch("mcp.autobot_server.validate_run_jwt", new=AsyncMock(return_value=_FAKE_KB_CLAIMS)):
+        with patch.object(server, "_kb_list_categories", new=AsyncMock(return_value={"tree": []})):
+            resp = await server.handle_request(
+                "tools/call",
+                {"name": "kb.list_categories", "arguments": {}, "run_jwt": "fake.jwt.token"},
+                "",
+            )
+    assert "result" in resp, f"Expected result, got: {resp}"
+
+
+@pytest.mark.asyncio
+async def test_run_jwt_insufficient_scope_returns_403():
+    """Agent with mcp:knowledge JWT cannot call agents.* tools — returns -32003."""
+    server = make_server()
+    with patch("mcp.autobot_server.validate_run_jwt", new=AsyncMock(return_value=_FAKE_KB_CLAIMS)):
+        resp = await server.handle_request(
+            "tools/call",
+            {"name": "agents.list", "arguments": {}, "run_jwt": "fake.jwt.token"},
+            "",
+        )
+    assert "error" in resp
+    assert resp["error"]["code"] == -32003
+    assert "Forbidden" in resp["error"]["message"]
+
+
+@pytest.mark.asyncio
+async def test_run_jwt_invalid_token_returns_401():
+    """Malformed or expired run JWT returns -32001 (401)."""
+    from autobot_shared.auth.jwt_core import JWTDecodeError
+
+    server = make_server()
+    with patch("mcp.autobot_server.validate_run_jwt", new=AsyncMock(side_effect=JWTDecodeError("bad sig"))):
+        resp = await server.handle_request(
+            "tools/call",
+            {"name": "kb.list_categories", "arguments": {}, "run_jwt": "invalid.token.value"},
+            "",
+        )
+    assert "error" in resp
+    assert resp["error"]["code"] == -32001
+
+
+@pytest.mark.asyncio
+async def test_run_jwt_agent_invoke_scope_grants_agents_tools():
+    """Agent with agent:invoke JWT can call agents.list."""
+    server = make_server()
+    with patch("mcp.autobot_server.validate_run_jwt", new=AsyncMock(return_value=_FAKE_AGENT_CLAIMS)):
+        resp = await server.handle_request(
+            "tools/call",
+            {"name": "agents.list", "arguments": {}, "run_jwt": "fake.jwt.token2"},
+            "",
+        )
+    assert "result" in resp, f"Expected result, got: {resp}"
+
+
+@pytest.mark.asyncio
+async def test_legacy_token_still_works_without_run_jwt():
+    """Direct user-driven calls using AUTOBOT_MCP_TOKEN still pass (backward compat)."""
+    server = make_server()
+    resp = await server.handle_request("tools/list", {}, VALID_TOKEN)
+    assert "result" in resp
+    tool_names = {t["name"] for t in resp["result"]["tools"]}
+    assert "kb.search" in tool_names

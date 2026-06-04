@@ -35,17 +35,18 @@ from __future__ import annotations
 
 import hashlib
 import io
-import logging
 import re
 import time
 from dataclasses import dataclass
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, Tuple
+
+from autobot_shared.logging_manager import get_logger
 
 if TYPE_CHECKING:
     pass  # Playwright Page — only needed for type annotations, imported lazily
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # Module-level compiled patterns (avoid re-compilation on every call)
@@ -106,11 +107,11 @@ class SolveResult:
     """
 
     success: bool
-    answer: Optional[str]
+    answer: str | None
     method_used: str
     confidence: float
     captcha_type: CaptchaType
-    error: Optional[str] = None
+    error: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -187,7 +188,7 @@ class CaptchaDetector:
         logger.debug("CaptchaDetector: no CAPTCHA pattern matched")
         return CaptchaType.UNKNOWN
 
-    async def extract_captcha_image(self, page: Any, selector: str) -> Optional[bytes]:
+    async def extract_captcha_image(self, page: Any, selector: str) -> bytes | None:
         """Screenshot the CAPTCHA element identified by *selector*.
 
         Args:
@@ -270,9 +271,9 @@ class LocalCaptchaSolver:
     ) -> None:
         self._model_path = model_path
         self._char_set = char_set
-        self._session: Optional[Any] = None  # onnxruntime.InferenceSession
-        self._input_name: Optional[str] = None
-        self._provider_used: Optional[str] = None
+        self._session: Any | None = None  # onnxruntime.InferenceSession
+        self._input_name: str | None = None
+        self._provider_used: str | None = None
 
     # ------------------------------------------------------------------
     # Public API
@@ -289,7 +290,7 @@ class LocalCaptchaSolver:
         """
         return captcha_type in (CaptchaType.TEXT_IMAGE, CaptchaType.MATH)
 
-    async def solve_text_image(self, image_bytes: bytes) -> Optional[str]:
+    async def solve_text_image(self, image_bytes: bytes) -> str | None:
         """Run ONNX inference on *image_bytes* and return the decoded text.
 
         The image is preprocessed (grayscale → resize → normalise) before being
@@ -330,7 +331,7 @@ class LocalCaptchaSolver:
             logger.error("solve_text_image: inference failed: %s", exc)
             return None
 
-    def solve_math(self, expression: str) -> Optional[str]:
+    def solve_math(self, expression: str) -> str | None:
         """Evaluate a simple arithmetic expression extracted from a CAPTCHA.
 
         Supports +, -, *, /, ×, ÷.  Division yields integer (floor) result.
@@ -363,7 +364,7 @@ class LocalCaptchaSolver:
     # ONNX session management
     # ------------------------------------------------------------------
 
-    def _get_session(self) -> Optional[Any]:
+    def _get_session(self) -> Any | None:
         """Return the cached ONNX session, initialising it on first call.
 
         Attempts NPU execution provider first, then falls back to CPU.
@@ -515,7 +516,7 @@ class LocalCaptchaSolver:
             cleaned = cleaned.replace(old, new)
         return cleaned
 
-    def _apply_operator(self, a: int, op: str, b: int) -> Optional[int]:
+    def _apply_operator(self, a: int, op: str, b: int) -> int | None:
         """Apply a binary arithmetic operator.
 
         Args:
@@ -563,8 +564,8 @@ class CaptchaSolverPipeline:
 
     def __init__(
         self,
-        solver: Optional[LocalCaptchaSolver] = None,
-        detector: Optional[CaptchaDetector] = None,
+        solver: LocalCaptchaSolver | None = None,
+        detector: CaptchaDetector | None = None,
         model_path: str = _DEFAULT_MODEL_PATH,
     ) -> None:
         self._solver = solver or LocalCaptchaSolver(model_path=model_path)
@@ -654,7 +655,7 @@ class CaptchaSolverPipeline:
             error="Math expression not found in page content",
         )
 
-    async def _extract_image(self, page: Any, captcha_type: CaptchaType) -> Optional[bytes]:
+    async def _extract_image(self, page: Any, captcha_type: CaptchaType) -> bytes | None:
         """Pick the right selector and extract the CAPTCHA image bytes.
 
         Args:

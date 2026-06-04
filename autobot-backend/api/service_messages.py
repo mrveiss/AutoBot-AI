@@ -12,9 +12,6 @@ Endpoints:
 - GET /api/service-messages/chain/{correlation_id} — full correlation chain
 """
 
-import logging
-from typing import Optional
-
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from api.schemas_system import (
@@ -25,10 +22,11 @@ from api.schemas_system import (
 )
 from auth_middleware import get_auth_middleware
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.message_bus import get_message_bus
 from utils.catalog_http_exceptions import raise_auth_error, raise_server_error
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/service-messages", tags=["service-messages"])
 
@@ -96,9 +94,9 @@ def _msg_to_response(msg) -> ServiceMessageResponse:
 async def get_latest_messages(
     request: Request,
     count: int = Query(50, ge=1, le=500, description="Number of messages"),
-    sender: Optional[str] = Query(None, description="Filter by sender"),
-    receiver: Optional[str] = Query(None, description="Filter by receiver"),
-    msg_type: Optional[str] = Query(None, description="Filter by type"),
+    sender: str | None = Query(None, description="Filter by sender"),
+    receiver: str | None = Query(None, description="Filter by receiver"),
+    msg_type: str | None = Query(None, description="Filter by type"),
     _admin: bool = Depends(_check_admin),
 ):
     """Return the most recent cross-service messages.

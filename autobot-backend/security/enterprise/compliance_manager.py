@@ -10,23 +10,23 @@ Issue #378: Added threading locks for file operations to prevent race conditions
 
 import asyncio
 import json
-import logging
 import os
 import threading
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List
 from uuid import uuid4
 
 import aiofiles
 import yaml
 from cryptography.fernet import Fernet
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc, parse_utc_iso, utc_timestamp
 from constants.path_constants import PATH
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level frozensets for compliance checks
 _CONSENT_REQUIRED_ACTIONS = frozenset({"data_export", "analytics", "marketing"})
@@ -181,7 +181,7 @@ class ComplianceManager:
             except Exception as e:
                 logger.error("Failed to save compliance config: %s", e)
 
-    def _get_encryption_key(self) -> Optional[bytes]:
+    def _get_encryption_key(self) -> bytes | None:
         """Get or generate encryption key for sensitive audit data (thread-safe, Issue #378)"""
         key_path = self.audit_base_path / ".audit_key"
 
@@ -279,9 +279,9 @@ class ComplianceManager:
         action: str,
         resource: str,
         outcome: str,
-        details: Optional[Dict],
+        details: Dict | None,
         data_classification: DataClassification,
-        compliance_frameworks: Optional[List[ComplianceFramework]],
+        compliance_frameworks: List[ComplianceFramework] | None,
     ) -> Dict:
         """
         Build base audit event dictionary with core fields.
@@ -335,9 +335,9 @@ class ComplianceManager:
         action: str,
         resource: str,
         outcome: str = "success",
-        details: Optional[Dict] = None,
+        details: Dict | None = None,
         data_classification: DataClassification = DataClassification.INTERNAL,
-        compliance_frameworks: Optional[List[ComplianceFramework]] = None,
+        compliance_frameworks: List[ComplianceFramework] | None = None,
     ) -> str:
         """
         Log audit event with comprehensive compliance tracking.
@@ -760,7 +760,7 @@ class ComplianceManager:
         framework: ComplianceFramework,
         start_date: datetime,
         end_date: datetime,
-        output_path: Optional[Path] = None,
+        output_path: Path | None = None,
     ) -> Dict:
         """Generate compliance report for specific framework"""
 

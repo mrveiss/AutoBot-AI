@@ -7,9 +7,9 @@ Step Generator
 Generates smart workflow steps with AI enhancements.
 """
 
-import logging
-from typing import List, Optional
+from typing import List
 
+from autobot_shared.logging_manager import get_logger
 from autobot_types import TaskComplexity
 from orchestrator import Orchestrator
 from orchestrator import get_orchestrator_sync as get_orchestrator
@@ -17,7 +17,7 @@ from type_defs.common import Metadata
 
 from .models import SmartWorkflowStep, WorkflowIntent
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level tuple for high-risk command patterns
 _HIGH_RISK_PATTERNS = (
@@ -39,7 +39,7 @@ _HIGH_RISK_PATTERNS = (
 class StepGenerator:
     """Generates intelligent workflow steps"""
 
-    def __init__(self, enhanced_orchestrator: Orchestrator = None):
+    def __init__(self, enhanced_orchestrator: Orchestrator = None) -> None:
         """Initialize step generator with optional enhanced orchestrator."""
         self.enhanced_orchestrator = enhanced_orchestrator or get_orchestrator()
 
@@ -128,7 +128,7 @@ class StepGenerator:
 
         return alternatives[:3]
 
-    def _generate_validation_command(self, command: str) -> Optional[str]:
+    def _generate_validation_command(self, command: str) -> str | None:
         """Generate validation command to verify success"""
         if "install" in command:
             if "apt install" in command:
@@ -148,7 +148,7 @@ class StepGenerator:
 
         return None
 
-    def _generate_rollback_command(self, command: str) -> Optional[str]:
+    def _generate_rollback_command(self, command: str) -> str | None:
         """Generate rollback command for safety"""
         if "systemctl start" in command:
             service = command.split()[-1]

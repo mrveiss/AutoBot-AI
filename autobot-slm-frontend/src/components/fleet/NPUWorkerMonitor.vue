@@ -204,13 +204,13 @@ onUnmounted(() => {
             <svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
             </svg>
-            <span class="text-sm text-gray-700">Avg utilization: <span class="font-semibold">{{ avgUtilization }}%</span></span>
+            <span class="text-sm text-gray-700">{{ $t('fleet.nPUWorkerMonitor.avgUtilization') }} <span class="font-semibold">{{ avgUtilization }}%</span></span>
             <div class="w-24 h-2 bg-gray-200 rounded-full overflow-hidden">
               <div :class="['h-full transition-all', utilizationBarColor(avgUtilization)]" :style="{ width: `${avgUtilization}%` }" />
             </div>
           </div>
         </div>
-        <button @click="refresh" :disabled="loading" class="p-2 text-gray-400 hover:text-gray-600 transition-colors" title="Refresh now">
+        <button @click="refresh" :disabled="loading" class="p-2 text-gray-400 hover:text-gray-600 transition-colors" title="Refresh now" aria-label="Refresh now">
           <svg :class="['w-5 h-5', loading ? 'animate-spin' : '']" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
           </svg>
@@ -226,8 +226,8 @@ onUnmounted(() => {
       <svg class="mx-auto w-12 h-12 text-gray-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
       </svg>
-      <h3 class="text-lg font-medium text-gray-900 mb-1">No NPU Workers</h3>
-      <p class="text-sm text-gray-500">No nodes with the npu-worker role are registered in the fleet.</p>
+      <h3 class="text-lg font-medium text-gray-900 mb-1">{{ $t('fleet.nPUWorkerMonitor.noNPUWorkers') }}</h3>
+      <p class="text-sm text-gray-500">{{ $t('fleet.nPUWorkerMonitor.noNodesWithThe') }}</p>
     </div>
 
     <!-- Worker Cards Grid -->
@@ -258,7 +258,7 @@ onUnmounted(() => {
         <!-- Utilization Bar -->
         <div class="mb-3">
           <div class="flex items-center justify-between text-xs text-gray-500 mb-1">
-            <span>Utilization</span>
+            <span>{{ $t('fleet.nPUWorkerMonitor.utilization') }}</span>
             <span>{{ nodeMetrics(node.node_id)?.utilization ?? 0 }}%</span>
           </div>
           <div class="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
@@ -272,11 +272,11 @@ onUnmounted(() => {
         <!-- Queue Depth + Current Task -->
         <div class="grid grid-cols-2 gap-2 mb-3">
           <div class="bg-gray-50 rounded-sm p-2">
-            <p class="text-xs text-gray-500">Queue Depth</p>
+            <p class="text-xs text-gray-500">{{ $t('fleet.nPUWorkerMonitor.queueDepth') }}</p>
             <p class="text-sm font-semibold text-gray-900">{{ nodeMetrics(node.node_id)?.queue_depth ?? 0 }}</p>
           </div>
           <div class="bg-gray-50 rounded-sm p-2">
-            <p class="text-xs text-gray-500">Current Task</p>
+            <p class="text-xs text-gray-500">{{ $t('fleet.nPUWorkerMonitor.currentTask') }}</p>
             <p class="text-sm font-semibold text-gray-900 truncate" :title="currentTask(node.node_id)">{{ currentTask(node.node_id) }}</p>
           </div>
         </div>

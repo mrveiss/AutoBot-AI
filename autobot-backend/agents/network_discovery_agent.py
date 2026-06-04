@@ -7,19 +7,18 @@ Provides network mapping and asset discovery capabilities
 """
 
 import ipaddress
-import logging
-import os
 from datetime import datetime, timezone
 from typing import Any, Dict, FrozenSet, List
 
-from constants.network_constants import NetworkConstants
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 from constants.threshold_constants import TimingConstants
 from utils.agent_command_helpers import run_agent_command
 
 from .base_agent import DeploymentMode
 from .standardized_agent import ActionHandler, StandardizedAgent
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level constants for agent configuration
 _SERVER_PORTS: FrozenSet[str] = frozenset({"22", "80", "443"})
@@ -43,7 +42,7 @@ class NetworkDiscoveryAgent(StandardizedAgent):
         self.description = "Discovers network assets and creates network maps"
         self.supported_tasks = _SUPPORTED_DISCOVERY_TASKS
 
-        self.default_network = os.getenv("AUTOBOT_DEFAULT_SCAN_NETWORK", NetworkConstants.DEFAULT_SCAN_NETWORK)
+        self.default_network = config.default_scan_network
 
         # Register action handlers for StandardizedAgent routing
         self.register_actions(

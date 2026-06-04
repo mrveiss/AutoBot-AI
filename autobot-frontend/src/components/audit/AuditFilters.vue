@@ -132,11 +132,11 @@
 
     <div class="filter-actions">
       <button class="btn btn-primary" @click="applyFilters">
-        <i class="fas fa-search"></i>
+        <Icon name="search" />
         {{ $t('audit.filters.applyFilters') }}
       </button>
       <button class="btn btn-secondary" @click="resetFilters">
-        <i class="fas fa-undo"></i>
+        <Icon name="undo" />
         {{ $t('audit.filters.reset') }}
       </button>
       <button
@@ -144,7 +144,7 @@
         class="btn btn-ghost"
         @click="clearFilters"
       >
-        <i class="fas fa-times"></i>
+        <Icon name="times" />
         {{ $t('audit.filters.clearAll') }}
       </button>
     </div>
@@ -152,6 +152,7 @@
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { computed } from 'vue'
 import type { AuditFilter, AuditResult } from '@/types/audit'
 

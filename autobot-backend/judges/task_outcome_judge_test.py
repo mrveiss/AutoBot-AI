@@ -6,11 +6,11 @@ Tests for TaskOutcomeJudge (Issue #930)
 """
 
 import json
-from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from autobot_shared.datetime_utils import datetime_now
 from judges.task_outcome_judge import (
     MAX_OUTCOMES_PER_TYPE,
     REDIS_OUTCOMES_KEY,
@@ -102,7 +102,7 @@ class TestTaskOutcomeJudge:
         result = JudgmentResult(
             subject_id="x",
             judge_type="task_outcome",
-            timestamp=datetime.utcnow(),
+            timestamp=datetime_now(),
             overall_score=0.75,
             recommendation="APPROVE",
             confidence=JudgmentConfidence.MEDIUM,
@@ -128,7 +128,7 @@ class TestTaskOutcomeJudge:
         result = JudgmentResult(
             subject_id="x",
             judge_type="task_outcome",
-            timestamp=datetime.utcnow(),
+            timestamp=datetime_now(),
             overall_score=0.5,
             recommendation="CONDITIONAL",
             confidence=JudgmentConfidence.LOW,

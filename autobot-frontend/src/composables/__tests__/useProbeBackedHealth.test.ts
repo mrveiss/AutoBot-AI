@@ -7,14 +7,31 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { defineComponent } from 'vue'
-import { mount } from '@vue/test-utils'
 
 import { useProbeBackedHealth } from '../useProbeBackedHealth'
 import { _resetProbeRegistryForTesting } from '../useHealthProbeRegistry'
 
 // ---------------------------------------------------------------------------
-// Test rig: minimal Vue app + apiClient provider
+// Module-level mock — useApiClient() returns a singleton, not Vue-injected
+// ---------------------------------------------------------------------------
+
+const fetchSpy = vi.fn()
+const apiGetSpy = vi.fn()
+
+vi.mock('@/plugins/api', () => ({
+  useApiClient: () => ({ get: apiGetSpy, post: vi.fn(), put: vi.fn(), delete: vi.fn() }),
+}))
+
+vi.mock('@/utils/debugUtils', () => ({
+  createLogger: () => ({ debug: vi.fn(), error: vi.fn(), warn: vi.fn(), info: vi.fn() }),
+}))
+
+vi.mock('@/config/ssot-config', () => ({
+  getApiBase: () => '/api',
+}))
+
+// ---------------------------------------------------------------------------
+// Test types
 // ---------------------------------------------------------------------------
 
 interface TestHealthResponse {
@@ -22,33 +39,6 @@ interface TestHealthResponse {
   active_jobs: number
   redis_connected: boolean
   message?: string
-}
-
-const fetchSpy = vi.fn()
-const apiGetSpy = vi.fn()
-
-function withApi<T>(setup: () => T): T {
-  let result!: T
-  const Wrapper = defineComponent({
-    setup() {
-      result = setup()
-      return {}
-    },
-    template: '<div />',
-  })
-  mount(Wrapper, {
-    global: {
-      provide: {
-        apiClient: {
-          get: apiGetSpy,
-          post: vi.fn(),
-          put: vi.fn(),
-          delete: vi.fn(),
-        },
-      },
-    },
-  })
-  return result
 }
 
 function buildHealthy(probe: { detail?: string }, data: Record<string, unknown>): TestHealthResponse {
@@ -73,9 +63,8 @@ beforeEach(() => {
   fetchSpy.mockReset()
   apiGetSpy.mockReset()
   _resetProbeRegistryForTesting()
-  // Stub global fetch for the registry composable
+  // Stub global fetch for the registry composable (fetches probe name list)
   vi.stubGlobal('fetch', fetchSpy)
-  // Default: registry returns the probe names we use in tests
   fetchSpy.mockResolvedValue({
     ok: true,
     json: async () => ['batch_jobs', 'long_running'],
@@ -89,26 +78,22 @@ beforeEach(() => {
 describe('useProbeBackedHealth', () => {
   it('returns buildHealthy result when probe found and status === ok', async () => {
     apiGetSpy.mockResolvedValue({
-      json: async () => ({
-        probes: [
-          {
-            name: 'batch_jobs',
-            status: 'ok',
-            data: { redis_connected: true },
-            detail: 'all good',
-          },
-        ],
-      }),
+      probes: [
+        {
+          name: 'batch_jobs',
+          status: 'ok',
+          data: { redis_connected: true },
+          detail: 'all good',
+        },
+      ],
     })
 
-    const getHealth = withApi(() =>
-      useProbeBackedHealth<TestHealthResponse>({
-        probeName: 'batch_jobs',
-        buildHealthy,
-        buildUnavailable,
-        errorMessage: 'failed',
-      })
-    )
+    const getHealth = useProbeBackedHealth<TestHealthResponse>({
+      probeName: 'batch_jobs',
+      buildHealthy,
+      buildUnavailable,
+      errorMessage: 'failed',
+    })
 
     const result = await getHealth()
     expect(result).toEqual({
@@ -120,17 +105,13 @@ describe('useProbeBackedHealth', () => {
   })
 
   it('returns buildUnavailable when probe is not in payload', async () => {
-    apiGetSpy.mockResolvedValue({
-      json: async () => ({ probes: [] }),
-    })
+    apiGetSpy.mockResolvedValue({ probes: [] })
 
-    const getHealth = withApi(() =>
-      useProbeBackedHealth<TestHealthResponse>({
-        probeName: 'batch_jobs',
-        buildHealthy,
-        buildUnavailable,
-      })
-    )
+    const getHealth = useProbeBackedHealth<TestHealthResponse>({
+      probeName: 'batch_jobs',
+      buildHealthy,
+      buildUnavailable,
+    })
 
     const result = await getHealth()
     expect(result).toEqual({
@@ -143,24 +124,20 @@ describe('useProbeBackedHealth', () => {
 
   it('returns buildUnavailable with probe.detail when status is not ok', async () => {
     apiGetSpy.mockResolvedValue({
-      json: async () => ({
-        probes: [
-          {
-            name: 'batch_jobs',
-            status: 'degraded',
-            detail: 'redis is slow',
-          },
-        ],
-      }),
+      probes: [
+        {
+          name: 'batch_jobs',
+          status: 'degraded',
+          detail: 'redis is slow',
+        },
+      ],
     })
 
-    const getHealth = withApi(() =>
-      useProbeBackedHealth<TestHealthResponse>({
-        probeName: 'batch_jobs',
-        buildHealthy,
-        buildUnavailable,
-      })
-    )
+    const getHealth = useProbeBackedHealth<TestHealthResponse>({
+      probeName: 'batch_jobs',
+      buildHealthy,
+      buildUnavailable,
+    })
 
     const result = await getHealth()
     expect(result).toEqual({
@@ -173,18 +150,14 @@ describe('useProbeBackedHealth', () => {
 
   it('falls back to "Service unavailable" when status is not ok and no detail', async () => {
     apiGetSpy.mockResolvedValue({
-      json: async () => ({
-        probes: [{ name: 'batch_jobs', status: 'unavailable' }],
-      }),
+      probes: [{ name: 'batch_jobs', status: 'unavailable' }],
     })
 
-    const getHealth = withApi(() =>
-      useProbeBackedHealth<TestHealthResponse>({
-        probeName: 'batch_jobs',
-        buildHealthy,
-        buildUnavailable,
-      })
-    )
+    const getHealth = useProbeBackedHealth<TestHealthResponse>({
+      probeName: 'batch_jobs',
+      buildHealthy,
+      buildUnavailable,
+    })
 
     const result = await getHealth()
     expect(result?.message).toBe('Service unavailable')
@@ -193,33 +166,25 @@ describe('useProbeBackedHealth', () => {
   it('returns buildUnavailable("Service unavailable") on fetch error', async () => {
     apiGetSpy.mockRejectedValue(new Error('network down'))
 
-    const getHealth = withApi(() =>
-      useProbeBackedHealth<TestHealthResponse>({
-        probeName: 'batch_jobs',
-        buildHealthy,
-        buildUnavailable,
-      })
-    )
+    const getHealth = useProbeBackedHealth<TestHealthResponse>({
+      probeName: 'batch_jobs',
+      buildHealthy,
+      buildUnavailable,
+    })
 
     const result = await getHealth()
-    // withErrorHandling silent:true returns the fallbackValue on throw
     expect(result?.status).toBe('unavailable')
     expect(result?.message).toBe('Service unavailable')
   })
 
   it('uses default errorMessage when none provided', async () => {
-    // The errorMessage default is `Failed to check ${probeName} service health`.
-    // We can't directly observe it via the public API (it goes through
-    // withErrorHandling's logging), but we verify the composable doesn't crash.
     apiGetSpy.mockRejectedValue(new Error('boom'))
 
-    const getHealth = withApi(() =>
-      useProbeBackedHealth<TestHealthResponse>({
-        probeName: 'batch_jobs',
-        buildHealthy,
-        buildUnavailable,
-      })
-    )
+    const getHealth = useProbeBackedHealth<TestHealthResponse>({
+      probeName: 'batch_jobs',
+      buildHealthy,
+      buildUnavailable,
+    })
 
     const result = await getHealth()
     expect(result?.status).toBe('unavailable')

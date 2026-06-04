@@ -13,7 +13,7 @@ Issue #68: NPU worker configuration bootstrap
 import asyncio
 import logging
 import socket
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from utils.http_retry import aiohttp_with_backoff
 
@@ -32,9 +32,9 @@ LOCAL_IP_FALLBACK = "127.0.0.1"
 # Thread-safe global state (Issue #68 - Race condition fix)
 # =============================================================================
 _bootstrap_lock = asyncio.Lock()
-_bootstrap_config: Optional[Dict[str, Any]] = None
-_worker_id: Optional[str] = None
-_local_ip_cache: Optional[str] = None  # Cache to avoid repeated socket calls
+_bootstrap_config: Dict[str, Any] | None = None
+_worker_id: str | None = None
+_local_ip_cache: str | None = None  # Cache to avoid repeated socket calls
 
 
 def get_local_ip(backend_host: str) -> str:
@@ -81,8 +81,8 @@ async def fetch_bootstrap_config(
     platform: str = "windows",
     timeout: int = DEFAULT_BOOTSTRAP_TIMEOUT,
     retries: int = DEFAULT_BOOTSTRAP_RETRIES,
-    worker_id: Optional[str] = None,
-) -> Optional[Dict[str, Any]]:
+    worker_id: str | None = None,
+) -> Dict[str, Any] | None:
     """
     Fetch configuration from the backend bootstrap endpoint.
 
@@ -168,9 +168,7 @@ DEFAULT_MODELS_CONFIG: Dict[str, Any] = {
 }
 
 
-def get_bootstrap_config_section(
-    section: str, default: Optional[Dict[str, Any]] = None
-) -> Dict[str, Any]:
+def get_bootstrap_config_section(section: str, default: Dict[str, Any] | None = None) -> Dict[str, Any]:
     """Return the named section from the cached bootstrap config, or default.
 
     Args:
@@ -188,12 +186,12 @@ def get_bootstrap_config_section(
     return default
 
 
-def get_cached_config() -> Optional[Dict[str, Any]]:
+def get_cached_config() -> Dict[str, Any] | None:
     """Get the cached bootstrap configuration."""
     return _bootstrap_config
 
 
-def get_worker_id() -> Optional[str]:
+def get_worker_id() -> str | None:
     """Get the assigned worker ID from bootstrap."""
     return _worker_id
 

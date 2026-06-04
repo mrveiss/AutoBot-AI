@@ -4,7 +4,7 @@
     <div class="flex items-center justify-between p-3 border-b border-autobot-border shrink-0">
       <div class="flex items-center gap-2">
         <div class="voice-panel__icon">
-          <i class="fas fa-headset"></i>
+          <Icon name="headset" />
         </div>
         <div>
           <h3 class="text-sm font-semibold text-autobot-text-primary">{{ $t('chat.voice.title') }}</h3>
@@ -24,6 +24,7 @@
           <option value="walkie-talkie">{{ $t('chat.voice.walkieTalkie') }}</option>
           <option value="hands-free">{{ $t('chat.voice.handsFree') }}</option>
           <option value="full-duplex">{{ $t('chat.voice.fullDuplex') }}</option>
+          <option value="realtime-webrtc">{{ $t('chat.voice.realtimeWebrtc') }}</option>
         </select>
 
         <!-- Language indicator (#1334) -->
@@ -31,7 +32,7 @@
           class="voice-panel__lang-badge"
           :title="$t('chat.voice.languageLabel')"
         >
-          <i class="fas fa-globe"></i>
+          <Icon name="globe" />
           {{ voiceConversation.currentLanguage.value.toUpperCase() }}
         </div>
 
@@ -39,13 +40,21 @@
         <div
           v-if="voiceConversation.mode.value === 'full-duplex'"
           class="voice-panel__ws-dot"
-          :class="{ 'voice-panel__ws-dot--connected': voiceConversation.wsConnected.value }"
-          :title="voiceConversation.wsConnected.value ? $t('chat.voice.connected') : $t('chat.voice.disconnected')"
+          :class="{ 'voice-panel__ws-dot--connected': voiceConversation.wsConnected?.value }"
+          :title="voiceConversation.wsConnected?.value ? $t('chat.voice.connected') : $t('chat.voice.disconnected')"
+        ></div>
+
+        <!-- RTC connection indicator (realtime-webrtc) -->
+        <div
+          v-if="voiceConversation.mode.value === 'realtime-webrtc'"
+          class="voice-panel__ws-dot"
+          :class="{ 'voice-panel__ws-dot--connected': voiceConversation.realtimeConnectionState.value === 'connected' }"
+          :title="voiceConversation.realtimeConnectionState.value === 'connected' ? $t('chat.voice.connected') : $t('chat.voice.disconnected')"
         ></div>
 
         <!-- Close -->
         <button @click="close" class="action-btn" :title="$t('chat.voice.closeVoicePanel')">
-          <i class="fas fa-times text-xs"></i>
+          <Icon name="times" class="text-xs" />
         </button>
       </div>
     </div>
@@ -54,7 +63,7 @@
     <div class="flex-1 flex flex-col items-center justify-center p-4 gap-4 overflow-y-auto">
       <!-- State indicator -->
       <div class="voice-panel__state-ring" :class="stateClass">
-        <i :class="stateIcon" class="text-lg"></i>
+        <Icon :name="stateIcon" />
       </div>
 
       <p class="text-sm font-medium" :class="stateTextClass">
@@ -66,7 +75,7 @@
         v-if="voiceConversation.currentTranscript.value"
         class="voice-panel__transcript"
       >
-        <i class="fas fa-ellipsis-h animate-pulse me-1 text-xs"></i>
+        <Icon name="ellipsis-h" class="animate-pulse me-1 text-xs" />
         {{ voiceConversation.currentTranscript.value }}
       </div>
     </div>
@@ -76,7 +85,7 @@
       v-if="voiceConversation.errorMessage.value"
       class="voice-panel__error"
     >
-      <i class="fas fa-exclamation-triangle me-1"></i>
+      <Icon name="exclamation-triangle" class="me-1" />
       {{ voiceConversation.errorMessage.value }}
     </div>
 
@@ -86,7 +95,7 @@
       class="voice-panel__cert-warning"
     >
       <p class="font-semibold text-xs">
-        <i class="fas fa-lock-open me-1"></i>{{ $t('chat.voice.micBlocked') }}
+        <Icon name="lock" class="me-1" />{{ $t('chat.voice.micBlocked') }}
       </p>
       <p class="text-xs opacity-80">
         {{ $t('chat.voice.certRequiredShort') }}
@@ -146,7 +155,7 @@
           "
           :aria-label="voiceConversation.stateLabel.value"
         >
-          <i :class="micIcon" class="text-base"></i>
+          <Icon :name="micIcon" />
         </button>
       </div>
 
@@ -158,9 +167,11 @@
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { computed, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useVoiceConversation } from '@/composables/useVoiceConversation'
+import type { ConversationMode } from '@/composables/useVoiceConversation'
 
 const emit = defineEmits<{
   (e: 'close'): void
@@ -175,8 +186,11 @@ const isFullDuplex = computed(
 const isHandsFree = computed(
   () => voiceConversation.mode.value === 'hands-free',
 )
+const isRealtimeWebrtc = computed(
+  () => voiceConversation.mode.value === 'realtime-webrtc',
+)
 const isAutoMode = computed(
-  () => isFullDuplex.value || isHandsFree.value,
+  () => isFullDuplex.value || isHandsFree.value || isRealtimeWebrtc.value,
 )
 
 const showInsecureContextWarning = computed(
@@ -201,21 +215,21 @@ const stateTextClass = computed(() => {
 
 const stateIcon = computed(() => {
   switch (voiceConversation.state.value) {
-    case 'listening': return 'fas fa-microphone'
-    case 'processing': return 'fas fa-spinner fa-spin'
-    case 'speaking': return 'fas fa-volume-up'
-    default: return 'fas fa-microphone-slash'
+    case 'listening': return 'microphone'
+    case 'processing': return 'spinner'
+    case 'speaking': return 'volume-up'
+    default: return 'microphone-slash'
   }
 })
 
 const micIcon = computed(() => {
   switch (voiceConversation.state.value) {
     case 'listening':
-      return isAutoMode.value ? 'fas fa-microphone' : 'fas fa-stop'
-    case 'processing': return 'fas fa-spinner fa-spin'
+      return isAutoMode.value ? 'microphone' : 'stop'
+    case 'processing': return 'spinner'
     case 'speaking':
-      return 'fas fa-stop'
-    default: return 'fas fa-microphone'
+      return 'stop'
+    default: return 'microphone'
   }
 })
 
@@ -244,9 +258,7 @@ function handleMicClick(): void {
 
 function handleModeChange(event: Event): void {
   const target = event.target as HTMLSelectElement
-  voiceConversation.setMode(
-    target.value as 'walkie-talkie' | 'hands-free' | 'full-duplex',
-  )
+  voiceConversation.setMode(target.value as ConversationMode)
 }
 
 function close(): void {

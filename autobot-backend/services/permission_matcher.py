@@ -30,17 +30,17 @@ Usage:
 """
 
 import fnmatch
-import logging
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 
 import yaml
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import PermissionAction, PermissionMode, config
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class MatchResult(Enum):
@@ -104,10 +104,10 @@ class PermissionMatcher:
 
     def __init__(
         self,
-        rules_file: Optional[str] = None,
-        mode: Optional[PermissionMode] = None,
+        rules_file: str | None = None,
+        mode: PermissionMode | None = None,
         is_admin: bool = False,
-    ):
+    ) -> None:
         """
         Initialize permission matcher with rules.
 
@@ -203,7 +203,7 @@ class PermissionMatcher:
                 )
             )
 
-    def match(self, tool: str, command: str) -> Tuple[MatchResult, Optional[PermissionRule]]:
+    def match(self, tool: str, command: str) -> Tuple[MatchResult, PermissionRule | None]:
         """
         Match a command against permission rules.
 
@@ -250,7 +250,7 @@ class PermissionMatcher:
         logger.debug(f"No rule matched for {tool}: {command[:50]}...")
         return MatchResult.DEFAULT, None
 
-    def _check_mode_override(self, tool: str, command: str) -> Optional[MatchResult]:
+    def _check_mode_override(self, tool: str, command: str) -> MatchResult | None:
         """
         Check if permission mode overrides normal rule matching.
 
@@ -429,7 +429,7 @@ class PermissionMatcher:
 
 
 # Singleton instance for easy access
-_matcher_instance: Optional[PermissionMatcher] = None
+_matcher_instance: PermissionMatcher | None = None
 
 
 def get_permission_matcher(is_admin: bool = False, reload: bool = False) -> PermissionMatcher:

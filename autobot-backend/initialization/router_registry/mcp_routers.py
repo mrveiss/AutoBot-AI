@@ -10,10 +10,11 @@ and future MCP router additions that may be optional.
 """
 
 import importlib
-import logging
 from typing import List, Tuple
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 
 
 def _load_single_mcp_router(module_path: str, prefix: str, tags: List[str], name: str) -> Tuple | None:
@@ -61,6 +62,8 @@ def load_mcp_routers():
         ("api.manual_mcp", "", ["manual_mcp", "mcp"], "manual_mcp"),
         # Issue #5072: AutoBot MCP server HTTP transport (POST /api/mcp/tool)
         ("api.autobot_mcp_router", "", ["mcp", "autobot-mcp"], "autobot_mcp_server"),
+        # Issue #6453: Admin endpoints to generate/revoke scoped MCP client tokens
+        ("api.mcp_token_admin", "", ["mcp", "admin", "mcp-tokens"], "mcp_token_admin"),
     ]
 
     for module_path, prefix, tags, name in optional_mcp_configs:

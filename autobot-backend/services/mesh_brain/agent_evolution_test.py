@@ -27,7 +27,7 @@ def _stat(task_type: str, success_rate: float, task_count: int) -> dict:
     }
 
 
-async def test_evaluate_returns_specializations():
+async def test_evaluate_returns_specializations() -> None:
     """Stats rows are converted to AgentSpecialization objects."""
     stats = [_stat("code_gen", 0.9, 10), _stat("rag", 0.8, 7)]
     tracker = AgentEvolutionTracker(db=_make_db(stats=stats))
@@ -42,7 +42,7 @@ async def test_evaluate_returns_specializations():
     assert result[0].task_count == 10
 
 
-async def test_evaluate_updates_registry():
+async def test_evaluate_updates_registry() -> None:
     """When registry is provided, update_specializations is called."""
     stats = [_stat("code_gen", 0.9, 12)]
     registry = AsyncMock()
@@ -57,7 +57,7 @@ async def test_evaluate_updates_registry():
     assert "code_gen" in call_args[0][1]
 
 
-async def test_evaluate_skips_registry_when_none():
+async def test_evaluate_skips_registry_when_none() -> None:
     """No error is raised when registry is None."""
     stats = [_stat("rag", 0.75, 6)]
     tracker = AgentEvolutionTracker(db=_make_db(stats=stats), registry=None)
@@ -67,7 +67,7 @@ async def test_evaluate_skips_registry_when_none():
     assert len(result) == 1
 
 
-async def test_evaluate_all_queries_all_agents():
+async def test_evaluate_all_queries_all_agents() -> None:
     """evaluate_all calls evaluate for every agent returned by get_all_agent_ids."""
     stats = [_stat("rag", 0.85, 8)]
     db = _make_db(stats=stats, agent_ids=["a1", "a2", "a3"])
@@ -80,7 +80,7 @@ async def test_evaluate_all_queries_all_agents():
     assert set(result.keys()) == {"a1", "a2", "a3"}
 
 
-async def test_empty_stats_returns_empty_list():
+async def test_empty_stats_returns_empty_list() -> None:
     """An agent with no task history yields an empty specialization list."""
     tracker = AgentEvolutionTracker(db=_make_db(stats=[]))
 

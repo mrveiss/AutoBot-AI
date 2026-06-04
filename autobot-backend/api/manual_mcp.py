@@ -13,8 +13,7 @@ Issue #3287: Complete MCP manual integration.
 
 import asyncio
 import json
-import logging
-from typing import List, Optional
+from typing import List
 
 from fastapi import APIRouter, Depends
 
@@ -24,12 +23,14 @@ from api.schemas_code import (
     ManualMCPToolItem,
 )
 from api.schemas_common import DataResponse
+from api.schemas_workflows import ManPageLookupData, ManPageSearchData
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 from services.man_page_parser import ManPageContent, get_man_page_content
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 router = APIRouter(tags=["manual_mcp", "mcp"])
 
 # Cache TTL for man page results (seconds). Man pages are static; 24 h is safe.
@@ -72,7 +73,7 @@ def _serialize_man_page(content: ManPageContent, cached: bool) -> dict:
     }
 
 
-async def _get_cached_man_page(command: str, section: str) -> Optional[dict]:
+async def _get_cached_man_page(command: str, section: str) -> dict | None:
     """Return cached man page dict from Redis, or None on miss/error."""
     key = _cache_key(command, section)
     try:
@@ -308,7 +309,7 @@ async def get_manual_mcp_tools(
     ]
 
 
-@router.post("/mcp/lookup_man_page", response_model=DataResponse)
+@router.post("/mcp/lookup_man_page", response_model=DataResponse[ManPageLookupData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="mcp_lookup_man_page",
@@ -348,7 +349,7 @@ async def mcp_lookup_man_page(
         }
 
 
-@router.post("/mcp/search_man_pages", response_model=DataResponse)
+@router.post("/mcp/search_man_pages", response_model=DataResponse[ManPageSearchData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="mcp_search_man_pages",
@@ -384,7 +385,7 @@ async def mcp_search_man_pages(
         }
 
 
-@router.post("/mcp/get_doc_index", response_model=DataResponse)
+@router.post("/mcp/get_doc_index", response_model=DataResponse[ManPageSearchData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="mcp_get_doc_index",

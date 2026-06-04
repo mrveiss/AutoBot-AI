@@ -10,12 +10,15 @@ Issue #2092: Added Q-learning RL router between pattern-match and LLM fallback.
 """
 
 import json
-import logging
+import os
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import LLMDefaults
 
+from .topology import AgentTopology, InMemoryTopologyDB
+from .topology_routing import TopologyAwareRouter
 from .types import (
     AUDIO_PROCESSING_PATTERNS,
     CODE_GENERATION_PATTERNS,
@@ -32,7 +35,7 @@ from .types import (
     AgentType,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class AgentRouter:
@@ -59,10 +62,18 @@ class AgentRouter:
         # Issue #2092: Q-learning RL router (lazy-initialised on first use).
         self._rl_router = None
         self.rl_routing_enabled: bool = True
+        # Issue #6821: topology-aware router (lazy-initialised on first use).
+        # Gated by env var TOPOLOGY_ROUTING_ENABLED (default: False).
+        self._topology_router: TopologyAwareRouter | None = None
+        self.topology_routing_enabled: bool = os.environ.get("TOPOLOGY_ROUTING_ENABLED", "false").lower() in {
+            "1",
+            "true",
+            "yes",
+        }
 
     async def _check_learned_strategy(
-        self, request: str, context: Optional[Dict[str, Any]] = None
-    ) -> Optional[Dict[str, Any]]:
+        self, request: str, context: Dict[str, Any] | None = None
+    ) -> Dict[str, Any] | None:
         """Query TaskPatternLearner for a learned strategy (#2105).
 
         Checks Redis for a previously learned strategy matching the
@@ -125,11 +136,18 @@ class AgentRouter:
             self._rl_router = RLRouter()
         return self._rl_router
 
+    def _get_topology_router(self) -> TopologyAwareRouter:
+        """Lazily initialise and return the TopologyAwareRouter singleton (Issue #6821)."""
+        if self._topology_router is None:
+            topology = AgentTopology(db=InMemoryTopologyDB())
+            self._topology_router = TopologyAwareRouter(topology=topology, base_router=self)
+        return self._topology_router
+
     def _available_agent_ids(self) -> List[str]:
         """Return all known AgentType values as string IDs."""
         return [at.value for at in self.agent_capabilities]
 
-    async def _check_rl_routing(self, request: str) -> Optional[Dict[str, Any]]:
+    async def _check_rl_routing(self, request: str) -> Dict[str, Any] | None:
         """Attempt Q-learning based routing for *request* (Issue #2092).
 
         Returns a routing result dict when the RL router's confidence exceeds
@@ -165,6 +183,61 @@ class AgentRouter:
             logger.warning("RL routing error: %s", exc)
             return None
 
+    async def _maybe_augment_with_topology(
+        self,
+        request: str,
+        context: Dict[str, Any] | None,
+        routing_decision: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """Optionally augment *routing_decision* with topology collaborators.
+
+        Issue #6821: When ``TOPOLOGY_ROUTING_ENABLED`` is set and the routing
+        decision indicates a complex/multi-hop/multi-step task, consults
+        ``TopologyAwareRouter`` to add historically effective collaborator
+        agents to the result.
+
+        Args:
+            request: The original user request.
+            context: Optional routing context dict.
+            routing_decision: The primary routing decision to augment.
+
+        Returns:
+            The (possibly augmented) routing decision dict.
+        """
+        if not self.topology_routing_enabled:
+            return routing_decision
+
+        primary_agent = routing_decision.get("primary_agent")
+        if primary_agent is None:
+            return routing_decision
+
+        primary_agent_id = primary_agent.value if hasattr(primary_agent, "value") else str(primary_agent)
+        topo_context = dict(context or {})
+        # Derive complexity from the routing strategy when not set in context.
+        if "complexity" not in topo_context:
+            strategy = routing_decision.get("strategy", "single_agent")
+            topo_context["complexity"] = "complex" if strategy != "single_agent" else "simple"
+
+        try:
+            topo_router = self._get_topology_router()
+            topo_result = await topo_router.route_with_collaborators(
+                request=request,
+                context=topo_context,
+                primary_agent_id=primary_agent_id,
+            )
+            if topo_result.get("topology_consulted"):
+                routing_decision["topology_collaborators"] = topo_result.get("collaborators", [])
+                routing_decision["topology_pattern"] = topo_result.get("pattern")
+                logger.info(
+                    "Topology augmentation: primary=%s collaborators=%s",
+                    primary_agent_id,
+                    routing_decision["topology_collaborators"],
+                )
+        except Exception as exc:
+            logger.warning("Topology augmentation failed: %s", exc)
+
+        return routing_decision
+
     def _resolve_agent_type(self, approach: str) -> AgentType:
         """Map a learned approach string to an AgentType enum (#2105)."""
         try:
@@ -179,7 +252,7 @@ class AgentRouter:
     async def determine_routing(
         self,
         request: str,
-        context: Optional[Dict[str, Any]] = None,
+        context: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
         """
         Determine the optimal routing strategy for the request.
@@ -228,6 +301,9 @@ class AgentRouter:
             # Parse routing decision
             routing_decision = self._parse_routing_response(response)
 
+            # Issue #6821: augment with topology collaborators when enabled.
+            routing_decision = await self._maybe_augment_with_topology(request, context, routing_decision)
+
             return routing_decision
 
         except Exception as e:
@@ -235,7 +311,7 @@ class AgentRouter:
             # Fallback to simple routing
             return self.quick_route_analysis(request)
 
-    def _check_chat_patterns(self, request_lower: str) -> Optional[Dict[str, Any]]:
+    def _check_chat_patterns(self, request_lower: str) -> Dict[str, Any] | None:
         """Check for greeting/chat patterns in request. Issue #620.
 
         Args:
@@ -253,7 +329,7 @@ class AgentRouter:
             }
         return None
 
-    def _check_system_command_patterns(self, request_lower: str) -> Optional[Dict[str, Any]]:
+    def _check_system_command_patterns(self, request_lower: str) -> Dict[str, Any] | None:
         """Check for system command patterns in request. Issue #620.
 
         Args:
@@ -271,7 +347,7 @@ class AgentRouter:
             }
         return None
 
-    def _check_research_patterns(self, request_lower: str) -> Optional[Dict[str, Any]]:
+    def _check_research_patterns(self, request_lower: str) -> Dict[str, Any] | None:
         """Check for research patterns in request. Issue #620.
 
         Args:
@@ -290,7 +366,7 @@ class AgentRouter:
             }
         return None
 
-    def _check_knowledge_patterns(self, request_lower: str) -> Optional[Dict[str, Any]]:
+    def _check_knowledge_patterns(self, request_lower: str) -> Dict[str, Any] | None:
         """Check for knowledge/RAG patterns in request. Issue #620.
 
         Args:
@@ -332,7 +408,7 @@ class AgentRouter:
             "reasoning": "Complex request requiring orchestrator analysis",
         }
 
-    def _check_specialized_agent_patterns(self, request_lower: str) -> Optional[Dict[str, Any]]:
+    def _check_specialized_agent_patterns(self, request_lower: str) -> Dict[str, Any] | None:
         """Check for specialized agent patterns (Issue #60)."""
         pattern_agent_map = [
             (DATA_ANALYSIS_PATTERNS, AgentType.DATA_ANALYSIS, "Data analysis pattern"),
@@ -425,14 +501,14 @@ class AgentRouter:
 
         return "\n".join(info_parts)
 
-    def _try_extract_message_content(self, response: dict) -> Optional[str]:
+    def _try_extract_message_content(self, response: dict) -> str | None:
         """Try to extract content from message dict (Issue #334 - extracted helper)."""
         if "message" not in response or not isinstance(response["message"], dict):
             return None
         content = response["message"].get("content")
         return content.strip() if content else None
 
-    def _try_extract_choices_content(self, response: dict) -> Optional[str]:
+    def _try_extract_choices_content(self, response: dict) -> str | None:
         """Try to extract content from choices list (Issue #334 - extracted helper)."""
         if "choices" not in response or not isinstance(response["choices"], list):
             return None

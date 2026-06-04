@@ -8,10 +8,11 @@ Issue #381: Extracted from search.py god class refactoring.
 Contains tag-based filtering functionality.
 """
 
-import logging
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Set
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 
 
 class TagFilter:
@@ -85,7 +86,7 @@ class TagFilter:
 
     async def get_tag_filtered_ids(
         self,
-        tags: Optional[List[str]],
+        tags: List[str] | None,
         tags_match_any: bool,
         processed_query: str,
     ) -> tuple:
@@ -113,7 +114,7 @@ class TagFilter:
         return None, None
 
     def apply_tag_filter(
-        self, results: List[Dict[str, Any]], tag_filtered_ids: Optional[Set[str]]
+        self, results: List[Dict[str, Any]], tag_filtered_ids: Set[str] | None
     ) -> List[Dict[str, Any]]:
         """Apply tag filtering to results."""
         if tag_filtered_ids is None:

@@ -42,16 +42,16 @@ API contract::
     }
 """
 
-import logging
 from datetime import datetime, timezone
-from typing import Literal, Optional
+from typing import Literal
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+from autobot_shared.logging_manager import get_logger
 from web_fetch import FetchResult, RenderMode, WebFetcher
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter()
 
@@ -76,8 +76,8 @@ class ScrapeResponse(BaseModel):
     """Success response for POST /knowledge/scrape."""
 
     url: str
-    markdown: Optional[str] = None
-    html: Optional[str] = None
+    markdown: str | None = None
+    html: str | None = None
     metadata: ScrapeMetadata
     indexed: bool
 

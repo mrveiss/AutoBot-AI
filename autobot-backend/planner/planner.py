@@ -9,12 +9,12 @@ Integrates with Event Stream for visibility into planning process.
 """
 
 import json
-import logging
 import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc, utc_timestamp
 from constants.threshold_constants import (
     BatchConfig,
@@ -25,7 +25,7 @@ from constants.threshold_constants import (
 from events.types import create_plan_event
 from planner.types import ExecutionPlan, PlanStatus, PlanStep, StepStatus
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # =============================================================================
@@ -61,7 +61,7 @@ class PlannerModule(ABC):
     async def create_plan(
         self,
         task_description: str,
-        context: Optional[dict] = None,
+        context: dict | None = None,
     ) -> ExecutionPlan:
         """Create a new execution plan for a task"""
 
@@ -87,8 +87,8 @@ class PlannerModule(ABC):
         self,
         plan_id: str,
         step_id: str,
-        reflection: Optional[str] = None,
-        tools_used: Optional[list[str]] = None,
+        reflection: str | None = None,
+        tools_used: list[str] | None = None,
     ) -> PlanStep:
         """Mark a step as completed with optional reflection"""
 
@@ -98,16 +98,16 @@ class PlannerModule(ABC):
         plan_id: str,
         step_id: str,
         error: str,
-        reflection: Optional[str] = None,
+        reflection: str | None = None,
     ) -> PlanStep:
         """Mark a step as failed"""
 
     @abstractmethod
-    async def get_plan(self, plan_id: str) -> Optional[ExecutionPlan]:
+    async def get_plan(self, plan_id: str) -> ExecutionPlan | None:
         """Get a plan by ID"""
 
     @abstractmethod
-    async def get_current_step(self, plan_id: str) -> Optional[PlanStep]:
+    async def get_current_step(self, plan_id: str) -> PlanStep | None:
         """Get the currently executing step"""
 
 
@@ -170,8 +170,8 @@ Output ONLY valid JSON in this format:
         self,
         llm_client: Any,
         event_stream: Any,
-        redis_client: Optional[Any] = None,
-        config: Optional[PlannerConfig] = None,
+        redis_client: Any | None = None,
+        config: PlannerConfig | None = None,
     ):
         self.llm = llm_client
         self.event_stream = event_stream
@@ -233,8 +233,8 @@ Output ONLY valid JSON in this format:
         self,
         plan: ExecutionPlan,
         is_update: bool,
-        changes_made: Optional[list[str]] = None,
-        reflection: Optional[str] = None,
+        changes_made: list[str] | None = None,
+        reflection: str | None = None,
     ) -> None:
         """
         Publish a plan event to the event stream. Issue #620.
@@ -324,7 +324,7 @@ Output ONLY valid JSON in this format:
     async def create_plan(
         self,
         task_description: str,
-        context: Optional[dict] = None,
+        context: dict | None = None,
     ) -> ExecutionPlan:
         """
         Create a new execution plan using LLM. Issue #620.
@@ -405,8 +405,8 @@ Output ONLY valid JSON in this format:
         self,
         plan_id: str,
         step_id: str,
-        reflection: Optional[str] = None,
-        tools_used: Optional[list[str]] = None,
+        reflection: str | None = None,
+        tools_used: list[str] | None = None,
     ) -> PlanStep:
         """
         Mark a step as completed. Issue #620.
@@ -445,8 +445,8 @@ Output ONLY valid JSON in this format:
     def _finalize_step_completion(
         self,
         step: PlanStep,
-        reflection: Optional[str] = None,
-        tools_used: Optional[list[str]] = None,
+        reflection: str | None = None,
+        tools_used: list[str] | None = None,
     ) -> None:
         """
         Finalize step completion by setting status and calculating duration. Issue #620.
@@ -484,7 +484,7 @@ Output ONLY valid JSON in this format:
         plan_id: str,
         step_id: str,
         error: str,
-        reflection: Optional[str] = None,
+        reflection: str | None = None,
     ) -> PlanStep:
         """
         Mark a step as failed. Issue #620.
@@ -519,7 +519,7 @@ Output ONLY valid JSON in this format:
         plan: ExecutionPlan,
         step: PlanStep,
         error: str,
-        reflection: Optional[str] = None,
+        reflection: str | None = None,
     ) -> None:
         """
         Finalize step failure and block dependent steps. Issue #620.
@@ -663,7 +663,7 @@ Output ONLY valid JSON in this format:
         for i, step in enumerate(plan.steps):
             step.step_number = i + 1
 
-    async def get_plan(self, plan_id: str) -> Optional[ExecutionPlan]:
+    async def get_plan(self, plan_id: str) -> ExecutionPlan | None:
         """Get plan from cache or Redis"""
         # Check in-memory cache first
         if plan_id in self._plans:
@@ -685,7 +685,7 @@ Output ONLY valid JSON in this format:
 
         return None
 
-    async def get_current_step(self, plan_id: str) -> Optional[PlanStep]:
+    async def get_current_step(self, plan_id: str) -> PlanStep | None:
         """Get currently executing step"""
         plan = await self.get_plan(plan_id)
         return plan.get_current_step() if plan else None
@@ -759,7 +759,7 @@ class InMemoryPlannerModule(PlannerModule):
     async def create_plan(
         self,
         task_description: str,
-        context: Optional[dict] = None,
+        context: dict | None = None,
     ) -> ExecutionPlan:
         """Create a simple 2-step plan"""
         plan = ExecutionPlan(
@@ -821,8 +821,8 @@ class InMemoryPlannerModule(PlannerModule):
         self,
         plan_id: str,
         step_id: str,
-        reflection: Optional[str] = None,
-        tools_used: Optional[list[str]] = None,
+        reflection: str | None = None,
+        tools_used: list[str] | None = None,
     ) -> PlanStep:
         """Mark step as completed"""
         plan = self._plans.get(plan_id)
@@ -849,7 +849,7 @@ class InMemoryPlannerModule(PlannerModule):
         plan_id: str,
         step_id: str,
         error: str,
-        reflection: Optional[str] = None,
+        reflection: str | None = None,
     ) -> PlanStep:
         """Mark step as failed"""
         plan = self._plans.get(plan_id)
@@ -866,11 +866,11 @@ class InMemoryPlannerModule(PlannerModule):
         plan.update_metrics()
         return step
 
-    async def get_plan(self, plan_id: str) -> Optional[ExecutionPlan]:
+    async def get_plan(self, plan_id: str) -> ExecutionPlan | None:
         """Get plan by ID"""
         return self._plans.get(plan_id)
 
-    async def get_current_step(self, plan_id: str) -> Optional[PlanStep]:
+    async def get_current_step(self, plan_id: str) -> PlanStep | None:
         """Get current step"""
         plan = self._plans.get(plan_id)
         return plan.get_current_step() if plan else None

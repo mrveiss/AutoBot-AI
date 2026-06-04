@@ -39,6 +39,16 @@ export interface UsePollingJobOptions<T> {
   onDone?: (data: T) => void
   /** Return true to stop polling (terminal state reached). Default: never complete. */
   isComplete?: (data: T) => boolean
+  /**
+   * Stop polling after N consecutive errors (independent of `maxAttempts`).
+   * Resets to 0 on any successful poll tick.
+   *
+   * Use for endpoints that 404 repeatedly — these would otherwise spam the
+   * console forever when backend routes are missing.  Default: unlimited.
+   *
+   * #6765: circuit-breaker for mass-404 endpoints.
+   */
+  consecutiveErrorLimit?: number
 }
 
 export interface UsePollingJobReturn<T> {
@@ -62,7 +72,8 @@ export function usePollingJob<T>(
   const {
     maxAttempts = 60,
     onDone,
-    isComplete
+    isComplete,
+    consecutiveErrorLimit
   } = options
 
   const isPolling = ref(false)
@@ -72,6 +83,7 @@ export function usePollingJob<T>(
 
   let timer: ReturnType<typeof setInterval> | null = null
   let currentTaskId: string | null = null
+  let consecutiveErrors = 0
 
   function stop(): void {
     if (timer !== null) {
@@ -90,6 +102,7 @@ export function usePollingJob<T>(
     try {
       const result = await fetcher(taskId)
       if (taskId !== currentTaskId) return
+      consecutiveErrors = 0
       data.value = result
       if (isComplete?.(result) ?? false) {
         stop()
@@ -98,8 +111,14 @@ export function usePollingJob<T>(
       }
     } catch (err) {
       if (taskId !== currentTaskId) return
+      consecutiveErrors += 1
       error.value = err instanceof Error ? err : new Error(String(err))
       logger.warn(`polling attempt ${attempts.value} failed: ${error.value.message}`)
+      if (consecutiveErrorLimit !== undefined && consecutiveErrors >= consecutiveErrorLimit) {
+        logger.info(`polling stopped after ${consecutiveErrors} consecutive errors (consecutiveErrorLimit=${consecutiveErrorLimit})`)
+        stop()
+        return
+      }
     }
 
     if (attempts.value >= maxAttempts) {
@@ -112,6 +131,7 @@ export function usePollingJob<T>(
     stop()
     currentTaskId = taskId
     attempts.value = 0
+    consecutiveErrors = 0
     error.value = null
     data.value = null
     isPolling.value = true

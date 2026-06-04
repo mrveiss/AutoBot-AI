@@ -29,15 +29,15 @@ API contract::
     }
 """
 
-import logging
-from typing import List, Optional
+from typing import List
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+from autobot_shared.logging_manager import get_logger
 from web_fetch.site_mapper import SiteMapEntry, SiteMapper, SiteMapResult
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter()
 
@@ -54,7 +54,7 @@ class SiteMapUrlEntry(BaseModel):
     """A single discovered URL in the site-map response."""
 
     url: str
-    title: Optional[str] = None
+    title: str | None = None
     depth: int
 
 

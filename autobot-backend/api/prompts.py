@@ -1,11 +1,17 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
+"""
+Prompt template management endpoints.
+
+Provides CRUD for system prompt templates stored on disk, including
+async file I/O and per-request timing instrumentation.
+"""
+
 import asyncio
-import logging
 import os
 import time
-from typing import Dict, Optional
+from typing import Dict
 
 import aiofiles
 from fastapi import APIRouter, Depends, HTTPException
@@ -18,6 +24,7 @@ from api.schemas_workflows import (
 )
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.path_validator import validate_relative_path
 from constants.ttl_constants import TTL_5_MINUTES
 
@@ -31,10 +38,10 @@ def _validate_prompt_id(prompt_id: str) -> str:
     return prompt_id
 
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Cache for prompts to avoid re-reading files on every request
-_prompts_cache: Optional[Dict] = None
+_prompts_cache: Dict | None = None
 _cache_timestamp: float = 0
 _cache_ttl: int = TTL_5_MINUTES
 

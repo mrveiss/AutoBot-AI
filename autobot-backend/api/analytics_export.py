@@ -18,21 +18,20 @@ import asyncio
 import csv
 import io
 import json
-import logging
 from datetime import timedelta
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import PlainTextResponse, Response
 
 from api.schemas_analytics import ExportFormatsResponse
-from api.schemas_common import DataResponse
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc, utc_timestamp
 from services.agent_analytics import get_agent_analytics
 from services.llm_cost_tracker import get_cost_tracker
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 router = APIRouter(prefix="/export", tags=["analytics", "export"])
 
 
@@ -207,7 +206,7 @@ async def export_usage_csv(
 # ============================================================================
 
 
-@router.get("/json/full", response_model=DataResponse)
+@router.get("/json/full", response_class=Response)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="export_full_json",
@@ -529,7 +528,7 @@ def _get_grafana_panels() -> list:
     return panels
 
 
-@router.get("/grafana-dashboard", response_model=DataResponse)
+@router.get("/grafana-dashboard", response_class=Response)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="export_grafana_dashboard",

@@ -9,13 +9,14 @@ Component must maintain >95% success rate to stay operational.
 When budget exhausted, component enters minimal-feature mode.
 """
 
-import logging
 import time
 from dataclasses import dataclass, field
 from threading import Lock
 from typing import Dict
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -46,16 +47,16 @@ class ErrorBudget:
         """Check if budget window has expired."""
         return (time.time() - self.created_at) > self.budget_window_seconds
 
-    def record_success(self):
+    def record_success(self) -> None:
         """Record successful request."""
         self.total_requests += 1
 
-    def record_failure(self):
+    def record_failure(self) -> None:
         """Record failed request."""
         self.total_requests += 1
         self.failed_requests += 1
 
-    def reset(self):
+    def reset(self) -> None:
         """Reset budget window."""
         self.total_requests = 0
         self.failed_requests = 0
@@ -65,7 +66,7 @@ class ErrorBudget:
 class ErrorBudgetTracker:
     """Tracks error budgets for multiple components."""
 
-    def __init__(self, window_seconds: float = 3600.0):
+    def __init__(self, window_seconds: float = 3600.0) -> None:
         """
         Initialize error budget tracker.
 
@@ -86,7 +87,7 @@ class ErrorBudgetTracker:
                 )
             return self.budgets[component]
 
-    def record_success(self, component: str):
+    def record_success(self, component: str) -> None:
         """Record successful request for component."""
         budget = self.get_budget(component)
         if budget.is_expired:
@@ -94,7 +95,7 @@ class ErrorBudgetTracker:
         with self._lock:
             budget.record_success()
 
-    def record_failure(self, component: str):
+    def record_failure(self, component: str) -> None:
         """Record failed request for component."""
         budget = self.get_budget(component)
         if budget.is_expired:
@@ -131,7 +132,7 @@ class ErrorBudgetTracker:
                 for component, budget in self.budgets.items()
             }
 
-    def reset_budget(self, component: str):
+    def reset_budget(self, component: str) -> None:
         """Reset error budget for component."""
         budget = self.get_budget(component)
         with self._lock:

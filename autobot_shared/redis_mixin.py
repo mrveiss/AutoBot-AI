@@ -21,7 +21,7 @@ Usage::
 """
 
 import asyncio
-from typing import Any, Optional, Union
+from typing import Any
 
 from autobot_shared.redis_client import get_async_redis_client
 
@@ -34,10 +34,10 @@ class AsyncRedisClientMixin:
     for the lifetime of the instance.
     """
 
-    _redis_database: Union[str, Any] = "main"
-    _redis: Optional[Any] = None
+    _redis_database: str | Any = "main"
+    _redis: Any | None = None
 
-    async def _get_redis(self) -> Optional[Any]:
+    async def _get_redis(self) -> Any | None:
         if self._redis is None:
             self._redis = await get_async_redis_client(database=self._redis_database)
         return self._redis
@@ -50,9 +50,9 @@ class AsyncRedisClientLockedMixin(AsyncRedisClientMixin):
     Redis connection — avoids creating duplicate clients under load.
     """
 
-    _redis_lock: Optional[asyncio.Lock] = None
+    _redis_lock: asyncio.Lock | None = None
 
-    async def _get_redis(self) -> Optional[Any]:
+    async def _get_redis(self) -> Any | None:
         if self._redis is None:
             if self._redis_lock is None:
                 self._redis_lock = asyncio.Lock()

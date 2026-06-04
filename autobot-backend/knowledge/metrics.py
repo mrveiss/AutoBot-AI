@@ -36,9 +36,9 @@ Follows the pattern established by ``knowledge/query_sanitizer.py`` (#5064).
 
 from __future__ import annotations
 
-import logging
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class _NoopCounter:

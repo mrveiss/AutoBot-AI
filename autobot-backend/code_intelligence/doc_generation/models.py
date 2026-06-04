@@ -13,7 +13,7 @@ Extracted from doc_generator.py as part of Issue #381 refactoring.
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Dict, FrozenSet, List, Optional, Tuple
+from typing import Any, Dict, FrozenSet, List, Tuple
 
 from code_intelligence.doc_generation.types import (
     DiagramType,
@@ -39,10 +39,10 @@ class FunctionDoc:
     name: str
     element_type: ElementType
     signature: str
-    docstring: Optional[str] = None
-    description: Optional[str] = None
+    docstring: str | None = None
+    description: str | None = None
     parameters: List[ParameterDoc] = field(default_factory=list)
-    returns: Optional[ReturnDoc] = None
+    returns: ReturnDoc | None = None
     exceptions: List[ExceptionDoc] = field(default_factory=list)
     examples: List[ExampleDoc] = field(default_factory=list)
     decorators: List[str] = field(default_factory=list)
@@ -126,8 +126,8 @@ class ClassDoc:
     """Complete documentation for a class."""
 
     name: str
-    docstring: Optional[str] = None
-    description: Optional[str] = None
+    docstring: str | None = None
+    description: str | None = None
     base_classes: List[str] = field(default_factory=list)
     methods: List[FunctionDoc] = field(default_factory=list)
     properties: List[FunctionDoc] = field(default_factory=list)
@@ -253,8 +253,8 @@ class ModuleDoc:
 
     name: str
     file_path: str
-    docstring: Optional[str] = None
-    description: Optional[str] = None
+    docstring: str | None = None
+    description: str | None = None
     classes: List[ClassDoc] = field(default_factory=list)
     functions: List[FunctionDoc] = field(default_factory=list)
     constants: Dict[str, str] = field(default_factory=dict)
@@ -357,11 +357,11 @@ class PackageDoc:
     path: str
     modules: List[ModuleDoc] = field(default_factory=list)
     subpackages: List["PackageDoc"] = field(default_factory=list)
-    readme_content: Optional[str] = None
-    init_docstring: Optional[str] = None
-    version: Optional[str] = None
-    author: Optional[str] = None
-    description: Optional[str] = None
+    readme_content: str | None = None
+    init_docstring: str | None = None
+    version: str | None = None
+    author: str | None = None
+    description: str | None = None
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""

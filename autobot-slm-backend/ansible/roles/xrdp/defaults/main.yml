@@ -1,0 +1,22 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# xrdp Role - Default variables (GH#1525)
+---
+# RDP server settings
+xrdp_port: 3389
+xrdp_max_bpp: 32
+xrdp_crypt_level: high
+xrdp_service_name: xrdp
+
+# xrdp.ini tuning
+xrdp_tcp_nodelay: "true"
+xrdp_tcp_keepalive: "true"
+xrdp_bitmap_compression: "true"
+
+# SLM credential auto-registration (mirrors vnc role pattern, #2926)
+xrdp_register_credentials: true
+slm_api_url: "https://{{ slm_host | default('127.0.0.1') }}"
+slm_admin_user: "admin"
+slm_admin_password: "{{ lookup('env', 'SLM_ADMIN_PASSWORD') | default('admin', true) }}"

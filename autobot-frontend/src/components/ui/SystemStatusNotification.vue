@@ -216,7 +216,7 @@ const props = withDefaults(defineProps<SystemStatusNotificationProps>(), {
   message: '',
   allowDismiss: true, // Always dismissible now
   showDetails: false,
-  autoHide: 10000 // Auto-hide after 10 seconds by default
+  autoHide: 0 // 0 = use canonical severity-based durations
 })
 
 const emit = defineEmits<{
@@ -279,17 +279,26 @@ const clearAutoHide = () => {
   }
 }
 
+const TOAST_AUTO_HIDE: Record<string, number> = {
+  error: 0,      // persistent — system errors require explicit dismissal
+  warning: 6000, // canonical
+  info: 4000,    // canonical
+  success: 4000, // canonical
+}
+
 const setupAutoHide = () => {
-  // Auto-hide based on severity (always auto-hide to prevent intrusive behavior)
+  const canonical = TOAST_AUTO_HIDE[notificationData.value.severity] ?? 4000
   const hideDelay = notificationData.value.autoHide > 0
     ? notificationData.value.autoHide
-    : (notificationData.value.severity === 'error' ? 12000 : 8000)
+    : canonical
 
   clearAutoHide()
-  autoHideTimer.value = setTimeout(() => {
-    showNotification.value = false
-    emit('expired')
-  }, hideDelay)
+  if (hideDelay > 0) {
+    autoHideTimer.value = setTimeout(() => {
+      showNotification.value = false
+      emit('expired')
+    }, hideDelay)
+  }
 }
 
 const dismissNotification = () => {

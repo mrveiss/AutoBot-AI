@@ -8,11 +8,13 @@ Orchestrates Redis replication with Ansible and provides data sync verification.
 Issue #726 Phase 4: Redis replication orchestration
 """
 
+from __future__ import annotations
+
 import asyncio
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, Optional, Tuple
+from typing import Dict, Tuple
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -36,7 +38,7 @@ class ReplicationService:
         replication_id: str,
         source_node: Node,
         target_node: Node,
-    ) -> Optional["Replication"]:
+    ) -> "Replication" | None:
         """Log the replication attempt and load the DB record.
 
         Helper for setup_replication. Ref: #1088.
@@ -107,7 +109,7 @@ class ReplicationService:
             await self._mark_replication_failed(db, replication, str(e)[:500])
             return False, f"Replication setup error: {e}"
 
-    async def _get_replication_record(self, db: AsyncSession, replication_id: str) -> Optional[Replication]:
+    async def _get_replication_record(self, db: AsyncSession, replication_id: str) -> Replication | None:
         """Fetch replication record and update to syncing status.
 
         Helper for setup_replication (Issue #665).
@@ -150,7 +152,7 @@ class ReplicationService:
         source_node: Node,
         target_node: Node,
         redis_password: str,
-    ) -> Optional[Tuple[bool, str]]:
+    ) -> Tuple[bool, str] | None:
         """Configure Ansible replication and verify sync.
 
         Helper for setup_replication (Issue #665).
@@ -347,7 +349,7 @@ class ReplicationService:
         self,
         db: AsyncSession,
         replication_id: str,
-    ) -> Optional[Dict]:
+    ) -> Dict | None:
         """Update lag info for a replication."""
         result = await db.execute(select(Replication).where(Replication.replication_id == replication_id))
         replication = result.scalar_one_or_none()

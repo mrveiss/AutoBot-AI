@@ -8,9 +8,11 @@ import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from autobot_shared.logging_manager import get_logger
+
 # Set up minimal logging
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 app = FastAPI()
 
@@ -63,4 +65,9 @@ if __name__ == "__main__":
     import uvicorn
 
     logger.info("Starting minimal backend...")
-    uvicorn.run(app, host="0.0.0.0", port=8001, log_level="info")
+    uvicorn.run(
+        app,
+        host="0.0.0.0",
+        port=8001,
+        log_level="info",  # nosec B104 - intentional bind to all interfaces for service/test
+    )

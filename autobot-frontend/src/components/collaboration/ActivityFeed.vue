@@ -8,6 +8,7 @@
  * Shows terminal commands, file operations, browser actions, etc.
  */
 
+import Icon from '@/components/ui/Icon.vue'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useSessionCollaboration, type CollaboratorActivity } from '@/composables/useSessionCollaboration'
@@ -121,7 +122,7 @@ const onlineCount = computed(() => {
             class="mt-1"
           >
             <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-yellow-500/20 text-yellow-400">
-              <i class="fas fa-key mr-1" />
+              <Icon name="key" class="mr-1" />
               {{ $t('collaboration.activityFeed.secretsCount', { count: activity.activity.secretsUsed.length }) }}
             </span>
           </div>
@@ -133,7 +134,7 @@ const onlineCount = computed(() => {
         v-if="visibleActivities.length === 0"
         class="flex flex-col items-center justify-center py-8 text-autobot-text-muted"
       >
-        <i class="fas fa-chart-line text-2xl mb-2" />
+        <Icon name="chart-line" class="text-2xl mb-2" />
         <span class="text-sm">{{ $t('collaboration.activityFeed.noRecentActivity') }}</span>
         <span class="text-xs">{{ $t('collaboration.activityFeed.activitiesWillAppear') }}</span>
       </div>

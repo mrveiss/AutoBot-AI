@@ -2,32 +2,32 @@
   <div class="terminal-container">
     <!-- Terminal Header (matching browser/desktop style) -->
     <div class="terminal-header bg-autobot-bg-secondary border-b border-autobot-border p-2 flex items-center justify-between">
-      <div class="flex items-center space-x-3">
-        <div class="flex space-x-1">
+      <div class="flex items-center gap-3">
+        <div class="flex gap-1">
           <div class="w-3 h-3 bg-red-500 rounded-full"></div>
           <div class="w-3 h-3 bg-yellow-500 rounded-full"></div>
           <div class="w-3 h-3 bg-green-500 rounded-full"></div>
         </div>
-        <div class="flex items-center space-x-2 text-sm">
-          <i class="fas fa-terminal text-green-600"></i>
+        <div class="flex items-center gap-2 text-sm">
+          <Icon name="terminal" class="text-green-600" />
           <span class="font-medium">{{ props.chatSessionId ? $t('terminal.terminal.chatTerminal') : $t('terminal.terminal.systemTerminal') }}</span>
           <span class="text-xs text-autobot-text-muted">{{ props.chatSessionId ? $t('terminal.terminal.chatSession') : $t('terminal.terminal.independentTool') }}</span>
         </div>
       </div>
 
-      <div class="flex items-center space-x-2">
+      <div class="flex items-center gap-2">
         <!-- Terminal Controls -->
-        <div class="flex items-center space-x-1">
-          <button @click="toggleConnection" :class="connectionButtonClass" :disabled="isConnecting" class="terminal-btn" :title="connectionButtonText">
-            <i :class="connectionIconClass"></i>
+        <div class="flex items-center gap-1">
+          <button @click="toggleConnection" :class="connectionButtonClass" :disabled="isConnecting" class="terminal-btn" :title="connectionButtonText" :aria-label="connectionButtonText">
+            <Icon :name="connectionIconClass" />
           </button>
 
-          <button @click="clearTerminal" class="terminal-btn" :title="$t('terminal.terminal.clearTerminal')">
-            <i class="fas fa-trash"></i>
+          <button @click="clearTerminal" class="terminal-btn" :title="$t('terminal.terminal.clearTerminal')" :aria-label="$t('terminal.terminal.clearTerminal')">
+            <Icon name="trash" />
           </button>
 
-          <button @click="copyTerminalOutput" class="terminal-btn" :title="$t('terminal.terminal.copyOutput')">
-            <i class="fas fa-copy"></i>
+          <button @click="copyTerminalOutput" class="terminal-btn" :title="$t('terminal.terminal.copyOutput')" :aria-label="$t('terminal.terminal.copyOutput')">
+            <Icon name="copy" />
           </button>
         </div>
       </div>
@@ -36,7 +36,7 @@
     <!-- Terminal Body (contained design) -->
     <div class="terminal-body">
       <div class="terminal-status" v-if="statusMessage">
-        <i :class="statusIconClass"></i>
+        <Icon :name="statusIconClass" />
         {{ statusMessage }}
       </div>
 
@@ -82,6 +82,7 @@
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import appConfig from '@/config/AppConfig.js'
@@ -188,8 +189,8 @@ const connectionButtonClass = computed(() => ({
 }))
 
 const connectionIconClass = computed(() => {
-  if (isConnecting.value) return 'fas fa-spinner fa-spin'
-  return isConnected.value ? 'fas fa-plug' : 'fas fa-power-off'
+  if (isConnecting.value) return 'spinner'
+  return isConnected.value ? 'plug' : 'power-off'
 })
 
 const connectionButtonText = computed(() => {
@@ -198,9 +199,9 @@ const connectionButtonText = computed(() => {
 })
 
 const statusIconClass = computed(() => {
-  if (isConnecting.value) return 'fas fa-spinner fa-spin text-blue-500'
-  if (isConnected.value) return 'fas fa-check-circle text-green-500'
-  return 'fas fa-exclamation-circle text-red-500'
+  if (isConnecting.value) return 'spinner'
+  if (isConnected.value) return 'check-circle'
+  return 'exclamation-circle'
 })
 
 const statusBarConnectionStatus = computed(() => {

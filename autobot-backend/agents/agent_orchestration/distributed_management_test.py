@@ -2,14 +2,16 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
-Tests for DistributedAgentManager work-stealing logic (Issue #2109) and
-circuit breaker logic (Issue #4694).
+Tests for DistributedAgentManager work-stealing logic (Issue #2109),
+circuit breaker logic (Issue #4694), and Redis state persistence (Issue #6479).
 
-All tests are pure in-memory; no Redis, no actual agents, no network I/O.
+Most tests are pure in-memory; Redis calls are patched to AsyncMock.
+Integration tests for persistence use _patch_persistence() context manager.
 """
 
+from contextlib import asynccontextmanager
 from datetime import timedelta
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -21,6 +23,28 @@ from .types import CircuitState, DistributedAgentInfo
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+
+_PERSISTENCE_MODULE = "agents.agent_orchestration.distributed_management"
+
+
+@asynccontextmanager
+async def _patch_persistence():
+    """Patch all state_persistence async helpers to AsyncMock no-ops.
+
+    Returns a dict of mock objects keyed by function name so callers can
+    inspect call counts / arguments.
+    """
+    mocks = {
+        "persist_task_assigned": AsyncMock(),
+        "persist_task_progress": AsyncMock(),
+        "persist_task_reassignment": AsyncMock(),
+        "delete_task_state": AsyncMock(),
+        "delete_task_timing_state": AsyncMock(),
+        "load_task_state": AsyncMock(return_value=({}, {}, {})),
+    }
+    with patch.multiple(_PERSISTENCE_MODULE, **mocks):
+        yield mocks
 
 
 def _make_manager(
@@ -67,10 +91,17 @@ def _assign_task(
     task_id: str,
     assigned_seconds_ago: float = 0.0,
 ) -> None:
-    """Add a task to an agent and backdating its assignment timestamp."""
-    mgr.add_active_task(agent_id, task_id)
+    """Directly set up task assignment state without going through async methods.
+
+    This is a test-only helper that mutates internal dicts directly so that
+    pure in-memory tests don't need to await or mock Redis.
+    """
+    if agent_id in mgr.distributed_agents:
+        mgr.distributed_agents[agent_id].active_tasks.add(task_id)
+    ts = now_utc()
     if assigned_seconds_ago:
-        mgr._task_assigned_at[task_id] = now_utc() - timedelta(seconds=assigned_seconds_ago)
+        ts = ts - timedelta(seconds=assigned_seconds_ago)
+    mgr._task_assigned_at[task_id] = ts
 
 
 # ---------------------------------------------------------------------------
@@ -110,7 +141,7 @@ class TestIsTaskStale:
         )
         _register_agent(mgr, "a1")
         _assign_task(mgr, "a1", "t1", assigned_seconds_ago=90)
-        mgr.report_task_progress("t1")  # progress just now
+        mgr._task_last_progress["t1"] = now_utc()  # direct mutation — bypass async
         assert mgr._is_task_stale("t1", now_utc()) is False
 
     def test_task_with_old_progress_is_stale(self):
@@ -294,34 +325,41 @@ class TestDetectAndStealStaleTasks:
 
 
 class TestTaskTrackingIntegration:
-    def test_add_active_task_records_assigned_at(self):
-        mgr = _make_manager()
-        _register_agent(mgr, "a1")
-        before = now_utc()
-        mgr.add_active_task("a1", "t1")
-        after = now_utc()
-        assert "t1" in mgr._task_assigned_at
-        assert before <= mgr._task_assigned_at["t1"] <= after
+    @pytest.mark.asyncio
+    async def test_add_active_task_records_assigned_at(self):
+        async with _patch_persistence() as mocks:
+            mgr = _make_manager()
+            _register_agent(mgr, "a1")
+            before = now_utc()
+            await mgr.add_active_task("a1", "t1")
+            after = now_utc()
+            assert "t1" in mgr._task_assigned_at
+            assert before <= mgr._task_assigned_at["t1"] <= after
+            mocks["persist_task_assigned"].assert_awaited_once()
 
-    def test_remove_active_task_clears_all_tracking(self):
-        mgr = _make_manager()
-        _register_agent(mgr, "a1")
-        mgr.add_active_task("a1", "t1")
-        mgr.report_task_progress("t1")
-        mgr._task_reassignment_count["t1"] = 2
-        mgr.remove_active_task("a1", "t1")
-        assert "t1" not in mgr._task_assigned_at
-        assert "t1" not in mgr._task_last_progress
-        assert "t1" not in mgr._task_reassignment_count
+    @pytest.mark.asyncio
+    async def test_remove_active_task_clears_all_tracking(self):
+        async with _patch_persistence():
+            mgr = _make_manager()
+            _register_agent(mgr, "a1")
+            await mgr.add_active_task("a1", "t1")
+            await mgr.report_task_progress("t1")
+            mgr._task_reassignment_count["t1"] = 2
+            await mgr.remove_active_task("a1", "t1")
+            assert "t1" not in mgr._task_assigned_at
+            assert "t1" not in mgr._task_last_progress
+            assert "t1" not in mgr._task_reassignment_count
 
-    def test_report_task_progress_updates_timestamp(self):
-        mgr = _make_manager()
-        _register_agent(mgr, "a1")
-        mgr.add_active_task("a1", "t1")
-        before = now_utc()
-        mgr.report_task_progress("t1")
-        after = now_utc()
-        assert before <= mgr._task_last_progress["t1"] <= after
+    @pytest.mark.asyncio
+    async def test_report_task_progress_updates_timestamp(self):
+        async with _patch_persistence():
+            mgr = _make_manager()
+            _register_agent(mgr, "a1")
+            await mgr.add_active_task("a1", "t1")
+            before = now_utc()
+            await mgr.report_task_progress("t1")
+            after = now_utc()
+            assert before <= mgr._task_last_progress["t1"] <= after
 
 
 # ---------------------------------------------------------------------------
@@ -347,7 +385,7 @@ class TestGetStatisticsWorkStealing:
     def test_task_reassignment_counts_in_agent_stats(self):
         mgr = _make_manager()
         _register_agent(mgr, "a1")
-        mgr.add_active_task("a1", "t1")
+        _assign_task(mgr, "a1", "t1")
         mgr._task_reassignment_count["t1"] = 2
         stats = mgr.get_statistics()
         assert stats["a1"]["task_reassignment_counts"]["t1"] == 2
@@ -524,3 +562,80 @@ class TestCircuitBreakerStatistics:
         stats = mgr.get_statistics()
         assert stats["a1"]["circuit_state"] == "open"
         assert stats["a1"]["circuit_opened_at"] == opened_at.isoformat()
+
+
+# ---------------------------------------------------------------------------
+# Redis persistence — Issue #6479
+# ---------------------------------------------------------------------------
+
+
+class TestRedisPersistence:
+    """Verify that task-assignment state is written to Redis and rehydrated on restart."""
+
+    @pytest.mark.asyncio
+    async def test_add_active_task_persists_to_redis(self):
+        async with _patch_persistence() as mocks:
+            mgr = _make_manager()
+            _register_agent(mgr, "a1")
+            await mgr.add_active_task("a1", "t1")
+            mocks["persist_task_assigned"].assert_awaited_once_with(
+                mgr._deployment_id, "t1", mgr._task_assigned_at["t1"]
+            )
+
+    @pytest.mark.asyncio
+    async def test_remove_active_task_deletes_redis_state(self):
+        async with _patch_persistence() as mocks:
+            mgr = _make_manager()
+            _register_agent(mgr, "a1")
+            await mgr.add_active_task("a1", "t1")
+            await mgr.remove_active_task("a1", "t1")
+            mocks["delete_task_state"].assert_awaited_with(mgr._deployment_id, "t1")
+
+    @pytest.mark.asyncio
+    async def test_report_task_progress_persists_to_redis(self):
+        async with _patch_persistence() as mocks:
+            mgr = _make_manager()
+            _register_agent(mgr, "a1")
+            await mgr.add_active_task("a1", "t1")
+            await mgr.report_task_progress("t1")
+            mocks["persist_task_progress"].assert_awaited_with(mgr._deployment_id, "t1", mgr._task_last_progress["t1"])
+
+    @pytest.mark.asyncio
+    async def test_rehydrate_restores_assigned_at_from_redis(self):
+        """Grace period must continue from original assignment after restart."""
+        original_assigned_at = now_utc() - timedelta(seconds=250)
+
+        async def _load_state(dep_id: str):
+            return ({"task-x": original_assigned_at}, {}, {})
+
+        with patch(f"{_PERSISTENCE_MODULE}.load_task_state", side_effect=_load_state):
+            with patch.multiple(
+                _PERSISTENCE_MODULE,
+                persist_task_assigned=AsyncMock(),
+                persist_task_progress=AsyncMock(),
+                persist_task_reassignment=AsyncMock(),
+                delete_task_state=AsyncMock(),
+                delete_task_timing_state=AsyncMock(),
+            ):
+                mgr = _make_manager(stale_task_timeout_seconds=200, grace_period_seconds=60)
+                await mgr._rehydrate_from_redis()
+
+        assert "task-x" in mgr._task_assigned_at
+        assert mgr._task_assigned_at["task-x"] == original_assigned_at
+        # Task was assigned 250s ago; grace=60s; timeout=200s → stale
+        assert mgr._is_task_stale("task-x", now_utc()) is True
+
+    @pytest.mark.asyncio
+    async def test_reassign_task_persists_count_clears_timing(self):
+        """_reassign_task must update the count and clear only timing entries in Redis."""
+        async with _patch_persistence() as mocks:
+            mgr = _make_manager()
+            _register_agent(mgr, "a1")
+            _assign_task(mgr, "a1", "t1", assigned_seconds_ago=400)
+            await mgr._reassign_task("a1", "t1")
+            # Count should be persisted
+            mocks["persist_task_reassignment"].assert_awaited()
+            # Only timing state (not full state) deleted
+            mocks["delete_task_timing_state"].assert_awaited_with(mgr._deployment_id, "t1")
+            # Full delete_task_state should NOT be called on reassign (count survives)
+            mocks["delete_task_state"].assert_not_awaited()

@@ -5,7 +5,7 @@
 Memory Manager Protocols - Interface Segregation Principle
 """
 
-from typing import Any, Dict, List, Optional, Protocol, Union
+from typing import Any, Dict, List, Protocol
 
 from .enums import MemoryCategory
 from .models import MemoryEntry, TaskExecutionRecord
@@ -27,7 +27,7 @@ class ITaskStorage(Protocol):
         """Update task fields"""
         ...
 
-    async def get_task(self, task_id: str) -> Optional[TaskExecutionRecord]:
+    async def get_task(self, task_id: str) -> TaskExecutionRecord | None:
         """Retrieve single task by ID"""
         ...
 
@@ -52,7 +52,7 @@ class IGeneralStorage(Protocol):
         """Store a memory entry"""
         ...
 
-    async def retrieve(self, category: Union[MemoryCategory, str], filters: Dict[str, Any]) -> List[MemoryEntry]:
+    async def retrieve(self, category: MemoryCategory | str, filters: Dict[str, Any]) -> List[MemoryEntry]:
         """Retrieve memories by category and filters"""
         ...
 
@@ -76,7 +76,7 @@ class ICacheManager(Protocol):
     Implementing classes must provide LRU caching with statistics.
     """
 
-    def get(self, key: str) -> Optional[Any]:
+    def get(self, key: str) -> Any | None:
         """Get item from cache"""
         ...
 

@@ -11,13 +11,13 @@ Consolidated from legacy auth.py and slm_auth.py in Issue #1922.
 
 import logging
 from datetime import timedelta
-from typing import Union
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
 
 from api.security import create_audit_log
+from autobot_shared.auth.permissions import Permission
 from autobot_shared.proxy_utils import get_client_ip
 from config import settings
 from models.schemas import (
@@ -27,7 +27,7 @@ from models.schemas import (
     UserCreate,
     UserResponse,
 )
-from services.auth import auth_service, get_current_user, get_slm_db, require_admin
+from services.auth import auth_service, get_current_user, get_slm_db, require_permission
 from services.database import get_db
 from user_management.models.user import User
 from user_management.services import TenantContext, UserService
@@ -61,14 +61,14 @@ def _create_mfa_challenge(user: User) -> MfaChallengeResponse:
 
 @router.post(
     "/login",
-    response_model=Union[TokenResponse, MfaChallengeResponse],
+    response_model=TokenResponse | MfaChallengeResponse,
 )
 async def login(
     http_request: Request,
     body: TokenRequest,
     db: Annotated[AsyncSession, Depends(get_slm_db)],
     audit_db: Annotated[AsyncSession, Depends(get_db)],
-) -> Union[TokenResponse, MfaChallengeResponse]:
+) -> TokenResponse | MfaChallengeResponse:
     """Authenticate and get access token.
 
     Accepts username or email. Returns JWT token or MFA challenge.
@@ -146,7 +146,7 @@ async def login(
 async def create_user(
     user_data: UserCreate,
     db: Annotated[AsyncSession, Depends(get_slm_db)],
-    _: Annotated[dict, Depends(require_admin)],
+    _: Annotated[dict, Depends(require_permission(Permission.ADMIN_USERS_WRITE))],
 ) -> UserResponse:
     """Create a new user (admin only)."""
     return await auth_service.create_user(db, user_data)

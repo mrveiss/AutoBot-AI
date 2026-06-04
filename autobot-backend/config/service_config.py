@@ -6,7 +6,7 @@
 Service, host, port, and URL configuration management.
 """
 
-import logging
+import logging  # stdlib: avoids deadlock — config is on the logging-manager init path (GH#7765 pattern)
 import os
 from typing import Any, Dict
 from urllib.parse import urlparse
@@ -82,7 +82,7 @@ class ServiceConfigMixin:
         """
         # 1. Try environment variable first (highest priority)
         env_key = f"AUTOBOT_{service.upper()}_HOST"
-        env_host = os.getenv(env_key)
+        env_host = os.getenv(env_key)  # ssot-config-exempt: dynamic service-name env lookup
         if env_host:
             return env_host
 
@@ -114,7 +114,7 @@ class ServiceConfigMixin:
         """
         # 1. Try environment variable first (highest priority)
         env_key = f"AUTOBOT_{service.upper()}_PORT"
-        env_port = os.getenv(env_key)
+        env_port = os.getenv(env_key)  # ssot-config-exempt: dynamic service-name env lookup
         if env_port:
             return int(env_port)
 
@@ -153,10 +153,8 @@ class ServiceConfigMixin:
 
         defaults = {
             "server_host": NetworkConstants.BIND_ALL_INTERFACES,
-            "server_port": int(os.getenv("AUTOBOT_BACKEND_PORT", str(NetworkConstants.BACKEND_PORT))),
-            "api_endpoint": (
-                f"http://localhost:{os.getenv('AUTOBOT_BACKEND_PORT', str(NetworkConstants.BACKEND_PORT))}"
-            ),
+            "server_port": ssot_config.port.backend,
+            "api_endpoint": (f"http://localhost:{ssot_config.port.backend}"),
             "timeout": 60,
             "max_retries": 3,
             "streaming": False,
@@ -188,7 +186,7 @@ class ServiceConfigMixin:
     def get_ollama_url(self) -> str:
         """Get the Ollama service URL from configuration (backward compatibility)"""
         # First check environment variable
-        env_url = os.getenv("AUTOBOT_OLLAMA_URL")
+        env_url = ssot_config.ollama_url
         if env_url:
             return env_url
 
@@ -220,7 +218,7 @@ class ServiceConfigMixin:
 
     def get_redis_url(self) -> str:
         """Get the Redis service URL from configuration (backward compatibility)"""
-        env_url = os.getenv("AUTOBOT_REDIS_URL")
+        env_url = ssot_config.redis_url
         if env_url:
             return env_url
 
@@ -318,7 +316,9 @@ class ServiceConfigMixin:
 
         Priority: env AUTOBOT_{PROVIDER}_API_KEY > config > empty string.
         """
-        env_val = os.getenv(f"AUTOBOT_{provider.upper()}_API_KEY")
+        env_val = os.getenv(
+            f"AUTOBOT_{provider.upper()}_API_KEY"
+        )  # ssot-config-exempt: dynamic provider API key lookup
         if env_val:
             return env_val
         return self.get_nested(f"backend.llm.cloud.providers.{provider}.api_key", "")
@@ -328,7 +328,7 @@ class ServiceConfigMixin:
 
         Priority: env AUTOBOT_LLM_PROVIDER > config > 'ollama'.
         """
-        env_provider = os.getenv("AUTOBOT_LLM_PROVIDER")
+        env_provider = ssot_config.llm_provider
         if env_provider:
             return env_provider
         return self.get_nested("backend.llm.active_provider", "ollama")

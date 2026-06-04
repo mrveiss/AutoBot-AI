@@ -68,9 +68,7 @@ class AutoBotServiceWithCircuitBreaker:
             monitored_exceptions=(ConnectionError, TimeoutError),
         )
 
-    @circuit_breaker_async(
-        "llm_service", failure_threshold=3, recovery_timeout=30.0, timeout=120.0
-    )
+    @circuit_breaker_async("llm_service", failure_threshold=3, recovery_timeout=30.0, timeout=120.0)
     async def call_llm_with_protection(self, prompt: str) -> Dict[str, Any]:
         """
         LLM call with circuit breaker protection
@@ -98,12 +96,8 @@ class AutoBotServiceWithCircuitBreaker:
             "protected": True,
         }
 
-    @circuit_breaker_async(
-        "database_service", failure_threshold=5, recovery_timeout=10.0, timeout=5.0
-    )
-    async def query_database_with_protection(
-        self, query: str, *params
-    ) -> List[Dict[str, Any]]:
+    @circuit_breaker_async("database_service", failure_threshold=5, recovery_timeout=10.0, timeout=5.0)
+    async def query_database_with_protection(self, query: str, *params) -> List[Dict[str, Any]]:
         """
         Database query with circuit breaker protection
         Fast timeout and recovery for database operations
@@ -135,17 +129,10 @@ class AutoBotServiceWithCircuitBreaker:
         # In a real implementation, this would use proper database parameterized queries
         safe_query_description = query.replace("?", "<param>") if params else query
 
-        return [
-            {"id": i, "data": f"Result {i} for query: {safe_query_description}"}
-            for i in range(3)
-        ]
+        return [{"id": i, "data": f"Result {i} for query: {safe_query_description}"} for i in range(3)]
 
-    @circuit_breaker_async(
-        "external_api", failure_threshold=2, recovery_timeout=60.0, timeout=15.0
-    )
-    async def call_external_api_with_protection(
-        self, endpoint: str, data: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    @circuit_breaker_async("external_api", failure_threshold=2, recovery_timeout=60.0, timeout=15.0)
+    async def call_external_api_with_protection(self, endpoint: str, data: Dict[str, Any]) -> Dict[str, Any]:
         """
         External API call with circuit breaker protection
         Lower threshold for external services that may be unreliable
@@ -173,9 +160,7 @@ class AutoBotServiceWithCircuitBreaker:
         Helper for perform_complex_operation_with_fallbacks (#825).
         """
         try:
-            llm_result = await self.call_llm_with_protection(
-                f"Process operation {operation_id}"
-            )
+            llm_result = await self.call_llm_with_protection(f"Process operation {operation_id}")
             result["results"]["llm"] = llm_result
             logger.info("✅ LLM call successful")
 
@@ -198,18 +183,14 @@ class AutoBotServiceWithCircuitBreaker:
         Helper for perform_complex_operation_with_fallbacks (#825).
         """
         try:
-            db_result = await self.query_database_with_protection(
-                "SELECT * FROM operations WHERE id=?", operation_id
-            )
+            db_result = await self.query_database_with_protection("SELECT * FROM operations WHERE id=?", operation_id)
             result["results"]["database"] = db_result
             logger.info("✅ Database query successful")
 
         except CircuitBreakerOpenError as e:
             logger.warning(f"Database circuit breaker is open: {e}")
             result["fallbacks_used"].append("database_cache")
-            result["results"]["database"] = [
-                {"id": operation_id, "data": "cached_result", "source": "cache"}
-            ]
+            result["results"]["database"] = [{"id": operation_id, "data": "cached_result", "source": "cache"}]
 
         except Exception as e:
             logger.error(f"Database query failed: {e}")
@@ -221,9 +202,7 @@ class AutoBotServiceWithCircuitBreaker:
         Helper for perform_complex_operation_with_fallbacks (#825).
         """
         try:
-            api_result = await self.call_external_api_with_protection(
-                "/api/process", {"operation_id": operation_id}
-            )
+            api_result = await self.call_external_api_with_protection("/api/process", {"operation_id": operation_id})
             result["results"]["external_api"] = api_result
             logger.info("✅ External API call successful")
 
@@ -239,9 +218,7 @@ class AutoBotServiceWithCircuitBreaker:
             logger.error(f"External API call failed: {e}")
             result["errors"].append(f"External API error: {str(e)}")
 
-    async def perform_complex_operation_with_fallbacks(
-        self, operation_id: str
-    ) -> Dict[str, Any]:
+    async def perform_complex_operation_with_fallbacks(self, operation_id: str) -> Dict[str, Any]:
         """Complex operation using multiple protected services with fallbacks."""
         logger.info(f"Starting complex operation: {operation_id}")
 
@@ -333,9 +310,7 @@ class CircuitBreakerOrchestrator:
         """
         async with semaphore:
             try:
-                result = await self.service.perform_complex_operation_with_fallbacks(
-                    operation_id
-                )
+                result = await self.service.perform_complex_operation_with_fallbacks(operation_id)
 
                 if result["status"] in ("completed", "partially_completed"):
                     batch_result["completed"] += 1
@@ -345,9 +320,7 @@ class CircuitBreakerOrchestrator:
                 return result
 
             except CircuitBreakerOpenError as e:
-                logger.warning(
-                    f"Operation {operation_id} skipped - " f"circuit breaker open: {e}"
-                )
+                logger.warning(f"Operation {operation_id} skipped - " f"circuit breaker open: {e}")
                 batch_result["skipped"] += 1
                 return {
                     "operation_id": operation_id,
@@ -365,9 +338,7 @@ class CircuitBreakerOrchestrator:
                     "error": str(e),
                 }
 
-    async def execute_batch_operations_with_protection(
-        self, operation_ids: List[str]
-    ) -> Dict[str, Any]:
+    async def execute_batch_operations_with_protection(self, operation_ids: List[str]) -> Dict[str, Any]:
         """Execute batch operations with circuit breaker protection."""
         logger.info(f"Starting batch processing of {len(operation_ids)} operations")
 
@@ -381,18 +352,13 @@ class CircuitBreakerOrchestrator:
         }
 
         semaphore = asyncio.Semaphore(3)
-        tasks = [
-            self._process_single_operation(op_id, batch_result, semaphore)
-            for op_id in operation_ids
-        ]
+        tasks = [self._process_single_operation(op_id, batch_result, semaphore) for op_id in operation_ids]
         operation_results = await asyncio.gather(*tasks, return_exceptions=True)
 
         for result in operation_results:
             if isinstance(result, Exception):
                 batch_result["failed"] += 1
-                batch_result["results"].append(
-                    {"status": "exception", "error": str(result)}
-                )
+                batch_result["results"].append({"status": "exception", "error": str(result)})
             else:
                 batch_result["results"].append(result)
 
@@ -400,10 +366,7 @@ class CircuitBreakerOrchestrator:
             {
                 "end_time": time.time(),
                 "duration": time.time() - batch_result["start_time"],
-                "success_rate": (
-                    batch_result["completed"] / batch_result["total_operations"]
-                )
-                * 100,
+                "success_rate": (batch_result["completed"] / batch_result["total_operations"]) * 100,
             }
         )
 
@@ -424,10 +387,7 @@ class CircuitBreakerOrchestrator:
             health_snapshot = {
                 "timestamp": dashboard["timestamp"],
                 "summary": dashboard["summary"],
-                "service_states": {
-                    name: state["state"]
-                    for name, state in dashboard["circuit_breakers"].items()
-                },
+                "service_states": {name: state["state"] for name, state in dashboard["circuit_breakers"].items()},
             }
             health_history.append(health_snapshot)
 
@@ -443,14 +403,10 @@ class CircuitBreakerOrchestrator:
 
             # Check for alerts
             if summary["failed_services"] > 0:
-                logger.warning(
-                    f"⚠️ {summary['failed_services']} services have failed circuit breakers"
-                )
+                logger.warning(f"⚠️ {summary['failed_services']} services have failed circuit breakers")
 
             if summary["success_rate_avg"] < 80:
-                logger.warning(
-                    f"⚠️ Low average success rate: {summary['success_rate_avg']:.1f}%"
-                )
+                logger.warning(f"⚠️ Low average success rate: {summary['success_rate_avg']:.1f}%")
 
             await asyncio.sleep(5.0)  # Check every 5 seconds
 
@@ -473,18 +429,14 @@ async def _demo_basic_service_operations(service):
             await service.call_llm_with_protection(f"Test prompt {i+1}")
             logger.info(f"✅ LLM Call {i+1}: Success")
         except CircuitBreakerOpenError as e:
-            logger.info(
-                f"🚫 LLM Call {i+1}: Circuit breaker open - " f"{e.service_name}"
-            )
+            logger.info(f"🚫 LLM Call {i+1}: Circuit breaker open - " f"{e.service_name}")
         except Exception as e:
             logger.error(f"❌ LLM Call {i+1}: Failed - {type(e).__name__}")
 
     dashboard = service.get_circuit_breaker_dashboard()
     logger.info("\\n📊 Circuit Breaker States:")
     for name, state in dashboard["circuit_breakers"].items():
-        logger.info(
-            f"   {name}: {state['state']} " f"(failures: {state['failure_count']})"
-        )
+        logger.info(f"   {name}: {state['state']} " f"(failures: {state['failure_count']})")
 
 
 async def _demo_batch_processing(orchestrator):
@@ -495,9 +447,7 @@ async def _demo_batch_processing(orchestrator):
     logger.info("\\n3. Batch Processing with Circuit Breaker Protection")
 
     operation_ids = [f"batch_op_{i:03d}" for i in range(8)]
-    batch_result = await orchestrator.execute_batch_operations_with_protection(
-        operation_ids
-    )
+    batch_result = await orchestrator.execute_batch_operations_with_protection(operation_ids)
 
     logger.info("✅ Batch Processing Results:")
     logger.info(f"   Total: {batch_result['total_operations']}")
@@ -521,9 +471,7 @@ async def _demo_circuit_recovery():
     async def demo_failing_service():
         if demo_failing_service.failure_count < 4:
             demo_failing_service.failure_count += 1
-            raise ConnectionError(
-                f"Simulated failure {demo_failing_service.failure_count}"
-            )
+            raise ConnectionError(f"Simulated failure {demo_failing_service.failure_count}")
         return "Service recovered!"
 
     demo_failing_service.failure_count = 0
@@ -555,11 +503,7 @@ async def demonstrate_circuit_breaker_patterns():
     logger.info("\\n2. Complex Operations with Fallback Strategies")
     orchestrator = CircuitBreakerOrchestrator()
 
-    complex_result = (
-        await orchestrator.service.perform_complex_operation_with_fallbacks(
-            "complex_op_001"
-        )
-    )
+    complex_result = await orchestrator.service.perform_complex_operation_with_fallbacks("complex_op_001")
     logger.info(f"✅ Complex Operation Status: {complex_result['status']}")
     logger.info(f"🔄 Fallbacks Used: {complex_result['fallbacks_used']}")
     logger.info(f"📈 Success Rate: {complex_result['success_rate']:.1%}")

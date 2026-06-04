@@ -9,7 +9,6 @@ Extended with desktop interaction controls (Issue #74)
 
 import asyncio
 import base64
-import logging
 import re
 import subprocess  # nosec B404
 import tempfile
@@ -62,10 +61,11 @@ from api.vnc_humanization import (
 )
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import with_error_handling
+from autobot_shared.logging_manager import get_logger
 from constants.network_constants import NetworkConstants
 from constants.threshold_constants import TimingConstants
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter()
 

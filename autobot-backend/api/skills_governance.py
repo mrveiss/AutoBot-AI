@@ -3,8 +3,7 @@
 # Author: mrveiss
 """Skills Governance API — gap detection, draft management, approvals, and governance config."""
 
-import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
@@ -27,8 +26,9 @@ from api.schemas_code import (
 )
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
-from skills.db import get_skills_engine
+from skills.db import skills_session_context
 from skills.generator import SkillGenerator
 from skills.models import (
     GovernanceConfig,
@@ -40,7 +40,7 @@ from skills.models import (
 from skills.promoter import SkillPromoter
 from skills.validator import SkillValidator
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 router = APIRouter()
 
 _GOVERNANCE_SINGLETON_ID = 1
@@ -100,7 +100,6 @@ async def detect_gap(
             "draft": pkg,
         }
 
-    engine = get_skills_engine()
     skill = SkillPackage(
         name=pkg["name"],
         skill_md=pkg["skill_md"],
@@ -109,9 +108,9 @@ async def detect_gap(
         state=SkillState.DRAFT,
         gap_reason=req.task,
     )
-    async with AsyncSession(engine) as session:
+    async with skills_session_context() as session:
         session.add(skill)
-        await session.commit()
+        await session.flush()
         await session.refresh(skill)
 
     logger.info("Created skill draft: %s (gap: %s)", skill.name, req.task)
@@ -131,8 +130,7 @@ async def detect_gap(
 )
 async def list_drafts() -> List[Dict[str, Any]]:
     """Return all SkillPackage records in DRAFT state."""
-    engine = get_skills_engine()
-    async with AsyncSession(engine) as session:
+    async with skills_session_context() as session:
         result = await session.execute(select(SkillPackage).where(SkillPackage.state == SkillState.DRAFT))
         drafts = result.scalars().all()
     return [
@@ -159,11 +157,10 @@ async def test_draft(
     _: None = Depends(check_admin_permission),
 ) -> Dict[str, Any]:
     """Run the SkillValidator against an existing draft and return results."""
-    engine = get_skills_engine()
-    async with AsyncSession(engine) as session:
+    async with skills_session_context() as session:
         skill = await _get_skill_draft(session, skill_id)
         skill_md = skill.skill_md
-        skill_py: Optional[str] = skill.skill_py
+        skill_py: str | None = skill.skill_py
 
     result = await SkillValidator().validate(skill_md, skill_py)
     return {
@@ -186,8 +183,7 @@ async def promote_draft(
     _: None = Depends(check_admin_permission),
 ) -> Dict[str, Any]:
     """Promote an approved draft skill to the builtin skills directory."""
-    engine = get_skills_engine()
-    async with AsyncSession(engine) as session:
+    async with skills_session_context() as session:
         skill = await _get_skill_draft(session, skill_id)
         if skill.state != SkillState.DRAFT:
             raise HTTPException(
@@ -195,25 +191,21 @@ async def promote_draft(
                 detail=f"Skill '{skill.name}' is already in state '{skill.state}', not DRAFT",
             )
 
-    async with AsyncSession(engine) as gs:
-        cfg_row = await gs.scalar(select(GovernanceConfig))
+        cfg_row = await session.scalar(select(GovernanceConfig))
         mode = cfg_row.mode if cfg_row else GovernanceMode.SEMI_AUTO
 
-    if mode == GovernanceMode.SEMI_AUTO:
-        async with AsyncSession(engine) as as_:
-            approval = await as_.scalar(
+        if mode == GovernanceMode.SEMI_AUTO:
+            approval = await session.scalar(
                 select(SkillApproval)
                 .where(SkillApproval.skill_id == skill_id)
                 .where(SkillApproval.status == _STATUS_APPROVED)
             )
-        if approval is None:
-            raise HTTPException(
-                status_code=403,
-                detail="Governance is SEMI_AUTO: skill must be approved before promotion",
-            )
+            if approval is None:
+                raise HTTPException(
+                    status_code=403,
+                    detail="Governance is SEMI_AUTO: skill must be approved before promotion",
+                )
 
-    async with AsyncSession(engine) as session:
-        skill = await _get_skill_draft(session, skill_id)
         try:
             promoted_path = await SkillPromoter().promote(
                 name=skill.name,
@@ -225,7 +217,6 @@ async def promote_draft(
             raise HTTPException(status_code=500, detail="Internal server error") from exc
         skill.state = SkillState.BUILTIN
         skill.promoted_at = now_utc()
-        await session.commit()
 
     logger.info("Promoted skill %s to builtin: %s", skill.name, promoted_path)
     return {"promoted": True, "path": promoted_path, "name": skill.name}
@@ -239,8 +230,7 @@ async def promote_draft(
 )
 async def list_approvals() -> List[Dict[str, Any]]:
     """Return all SkillApproval records with status 'pending'."""
-    engine = get_skills_engine()
-    async with AsyncSession(engine) as session:
+    async with skills_session_context() as session:
         result = await session.execute(select(SkillApproval).where(SkillApproval.status == _STATUS_PENDING))
         approvals = result.scalars().all()
     return [
@@ -272,13 +262,11 @@ async def decide_approval(
     _: None = Depends(check_admin_permission),
 ) -> Dict[str, Any]:
     """Update an approval record with an approve or reject decision."""
-    engine = get_skills_engine()
-    async with AsyncSession(engine) as session:
+    async with skills_session_context() as session:
         approval = await _get_approval(session, approval_id)
         approval.status = _STATUS_APPROVED if body.approved else _STATUS_REJECTED
         approval.notes = body.notes
         approval.reviewed_at = now_utc()
-        await session.commit()
 
     logger.info("Approval %s set to: %s", approval_id, approval.status)
     return {"approval_id": approval_id, "status": approval.status}
@@ -292,8 +280,7 @@ async def decide_approval(
 )
 async def get_governance() -> Dict[str, Any]:
     """Return the active GovernanceConfig, or the default if none exists."""
-    engine = get_skills_engine()
-    async with AsyncSession(engine) as session:
+    async with skills_session_context() as session:
         result = await session.execute(select(GovernanceConfig))
         config = result.scalar_one_or_none()
     if config is None:
@@ -318,8 +305,7 @@ async def update_governance(
     _: None = Depends(check_admin_permission),
 ) -> Dict[str, Any]:
     """Update the governance mode in GovernanceConfig (upsert singleton row)."""
-    engine = get_skills_engine()
-    async with AsyncSession(engine) as session:
+    async with skills_session_context() as session:
         result = await session.execute(select(GovernanceConfig))
         config = result.scalar_one_or_none()
         if config is None:
@@ -328,7 +314,6 @@ async def update_governance(
         else:
             config.mode = body.mode
             config.updated_at = now_utc()
-        await session.commit()
 
     logger.info("Governance mode updated to: %s", body.mode)
     return {"mode": body.mode}

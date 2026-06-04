@@ -2,21 +2,21 @@
   <div class="session-manager">
     <!-- Header -->
     <div class="manager-header">
-      <div class="flex items-center space-x-3">
-        <i class="fas fa-window-restore text-green-600 text-xl"></i>
+      <div class="flex items-center gap-3">
+        <Icon name="window-restore" class="text-green-600 text-xl" />
         <div>
           <h3 class="text-lg font-semibold text-autobot-text-primary">{{ $t('browser.sessionManager.title') }}</h3>
           <p class="text-sm text-autobot-text-muted">{{ $t('browser.sessionManager.subtitle') }}</p>
         </div>
       </div>
 
-      <div class="flex items-center space-x-2">
+      <div class="flex items-center gap-2">
         <BaseButton
           variant="primary"
           size="sm"
           @click="showCreateModal = true"
         >
-          <i class="fas fa-plus mr-1"></i>
+          <Icon name="plus" class="mr-1" />
           {{ $t('browser.sessionManager.newSession') }}
         </BaseButton>
       </div>
@@ -26,7 +26,7 @@
     <div class="stats-grid">
       <div class="stat-card">
         <div class="stat-icon bg-green-100 text-green-600">
-          <i class="fas fa-check-circle"></i>
+          <Icon name="check-circle" />
         </div>
         <div>
           <div class="stat-value">{{ activeSessions.length }}</div>
@@ -36,7 +36,7 @@
 
       <div class="stat-card">
         <div class="stat-icon bg-yellow-100 text-yellow-600">
-          <i class="fas fa-pause-circle"></i>
+          <Icon name="pause-circle" />
         </div>
         <div>
           <div class="stat-value">{{ idleSessions.length }}</div>
@@ -46,7 +46,7 @@
 
       <div class="stat-card">
         <div class="stat-icon bg-blue-100 text-blue-600">
-          <i class="fas fa-save"></i>
+          <Icon name="save" />
         </div>
         <div>
           <div class="stat-value">{{ persistentSessions.length }}</div>
@@ -56,7 +56,7 @@
 
       <div class="stat-card">
         <div class="stat-icon bg-autobot-bg-tertiary text-autobot-text-secondary">
-          <i class="fas fa-window-restore"></i>
+          <Icon name="window-restore" />
         </div>
         <div>
           <div class="stat-value">{{ sessions.length }}</div>
@@ -75,7 +75,7 @@
         >
           <template #actions>
             <BaseButton variant="primary" @click="showCreateModal = true">
-              <i class="fas fa-plus mr-2"></i>
+              <Icon name="plus" class="mr-2" />
               {{ $t('browser.sessionManager.createSession') }}
             </BaseButton>
           </template>
@@ -91,9 +91,9 @@
         >
           <!-- Session Header -->
           <div class="session-header">
-            <div class="flex items-center space-x-3 flex-1">
+            <div class="flex items-center gap-3 flex-1">
               <div class="session-icon" :class="getSessionIconClass(session.status)">
-                <i :class="getSessionIcon(session.status)"></i>
+                <Icon :name="getSessionIcon(session.status)" />
               </div>
               <div class="flex-1">
                 <h4 class="session-name">{{ session.title }}</h4>
@@ -101,8 +101,8 @@
               </div>
             </div>
 
-            <div class="flex items-center space-x-2">
-              <StatusBadge :variant="getStatusVariant(session.status)" size="small">
+            <div class="flex items-center gap-2">
+              <StatusBadge :variant="getStatusVariant(session.status)" size="sm">
                 {{ session.status.toUpperCase() }}
               </StatusBadge>
 
@@ -114,11 +114,11 @@
           <div class="session-info">
             <div class="info-grid">
               <div class="info-item">
-                <i class="fas fa-calendar text-autobot-text-muted"></i>
+                <Icon name="calendar" class="text-autobot-text-muted" />
                 <span class="text-sm text-autobot-text-secondary">{{ $t('browser.sessionManager.created') }} {{ formatDate(session.created_at) }}</span>
               </div>
               <div class="info-item">
-                <i class="fas fa-clock text-autobot-text-muted"></i>
+                <Icon name="clock" class="text-autobot-text-muted" />
                 <span class="text-sm text-autobot-text-secondary">{{ $t('browser.sessionManager.active') }} {{ formatTimeAgo(session.last_activity) }}</span>
               </div>
             </div>
@@ -132,7 +132,7 @@
               size="sm"
               @click="pauseSession(session.id)"
             >
-              <i class="fas fa-pause mr-1"></i>
+              <Icon name="pause" class="mr-1" />
               {{ $t('browser.sessionManager.pause') }}
             </BaseButton>
 
@@ -142,7 +142,7 @@
               size="sm"
               @click="resumeSession(session.id)"
             >
-              <i class="fas fa-play mr-1"></i>
+              <Icon name="play" class="mr-1" />
               {{ $t('browser.sessionManager.resume') }}
             </BaseButton>
 
@@ -151,7 +151,7 @@
               size="sm"
               @click="openSession(session.id)"
             >
-              <i class="fas fa-external-link-alt mr-1"></i>
+              <Icon name="external-link-alt" class="mr-1" />
               {{ $t('browser.sessionManager.open') }}
             </BaseButton>
 
@@ -160,7 +160,7 @@
               class="action-btn"
               :title="$t('browser.sessionManager.duplicateSession')"
             >
-              <i class="fas fa-copy"></i>
+              <Icon name="copy" />
             </button>
 
             <button
@@ -169,7 +169,7 @@
               class="action-btn"
               :title="$t('browser.sessionManager.closeSession')"
             >
-              <i class="fas fa-times"></i>
+              <Icon name="times" />
             </button>
 
             <button
@@ -177,7 +177,7 @@
               class="action-btn text-red-600"
               :title="$t('browser.sessionManager.deleteSession')"
             >
-              <i class="fas fa-trash"></i>
+              <Icon name="trash" />
             </button>
           </div>
         </div>
@@ -190,7 +190,7 @@
         <div class="modal-header">
           <h3 class="text-lg font-semibold">{{ $t('browser.sessionManager.createBrowserSession') }}</h3>
           <button @click="showCreateModal = false" class="text-autobot-text-muted hover:text-autobot-text-secondary">
-            <i class="fas fa-times"></i>
+            <Icon name="times" />
           </button>
         </div>
 
@@ -217,7 +217,7 @@
             @click="createNewSession"
             :disabled="!isFormValid"
           >
-            <i class="fas fa-plus mr-1"></i>
+            <Icon name="plus" class="mr-1" />
             {{ $t('browser.sessionManager.createSession') }}
           </BaseButton>
         </div>
@@ -233,6 +233,7 @@ import { useBrowserAutomation } from '@/composables/useBrowserAutomation'
 import BaseButton from '@/components/base/BaseButton.vue'
 import StatusBadge from '@/components/ui/StatusBadge.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
+import Icon from '@/components/ui/Icon.vue'
 import type { SessionStatus } from '@/types/browser'
 import { createLogger } from '@/utils/debugUtils'
 
@@ -243,7 +244,8 @@ export default {
   components: {
     BaseButton,
     StatusBadge,
-    EmptyState
+    EmptyState,
+    Icon
   },
   setup() {
     const { t } = useI18n()
@@ -358,21 +360,21 @@ export default {
       }
     }
 
-    const getStatusVariant = (status: SessionStatus): 'success' | 'warning' | 'danger' | 'info' => {
+    const getStatusVariant = (status: SessionStatus): 'success' | 'warning' | 'error' | 'info' => {
       switch (status) {
         case 'active': return 'success'
         case 'idle': return 'warning'
-        case 'error': return 'danger'
+        case 'error': return 'error'
         default: return 'info'
       }
     }
 
     const getSessionIcon = (status: SessionStatus): string => {
       switch (status) {
-        case 'active': return 'fas fa-check-circle'
-        case 'idle': return 'fas fa-pause-circle'
-        case 'error': return 'fas fa-exclamation-circle'
-        default: return 'fas fa-circle'
+        case 'active': return 'check-circle'
+        case 'idle': return 'pause-circle'
+        case 'error': return 'exclamation-circle'
+        default: return 'circle'
       }
     }
 

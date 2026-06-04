@@ -20,7 +20,7 @@
       debug:
         msg:
           - "🗄️  Deploying Database Infrastructure"
-          - "VM: {{ inventory_hostname }} ({{ ansible_facts['default_ipv4'].address }})"
+          - "VM: {{ inventory_hostname }} ({{ ansible_facts['default_ipv4'].address | default(ansible_host) }})"
           - "Services: Redis Stack {{ redis.version }}, Model Storage"
           - "Memory Allocation: {{ redis.memory.maxmemory }}"
           - "Persistence: RDB + AOF enabled"
@@ -54,6 +54,7 @@
           - "python3-redis"
         state: present
         update_cache: true
+        cache_valid_time: 3600
       retries: 3
       delay: 10
 
@@ -424,7 +425,7 @@
           - "📊 Memory Limit: {{ redis.memory.maxmemory }}"
           - "🗂️  Databases: {{ database_schema.databases | length }} configured"
           - "📁 Model Storage: {{ model_storage.directories.base_dir }}"
-          - "🔧 RedisInsight: {{ redis_insight.enabled | ternary('http://' + ansible_facts['default_ipv4'].address + ':8002', 'Disabled') }}"
+          - "🔧 RedisInsight: {{ redis_insight.enabled | ternary('http://' + (ansible_facts['default_ipv4'].address | default(ansible_host)) + ':8002', 'Disabled') }}"
           - "💾 Backup: {{ backup.enabled | ternary('Scheduled', 'Manual only') }}"
 
     - name: Create database deployment marker

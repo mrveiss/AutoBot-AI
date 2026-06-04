@@ -17,20 +17,17 @@ Key Features:
 
 import asyncio
 import hashlib
-import logging
-import os
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Query, Request
 
 from api.schemas_analytics import (
     ContinuousLearningFeedbackResponse,
     ContinuousLearningGenerateInsightsResponse,
-    ContinuousLearningHealthResponse,
     ContinuousLearningInsightsResponse,
     ContinuousLearningMetrics,
     ContinuousLearningRetrainResponse,
@@ -50,8 +47,10 @@ from api.schemas_analytics import (
 from api.system_health import ComponentHealth, register_health_probe
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter()
 
@@ -90,7 +89,7 @@ class PatternStatistics:
     true_positives: int = 0
     false_positives: int = 0
     accuracy: float = 1.0
-    last_detected: Optional[datetime] = None
+    last_detected: datetime | None = None
     evolution_history: List[Dict[str, Any]] = field(default_factory=list)
 
 
@@ -121,7 +120,7 @@ class LearningPipeline:
         self.pattern_stats: Dict[str, PatternStatistics] = {}
         self.insights: List[LearningInsight] = []
         self.processed_count = 0
-        self.last_retrain: Optional[datetime] = None
+        self.last_retrain: datetime | None = None
         self.accuracy_history: List[Tuple[datetime, float]] = []
         # Build event handler dispatch table (Issue #315)
         self._event_handlers = {
@@ -131,7 +130,7 @@ class LearningPipeline:
             LearningEventType.THRESHOLD_CROSSED: self._handle_threshold_crossed,
         }
 
-    async def _dispatch_event(self, event: LearningEvent) -> Optional[str]:
+    async def _dispatch_event(self, event: LearningEvent) -> str | None:
         """Dispatch event to appropriate handler. (Issue #315 - extracted)"""
         handler = self._event_handlers.get(event.event_type)
         if handler:
@@ -141,7 +140,7 @@ class LearningPipeline:
     def _create_insight(
         self,
         id_prefix: str,
-        pattern_id: Optional[str],
+        pattern_id: str | None,
         insight_type: InsightType,
         title: str,
         description: str,
@@ -305,7 +304,7 @@ class LearningPipeline:
 
         return total_correct / total if total > 0 else 1.0
 
-    async def retrain_models(self, reason: RetrainingReason, patterns: Optional[List[str]] = None) -> Dict[str, Any]:
+    async def retrain_models(self, reason: RetrainingReason, patterns: List[str] | None = None) -> Dict[str, Any]:
         """Retrain pattern detection models."""
         start_time = time.time()
         self.last_retrain = datetime.now(tz=timezone.utc)
@@ -359,7 +358,7 @@ class LearningPipeline:
 
     def _generate_active_pattern_insight(
         self, recent_patterns: List["PatternStats"]  # noqa: F821
-    ) -> Optional[LearningInsight]:
+    ) -> LearningInsight | None:
         """Generate insight for most active pattern (Issue #398: extracted)."""
         if not recent_patterns:
             return None
@@ -386,7 +385,7 @@ class LearningPipeline:
             ],
         )
 
-    def _generate_false_positive_insight(self, pattern: "PatternStats") -> Optional[LearningInsight]:  # noqa: F821
+    def _generate_false_positive_insight(self, pattern: "PatternStats") -> LearningInsight | None:  # noqa: F821
         """Generate insight for high false positive pattern (Issue #398: extracted)."""
         total = pattern.true_positives + pattern.false_positives
         fp_rate = pattern.false_positives / total if total > 0 else 0
@@ -414,7 +413,7 @@ class LearningPipeline:
             ],
         )
 
-    def _generate_accuracy_improvement_insight(self) -> Optional[LearningInsight]:
+    def _generate_accuracy_improvement_insight(self) -> LearningInsight | None:
         """Generate insight for accuracy improvement (Issue #398: extracted)."""
         if len(self.accuracy_history) < 2:
             return None
@@ -531,15 +530,15 @@ class FileMonitor:
     def __init__(self, base_path: str = None):
         """Initialize file monitor with base path and tracking state."""
         if base_path is None:
-            base_path = os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot")
+            base_path = config.base_dir
         self.base_path = Path(base_path)
         self.state = MonitoringState.STOPPED
-        self.started_at: Optional[datetime] = None
+        self.started_at: datetime | None = None
         self.file_states: Dict[str, FileState] = {}
         self.watched_paths: List[str] = []
         self.event_queue: asyncio.Queue = asyncio.Queue()
         self._stop_event = asyncio.Event()
-        self._monitor_task: Optional[asyncio.Task] = None
+        self._monitor_task: asyncio.Task | None = None
 
     async def start(self, paths: List[str], interval: int = 60) -> bool:
         """Start monitoring specified paths."""
@@ -745,8 +744,8 @@ class ContinuousLearningEngine:
         self.pipeline = LearningPipeline()
         self.monitor = FileMonitor()
         self._running = False
-        self._processing_task: Optional[asyncio.Task] = None
-        self._insight_task: Optional[asyncio.Task] = None
+        self._processing_task: asyncio.Task | None = None
+        self._insight_task: asyncio.Task | None = None
         self._initialized = False
 
     async def initialize(self) -> bool:
@@ -843,7 +842,7 @@ class ContinuousLearningEngine:
             except Exception as e:
                 logger.error("Insight generation error: %s", e)
 
-    async def submit_feedback(self, pattern_id: str, is_correct: bool, details: Optional[str] = None) -> Dict[str, Any]:
+    async def submit_feedback(self, pattern_id: str, is_correct: bool, details: str | None = None) -> Dict[str, Any]:
         """Submit feedback for a pattern detection."""
         event = LearningEvent(
             event_id=hashlib.sha256(
@@ -903,7 +902,7 @@ class ContinuousLearningEngine:
 # Global Instance
 # =============================================================================
 
-_engine: Optional[ContinuousLearningEngine] = None
+_engine: ContinuousLearningEngine | None = None
 _engine_lock = asyncio.Lock()
 
 
@@ -1008,7 +1007,7 @@ async def submit_feedback(
     admin_check: bool = Depends(check_admin_permission),
     pattern_id: str = None,
     is_correct: bool = None,
-    details: Optional[str] = None,
+    details: str | None = None,
 ) -> Dict[str, Any]:
     """
     Submit feedback for a pattern detection.
@@ -1144,7 +1143,7 @@ async def get_config(
 
 @register_health_probe("analytics_continuous_learning")
 async def probe_analytics_continuous_learning(
-    request: Optional[Request] = None,
+    request: Request | None = None,
 ) -> ComponentHealth:
     """Issue #3333: probe registration for the continuous-learning analytics module.
 
@@ -1168,25 +1167,3 @@ async def probe_analytics_continuous_learning(
             status="down",
             detail=f"probe error: {type(exc).__name__}",
         )
-
-
-@router.get("/health", summary="Health check", response_model=ContinuousLearningHealthResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="health_check",
-    error_code_prefix="ANALYTICS_CONTINUOUS_LEARNING",
-)
-async def health_check(
-    admin_check: bool = Depends(check_admin_permission),
-) -> Dict[str, Any]:
-    """
-    Check health of the learning system.
-
-    Issue #744: Requires admin authentication.
-    """
-    engine = await get_engine()
-    return {
-        "status": "healthy",
-        "running": engine._running,
-        "initialized": engine._initialized,
-    }

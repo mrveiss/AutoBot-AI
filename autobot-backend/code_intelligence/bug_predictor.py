@@ -27,7 +27,6 @@ Issue #554: Enhanced with Vector/Redis/LLM infrastructure:
 """
 
 import asyncio
-import logging
 import re
 import subprocess  # nosec B404 - required for git operations
 import time
@@ -35,12 +34,13 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import parse_utc_iso
 from constants.threshold_constants import TimingConstants
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # TTL for git-based caches (seconds); prevents unbounded memory growth (#1551)
 _CHANGE_FREQ_CACHE_TTL = 3600  # 1 hour — git log --since=90 days
@@ -140,7 +140,7 @@ class FileRiskAssessment:
     risk_level: RiskLevel
     factor_scores: list[RiskFactorScore] = field(default_factory=list)
     bug_count_history: int = 0
-    last_bug_date: Optional[datetime] = None
+    last_bug_date: datetime | None = None
     prevention_tips: list[str] = field(default_factory=list)
     suggested_tests: list[str] = field(default_factory=list)
     recommendation: str = ""
@@ -171,7 +171,7 @@ class PredictionResult:
     high_risk_count: int
     predicted_bugs: int
     # Issue #468: accuracy_score is Optional - None when no historical data available
-    accuracy_score: Optional[float]
+    accuracy_score: float | None
     risk_distribution: dict[str, int]
     file_assessments: list[FileRiskAssessment]
     top_risk_factors: list[tuple[str, float]]
@@ -293,9 +293,9 @@ class BugPredictor(_BaseClass):
 
     def __init__(
         self,
-        project_root: Optional[str] = None,
-        weights: Optional[dict[RiskFactor, float]] = None,
-        bug_keywords: Optional[list[str]] = None,
+        project_root: str | None = None,
+        weights: dict[RiskFactor, float] | None = None,
+        bug_keywords: list[str] | None = None,
         use_semantic_analysis: bool = False,
     ):
         """
@@ -332,13 +332,13 @@ class BugPredictor(_BaseClass):
         ]
 
         # Cache for expensive operations
-        self._bug_history_cache: Optional[dict[str, list[dict]]] = None
-        self._bug_history_cache_time: Optional[float] = None
-        self._change_freq_cache: Optional[dict[str, int]] = None
-        self._change_freq_cache_time: Optional[float] = None
-        self._author_stats_cache: Optional[dict[str, dict]] = None
+        self._bug_history_cache: dict[str, list[dict]] | None = None
+        self._bug_history_cache_time: float | None = None
+        self._change_freq_cache: dict[str, int] | None = None
+        self._change_freq_cache_time: float | None = None
+        self._author_stats_cache: dict[str, dict] | None = None
         # Issue #554: Cache for semantic bug pattern embeddings
-        self._bug_pattern_embeddings: Optional[Dict[str, List[float]]] = None
+        self._bug_pattern_embeddings: Dict[str, List[float]] | None = None
 
     def _collect_complexity_factors(self, path: Path, complexity: dict[str, Any]) -> list[RiskFactorScore]:
         """Collect complexity-related risk factor scores (Issue #281 - extracted helper)."""
@@ -492,7 +492,7 @@ class BugPredictor(_BaseClass):
 
     def analyze_directory(
         self,
-        directory: Optional[str] = None,
+        directory: str | None = None,
         pattern: str = "*.py",
         limit: int = 0,
     ) -> PredictionResult:
@@ -543,7 +543,7 @@ class BugPredictor(_BaseClass):
 
     def get_high_risk_files(
         self,
-        directory: Optional[str] = None,
+        directory: str | None = None,
         threshold: float = 60.0,
         limit: int = 20,
     ) -> list[FileRiskAssessment]:
@@ -616,7 +616,7 @@ class BugPredictor(_BaseClass):
 
     def generate_heatmap(
         self,
-        directory: Optional[str] = None,
+        directory: str | None = None,
         grouping: str = "directory",
     ) -> dict[str, Any]:
         """
@@ -805,7 +805,7 @@ class BugPredictor(_BaseClass):
 
         return {"count": count, "score": score, "last_date": last_date}
 
-    def _parse_commit_line(self, line: str) -> Optional[dict]:
+    def _parse_commit_line(self, line: str) -> dict | None:
         """Parse a commit info line (Issue #335 - extracted helper)."""
         if "|" not in line:
             return None
@@ -1200,7 +1200,7 @@ class BugPredictor(_BaseClass):
 
         return assessment
 
-    async def _check_cached_prediction(self, cache_key: str) -> Optional[PredictionResult]:
+    async def _check_cached_prediction(self, cache_key: str) -> PredictionResult | None:
         """
         Check for cached prediction result if semantic analysis is enabled.
 
@@ -1255,7 +1255,7 @@ class BugPredictor(_BaseClass):
 
     async def analyze_directory_async(
         self,
-        directory: Optional[str] = None,
+        directory: str | None = None,
         pattern: str = "*.py",
         limit: int = 0,
     ) -> PredictionResult:
@@ -1322,7 +1322,7 @@ class BugPredictor(_BaseClass):
 
 
 def predict_bugs(
-    directory: Optional[str] = None,
+    directory: str | None = None,
     pattern: str = "*.py",
     limit: int = 100,
 ) -> PredictionResult:
@@ -1342,7 +1342,7 @@ def predict_bugs(
 
 
 async def predict_bugs_async(
-    directory: Optional[str] = None,
+    directory: str | None = None,
     pattern: str = "*.py",
     limit: int = 100,
     use_semantic_analysis: bool = True,
@@ -1383,7 +1383,7 @@ def get_file_risk(file_path: str) -> FileRiskAssessment:
 
 
 def get_high_risk_files(
-    directory: Optional[str] = None,
+    directory: str | None = None,
     threshold: float = 60.0,
     limit: int = 20,
 ) -> list[FileRiskAssessment]:

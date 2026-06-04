@@ -8,10 +8,11 @@ Type definitions for the agent loop system including states, phases,
 iteration results, and configuration.
 """
 
+from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum, auto
-from typing import Any, Optional
+from typing import Any
 
 from autobot_shared.time_utils import now_utc
 from constants.threshold_constants import BatchConfig, RetryConfig
@@ -47,6 +48,24 @@ class LoopState(Enum):
     COMPLETED = auto()  # Task finished successfully
     FAILED = auto()  # Task failed
     CANCELLED = auto()  # Task was cancelled
+
+
+class LoopOutcome(Enum):
+    """Terminal outcome of a loop run.
+
+    ABSTAINED is distinct from FAILED: the agent recognised it could not
+    produce a reliable answer and chose governed silence over hallucination.
+    It is re-runnable with different inputs; FAILED typically is not.
+    STAGNATED: observation novelty plateaued — tool results carried no new
+    information across the stagnation window (#6627).
+    """
+
+    COMPLETED = "completed"
+    ABSTAINED = "abstained"
+    STAGNATED = "stagnated"
+    CANCELLED = "cancelled"
+    HALTED = "halted"
+    FAILED = "failed"
 
 
 class ThinkCategory(Enum):
@@ -87,7 +106,7 @@ class ThinkResult:
     alternatives_considered: list[str] = field(default_factory=list)
     risks_identified: list[str] = field(default_factory=list)
     timestamp: datetime = field(default_factory=now_utc)
-    task_id: Optional[str] = None
+    task_id: str | None = None
 
     def to_dict(self) -> dict:
         """Convert to dictionary for event content."""
@@ -118,10 +137,10 @@ class IterationResult:
     tools_executed: list[str] = field(default_factory=list)
     tool_results: dict[str, Any] = field(default_factory=dict)
     events_analyzed: int = 0
-    plan_progress: Optional[float] = None  # 0.0 to 1.0
+    plan_progress: float | None = None  # 0.0 to 1.0
     think_results: list[ThinkResult] = field(default_factory=list)
     should_continue: bool = True
-    error: Optional[str] = None
+    error: str | None = None
     timestamp: datetime = field(default_factory=now_utc)
 
     def to_dict(self) -> dict:
@@ -177,8 +196,19 @@ class AgentLoopConfig:
     retry_failed_tools: bool = True  # Retry failed tool calls
     max_tool_retries: int = RetryConfig.MIN_RETRIES  # 2 - Max retries per tool
 
+    # Per-severity retry budgets (GH#6628)
+    max_retries_critical: int = 0  # CRITICAL: immediate halt, no retry
+    max_retries_high: int = 1  # HIGH severity: 1 retry
+    max_retries_medium: int = 3  # MEDIUM severity: 3 retries (legacy default)
+    max_retries_low: int = 5  # LOW/RETRY-class: 5 retries (transient errors)
+
     # Repetitive tool-call detection (#3255)
     max_identical_tool_calls: int = 3  # Halt when same tool+args seen N times
+
+    # Semantic stagnation detection (#6627)
+    stagnation_window: int = 5  # Rolling window of observations to evaluate
+    min_observation_novelty: float = 0.05  # Min avg novel-token ratio to avoid halt
+    halt_on_stagnation: bool = True  # Enable stagnation-based halt
 
     # Schema self-correction (Issue #4482)
     max_schema_retries: int = 3  # Max retries when tool argument schema validation fails
@@ -189,6 +219,18 @@ class AgentLoopConfig:
 
     # First-turn priming (Issue #4481)
     first_turn_priming_enabled: bool = True  # Inject context note on first iteration
+
+    # Confidence-based abstention (GH#6626)
+    abstain_on_low_confidence: bool = True  # Halt with ABSTAINED outcome when confidence stays low
+    min_confidence_floor: float = 0.3  # Confidence threshold below which a think step is "low"
+    confidence_window: int = 3  # Consecutive low-confidence steps before abstention fires
+
+    # Belief state prototype (MVA-1407) — off by default to avoid prod changes
+    belief_state_enabled: bool = False
+    # MVA-1434: min confidence to serve a cached assertion instead of re-querying
+    belief_cache_threshold: float = 0.85
+    # GH#9053: min confidence delta to surface contradictions for agent review
+    contradiction_surface_threshold: float = 0.3
 
     # Logging
     log_iterations: bool = True  # Log each iteration
@@ -219,10 +261,10 @@ class AgentMessage:
 
     message_type: MessageType
     content: str
-    options: Optional[list[str]] = None  # For ASK messages
+    options: list[str] | None = None  # For ASK messages
     metadata: dict = field(default_factory=dict)
     timestamp: datetime = field(default_factory=now_utc)
-    task_id: Optional[str] = None
+    task_id: str | None = None
     requires_response: bool = False
 
     def __post_init__(self):
@@ -243,6 +285,96 @@ class AgentMessage:
 
 
 # =============================================================================
+# Observation Fingerprint (Issue #6627)
+# =============================================================================
+
+
+@dataclass
+class ObservationFingerprint:
+    """SHA-256 content digest + novelty metrics for a single tool result."""
+
+    iteration: int
+    content_hash: str
+    content_size: int
+    novel_token_ratio: float
+    timestamp: datetime = field(default_factory=now_utc)
+
+
+# =============================================================================
+# Belief State Types (MVA-1407)
+# =============================================================================
+
+
+@dataclass
+class ToolExecutionRef:
+    """Reference to a specific tool execution that produced an assertion."""
+
+    tool_name: str
+    iteration: int
+    call_hash: str
+
+    def to_dict(self) -> dict:
+        return {"tool_name": self.tool_name, "iteration": self.iteration, "call_hash": self.call_hash}
+
+
+@dataclass
+class Assertion:
+    """A belief about the world derived from tool output."""
+
+    key: str
+    value: Any
+    confidence: float
+    sources: list[ToolExecutionRef]
+    confirmed_at: datetime
+    refuted_at: datetime | None = None
+    refutation_source: ToolExecutionRef | None = None
+
+    @property
+    def is_active(self) -> bool:
+        return self.refuted_at is None
+
+    def to_dict(self) -> dict:
+        """Serialize assertion to dictionary."""
+        return {
+            "key": self.key,
+            "value": self.value,
+            "confidence": self.confidence,
+            "sources": [s.to_dict() for s in self.sources],
+            "confirmed_at": self.confirmed_at.isoformat(),
+            "refuted_at": self.refuted_at.isoformat() if self.refuted_at else None,
+            "refutation_source": self.refutation_source.to_dict() if self.refutation_source else None,
+            "is_active": self.is_active,
+        }
+
+
+@dataclass
+class ContradictionRecord:
+    """Records when a new assertion contradicts an existing one."""
+
+    key: str
+    prior_value: Any
+    prior_confidence: float
+    new_value: Any
+    new_confidence: float
+    iteration: int
+    resolution: str  # "updated" | "suppressed" | "surfaced_to_think"
+    timestamp: datetime = field(default_factory=now_utc)
+
+    def to_dict(self) -> dict:
+        """Serialize contradiction record to dictionary."""
+        return {
+            "key": self.key,
+            "prior_value": self.prior_value,
+            "prior_confidence": self.prior_confidence,
+            "new_value": self.new_value,
+            "new_confidence": self.new_confidence,
+            "iteration": self.iteration,
+            "resolution": self.resolution,
+            "timestamp": self.timestamp.isoformat(),
+        }
+
+
+# =============================================================================
 # Task Context
 # =============================================================================
 
@@ -259,11 +391,50 @@ class TaskContext:
     errors: list[str] = field(default_factory=list)
     user_messages: list[str] = field(default_factory=list)
     think_history: list[ThinkResult] = field(default_factory=list)
-    plan_id: Optional[str] = None
-    current_step_id: Optional[str] = None
+    plan_id: str | None = None
+    current_step_id: str | None = None
     metadata: dict = field(default_factory=dict)
     # Repetitive tool-call detection: maps content-hash -> call count (#3255)
     tool_call_hashes: dict[str, int] = field(default_factory=dict)
+    # Semantic stagnation detection: ordered fingerprints (#6627)
+    observation_fingerprints: list[ObservationFingerprint] = field(default_factory=list)
+    # Belief state (MVA-1407)
+    assertions: dict[str, "Assertion"] = field(default_factory=dict)
+    contradictions: list["ContradictionRecord"] = field(default_factory=list)
+    # Rolling token-vocabulary window (last 50 observations) for novelty scoring.
+    # Bounded to prevent common tokens from saturating the vocabulary on long tasks
+    # and causing false stagnation detections (#6627 P1).
+    _token_windows: "deque[frozenset[str]]" = field(default_factory=lambda: deque(maxlen=50), repr=False)
+
+    def record_observation(self, content: Any, iteration: int) -> "ObservationFingerprint":
+        """Fingerprint a tool result and append it to observation_fingerprints.
+
+        Novelty is scored against the rolling vocabulary of the last 50
+        observations only, preventing unbounded saturation on long tasks.
+        Issue #6627.
+        """
+        from agent_loop.fingerprint import content_hash as _hash
+        from agent_loop.fingerprint import normalize_content, tokenize
+
+        normalized = normalize_content(content)
+        new_tokens = tokenize(normalized)
+        seen_vocab: set[str] = set().union(*self._token_windows) if self._token_windows else set()
+        if not new_tokens:
+            ratio = 1.0
+        elif not seen_vocab:
+            ratio = 1.0
+        else:
+            novel_count = sum(1 for t in new_tokens if t not in seen_vocab)
+            ratio = novel_count / len(new_tokens)
+        self._token_windows.append(frozenset(new_tokens))
+        fp = ObservationFingerprint(
+            iteration=iteration,
+            content_hash=_hash(content),
+            content_size=len(normalized),
+            novel_token_ratio=ratio,
+        )
+        self.observation_fingerprints.append(fp)
+        return fp
 
     def add_tool(self, tool_name: str) -> None:
         """Record tool execution."""

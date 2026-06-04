@@ -1,7 +1,7 @@
 <template>
   <div class="integration-actions">
     <div class="section-header">
-      <h3><i class="fas fa-cogs"></i> {{ $t('manpage.integrationActions.title') }}</h3>
+      <h3><Icon name="cogs" /> {{ $t('manpage.integrationActions.title') }}</h3>
     </div>
 
     <div class="action-buttons">
@@ -11,7 +11,7 @@
         :disabled="loading.initialize || !canInitialize"
         :loading="loading.initialize"
       >
-        <i class="fas fa-rocket"></i>
+        <Icon name="rocket" />
         {{ $t('manpage.integrationActions.initializeMachineKnowledge') }}
       </BaseButton>
 
@@ -21,7 +21,7 @@
         :disabled="loading.integrate || !canIntegrate"
         :loading="loading.integrate"
       >
-        <i class="fas fa-book-open"></i>
+        <Icon name="book-open" />
         {{ $t('manpage.integrationActions.integrateManPages') }}
       </BaseButton>
 
@@ -31,7 +31,7 @@
         :disabled="loading.search || !hasIntegration"
         :loading="loading.search"
       >
-        <i class="fas fa-search"></i>
+        <Icon name="search" />
         {{ $t('manpage.integrationActions.testSearch') }}
       </BaseButton>
     </div>
@@ -68,6 +68,7 @@
  * Issue #184: Split oversized Vue components
  */
 
+import Icon from '@/components/ui/Icon.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 
 interface LoadingState {

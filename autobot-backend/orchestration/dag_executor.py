@@ -8,6 +8,13 @@ Issue #2140: Upgrade WorkflowExecutor to support condition nodes and
 branching execution.  Linear workflows continue to use the existing
 sequential path in WorkflowExecutor for full backward compatibility.
 
+Executor scope (#6826): DAGExecutor is the **production DAG engine**.  It
+owns asyncio-based parallel fan-out for independent branches and condition/
+branch routing.  The intended successor (GraphRunner via DAGGraphAdapter) is
+not yet in production because parallel fan-out is not yet supported there
+(tracked in #6826).  Until that gap closes, ``WorkflowExecutor`` delegates
+here for all DAG workflows.
+
 Key classes
 -----------
 WorkflowDAG
@@ -22,17 +29,19 @@ DAGExecutor
 """
 
 import asyncio
-import logging
-import os
 import ssl
 import time
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable, Coroutine, Dict, List, Optional, Set
+from typing import Any, Callable, Coroutine, Dict, List, Set
 
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 from constants.status_enums import TaskStatus
 
-logger = logging.getLogger(__name__)
+from .success_criteria import SuccessCriteriaEvaluator
+
+logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # Types
@@ -65,7 +74,7 @@ class DAGEdge:
 
     source: str
     target: str
-    label: Optional[bool] = None  # None = unconditional; True/False = condition branch
+    label: bool | None = None  # None = unconditional; True/False = condition branch
 
 
 @dataclass
@@ -99,7 +108,8 @@ class DAGExecutionContext:
     # Issue #2141: typed step outputs for structured variable piping
     step_outputs: Dict[str, Any] = field(default_factory=dict)
     status: str = "in_progress"
-    error: Optional[str] = None
+    error: str | None = None
+    criteria_evaluation: Dict[str, Any] = field(default_factory=dict)
 
 
 # ---------------------------------------------------------------------------
@@ -153,7 +163,7 @@ class WorkflowDAG:
                 logger.warning("DAG edge (%s → %s) references unknown node; skipping", src, tgt)
                 continue
             label_raw = raw.get("label")
-            label: Optional[bool] = None if label_raw is None else bool(label_raw)
+            label: bool | None = None if label_raw is None else bool(label_raw)
             edge = DAGEdge(source=src, target=tgt, label=label)
             self._successors[src].append(edge)
             self._predecessors[tgt].append(src)
@@ -188,7 +198,7 @@ class WorkflowDAG:
         """True when at least one node is a CONDITION node."""
         return any(n.node_type == NodeType.CONDITION for n in self._nodes.values())
 
-    def detect_cycle(self) -> Optional[List[str]]:
+    def detect_cycle(self) -> List[str] | None:
         """
         Return the first cycle found (as a path) or None if the graph is acyclic.
 
@@ -196,7 +206,7 @@ class WorkflowDAG:
         """
         WHITE, GREY, BLACK = 0, 1, 2
         colour: Dict[str, int] = {nid: WHITE for nid in self._nodes}
-        parent: Dict[str, Optional[str]] = {nid: None for nid in self._nodes}
+        parent: Dict[str, str | None] = {nid: None for nid in self._nodes}
 
         for start in self._nodes:
             if colour[start] != WHITE:
@@ -325,8 +335,13 @@ class DAGExecutor:
             results are merged by DAGExecutor after the call returns.
     """
 
-    def __init__(self, step_executor_callback: StepExecutorCallback) -> None:
+    def __init__(
+        self,
+        step_executor_callback: StepExecutorCallback,
+        criteria_evaluator: SuccessCriteriaEvaluator | None = None,
+    ) -> None:
         self._execute_step = step_executor_callback
+        self._criteria_evaluator = criteria_evaluator
 
     # ------------------------------------------------------------------
     # Public entry point
@@ -336,7 +351,7 @@ class DAGExecutor:
         self,
         dag: WorkflowDAG,
         workflow_id: str,
-        context: Optional[Dict[str, Any]] = None,
+        context: Dict[str, Any] | None = None,
     ) -> DAGExecutionContext:
         """
         Execute *dag* from all root nodes.
@@ -389,6 +404,11 @@ class DAGExecutor:
             ctx.status = TaskStatus.COMPLETED.value
         else:
             ctx.status = TaskStatus.PARTIALLY_COMPLETED.value
+
+        if self._criteria_evaluator and context and context.get("structured_criteria"):
+            eval_result = await self._criteria_evaluator.evaluate(context["structured_criteria"], ctx.step_results)
+            ctx.criteria_evaluation = eval_result.to_dict()
+
         logger.info("Workflow %s DAG execution finished: status=%s", workflow_id, ctx.status)
         return ctx
 
@@ -567,7 +587,7 @@ class DAGExecutor:
         self,
         node: DAGNode,
         dag: WorkflowDAG,
-        condition_result: Optional[bool],
+        condition_result: bool | None,
         skipped: bool = False,
     ) -> List[str]:
         """
@@ -585,12 +605,10 @@ class DAGExecutor:
 
 
 def _build_slm_ssl_context() -> ssl.SSLContext:
-    """Create SSL context for SLM HTTP calls (mirrors slm_client pattern)."""
-    ctx = ssl.create_default_context()
-    if os.environ.get("AUTOBOT_SKIP_TLS_VERIFY", "").lower() == "true":
-        ctx.check_hostname = False
-        ctx.verify_mode = ssl.CERT_NONE
-    return ctx
+    """Create SSL context for SLM HTTP calls (#6702: delegates to shared tls.py)."""
+    from autobot_shared.tls import get_internal_tls_context
+
+    return get_internal_tls_context()
 
 
 async def _execute_on_node(
@@ -662,8 +680,8 @@ async def execute_distributed_shell(node: DAGNode, ctx: DAGExecutionContext) -> 
     Returns a result dict whose ``success`` is True only when all nodes
     return exit_code 0.  Per-node details are in ``node_results``.
     """
-    slm_url = os.environ.get("SLM_URL", "").rstrip("/")
-    auth_token = os.environ.get("SLM_AUTH_TOKEN", "")
+    slm_url = config.slm_url.rstrip("/")
+    auth_token = config.slm_auth_token
     if not slm_url:
         return {
             "success": False,
@@ -756,7 +774,7 @@ def build_dag(steps: List[Dict[str, Any]], edges: List[Dict[str, Any]]) -> Workf
     payload without an explicit adapter.
     """
 
-    def _condition_to_label(value: Any) -> Optional[bool]:
+    def _condition_to_label(value: Any) -> bool | None:
         if value is None or isinstance(value, bool):
             return value
         if isinstance(value, str):

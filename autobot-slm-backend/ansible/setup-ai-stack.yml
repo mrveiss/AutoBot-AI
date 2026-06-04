@@ -71,8 +71,8 @@
 
     - name: Check ChromaDB health
       uri:
-        url: "http://{{ ansible_host }}:{{ chromadb_port }}/api/v1/heartbeat"
-        status_code: [200, 404]
+        url: "http://{{ ansible_host }}:{{ chromadb_port }}/api/v2/heartbeat"
+        status_code: [200]
         timeout: 5
       register: chromadb_check
       failed_when: false

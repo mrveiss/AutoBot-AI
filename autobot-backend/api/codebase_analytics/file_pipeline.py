@@ -18,10 +18,10 @@ Public functions
 """
 
 import asyncio
-import logging
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 
+from autobot_shared.logging_manager import get_logger
 from utils.file_categorization import FILE_CATEGORY_CODE, SKIP_DIRS
 from utils.file_categorization import get_file_category as _get_file_category
 
@@ -39,14 +39,14 @@ from .file_analyzer import (
 from .progress_tracker import _store_file_hash
 from .stats_aggregation import _aggregate_all_results, _aggregate_file_analysis
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 async def _get_file_analysis(
     file_path: Path,
     extension: str,
     stats: dict,
-) -> Optional[dict]:
+) -> dict | None:
     """Dispatch file analysis by extension.
 
     Issue #315, #367, #398: Refactored with mapping table for reduced complexity.
@@ -74,7 +74,7 @@ async def _process_file_problems(
     analysis_results: Dict,
     immediate_store_collection,
     file_category: str = FILE_CATEGORY_CODE,
-    source_id: Optional[str] = None,
+    source_id: str | None = None,
 ) -> None:
     """Process problems from file analysis and store to ChromaDB.
 
@@ -108,7 +108,7 @@ async def _process_single_file(
     file_needs_reindex_fn,
     run_in_thread_fn,
     redis_client=None,
-    source_id: Optional[str] = None,
+    source_id: str | None = None,
 ) -> Tuple[bool, bool]:
     """Process one file: check, analyse, aggregate, and store.
 
@@ -164,7 +164,7 @@ async def _iterate_files_sequential(
     run_in_thread_fn,
     parallel_file_processing: int,
     redis_client=None,
-    source_id: Optional[str] = None,
+    source_id: str | None = None,
 ) -> Tuple[int, int]:
     """Process files sequentially (fallback when parallel mode disabled).
 
@@ -219,7 +219,7 @@ async def _iterate_and_process_files_parallel(
     total_files: int,
     process_files_parallel_fn,
     redis_client=None,
-    source_id: Optional[str] = None,
+    source_id: str | None = None,
 ) -> Tuple[Dict, int, int]:
     """Process files in parallel and return aggregated results.
 
@@ -290,7 +290,7 @@ async def _iterate_and_process_files(
     process_files_parallel_fn,
     parallel_file_processing: int,
     redis_client=None,
-    source_id: Optional[str] = None,
+    source_id: str | None = None,
 ) -> Tuple[int, int]:
     """Dispatch file iteration to parallel or sequential mode.
 

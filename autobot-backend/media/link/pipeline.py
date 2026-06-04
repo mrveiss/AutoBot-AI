@@ -33,13 +33,13 @@ sites intact (see issue #7401 caller audit).
 
 import asyncio
 import ipaddress
-import logging
 import re
 import time
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 from urllib.parse import urljoin
 
+from autobot_shared.logging_manager import get_logger
 from knowledge.query_sanitizer import sanitize_document as _sanitize_document
 from media.core.pipeline import BasePipeline
 from media.core.types import MediaInput, MediaType, ProcessingResult
@@ -60,7 +60,7 @@ try:
 except ImportError:
     _BS4_AVAILABLE = False
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _DEFAULT_TIMEOUT = aiohttp.ClientTimeout(total=15) if _AIOHTTP_AVAILABLE else None
 _JINA_TIMEOUT = aiohttp.ClientTimeout(total=5) if _AIOHTTP_AVAILABLE else None
@@ -84,8 +84,8 @@ _jina_failures_in_window: List[float] = []
 # Pooled aiohttp session for Jina Reader (reused across calls for connection
 # pooling). Lazy-created under _jina_session_lock to serialize the first-
 # creation race. Close via close_jina_session() during app shutdown.
-_jina_session: Optional["aiohttp.ClientSession"] = None
-_jina_session_lock: Optional[asyncio.Lock] = None
+_jina_session: "aiohttp.ClientSession" | None = None
+_jina_session_lock: asyncio.Lock | None = None
 
 
 class LinkPipeline(BasePipeline):
@@ -130,10 +130,12 @@ class LinkPipeline(BasePipeline):
     # HTTP fetch
     # ------------------------------------------------------------------
 
-    # SSRF guard moved to ``autobot_shared.url_safety`` (#7477).
-    # The consolidated SSRF module is ``autobot_shared.security.ssrf_guard``
-    # (#6533); url_safety feeds into it. Thin wrappers below preserve the
-    # LinkPipeline call-site API (used by pipeline_test.py / web_fetch.fetcher).
+    # SSRF guard moved to ``autobot_shared.url_safety`` (#7477) so
+    # ``web_fetch.fetcher`` can call it directly instead of reaching into
+    # ``LinkPipeline`` via a ``__new__`` hack + lazy import (which was
+    # the last leg of the ``pipeline.py`` ↔ ``fetcher.py`` cycle). The
+    # methods below are preserved as thin wrappers so existing callers
+    # (this class + ``pipeline_test.py``) keep working unchanged.
 
     @staticmethod
     def _ip_is_public(ip: ipaddress._BaseAddress) -> bool:
@@ -404,7 +406,7 @@ class LinkResult:
     markdown: str = ""
     title: str = ""
     source: str = ""
-    error_code: Optional[str] = None
+    error_code: str | None = None
     retryable: bool = False
 
 

@@ -10,9 +10,10 @@ Contains LLMCodeGenerator class for LLM-powered code refactoring.
 
 import asyncio
 import hashlib
-import logging
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Tuple
+
+from autobot_shared.logging_manager import get_logger
 
 from .diff import DiffGenerator
 from .prompts import PromptTemplateManager
@@ -29,7 +30,7 @@ from .types import (
 )
 from .validator import CodeValidator
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # LLM service (replaces LLMInterface singleton — Phase 2D #3185)
 try:
@@ -52,7 +53,7 @@ class LLMCodeGenerator:
 
     def __init__(
         self,
-        llm_client: Optional[Any] = None,
+        llm_client: Any | None = None,
         model_name: str = "codellama:13b",
         temperature: float = 0.1,
         max_tokens: int = 4096,
@@ -115,7 +116,7 @@ class LLMCodeGenerator:
         request: RefactoringRequest,
         request_id: str,
         cache_key: str,
-    ) -> Optional[RefactoringResult]:
+    ) -> RefactoringResult | None:
         """
         Check cache and return cached result if available.
 
@@ -455,10 +456,10 @@ def list_prompt_templates() -> List[str]:
 
 async def refactor_code(
     code: str,
-    refactoring_type: Union[RefactoringType, str],
+    refactoring_type: RefactoringType | str,
     file_path: str = "code.py",
     description: str = "",
-    llm_client: Optional[Any] = None,
+    llm_client: Any | None = None,
     **kwargs,
 ) -> RefactoringResult:
     """

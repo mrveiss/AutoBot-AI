@@ -13,7 +13,6 @@ import {
 
 const meta = {
   title: 'Design System/Design Tokens',
-  tags: ['autodocs'],
   parameters: {
     layout: 'fullscreen',
     docs: {

@@ -24,11 +24,14 @@ semantic search, keyword search, hybrid search, and query preprocessing.
 """
 
 import asyncio
-import logging
 import time
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set
+from typing import TYPE_CHECKING, Any, Dict, List, Set
 
 from autobot_shared.error_boundaries import error_boundary
+from autobot_shared.logging_manager import get_logger
+
+# Issue #5064: prompt-injection sanitizer applied pre-embedding.
+from knowledge.query_sanitizer import sanitize_query as _sanitize_query
 
 # Issue #5064: prompt-injection sanitizer applied pre-embedding.
 from knowledge.query_sanitizer import sanitize_query as _sanitize_query
@@ -60,7 +63,7 @@ if TYPE_CHECKING:
     import redis
     from llama_index.vector_stores.chroma import ChromaVectorStore
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Re-export helper functions for backward compatibility
 _decode_redis_hash = decode_redis_hash
@@ -127,7 +130,7 @@ class SearchMixin:
             )
         return self._hybrid_searcher
 
-    def _validate_search_inputs(self, query: str) -> Optional[List[Dict[str, Any]]]:
+    def _validate_search_inputs(self, query: str) -> List[Dict[str, Any]] | None:
         """Validate search inputs, return empty list if invalid (Issue #398: extracted)."""
         if not query.strip():
             return []
@@ -137,7 +140,7 @@ class SearchMixin:
         return None  # Valid inputs
 
     @staticmethod
-    def _sanitize_search_query(query: str) -> Optional[str]:
+    def _sanitize_search_query(query: str) -> str | None:
         """Sanitize a search query against prompt-injection payloads (Issue #5064).
 
         Returns the sanitized string, or ``None`` if the query was rejected by
@@ -162,7 +165,7 @@ class SearchMixin:
         self,
         query: str,
         similarity_top_k: int,
-        filters: Optional[Dict[str, Any]] = None,
+        filters: Dict[str, Any] | None = None,
     ) -> List[Dict[str, Any]]:
         """Execute vector search and deduplicate results (Issue #398: extracted)."""
         query_embedding = await self._get_query_embedding(query)
@@ -180,7 +183,7 @@ class SearchMixin:
         query: str,
         top_k: int = 10,
         similarity_top_k: int = None,
-        filters: Optional[Dict[str, Any]] = None,
+        filters: Dict[str, Any] | None = None,
         mode: str = "auto",
     ) -> List[Dict[str, Any]]:
         """Search the knowledge base.
@@ -261,13 +264,24 @@ class SearchMixin:
         self,
         query_embedding: List[float],
         similarity_top_k: int,
-        where: Optional[Dict[str, Any]] = None,
+        where: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
         """Query ChromaDB directly with embedding. Issue #281: Extracted helper.
 
         Issue #934: Accepts optional where filter for permission-based pre-filtering.
+        Issue #8392: Records access for CollectionTierManager hot/warm/cold promotion.
         """
         chroma_collection = self.vector_store._collection
+
+        # Issue #8392: Record collection access for tiering promotions (non-critical).
+        try:
+            from knowledge.tiering import get_tier_manager
+
+            collection_id = getattr(chroma_collection, "name", None) or getattr(self, "chromadb_collection", "default")
+            await get_tier_manager().record_access(collection_id)
+        except Exception as _tier_err:
+            logger.debug("CollectionTierManager record_access failed: %s", _tier_err)
+
         kwargs: Dict[str, Any] = {
             "query_embeddings": [query_embedding],
             "n_results": similarity_top_k,
@@ -338,7 +352,7 @@ class SearchMixin:
         self,
         query: str,
         similarity_top_k: int,
-        filters: Optional[Dict[str, Any]],
+        filters: Dict[str, Any] | None,
         mode: str,
     ) -> List[Dict[str, Any]]:
         """Internal search implementation with timeout protection (V1 compatibility)"""
@@ -359,9 +373,7 @@ class SearchMixin:
             "message": "No facts match the specified tags",
         }
 
-    async def _get_tag_filtered_ids(
-        self, tags: Optional[List[str]], tags_match_any: bool, processed_query: str
-    ) -> tuple:
+    async def _get_tag_filtered_ids(self, tags: List[str] | None, tags_match_any: bool, processed_query: str) -> tuple:
         """Get tag-filtered fact IDs. Returns (filtered_ids, early_return_response or None)."""
         return await self._get_tag_filter().get_tag_filtered_ids(tags, tags_match_any, processed_query)
 
@@ -370,8 +382,8 @@ class SearchMixin:
         mode: str,
         processed_query: str,
         fetch_limit: int,
-        category: Optional[str],
-        board_filter: Optional[Dict[str, Any]] = None,
+        category: str | None,
+        board_filter: Dict[str, Any] | None = None,
     ) -> List[Dict[str, Any]]:
         """Execute search based on mode. Issue #281: Extracted helper.
 
@@ -379,7 +391,7 @@ class SearchMixin:
         ChromaDB ``where`` clauses include the board_id constraint.
         """
         # Build base filters dict, merging category and board constraints
-        base_filters: Optional[Dict[str, Any]] = None
+        base_filters: Dict[str, Any] | None = None
         filter_parts: Dict[str, Any] = {}
         if category:
             filter_parts["category"] = category
@@ -403,7 +415,7 @@ class SearchMixin:
     def _apply_post_search_filters(
         self,
         results: List[Dict[str, Any]],
-        tag_filtered_ids: Optional[Set[str]],
+        tag_filtered_ids: Set[str] | None,
         min_score: float,
     ) -> List[Dict[str, Any]]:
         """Apply tag and score filtering to results. Issue #281: Extracted helper."""
@@ -420,7 +432,7 @@ class SearchMixin:
         limit: int,
         processed_query: str,
         mode: str,
-        tags: Optional[List[str]],
+        tags: List[str] | None,
         min_score: float,
         enable_reranking: bool,
     ) -> Dict[str, Any]:
@@ -437,7 +449,7 @@ class SearchMixin:
             enable_reranking,
         )
 
-    def _calculate_fetch_limit(self, limit: int, offset: int, tags: Optional[List[str]], min_score: float) -> int:
+    def _calculate_fetch_limit(self, limit: int, offset: int, tags: List[str] | None, min_score: float) -> int:
         """Calculate fetch limit based on filters (Issue #398: extracted)."""
         multiplier = 3 if tags or min_score > 0 else 1.5
         return min(int((limit + offset) * multiplier), 500)
@@ -446,12 +458,12 @@ class SearchMixin:
         self,
         processed_query: str,
         mode: str,
-        category: Optional[str],
+        category: str | None,
         fetch_limit: int,
-        tag_filtered_ids: Optional[Set[str]],
+        tag_filtered_ids: Set[str] | None,
         min_score: float,
         enable_reranking: bool,
-        board_filter: Optional[Dict[str, Any]] = None,
+        board_filter: Dict[str, Any] | None = None,
     ) -> List[Dict[str, Any]]:
         """Execute search pipeline with filtering and reranking (Issue #398: extracted).
 
@@ -472,13 +484,13 @@ class SearchMixin:
         query: str,
         limit: int = 10,
         offset: int = 0,
-        category: Optional[str] = None,
-        tags: Optional[List[str]] = None,
+        category: str | None = None,
+        tags: List[str] | None = None,
         tags_match_any: bool = False,
         mode: str = "hybrid",
         enable_reranking: bool = False,
         min_score: float = 0.0,
-        board_id: Optional[str] = None,
+        board_id: str | None = None,
     ) -> Dict[str, Any]:
         """Enhanced search with filtering and reranking (Issue #398: refactored).
 
@@ -508,7 +520,7 @@ class SearchMixin:
 
             # Issue #3242: inject board filter into vector search when scoped
             effective_category = category
-            board_filter: Optional[Dict[str, Any]] = None
+            board_filter: Dict[str, Any] | None = None
             if board_id and board_id != "__global__":
                 board_filter = {"board_id": board_id}
                 logger.debug("Board-scoped search: board_id=%s", board_id)
@@ -562,12 +574,12 @@ class SearchMixin:
         return await self._get_tag_filter().get_fact_ids_by_tags(tags, match_all)
 
     async def _process_keyword_batch(
-        self, keys: list, query_terms: Set[str], category: Optional[str]
+        self, keys: list, query_terms: Set[str], category: str | None
     ) -> List[Dict[str, Any]]:
         """Process a batch of Redis keys for keyword search. Issue #281: Extracted helper."""
         return await self._get_keyword_searcher().process_keyword_batch(keys, query_terms, category)
 
-    async def _keyword_search(self, query: str, limit: int, category: Optional[str] = None) -> List[Dict[str, Any]]:
+    async def _keyword_search(self, query: str, limit: int, category: str | None = None) -> List[Dict[str, Any]]:
         """Perform keyword-based search using Redis (Issue #281 refactor)."""
         return await self._get_keyword_searcher().search(query, limit, category)
 
@@ -595,8 +607,8 @@ class SearchMixin:
         self,
         query: str,
         limit: int,
-        category: Optional[str] = None,
-        board_filter: Optional[Dict[str, Any]] = None,
+        category: str | None = None,
+        board_filter: Dict[str, Any] | None = None,
     ) -> List[Dict[str, Any]]:
         """Perform hybrid search combining semantic and keyword results.
 
@@ -625,8 +637,8 @@ class SearchMixin:
         query: str,
         limit: int = 10,
         offset: int = 0,
-        category: Optional[str] = None,
-        tags: Optional[List[str]] = None,
+        category: str | None = None,
+        tags: List[str] | None = None,
         tags_match_any: bool = False,
         mode: str = "hybrid",
         enable_reranking: bool = False,
@@ -635,13 +647,13 @@ class SearchMixin:
         enable_relevance_scoring: bool = False,
         enable_clustering: bool = False,
         track_analytics: bool = True,
-        created_after: Optional[str] = None,
-        created_before: Optional[str] = None,
-        exclude_terms: Optional[List[str]] = None,
-        require_terms: Optional[List[str]] = None,
-        exclude_sources: Optional[List[str]] = None,
+        created_after: str | None = None,
+        created_before: str | None = None,
+        exclude_terms: List[str] | None = None,
+        require_terms: List[str] | None = None,
+        exclude_sources: List[str] | None = None,
         verified_only: bool = False,
-        session_id: Optional[str] = None,
+        session_id: str | None = None,
     ) -> Dict[str, Any]:
         """Enhanced search v2 with full Issue #78 improvements."""
         ctx = EnhancedSearchContext.from_params(
@@ -698,7 +710,7 @@ class SearchMixin:
         queries: List[str],
         mode: str,
         fetch_limit: int,
-        category: Optional[str],
+        category: str | None,
     ) -> List[Dict[str, Any]]:
         """Execute search across multiple query variations (Issue #398: extracted)."""
         all_results: List[Dict[str, Any]] = []
@@ -719,7 +731,7 @@ class SearchMixin:
         self,
         results: List[Dict[str, Any]],
         params: Dict[str, Any],
-        tag_filtered_ids: Optional[Set[str]],
+        tag_filtered_ids: Set[str] | None,
         processed_query: str,
         fetch_limit: int,
     ) -> List[Dict[str, Any]]:
@@ -855,11 +867,11 @@ class SearchMixin:
     def _apply_advanced_search_filters(
         self,
         results: List[Dict[str, Any]],
-        created_after: Optional[str],
-        created_before: Optional[str],
-        exclude_terms: Optional[List[str]],
-        require_terms: Optional[List[str]],
-        exclude_sources: Optional[List[str]],
+        created_after: str | None,
+        created_before: str | None,
+        exclude_terms: List[str] | None,
+        require_terms: List[str] | None,
+        exclude_sources: List[str] | None,
         verified_only: bool,
         min_score: float,
         fetch_limit: int,
@@ -919,10 +931,10 @@ class SearchMixin:
         query: str,
         result_count: int,
         duration_ms: int,
-        session_id: Optional[str],
+        session_id: str | None,
         mode: str,
-        tags: Optional[List[str]],
-        category: Optional[str],
+        tags: List[str] | None,
+        category: str | None,
         query_expansion: bool,
         relevance_scoring: bool,
         track_analytics: bool,
@@ -962,7 +974,7 @@ class SearchMixin:
         clusters,
         query: str,
         mode: str,
-        tags: Optional[List[str]],
+        tags: List[str] | None,
         min_score: float,
         enable_reranking: bool,
         enable_query_expansion: bool,

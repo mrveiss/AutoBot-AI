@@ -23,8 +23,8 @@
 
 - name: "AutoBot Node Enrollment"
   hosts: "{{ target_host | default('all') }}"
-  gather_facts: yes
-  become: yes
+  gather_facts: true
+  become: true
 
   vars:
     enrollment_timestamp: "{{ ansible_facts['date_time'].iso8601 }}"
@@ -111,7 +111,7 @@
       block:
         - name: "Update apt cache"
           apt:
-            update_cache: yes
+            update_cache: true
             cache_valid_time: 3600
 
         - name: "Install base packages"
@@ -140,9 +140,9 @@
             groups: sudo
             shell: /bin/bash
             home: "{{ autobot_home }}"
-            create_home: yes
+            create_home: true
             state: present
-          ignore_errors: yes  # User may already exist
+          ignore_errors: true  # User may already exist
 
         - name: "Create AutoBot directories"
           file:
@@ -163,16 +163,16 @@
             user: "{{ autobot_user }}"
             state: present
             key: "{{ lookup('file', '/etc/autobot/ssh/autobot_key.pub') }}"
-          ignore_errors: yes  # Key may not exist during initial enrollment
+          ignore_errors: true  # Key may not exist during initial enrollment
 
         - name: "Create emergency admin user"
           user:
             name: "{{ emergency_admin_user }}"
             comment: "Emergency Admin User (fallback access)"
             shell: /bin/bash
-            create_home: yes
+            create_home: true
             groups: sudo
-            append: yes
+            append: true
             password: "{{ emergency_admin_password_hash }}"
             state: present
           when: vault_emergency_admin_password_hash is defined
@@ -236,7 +236,8 @@
               apt:
                 name: nodejs
                 state: present
-                update_cache: yes
+                update_cache: true
+                cache_valid_time: 3600
 
         # Redis-specific setup
         - name: "Setup Redis Stack"
@@ -253,7 +254,7 @@
               apt:
                 name: redis-stack-server
                 state: present
-                update_cache: yes
+                update_cache: true
 
         # NPU Worker setup
         - name: "Setup NPU Worker"
@@ -374,7 +375,7 @@
             direction: incoming
 
       tags: ['firewall']
-      ignore_errors: yes  # Firewall may be managed externally
+      ignore_errors: true  # Firewall may be managed externally
 
     # ===========================================
     # Phase 4: Service Registration

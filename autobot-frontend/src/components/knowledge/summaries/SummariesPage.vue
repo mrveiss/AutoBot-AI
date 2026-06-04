@@ -7,13 +7,13 @@
         :class="['toggle-btn', { active: view === 'search' }]"
         @click="view = 'search'"
       >
-        <i class="fas fa-search"></i> {{ $t('knowledge.summaries.page.search') }}
+        <Icon name="search" /> {{ $t('knowledge.summaries.page.search') }}
       </button>
       <button
         :class="['toggle-btn', { active: view === 'overview' }]"
         @click="view = 'overview'"
       >
-        <i class="fas fa-file-alt"></i> {{ $t('knowledge.summaries.page.documentOverview') }}
+        <Icon name="file-alt" /> {{ $t('knowledge.summaries.page.documentOverview') }}
       </button>
     </div>
 
@@ -41,7 +41,7 @@
             :disabled="!documentId.trim()"
             @click="loadOverview"
           >
-            <i class="fas fa-eye"></i> {{ $t('knowledge.summaries.page.load') }}
+            <Icon name="eye" /> {{ $t('knowledge.summaries.page.load') }}
           </button>
         </div>
       </div>
@@ -56,7 +56,7 @@
     <!-- Drill-Down View -->
     <div v-if="drillDownId" class="drill-down-section">
       <button class="back-btn" @click="drillDownId = null">
-        <i class="fas fa-arrow-left"></i> {{ $t('knowledge.summaries.page.backTo') }}
+        <Icon name="arrow-left" /> {{ $t('knowledge.summaries.page.backTo') }}
         {{ view === 'search' ? $t('knowledge.summaries.page.search') : $t('knowledge.summaries.page.documentOverview') }}
       </button>
       <DrillDownViewer :summary-id="drillDownId" />
@@ -69,6 +69,7 @@
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
 
+import Icon from '@/components/ui/Icon.vue'
 import { ref } from 'vue'
 import SummarySearch from './SummarySearch.vue'
 import DocumentOverview from './DocumentOverview.vue'

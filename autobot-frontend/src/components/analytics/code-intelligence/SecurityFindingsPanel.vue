@@ -6,7 +6,7 @@
 <template>
   <div class="security-panel">
     <div class="panel-header">
-      <h3><i class="fas fa-shield-alt"></i> {{ $t('analytics.findings.security.title') }}</h3>
+      <h3><Icon name="shield-alt" /> {{ $t('analytics.findings.security.title') }}</h3>
       <span v-if="findings.length > 0" class="count-badge">{{ findings.length }}</span>
     </div>
     <FindingsTable
@@ -18,6 +18,7 @@
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import FindingsTable from './FindingsTable.vue'
 import type { SecurityFinding } from '@/types/codeIntelligence'
 

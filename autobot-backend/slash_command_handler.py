@@ -24,18 +24,18 @@ Updated: 2025-12-06 - Refactored to fix Feature Envy with Command pattern
 """
 
 import asyncio
-import logging
 import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from constants.network_constants import NetworkConstants
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level cached category info to avoid repeated dict creation
 _CATEGORY_INFO: Dict[str, str] = {
@@ -109,7 +109,7 @@ class Command(ABC):
 class DocsCommand(Command):
     """Documentation browsing command."""
 
-    def __init__(self, args: Optional[str], docs_base_path: Path, doc_categories: dict):
+    def __init__(self, args: str | None, docs_base_path: Path, doc_categories: dict):
         """Initialize docs command with args and documentation paths."""
         self.args = args
         self.docs_base_path = docs_base_path
@@ -228,7 +228,7 @@ class DocsCommand(Command):
         """
         return "archive" in md_file_str_lower or "legacy" in md_file_str_lower
 
-    def _matches_query(self, md_file, query_lower: str) -> Optional[Path]:
+    def _matches_query(self, md_file, query_lower: str) -> Path | None:
         """
         Check if a markdown file matches the search query.
 
@@ -395,7 +395,7 @@ check the monitoring dashboard or system logs.
 class ScanCommand(Command):
     """Security scan initiation command."""
 
-    def __init__(self, args: Optional[str]):
+    def __init__(self, args: str | None):
         """Initialize scan command with target arguments."""
         self.args = args
 
@@ -519,7 +519,7 @@ class ScanCommand(Command):
 class SecurityCommand(Command):
     """Security assessment management command."""
 
-    def __init__(self, args: Optional[str]):
+    def __init__(self, args: str | None):
         """Initialize security command with subcommand arguments."""
         self.args = args
 
@@ -677,7 +677,7 @@ No active assessments found.
 class SecurityStatusSubcommand(Command):
     """Get status of a specific assessment."""
 
-    def __init__(self, manager, assessment_id: Optional[str]):
+    def __init__(self, manager, assessment_id: str | None):
         """Initialize status subcommand with manager and assessment ID."""
         self.manager = manager
         self.assessment_id = assessment_id
@@ -757,7 +757,7 @@ class SecurityStatusSubcommand(Command):
 class SecurityResumeSubcommand(Command):
     """Resume a security assessment."""
 
-    def __init__(self, manager, assessment_id: Optional[str]):
+    def __init__(self, manager, assessment_id: str | None):
         """Initialize resume subcommand with manager and assessment ID."""
         self.manager = manager
         self.assessment_id = assessment_id
@@ -892,12 +892,12 @@ class SecurityPhasesSubcommand(Command):
 class SecretsCommand(Command):
     """Secrets management command - Issue #211."""
 
-    def __init__(self, args: Optional[str], chat_id: Optional[str] = None):
+    def __init__(self, args: str | None, chat_id: str | None = None):
         """Initialize secrets command with subcommand arguments."""
         self.args = args
         self.chat_id = chat_id
 
-    def _get_subcommand_handlers(self, sub_args: Optional[str]) -> dict:
+    def _get_subcommand_handlers(self, sub_args: str | None) -> dict:
         """Get subcommand handler mapping. Issue #620."""
         from api.secrets import secrets_manager
 
@@ -986,7 +986,7 @@ class SecretsCommand(Command):
 class SecretsListSubcommand(Command):
     """List accessible secrets."""
 
-    def __init__(self, manager, chat_id: Optional[str]):
+    def __init__(self, manager, chat_id: str | None):
         """Initialize list subcommand with secrets manager."""
         self.manager = manager
         self.chat_id = chat_id
@@ -1073,13 +1073,13 @@ class SecretsAddSubcommand(Command):
         "other",
     ]
 
-    def __init__(self, manager, args: Optional[str], chat_id: Optional[str]):
+    def __init__(self, manager, args: str | None, chat_id: str | None):
         """Initialize add subcommand with manager and arguments."""
         self.manager = manager
         self.args = args
         self.chat_id = chat_id
 
-    def _parse_and_validate_args(self) -> Optional[SlashCommandResult]:
+    def _parse_and_validate_args(self) -> SlashCommandResult | None:
         """
         Parse and validate arguments for add command.
 
@@ -1187,13 +1187,13 @@ Your secret has been securely encrypted and stored.
 class SecretsShowSubcommand(Command):
     """Show a secret's value."""
 
-    def __init__(self, manager, secret_name: Optional[str], chat_id: Optional[str]):
+    def __init__(self, manager, secret_name: str | None, chat_id: str | None):
         """Initialize show subcommand."""
         self.manager = manager
         self.secret_name = secret_name
         self.chat_id = chat_id
 
-    def _find_secret_by_name(self, secret_name: str) -> Optional[dict]:
+    def _find_secret_by_name(self, secret_name: str) -> dict | None:
         """
         Find a secret by name from accessible secrets.
 
@@ -1278,13 +1278,13 @@ class SecretsShowSubcommand(Command):
 class SecretsDeleteSubcommand(Command):
     """Delete a secret."""
 
-    def __init__(self, manager, secret_name: Optional[str], chat_id: Optional[str]):
+    def __init__(self, manager, secret_name: str | None, chat_id: str | None):
         """Initialize delete subcommand."""
         self.manager = manager
         self.secret_name = secret_name
         self.chat_id = chat_id
 
-    def _find_secret_by_name(self) -> Optional[dict]:
+    def _find_secret_by_name(self) -> dict | None:
         """
         Find a secret by name from accessible secrets.
 
@@ -1345,13 +1345,13 @@ class SecretsDeleteSubcommand(Command):
 class SecretsTransferSubcommand(Command):
     """Transfer a secret between scopes."""
 
-    def __init__(self, manager, args: Optional[str], chat_id: Optional[str]):
+    def __init__(self, manager, args: str | None, chat_id: str | None):
         """Initialize transfer subcommand."""
         self.manager = manager
         self.args = args
         self.chat_id = chat_id
 
-    def _find_secret_by_name(self, secret_name: str) -> Optional[dict]:
+    def _find_secret_by_name(self, secret_name: str) -> dict | None:
         """
         Find a secret by name from accessible secrets.
 
@@ -1579,7 +1579,7 @@ class SlashCommandHandler:
     async def execute(
         self,
         message: str,
-        chat_id: Optional[str] = None,
+        chat_id: str | None = None,
     ) -> SlashCommandResult:
         """
         Execute a slash command and return the result.
@@ -1599,7 +1599,7 @@ class SlashCommandHandler:
 
     def _get_command_factories(
         self,
-        chat_id: Optional[str] = None,
+        chat_id: str | None = None,
     ) -> Dict[CommandType, callable]:
         """Get command type to factory mapping (Issue #315)."""
         return {
@@ -1614,8 +1614,8 @@ class SlashCommandHandler:
     def _create_command(
         self,
         cmd_type: CommandType,
-        args: Optional[str],
-        chat_id: Optional[str] = None,
+        args: str | None,
+        chat_id: str | None = None,
     ) -> Command:
         """
         Create the appropriate command object (#315, #1641).

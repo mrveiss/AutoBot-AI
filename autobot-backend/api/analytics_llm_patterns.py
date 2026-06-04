@@ -18,12 +18,11 @@ Related Issues: #229 (LLM Integration Pattern Analyzer)
 import asyncio
 import hashlib
 import json
-import logging
 import re
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from fastapi import APIRouter, Query
 from redis.exceptions import RedisError
@@ -33,7 +32,6 @@ from api.schemas_agent import (
     LLMPatternsCacheOpportunitiesResponse,
     LLMPatternsCategoryDistributionResponse,
     LLMPatternsCostBreakdownResponse,
-    LLMPatternsHealthResponse,
     LLMPatternsModelComparisonResponse,
     LLMPatternsRecommendationsResponse,
     LLMPatternsRecordResponse,
@@ -45,6 +43,7 @@ from api.schemas_analytics import (
     PromptCategory,
     UsageRecordRequest,
 )
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import RedisDatabase
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
 from constants.model_constants import (
@@ -57,7 +56,7 @@ from constants.ttl_constants import TTL_30_DAYS
 
 # Prefix provided by analytics_routers.py registry (#1032)
 router = APIRouter(tags=["llm-patterns", "analytics"])
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # =============================================================================
@@ -150,7 +149,7 @@ class PromptUsageRecord:
     timestamp: datetime
     response_time: float
     success: bool
-    session_id: Optional[str] = None
+    session_id: str | None = None
 
 
 @dataclass
@@ -329,7 +328,7 @@ class LLMPatternAnalyzer(AsyncRedisClientMixin):
             if category in SIMPLE_PROMPT_CATEGORIES:  # O(1) lookup (Issue #326)
                 recommendations.append("Consider using a smaller model (Haiku/GPT-3.5) for this task type")
 
-    async def analyze_prompt(self, prompt: str, model: Optional[str] = None) -> Dict[str, Any]:
+    async def analyze_prompt(self, prompt: str, model: str | None = None) -> Dict[str, Any]:
         """
         Analyze a single prompt for optimization opportunities.
 
@@ -381,8 +380,12 @@ class LLMPatternAnalyzer(AsyncRedisClientMixin):
             # Store usage record
             date_key = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d")
             usage_key = f"{self._usage_key}:{date_key}"
-            await redis.lpush(usage_key, json.dumps(record))
-            await redis.expire(usage_key, TTL_30_DAYS)  # 30 days
+            # Issue #8163: pipeline LPUSH+EXPIRE to avoid a race where the
+            # key survives forever if the process dies between the two calls.
+            async with redis.pipeline() as pipe:
+                await pipe.lpush(usage_key, json.dumps(record))
+                await pipe.expire(usage_key, TTL_30_DAYS)
+                await pipe.execute()
 
             # Update cache tracking
             cache_key = f"{self._cache_key}:{prompt_hash}"
@@ -402,8 +405,8 @@ class LLMPatternAnalyzer(AsyncRedisClientMixin):
                     "preview": self._get_prompt_preview(request.prompt),
                 }
 
-            await redis.set(cache_key, json.dumps(data))
-            await redis.expire(cache_key, TTL_30_DAYS)
+            # Issue #8163: atomic SET EX replaces the two-call SET + EXPIRE.
+            await redis.set(cache_key, json.dumps(data), ex=TTL_30_DAYS)
 
             # Update stats
             await self._update_stats(request.model, cost, request.success)
@@ -517,7 +520,7 @@ class LLMPatternAnalyzer(AsyncRedisClientMixin):
             logger.error("Failed to get usage stats: %s", e)
             raise RuntimeError(f"Failed to get usage stats: {e}")
 
-    def _parse_cache_opportunity(self, key: str, data: str, min_occurrences: int) -> Optional[Dict[str, Any]]:
+    def _parse_cache_opportunity(self, key: str, data: str, min_occurrences: int) -> Dict[str, Any] | None:
         """Parse a cache opportunity from Redis data. (Issue #315 - extracted)"""
         if not data:
             return None
@@ -560,7 +563,7 @@ class LLMPatternAnalyzer(AsyncRedisClientMixin):
             logger.error("Failed to identify cache opportunities: %s", e)
             raise RuntimeError(f"Failed to identify cache opportunities: {e}")
 
-    def _build_caching_recommendation(self, cache_opportunities: List[Dict]) -> Optional[Dict[str, Any]]:
+    def _build_caching_recommendation(self, cache_opportunities: List[Dict]) -> Dict[str, Any] | None:
         """Build caching recommendation if applicable (Issue #665: extracted helper)."""
         if not cache_opportunities:
             return None
@@ -580,7 +583,7 @@ class LLMPatternAnalyzer(AsyncRedisClientMixin):
             ],
         }
 
-    def _build_model_downgrade_recommendation(self, stats: Dict, model_usage: Dict) -> Optional[Dict[str, Any]]:
+    def _build_model_downgrade_recommendation(self, stats: Dict, model_usage: Dict) -> Dict[str, Any] | None:
         """Build model downgrade recommendation if applicable (Issue #665: extracted helper)."""
         expensive_models = [m for m in model_usage if any(keyword in m.lower() for keyword in EXPENSIVE_MODELS)]
         if not expensive_models:
@@ -600,7 +603,7 @@ class LLMPatternAnalyzer(AsyncRedisClientMixin):
             ],
         }
 
-    def _build_batch_processing_recommendation(self, stats: Dict) -> Optional[Dict[str, Any]]:
+    def _build_batch_processing_recommendation(self, stats: Dict) -> Dict[str, Any] | None:
         """Build batch processing recommendation if applicable (Issue #665: extracted helper)."""
         if stats["total_requests"] <= 100:
             return None
@@ -842,7 +845,7 @@ import threading
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
-_analyzer: Optional[LLMPatternAnalyzer] = None
+_analyzer: LLMPatternAnalyzer | None = None
 _analyzer_lock = threading.Lock()
 
 
@@ -860,38 +863,6 @@ def get_pattern_analyzer() -> LLMPatternAnalyzer:
 # =============================================================================
 # API Endpoints
 # =============================================================================
-
-
-@router.get("/health", response_model=LLMPatternsHealthResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_health",
-    error_code_prefix="ANALYTICS_LLM_PATTERNS",
-)
-async def get_health():
-    """Get LLM pattern analyzer health status.
-
-    Deprecated: Use /api/system/health for system-wide health checks.
-    This per-module endpoint will be removed in a future release. (#3333)
-    """
-    logger.warning(
-        "Deprecated health endpoint called: /api/llm-patterns/health — " "use /api/system/health instead (#3333)"
-    )
-    return {
-        "status": "healthy",
-        "service": "llm_pattern_analyzer",
-        "deprecated": True,
-        "use_instead": "/api/system/health",
-        "features": [
-            "prompt_analysis",
-            "usage_tracking",
-            "cache_detection",
-            "cost_optimization",
-            "model_comparison",
-        ],
-        "supported_categories": [c.value for c in PromptCategory],
-        "optimization_types": [o.value for o in OptimizationType],
-    }
 
 
 @router.post("/analyze", response_model=LLMPatternsAnalyzeResponse)

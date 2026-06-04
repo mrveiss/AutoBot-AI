@@ -10,7 +10,7 @@ Contains dataclasses and type definitions for GPU optimization.
 
 import time
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 
 @dataclass
@@ -19,7 +19,7 @@ class GPUOptimizationConfig:
 
     # Memory Management
     memory_growth_enabled: bool = True
-    memory_limit_mb: Optional[int] = None
+    memory_limit_mb: int | None = None
     memory_allocation_strategy: str = "dynamic"  # dynamic, pre_allocated, growth_limit
 
     # Performance Settings
@@ -90,8 +90,8 @@ class GPUCapabilities:
     vendor: str = "unknown"  # "nvidia", "amd", "intel", "unknown"
     tensor_cores: bool = False
     mixed_precision: bool = False
-    cuda_version: Optional[str] = None
-    compute_capability: Optional[str] = None
+    cuda_version: str | None = None
+    compute_capability: str | None = None
     memory_gb: float = 0
     max_threads_per_block: int = 0
     multiprocessor_count: int = 0

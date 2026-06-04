@@ -27,13 +27,14 @@
 
     <!-- Current step -->
     <div class="progress-step" v-if="currentStep && showStep">
-      <i class="fas fa-cog fa-spin step-icon" v-if="isRunning"></i>
+      <Icon name="cog" class="animate-spin step-icon" />
       <span class="step-text">{{ currentStep }}</span>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { computed } from 'vue'
 import type { OperationStatus } from '@/types/operations'
 
@@ -43,7 +44,7 @@ interface Props {
   processedItems?: number
   estimatedItems?: number
   currentStep?: string
-  size?: 'small' | 'medium' | 'large'
+  size?: 'sm' | 'md' | 'lg'
   showInfo?: boolean
   showItems?: boolean
   showStep?: boolean
@@ -53,7 +54,7 @@ const props = withDefaults(defineProps<Props>(), {
   processedItems: 0,
   estimatedItems: 0,
   currentStep: '',
-  size: 'medium',
+  size: 'md',
   showInfo: true,
   showItems: true,
   showStep: true
@@ -98,15 +99,15 @@ const progressBarClasses = computed(() => {
   overflow: hidden;
 }
 
-.progress-small .progress-bar-container {
+.progress-sm .progress-bar-container {
   height: 4px;
 }
 
-.progress-medium .progress-bar-container {
+.progress-md .progress-bar-container {
   height: 8px;
 }
 
-.progress-large .progress-bar-container {
+.progress-lg .progress-bar-container {
   height: 12px;
 }
 
@@ -173,7 +174,7 @@ const progressBarClasses = computed(() => {
 }
 
 .bg-red-500 {
-  background-color: #ef4444;
+  background-color: var(--color-error);
 }
 
 .bg-yellow-500 {

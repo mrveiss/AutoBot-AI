@@ -11,12 +11,10 @@ Legacy tools that do not set ``tool_permission`` on HookContext are allowed
 through unchanged so that existing callers are not broken.
 """
 
-import logging
-from typing import Optional
-
+from autobot_shared.logging_manager import get_logger
 from extensions.base import Extension, HookContext
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -45,7 +43,7 @@ _PERMISSION_MIN_LEVEL: dict[str, int] = {
 }
 
 
-def _role_satisfies(user_role: Optional[str], tool_permission: str) -> bool:
+def _role_satisfies(user_role: str | None, tool_permission: str) -> bool:
     """Return True if *user_role* meets the *tool_permission* requirement.
 
     Args:
@@ -90,7 +88,7 @@ class PermissionEnforcementExtension(Extension):
     name = "permission_enforcement"
     priority = 0  # Runs first — before any other extension
 
-    async def on_before_tool_execute(self, ctx: HookContext) -> Optional[bool]:
+    async def on_before_tool_execute(self, ctx: HookContext) -> bool | None:
         """Check caller permission before tool execution.
 
         Args:

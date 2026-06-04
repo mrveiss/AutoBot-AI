@@ -17,7 +17,7 @@
 
 - name: "AutoBot System Rollback - Pre-flight"
   hosts: localhost
-  gather_facts: no
+  gather_facts: false
   tasks:
     - name: Display rollback warning
       ansible.builtin.debug:
@@ -50,7 +50,7 @@
 # Rollback in reverse order of updates (most dependent first)
 - name: "Rollback Browser Services"
   hosts: browser
-  become: yes
+  become: true
   serial: 1
   tasks:
     - name: Include system rollback tasks
@@ -62,7 +62,7 @@
 
 - name: "Rollback Frontend Services"
   hosts: frontend
-  become: yes
+  become: true
   serial: 1
   tasks:
     - name: Include system rollback tasks
@@ -74,7 +74,7 @@
 
 - name: "Rollback NPU Worker Services"
   hosts: npu
-  become: yes
+  become: true
   serial: 1
   tasks:
     - name: Include system rollback tasks
@@ -86,7 +86,7 @@
 
 - name: "Rollback AI/ML Stack Services"
   hosts: aiml
-  become: yes
+  become: true
   serial: 1
   tasks:
     - name: Include system rollback tasks
@@ -98,7 +98,7 @@
 
 - name: "Rollback Backend Services"
   hosts: backend
-  become: yes
+  become: true
   serial: 1
   tasks:
     - name: Include system rollback tasks
@@ -110,7 +110,7 @@
 
 - name: "Rollback Database Services"
   hosts: database
-  become: yes
+  become: true
   serial: 1
   tasks:
     - name: Include system rollback tasks
@@ -122,7 +122,7 @@
 
 - name: "Post-Rollback Summary"
   hosts: localhost
-  gather_facts: no
+  gather_facts: false
   tasks:
     - name: Display completion summary
       ansible.builtin.debug:

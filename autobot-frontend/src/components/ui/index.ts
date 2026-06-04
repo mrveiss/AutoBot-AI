@@ -30,4 +30,5 @@ export { default as SystemStatusNotification } from './SystemStatusNotification.
 export { default as ThemeToggle } from './ThemeToggle.vue'
 export { default as ToastContainer } from './ToastContainer.vue'
 export { default as TouchFriendlyButton } from './TouchFriendlyButton.vue'
-export { default as UnifiedLoadingView } from './UnifiedLoadingView.vue'
+export { default as LoadingBoundary } from './LoadingBoundary.vue'
+export { default as LoadingOverlay } from './LoadingOverlay.vue'

@@ -32,6 +32,7 @@ from .nodes import router as nodes_router
 from .nodes_execution import router as nodes_execution_router
 from .npu import router as npu_router
 from .orchestration import router as orchestration_router
+from .rdp import node_rdp_router, rdp_router
 from .secrets import router as secrets_router
 from .security import router as security_router
 from .services import fleet_router as fleet_services_router
@@ -70,6 +71,8 @@ __all__ = [
     "mfa_router",
     "monitoring_router",
     "blue_green_router",
+    "node_rdp_router",
+    "rdp_router",
     "node_vnc_router",
     "vnc_router",
     "node_tls_router",

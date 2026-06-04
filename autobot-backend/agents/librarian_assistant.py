@@ -12,18 +12,18 @@ or the query requires current/external data.
 """
 
 import json
-import logging
 from datetime import datetime, timezone
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List
 
 from autobot_shared.http_client import get_http_client
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from config import config
 from knowledge_base import KnowledgeBase
 from services.llm_service import get_llm_service
 from utils.service_registry import get_service_url
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class LibrarianAssistant:
@@ -66,7 +66,7 @@ class LibrarianAssistant:
         self.http_client = get_http_client()
 
     @staticmethod
-    async def _emit(callback: Optional[Callable], event: Dict[str, Any]) -> None:
+    async def _emit(callback: Callable | None, event: Dict[str, Any]) -> None:
         """Fire a progress event if a callback is registered. Issue #1256."""
         if callback is None:
             return
@@ -93,7 +93,7 @@ class LibrarianAssistant:
         self,
         query: str,
         search_engine: str,
-        progress_callback: Optional[Callable],
+        progress_callback: Callable | None,
     ) -> List[Dict[str, Any]]:
         """POST to Playwright /search and emit result_found events. Issue #1256.
 
@@ -130,7 +130,7 @@ class LibrarianAssistant:
         self,
         query: str,
         search_engine: str = "duckduckgo",
-        progress_callback: Optional[Callable] = None,
+        progress_callback: Callable | None = None,
     ) -> List[Dict[str, Any]]:
         """Search the web for information using the browser VM Playwright service.
 
@@ -181,7 +181,7 @@ class LibrarianAssistant:
             "content_length": result["content_length"],
         }
 
-    async def extract_content(self, url: str) -> Optional[Dict[str, Any]]:
+    async def extract_content(self, url: str) -> Dict[str, Any] | None:
         """Extract content from a web page using the browser VM Playwright service.
 
         Args:
@@ -223,9 +223,7 @@ class LibrarianAssistant:
             logger.error("Error extracting content from %s: %s", url, e)
             return None
 
-    def _build_fallback_assessment(
-        self, content_data: Dict[str, Any], error_msg: Optional[str] = None
-    ) -> Dict[str, Any]:
+    def _build_fallback_assessment(self, content_data: Dict[str, Any], error_msg: str | None = None) -> Dict[str, Any]:
         """Build fallback assessment when LLM fails (Issue #665: extracted helper)."""
         if error_msg:
             return {
@@ -390,8 +388,8 @@ class LibrarianAssistant:
         result: Dict[str, Any],
         store_quality_content: bool,
         stored_list: List[Dict[str, Any]],
-        progress_callback: Optional[Callable] = None,
-    ) -> Optional[Dict[str, Any]]:
+        progress_callback: Callable | None = None,
+    ) -> Dict[str, Any] | None:
         """Process single search result (Issue #334, #1256 - extracted helper)."""
         content = await self.extract_content(result["url"])
         if not content:
@@ -475,7 +473,7 @@ class LibrarianAssistant:
         search_results: List[Dict[str, Any]],
         store_quality_content: bool,
         stored_list: List[Dict[str, Any]],
-        progress_callback: Optional[Callable] = None,
+        progress_callback: Callable | None = None,
     ) -> List[Dict[str, Any]]:
         """Extract and process top search results. Issue #620, #1256.
 
@@ -501,7 +499,7 @@ class LibrarianAssistant:
         self,
         query: str,
         store_quality_content: bool = None,
-        progress_callback: Optional[Callable] = None,
+        progress_callback: Callable | None = None,
     ) -> Dict[str, Any]:
         """Research a query by searching the web and extracting content. Issue #620, #1256.
 

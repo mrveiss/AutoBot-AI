@@ -24,18 +24,18 @@ Issue #554: Enhanced with Vector/Redis/LLM infrastructure:
 - Historical review pattern learning via embeddings
 """
 
-import logging
 import re
 import subprocess  # nosec B404 - code review tools require subprocess
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import TimingConstants
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Allowlist pattern for git ref arguments passed to subprocess (Issue #1733).
 # Allows: HEAD, HEAD~N, commit hashes, branch names, --cached, --staged, .. and ... ranges.
@@ -100,9 +100,9 @@ class ReviewPattern:
     name: str
     category: ReviewCategory
     severity: ReviewSeverity
-    pattern: Optional[str]  # Regex pattern (None for programmatic checks)
+    pattern: str | None  # Regex pattern (None for programmatic checks)
     message: str
-    suggestion: Optional[str] = None
+    suggestion: str | None = None
     file_extensions: list[str] = field(default_factory=lambda: [".py"])
 
     def to_dict(self) -> dict[str, Any]:
@@ -129,9 +129,9 @@ class ReviewComment:
     severity: ReviewSeverity
     category: ReviewCategory
     message: str
-    suggestion: Optional[str] = None
-    code_snippet: Optional[str] = None
-    pattern_id: Optional[str] = None
+    suggestion: str | None = None
+    code_snippet: str | None = None
+    pattern_id: str | None = None
     context_before: list[str] = field(default_factory=list)
     context_after: list[str] = field(default_factory=list)
 
@@ -168,7 +168,7 @@ class DiffFile:
     """A file from a diff."""
 
     path: str
-    old_path: Optional[str] = None
+    old_path: str | None = None
     is_new: bool = False
     is_deleted: bool = False
     is_renamed: bool = False
@@ -461,8 +461,8 @@ class CodeReviewEngine(_BaseClass):
 
     def __init__(
         self,
-        project_root: Optional[str] = None,
-        patterns: Optional[dict[str, ReviewPattern]] = None,
+        project_root: str | None = None,
+        patterns: dict[str, ReviewPattern] | None = None,
         context_lines: int = 2,
         max_function_lines: int = 50,
         max_nesting_depth: int = 4,
@@ -568,7 +568,7 @@ class CodeReviewEngine(_BaseClass):
                 )
         return comments
 
-    def review_file(self, file_path: str, content: Optional[str] = None) -> list[ReviewComment]:
+    def review_file(self, file_path: str, content: str | None = None) -> list[ReviewComment]:
         """
         Review a single file for issues.
 
@@ -765,8 +765,8 @@ class CodeReviewEngine(_BaseClass):
 
     def _finalize_current_file(
         self,
-        current_file: Optional[DiffFile],
-        current_hunk: Optional[DiffHunk],
+        current_file: DiffFile | None,
+        current_hunk: DiffHunk | None,
         files: list,
     ) -> None:
         """Finalize current file and add to files list (Issue #335 - extracted helper)."""
@@ -784,7 +784,7 @@ class CodeReviewEngine(_BaseClass):
         old_path = old_path_match.group(1) if old_path_match else None
         return DiffFile(path=file_path, old_path=old_path)
 
-    def _parse_hunk_header(self, line: str) -> Optional[DiffHunk]:
+    def _parse_hunk_header(self, line: str) -> DiffHunk | None:
         """Parse hunk header line (Issue #335 - extracted helper)."""
         match = _HUNK_HEADER_RE.match(line)
         if not match:
@@ -797,7 +797,7 @@ class CodeReviewEngine(_BaseClass):
             lines=[],
         )
 
-    def _parse_hunk_line(self, line: str, current_hunk: DiffHunk, current_file: Optional[DiffFile]) -> None:
+    def _parse_hunk_line(self, line: str, current_hunk: DiffHunk, current_file: DiffFile | None) -> None:
         """Parse a hunk content line (Issue #335 - extracted helper)."""
         if line.startswith("+") and not line.startswith("+++"):
             current_hunk.lines.append({"type": "add", "content": line[1:]})
@@ -815,7 +815,7 @@ class CodeReviewEngine(_BaseClass):
                 }
             )
 
-    def _handle_file_metadata(self, line: str, current_file: Optional[DiffFile]) -> bool:
+    def _handle_file_metadata(self, line: str, current_file: DiffFile | None) -> bool:
         """Handle file metadata lines (Issue #315 - reduce nesting)."""
         if not current_file:
             return False
@@ -833,8 +833,8 @@ class CodeReviewEngine(_BaseClass):
     def _parse_diff(self, diff_content: str) -> list[DiffFile]:
         """Parse unified diff format into structured data (Issue #315: depth 7→3)."""
         files: list[DiffFile] = []
-        current_file: Optional[DiffFile] = None
-        current_hunk: Optional[DiffHunk] = None
+        current_file: DiffFile | None = None
+        current_hunk: DiffHunk | None = None
 
         for line in diff_content.split("\n"):
             # Handle new file marker
@@ -1097,7 +1097,7 @@ class CodeReviewEngine(_BaseClass):
 # ============================================================================
 
 
-def review_file(file_path: str, content: Optional[str] = None) -> list[ReviewComment]:
+def review_file(file_path: str, content: str | None = None) -> list[ReviewComment]:
     """
     Review a file for issues.
 

@@ -54,7 +54,7 @@ Usage:
 import time
 from collections import defaultdict
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Set, Tuple
 
 from agents.knowledge_extraction_agent import KnowledgeExtractionAgent
 from autobot_memory_graph import AutoBotMemoryGraph
@@ -86,7 +86,7 @@ class EntityCandidate:
     facts: List[AtomicFact] = field(default_factory=list)
     confidence: float = 0.0
     tags: Set[str] = field(default_factory=set)
-    temporal_type: Optional[TemporalType] = None
+    temporal_type: TemporalType | None = None
 
 
 @dataclass
@@ -214,7 +214,7 @@ class GraphEntityExtractor:
         self,
         conversation_id: str,
         messages: List[Dict[str, str]],
-        session_metadata: Optional[Dict[str, Any]],
+        session_metadata: Dict[str, Any] | None,
         result: ExtractionResult,
     ) -> None:
         """
@@ -249,7 +249,7 @@ class GraphEntityExtractor:
         self,
         conversation_id: str,
         messages: List[Dict[str, str]],
-        session_metadata: Optional[Dict[str, Any]] = None,
+        session_metadata: Dict[str, Any] | None = None,
     ) -> ExtractionResult:
         """
         Extract entities from conversation and populate graph.
@@ -313,7 +313,7 @@ class GraphEntityExtractor:
         self,
         facts: List[AtomicFact],
         conversation_id: str,
-        session_metadata: Optional[Dict[str, Any]],
+        session_metadata: Dict[str, Any] | None,
     ) -> List[EntityCandidate]:
         """
         Convert atomic facts to entity candidates.
@@ -723,7 +723,7 @@ class GraphEntityExtractor:
         self,
         high_confidence_facts: List[AtomicFact],
         conversation_id: str,
-        session_metadata: Optional[Dict[str, Any]],
+        session_metadata: Dict[str, Any] | None,
         result: ExtractionResult,
     ) -> List[Dict[str, Any]]:
         """

@@ -117,8 +117,8 @@ SAFE_PATTERNS = {
     "getattr(": "Python builtin for attribute access",
     "getattr": "Python builtin for attribute access",
     # Logging - initialization, not I/O during call
-    "getlogger": "logging.getLogger() - logger initialization",
-    "logging.getlogger": "logging.getLogger() - logger initialization",
+    "getlogger": "get_logger() - logger initialization",
+    "logging.getlogger": "get_logger() - logger initialization",
     # FastAPI/web framework decorators - NOT HTTP calls
     "router.get": "FastAPI/Starlette route decorator",
     "router.post": "FastAPI/Starlette route decorator",

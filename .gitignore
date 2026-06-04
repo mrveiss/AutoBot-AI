@@ -46,6 +46,9 @@ static/js/
 autobot-vue/dist/
 autobot-vue/.vite/
 
+# Embed widget build output (vite.embed.config.ts → dist-embed/)
+autobot-frontend/dist-embed/
+
 # === APPLICATION DATA ===
 # CRITICAL: Ignore data directory contents EXCEPT configuration files
 # User data and runtime files should NEVER be committed to git
@@ -66,6 +69,7 @@ analysis/**/output.txt
 *.pem
 *.key
 *.pub
+!cosign.pub  # Exception: cosign public key must be tracked for image verification (#6597)
 *.ppk
 *.p12
 *.pfx
@@ -397,6 +401,7 @@ config/service-keys/
 .console-cleanup-backups/
 .sidebar-backups/
 backup/
+!autobot-backend/backup/
 backups/
 
 # === ADDITIONAL CLOUD PROVIDER CREDENTIALS ===
@@ -444,6 +449,7 @@ ansible/inventory/group_vars/vault.yml
 .claude/agents-optimized/
 .claude/.optimization_cache.json
 .claude/settings.local.json
+.claude/scheduled_tasks.lock
 
 # Git worktrees for isolated development
 .worktrees/
@@ -463,3 +469,9 @@ docs/.obsidian/core-plugins.json
 
 # Git worktrees
 .worktrees/
+
+# Canonical-check local audit reports
+.canonical-audit/
+
+# Claims audit generated output
+.claude/skills/claims-audit/extracted-claims.json

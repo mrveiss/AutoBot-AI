@@ -169,7 +169,7 @@ onMounted(() => {
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
       </svg>
       {{ error }}
-      <button @click="error = null" class="ml-auto text-red-500 hover:text-red-700">
+      <button @click="error = null" class="ml-auto text-red-500 hover:text-red-700" aria-label="Dismiss error">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
         </svg>
@@ -186,7 +186,7 @@ onMounted(() => {
     <!-- Header with Controls -->
     <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
       <div class="flex items-center justify-between mb-4">
-        <h2 class="text-lg font-semibold text-gray-900">Prompt Templates</h2>
+        <h2 class="text-lg font-semibold text-gray-900">{{ $t('settings.admin.promptsSettings.promptTemplates') }}</h2>
         <button
           @click="loadPrompts"
           :disabled="loading"
@@ -199,7 +199,7 @@ onMounted(() => {
           <svg v-else class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
           </svg>
-          Reload Prompts
+          {{ $t('settings.admin.promptsSettings.reloadPrompts') }}
         </button>
       </div>
 
@@ -223,7 +223,7 @@ onMounted(() => {
             v-model="selectedCategory"
             class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
           >
-            <option :value="null">All Categories</option>
+            <option :value="null">{{ $t('settings.admin.promptsSettings.allCategories') }}</option>
             <option v-for="cat in categories" :key="cat" :value="cat">
               {{ cat }}
             </option>
@@ -279,7 +279,7 @@ onMounted(() => {
                     {{ prompt.category }}
                   </span>
                   <span v-if="prompt.is_default" class="px-2 py-0.5 bg-blue-100 text-blue-700 rounded-sm text-xs">
-                    Default
+                    {{ $t('settings.admin.promptsSettings.default') }}
                   </span>
                 </div>
               </div>
@@ -298,7 +298,7 @@ onMounted(() => {
             {{ selectedPrompt ? `Editing: ${selectedPrompt.name}` : 'Select a Prompt' }}
           </h3>
           <div v-if="hasUnsavedChanges" class="px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded-sm text-xs font-medium">
-            Unsaved Changes
+            {{ $t('settings.admin.promptsSettings.unsavedChanges') }}
           </div>
         </div>
 
@@ -306,7 +306,7 @@ onMounted(() => {
           <svg class="w-12 h-12 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
           </svg>
-          <p class="text-gray-500">Select a prompt from the list to edit</p>
+          <p class="text-gray-500">{{ $t('settings.admin.promptsSettings.selectAPromptFrom') }}</p>
         </div>
 
         <div v-else class="p-4">
@@ -314,11 +314,11 @@ onMounted(() => {
           <div class="mb-4 p-3 bg-gray-50 rounded-lg">
             <div class="grid grid-cols-2 gap-4 text-sm">
               <div>
-                <span class="text-gray-500">Category:</span>
+                <span class="text-gray-500">{{ $t('settings.admin.promptsSettings.category') }}</span>
                 <span class="ml-2 font-medium text-gray-900">{{ selectedPrompt.category }}</span>
               </div>
               <div>
-                <span class="text-gray-500">Status:</span>
+                <span class="text-gray-500">{{ $t('settings.admin.promptsSettings.status') }}</span>
                 <span :class="[
                   'ml-2 font-medium',
                   selectedPrompt.is_default ? 'text-blue-600' : 'text-gray-900',
@@ -327,7 +327,7 @@ onMounted(() => {
                 </span>
               </div>
               <div class="col-span-2">
-                <span class="text-gray-500">Last Modified:</span>
+                <span class="text-gray-500">{{ $t('settings.admin.promptsSettings.lastModified') }}</span>
                 <span class="ml-2 font-medium text-gray-900">
                   {{ formatDateTime(selectedPrompt.modified_at ?? null) }}
                 </span>
@@ -337,7 +337,7 @@ onMounted(() => {
 
           <!-- Editor -->
           <div class="mb-4">
-            <label class="block text-sm font-medium text-gray-700 mb-2">Prompt Content</label>
+            <label class="block text-sm font-medium text-gray-700 mb-2">{{ $t('settings.admin.promptsSettings.promptContent') }}</label>
             <textarea
               v-model="editedContent"
               rows="12"
@@ -360,7 +360,7 @@ onMounted(() => {
               <svg v-else class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
               </svg>
-              Save Changes
+              {{ $t('settings.admin.promptsSettings.saveChanges') }}
             </button>
 
             <button
@@ -371,7 +371,7 @@ onMounted(() => {
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
               </svg>
-              Revert to Default
+              {{ $t('settings.admin.promptsSettings.revertToDefault') }}
             </button>
 
             <button
@@ -381,7 +381,7 @@ onMounted(() => {
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
               </svg>
-              Cancel
+              {{ $t('settings.admin.promptsSettings.cancel') }}
             </button>
           </div>
         </div>

@@ -16,7 +16,7 @@ import psycopg2
 logger = logging.getLogger(__name__)
 
 
-def get_connection(db_url: str) -> psycopg2.extensions.connection:
+def get_connection(db_url: str, timeout: int = 10) -> psycopg2.extensions.connection:
     """Get a PostgreSQL connection from URL (#786)."""
     from urllib.parse import urlparse
 
@@ -29,6 +29,7 @@ def get_connection(db_url: str) -> psycopg2.extensions.connection:
         "port": parsed.port or 5432,
         "database": parsed.path.lstrip("/") if parsed.path else "slm",
         "user": parsed.username or "slm_app",
+        "connect_timeout": timeout,
     }
     if parsed.password:
         params["password"] = parsed.password

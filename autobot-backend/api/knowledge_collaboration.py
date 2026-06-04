@@ -13,8 +13,7 @@ Issue #679: Hierarchical knowledge access control system supporting:
 """
 
 import json
-import logging
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
@@ -29,12 +28,13 @@ from api.schemas_knowledge import (
 )
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.models.pagination import PaginationParams
 from knowledge.ownership import VisibilityLevel
 from knowledge.search_filters import extract_user_context_from_request
 from knowledge_factory import get_or_create_knowledge_base
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/knowledge/collaboration", tags=["knowledge-collaboration"])
 
@@ -105,7 +105,7 @@ async def _fetch_and_verify_owner(fact_id: str, user_id: str, redis) -> Dict:
 def _apply_visibility_to_metadata(
     metadata: Dict,
     permissions_request: "UpdatePermissionsRequest",
-    user_org_id: Optional[str],
+    user_org_id: str | None,
 ) -> Dict:
     """Helper for update_knowledge_permissions. Ref: #1088."""
     if permissions_request.visibility == VisibilityLevel.ORGANIZATION:
@@ -164,7 +164,7 @@ async def _check_fact_access(
     fact_id: str,
     metadata: Dict,
     user_id: str,
-    user_org_id: Optional[str],
+    user_org_id: str | None,
     user_group_ids: List[str],
     ownership_manager,
 ) -> bool:
@@ -226,7 +226,7 @@ async def _unshare_fact_by_entity(
 async def get_knowledge_by_scope(
     request: Request,
     current_user: Dict = Depends(get_current_user),
-    scope: Optional[VisibilityLevel] = Query(default=None, description="Filter by visibility scope"),
+    scope: VisibilityLevel | None = Query(default=None, description="Filter by visibility scope"),
     pagination: PaginationParams = Depends(),
 ):
     """Get knowledge facts filtered by scope.

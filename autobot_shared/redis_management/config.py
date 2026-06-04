@@ -19,7 +19,7 @@ with their literal values so this module has no backend dependencies.
 import logging
 import os
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 import yaml
 
@@ -56,25 +56,25 @@ class RedisConfig:
     db: int
     host: str = NetworkConstants.REDIS_VM_IP
     port: int = NetworkConstants.REDIS_PORT
-    password: Optional[str] = None
+    password: str | None = None
     decode_responses: bool = True
     max_connections: int = _MAX_CONNECTIONS_POOL
     socket_timeout: float = float(_SOCKET_TIMEOUT)
     socket_connect_timeout: float = float(_SOCKET_TIMEOUT)
     socket_keepalive: bool = True
-    socket_keepalive_options: Optional[Dict[int, int]] = None
+    socket_keepalive_options: Dict[int, int] | None = None
     health_check_interval: int = _HEALTH_CHECK_INTERVAL
     retry_on_timeout: bool = _RETRY_ON_TIMEOUT
     max_retries: int = _DEFAULT_RETRIES
     description: str = ""
     # TLS configuration
     ssl: bool = False
-    ssl_ca_certs: Optional[str] = None
-    ssl_certfile: Optional[str] = None
-    ssl_keyfile: Optional[str] = None
+    ssl_ca_certs: str | None = None
+    ssl_certfile: str | None = None
+    ssl_keyfile: str | None = None
     ssl_cert_reqs: str = "required"
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Auto-load password and TLS settings from environment if not provided."""
         if self.password is None:
             # Try REDIS_PASSWORD first, then AUTOBOT_REDIS_PASSWORD
@@ -93,7 +93,7 @@ class RedisConfig:
             if not self.ssl_ca_certs or not self.ssl_certfile or not self.ssl_keyfile:
                 from pathlib import Path
 
-                cert_dir = os.getenv("AUTOBOT_TLS_CERT_DIR", "certs")
+                cert_dir = os.getenv("AUTOBOT_TLS_CERT_DIR", "certs")  # ssot-config-exempt: TLS cert dir
                 project_root = Path(__file__).parent.parent.parent
                 self.ssl_ca_certs = str(project_root / cert_dir / "ca" / "ca-cert.pem")
                 self.ssl_certfile = str(project_root / cert_dir / "main-host" / "server-cert.pem")
@@ -111,7 +111,7 @@ class RedisConfigLoader:
     """
 
     @staticmethod
-    def _resolve_yaml_path(yaml_path: Optional[str]) -> Optional[str]:
+    def _resolve_yaml_path(yaml_path: str | None) -> str | None:
         """
         Resolve the YAML configuration file path.
 
@@ -161,7 +161,7 @@ class RedisConfigLoader:
         )
 
     @staticmethod
-    def load_from_yaml(yaml_path: str = None) -> Dict[str, RedisConfig]:
+    def load_from_yaml(yaml_path: str | None = None) -> Dict[str, RedisConfig]:
         """
         Load configurations from YAML file.
 

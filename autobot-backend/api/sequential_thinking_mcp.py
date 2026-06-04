@@ -15,13 +15,13 @@ Enables agents to:
 """
 
 import asyncio
-import logging
 from typing import Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException
 
 from api.schemas_common import DataResponse
 from api.schemas_workflows import (
+    SequentialThinkingClearData,
     SequentialThinkingMCPTool,
     SequentialThinkingMCPToolsResponse,
     SequentialThinkingRequest,
@@ -31,9 +31,19 @@ from api.schemas_workflows import (
 )
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
+from services.mcp_bridge_manifest import MCPBridgeManifest
 from type_defs.common import Metadata
 
-logger = logging.getLogger(__name__)
+MANIFEST = MCPBridgeManifest(
+    name="sequential_thinking_mcp",
+    version="1.0.0",
+    description="Sequential Thinking - Dynamic Problem-Solving Framework",
+    features=["sequential_thinking", "thought_tracking", "branching", "revision"],
+    endpoint="/api/sequential_thinking/mcp/tools",
+)
+
+logger = get_logger(__name__)
 router = APIRouter(
     tags=["sequential_thinking_mcp", "mcp"],
     dependencies=[Depends(check_admin_permission)],
@@ -249,7 +259,7 @@ async def get_thinking_session(session_id: str) -> Metadata:
     }
 
 
-@router.delete("/sessions/{session_id}", response_model=DataResponse)
+@router.delete("/sessions/{session_id}", response_model=DataResponse[SequentialThinkingClearData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="clear_thinking_session",

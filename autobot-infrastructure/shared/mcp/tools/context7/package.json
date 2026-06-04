@@ -34,16 +34,16 @@
   },
   "homepage": "https://github.com/upstash/context7#readme",
   "dependencies": {
-    "undici": "^6.6.3",
+    "undici": "^8.3.0",
     "@modelcontextprotocol/sdk": "^1.13.2",
     "commander": "^14.0.0",
-    "zod": "^3.24.2"
+    "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@types/node": "^22.13.14",
+    "@types/node": "^25.6.2",
     "@typescript-eslint/eslint-plugin": "^8.28.0",
     "@typescript-eslint/parser": "^8.28.0",
-    "eslint": "^9.34.0",
+    "eslint": "^10.4.0",
     "eslint-config-prettier": "^10.1.1",
     "eslint-plugin-prettier": "^5.2.5",
     "prettier": "^3.6.2",

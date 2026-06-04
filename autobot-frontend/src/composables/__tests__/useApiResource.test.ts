@@ -330,7 +330,7 @@ describe('useApiResource', () => {
 
       // Track whether any externally-visible abort event fired.
       // With abortPrior:false there is no controller, so this stays false.
-      let firstAborted = false
+      const firstAborted = false
 
       const { data, refresh } = useApiResource(
         () => {

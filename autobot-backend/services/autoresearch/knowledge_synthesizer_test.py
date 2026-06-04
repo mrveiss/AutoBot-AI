@@ -23,7 +23,7 @@ from services.autoresearch.models import (
 
 
 class TestExperimentInsight:
-    def test_to_dict(self):
+    def test_to_dict(self) -> None:
         insight = ExperimentInsight(
             statement="Dropout < 0.1 degrades val_bpb",
             confidence=0.85,
@@ -94,7 +94,7 @@ class TestKnowledgeSynthesizer:
         return s
 
     @pytest.mark.asyncio
-    async def test_synthesize_session(self, synthesizer, mock_llm, mock_chromadb):
+    async def test_synthesize_session(self, synthesizer, mock_llm, mock_chromadb) -> None:
         insights = await synthesizer.synthesize_session("session-1")
 
         assert len(insights) == 1
@@ -104,7 +104,20 @@ class TestKnowledgeSynthesizer:
         mock_chromadb.upsert.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_query_insights(self, synthesizer, mock_chromadb):
+    async def test_synthesize_empty_session_returns_empty(self, synthesizer) -> None:
+        """No experiments tagged with session returns [] without calling LLM — Issue #3211."""
+        insights = await synthesizer.synthesize_session("session-nonexistent")
+        assert insights == []
+
+    @pytest.mark.asyncio
+    async def test_synthesize_session_llm_failure_returns_empty(self, synthesizer, mock_llm) -> None:
+        """LLM exception during synthesis returns [] gracefully — Issue #3211."""
+        mock_llm.chat.side_effect = RuntimeError("LLM service unavailable")
+        insights = await synthesizer.synthesize_session("session-1")
+        assert insights == []
+
+    @pytest.mark.asyncio
+    async def test_query_insights(self, synthesizer, mock_chromadb) -> None:
         mock_chromadb.query.return_value = {
             "ids": [["i1"]],
             "documents": [["Warmup steps >= 300 improve convergence"]],

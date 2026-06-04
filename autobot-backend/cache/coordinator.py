@@ -3,16 +3,18 @@
 # Author: mrveiss
 """Central cache coordinator with memory-pressure-aware eviction."""
 
-import asyncio
-import logging
-from typing import Any, Dict, Optional
+from __future__ import annotations
 
+import asyncio
+from typing import Any, Dict
+
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
 from utils.async_initializable import AsyncInitializable
 
 from .protocols import CacheProtocol
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class CacheCoordinator(AsyncInitializable):
@@ -38,7 +40,7 @@ class CacheCoordinator(AsyncInitializable):
         stats = coordinator.get_unified_stats()
     """
 
-    _instance: Optional["CacheCoordinator"] = None
+    _instance: "CacheCoordinator" | None = None
 
     def __init__(self):
         super().__init__(component_name="cache_coordinator")
@@ -167,8 +169,8 @@ class CacheCoordinator(AsyncInitializable):
 
     def configure(
         self,
-        pressure_threshold: Optional[float] = None,
-        eviction_ratio: Optional[float] = None,
+        pressure_threshold: float | None = None,
+        eviction_ratio: float | None = None,
     ) -> None:
         """
         Configure coordinator settings.

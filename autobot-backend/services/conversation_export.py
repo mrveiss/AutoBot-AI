@@ -12,13 +12,13 @@ Provides export and import operations for chat conversations:
 """
 
 import json
-import logging
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import utc_timestamp
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Format identifier embedded in every exported archive
 AUTOBOT_EXPORT_FORMAT = "autobot-conversation-v1"
@@ -92,7 +92,7 @@ def _build_bulk_envelope(sessions: List[Dict[str, Any]]) -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
-async def export_conversation_json(chat_history_manager, session_id: str) -> Optional[str]:
+async def export_conversation_json(chat_history_manager, session_id: str) -> str | None:
     """
     Export a single conversation as enriched AutoBot JSON.
 
@@ -109,7 +109,7 @@ async def export_conversation_json(chat_history_manager, session_id: str) -> Opt
         return None
 
 
-async def export_conversation_markdown(chat_history_manager, session_id: str) -> Optional[str]:
+async def export_conversation_markdown(chat_history_manager, session_id: str) -> str | None:
     """
     Export a single conversation as human-readable Markdown.
 
@@ -129,7 +129,7 @@ async def export_conversation_markdown(chat_history_manager, session_id: str) ->
         return None
 
 
-async def export_all_conversations_json(chat_history_manager) -> Optional[str]:
+async def export_all_conversations_json(chat_history_manager) -> str | None:
     """
     Export all conversations as a bulk JSON archive.
 
@@ -250,7 +250,7 @@ async def import_conversation(
 # ---------------------------------------------------------------------------
 
 
-async def _load_full_session_data(chat_history_manager, session_id: str) -> Optional[Dict[str, Any]]:
+async def _load_full_session_data(chat_history_manager, session_id: str) -> Dict[str, Any] | None:
     """
     Load the full session data dict (not just the messages list).
 

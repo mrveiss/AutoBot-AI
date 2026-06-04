@@ -7,14 +7,14 @@ System Integration Task Handlers
 Issue #322: Refactored to use TaskExecutionContext to eliminate data clump pattern.
 """
 
-import logging
 from typing import Any, Dict
 
+from autobot_shared.logging_manager import get_logger
 from models.task_context import TaskExecutionContext
 
 from .base import TaskHandler
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class SystemQueryInfoHandler(TaskHandler):

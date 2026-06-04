@@ -15,7 +15,7 @@
           <div class="shrink-0 flex items-center">
             <button
               @click="toggleSystemStatus"
-              class="flex items-center space-x-3 hover:bg-autobot-bg-tertiary rounded-md px-2 py-1 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-autobot-primary"
+              class="flex items-center gap-3 hover:bg-autobot-bg-tertiary rounded-md px-2 py-1 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-autobot-primary"
               :title="getSystemStatusTooltip()"
               :aria-label="getSystemStatusAriaLabel()"
             >
@@ -39,8 +39,8 @@
 
           <!-- Desktop Navigation -->
           <nav id="navigation" class="hidden lg:block" role="navigation" :aria-label="$t('nav.mainNavigation')">
-            <div class="hidden lg:flex items-center space-x-8">
-              <div ref="navContainerRef" class="flex items-center space-x-4">
+            <div class="hidden lg:flex items-center gap-8">
+              <div ref="navContainerRef" class="flex items-center gap-4">
                 <template v-for="item in visibleNavItems" :key="item.to">
                 <router-link
                   :to="item.to"
@@ -51,7 +51,7 @@
                   }"
                   class="px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 shrink-0"
                 >
-                  <div class="flex items-center space-x-1">
+                  <div class="flex items-center gap-1">
                     <svg class="w-4 h-4" :fill="item.iconStroke ? 'none' : 'currentColor'" :stroke="item.iconStroke ? 'currentColor' : undefined" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
                       <template v-if="item.iconPaths">
                         <path v-for="(p, pi) in item.iconPaths" :key="pi" :d="p" :fill-rule="item.iconRule" :clip-rule="item.iconRule"></path>
@@ -68,45 +68,113 @@
                   :items="overflowNavItems"
                 />
 
-                <!-- SLM Admin: external link (Issue #729) -->
-                <a
-                  :href="slmAdminUrl"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="px-3 py-2 rounded text-sm font-medium transition-colors duration-150 text-autobot-text-primary hover:bg-autobot-bg-tertiary shrink-0"
-                  :title="$t('nav.slmAdminTitle')"
-                  :aria-label="$t('nav.slmAdminTitle')"
-                >
-                  <div class="flex items-center space-x-1">
-                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                      <path fill-rule="evenodd" d="M2 5a2 2 0 012-2h12a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V5zm3.293 1.293a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 01-1.414-1.414L7.586 10 5.293 7.707a1 1 0 010-1.414zM11 12a1 1 0 100 2h3a1 1 0 100-2h-3z" clip-rule="evenodd"></path>
-                    </svg>
-                    <span>{{ $t('nav.slmAdmin') }}</span>
-                    <svg class="w-3 h-3 opacity-50" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                      <path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z"></path>
-                      <path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z"></path>
-                    </svg>
-                  </div>
-                </a>
+                <!-- SLM Admin: external link (Issue #729, #8753) -->
+                <div class="flex items-center shrink-0">
+                  <div class="w-px h-5 bg-autobot-border mx-1" aria-hidden="true"></div>
+                  <a
+                    :href="slmAdminUrl"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="px-3 py-2 rounded text-sm font-medium transition-colors duration-150 text-autobot-text-secondary hover:text-autobot-text-primary hover:bg-autobot-bg-tertiary border border-transparent hover:border-autobot-border"
+                    :title="$t('nav.slmAdminTitle')"
+                    :aria-label="$t('nav.slmAdminTitle')"
+                  >
+                    <div class="flex items-center gap-1">
+                      <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                        <path fill-rule="evenodd" d="M2 5a2 2 0 012-2h12a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V5zm3.293 1.293a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 01-1.414-1.414L7.586 10 5.293 7.707a1 1 0 010-1.414zM11 12a1 1 0 100 2h3a1 1 0 100-2h-3z" clip-rule="evenodd"></path>
+                      </svg>
+                      <span>{{ $t('nav.slmAdmin') }}</span>
+                      <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z"></path>
+                        <path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z"></path>
+                      </svg>
+                    </div>
+                  </a>
+                </div>
               </div>
             </div>
           </nav>
 
           <!-- Right side - Status and controls -->
-          <div class="flex items-center space-x-4">
-            <!-- User Profile Button -->
-            <button
-              v-if="userStore.isAuthenticated"
-              @click="showProfileModal = true"
-              class="hidden sm:flex items-center space-x-2 px-3 py-1.5 rounded-md text-sm font-medium text-autobot-text-primary hover:bg-autobot-bg-tertiary transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-autobot-primary"
-              :title="$t('nav.profileSettings')"
-              :aria-label="$t('nav.profileSettings')"
-            >
-              <div class="w-6 h-6 rounded-full bg-autobot-primary flex items-center justify-center text-white text-xs font-bold shrink-0">
-                {{ displayUsername?.charAt(0)?.toUpperCase() || 'U' }}
-              </div>
-              <span class="max-w-[120px] truncate">{{ displayUsername || $t('nav.profile') }}</span>
-            </button>
+          <div class="flex items-center gap-4">
+            <!-- User Profile Dropdown (GH#8748: surfaces settings/admin items moved from primary nav) -->
+            <div v-if="userStore.isAuthenticated" class="relative hidden sm:block" ref="profileDropdownRef">
+              <button
+                @click="showProfileDropdown = !showProfileDropdown"
+                class="flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium text-autobot-text-primary hover:bg-autobot-bg-tertiary transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-autobot-primary"
+                :title="$t('nav.profileSettings')"
+                :aria-label="$t('nav.profileSettings')"
+                :aria-expanded="showProfileDropdown"
+                aria-haspopup="menu"
+              >
+                <div class="w-6 h-6 rounded-full bg-autobot-primary flex items-center justify-center text-white text-xs font-bold shrink-0">
+                  {{ displayUsername?.charAt(0)?.toUpperCase() || 'U' }}
+                </div>
+                <span class="max-w-[120px] truncate">{{ displayUsername || $t('nav.profile') }}</span>
+                <svg class="w-3 h-3" :class="showProfileDropdown ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8l5 5 5-5" />
+                </svg>
+              </button>
+
+              <Teleport to="body">
+                <div
+                  v-if="showProfileDropdown"
+                  ref="profileDropdownMenuRef"
+                  :style="profileDropdownStyle"
+                  class="fixed z-50 bg-autobot-bg-secondary border border-autobot-border rounded-md shadow-lg py-1 min-w-48"
+                  role="menu"
+                >
+                  <!-- Open full profile modal -->
+                  <button
+                    role="menuitem"
+                    class="flex items-center gap-2 w-full text-start px-3 py-2 text-sm transition-colors duration-150 hover:bg-autobot-bg-tertiary text-autobot-text-primary"
+                    @click="showProfileModal = true; showProfileDropdown = false"
+                  >
+                    <div class="w-4 h-4 rounded-full bg-autobot-primary flex items-center justify-center text-white text-[10px] font-bold shrink-0">
+                      {{ displayUsername?.charAt(0)?.toUpperCase() || 'U' }}
+                    </div>
+                    <span>{{ $t('nav.profileSettings') }}</span>
+                  </button>
+
+                  <hr class="my-1 border-autobot-border" />
+
+                  <!-- Settings & Tools section -->
+                  <p class="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-autobot-text-secondary">{{ $t('nav.settingsAndTools') }}</p>
+                  <router-link
+                    v-for="item in filteredProfileMenuItems"
+                    :key="item.to"
+                    :to="item.to"
+                    role="menuitem"
+                    class="flex items-center gap-2 px-3 py-2 text-sm transition-colors duration-150 hover:bg-autobot-bg-tertiary text-autobot-text-primary"
+                    @click="showProfileDropdown = false"
+                  >
+                    <svg class="w-4 h-4 shrink-0" :fill="item.iconStroke ? 'none' : 'currentColor'" :stroke="item.iconStroke ? 'currentColor' : undefined" viewBox="0 0 20 20" aria-hidden="true">
+                      <path :d="item.icon" :fill-rule="item.iconRule" :clip-rule="item.iconRule" :stroke-linecap="item.iconStroke ? 'round' : undefined" :stroke-linejoin="item.iconStroke ? 'round' : undefined" :stroke-width="item.iconStroke ? '2' : undefined" />
+                    </svg>
+                    <span>{{ $t(item.labelKey) }}</span>
+                  </router-link>
+
+                  <!-- Admin section (admin-only) -->
+                  <template v-if="userStore.isAdmin">
+                    <hr class="my-1 border-autobot-border" />
+                    <p class="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-autobot-text-secondary">{{ $t('nav.adminPanel') }}</p>
+                    <router-link
+                      v-for="item in adminMenuItems"
+                      :key="item.to"
+                      :to="item.to"
+                      role="menuitem"
+                      class="flex items-center gap-2 px-3 py-2 text-sm transition-colors duration-150 hover:bg-autobot-bg-tertiary text-autobot-text-primary"
+                      @click="showProfileDropdown = false"
+                    >
+                      <svg class="w-4 h-4 shrink-0" :fill="item.iconStroke ? 'none' : 'currentColor'" :stroke="item.iconStroke ? 'currentColor' : undefined" viewBox="0 0 20 20" aria-hidden="true">
+                        <path :d="item.icon" :fill-rule="item.iconRule" :clip-rule="item.iconRule" :stroke-linecap="item.iconStroke ? 'round' : undefined" :stroke-linejoin="item.iconStroke ? 'round' : undefined" :stroke-width="item.iconStroke ? '2' : undefined" />
+                      </svg>
+                      <span>{{ $t(item.labelKey) }}</span>
+                    </router-link>
+                  </template>
+                </div>
+              </Teleport>
+            </div>
 
             <!-- Dark Mode Toggle -->
             <DarkModeToggle />
@@ -151,7 +219,6 @@
           <div class="px-4 py-3 space-y-2">
             <template v-for="item in navItems" :key="item.to">
             <router-link
-              v-if="!item.adminOnly || userStore.isAdmin"
               :to="item.to"
               @click="closeMobileNav"
               :class="{
@@ -160,7 +227,7 @@
               }"
               class="w-full text-start px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 block"
             >
-              <div class="flex items-center space-x-2">
+              <div class="flex items-center gap-2">
                 <svg class="w-4 h-4" :fill="item.iconStroke ? 'none' : 'currentColor'" :stroke="item.iconStroke ? 'currentColor' : undefined" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
                   <template v-if="item.iconPaths">
                     <path v-for="(p, pi) in item.iconPaths" :key="pi" :d="p" :fill-rule="item.iconRule" :clip-rule="item.iconRule"></path>
@@ -172,29 +239,76 @@
             </router-link>
             </template>
 
-            <!-- SLM Admin: external link (Issue #729) -->
-            <a
-              :href="slmAdminUrl"
-              target="_blank"
-              rel="noopener noreferrer"
-              @click="closeMobileNav"
-              class="w-full text-start px-3 py-2 rounded text-sm font-medium transition-colors duration-150 block text-autobot-text-primary hover:bg-autobot-bg-tertiary"
-              :aria-label="$t('nav.slmAdminTitle')"
-            >
-              <div class="flex items-center space-x-2">
-                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                  <path fill-rule="evenodd" d="M2 5a2 2 0 012-2h12a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V5zm3.293 1.293a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 01-1.414-1.414L7.586 10 5.293 7.707a1 1 0 010-1.414zM11 12a1 1 0 100 2h3a1 1 0 100-2h-3z" clip-rule="evenodd"></path>
-                </svg>
-                <span>{{ $t('nav.slmAdmin') }}</span>
-                <svg class="w-3 h-3 opacity-50" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z"></path>
-                  <path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z"></path>
-                </svg>
-              </div>
-            </a>
+            <!-- SLM Admin: external link (Issue #729, #8753) -->
+            <div class="border-t border-autobot-border pt-2 mt-1">
+              <a
+                :href="slmAdminUrl"
+                target="_blank"
+                rel="noopener noreferrer"
+                @click="closeMobileNav"
+                class="w-full text-start px-3 py-2 rounded text-sm font-medium transition-colors duration-150 block text-autobot-text-secondary hover:text-autobot-text-primary hover:bg-autobot-bg-tertiary border border-transparent hover:border-autobot-border"
+                :aria-label="$t('nav.slmAdminTitle')"
+                :title="$t('nav.slmAdminTitle')"
+              >
+                <div class="flex items-center gap-2">
+                  <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                    <path fill-rule="evenodd" d="M2 5a2 2 0 012-2h12a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V5zm3.293 1.293a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 01-1.414-1.414L7.586 10 5.293 7.707a1 1 0 010-1.414zM11 12a1 1 0 100 2h3a1 1 0 100-2h-3z" clip-rule="evenodd"></path>
+                  </svg>
+                  <span>{{ $t('nav.slmAdmin') }}</span>
+                  <svg class="w-4 h-4 ml-auto" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z"></path>
+                    <path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z"></path>
+                  </svg>
+                </div>
+              </a>
+            </div>
 
                         <!-- Language Switcher -->
             <LanguageSwitcher :mobile="true" />
+
+            <!-- GH#8748: Settings & Tools (moved from primary nav) -->
+            <div class="border-t border-autobot-border pt-2 mt-1">
+              <p class="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-autobot-text-secondary">{{ $t('nav.settingsAndTools') }}</p>
+              <router-link
+                v-for="item in filteredProfileMenuItems"
+                :key="item.to"
+                :to="item.to"
+                @click="closeMobileNav"
+                :class="{
+                  'bg-autobot-primary text-white': $route.path.startsWith(item.to),
+                  'text-autobot-text-primary hover:bg-autobot-bg-tertiary': !$route.path.startsWith(item.to)
+                }"
+                class="flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200"
+              >
+                <svg class="w-4 h-4 shrink-0" :fill="item.iconStroke ? 'none' : 'currentColor'" :stroke="item.iconStroke ? 'currentColor' : undefined" viewBox="0 0 20 20" aria-hidden="true">
+                  <path :d="item.icon" :fill-rule="item.iconRule" :clip-rule="item.iconRule" :stroke-linecap="item.iconStroke ? 'round' : undefined" :stroke-linejoin="item.iconStroke ? 'round' : undefined" :stroke-width="item.iconStroke ? '2' : undefined" />
+                </svg>
+                <span>{{ $t(item.labelKey) }}</span>
+              </router-link>
+            </div>
+
+            <!-- GH#8748: Admin tools (moved from primary nav, admin-only) -->
+            <template v-if="userStore.isAdmin">
+              <div class="border-t border-autobot-border pt-2 mt-1">
+                <p class="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-autobot-text-secondary">{{ $t('nav.adminPanel') }}</p>
+                <router-link
+                  v-for="item in adminMenuItems"
+                  :key="item.to"
+                  :to="item.to"
+                  @click="closeMobileNav"
+                  :class="{
+                    'bg-autobot-primary text-white': $route.path.startsWith(item.to),
+                    'text-autobot-text-primary hover:bg-autobot-bg-tertiary': !$route.path.startsWith(item.to)
+                  }"
+                  class="flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200"
+                >
+                  <svg class="w-4 h-4 shrink-0" :fill="item.iconStroke ? 'none' : 'currentColor'" :stroke="item.iconStroke ? 'currentColor' : undefined" viewBox="0 0 20 20" aria-hidden="true">
+                    <path :d="item.icon" :fill-rule="item.iconRule" :clip-rule="item.iconRule" :stroke-linecap="item.iconStroke ? 'round' : undefined" :stroke-linejoin="item.iconStroke ? 'round' : undefined" :stroke-width="item.iconStroke ? '2' : undefined" />
+                  </svg>
+                  <span>{{ $t(item.labelKey) }}</span>
+                </router-link>
+              </div>
+            </template>
 
             <!-- Profile Settings (Issue #950) -->
             <button
@@ -202,7 +316,7 @@
               @click="showProfileModal = true; closeMobileNav()"
               class="w-full text-start px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 text-autobot-text-primary hover:bg-autobot-bg-tertiary"
             >
-              <div class="flex items-center space-x-2">
+              <div class="flex items-center gap-2">
                 <div class="w-4 h-4 rounded-full bg-autobot-primary flex items-center justify-center text-white text-xs font-bold">
                   {{ displayUsername?.charAt(0)?.toUpperCase() || 'U' }}
                 </div>
@@ -246,6 +360,7 @@
               <button
                 @click="showSystemStatus = false"
                 class="rounded-md text-autobot-text-muted hover:text-autobot-text-primary focus:outline-none focus:ring-2 focus:ring-autobot-primary"
+                :aria-label="$t('common.close')"
               >
                 <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -382,14 +497,10 @@
 
     <!-- Main Content Area with Router -->
     <main id="main-content" class="flex-1 min-h-0 overflow-hidden" role="main">
-      <!-- Unified Loading System -->
-      <UnifiedLoadingView
-        :is-loading="isLoading"
-        :has-content="!isLoading && !hasErrors"
+      <LoadingBoundary
+        :loading="isLoading"
         :on-retry="clearAllCaches"
         :timeout-ms="15000"
-        @loading-complete="handleLoadingComplete"
-        @loading-error="handleLoadingError"
         @loading-timeout="handleLoadingTimeout"
         class="h-full"
       >
@@ -397,7 +508,7 @@
         <ErrorBoundary>
           <router-view class="h-full" />
         </ErrorBoundary>
-      </UnifiedLoadingView>
+      </LoadingBoundary>
     </main>
 
     <!-- Footer: About link (hidden on public routes and routes with hideFooter meta) -->
@@ -413,10 +524,13 @@
 
   <!-- Global confirm dialog (#6092) -->
   <ConfirmDialog />
+
+  <!-- Global command palette — opened via Ctrl/Cmd+K (#8989) -->
+  <CommandPalette ref="commandPaletteRef" />
 </template>
 
 <script lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted, defineAsyncComponent } from 'vue';
+import { ref, computed, watch, nextTick, onMounted, onUnmounted, defineAsyncComponent } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { useAppStore } from '@/stores/useAppStore'
@@ -426,7 +540,9 @@ import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
 import { useSystemStatus } from '@/composables/useSystemStatus'
 import { useHostSelection } from '@/composables/useHostSelection';
 import { useNavOverflow } from '@/composables/useNavOverflow'
+import { useGlobalShortcuts } from '@/composables/useGlobalShortcuts'
 import NavOverflowMenu from '@/components/layout/NavOverflowMenu.vue'
+import CommandPalette from '@/components/CommandPalette.vue'
 import { createLogger } from '@/utils/debugUtils'
 import { cacheBuster } from '@/utils/CacheBuster.js';
 import { optimizedHealthMonitor } from '@/utils/OptimizedHealthMonitor.js';
@@ -434,13 +550,13 @@ import { initializeNotificationBridge } from '@/utils/notificationBridge';
 import { smartMonitoringController, getAdaptiveInterval } from '@/config/OptimizedPerformance.js';
 import { clearAllSystemNotifications, resetHealthMonitor } from '@/utils/ClearNotifications.js';
 import { getSLMAdminUrl } from '@/config/ssot-config';
-import { navItems } from '@/config/navItems';
+import { navItems, profileMenuItems, adminMenuItems, filterByFeatureFlag } from '@/config/navItems';
 import SystemStatusNotification from '@/components/ui/SystemStatusNotification.vue';
 import CaptchaNotification from '@/components/research/CaptchaNotification.vue';
 import ToastContainer from '@/components/ui/ToastContainer.vue';
 import HostSelectionDialog from '@/components/ui/HostSelectionDialog.vue';
 import ConfirmDialog from '@/components/ui/ConfirmDialog.vue';
-import UnifiedLoadingView from '@/components/ui/UnifiedLoadingView.vue';
+import LoadingBoundary from '@/components/ui/LoadingBoundary.vue';
 import ProfileModal from '@/components/profile/ProfileModal.vue';
 import ErrorBoundary from '@/components/common/ErrorBoundary.vue'
 import OfflineBanner from '@/components/ui/OfflineBanner.vue';
@@ -457,10 +573,11 @@ export default {
     ToastContainer,
     HostSelectionDialog,
     ConfirmDialog,
-    UnifiedLoadingView,
+    LoadingBoundary,
     ProfileModal,
     ErrorBoundary,
     NavOverflowMenu,
+    CommandPalette,
     DarkModeToggle: defineAsyncComponent(() => import('@/components/ui/DarkModeToggle.vue')),
     LanguageSwitcher: defineAsyncComponent(() => import('@/components/layout/LanguageSwitcher.vue')),
   },
@@ -538,6 +655,50 @@ export default {
     // Reactive data (non-status related)
     const showMobileNav = ref(false);
     const showProfileModal = ref(false);
+
+    // Global keyboard shortcuts (#8989)
+    const commandPaletteRef = ref<InstanceType<typeof CommandPalette> | null>(null)
+    useGlobalShortcuts({ commandPaletteRef })
+
+    // GH#8748: profile dropdown (settings/admin items moved from primary nav)
+    const showProfileDropdown = ref(false);
+    const profileDropdownRef = ref<HTMLElement | null>(null);
+    const profileDropdownMenuRef = ref<HTMLElement | null>(null);
+    const profileDropdownStyle = ref<Record<string, string>>({});
+
+    function positionProfileDropdown() {
+      if (!profileDropdownRef.value) return;
+      const rect = profileDropdownRef.value.getBoundingClientRect();
+      const menuWidth = profileDropdownMenuRef.value?.getBoundingClientRect().width || 192;
+      const spaceRight = window.innerWidth - rect.left;
+      const left = spaceRight < menuWidth ? rect.right - menuWidth : rect.left;
+      profileDropdownStyle.value = {
+        top: `${rect.bottom + 4}px`,
+        left: `${Math.max(0, left)}px`,
+      };
+    }
+
+    function onProfileDropdownClickOutside(event: MouseEvent) {
+      const target = event.target as Node;
+      if (
+        !profileDropdownRef.value?.contains(target) &&
+        !profileDropdownMenuRef.value?.contains(target)
+      ) {
+        showProfileDropdown.value = false;
+      }
+    }
+
+    watch(showProfileDropdown, async (open) => {
+      if (open) {
+        positionProfileDropdown();
+        await nextTick();
+        positionProfileDropdown();
+        document.addEventListener('click', onProfileDropdownClickOutside, true);
+      } else {
+        document.removeEventListener('click', onProfileDropdownClickOutside, true);
+      }
+    });
+
     let notificationCleanup: number | null = null;
 
     // Computed properties
@@ -808,8 +969,10 @@ export default {
     // Nav overflow: ref for container, filtered/visible/overflow computed slices
     const navContainerRef = ref<HTMLElement | null>(null)
 
-    const filteredNavItems = computed(() =>
-      navItems.filter(item => !item.adminOnly || userStore.isAdmin)
+    const filteredNavItems = computed(() => navItems)
+
+    const filteredProfileMenuItems = computed(() =>
+      filterByFeatureFlag(profileMenuItems)
     )
 
     const { visibleCount } = useNavOverflow(
@@ -834,8 +997,13 @@ export default {
       knowledgeStore,
 
       // Reactive data
+      commandPaletteRef,
       showMobileNav,
       showProfileModal,
+      showProfileDropdown,
+      profileDropdownRef,
+      profileDropdownMenuRef,
+      profileDropdownStyle,
 
       // System status (from composable)
       showSystemStatus,
@@ -849,6 +1017,9 @@ export default {
       showAuthChrome,
       hideFooter,
       navItems,
+      profileMenuItems,
+      filteredProfileMenuItems,
+      adminMenuItems,
       slmAdminUrl,
       displayUsername,
 

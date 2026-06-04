@@ -9,12 +9,13 @@ Author: mrveiss
 """
 
 import asyncio
-import logging
 import sys
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import pytest
+
+from autobot_shared.logging_manager import get_logger
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
@@ -33,7 +34,7 @@ except ImportError as _benchmark_import_error:
     BenchmarkRunner = _MissingDep("BenchmarkRunner", _benchmark_import_error)  # type: ignore[assignment, misc]
     assert_performance = _MissingDep("assert_performance", _benchmark_import_error)  # type: ignore[assignment, misc]
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Build URLs from centralized configuration
 BASE_URL = f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
@@ -256,7 +257,7 @@ class TestAPIResponseTimeBenchmarks:
 
     def test_pydantic_validation_benchmark(self, runner):
         """Benchmark Pydantic model validation"""
-        from typing import List, Optional
+        from typing import List
 
         from pydantic import BaseModel
 
@@ -265,7 +266,7 @@ class TestAPIResponseTimeBenchmarks:
             name: str
             status: str
             tasks: List[int]
-            metadata: Optional[dict] = None
+            metadata: dict | None = None
 
         test_data = {
             "id": "agent_001",

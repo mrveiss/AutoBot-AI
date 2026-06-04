@@ -21,7 +21,7 @@ from services.temporal_invalidation_service import (
 class MockFactExtractionService:
     """Mock fact extraction service for testing temporal invalidation."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.facts_db = []
         self.next_fact_id = 1
 
@@ -91,14 +91,14 @@ class MockFactExtractionService:
 class TestTemporalInvalidation:
     """Test cases for temporal knowledge invalidation functionality."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.mock_fact_service = MockFactExtractionService()
         self.invalidation_service = TemporalInvalidationService(self.mock_fact_service)
 
         # Create test facts with various temporal characteristics
         self._setup_test_facts()
 
-    def _setup_test_facts(self):
+    def _setup_test_facts(self) -> None:
         """Set up test facts with different temporal characteristics."""
         # Old dynamic facts (should be invalidated)
         self.old_dynamic_fact = self.mock_fact_service.add_test_fact(

@@ -1,20 +1,27 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
+"""
+Worker-node hardware profiler and resource reporter.
+
+Collects CPU, RAM, GPU, and NPU capabilities at startup and exposes
+the node profile via REST so the scheduler can route workloads appropriately.
+"""
+
 import asyncio
 import json
-import logging
 import os
 import platform
 import subprocess  # nosec B404 - required for GPU detection
 import sys
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 import psutil
 
+from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import TimingConstants
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Constants for unit conversions and hardware detection
 BYTES_PER_GB = 1024**3  # Bytes to gigabytes conversion
@@ -34,7 +41,7 @@ from autobot_shared.redis_client import get_redis_client
 
 # Import the centralized ConfigManager and Redis client utility
 from config import config as global_config_manager
-from event_manager import get_event_manager
+from events.bus import PersistStrategy, publish_event
 from knowledge_base import KnowledgeBase
 from security_layer import SecurityLayer
 from services.llm_service import get_llm_service
@@ -257,9 +264,9 @@ class WorkerNode:
             logger.info("Worker capabilities reported to Redis channel '%s'.", channel)
         else:
             logger.debug("Worker capabilities detected (local mode): %s", capabilities)
-            await get_event_manager().publish("worker_capability_report", capabilities)
+            await publish_event("global", "worker_capability_report", capabilities, persist=PersistStrategy.NONE)
 
-    def _validate_user_role(self, task_type: str, task_id: str, user_role: Optional[str]) -> Optional[Dict[str, Any]]:
+    def _validate_user_role(self, task_type: str, task_id: str, user_role: str | None) -> Dict[str, Any] | None:
         """Validate that user_role is provided for task execution.
 
         Args:
@@ -289,7 +296,7 @@ class WorkerNode:
         task_id: str,
         task_payload: Dict[str, Any],
         user_role: str,
-    ) -> Optional[Dict[str, Any]]:
+    ) -> Dict[str, Any] | None:
         """Check if user has permission to execute the task type.
 
         Args:
@@ -354,9 +361,11 @@ class WorkerNode:
 
     async def _publish_task_start(self, task_id: str, task_type: str, user_role: str) -> None:
         """Publish task start event and log execution start. Issue #620."""
-        await get_event_manager().publish(
+        await publish_event(
+            "global",
             "worker_task_start",
             {"worker_id": self.worker_id, "task_id": task_id, "type": task_type},
+            persist=PersistStrategy.NONE,
         )
         logger.info(
             "Worker %s executing task %s of type '%s' for role '%s'",
@@ -368,9 +377,11 @@ class WorkerNode:
 
     async def _publish_task_completion(self, task_id: str, result: Dict[str, Any]) -> None:
         """Publish task completion event and log result. Issue #620."""
-        await get_event_manager().publish(
+        await publish_event(
+            "global",
             "worker_task_end",
             {"worker_id": self.worker_id, "task_id": task_id, "result": result},
+            persist=PersistStrategy.NONE,
         )
         logger.info(
             "Worker %s finished task %s with status: %s",

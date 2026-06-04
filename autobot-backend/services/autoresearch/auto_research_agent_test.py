@@ -11,7 +11,7 @@ and early-stop on plateau.
 from __future__ import annotations
 
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -73,8 +73,8 @@ GITHUB_JSON_SAMPLE: Dict[str, Any] = {
 
 def _make_experiment(
     state: ExperimentState = ExperimentState.KEPT,
-    val_bpb: Optional[float] = 4.5,
-    baseline: Optional[float] = 5.0,
+    val_bpb: float | None = 4.5,
+    baseline: float | None = 5.0,
 ) -> Experiment:
     exp = Experiment(
         hypothesis="test",
@@ -105,20 +105,20 @@ def _make_metrics(improved: bool = True) -> ImprovementMetrics:
 class TestParseArxivAtom:
     """_parse_arxiv_atom correctly extracts entries from Atom XML."""
 
-    def test_extracts_two_entries(self):
+    def test_extracts_two_entries(self) -> None:
         results = _parse_arxiv_atom(ARXIV_ATOM_SAMPLE)
         assert len(results) == 2
 
-    def test_first_entry_fields(self):
+    def test_first_entry_fields(self) -> None:
         results = _parse_arxiv_atom(ARXIV_ATOM_SAMPLE)
         assert results[0].source == "arxiv"
         assert "Attention" in results[0].title
         assert "arxiv.org" in results[0].url  # codeql[py/incomplete-url-substring-sanitization]
 
-    def test_empty_xml_returns_empty_list(self):
+    def test_empty_xml_returns_empty_list(self) -> None:
         assert _parse_arxiv_atom("<feed></feed>") == []
 
-    def test_entry_missing_id_is_skipped(self):
+    def test_entry_missing_id_is_skipped(self) -> None:
         xml = "<feed><entry><title>No ID</title><summary>x</summary></entry></feed>"
         assert _parse_arxiv_atom(xml) == []
 
@@ -126,21 +126,21 @@ class TestParseArxivAtom:
 class TestParseGitHubResults:
     """_parse_github_results correctly extracts repo data from search JSON."""
 
-    def test_extracts_one_result(self):
+    def test_extracts_one_result(self) -> None:
         results = _parse_github_results(GITHUB_JSON_SAMPLE)
         assert len(results) == 1
 
-    def test_result_fields(self):
+    def test_result_fields(self) -> None:
         results = _parse_github_results(GITHUB_JSON_SAMPLE)
         r = results[0]
         assert r.source == "github"
         assert r.title == "karpathy/nanoGPT"
         assert "github.com" in r.url  # codeql[py/incomplete-url-substring-sanitization]
 
-    def test_empty_items_returns_empty_list(self):
+    def test_empty_items_returns_empty_list(self) -> None:
         assert _parse_github_results({"items": []}) == []
 
-    def test_missing_description_defaults_to_empty_string(self):
+    def test_missing_description_defaults_to_empty_string(self) -> None:
         data = {
             "items": [
                 {
@@ -157,7 +157,7 @@ class TestParseGitHubResults:
 class TestExtractThemes:
     """_extract_themes maps search result text to theme names."""
 
-    def test_detects_attention_theme(self):
+    def test_detects_attention_theme(self) -> None:
         results = [
             SearchResult(
                 title="Multi-head Attention",
@@ -168,7 +168,7 @@ class TestExtractThemes:
         ]
         assert "attention" in _extract_themes(results)
 
-    def test_detects_regularisation_theme(self):
+    def test_detects_regularisation_theme(self) -> None:
         results = [
             SearchResult(
                 title="Dropout",
@@ -179,10 +179,10 @@ class TestExtractThemes:
         ]
         assert "regularisation" in _extract_themes(results)
 
-    def test_empty_results_return_empty_list(self):
+    def test_empty_results_return_empty_list(self) -> None:
         assert _extract_themes([]) == []
 
-    def test_no_match_returns_empty_list(self):
+    def test_no_match_returns_empty_list(self) -> None:
         results = [
             SearchResult(
                 title="Unrelated paper",
@@ -193,7 +193,7 @@ class TestExtractThemes:
         ]
         assert _extract_themes(results) == []
 
-    def test_multiple_themes_detected(self):
+    def test_multiple_themes_detected(self) -> None:
         results = [
             SearchResult(
                 title="Attention and Dropout",
@@ -210,11 +210,11 @@ class TestExtractThemes:
 class TestThemesToHyperparams:
     """_themes_to_hyperparams returns valid hyperparameter dicts."""
 
-    def test_attention_theme_returns_n_head(self):
+    def test_attention_theme_returns_n_head(self) -> None:
         hp = _themes_to_hyperparams(["attention"], iteration=1)
         assert "n_head" in hp
 
-    def test_fallback_cycles_on_empty_themes(self):
+    def test_fallback_cycles_on_empty_themes(self) -> None:
         hp1 = _themes_to_hyperparams([], iteration=1)
         hp2 = _themes_to_hyperparams([], iteration=2)
         # Should differ — different iteration picks different default theme
@@ -222,7 +222,7 @@ class TestThemesToHyperparams:
         assert isinstance(hp1, dict)
         assert isinstance(hp2, dict)
 
-    def test_iteration_cycles_through_themes(self):
+    def test_iteration_cycles_through_themes(self) -> None:
         themes = ["attention", "regularisation"]
         hp1 = _themes_to_hyperparams(themes, iteration=1)
         hp2 = _themes_to_hyperparams(themes, iteration=2)
@@ -232,14 +232,14 @@ class TestThemesToHyperparams:
 class TestSummarisePriorResults:
     """_summarise_prior_results builds a human-readable string."""
 
-    def test_empty_returns_empty_string(self):
+    def test_empty_returns_empty_string(self) -> None:
         assert _summarise_prior_results([]) == ""
 
-    def test_improved_mentions_percentage(self):
+    def test_improved_mentions_percentage(self) -> None:
         summary = _summarise_prior_results([_make_metrics(improved=True)])
         assert "10.00%" in summary
 
-    def test_no_improvement_mentions_baseline(self):
+    def test_no_improvement_mentions_baseline(self) -> None:
         summary = _summarise_prior_results([_make_metrics(improved=False)])
         assert "did not improve" in summary
 
@@ -247,15 +247,15 @@ class TestSummarisePriorResults:
 class TestImprovementMetrics:
     """ImprovementMetrics.improved property reflects actual improvement direction."""
 
-    def test_positive_improvement_is_improved(self):
+    def test_positive_improvement_is_improved(self) -> None:
         m = _make_metrics(improved=True)
         assert m.improved is True
 
-    def test_negative_improvement_is_not_improved(self):
+    def test_negative_improvement_is_not_improved(self) -> None:
         m = _make_metrics(improved=False)
         assert m.improved is False
 
-    def test_none_improvement_is_not_improved(self):
+    def test_none_improvement_is_not_improved(self) -> None:
         m = ImprovementMetrics(
             experiment_id="x",
             baseline_val_bpb=None,
@@ -280,26 +280,26 @@ class TestApprovalGate:
 
     # -- check_approval_needed --
 
-    def test_below_threshold_returns_false(self):
+    def test_below_threshold_returns_false(self) -> None:
         gate = self._gate()
         assert gate.check_approval_needed(3.0, threshold=5.0) is False
 
-    def test_at_threshold_returns_true(self):
+    def test_at_threshold_returns_true(self) -> None:
         gate = self._gate()
         assert gate.check_approval_needed(5.0, threshold=5.0) is True
 
-    def test_above_threshold_returns_true(self):
+    def test_above_threshold_returns_true(self) -> None:
         gate = self._gate()
         assert gate.check_approval_needed(12.5, threshold=5.0) is True
 
-    def test_none_improvement_returns_false(self):
+    def test_none_improvement_returns_false(self) -> None:
         gate = self._gate()
         assert gate.check_approval_needed(None, threshold=5.0) is False
 
     # -- request_approval / get_approval_status --
 
     @pytest.mark.asyncio
-    async def test_request_approval_stores_pending_status(self):
+    async def test_request_approval_stores_pending_status(self) -> None:
         gate = self._gate()
         redis_mock = AsyncMock()
         gate._redis = redis_mock
@@ -316,7 +316,7 @@ class TestApprovalGate:
         assert any("pending" in c for c in calls)
 
     @pytest.mark.asyncio
-    async def test_get_approval_status_decodes_bytes(self):
+    async def test_get_approval_status_decodes_bytes(self) -> None:
         gate = self._gate()
         redis_mock = AsyncMock()
         redis_mock.get = AsyncMock(return_value=b"approved")
@@ -326,7 +326,7 @@ class TestApprovalGate:
         assert status == "approved"
 
     @pytest.mark.asyncio
-    async def test_get_approval_status_unknown_on_missing_key(self):
+    async def test_get_approval_status_unknown_on_missing_key(self) -> None:
         gate = self._gate()
         redis_mock = AsyncMock()
         redis_mock.get = AsyncMock(return_value=None)
@@ -338,7 +338,7 @@ class TestApprovalGate:
     # -- wait_for_approval --
 
     @pytest.mark.asyncio
-    async def test_wait_for_approval_returns_immediately_on_approved(self):
+    async def test_wait_for_approval_returns_immediately_on_approved(self) -> None:
         gate = self._gate()
         gate.get_approval_status = AsyncMock(return_value="approved")
 
@@ -346,7 +346,7 @@ class TestApprovalGate:
         assert result == "approved"
 
     @pytest.mark.asyncio
-    async def test_wait_for_approval_times_out(self):
+    async def test_wait_for_approval_times_out(self) -> None:
         gate = self._gate()
         gate.get_approval_status = AsyncMock(return_value="pending")
 
@@ -360,7 +360,7 @@ class TestApprovalGate:
 
 
 def _make_checkpoint_gate(
-    decision: CheckpointDecision = CheckpointDecision.APPROVED, redirect_text: Optional[str] = None
+    decision: CheckpointDecision = CheckpointDecision.APPROVED, redirect_text: str | None = None
 ) -> MagicMock:
     """Return a mock ResearchCheckpointGate that returns the given decision."""
     gate = MagicMock(spec=ResearchCheckpointGate)
@@ -376,7 +376,7 @@ def _make_agent(
     store_mock=None,
     checkpoints_enabled: bool = False,
     checkpoint_decision: CheckpointDecision = CheckpointDecision.APPROVED,
-    checkpoint_redirect: Optional[str] = None,
+    checkpoint_redirect: str | None = None,
 ) -> AutoResearchAgent:
     """Build an AutoResearchAgent with all I/O mocked out."""
     config = AutoResearchConfig()
@@ -424,7 +424,7 @@ class TestAutoResearchAgentLoop:
         return exp
 
     @pytest.mark.asyncio
-    async def test_loop_runs_max_iterations(self):
+    async def test_loop_runs_max_iterations(self) -> None:
         runner = AsyncMock()
         runner.run_experiment = AsyncMock(side_effect=lambda e: _make_experiment())
         agent = _make_agent(runner_mock=runner)
@@ -435,7 +435,7 @@ class TestAutoResearchAgentLoop:
         assert session.status == SessionStatus.COMPLETED
 
     @pytest.mark.asyncio
-    async def test_loop_returns_experiment_session(self):
+    async def test_loop_returns_experiment_session(self) -> None:
         runner = AsyncMock()
         runner.run_experiment = AsyncMock(side_effect=lambda e: _make_experiment())
         agent = _make_agent(runner_mock=runner)
@@ -448,7 +448,7 @@ class TestAutoResearchAgentLoop:
         assert len(session.hypotheses) == 1
 
     @pytest.mark.asyncio
-    async def test_loop_stops_early_on_plateau(self):
+    async def test_loop_stops_early_on_plateau(self) -> None:
         """plateau_window=2 means 2 consecutive non-improving iterations triggers stop."""
         runner = AsyncMock()
         # All experiments fail to improve (high val_bpb = worse)
@@ -468,7 +468,7 @@ class TestAutoResearchAgentLoop:
         assert session.status == SessionStatus.COMPLETED
 
     @pytest.mark.asyncio
-    async def test_cancellation_stops_loop_cleanly(self):
+    async def test_cancellation_stops_loop_cleanly(self) -> None:
         """Calling cancel() before the loop starts marks the session CANCELLED."""
         runner = AsyncMock()
         runner.run_experiment = AsyncMock(side_effect=lambda e: _make_experiment())
@@ -482,7 +482,7 @@ class TestAutoResearchAgentLoop:
         assert session.iterations_completed == 0
 
     @pytest.mark.asyncio
-    async def test_approval_gate_invoked_for_significant_improvement(self):
+    async def test_approval_gate_invoked_for_significant_improvement(self) -> None:
         """ApprovalGate.request_approval is called when improvement exceeds threshold."""
         runner = AsyncMock()
         # 20% improvement — above the 5% default threshold
@@ -521,7 +521,7 @@ class TestAutoResearchAgentLoop:
         approval_gate.request_approval.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_approval_gate_not_invoked_below_threshold(self):
+    async def test_approval_gate_not_invoked_below_threshold(self) -> None:
         """ApprovalGate.request_approval is NOT called when improvement is below threshold."""
         runner = AsyncMock()
         # Small improvement — below threshold
@@ -559,7 +559,7 @@ class TestAutoResearchAgentLoop:
         approval_gate.request_approval.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_session_persisted_to_redis(self):
+    async def test_session_persisted_to_redis(self) -> None:
         """_save_session is called at least once with a valid session payload."""
         runner = AsyncMock()
         runner.run_experiment = AsyncMock(side_effect=lambda e: _make_experiment())
@@ -578,7 +578,7 @@ class TestAutoResearchAgentLoop:
         assert payload["topic"] == "data"
 
     @pytest.mark.asyncio
-    async def test_failed_runner_marks_session_failed(self):
+    async def test_failed_runner_marks_session_failed(self) -> None:
         """If the runner raises, the session ends with FAILED status."""
         runner = AsyncMock()
         runner.run_experiment = AsyncMock(side_effect=RuntimeError("GPU OOM"))
@@ -606,18 +606,18 @@ class TestShouldContinue:
         s.results = results
         return s
 
-    def test_continue_when_fewer_results_than_window(self):
+    def test_continue_when_fewer_results_than_window(self) -> None:
         agent = self._agent()
         session = self._session_with([_make_metrics(improved=False)])
         assert agent._should_continue(session, plateau_window=3) is True
 
-    def test_plateau_triggers_stop(self):
+    def test_plateau_triggers_stop(self) -> None:
         agent = self._agent()
         results = [_make_metrics(improved=False), _make_metrics(improved=False)]
         session = self._session_with(results)
         assert agent._should_continue(session, plateau_window=2) is False
 
-    def test_any_improvement_prevents_stop(self):
+    def test_any_improvement_prevents_stop(self) -> None:
         agent = self._agent()
         results = [_make_metrics(improved=False), _make_metrics(improved=True)]
         session = self._session_with(results)
@@ -638,7 +638,7 @@ class TestResearchCheckpointGate:
         return gate
 
     @pytest.mark.asyncio
-    async def test_request_stores_pending_decision(self):
+    async def test_request_stores_pending_decision(self) -> None:
         gate = self._gate()
         dec_key = await gate.request(
             session_id="s1",
@@ -650,21 +650,21 @@ class TestResearchCheckpointGate:
         assert any("pending" in c for c in calls)
 
     @pytest.mark.asyncio
-    async def test_get_decision_decodes_bytes(self):
+    async def test_get_decision_decodes_bytes(self) -> None:
         gate = self._gate()
         gate._redis.get = AsyncMock(return_value=b"approved")
         result = await gate.get_decision("s1", ResearchCheckpointType.QUERY_PLAN.value)
         assert result == "approved"
 
     @pytest.mark.asyncio
-    async def test_get_decision_returns_unknown_when_missing(self):
+    async def test_get_decision_returns_unknown_when_missing(self) -> None:
         gate = self._gate()
         gate._redis.get = AsyncMock(return_value=None)
         result = await gate.get_decision("s1", "missing_type")
         assert result == "unknown"
 
     @pytest.mark.asyncio
-    async def test_wait_returns_approved_immediately(self):
+    async def test_wait_returns_approved_immediately(self) -> None:
         gate = self._gate()
         gate.get_decision = AsyncMock(return_value="approved")
         result = await gate.wait_for_decision(
@@ -676,7 +676,7 @@ class TestResearchCheckpointGate:
         assert result.decision == CheckpointDecision.APPROVED
 
     @pytest.mark.asyncio
-    async def test_wait_returns_cancelled(self):
+    async def test_wait_returns_cancelled(self) -> None:
         gate = self._gate()
         gate.get_decision = AsyncMock(return_value="cancelled")
         result = await gate.wait_for_decision(
@@ -688,7 +688,7 @@ class TestResearchCheckpointGate:
         assert result.decision == CheckpointDecision.CANCELLED
 
     @pytest.mark.asyncio
-    async def test_wait_returns_redirect_with_instructions(self):
+    async def test_wait_returns_redirect_with_instructions(self) -> None:
         gate = self._gate()
         gate.get_decision = AsyncMock(return_value="redirect:focus on regularisation")
         result = await gate.wait_for_decision(
@@ -701,7 +701,7 @@ class TestResearchCheckpointGate:
         assert result.redirect_instructions == "focus on regularisation"
 
     @pytest.mark.asyncio
-    async def test_wait_times_out_and_auto_proceeds(self):
+    async def test_wait_times_out_and_auto_proceeds(self) -> None:
         gate = self._gate()
         gate.get_decision = AsyncMock(return_value="pending")
         result = await gate.wait_for_decision(
@@ -722,7 +722,7 @@ class TestAutoResearchAgentCheckpoints:
     """Verify checkpoint gate interactions during run_experiment_loop."""
 
     @pytest.mark.asyncio
-    async def test_checkpoints_disabled_skips_gate(self):
+    async def test_checkpoints_disabled_skips_gate(self) -> None:
         """When checkpoints_enabled=False the gate is never called."""
         runner = AsyncMock()
         runner.run_experiment = AsyncMock(side_effect=lambda e: _make_experiment())
@@ -735,7 +735,7 @@ class TestAutoResearchAgentCheckpoints:
         assert session.status == SessionStatus.COMPLETED
 
     @pytest.mark.asyncio
-    async def test_checkpoint_approve_continues_normally(self):
+    async def test_checkpoint_approve_continues_normally(self) -> None:
         """Approval at all checkpoints lets the loop complete normally."""
         runner = AsyncMock()
         runner.run_experiment = AsyncMock(side_effect=lambda e: _make_experiment())
@@ -750,7 +750,7 @@ class TestAutoResearchAgentCheckpoints:
         assert agent.checkpoint_gate.request.call_count == 3
 
     @pytest.mark.asyncio
-    async def test_checkpoint_cancel_stops_session(self):
+    async def test_checkpoint_cancel_stops_session(self) -> None:
         """Cancel at the first checkpoint marks session CANCELLED."""
         runner = AsyncMock()
         runner.run_experiment = AsyncMock(side_effect=lambda e: _make_experiment())
@@ -765,7 +765,7 @@ class TestAutoResearchAgentCheckpoints:
         runner.run_experiment.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_checkpoint_redirect_query_plan_changes_query(self):
+    async def test_checkpoint_redirect_query_plan_changes_query(self) -> None:
         """Redirect at QUERY_PLAN checkpoint applies redirect text as new query."""
         runner = AsyncMock()
         runner.run_experiment = AsyncMock(side_effect=lambda e: _make_experiment())
@@ -804,7 +804,7 @@ class TestAutoResearchAgentCheckpoints:
         assert any("learning rate schedule" in h.statement for h in session.hypotheses)
 
     @pytest.mark.asyncio
-    async def test_checkpoint_timeout_auto_proceeds(self):
+    async def test_checkpoint_timeout_auto_proceeds(self) -> None:
         """Timeout at a checkpoint auto-proceeds (treated as approved)."""
         runner = AsyncMock()
         runner.run_experiment = AsyncMock(side_effect=lambda e: _make_experiment())

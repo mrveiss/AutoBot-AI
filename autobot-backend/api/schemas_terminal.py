@@ -6,7 +6,7 @@ Terminal and AgentTerminal session, SSH, command, and health schemas.
 """
 
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from pydantic import BaseModel
 
@@ -23,16 +23,15 @@ class TerminalSessionCreateResponse(BaseModel):
     security_level: str
     websocket_url: str
     created_at: str
-    ssh_keys: Optional[Dict[str, Any]] = None
-
+    ssh_keys: Dict[str, Any] | None = None
 
 class TerminalSessionItem(BaseModel):
     """Single session entry within a list response."""
 
     session_id: str
-    user_id: Optional[str] = None
-    security_level: Optional[str] = None
-    created_at: Optional[str] = None
+    user_id: str | None = None
+    security_level: str | None = None
+    created_at: str | None = None
     is_active: bool
 
 
@@ -69,10 +68,9 @@ class SSHKeyItem(BaseModel):
     """A single SSH key entry as returned by get_session_keys()."""
 
     name: str
-    fingerprint: Optional[str] = None
-    has_passphrase: Optional[bool] = None
-    key_path: Optional[str] = None
-
+    fingerprint: str | None = None
+    has_passphrase: bool | None = None
+    key_path: str | None = None
 
 class SSHKeyListResponse(BaseModel):
     """Response for GET /sessions/{session_id}/ssh-keys."""
@@ -142,16 +140,15 @@ class TerminalCommandHistoryResponse(BaseModel):
     session_id: str
     is_active: bool
     history: List[Any]
-    total_commands: Optional[int] = None
-    message: Optional[str] = None
-
+    total_commands: int | None = None
+    message: str | None = None
 
 class TerminalAuditLogResponse(BaseModel):
     """Response for GET /audit/{session_id}."""
 
     session_id: str
     audit_available: bool
-    security_level: Optional[str] = None
+    security_level: str | None = None
     message: str
 
 
@@ -189,10 +186,9 @@ class TerminalHealthResponse(BaseModel):
 
     status: str
     service: str
-    components: Optional[TerminalHealthComponents] = None
-    metrics: Optional[TerminalHealthMetrics] = None
-    error: Optional[str] = None
-
+    components: TerminalHealthComponents | None = None
+    metrics: TerminalHealthMetrics | None = None
+    error: str | None = None
 
 class TerminalStatusFeatures(BaseModel):
     pty_support: bool
@@ -205,18 +201,16 @@ class TerminalStatusFeatures(BaseModel):
 
 class TerminalStatusSessionInfo(BaseModel):
     active_sessions: int
-    max_concurrent_sessions: Optional[int] = None
-
+    max_concurrent_sessions: int | None = None
 
 class TerminalSystemStatusResponse(BaseModel):
     """Response for GET /status."""
 
     status: str
-    terminal_types: Optional[List[str]] = None
-    features: Optional[TerminalStatusFeatures] = None
-    session_info: Optional[TerminalStatusSessionInfo] = None
-    error: Optional[str] = None
-
+    terminal_types: List[str] | None = None
+    features: TerminalStatusFeatures | None = None
+    session_info: TerminalStatusSessionInfo | None = None
+    error: str | None = None
 
 class TerminalCapabilitiesResponse(BaseModel):
     """Response for GET /capabilities."""
@@ -248,8 +242,7 @@ class TerminalImplementationItem(BaseModel):
     frontend_component: str
     backend_api: str
     approval_workflow: bool
-    service_layer: Optional[str] = None
-
+    service_layer: str | None = None
 
 class TerminalFeaturesResponse(BaseModel):
     """Response for GET /features."""
@@ -299,7 +292,7 @@ class AdminExecuteResponse(BaseModel):
 class PackageManagersResponse(BaseModel):
     """Response for GET /terminal/package-managers."""
 
-    detected: Optional[str] = None
+    detected: str | None = None
     available: List[str]
     package_managers: Dict[str, Any]
 
@@ -316,12 +309,11 @@ class AgentTerminalSessionCreateResponse(BaseModel):
     session_id: str
     agent_id: str
     agent_role: str
-    conversation_id: Optional[str] = None
+    conversation_id: str | None = None
     host: str
     state: str
     created_at: float
-    pty_session_id: Optional[str] = None
-
+    pty_session_id: str | None = None
 
 class AgentTerminalSessionItem(BaseModel):
     """Single session entry within list response."""
@@ -329,14 +321,13 @@ class AgentTerminalSessionItem(BaseModel):
     session_id: str
     agent_id: str
     agent_role: str
-    conversation_id: Optional[str] = None
+    conversation_id: str | None = None
     host: str
     state: str
     created_at: float
-    last_activity: Optional[float] = None
+    last_activity: float | None = None
     command_count: int
-    pty_session_id: Optional[str] = None
-
+    pty_session_id: str | None = None
 
 class AgentTerminalSessionListResponse(BaseModel):
     """Response for GET /agent-terminal/sessions."""
@@ -368,23 +359,22 @@ class AgentTerminalCommandStateResponse(BaseModel):
     """Response for GET /agent-terminal/commands/{command_id}."""
 
     command_id: str
-    terminal_session_id: Optional[str] = None
-    chat_id: Optional[str] = None
+    terminal_session_id: str | None = None
+    chat_id: str | None = None
     command: str
-    purpose: Optional[str] = None
+    purpose: str | None = None
     state: str
-    output: Optional[str] = None
-    stderr: Optional[str] = None
-    return_code: Optional[int] = None
+    output: str | None = None
+    stderr: str | None = None
+    return_code: int | None = None
     risk_level: str
-    risk_reasons: Optional[List[str]] = None
-    requested_at: Optional[float] = None
-    approved_at: Optional[float] = None
-    execution_started_at: Optional[float] = None
-    execution_completed_at: Optional[float] = None
-    approved_by_user_id: Optional[str] = None
-    approval_comment: Optional[str] = None
-
+    risk_reasons: List[str] | None = None
+    requested_at: float | None = None
+    approved_at: float | None = None
+    execution_started_at: float | None = None
+    execution_completed_at: float | None = None
+    approved_by_user_id: str | None = None
+    approval_comment: str | None = None
 
 class AgentTerminalInfoResponse(BaseModel):
     """Response for GET /agent-terminal/."""
@@ -420,22 +410,20 @@ class AgentTerminalHostSelectionGetResponse(BaseModel):
 
     request_id: str
     status: str
-    selected_host_id: Optional[str] = None
-    selected_host_name: Optional[str] = None
-    connection_info: Optional[Dict[str, Any]] = None
+    selected_host_id: str | None = None
+    selected_host_name: str | None = None
+    connection_info: Dict[str, Any] | None = None
     created_at: str
-    updated_at: Optional[str] = None
-
+    updated_at: str | None = None
 
 class AgentTerminalHostSelectionSubmitResponse(BaseModel):
     """Response for POST /agent-terminal/host-selection/{request_id}/select."""
 
     status: str
     request_id: str
-    selected_host_id: Optional[str] = None
-    selected_host_name: Optional[str] = None
-    connection_info: Optional[Dict[str, Any]] = None
-
+    selected_host_id: str | None = None
+    selected_host_name: str | None = None
+    connection_info: Dict[str, Any] | None = None
 
 class AgentTerminalHostSelectionCancelResponse(BaseModel):
     """Response for POST /agent-terminal/host-selection/{request_id}/cancel."""
@@ -481,58 +469,58 @@ class CommandRiskLevel(Enum):
 # Request/Response Models
 class CommandRequest(BaseModel):
     command: str
-    description: Optional[str] = None
-    require_confirmation: Optional[bool] = True
-    timeout: Optional[float] = 30.0
-    working_directory: Optional[str] = None
-    environment: Optional[Dict[str, str]] = None
+    description: str | None = None
+    require_confirmation: bool | None = True
+    timeout: float | None = 30.0
+    working_directory: str | None = None
+    environment: Dict[str, str] | None = None
 
 
 class TerminalSessionRequest(BaseModel):
-    user_id: Optional[str] = "default"
-    conversation_id: Optional[str] = None  # Link to chat session for logging
-    chat_id: Optional[str] = None  # For chat-scoped SSH keys (Issue #211)
-    security_level: Optional[SecurityLevel] = SecurityLevel.STANDARD
-    enable_logging: Optional[bool] = True
-    enable_workflow_control: Optional[bool] = True
-    initial_directory: Optional[str] = None
-    setup_ssh_keys: Optional[bool] = False  # Auto-setup SSH keys (Issue #211)
-    ssh_key_names: Optional[list] = None  # Specific SSH keys to load (Issue #211)
+    user_id: str | None = "default"
+    conversation_id: str | None = None  # Link to chat session for logging
+    chat_id: str | None = None  # For chat-scoped SSH keys (Issue #211)
+    security_level: SecurityLevel | None = SecurityLevel.STANDARD
+    enable_logging: bool | None = True
+    enable_workflow_control: bool | None = True
+    initial_directory: str | None = None
+    setup_ssh_keys: bool | None = False  # Auto-setup SSH keys (Issue #211)
+    ssh_key_names: list | None = None  # Specific SSH keys to load (Issue #211)
 
 
 class TerminalInputRequest(BaseModel):
     text: str
-    is_password: Optional[bool] = False
+    is_password: bool | None = False
 
 
 class WorkflowControlRequest(BaseModel):
     action: str  # pause, resume, approve_step, cancel
-    workflow_id: Optional[str] = None
-    step_id: Optional[str] = None
-    data: Optional[Dict] = None
+    workflow_id: str | None = None
+    step_id: str | None = None
+    data: Dict | None = None
 
 
 class ToolInstallRequest(BaseModel):
     tool_name: str
-    package_name: Optional[str] = None
-    install_method: Optional[str] = "auto"
-    custom_command: Optional[str] = None
-    update_first: Optional[bool] = True
+    package_name: str | None = None
+    install_method: str | None = "auto"
+    custom_command: str | None = None
+    update_first: bool | None = True
 
 
 class SSHKeySetupRequest(BaseModel):
     """Request model for SSH key setup in terminal sessions (Issue #211)."""
 
-    chat_id: Optional[str] = None  # For chat-scoped keys
-    include_general: Optional[bool] = True  # Include general-scoped keys
-    key_names: Optional[list] = None  # Specific keys to load
+    chat_id: str | None = None  # For chat-scoped keys
+    include_general: bool | None = True  # Include general-scoped keys
+    key_names: list | None = None  # Specific keys to load
 
 
 class SSHKeyAgentRequest(BaseModel):
     """Request model for adding SSH key to ssh-agent (Issue #211)."""
 
     key_name: str
-    passphrase: Optional[str] = None  # For encrypted keys
+    passphrase: str | None = None  # For encrypted keys
 
 
 class AdminExecuteRequest(BaseModel):

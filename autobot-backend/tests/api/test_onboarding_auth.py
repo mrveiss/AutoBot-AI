@@ -1,10 +1,11 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
-"""Regression tests for #6568 — /api/onboarding auth gating.
+"""Regression tests for #6568 — /api/onboarding auth gating, and #6577 — Redis
+transaction atomicity.
 
-Before the fix, all four onboarding endpoints (presets, doctor, apply, status)
-were reachable without authentication. ``/apply`` in particular performs
+Before the fix (#6568), all four onboarding endpoints (presets, doctor, apply,
+status) were reachable without authentication. ``/apply`` in particular performs
 privileged operations: enables agents, activates skills, persists config.
 
 The fix:
@@ -13,16 +14,19 @@ The fix:
   - POST /onboarding/apply   → requires admin user
   - GET  /onboarding/status  → INTENTIONALLY unauthenticated (bootstrap probe)
 
-These tests pin the dependency wiring so the gating cannot regress silently.
+Before the fix (#6577), ``apply_preset`` wrote Redis keys individually so a
+mid-flight failure could leave a half-applied state. The fix wraps all writes
+in a single MULTI/EXEC pipeline (``transaction=True``).
 """
 
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
 from api import onboarding as onboarding_api
 from auth_middleware import check_admin_permission, get_current_user
+from tests.fixtures import make_async_redis, make_redis_pipeline
 
 
 def _build_app() -> FastAPI:
@@ -54,6 +58,16 @@ def _deny_admin(app: FastAPI) -> None:
         raise HTTPException(status_code=403, detail="Admin permission required")
 
     app.dependency_overrides[check_admin_permission] = _raise
+
+
+def _make_mock_pipe():
+    """Return a canonical pipeline mock that records set() calls and awaits execute() (#7280)."""
+    return make_redis_pipeline(execute_returns=[True])
+
+
+def _make_mock_redis(pipe):
+    """Return a canonical Redis mock whose pipeline() returns *pipe* (#7280)."""
+    return make_async_redis(pipeline=pipe)
 
 
 class TestPresetsAuth:
@@ -110,21 +124,16 @@ class TestApplyAuth:
         app = _build_app()
         _grant_admin(app)
 
-        async def _enable_agents(*_a, **_k):
-            return []
-
-        async def _activate_skills(*_a, **_k):
-            return []
-
-        async def _persist_config(*_a, **_k):
-            return {"system_prompt": "applied", "llm_tier": "balanced"}
+        pipe = _make_mock_pipe()
+        mock_redis = _make_mock_redis(pipe)
 
         with (
             patch("api.onboarding.get_preset", return_value={"agents": [], "skills": []}),
-            patch("api.onboarding._enable_agents", side_effect=_enable_agents),
-            patch("api.onboarding._activate_skills", side_effect=_activate_skills),
-            patch("api.onboarding._persist_config", side_effect=_persist_config),
-            patch("autobot_shared.redis_client.get_async_redis_client", return_value=None),
+            patch("api.onboarding._activate_skills", new=AsyncMock(return_value=[])),
+            patch(
+                "autobot_shared.redis_client.get_async_redis_client",
+                new=AsyncMock(return_value=mock_redis),
+            ),
         ):
             resp = TestClient(app).post(
                 "/api/onboarding/apply",
@@ -176,3 +185,156 @@ class TestRouteDependenciesPinned:
 
     def test_apply_requires_check_admin_permission(self):
         assert check_admin_permission in self._dep_callables_for("/apply")
+
+
+# ---------------------------------------------------------------------------
+# #6577 — Redis transaction atomicity
+# ---------------------------------------------------------------------------
+
+
+class TestApplyPresetTransaction:
+    """All Redis writes in ``apply_preset`` must execute inside a single
+    MULTI/EXEC pipeline so a partial failure leaves no half-written state."""
+
+    def _app(self) -> FastAPI:
+        app = _build_app()
+        _grant_admin(app)
+        return app
+
+    def test_pipeline_created_with_transaction_true(self):
+        """pipeline(transaction=True) must be called — not plain pipeline()."""
+        pipe = _make_mock_pipe()
+        mock_redis = _make_mock_redis(pipe)
+        preset = {
+            "agents": ["a1"],
+            "skills": [],
+            "system_prompt": "Hi",
+            "llm_tier": "fast",
+        }
+
+        with (
+            patch("api.onboarding.get_preset", return_value=preset),
+            patch("api.onboarding._activate_skills", new=AsyncMock(return_value=[])),
+            patch(
+                "autobot_shared.redis_client.get_async_redis_client",
+                new=AsyncMock(return_value=mock_redis),
+            ),
+        ):
+            resp = TestClient(self._app()).post("/api/onboarding/apply", json={"preset_name": "starter"})
+
+        assert resp.status_code == 200
+        mock_redis.pipeline.assert_called_once_with(transaction=True)
+
+    def test_all_keys_queued_before_execute(self):
+        """Every expected key is queued via pipe.set() and execute() is called once."""
+        pipe = _make_mock_pipe()
+        mock_redis = _make_mock_redis(pipe)
+        preset = {
+            "agents": ["agent-a", "agent-b"],
+            "skills": [],
+            "system_prompt": "Hello",
+            "llm_tier": "balanced",
+        }
+
+        with (
+            patch("api.onboarding.get_preset", return_value=preset),
+            patch("api.onboarding._activate_skills", new=AsyncMock(return_value=[])),
+            patch(
+                "autobot_shared.redis_client.get_async_redis_client",
+                new=AsyncMock(return_value=mock_redis),
+            ),
+        ):
+            TestClient(self._app()).post("/api/onboarding/apply", json={"preset_name": "starter"})
+
+        # 2 agents + system_prompt + llm_tier + preset_applied + preset_name = 6 keys
+        assert pipe.set.call_count == 6
+        set_keys = {c.args[0] for c in pipe.set.call_args_list}
+        assert set_keys == {
+            "agents:enabled:agent-a",
+            "agents:enabled:agent-b",
+            "onboarding:config:system_prompt",
+            "onboarding:config:llm_tier",
+            "onboarding:preset_applied",
+            "onboarding:preset_name",
+        }
+        pipe.execute.assert_awaited_once()
+
+    def test_redis_transaction_failure_rolls_back_skills(self):
+        """If the Redis EXEC raises, in-memory skill state is restored and a 500 is returned."""
+        pipe = _make_mock_pipe()
+        pipe.execute = AsyncMock(side_effect=RuntimeError("Redis EXEC failed"))
+        mock_redis = _make_mock_redis(pipe)
+
+        # Simulate a skill that was enabled; track rollback calls
+        rollback_calls: list[str] = []
+
+        async def _fake_activate(skill_names, rollback_stack):
+            rollback_stack.append(("skill_enabled", _FakeManager(rollback_calls), "my-skill", False))
+            return ["my-skill"]
+
+        with (
+            patch(
+                "api.onboarding.get_preset",
+                return_value={"agents": [], "skills": ["my-skill"]},
+            ),
+            patch("api.onboarding._activate_skills", side_effect=_fake_activate),
+            patch(
+                "autobot_shared.redis_client.get_async_redis_client",
+                new=AsyncMock(return_value=mock_redis),
+            ),
+        ):
+            resp = TestClient(self._app()).post("/api/onboarding/apply", json={"preset_name": "starter"})
+
+        assert resp.status_code == 500
+        # Skill rollback was triggered
+        assert "my-skill" in rollback_calls
+
+    def test_no_redis_writes_on_transaction_failure(self):
+        """With a failing pipeline, pipe.execute() is called but raises — no individual
+        set() result lands in Redis, demonstrating the all-or-nothing guarantee."""
+        pipe = _make_mock_pipe()
+        pipe.execute = AsyncMock(side_effect=RuntimeError("EXEC error"))
+        mock_redis = _make_mock_redis(pipe)
+
+        with (
+            patch(
+                "api.onboarding.get_preset",
+                return_value={"agents": ["a1"], "skills": []},
+            ),
+            patch("api.onboarding._activate_skills", new=AsyncMock(return_value=[])),
+            patch(
+                "autobot_shared.redis_client.get_async_redis_client",
+                new=AsyncMock(return_value=mock_redis),
+            ),
+        ):
+            resp = TestClient(self._app()).post("/api/onboarding/apply", json={"preset_name": "starter"})
+
+        assert resp.status_code == 500
+        # set() was called (keys were queued) but execute() raised before any write landed
+        assert pipe.set.call_count >= 1
+        pipe.execute.assert_awaited_once()
+
+
+class _FakeManager:
+    """Minimal stand-in for SkillManager in rollback tests."""
+
+    def __init__(self, rollback_log: list[str]) -> None:
+        self._log = rollback_log
+
+    class _Skill:
+        def __init__(self, log: list[str], name: str, initial: bool) -> None:
+            self._log = log
+            self._name = name
+            self.enabled = initial
+
+        def __setattr__(self, attr: str, value: object) -> None:
+            object.__setattr__(self, attr, value)
+            if attr == "enabled":
+                self._log.append(self._name)  # type: ignore[attr-defined]
+
+    @property
+    def registry(self):
+        return self
+
+    def get(self, name: str):
+        return _FakeManager._Skill(self._log, name, True)

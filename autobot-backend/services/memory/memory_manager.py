@@ -3,13 +3,14 @@
 # Author: mrveiss
 """Memory Manager - Unified Access Layer (Issue #4344)"""
 
-import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
+
+from autobot_shared.logging_manager import get_logger
 
 from .external_provider_factory import ExternalProviderFactory
 from .postgres_provider import PostgresMemoryProvider
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class MemoryManager:
@@ -17,9 +18,9 @@ class MemoryManager:
     Unified memory access layer that routes operations to appropriate providers.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.built_in: PostgresMemoryProvider = PostgresMemoryProvider()
-        self.external: Optional[Any] = None
+        self.external: Any | None = None
         self.external_enabled: bool = False
 
     async def initialize(self) -> None:
@@ -77,9 +78,7 @@ class MemoryManager:
             except Exception as e:
                 logger.warning(f"External provider sync failed, continuing: {e}")
 
-    async def search(
-        self, query: str, limit: int = 10, filters: Optional[Dict[str, Any]] = None
-    ) -> List[Dict[str, Any]]:
+    async def search(self, query: str, limit: int = 10, filters: Dict[str, Any] | None = None) -> List[Dict[str, Any]]:
         if self.external_enabled and self.external:
             try:
                 results = await self.external.search(query, limit, filters)
@@ -93,7 +92,7 @@ class MemoryManager:
             logger.error(f"Built-in provider search failed: {e}")
             return []
 
-    async def get_entity(self, entity_id: str) -> Optional[Dict[str, Any]]:
+    async def get_entity(self, entity_id: str) -> Dict[str, Any] | None:
         try:
             return await self.built_in.get_entity(entity_id)
         except Exception as e:

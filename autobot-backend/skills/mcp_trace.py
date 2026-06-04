@@ -18,15 +18,15 @@ swallowed and logged at DEBUG level so tracing never disrupts tool calls.
 """
 
 import json
-import logging
 import time
 import uuid
 from dataclasses import asdict, dataclass
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _SPAN_TTL: int = 3600  # seconds
 _MAX_PARAM_BYTES: int = 4096  # 4 KB cap for input_params before Redis storage
@@ -51,10 +51,10 @@ class MCPSpan:
     skill_name: str
     tool_name: str
     started_at: float
-    ended_at: Optional[float]
+    ended_at: float | None
     input_params: Dict[str, Any]
-    output: Optional[Dict[str, Any]]
-    error: Optional[str]
+    output: Dict[str, Any] | None
+    error: str | None
     pid: int
 
 

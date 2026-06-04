@@ -20,17 +20,17 @@ Redis key layout (read-only; written by autobot_memory_graph):
 import asyncio
 import hashlib
 import json
-import logging
 import re
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 from knowledge.memory_graph.hybrid_scorer import HybridScorer, SearchResult
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -159,8 +159,8 @@ class QueryIntent:
     """Structured intent extracted from a natural language query."""
 
     entity_types: List[str] = field(default_factory=list)
-    time_range: Optional[Dict[str, Any]] = None
-    status_filter: Optional[str] = None
+    time_range: Dict[str, Any] | None = None
+    status_filter: str | None = None
     keywords: List[str] = field(default_factory=list)
     semantic_query: str = ""
 
@@ -211,7 +211,7 @@ class MemoryGraphQueryProcessor:
     async def process_query(
         self,
         query: str,
-        filters: Optional[Dict[str, Any]] = None,
+        filters: Dict[str, Any] | None = None,
         limit: int = _DEFAULT_RESULT_LIMIT,
     ) -> List[SearchResult]:
         """
@@ -269,7 +269,7 @@ class MemoryGraphQueryProcessor:
         )
         return results
 
-    async def get_entity(self, entity_id: str) -> Optional[Dict[str, Any]]:
+    async def get_entity(self, entity_id: str) -> Dict[str, Any] | None:
         """
         Retrieve a single entity document by its UUID.
 
@@ -288,7 +288,7 @@ class MemoryGraphQueryProcessor:
             logger.warning("get_entity failed for %s: %s", entity_id, exc)
             return None
 
-    async def get_entity_by_name(self, name: str) -> Optional[Dict[str, Any]]:
+    async def get_entity_by_name(self, name: str) -> Dict[str, Any] | None:
         """
         Retrieve the first entity matching *name* exactly.
 
@@ -320,7 +320,7 @@ class MemoryGraphQueryProcessor:
     async def get_related_entities(
         self,
         entity_name: str,
-        relation_type: Optional[str] = None,
+        relation_type: str | None = None,
         limit: int = 20,
     ) -> List[Dict[str, Any]]:
         """
@@ -408,7 +408,7 @@ class MemoryGraphQueryProcessor:
     # Stage 3: Embedding
     # ------------------------------------------------------------------
 
-    async def _get_query_embedding(self, semantic_query: str) -> Optional[List[float]]:
+    async def _get_query_embedding(self, semantic_query: str) -> List[float] | None:
         """
         Return an embedding vector for *semantic_query*.
 
@@ -502,7 +502,7 @@ class MemoryGraphQueryProcessor:
 # ---------------------------------------------------------------------------
 
 
-def _extract_time_range(query_lower: str) -> Optional[Dict[str, Any]]:
+def _extract_time_range(query_lower: str) -> Dict[str, Any] | None:
     """Try each time pattern and return the first match."""
     for pattern, handler in _TIME_PATTERNS:
         m = re.search(pattern, query_lower)
@@ -608,7 +608,7 @@ def _embedding_cache_key(text: str) -> str:
     return f"{_EMBEDDING_CACHE_KEY_PREFIX}{digest}"
 
 
-async def _generate_embedding(text: str) -> Optional[List[float]]:
+async def _generate_embedding(text: str) -> List[float] | None:
     """
     Generate a text embedding using the NPU worker / Ollama fallback.
 

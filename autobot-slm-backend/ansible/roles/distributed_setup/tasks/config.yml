@@ -49,7 +49,7 @@
   lineinfile:
     path: "{{ config_dir }}/autobot.env"
     line: "AUTOBOT_DEPLOYMENT_MODE=distributed"
-    create: yes
+    create: true
     owner: "{{ service_user }}"
     group: "{{ service_group }}"
     mode: '0640'

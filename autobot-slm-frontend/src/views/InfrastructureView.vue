@@ -113,16 +113,16 @@ function getCategoryColor(category: string): string {
     <!-- Header -->
     <div class="flex items-center justify-between mb-6">
       <div>
-        <h1 class="text-2xl font-bold text-gray-900">Infrastructure Setup</h1>
+        <h1 class="text-2xl font-bold text-gray-900">{{ $t('infrastructureView.infrastructureSetup') }}</h1>
         <p class="text-gray-500 mt-1">
-          Deploy and configure infrastructure components using Ansible playbooks
+          {{ $t('infrastructureView.deployAndConfigureInfrastructure') }}
         </p>
       </div>
       <button @click="showWizard = true" class="btn btn-primary flex items-center gap-2">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
         </svg>
-        Run Setup Wizard
+        {{ $t('infrastructureView.runSetupWizard') }}
       </button>
     </div>
 
@@ -186,7 +186,7 @@ function getCategoryColor(category: string): string {
               @click="showWizard = true"
               class="mt-4 w-full btn btn-secondary text-sm"
             >
-              Configure & Run
+              {{ $t('infrastructureView.configureRun') }}
             </button>
           </div>
         </div>
@@ -201,9 +201,9 @@ function getCategoryColor(category: string): string {
       <svg class="w-12 h-12 mx-auto text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
       </svg>
-      <h3 class="text-lg font-medium text-gray-900 mb-2">No playbooks available</h3>
+      <h3 class="text-lg font-medium text-gray-900 mb-2">{{ $t('infrastructureView.noPlaybooksAvailable') }}</h3>
       <p class="text-gray-500 mb-4">
-        Infrastructure playbooks have not been configured yet.
+        {{ $t('infrastructureView.infrastructurePlaybooksHaveNot') }}
       </p>
     </div>
 
@@ -214,11 +214,9 @@ function getCategoryColor(category: string): string {
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
         <div class="text-sm text-blue-700">
-          <p class="font-medium">About Infrastructure Setup</p>
+          <p class="font-medium">{{ $t('infrastructureView.aboutInfrastructureSetup') }}</p>
           <p class="mt-1 text-blue-600">
-            Infrastructure playbooks automate the deployment and configuration of system components.
-            Each playbook is designed to set up specific services like databases, monitoring, or security tools.
-            Run the Setup Wizard to execute a playbook with guided configuration.
+            {{ $t('infrastructureView.infrastructurePlaybooksAutomateThe') }}
           </p>
         </div>
       </div>

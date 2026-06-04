@@ -14,15 +14,15 @@ Services configured:
 - Inter-service communication
 """
 
-import logging
 from dataclasses import dataclass
-from typing import Dict, Optional
+from typing import Dict
 
 import asyncssh
 
+from autobot_shared.logging_manager import get_logger
 from pki.config import VM_DEFINITIONS, TLSConfig
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -93,7 +93,7 @@ async def _write_tls_config_to_redis(conn, tls_config: str) -> None:
     await conn.run(f"rm {temp_config}")
 
 
-async def _check_redis_service_status(conn) -> Optional[ConfigurationResult]:
+async def _check_redis_service_status(conn) -> ConfigurationResult | None:
     """
     Check if Redis Stack service is running.
 
@@ -204,7 +204,7 @@ class ServiceConfigurator:
     - Configuration file updates
     """
 
-    def __init__(self, config: Optional[TLSConfig] = None):
+    def __init__(self, config: TLSConfig | None = None):
         """Initialize configurator."""
         self.config = config or TLSConfig()
 

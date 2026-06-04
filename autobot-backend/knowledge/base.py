@@ -8,11 +8,12 @@ Contains the core KnowledgeBaseCore class with initialization, configuration,
 and connection management functionality.
 """
 
+from __future__ import annotations
+
 import asyncio
 import json
-import logging
 from pathlib import Path
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING, List
 
 import redis
 from llama_index.core import Settings, VectorStoreIndex
@@ -23,6 +24,7 @@ from llama_index.vector_stores.chroma import ChromaVectorStore
 from redis import asyncio as aioredis
 
 from autobot_shared.error_boundaries import error_boundary, get_error_boundary_manager
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_management.types import DATABASE_MAPPING
 from autobot_shared.ssot_config import config as ssot_config
 from config.manager import get_config_manager
@@ -34,7 +36,7 @@ if TYPE_CHECKING:
 
 config = get_config_manager()
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def _extract_embedding_model_from_metadata(
@@ -90,21 +92,27 @@ class KnowledgeBaseCore:
         self.hnsw_construction_ef = config.get("memory.chromadb.hnsw.construction_ef", 300)
         self.hnsw_search_ef = config.get("memory.chromadb.hnsw.search_ef", 100)
         self.hnsw_m = config.get("memory.chromadb.hnsw.M", 32)
+        # Issue #8155: SQ8 scalar quantization — opt-in via AUTOBOT_HNSW_QUANTIZATION_TYPE=sq.
+        # Empty string (default) disables quantization (safe for ChromaDB 1.5.x which rejects
+        # the key; non-empty value is added to hnsw_metadata and tried at collection creation).
+        self.hnsw_quantization_type: str = ssot_config.misc.hnsw_quantization_type
 
     def _init_connection_vars(self) -> None:
         """Initialize connection and state variables (Issue #398: extracted)."""
-        self.redis_client: Optional[redis.Redis] = None
-        self._aioredis_client: Optional[aioredis.Redis] = None
-        self.vector_store: Optional[ChromaVectorStore] = None
-        self.vector_index: Optional[VectorStoreIndex] = None
-        self._async_chroma_collection: Optional["BaseCollection"] = None
+        self.redis_client: redis.Redis | None = None
+        self._aioredis_client: aioredis.Redis | None = None
+        self.vector_store: ChromaVectorStore | None = None
+        self.vector_index: VectorStoreIndex | None = None
+        self._async_chroma_collection: "BaseCollection" | None = None
         self.llama_index_configured = False
-        self.embedding_model_name: Optional[str] = None
-        self.embedding_dimensions: Optional[int] = None
+        self.embedding_model_name: str | None = None
+        self.embedding_dimensions: int | None = None
         self._redis_initialized = False
         self._stats_key = "kb:stats"
         # Issue #688: Initialize ownership manager (lazy loaded)
         self.ownership_manager = None
+        # Issue #8391: VectorWriteBuffer (started in lifespan after ChromaDB init)
+        self._write_buffer = None
 
     def __init__(self):
         """Initialize instance variables only (Issue #398: refactored)."""
@@ -337,12 +345,18 @@ class KnowledgeBaseCore:
 
     def _build_hnsw_metadata(self) -> dict:
         """Build HNSW metadata for ChromaDB collection (Issue #398: extracted)."""
-        return {
+        meta: dict = {
             "hnsw:space": self.hnsw_space,
             "hnsw:construction_ef": self.hnsw_construction_ef,
             "hnsw:search_ef": self.hnsw_search_ef,
             "hnsw:M": self.hnsw_m,
         }
+        if self.hnsw_quantization_type:
+            # Issue #8155: SQ8 scalar quantization reduces vector storage 4× with <1% recall
+            # loss. Gated by AUTOBOT_HNSW_QUANTIZATION_TYPE because ChromaDB 1.5.x rejects
+            # this key; set to "sq" on installations that support it.
+            meta["hnsw:quantization_type"] = self.hnsw_quantization_type
+        return meta
 
     async def _create_chroma_collection(self, chroma_client, hnsw_metadata: dict):
         """Create ChromaDB collection with HNSW parameters (Issue #398: extracted)."""
@@ -365,6 +379,21 @@ class KnowledgeBaseCore:
         # ChromaDBCollection._raw holds the underlying chromadb object.
         raw_collection = getattr(abc_collection, "_raw", abc_collection)
         self.vector_store = ChromaVectorStore(chroma_collection=raw_collection)
+
+        # Issue #8391: Instantiate VectorWriteBuffer backed by this collection.
+        # buffer.start() is called in lifespan after KB init succeeds.
+        from knowledge.write_buffer import VectorWriteBuffer, make_chromadb_flush_fn
+
+        # Issue #8406: Decrement total_vectors counter when a flush batch is dropped so
+        # the optimistic increment made at write time is corrected on failure.
+        async def _on_write_buffer_flush_error(count: int, exc: Exception) -> None:
+            logger.error("VectorWriteBuffer flush lost %d vectors; decrementing total_vectors: %s", count, exc)
+            await self._decrement_stat("total_vectors", count)
+
+        self._write_buffer = VectorWriteBuffer(
+            flush_fn=make_chromadb_flush_fn(self.vector_store),  # Issue #8401: LlamaIndex vs raw collection
+            on_flush_error=_on_write_buffer_flush_error,
+        )
 
         logger.info(
             "ChromaDB vector store initialized: collection='%s'",
@@ -474,11 +503,11 @@ class KnowledgeBaseCore:
         if not self._redis_initialized:
             await self.initialize()
 
-    def _get_redis_client(self) -> Optional[redis.Redis]:
+    def _get_redis_client(self) -> redis.Redis | None:
         """Get Redis client for sync operations (V1 compatibility)"""
         return self.redis_client
 
-    async def _get_async_redis_client(self) -> Optional[aioredis.Redis]:
+    async def _get_async_redis_client(self) -> aioredis.Redis | None:
         """Get async Redis client for async operations (V1 compatibility)"""
         return self._aioredis_client
 
@@ -581,7 +610,7 @@ class KnowledgeBaseCore:
             logger.error("Error counting facts: %s", e)
             return 0
 
-    async def _detect_stored_embedding_model(self) -> Optional[str]:
+    async def _detect_stored_embedding_model(self) -> str | None:
         """Detect which embedding model was used for existing data.
         Issue #315: Refactored to use helper for reduced nesting.
         """

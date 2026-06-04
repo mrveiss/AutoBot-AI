@@ -14,7 +14,7 @@ import logging
 import os
 import time
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 
 import yaml
 
@@ -45,7 +45,7 @@ class ManifestLoader:
         """Return the expected manifest.yml path for a role."""
         return self._infra_base / role_name / "manifest.yml"
 
-    def _load_from_disk(self, role_name: str) -> Optional[RoleManifest]:
+    def _load_from_disk(self, role_name: str) -> RoleManifest | None:
         """Load and parse manifest.yml for role_name."""
         path = self._manifest_path(role_name)
         if not path.exists():
@@ -59,7 +59,7 @@ class ManifestLoader:
             logger.warning("Failed to load manifest for %s: %s", role_name, exc)
             return None
 
-    def load(self, role_name: str, *, force_reload: bool = False) -> Optional[RoleManifest]:
+    def load(self, role_name: str, *, force_reload: bool = False) -> RoleManifest | None:
         """Return the RoleManifest for role_name, using cache if fresh."""
         cached = self._cache.get(role_name)
         if cached and not force_reload:
@@ -93,7 +93,7 @@ class ManifestLoader:
     # Convenience accessors (avoid repeated None checks at call sites)
     # ------------------------------------------------------------------
 
-    def get_health_endpoint(self, role_name: str) -> Optional[str]:
+    def get_health_endpoint(self, role_name: str) -> str | None:
         """Return the health.endpoint URL for a role, or None."""
         m = self.load(role_name)
         return m.health.endpoint if m and m.health else None
@@ -113,7 +113,7 @@ class ManifestLoader:
         m = self.load(role_name)
         return list(m.coexistence.warns_with) if m else []
 
-    def get_update_policy(self, role_name: str) -> Optional[UpdatePolicy]:
+    def get_update_policy(self, role_name: str) -> UpdatePolicy | None:
         """Return the system_updates.policy for a role."""
         m = self.load(role_name)
         return m.system_updates.policy if m else None
@@ -163,7 +163,7 @@ class ManifestLoader:
 # Module-level singleton
 # ---------------------------------------------------------------------------
 
-_loader: Optional[ManifestLoader] = None
+_loader: ManifestLoader | None = None
 
 
 def get_manifest_loader() -> ManifestLoader:
@@ -174,7 +174,7 @@ def get_manifest_loader() -> ManifestLoader:
     return _loader
 
 
-def init_manifest_loader(infra_base: Optional[Path] = None) -> ManifestLoader:
+def init_manifest_loader(infra_base: Path | None = None) -> ManifestLoader:
     """Initialize (or reinitialize) the global ManifestLoader."""
     global _loader
     _loader = ManifestLoader(infra_base=infra_base or _INFRA_BASE)

@@ -15,25 +15,33 @@ Features:
 
 import asyncio
 import json
-import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
 
-from api.schemas_analytics import DebtCalculationRequest
+from api.schemas_analytics import (
+    AnalyticsDebtByCategoryResponse,
+    AnalyticsDebtCalculateResponse,
+    AnalyticsDebtReportResponse,
+    AnalyticsDebtROIPrioritiesResponse,
+    AnalyticsDebtSummaryResponse,
+    AnalyticsDebtTrendsResponse,
+    DebtCalculationRequest,
+)
 from api.schemas_common import DataResponse
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.redis_utils import decode_redis_value as _decode_redis_value
 from autobot_shared.status_enums import Severity as DebtSeverity  # #6689 consolidation
 from constants.ttl_constants import TTL_30_DAYS
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 router = APIRouter(tags=["technical-debt", "analytics"])  # Prefix set in router_registry
 
 # Redis key prefix
@@ -83,7 +91,7 @@ class DebtItem:
     category: DebtCategory
     severity: DebtSeverity
     file_path: str
-    line_number: Optional[int]
+    line_number: int | None
     description: str
     estimated_hours: float
     fix_complexity: str  # easy, medium, hard
@@ -203,7 +211,7 @@ def _map_problem_to_category(problem_type: str) -> DebtCategory:
     return mapping.get(problem_type.lower(), DebtCategory.ANTI_PATTERNS)
 
 
-def _get_fix_complexity(pattern_type: Optional[str]) -> str:
+def _get_fix_complexity(pattern_type: str | None) -> str:
     """Estimate fix complexity for a pattern type"""
     hard_patterns = {"god_class", "spaghetti_code", "circular_dependency"}
     medium_patterns = {"long_method", "feature_envy", "duplicate_code"}
@@ -445,7 +453,7 @@ def _store_debt_result(debt_result: Dict[str, Any]) -> None:
         logger.warning("Failed to store debt calculation: %s", e)
 
 
-def _get_latest_debt_data() -> Optional[Dict[str, Any]]:
+def _get_latest_debt_data() -> Dict[str, Any] | None:
     """Get latest debt data from Redis (Issue #315 - extracted helper)."""
     redis_client = get_debt_redis()
     if not redis_client:
@@ -463,7 +471,7 @@ def _get_latest_debt_data() -> Optional[Dict[str, Any]]:
         return None
 
 
-@router.post("/calculate", response_model=DataResponse)
+@router.post("/calculate", response_model=DataResponse[AnalyticsDebtCalculateResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="calculate_technical_debt",
@@ -510,7 +518,7 @@ async def calculate_technical_debt(
         )
 
 
-@router.get("/summary", response_model=DataResponse)
+@router.get("/summary", response_model=DataResponse[AnalyticsDebtSummaryResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_debt_summary",
@@ -540,7 +548,7 @@ async def get_debt_summary(admin_check: bool = Depends(check_admin_permission)):
     return JSONResponse(_no_data_response("No debt analysis found. Run POST /calculate first."))
 
 
-@router.get("/by-category/{category}", response_model=DataResponse)
+@router.get("/by-category/{category}", response_model=DataResponse[AnalyticsDebtByCategoryResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_debt_by_category",
@@ -630,7 +638,7 @@ def _calculate_trend_change(trend_data: List[Dict[str, Any]]) -> tuple:
     return change, direction
 
 
-@router.get("/trends", response_model=DataResponse)
+@router.get("/trends", response_model=DataResponse[AnalyticsDebtTrendsResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_debt_trends",
@@ -662,7 +670,7 @@ async def get_debt_trends(
     )
 
 
-@router.get("/roi-priorities", response_model=DataResponse)
+@router.get("/roi-priorities", response_model=DataResponse[AnalyticsDebtROIPrioritiesResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_roi_priorities",
@@ -768,7 +776,7 @@ def _generate_markdown_report(debt_data: dict) -> str:
     return _build_debt_executive_summary(debt_data) + _build_debt_tables(debt_data) + _build_debt_recommendations()
 
 
-@router.get("/report", response_model=DataResponse)
+@router.get("/report", response_model=DataResponse[AnalyticsDebtReportResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_debt_report",

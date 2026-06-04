@@ -21,10 +21,10 @@ Usage::
     cascade_report = causal_executor.analyze_cascades()
 """
 
-import logging
 import time
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
+from autobot_shared.logging_manager import get_logger
 from orchestration.causal_models import (
     CascadeReport,
     CausalMetadata,
@@ -38,7 +38,7 @@ from orchestration.dag_executor import (
     WorkflowDAG,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class CausalExecutor:
@@ -58,7 +58,7 @@ class CausalExecutor:
     def __init__(
         self,
         executor: DAGExecutor,
-        metadata_map: Optional[Dict[str, CausalMetadata]] = None,
+        metadata_map: Dict[str, CausalMetadata] | None = None,
     ):
         """
         Initialize the causal executor.
@@ -69,14 +69,14 @@ class CausalExecutor:
         """
         self.executor = executor
         self.metadata_map = metadata_map or {}
-        self.effect_trace: Optional[EffectTrace] = None
-        self.validation_result: Optional[ValidationResult] = None
+        self.effect_trace: EffectTrace | None = None
+        self.validation_result: ValidationResult | None = None
 
     async def execute(
         self,
         dag: WorkflowDAG,
         workflow_id: str,
-        context: Optional[Dict[str, Any]] = None,
+        context: Dict[str, Any] | None = None,
         validate_causal: bool = True,
     ) -> DAGExecutionContext:
         """
@@ -207,9 +207,7 @@ class CausalExecutor:
     # Cascade analysis
     # -----------------------------------------------------------------------
 
-    def analyze_cascades(
-        self, execution_ctx: DAGExecutionContext, failed_step_id: Optional[str] = None
-    ) -> CascadeReport:
+    def analyze_cascades(self, execution_ctx: DAGExecutionContext, failed_step_id: str | None = None) -> CascadeReport:
         """
         Analyze cascading failures after execution.
 

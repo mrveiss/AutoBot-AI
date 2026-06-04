@@ -10,7 +10,7 @@ roles.  See docs/developer/ROLES.md for the authoritative spec.
 """
 
 import logging
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -185,8 +185,8 @@ async def list_roles(
 async def list_deployments(
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(get_current_user)],
-    node_id: Optional[str] = Query(None),
-    status_filter: Optional[str] = Query(None, alias="status"),
+    node_id: str | None = Query(None),
+    status_filter: str | None = Query(None, alias="status"),
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
 ) -> DeploymentListResponse:

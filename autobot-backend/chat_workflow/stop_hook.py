@@ -18,10 +18,11 @@ All ``.delay()`` calls are synchronous and non-blocking; they only publish
 a message to Redis.  The actual work happens in background Celery workers.
 """
 
-import logging
 from datetime import datetime, timezone
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 
 
 async def on_turn_complete(

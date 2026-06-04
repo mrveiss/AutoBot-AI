@@ -50,13 +50,13 @@ def _make_dispatcher_with_cache(*tools) -> MCPDispatcher:
 # ---------------------------------------------------------------------------
 
 
-def test_find_tool_returns_none_when_empty():
+def test_find_tool_returns_none_when_empty() -> None:
     """Empty cache should return None for any name."""
     d = MCPDispatcher()
     assert d.find_tool("search_knowledge_base") is None
 
 
-def test_find_tool_returns_cached_tool():
+def test_find_tool_returns_cached_tool() -> None:
     """After populating the cache manually, find_tool should return the entry."""
     d = _make_dispatcher_with_cache(_SAMPLE_TOOL)
     result = d.find_tool("search_knowledge_base")
@@ -70,7 +70,7 @@ def test_find_tool_returns_cached_tool():
 
 
 @pytest.mark.asyncio
-async def test_dispatch_unknown_tool_returns_error():
+async def test_dispatch_unknown_tool_returns_error() -> None:
     """Dispatching a tool not in cache should return success=False."""
     d = _make_dispatcher_with_cache()  # empty cache
     result = await d.dispatch("nonexistent_tool", {})
@@ -85,7 +85,7 @@ async def test_dispatch_unknown_tool_returns_error():
 
 
 @pytest.mark.asyncio
-async def test_dispatch_calls_bridge_endpoint():
+async def test_dispatch_calls_bridge_endpoint() -> None:
     """A known tool should call the bridge endpoint and return success=True."""
     d = _make_dispatcher_with_cache(_SAMPLE_TOOL)
 
@@ -112,7 +112,7 @@ async def test_dispatch_calls_bridge_endpoint():
 
 
 @pytest.mark.asyncio
-async def test_dispatch_handles_bridge_error():
+async def test_dispatch_handles_bridge_error() -> None:
     """When the bridge returns a non-200 status, success should be False."""
     d = _make_dispatcher_with_cache(_SAMPLE_TOOL)
 
@@ -138,7 +138,7 @@ async def test_dispatch_handles_bridge_error():
 # ---------------------------------------------------------------------------
 
 
-def test_get_tool_definitions_formats_correctly():
+def test_get_tool_definitions_formats_correctly() -> None:
     """Tool definitions should include bridge prefix in description."""
     d = _make_dispatcher_with_cache(_SAMPLE_TOOL)
     defs = d.get_tool_definitions()
@@ -156,7 +156,7 @@ def test_get_tool_definitions_formats_correctly():
 
 
 @pytest.mark.asyncio
-async def test_refresh_cache_handles_registry_unavailable():
+async def test_refresh_cache_handles_registry_unavailable() -> None:
     """refresh_tool_cache() should return 0 and not crash when registry is down."""
     d = MCPDispatcher()
 
@@ -173,7 +173,7 @@ async def test_refresh_cache_handles_registry_unavailable():
 
 
 @pytest.mark.asyncio
-async def test_refresh_cache_handles_non_200_response():
+async def test_refresh_cache_handles_non_200_response() -> None:
     """refresh_tool_cache() should return 0 when registry returns non-200."""
     d = MCPDispatcher()
 
@@ -193,7 +193,7 @@ async def test_refresh_cache_handles_non_200_response():
 
 
 @pytest.mark.asyncio
-async def test_refresh_cache_populates_tool_dict():
+async def test_refresh_cache_populates_tool_dict() -> None:
     """refresh_tool_cache() should populate _tool_cache from registry response."""
     d = MCPDispatcher()
 
@@ -223,7 +223,7 @@ async def test_refresh_cache_populates_tool_dict():
 # ---------------------------------------------------------------------------
 
 
-def test_get_mcp_dispatcher_returns_singleton():
+def test_get_mcp_dispatcher_returns_singleton() -> None:
     """get_mcp_dispatcher() should always return the same instance."""
     a = get_mcp_dispatcher()
     b = get_mcp_dispatcher()
@@ -308,7 +308,7 @@ async def test_cache_ttl_does_not_refresh_when_fresh():
 # ---------------------------------------------------------------------------
 
 
-def test_get_tool_definitions_filters_admin_tools_for_user():
+def test_get_tool_definitions_filters_admin_tools_for_user() -> None:
     """Admin-only tools should be hidden from role='user' (#2598)."""
     d = _make_dispatcher_with_cache(_SAMPLE_TOOL, _ADMIN_TOOL)
     defs = d.get_tool_definitions(role="user")
@@ -317,7 +317,7 @@ def test_get_tool_definitions_filters_admin_tools_for_user():
     assert "redis_client_list" not in names
 
 
-def test_get_tool_definitions_shows_all_for_admin():
+def test_get_tool_definitions_shows_all_for_admin() -> None:
     """All tools including admin-only should be visible for role='admin' (#2598)."""
     d = _make_dispatcher_with_cache(_SAMPLE_TOOL, _ADMIN_TOOL)
     defs = d.get_tool_definitions(role="admin")
@@ -327,7 +327,7 @@ def test_get_tool_definitions_shows_all_for_admin():
 
 
 @pytest.mark.asyncio
-async def test_dispatch_rejects_admin_tool_for_user():
+async def test_dispatch_rejects_admin_tool_for_user() -> None:
     """dispatch() should return success=False for admin-only tool when role='user' (#2598)."""
     d = _make_dispatcher_with_cache(_ADMIN_TOOL)
     d._cache_timestamp = time.monotonic()  # keep cache fresh to avoid network call

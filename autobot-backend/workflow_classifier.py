@@ -7,16 +7,16 @@ Manages classification rules and keywords in Redis for dynamic updates
 """
 
 import json
-import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import redis
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 from autobot_types import TaskComplexity
 from constants.threshold_constants import StringParsingConstants
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Performance optimization: O(1) lookup for workflow classification (Issue #326)
 CRITICAL_CATEGORIES = {"security", "network", "system"}
@@ -101,7 +101,7 @@ DEFAULT_CLASSIFICATION_RULES = {
 class WorkflowClassifier:
     """Manages workflow classification rules in Redis."""
 
-    def __init__(self, redis_client: Optional[redis.Redis] = None):
+    def __init__(self, redis_client: redis.Redis | None = None):
         """Initialize workflow classifier with Redis client and default rules."""
         self.redis_client = redis_client or get_redis_client()
         self.rules_key = "autobot:workflow:classification:rules"
@@ -183,7 +183,7 @@ class WorkflowClassifier:
 
     def _evaluate_rules_for_complexity(
         self, rules: Dict[str, Any], keyword_counts: Dict[str, Any]
-    ) -> Optional[TaskComplexity]:
+    ) -> TaskComplexity | None:
         """Evaluate classification rules to determine complexity. Issue #620.
 
         Args:

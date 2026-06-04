@@ -13,12 +13,12 @@ TTL: 1 hour (hardcoded per robots.txt staleness expectations).
 from __future__ import annotations
 
 import asyncio
-import logging
 import urllib.robotparser
-from typing import Optional
 from urllib.parse import urlparse
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 
 _ROBOTS_CACHE_TTL = 3600  # 1 hour, per robots.txt staleness expectations
 _USER_AGENT = "AutoBot/1.0"
@@ -79,11 +79,11 @@ class RobotsCache:
         Fail-open: ``_fetch_robots_text`` returns ``""`` on any error and
         ``_parse_robots`` parses an empty string into a permissive
         ``RobotFileParser`` whose ``can_fetch`` returns True for every URL.
-        No explicit None guard needed — ``_get_parser`` always returns a
-        parser (#7461).
+        ``_get_parser`` always returns a parser (Issue #7461).
         """
         domain = _extract_domain(url)
         parser = await self._get_parser(domain)
+        assert parser is not None, "robots parser must be initialized"
         return parser.can_fetch(user_agent, url)
 
     async def _get_parser(self, domain: str) -> urllib.robotparser.RobotFileParser:
@@ -99,7 +99,7 @@ class RobotsCache:
             self._local[domain] = parser
             return parser
 
-    async def _load_from_redis(self, domain: str) -> Optional[str]:
+    async def _load_from_redis(self, domain: str) -> str | None:
         """Return cached robots.txt text from Redis, or None on miss."""
         if self._redis is None:
             return None

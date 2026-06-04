@@ -24,11 +24,11 @@ Features:
 - Configurable sampling strategy (Issue #697)
 """
 
-import logging
-import os
+from __future__ import annotations
+
 import threading
 from contextlib import contextmanager
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from opentelemetry import trace
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
@@ -47,9 +47,11 @@ from opentelemetry.sdk.trace.sampling import (
 from opentelemetry.trace import SpanKind, Status, StatusCode
 from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
 
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 from constants.network_constants import NetworkConstants
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Service identification for distributed tracing
 SERVICE_INSTANCES = {
@@ -70,7 +72,7 @@ class TracingService:
     Designed for multi-VM distributed tracing with Jaeger as the backend.
     """
 
-    _instance: Optional["TracingService"] = None
+    _instance: "TracingService" | None = None
     _initialized: bool = False
     _lock: threading.Lock = threading.Lock()
 
@@ -83,33 +85,30 @@ class TracingService:
                     cls._instance = super().__new__(cls)
         return cls._instance
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize tracing service (only runs once due to singleton)."""
         if TracingService._initialized:
             return
 
-        self._tracer: Optional[trace.Tracer] = None
-        self._provider: Optional[TracerProvider] = None
+        self._tracer: trace.Tracer | None = None
+        self._provider: TracerProvider | None = None
         self._enabled: bool = False
         self._service_name: str = "autobot-backend"
         self._service_version: str = "1.0.0"
 
         # Configuration from environment
-        self._jaeger_endpoint = os.getenv(
-            "AUTOBOT_JAEGER_ENDPOINT",
-            f"http://{NetworkConstants.REDIS_VM_IP}:4317",  # Default: Redis VM
-        )
-        self._console_export = os.getenv("AUTOBOT_TRACE_CONSOLE", "false").lower() == "true"
+        self._jaeger_endpoint = config.misc.jaeger_endpoint or f"http://{NetworkConstants.REDIS_VM_IP}:4317"
+        self._console_export = config.trace_console.lower() == "true"
 
         # Issue #697: Configurable sampling strategy
         # AUTOBOT_TRACE_SAMPLE_RATE: 0.0-1.0 (0.1 = 10% sampling in production)
-        self._sample_rate = float(os.getenv("AUTOBOT_TRACE_SAMPLE_RATE", "1.0"))
+        self._sample_rate = float(config.trace_sample_rate)
         self._redis_instrumented = False
         self._aiohttp_instrumented = False
 
         TracingService._initialized = True
 
-    def _resolve_service_name(self, service_name: Optional[str]) -> str:
+    def _resolve_service_name(self, service_name: str | None) -> str:
         """
         Resolve service name from hostname if not provided (Issue #665: extracted helper).
 
@@ -141,7 +140,7 @@ class TracingService:
             {
                 SERVICE_NAME: self._service_name,
                 SERVICE_VERSION: self._service_version,
-                "deployment.environment": os.getenv("AUTOBOT_ENV", "development"),
+                "deployment.environment": config.env,
                 "service.namespace": "autobot",
             }
         )
@@ -211,9 +210,9 @@ class TracingService:
 
     def initialize(
         self,
-        service_name: Optional[str] = None,
+        service_name: str | None = None,
         service_version: str = "1.0.0",
-        jaeger_endpoint: Optional[str] = None,
+        jaeger_endpoint: str | None = None,
         enable_console_export: bool = False,
     ) -> bool:
         """
@@ -383,7 +382,7 @@ class TracingService:
         return results
 
     @property
-    def tracer(self) -> Optional[trace.Tracer]:
+    def tracer(self) -> trace.Tracer | None:
         """Get the OpenTelemetry tracer instance."""
         return self._tracer
 
@@ -397,7 +396,7 @@ class TracingService:
         self,
         name: str,
         kind: SpanKind = SpanKind.INTERNAL,
-        attributes: Optional[Dict[str, Any]] = None,
+        attributes: Dict[str, Any] | None = None,
     ):
         """
         Create a traced span context manager.
@@ -436,7 +435,7 @@ class TracingService:
         self,
         name: str,
         kind: SpanKind = SpanKind.INTERNAL,
-        attributes: Optional[Dict[str, Any]] = None,
+        attributes: Dict[str, Any] | None = None,
     ):
         """
         Create and start a new span (non-context manager version).
@@ -461,7 +460,7 @@ class TracingService:
     def add_event(
         self,
         name: str,
-        attributes: Optional[Dict[str, Any]] = None,
+        attributes: Dict[str, Any] | None = None,
     ) -> None:
         """
         Add an event to the current span.

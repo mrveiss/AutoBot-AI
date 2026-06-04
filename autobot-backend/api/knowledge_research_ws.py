@@ -23,15 +23,15 @@ Server streams:
 """
 
 import json
-import logging
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from starlette.websockets import WebSocketState
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 router = APIRouter()
 
 
@@ -105,7 +105,7 @@ async def _run_research(
         )
 
 
-def _parse_client_message(raw: str) -> Optional[Dict[str, Any]]:
+def _parse_client_message(raw: str) -> Dict[str, Any] | None:
     """Parse and validate a client message. Returns None on error. Issue #1256."""
     try:
         return json.loads(raw)

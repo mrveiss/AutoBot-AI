@@ -1,6 +1,6 @@
 """Shared helpers for backend e2e/integration tests."""
 
-import os
+from autobot_shared.ssot_config import config
 
 
 def get_test_backend_url() -> str:
@@ -9,4 +9,4 @@ def get_test_backend_url() -> str:
     Reads AUTOBOT_TEST_BACKEND_URL env var first so CI can override without code changes.
     Defaults to localhost:8001.
     """
-    return os.environ.get("AUTOBOT_TEST_BACKEND_URL", "http://localhost:8001")
+    return config.test_backend_url

@@ -17,7 +17,7 @@ import time
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import aiohttp
 import matplotlib.pyplot as plt
@@ -81,8 +81,8 @@ class SystemBenchmark:
     memory_bandwidth_mbps: float
     disk_io_mbps: float
     network_throughput_mbps: float
-    gpu_compute_score: Optional[float] = None
-    npu_inference_score: Optional[float] = None
+    gpu_compute_score: float | None = None
+    npu_inference_score: float | None = None
 
     def get_summary_lines(self) -> List[str]:
         """Get formatted summary lines for logging (Issue #372 - reduces feature envy)."""
@@ -470,7 +470,7 @@ class PerformanceBenchmark:
 
         return results
 
-    async def _execute_single_ping(self, vm_name: str, vm_ip: str) -> Optional[float]:
+    async def _execute_single_ping(self, vm_name: str, vm_ip: str) -> float | None:
         """Helper for _benchmark_network_latency. Ref: #1088.
 
         Runs a single non-blocking ping to vm_ip and returns latency in ms,
@@ -680,7 +680,7 @@ class PerformanceBenchmark:
 
         return 0.0
 
-    async def _benchmark_gpu(self) -> Optional[float]:
+    async def _benchmark_gpu(self) -> float | None:
         """Benchmark GPU performance (if available)."""
         try:
             # Check if nvidia-smi is available using async subprocess
@@ -712,7 +712,7 @@ class PerformanceBenchmark:
 
         return None
 
-    async def _query_gpu_utilization_score(self) -> Optional[float]:
+    async def _query_gpu_utilization_score(self) -> float | None:
         """Query real GPU utilization via nvidia-smi and return a normalised score.
 
         Returns the GPU utilization percentage (0-100) as the score, or None if the
@@ -738,7 +738,7 @@ class PerformanceBenchmark:
             self.logger.debug(f"GPU utilization query error: {e}")
         return None
 
-    async def _benchmark_npu(self) -> Optional[float]:
+    async def _benchmark_npu(self) -> float | None:
         """Benchmark NPU performance (Intel AI Boost chip)."""
         try:
             # Check if Intel OpenVINO is available using async subprocess

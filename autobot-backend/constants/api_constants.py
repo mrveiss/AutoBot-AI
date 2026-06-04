@@ -3,15 +3,16 @@
 # Author: mrveiss
 """Centralised API path and endpoint constants.
 
-Issue #3531: Replace hardcoded path strings across the codebase with
-named constants so all endpoint paths are defined in one place.
+MIGRATION (Issue #GH7440):
+    This module re-exports from autobot_shared.ssot_constants for backward compatibility.
+    Import directly from autobot_shared.ssot_constants for new code.
 """
 
-# Health check endpoints
-PATH_HEALTH = "/health"
-PATH_API_HEALTH = "/api/health"
-
-# Ollama inference endpoints
-PATH_OLLAMA_GENERATE = "/api/generate"
-PATH_OLLAMA_CHAT = "/api/chat"
-PATH_OLLAMA_TAGS = "/api/tags"
+from autobot_shared.ssot_constants import (  # noqa: F401,F403
+    PATH_API_HEALTH,
+    PATH_HEALTH,
+    PATH_OLLAMA_CHAT,
+    PATH_OLLAMA_GENERATE,
+    PATH_OLLAMA_PULL,
+    PATH_OLLAMA_TAGS,
+)

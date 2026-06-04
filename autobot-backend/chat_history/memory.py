@@ -16,13 +16,13 @@ when the main asyncio thread pool is saturated by indexing operations.
 """
 
 import gc
-import logging
 import os
 from typing import Any, Dict
 
+from autobot_shared.logging_manager import get_logger
 from chat_history.file_io import run_in_chat_io_executor
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class MemoryMixin:

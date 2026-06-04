@@ -321,6 +321,8 @@ export interface ConnectorConfig {
    *   2 = Credentials / OAuth / cookie needed (e.g. database, private GitHub).
    */
   tier?: number
+  /** Issue #8148: max parallel source fetches. null = use connector class default. */
+  max_concurrency?: number | null
 }
 
 /**
@@ -347,4 +349,46 @@ export interface SyncResult {
   updated: number
   deleted: number
   errors: string[]
+}
+
+/**
+ * In-flight sync job state written to Redis during execution.
+ * Issue #8149: returned by GET /knowledge_base/connectors/{id}/job.
+ */
+export interface ConnectorJobState {
+  connector_id: string
+  job_id: string
+  started_at: string
+  status: 'running' | 'success' | 'failed' | 'partial'
+  sources_total: number
+  sources_done: number
+  sources_failed: number
+  worker_id: string
+  last_updated: string
+}
+
+/**
+ * Single enriched history record.
+ * Issue #8149: adds duration_seconds, sources_total, sources_done.
+ */
+export interface ConnectorHistoryEntry {
+  connector_id: string
+  started_at: string
+  completed_at: string | null
+  status: string | null
+  added: number | null
+  updated: number | null
+  deleted: number | null
+  errors: string[] | number | null
+  duration_seconds: number | null
+  sources_total: number | null
+  sources_done: number | null
+}
+
+/**
+ * Response from GET /knowledge_base/connectors/scheduler/leader.
+ * Issue #8149.
+ */
+export interface ConnectorLeaderState {
+  leader: string | null
 }

@@ -11,10 +11,9 @@ pulling in the full dependency tree.
 """
 
 import asyncio
-import logging
 import threading
-from typing import Optional
 
+from autobot_shared.logging_manager import get_logger
 from knowledge.base import KnowledgeBaseCore
 from knowledge.bulk import BulkOperationsMixin
 from knowledge.categories import CategoriesMixin
@@ -30,7 +29,7 @@ from knowledge.suggestions import SuggestionsMixin
 from knowledge.tags import TagsMixin
 from knowledge.versioning import VersioningMixin
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class KnowledgeBase(
@@ -64,7 +63,7 @@ class KnowledgeBase(
 
 
 # Singleton factory
-_knowledge_base_instance: Optional[KnowledgeBase] = None
+_knowledge_base_instance: KnowledgeBase | None = None
 _initialization_lock = asyncio.Lock()
 _reset_lock = threading.Lock()
 

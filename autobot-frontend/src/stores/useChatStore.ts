@@ -55,6 +55,8 @@ export interface ChatSession {
   activities?: SessionActivity[]
   // Issue #608: Session-scoped secrets
   sessionSecrets?: SessionSecret[]
+  // GH#8987: folder assignment (folder_id from useFolderStore)
+  folderId?: string | null
   // Desktop automation context
   // DORMANT: vncUrl preserved for future VNC re-integration (#1130 → #5136)
   desktopSession?: {
@@ -71,7 +73,6 @@ export interface ChatSettings {
   temperature: number
   maxTokens: number
   systemPrompt: string
-  autoSave: boolean
   persistHistory: boolean
 }
 
@@ -93,7 +94,6 @@ export const useChatStore = defineStore('chat', () => {
     temperature: 0.7,
     maxTokens: 2048,
     systemPrompt: '',
-    autoSave: true,
     persistHistory: true
   })
 
@@ -110,11 +110,21 @@ export const useChatStore = defineStore('chat', () => {
 
   const hasActiveSessions = computed(() => sessionCount.value > 0)
 
+  const _sessionTitles = computed(() =>
+    sessions.value.map(s => ({
+      id: s.id,
+      title: s.title,
+      createdAt: s.createdAt,
+      updatedAt: s.updatedAt
+    }))
+  )
+
   // Actions
-  function createNewSession(title?: string): string {
-    const sessionId = generateChatId()
+  function createNewSession(title?: string, sessionId?: string): string {
+    // MVA-164: Accept optional client-minted UUID; generate only if not provided
+    const finalSessionId = sessionId || generateChatId()
     const newSession: ChatSession = {
-      id: sessionId,
+      id: finalSessionId,
       title: title || `Chat ${sessions.value.length + 1}`,
       messages: [],
       createdAt: new Date(),
@@ -126,14 +136,14 @@ export const useChatStore = defineStore('chat', () => {
     sessions.value.forEach(session => { session.isActive = false })
 
     sessions.value.unshift(newSession)
-    currentSessionId.value = sessionId
+    currentSessionId.value = finalSessionId
 
     // Issue #709: Reset typing state when creating new session
     // This prevents stale typing indicator from previous session
     isTyping.value = false
     streamingPreview.value = ''
 
-    return sessionId
+    return finalSessionId
   }
 
   function switchToSession(sessionId: string) {
@@ -292,7 +302,7 @@ export const useChatStore = defineStore('chat', () => {
         ...message,
         metadata: {
           ...message.metadata,
-          ...metadataUpdates
+          ...(metadataUpdates as Record<string, string | number | boolean | undefined>)
         }
       }
       currentSession.value.updatedAt = new Date()
@@ -461,63 +471,35 @@ export const useChatStore = defineStore('chat', () => {
   /**
    * Synchronize store sessions with backend sessions.
    *
-   * This is the SOURCE OF TRUTH sync:
-   * - Backend sessions are authoritative
-   * - Removes sessions that exist in store but not on backend (deleted sessions)
-   * - Adds sessions that exist on backend but not in store (new sessions)
-   * - Updates existing sessions with backend data
+   * **MVA-164 Phase 3**: Enforces strict merge-only semantics except for explicit logout.
+   * - Default behavior (intentionalEmpty=false): Merge backend sessions with local, never overwrite
+   * - Explicit empty (intentionalEmpty=true): Clear all local sessions (logout)
    *
-   * This fixes the bug where deleted sessions reappear after page reload.
+   * This prevents accidental data loss when backend returns incomplete results.
    *
    * @param backendSessions - Sessions returned by the backend
-   * @param intentionalEmpty - Issue #4352: When true, the backend explicitly confirmed
-   *   0 sessions (e.g. user deleted all sessions). The defensive guard is bypassed so
-   *   local sessions are cleared. When false/undefined, 0 backend sessions while store
-   *   has sessions is treated as an API failure and local data is preserved (#4328).
+   * @param intentionalEmpty - When true, backend confirmed user has 0 sessions (explicit logout).
+   *   When false/undefined, treat any backend response as incomplete — add missing sessions to local
+   *   store instead of removing them.
    */
   function syncSessionsWithBackend(backendSessions: ChatSession[], intentionalEmpty = false) {
-    // Defensive guard: if backend returns 0 sessions but store has sessions,
-    // the backend may have returned incomplete data. Preserving local sessions
-    // prevents accidental data loss (#4328).
-    // Exception: when intentionalEmpty=true the backend confirmed the empty list
-    // is correct (user deleted all sessions), so we proceed with the sync.
-    if (backendSessions.length === 0 && sessions.value.length > 0 && !intentionalEmpty) {
-      logger.warn(`syncSessionsWithBackend: backend returned 0 sessions but store has ${sessions.value.length} — skipping to preserve local data`)
-      return
-    }
-
-    logger.debug(`🔄 Syncing sessions: Store has ${sessions.value.length}, Backend has ${backendSessions.length}`)
-
-    const backendIds = new Set(backendSessions.map(s => s.id))
-    const storeIds = new Set(sessions.value.map(s => s.id))
-
-    // Find sessions to remove (exist in store but not on backend)
-    const sessionsToRemove = sessions.value.filter(s => !backendIds.has(s.id))
-    if (sessionsToRemove.length > 0) {
-      logger.debug(`🗑️ Removing ${sessionsToRemove.length} stale sessions from store:`, sessionsToRemove.map(s => s.id))
-      sessions.value = sessions.value.filter(s => backendIds.has(s.id))
-    }
-
-    // Find sessions to add (exist on backend but not in store)
-    const sessionsToAdd = backendSessions.filter(s => !storeIds.has(s.id))
-    if (sessionsToAdd.length > 0) {
-      logger.debug(`➕ Adding ${sessionsToAdd.length} new sessions to store:`, sessionsToAdd.map(s => s.id))
-      sessions.value.push(...sessionsToAdd)
-    }
-
-    // Update existing sessions with backend data (in case of changes)
-    backendSessions.forEach(backendSession => {
-      const storeSession = sessions.value.find(s => s.id === backendSession.id)
-      if (storeSession) {
-        // Update session data (preserve messages if loaded)
-        storeSession.title = backendSession.title || storeSession.title
-        storeSession.updatedAt = backendSession.updatedAt || storeSession.updatedAt
-        storeSession.createdAt = backendSession.createdAt || storeSession.createdAt
-        if (!storeSession.messages || storeSession.messages.length === 0) {
-          storeSession.messages = backendSession.messages || []
-        }
+    // MVA-164: Enforce strict rule: only overwrite local when intentionalEmpty=true
+    // All other cases merge (add backend sessions to local, never remove local)
+    if (!intentionalEmpty) {
+      // Merge mode: add backend sessions that don't exist locally
+      logger.debug(`🔄 Merge mode: Syncing sessions. Store has ${sessions.value.length}, Backend has ${backendSessions.length}`)
+      const storeIds = new Set(sessions.value.map(s => s.id))
+      const sessionsToAdd = backendSessions.filter(s => !storeIds.has(s.id))
+      if (sessionsToAdd.length > 0) {
+        logger.debug(`➕ Adding ${sessionsToAdd.length} backend sessions to store (merge mode)`)
+        sessions.value.push(...sessionsToAdd)
       }
-    })
+    } else {
+      // Explicit empty mode: backend confirmed 0 sessions (user deleted all)
+      logger.debug(`🔄 Explicit empty mode (intentionalEmpty=true): Clearing all sessions`)
+      sessions.value = backendSessions // Replace with empty backend result
+      currentSessionId.value = null
+    }
 
     // Issue #709: Reset typing state after sync to clear any stale state
     // Issue #820: Only reset if not actively streaming to prevent interrupting active streams
@@ -944,33 +926,20 @@ export const useChatStore = defineStore('chat', () => {
   persist: {
     key: 'autobot-chat-store',
     storage: localStorage,
-    // Only persist essential chat data, not sensitive information
-    pick: ['sessions', 'currentSessionId', 'settings.autoSave', 'settings.persistHistory', 'sidebarCollapsed'],
-    // Exclude sensitive settings like API keys, system prompts, etc.
+    pick: ['currentSessionId', 'sidebarCollapsed', 'sessions'],
     serializer: {
       deserialize: (value: string) => {
         try {
           const parsed = JSON.parse(value)
-          // Convert timestamp strings back to Date objects
-          if (parsed.sessions) {
+          // Reconstruct sessions with empty messages (discarding persisted message bodies)
+          if (parsed.sessions && Array.isArray(parsed.sessions)) {
             parsed.sessions = parsed.sessions.map((session: Record<string, unknown>) => ({
-              ...session,
-              createdAt: new Date(session.createdAt),
-              updatedAt: new Date(session.updatedAt),
-              messages: (session.messages as Record<string, unknown>[]).map((msg) => ({
-                ...msg,
-                timestamp: new Date(msg.timestamp)
-              })),
-              // Issue #608: Handle activity timestamps
-              activities: (session.activities as Record<string, unknown>[] | undefined)?.map((activity) => ({
-                ...activity,
-                timestamp: new Date(activity.timestamp)
-              })),
-              // Handle desktop session dates
-              desktopSession: session.desktopSession ? {
-                ...session.desktopSession,
-                lastActivity: session.desktopSession.lastActivity ? new Date(session.desktopSession.lastActivity) : undefined
-              } : undefined
+              id: session.id,
+              title: session.title,
+              messages: [],
+              createdAt: new Date(session.createdAt as string),
+              updatedAt: new Date(session.updatedAt as string),
+              isActive: false
             }))
           }
           return parsed
@@ -978,7 +947,21 @@ export const useChatStore = defineStore('chat', () => {
           return {}
         }
       },
-      serialize: JSON.stringify
+      serialize: (value: Record<string, unknown>) => {
+        const copy = { ...value }
+        // MVA-164: Strip message bodies before persisting
+        if (copy.sessions && Array.isArray(copy.sessions)) {
+          copy.sessions = (copy.sessions as Array<Record<string, unknown>>).map(session => ({
+            id: session.id,
+            title: session.title,
+            createdAt: session.createdAt,
+            updatedAt: session.updatedAt,
+            isActive: session.isActive
+            // Explicitly exclude: messages, owner, collaborators, activities, sessionSecrets, desktopSession
+          }))
+        }
+        return JSON.stringify(copy)
+      }
     }
   }
 })

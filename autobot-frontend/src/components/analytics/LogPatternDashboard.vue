@@ -3,7 +3,7 @@
     <!-- Header -->
     <div class="dashboard-header">
       <div class="header-content">
-        <h2><i class="fas fa-stream"></i> {{ $t('analytics.logPatterns.title') }}</h2>
+        <h2><Icon name="stream" /> {{ $t('analytics.logPatterns.title') }}</h2>
         <p class="subtitle">{{ $t('analytics.logPatterns.subtitle') }}</p>
       </div>
       <div class="header-actions">
@@ -15,7 +15,7 @@
           <option value="168">{{ $t('analytics.logPatterns.last7days') }}</option>
         </select>
         <button @click="runAnalysis" class="analyze-btn" :disabled="isAnalyzing">
-          <i :class="isAnalyzing ? 'fas fa-spinner fa-spin' : 'fas fa-search'"></i>
+          <i :class="isAnalyzing ? 'fas fa-spinner fa-spin' : 'search'"></i>
           {{ isAnalyzing ? $t('analytics.logPatterns.analyzing') : $t('analytics.logPatterns.analyzeLogs') }}
         </button>
       </div>
@@ -24,28 +24,28 @@
     <!-- Real-time Summary -->
     <div class="realtime-summary" v-if="realtimeData">
       <div class="summary-card">
-        <div class="summary-icon"><i class="fas fa-clock"></i></div>
+        <div class="summary-icon"><Icon name="clock" /></div>
         <div class="summary-content">
           <div class="summary-value">{{ realtimeData.logs_last_5min }}</div>
           <div class="summary-label">{{ $t('analytics.logPatterns.logs5min') }}</div>
         </div>
       </div>
       <div class="summary-card" :class="{ 'has-errors': realtimeData.error_count > 0 }">
-        <div class="summary-icon"><i class="fas fa-exclamation-triangle"></i></div>
+        <div class="summary-icon"><Icon name="exclamation-triangle" /></div>
         <div class="summary-content">
           <div class="summary-value">{{ realtimeData.error_count }}</div>
           <div class="summary-label">{{ $t('analytics.logPatterns.recentErrors') }}</div>
         </div>
       </div>
       <div class="summary-card">
-        <div class="summary-icon"><i class="fas fa-layer-group"></i></div>
+        <div class="summary-icon"><Icon name="layer-group" /></div>
         <div class="summary-content">
           <div class="summary-value">{{ miningResult?.summary?.unique_patterns || 0 }}</div>
           <div class="summary-label">{{ $t('analytics.logPatterns.patternsFound') }}</div>
         </div>
       </div>
       <div class="summary-card" :class="{ 'has-anomalies': (miningResult?.anomalies?.length || 0) > 0 }">
-        <div class="summary-icon"><i class="fas fa-bolt"></i></div>
+        <div class="summary-icon"><Icon name="bolt" /></div>
         <div class="summary-content">
           <div class="summary-value">{{ miningResult?.anomalies?.length || 0 }}</div>
           <div class="summary-label">{{ $t('analytics.logPatterns.anomalies') }}</div>
@@ -58,7 +58,7 @@
       <!-- Patterns Panel -->
       <div class="panel patterns-panel">
         <div class="panel-header">
-          <h3><i class="fas fa-fingerprint"></i> {{ $t('analytics.logPatterns.discoveredPatterns') }}</h3>
+          <h3><Icon name="lock" /> {{ $t('analytics.logPatterns.discoveredPatterns') }}</h3>
           <span class="pattern-count">{{ $t('analytics.logPatterns.patternsCount', { count: miningResult.patterns.length }) }}</span>
         </div>
         <div class="panel-content">
@@ -87,10 +87,10 @@
               <div class="pattern-template">{{ truncate(pattern.pattern_template, 120) }}</div>
               <div class="pattern-meta">
                 <span class="meta-item">
-                  <i class="fas fa-chart-line"></i> {{ pattern.frequency_per_hour }}/hr
+                  <Icon name="chart-line" /> {{ pattern.frequency_per_hour }}/hr
                 </span>
                 <span class="meta-item">
-                  <i class="fas fa-folder"></i> {{ pattern.sources.join(', ') }}
+                  <Icon name="folder" /> {{ pattern.sources.join(', ') }}
                 </span>
                 <span v-for="level in pattern.log_levels" :key="level" :class="['level-badge', `level-${level.toLowerCase()}`]">
                   {{ level }}
@@ -104,11 +104,11 @@
       <!-- Anomalies Panel -->
       <div class="panel anomalies-panel">
         <div class="panel-header">
-          <h3><i class="fas fa-exclamation-circle"></i> {{ $t('analytics.logPatterns.detectedAnomalies') }}</h3>
+          <h3><Icon name="exclamation-circle" /> {{ $t('analytics.logPatterns.detectedAnomalies') }}</h3>
         </div>
         <div class="panel-content">
           <div v-if="miningResult.anomalies.length === 0" class="empty-state">
-            <i class="fas fa-check-circle"></i>
+            <Icon name="check-circle" />
             <p>{{ $t('analytics.logPatterns.noAnomalies') }}</p>
           </div>
           <div v-else class="anomalies-list">
@@ -126,8 +126,8 @@
               </div>
               <p class="anomaly-description">{{ anomaly.description }}</p>
               <div class="anomaly-meta">
-                <span><i class="fas fa-clock"></i> {{ formatTimestamp(anomaly.timestamp) }}</span>
-                <span><i class="fas fa-percentage"></i> {{ Math.round(anomaly.confidence * 100) }}% confidence</span>
+                <span><Icon name="clock" /> {{ formatTimestamp(anomaly.timestamp) }}</span>
+                <span><Icon name="dollar-sign" /> {{ Math.round(anomaly.confidence * 100) }}% confidence</span>
               </div>
             </div>
           </div>
@@ -137,11 +137,11 @@
       <!-- Trends Panel -->
       <div class="panel trends-panel">
         <div class="panel-header">
-          <h3><i class="fas fa-chart-bar"></i> {{ $t('analytics.logPatterns.logTrends') }}</h3>
+          <h3><Icon name="chart-bar" /> {{ $t('analytics.logPatterns.logTrends') }}</h3>
         </div>
         <div class="panel-content">
           <div v-if="miningResult.trends.length === 0" class="empty-state">
-            <i class="fas fa-minus"></i>
+            <Icon name="minus" />
             <p>{{ $t('analytics.logPatterns.notEnoughData') }}</p>
           </div>
           <div v-else class="trends-list">
@@ -149,7 +149,7 @@
               <div class="trend-header">
                 <span class="trend-name">{{ trend.metric_name }}</span>
                 <span :class="['trend-direction', `direction-${trend.direction}`]">
-                  <i :class="getTrendIcon(trend.direction)"></i>
+                  <Icon :name="getTrendIcon(trend.direction)" />
                   {{ trend.change_percent > 0 ? '+' : '' }}{{ trend.change_percent }}%
                 </span>
               </div>
@@ -176,7 +176,7 @@
         <div class="modal-header">
           <h3>{{ $t('analytics.logPatterns.patternDetails', { id: selectedPattern.pattern_id }) }}</h3>
           <button @click="selectedPattern = null" class="close-btn">
-            <i class="fas fa-times"></i>
+            <Icon name="times" />
           </button>
         </div>
         <div class="modal-body">
@@ -217,7 +217,7 @@
     <!-- Loading State -->
     <div v-if="isAnalyzing && !miningResult" class="loading-overlay">
       <div class="loading-spinner">
-        <i class="fas fa-cog fa-spin fa-3x"></i>
+        <Icon name="cog" class="animate-spin" />
         <p>{{ $t('analytics.logPatterns.miningPatterns') }}</p>
       </div>
     </div>
@@ -225,6 +225,7 @@
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils'
@@ -316,9 +317,9 @@ const formatAnomalyType = (type: string): string => {
 
 const getTrendIcon = (direction: string): string => {
   switch (direction) {
-    case 'increasing': return 'fas fa-arrow-up'
-    case 'decreasing': return 'fas fa-arrow-down'
-    default: return 'fas fa-minus'
+    case 'increasing': return 'arrow-up'
+    case 'decreasing': return 'arrow-down'
+    default: return 'minus'
   }
 }
 

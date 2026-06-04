@@ -3,11 +3,12 @@
 # Author: mrveiss
 """BFS staleness propagation for Neural Mesh knowledge graph (#1994, #2111)."""
 
-import logging
 from collections import deque
 from typing import Protocol
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 
 
 class MeshGraph(Protocol):

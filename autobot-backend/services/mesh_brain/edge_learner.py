@@ -4,12 +4,13 @@
 """Hebbian edge reinforcement from retrieval feedback for Neural Mesh RAG (#1994, #2056)."""
 
 import json
-import logging
 from datetime import datetime, timezone
 from itertools import combinations
 from typing import Protocol
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 
 
 class MeshDB(Protocol):

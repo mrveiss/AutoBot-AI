@@ -29,22 +29,21 @@ Protocol (JSON messages):
 
 import asyncio
 import base64
-import logging
-import os
 from collections import deque
-from typing import Optional
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from starlette.websockets import WebSocketState
 
+from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from services.tts_client import get_tts_client
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 router = APIRouter()
 
-# Maximum TTS text length per chunk (characters)
-_MAX_TTS_CHUNK_CHARS = 200
+# Maximum TTS text length per chunk (characters). Override via AUTOBOT_TTS_MAX_CHUNK_CHARS.
+_MAX_TTS_CHUNK_CHARS = env_int_clamped("AUTOBOT_TTS_MAX_CHUNK_CHARS", 200, 50, 1000)
 
 
 def _split_text_for_tts(text: str) -> list[str]:
@@ -100,13 +99,7 @@ async def _cancel_pending_task(task: "asyncio.Task | None") -> None:
 # typical jitter without piling backlog. Override with AUTOBOT_TTS_PIPELINE_DEPTH
 # (clamped to 1..8 to prevent ops typos OOMing the worker).
 def _resolve_tts_pipeline_depth() -> int:
-    raw = os.getenv("AUTOBOT_TTS_PIPELINE_DEPTH", "2")
-    try:
-        value = int(raw)
-    except ValueError:
-        logger.warning("Invalid AUTOBOT_TTS_PIPELINE_DEPTH=%r; using 2", raw)
-        return 2
-    return max(1, min(8, value))
+    return env_int_clamped("AUTOBOT_TTS_PIPELINE_DEPTH", 2, 1, 8)
 
 
 _TTS_PIPELINE_DEPTH = _resolve_tts_pipeline_depth()
@@ -266,7 +259,7 @@ async def _tts_queue_worker(
 
 async def _cancel_active_tts(
     cancel_event: asyncio.Event,
-    tts_task: Optional[asyncio.Task],
+    tts_task: asyncio.Task | None,
 ) -> None:
     """Cancel any active TTS task for barge-in interruption (#1031)."""
     cancel_event.set()
@@ -287,7 +280,7 @@ async def _start_tts_stream(
     get_state_fn,
     voice_id: str = "",
     language: str = "",
-) -> Optional[asyncio.Task]:
+) -> asyncio.Task | None:
     """Start TTS synthesis and stream audio to client (#1031)."""
     if not text:
         return None
@@ -346,7 +339,7 @@ async def _handle_ws_message(
     msg: dict,
     ws: WebSocket,
     ctx: dict,
-) -> Optional[asyncio.Task]:
+) -> asyncio.Task | None:
     """Dispatch a single WebSocket message. Returns updated tts_task.
 
     ctx keys: cancel_tts, tts_task, sentence_queue, current_state,
@@ -401,9 +394,9 @@ async def _handle_ws_message(
 
 
 async def _cleanup_ws_tasks(
-    queue_worker_task: Optional[asyncio.Task],
+    queue_worker_task: asyncio.Task | None,
     cancel_tts: asyncio.Event,
-    tts_task: Optional[asyncio.Task],
+    tts_task: asyncio.Task | None,
 ) -> None:
     """Cancel background tasks on WebSocket close (#1319)."""
     if queue_worker_task and not queue_worker_task.done():
@@ -429,9 +422,9 @@ async def voice_stream_ws(websocket: WebSocket) -> None:
     logger.info("Voice stream WebSocket connected")
 
     cancel_tts = asyncio.Event()
-    tts_task: Optional[asyncio.Task] = None
+    tts_task: asyncio.Task | None = None
     sentence_queue: asyncio.Queue = asyncio.Queue()
-    queue_worker_task: Optional[asyncio.Task] = None
+    queue_worker_task: asyncio.Task | None = None
     current_state = "idle"
 
     async def _set_state(new_state: str) -> None:

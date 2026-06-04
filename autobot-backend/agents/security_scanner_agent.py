@@ -6,11 +6,11 @@ Security Scanner Agent for AutoBot
 Provides defensive security scanning and analysis capabilities
 """
 
-import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List
 
 from autobot_shared.http_client import get_http_client
+from autobot_shared.logging_manager import get_logger
 from constants.network_constants import NetworkConstants
 from constants.threshold_constants import TimingConstants
 from utils.agent_command_helpers import run_agent_command
@@ -18,7 +18,7 @@ from utils.agent_command_helpers import run_agent_command
 from .base_agent import DeploymentMode
 from .standardized_agent import ActionHandler, StandardizedAgent
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level tuples for constant scan types and targets
 _SUPPORTED_SCAN_TYPES = (

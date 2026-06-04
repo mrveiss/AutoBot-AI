@@ -1,21 +1,21 @@
 <template>
   <div class="hardcodes-section analytics-section">
     <h3>
-      <i class="fas fa-bolt"></i> {{ $t('analytics.hardcodes.title') }}
+      <Icon name="bolt" /> {{ $t('analytics.hardcodes.title') }}
       <span v-if="hardcodes && hardcodes.length > 0" class="total-count">
         ({{ hardcodes.length.toLocaleString() }} {{ $t('analytics.hardcodes.values') }})
       </span>
       <div v-if="hardcodes && hardcodes.length > 0" class="section-export-buttons">
         <button @click="emit('export', 'md')" class="export-btn" :title="$t('analytics.codebase.actions.exportMarkdown')">
-          <i class="fas fa-file-alt"></i> MD
+          <Icon name="file-alt" /> MD
         </button>
         <button @click="emit('export', 'json')" class="export-btn" :title="$t('analytics.codebase.actions.exportJson')">
-          <i class="fas fa-file-code"></i> JSON
+          <Icon name="file-code" /> JSON
         </button>
       </div>
     </h3>
     <div v-if="loading" class="section-loading">
-      <i class="fas fa-spinner fa-spin"></i>
+      <Icon name="spinner" :spin="true" />
       <span>{{ $t('analytics.codebase.actions.loading') }}</span>
     </div>
     <div v-else-if="hardcodes && hardcodes.length > 0" class="section-content">
@@ -124,6 +124,7 @@ import { useI18n } from 'vue-i18n'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import { useExpansion } from '@/composables/useExpansion'
 import type { HardcodedValue } from '@/composables/analytics/analyticsTypes'
+import Icon from '@/components/ui/Icon.vue'
 
 const { t } = useI18n()
 

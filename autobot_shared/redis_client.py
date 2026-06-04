@@ -93,7 +93,7 @@ import logging
 
 # Thread safety support for concurrent access patterns
 from contextlib import asynccontextmanager
-from typing import Any, AsyncGenerator, Dict, Optional, Union
+from typing import Any, AsyncGenerator, Dict
 
 import redis
 import redis.asyncio as async_redis
@@ -173,7 +173,7 @@ __all__ = [
 # Lazy initialization prevents Redis connection errors during module imports
 # on dev machines where the Redis VM is unreachable.
 
-_connection_manager: Optional[RedisConnectionManager] = None
+_connection_manager: RedisConnectionManager | None = None
 
 
 def _get_connection_manager() -> RedisConnectionManager:
@@ -193,7 +193,7 @@ def _get_connection_manager() -> RedisConnectionManager:
 # =============================================================================
 
 
-def get_redis_client(async_client: bool = False, database: str = "main") -> Union[redis.Redis, async_redis.Redis, None]:
+def get_redis_client(async_client: bool = False, database: str = "main") -> redis.Redis | async_redis.Redis | None:
     """
     Get a Redis client instance with circuit breaker and health monitoring.
 
@@ -265,34 +265,34 @@ def get_redis_client(async_client: bool = False, database: str = "main") -> Unio
 # =============================================================================
 
 
-def get_knowledge_base_redis(**kwargs) -> Optional[redis.Redis]:
+def get_knowledge_base_redis(**kwargs) -> redis.Redis | None:
     """Get Redis client for knowledge base data."""
     return get_redis_client(database="knowledge", **kwargs)
 
 
-def get_prompts_redis(**kwargs) -> Optional[redis.Redis]:
+def get_prompts_redis(**kwargs) -> redis.Redis | None:
     """Get Redis client for prompt templates."""
     return get_redis_client(database="prompts", **kwargs)
 
 
-def get_agents_redis(**kwargs) -> Optional[redis.Redis]:
+def get_agents_redis(**kwargs) -> redis.Redis | None:
     """Get Redis client for agent communication."""
     return get_redis_client(database="agents", **kwargs)
 
 
-def get_metrics_redis(**kwargs) -> Optional[redis.Redis]:
+def get_metrics_redis(**kwargs) -> redis.Redis | None:
     """Get Redis client for performance metrics."""
     return get_redis_client(database="metrics", **kwargs)
 
 
-def get_main_redis(**kwargs) -> Optional[redis.Redis]:
+def get_main_redis(**kwargs) -> redis.Redis | None:
     """Get Redis client for main application data."""
     return get_redis_client(database="main", **kwargs)
 
 
 async def get_async_redis_client(
     database: str = "main",
-) -> Optional[async_redis.Redis]:
+) -> async_redis.Redis | None:
     """Return an async Redis client for *database*, properly awaited.
 
     This is the safe alternative to ``get_redis_client(async_client=True)``
@@ -330,7 +330,7 @@ def get_redis_health() -> Dict[str, Any]:
     return _get_connection_manager().get_health_status()
 
 
-def get_redis_metrics(database: Optional[str] = None) -> Dict[str, Any]:
+def get_redis_metrics(database: str | None = None) -> Dict[str, Any]:
     """Get Redis connection metrics."""
     return _get_connection_manager().get_metrics(database)
 
@@ -421,7 +421,7 @@ def test_redis_connection(database: str = "main") -> bool:
 # =============================================================================
 
 
-async def close_all_redis_connections():
+async def close_all_redis_connections() -> None:
     """Close all Redis connections."""
     await _get_connection_manager().close_all()
 
@@ -431,7 +431,7 @@ async def close_all_redis_connections():
 # =============================================================================
 
 
-async def redis_get(key: str, database: str = "main") -> Optional[Any]:
+async def redis_get(key: str, database: str = "main") -> Any | None:
     """
     Async Redis GET operation with consolidated backend.
 
@@ -453,7 +453,7 @@ async def redis_get(key: str, database: str = "main") -> Optional[Any]:
     return None
 
 
-async def redis_set(key: str, value: Any, expire: Optional[int] = None, database: str = "main") -> bool:
+async def redis_set(key: str, value: Any, expire: int | None = None, database: str = "main") -> bool:
     """
     Async Redis SET operation with optional expiration.
 
@@ -551,19 +551,19 @@ class RedisDatabaseManager:
         NEW: client = await get_async_redis_client(database="main")
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize deprecated manager with deprecation warning."""
         logger.warning(
             "DEPRECATED: RedisDatabaseManager is deprecated. "
             "Use get_redis_client() from autobot_shared.redis_client instead."
         )
 
-    def get_connection(self, database: Union[RedisDatabase, str]) -> Optional[redis.Redis]:
+    def get_connection(self, database: RedisDatabase | str) -> redis.Redis | None:
         """Get synchronous Redis connection (DEPRECATED)."""
         db_name = database.name.lower() if isinstance(database, RedisDatabase) else database
         return get_redis_client(async_client=False, database=db_name)
 
-    async def get_async_connection(self, database: Union[RedisDatabase, str]) -> Optional[async_redis.Redis]:
+    async def get_async_connection(self, database: RedisDatabase | str) -> async_redis.Redis | None:
         """Get asynchronous Redis connection (DEPRECATED)."""
         db_name = database.name.lower() if isinstance(database, RedisDatabase) else database
         return await get_redis_client(async_client=True, database=db_name)
@@ -571,7 +571,7 @@ class RedisDatabaseManager:
 
 # Global instance for backward compatibility (lazy-loaded)
 # Issue #665: Use lazy initialization to avoid deprecation warning at import time
-_redis_db_manager_instance: Optional[RedisDatabaseManager] = None
+_redis_db_manager_instance: RedisDatabaseManager | None = None
 
 
 def _get_redis_db_manager() -> RedisDatabaseManager:

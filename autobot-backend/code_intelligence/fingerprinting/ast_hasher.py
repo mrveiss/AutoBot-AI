@@ -13,12 +13,12 @@ Extracted from code_fingerprinting.py as part of Issue #381 refactoring.
 
 import ast
 import hashlib
-import logging
 from typing import Any, Dict, Tuple
 
+from autobot_shared.logging_manager import get_logger
 from code_intelligence.fingerprinting.ast_normalizer import ASTNormalizer
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level tuples for AST node types used in isinstance checks
 _EXPRESSION_TYPES = (ast.Expr, ast.BinOp, ast.UnaryOp, ast.Compare)

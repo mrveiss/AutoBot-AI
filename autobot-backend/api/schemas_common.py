@@ -15,7 +15,7 @@ Domain-specific schemas live in:
   schemas_code.py        - CodeReview*, Git*, Skills*, Database*, Template*, etc.
 """
 
-from typing import Any, Dict, Generic, Optional, TypeVar
+from typing import Any, Dict, Generic, TypeVar
 
 from pydantic import BaseModel
 
@@ -39,14 +39,13 @@ class SuccessDataResponse(BaseModel):
 
     success: bool
     message: str
-    data: Optional[Dict[str, Any]] = None
-
+    data: Dict[str, Any] | None = None
 
 class SuccessResponse(BaseModel):
     """Minimal success/failure envelope used by several endpoints."""
 
     success: bool
-    message: Optional[str] = None
+    message: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -69,9 +68,9 @@ class DataResponse(BaseModel, Generic[T]):
     # DataResponse(data=...) callers (api/onboarding.py, api/playwright.py)
     # crashed at request time — see #6609.
     success: bool = True
-    data: Optional[T] = None
-    message: Optional[str] = None
-    timestamp: Optional[str] = None
+    data: T | None = None
+    message: str | None = None
+    timestamp: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -84,7 +83,7 @@ class UsageRecordResponse(BaseModel):
 
     recorded: bool
     cost_usd: float
-    record_id: Optional[str] = None
+    record_id: str | None = None
 
 
 class AgentMessageResponse(BaseModel):

@@ -1,0 +1,82 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Composite action: Free disk space + threshold guard (GH#8914)
+#
+# Removes large pre-installed toolchains that are unused by AutoBot CI, then
+# asserts that at least MIN_FREE_GB of disk space is available. Fails fast
+# before Docker builds begin, producing a clear error rather than an opaque
+# "no space left on device" inside buildx logs.
+#
+# Usage:
+#   - uses: ./.github/actions/free-disk-space
+#     with:
+#       min-free-gb: '10'   # optional, default 10
+
+name: Free Disk Space
+description: >
+  Remove unused pre-installed toolchains and assert a minimum free-disk
+  threshold so Docker builds fail fast with a clear message rather than
+  opaque buildx "no space left on device" errors.
+
+inputs:
+  min-free-gb:
+    description: 'Minimum free disk space in GB required after cleanup. Fails the step if not met.'
+    required: false
+    default: '10'
+
+runs:
+  using: composite
+  steps:
+    - name: Remove unused toolchains
+      shell: bash
+      run: |
+        echo "=== Before cleanup ==="
+        df -h / | grep -v Filesystem
+
+        echo ""
+        echo "=== Removing unused toolchains ==="
+        # Original cleanup (~30GB)
+        sudo rm -rf /usr/share/dotnet
+        sudo rm -rf /usr/local/lib/android
+        sudo rm -rf /opt/ghc
+        sudo rm -rf /opt/hostedtoolcache/CodeQL
+
+        # Additional cleanup for Docker-heavy builds (~15GB more)
+        sudo rm -rf /usr/share/swift
+        sudo rm -rf /usr/local/share/chromium
+        sudo rm -rf /usr/local/share/powershell
+        sudo rm -rf /opt/az
+        sudo rm -rf /opt/microsoft
+        sudo rm -rf /usr/share/az_*
+
+        echo ""
+        echo "=== After cleanup ==="
+        df -h / | grep -v Filesystem
+
+    - name: Clean Docker system
+      shell: bash
+      run: |
+        echo "=== Cleaning Docker system ==="
+        docker system prune -af --volumes || true
+        echo ""
+        echo "=== After Docker cleanup ==="
+        df -h / | grep -v Filesystem
+
+    - name: Assert minimum free disk space
+      shell: bash
+      env:
+        MIN_FREE_GB: ${{ inputs.min-free-gb }}
+      run: |
+        # Available KB on the root filesystem
+        avail_kb=$(df --output=avail / | tail -1)
+        avail_gb=$(( avail_kb / 1024 / 1024 ))
+        echo "Available disk space: ${avail_gb} GB (minimum required: ${MIN_FREE_GB} GB)"
+        if [ "${avail_gb}" -lt "${MIN_FREE_GB}" ]; then
+          echo "ERROR: Insufficient disk space: ${avail_gb} GB available, ${MIN_FREE_GB} GB required."
+          echo "       Docker builds would fail mid-run with 'no space left on device'."
+          df -h
+          exit 1
+        fi
+        echo "OK: ${avail_gb} GB >= ${MIN_FREE_GB} GB — disk space check passed."

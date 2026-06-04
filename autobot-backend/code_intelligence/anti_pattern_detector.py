@@ -26,7 +26,22 @@ New facade: ~100 lines (92% reduction)
 # Backward compatibility: Expose commonly used regex patterns
 import re
 
-# Re-export all public API from the package for backward compatibility
+# GH#6757: canonical AntiPatternDetector + AntiPatternType live in
+# code_analysis.src.  This facade re-exports them so existing callers require
+# no import-path changes.  Fall back to the package-local implementations only
+# when code_analysis is unavailable (e.g., isolated test environments).
+try:
+    from code_analysis.src.anti_pattern_detector import AntiPatternDetector  # noqa: F401
+    from code_analysis.src.anti_pattern_detector import AntiPatternType  # noqa: F401  — canonical SSOT enum (GH#6757)
+except ImportError:
+    from .anti_pattern_detection import (  # type: ignore[assignment]
+        AntiPatternDetector,
+        AntiPatternType,
+    )
+
+# Re-export remaining public API from the package for backward compatibility.
+# NOTE: AntiPatternType is intentionally NOT imported from here — the canonical
+# version from code_analysis.src overrides it above.
 from .anti_pattern_detection import (  # Types and enums; Data models; Severity utilities; Detectors; Main analyzer
     ALLOWED_MAGIC_NUMBERS,
     ALLOWED_SINGLE_LETTER_VARS,
@@ -34,10 +49,8 @@ from .anti_pattern_detection import (  # Types and enums; Data models; Severity 
     DEFAULT_IGNORE_PATTERNS,
     SNAKE_CASE_RE,
     AnalysisReport,
-    AntiPatternDetector,
     AntiPatternResult,
     AntiPatternSeverity,
-    AntiPatternType,
     BloaterDetector,
     ClassInfo,
     CouplerDetector,

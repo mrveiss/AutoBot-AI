@@ -149,7 +149,7 @@ onMounted(fetchSecrets)
         />
       </svg>
       {{ error }}
-      <button class="ml-auto text-red-500 hover:text-red-700" @click="error = null">
+      <button class="ml-auto text-red-500 hover:text-red-700" @click="error = null" aria-label="Dismiss error">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
         </svg>
@@ -174,9 +174,9 @@ onMounted(fetchSecrets)
     <!-- Header -->
     <div class="flex items-center justify-between">
       <div>
-        <h2 class="text-lg font-semibold text-gray-900">System Secrets</h2>
+        <h2 class="text-lg font-semibold text-gray-900">{{ $t('settings.admin.secretsSettings.systemSecrets') }}</h2>
         <p class="text-sm text-gray-500 mt-1">
-          Encrypted tokens and credentials for AutoBot infrastructure. Values are never displayed.
+          {{ $t('settings.admin.secretsSettings.encryptedTokensAndCredentials') }}
         </p>
       </div>
       <button
@@ -189,10 +189,10 @@ onMounted(fetchSecrets)
 
     <!-- Add Secret Form -->
     <div v-if="showAddForm" class="bg-gray-50 border border-gray-200 rounded-lg p-5 space-y-4">
-      <h3 class="font-medium text-gray-900">New Secret</h3>
+      <h3 class="font-medium text-gray-900">{{ $t('settings.admin.secretsSettings.newSecret') }}</h3>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Key</label>
+          <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.secretsSettings.key') }}</label>
           <input
             v-model="newSecret.key"
             type="text"
@@ -201,7 +201,7 @@ onMounted(fetchSecrets)
           />
         </div>
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Category</label>
+          <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.secretsSettings.category') }}</label>
           <select
             v-model="newSecret.category"
             class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
@@ -212,7 +212,7 @@ onMounted(fetchSecrets)
           </select>
         </div>
         <div class="md:col-span-2">
-          <label class="block text-sm font-medium text-gray-700 mb-1">Value</label>
+          <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.secretsSettings.value') }}</label>
           <input
             v-model="newSecret.value"
             type="password"
@@ -221,7 +221,7 @@ onMounted(fetchSecrets)
           />
         </div>
         <div class="md:col-span-2">
-          <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
+          <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.secretsSettings.description') }}</label>
           <input
             v-model="newSecret.description"
             type="text"
@@ -264,8 +264,8 @@ onMounted(fetchSecrets)
           d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
         />
       </svg>
-      <h3 class="mt-2 text-sm font-medium text-gray-900">No secrets configured</h3>
-      <p class="mt-1 text-sm text-gray-500">Add system tokens like HF_TOKEN to get started.</p>
+      <h3 class="mt-2 text-sm font-medium text-gray-900">{{ $t('settings.admin.secretsSettings.noSecretsConfigured') }}</h3>
+      <p class="mt-1 text-sm text-gray-500">{{ $t('settings.admin.secretsSettings.addSystemTokensLike') }}</p>
     </div>
 
     <!-- Secrets Table -->
@@ -274,19 +274,19 @@ onMounted(fetchSecrets)
         <thead class="bg-gray-50">
           <tr>
             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Key
+              {{ $t('settings.admin.secretsSettings.key') }}
             </th>
             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Category
+              {{ $t('settings.admin.secretsSettings.category') }}
             </th>
             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Description
+              {{ $t('settings.admin.secretsSettings.description') }}
             </th>
             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Updated
+              {{ $t('settings.admin.secretsSettings.updated') }}
             </th>
             <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Actions
+              {{ $t('settings.admin.secretsSettings.actions') }}
             </th>
           </tr>
         </thead>
@@ -327,10 +327,10 @@ onMounted(fetchSecrets)
                     class="text-green-600 hover:text-green-800 disabled:opacity-50"
                     @click="updateSecretValue(secret.key)"
                   >
-                    Save
+                    {{ $t('settings.admin.secretsSettings.save') }}
                   </button>
                   <button class="text-gray-500 hover:text-gray-700" @click="cancelEdit">
-                    Cancel
+                    {{ $t('settings.admin.secretsSettings.cancel') }}
                   </button>
                 </div>
               </template>

@@ -10,7 +10,6 @@ Endpoints for managing per-node and global configuration.
 import json
 import logging
 from datetime import datetime, timezone
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
@@ -35,7 +34,7 @@ router = APIRouter(prefix="/config", tags=["configuration"])
 node_config_router = APIRouter(tags=["node-configuration"])
 
 
-def _cast_config_value(value: Optional[str], value_type: str):
+def _cast_config_value(value: str | None, value_type: str):
     """Cast config value to appropriate type."""
     if value is None:
         return None
@@ -49,7 +48,7 @@ def _cast_config_value(value: Optional[str], value_type: str):
     return value
 
 
-async def _get_config_with_fallback(db: AsyncSession, node_id: str, key: str) -> Optional[NodeConfig]:
+async def _get_config_with_fallback(db: AsyncSession, node_id: str, key: str) -> NodeConfig | None:
     """Get config for node, falling back to global default."""
     result = await db.execute(
         select(NodeConfig).where(
@@ -79,7 +78,7 @@ async def _get_config_with_fallback(db: AsyncSession, node_id: str, key: str) ->
 async def get_global_defaults(
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(get_current_user)],
-    prefix: Optional[str] = Query(None, description="Filter by key prefix"),
+    prefix: str | None = Query(None, description="Filter by key prefix"),
 ) -> dict:
     """Get all global default configurations."""
     query = select(NodeConfig).where(NodeConfig.node_id.is_(None))
@@ -227,7 +226,7 @@ async def get_node_config(
     node_id: str,
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(get_current_user)],
-    prefix: Optional[str] = Query(None, description="Filter by key prefix"),
+    prefix: str | None = Query(None, description="Filter by key prefix"),
     include_globals: bool = Query(True, description="Include global defaults"),
 ) -> NodeConfigBulkResponse:
     """

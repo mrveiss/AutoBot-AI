@@ -113,3 +113,10 @@ export const SHADOWS: readonly LabelPair[] = [
   { cls: 'shadow-xl', label: 'shadow-xl' },
   { cls: 'shadow-2xl', label: 'shadow-2xl' },
 ] as const
+
+/** Canvas cell ownership tokens (MVA-360). */
+export const CANVAS_TOKENS: readonly ClassPair[] = [
+  { name: 'agent-draft-border', cls: 'border-[var(--color-agent-draft-border)]' },
+  { name: 'agent-draft-bg', cls: 'bg-[var(--color-agent-draft-bg)]' },
+  { name: 'user-edit-cursor', cls: 'text-[var(--color-user-edit-cursor)]' },
+]

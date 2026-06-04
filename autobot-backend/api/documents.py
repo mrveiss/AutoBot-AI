@@ -24,8 +24,7 @@ Each document is serialised as a JSON blob under the ``main`` Redis database:
 """
 
 import json
-import logging
-from typing import List, Optional
+from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
@@ -38,11 +37,12 @@ from api.schemas_knowledge import (
 )
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from constants.ttl_constants import TTL_365_DAYS
 from models.document import AIDocument
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(tags=["ai-documents"])
 
@@ -69,7 +69,7 @@ def _owner_id(current_user: dict) -> str:
     return current_user.get("user_id") or current_user.get("id") or current_user.get("sub") or "anonymous"
 
 
-async def _load_document(redis, doc_id: str) -> Optional[AIDocument]:
+async def _load_document(redis, doc_id: str) -> AIDocument | None:
     """Return the document or None if the key is missing."""
     raw = await redis.get(f"autobot:ai_document:{doc_id}")
     if raw is None:

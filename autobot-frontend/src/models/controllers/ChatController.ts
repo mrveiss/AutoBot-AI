@@ -4,8 +4,8 @@ import { chatRepository } from '@/models/repositories'
 import apiClient from '@/utils/ApiClient'
 import type { ChatSession } from '@/stores/useChatStore'
 import { createLogger } from '@/utils/debugUtils'
-import { extractErrorMessage, extractApiErrorMessage } from '@/utils/errorExtract'
-import type { ChatMessageDisplayType } from '@/types/api'
+import { extractErrorMessage } from '@/utils/errorExtract'
+import type { ChatMessage, ChatMessageDisplayType } from '@/types/api'
 import { requestQueue } from '@/composables/useRequestQueue'
 
 const logger = createLogger('ChatController')
@@ -55,8 +55,6 @@ export class ChatController {
   } | null = null
   private _streamFlushTimer: ReturnType<typeof setTimeout> | null = null
   private _previewThrottleTimer: ReturnType<typeof setTimeout> | null = null
-  // Issue #3749: stored so disableAutoSave() can clearInterval()
-  private _autoSaveIntervalId: ReturnType<typeof setInterval> | null = null
   private static readonly STREAM_FLUSH_INTERVAL_MS = 80
   private static readonly PREVIEW_THROTTLE_MS = 200
 
@@ -77,7 +75,7 @@ export class ChatController {
     if (!this._appStore) {
       try {
         this._appStore = useAppStore()
-      } catch (error) {
+      } catch {
         logger.warn('AppStore not available, running without store integration')
         return null
       }
@@ -256,7 +254,7 @@ export class ChatController {
     if (!this._pendingStreamUpdate) return
     const { messageId, content, type, metadata } = this._pendingStreamUpdate
     this._pendingStreamUpdate = null
-    this.chatStore.updateMessage(messageId, { content, type, metadata })
+    this.chatStore.updateMessage(messageId, { content, type, metadata: metadata as ChatMessage["metadata"] })
   }
 
   /**
@@ -319,165 +317,21 @@ export class ChatController {
           break
         }
 
-        // Decode chunk and add to buffer
         const chunk = decoder.decode(value, { stream: true })
         buffer += chunk
 
-        // Process complete lines from buffer
         const lines = buffer.split('\n')
-        buffer = lines.pop() || '' // Keep incomplete line in buffer
+        buffer = lines.pop() || ''
 
         for (const line of lines) {
           if (!line.trim()) continue
-
           if (line.startsWith('data: ')) {
-            try {
-              const jsonStr = line.slice(6).trim()
-              if (!jsonStr) continue
-
-              const data = JSON.parse(jsonStr)
-              logger.debug('Received stream data:', data.type || 'unknown')
-
-              // Handle control events
-              if (data.type === 'start') {
-                logger.debug('Stream started:', data.session_id)
-                continue
-              }
-              if (data.type === 'end') {
-                logger.debug('Stream ended')
-                continue
-              }
-              if (data.type === 'segment_complete') {
-                logger.debug(`Segment complete: ${data.metadata?.completed_type}`)
-                // Mark the message as finalized
-                const backendId = data.metadata?.message_id
-                if (backendId && messageIdMap.has(backendId)) {
-                  const frontendId = messageIdMap.get(backendId)!
-                  this.chatStore.updateMessage(frontendId, { status: 'sent' })
-                }
-                continue
-              }
-
-              // Handle error events
-              if (data.type === 'error') {
-                logger.error('Stream error:', data.content)
-                const errorMsgId = fallbackMessageId || this.chatStore.addMessage({
-                  content: '',
-                  sender: 'assistant'
-                })
-                this.chatStore.updateMessage(errorMsgId, {
-                  content: `Error: ${data.content || data.message || 'Unknown error'}`,
-                  status: 'error'
-                })
-                continue
-              }
-
-              // Skip messages without content
-              if (!data.content && data.type !== 'command_approval_request') {
-                continue
-              }
-
-              // Map backend type to frontend type (must be before addMessage to set type immediately,
-              // preventing the 80ms throttle window where the message appears as 'response' then
-              // disappears when the real type is applied — issue #1364)
-              const messageType = this.mapMessageType(data.type, data.metadata?.message_type)
-
-              // Agent Zero Pattern: Use backend message_id for stable identity
-              const backendMessageId = data.metadata?.message_id || data.id
-              let frontendMessageId: string
-
-              if (backendMessageId && messageIdMap.has(backendMessageId)) {
-                // Existing message - update it (Agent Zero: always replace)
-                frontendMessageId = messageIdMap.get(backendMessageId)!
-              } else if (!backendMessageId && fallbackMessageId) {
-                // No backend ID but we already have a fallback — reuse it
-                // Prevents duplicate messages when chunks lack message_id
-                frontendMessageId = fallbackMessageId
-              } else {
-                // New message - create it with type set immediately to prevent filter flicker (#1364)
-                const sender = data.type === 'terminal_output' ? 'system' : 'assistant'
-                frontendMessageId = this.chatStore.addMessage({
-                  content: '',
-                  sender,
-                  type: messageType
-                })
-                if (backendMessageId) {
-                  messageIdMap.set(backendMessageId, frontendMessageId)
-                }
-                fallbackMessageId = frontendMessageId
-              }
-
-              // Handle special message types
-              if (data.type === 'command_approval_request') {
-                this.chatStore.setTyping(false)
-                // Issue #680: Set pending approval flag to prevent polling race conditions
-                this.chatStore.setPendingApproval(true)
-                this.chatStore.updateMessage(frontendMessageId, {
-                  content: data.content || 'Command approval required',
-                  type: 'command_approval_request',
-                  metadata: {
-                    ...data.metadata,
-                    requires_approval: true
-                    // Note: approval_status is NOT set here - it's only set after user action
-                    // This allows the template to show approval buttons when !approval_status
-                  }
-                })
-                continue
-              }
-
-              // Agent Zero Pattern: Backend sends CUMULATIVE content - just replace
-              // Issue #1312: Throttle store updates to ~12fps instead of per-chunk
-              // This reduces 200+ re-renders to ~20 per streaming response
-              this.scheduleStreamUpdate(
-                frontendMessageId,
-                data.content,
-                messageType,
-                data.metadata || {}
-              )
-
-              // Issue #1312: Throttle preview extraction to max every 200ms
-              if (data.content && this.chatStore.isTyping) {
-                this.schedulePreviewUpdate(data.content, messageType)
-              }
-
-            } catch (e) {
-              logger.warn('Failed to parse stream data:', { line, error: e })
-            }
+            fallbackMessageId = this._processStreamLine(line, messageIdMap, fallbackMessageId)
           }
         }
       }
 
-      // Issue #1312: Flush any remaining buffered update before finalization
-      if (this._streamFlushTimer) {
-        clearTimeout(this._streamFlushTimer)
-        this._streamFlushTimer = null
-      }
-      this.flushStreamUpdate()
-      if (this._previewThrottleTimer) {
-        clearTimeout(this._previewThrottleTimer)
-        this._previewThrottleTimer = null
-      }
-
-      // Issue #1302: Finalize all messages and clean up truly empty ones
-      // Check displayable content (after stripping internal tags) not raw content
-      // to prevent deleting messages that have visible text between tags
-      for (const frontendId of messageIdMap.values()) {
-        const msg = this.chatStore.currentSession?.messages.find(m => m.id === frontendId)
-        if (!msg) continue
-
-        const displayContent = (msg.content || '')
-          .replace(/\[\/?(THOUGHT|PLANNING|DEBUG|SOURCES)\]?/gi, '')
-          .replace(/\[\/?(?:THO(?:UGH?T?)?|PLA(?:NN?I?N?G?)?|DEB(?:UG?)?|SOU(?:RC?E?S?)?)\]?/gi, '')
-          .trim()
-
-        if (displayContent) {
-          if (msg.status !== 'error') {
-            this.chatStore.updateMessage(frontendId, { status: 'sent' })
-          }
-        } else {
-          this.chatStore.deleteMessage(frontendId)
-        }
-      }
+      this._finalizeStreamMessages(messageIdMap, fallbackMessageId)
 
     } catch (error) {
       logger.error('Streaming response error:', error)
@@ -490,6 +344,158 @@ export class ChatController {
       throw error
     } finally {
       reader.releaseLock()
+    }
+  }
+
+  private _processStreamLine(
+    line: string,
+    messageIdMap: Map<string, string>,
+    fallbackMessageId: string | null
+  ): string | null {
+    try {
+      const jsonStr = line.slice(6).trim()
+      if (!jsonStr) return fallbackMessageId
+
+      const data = JSON.parse(jsonStr)
+      logger.debug('Received stream data:', data.type || 'unknown')
+
+      if (data.type === 'start') {
+        logger.debug('Stream started:', data.session_id)
+        return fallbackMessageId
+      }
+      if (data.type === 'end') {
+        logger.debug('Stream ended')
+        return fallbackMessageId
+      }
+      if (data.type === 'segment_complete') {
+        logger.debug(`Segment complete: ${data.metadata?.completed_type}`)
+        const backendId = data.metadata?.message_id
+        if (backendId && messageIdMap.has(backendId)) {
+          this.chatStore.updateMessage(messageIdMap.get(backendId)!, { status: 'sent' })
+        }
+        return fallbackMessageId
+      }
+
+      if (data.type === 'error') {
+        logger.error('Stream error:', data.content)
+        const errorMsgId = fallbackMessageId || this.chatStore.addMessage({
+          content: '',
+          sender: 'assistant'
+        })
+        if (!errorMsgId) return fallbackMessageId
+        this.chatStore.updateMessage(errorMsgId, {
+          content: `Error: ${data.content || data.message || 'Unknown error'}`,
+          status: 'error'
+        })
+        return fallbackMessageId
+      }
+
+      if (!data.content && data.type !== 'command_approval_request') {
+        return fallbackMessageId
+      }
+
+      // Map backend type to frontend type (must be before addMessage to set type immediately,
+      // preventing the 80ms throttle window where the message appears as 'response' then
+      // disappears when the real type is applied — issue #1364)
+      const messageType = this.mapMessageType(data.type, data.metadata?.message_type)
+
+      // Agent Zero Pattern: Use backend message_id for stable identity
+      const backendMessageId = data.metadata?.message_id || data.id
+      let frontendMessageId: string
+
+      if (backendMessageId && messageIdMap.has(backendMessageId)) {
+        frontendMessageId = messageIdMap.get(backendMessageId)!
+      } else if (!backendMessageId && fallbackMessageId) {
+        // No backend ID but we already have a fallback — reuse it
+        // Prevents duplicate messages when chunks lack message_id
+        frontendMessageId = fallbackMessageId as string
+      } else {
+        // New message - create it with type set immediately to prevent filter flicker (#1364)
+        const sender = data.type === 'terminal_output' ? 'system' : 'assistant'
+        frontendMessageId = this.chatStore.addMessage({
+          content: '',
+          sender,
+          type: messageType
+        }) as string
+        if (backendMessageId) {
+          messageIdMap.set(backendMessageId, frontendMessageId)
+        }
+        fallbackMessageId = frontendMessageId
+      }
+
+      if (data.type === 'command_approval_request') {
+        this.chatStore.setTyping(false)
+        // Issue #680: Set pending approval flag to prevent polling race conditions
+        this.chatStore.setPendingApproval(true)
+        this.chatStore.updateMessage(frontendMessageId, {
+          content: data.content || 'Command approval required',
+          type: 'command_approval_request',
+          metadata: {
+            ...data.metadata,
+            requires_approval: true
+            // Note: approval_status is NOT set here - it's only set after user action
+            // This allows the template to show approval buttons when !approval_status
+          }
+        })
+        return fallbackMessageId
+      }
+
+      // Agent Zero Pattern: Backend sends CUMULATIVE content - just replace
+      // Issue #1312: Throttle store updates to ~12fps instead of per-chunk
+      // This reduces 200+ re-renders to ~20 per streaming response
+      this.scheduleStreamUpdate(frontendMessageId, data.content, messageType, data.metadata || {})
+
+      // Issue #1312: Throttle preview extraction to max every 200ms
+      if (data.content && this.chatStore.isTyping) {
+        this.schedulePreviewUpdate(data.content, messageType)
+      }
+
+    } catch (e) {
+      logger.warn('Failed to parse stream data:', { line, error: e })
+    }
+
+    return fallbackMessageId
+  }
+
+  private _finalizeStreamMessages(
+    messageIdMap: Map<string, string>,
+    fallbackMessageId: string | null
+  ): void {
+    // Issue #1312: Flush any remaining buffered update before finalization
+    if (this._streamFlushTimer) {
+      clearTimeout(this._streamFlushTimer)
+      this._streamFlushTimer = null
+    }
+    this.flushStreamUpdate()
+    if (this._previewThrottleTimer) {
+      clearTimeout(this._previewThrottleTimer)
+      this._previewThrottleTimer = null
+    }
+
+    // Issue #1302: Finalize all messages and clean up truly empty ones
+    // Check displayable content (after stripping internal tags) not raw content
+    // to prevent deleting messages that have visible text between tags
+    const allIds = [...messageIdMap.values()]
+    if (fallbackMessageId && !allIds.includes(fallbackMessageId)) {
+      allIds.push(fallbackMessageId)
+    }
+
+    for (const frontendId of allIds) {
+      const msg = this.chatStore.currentSession?.messages.find(m => m.id === frontendId)
+      if (!msg) continue
+
+      const displayContent = (msg.content || '')
+        .replace(/\[\/?(THOUGHT|PLANNING|DEBUG|SOURCES)\]?/gi, '')
+        .replace(/\[\/?(?:THO(?:UGH?T?)?|PLA(?:NN?I?N?G?)?|DEB(?:UG?)?|SOU(?:RC?E?S?)?)\]?/gi, '')
+        .trim()
+
+      if (displayContent) {
+        if (msg.status !== 'error') {
+          this.chatStore.updateMessage(frontendId, { status: 'sent' })
+        }
+      } else {
+        this.chatStore.deleteMessage(frontendId)
+      }
     }
   }
 
@@ -576,7 +582,7 @@ export class ChatController {
           content: msg.text || msg.content || '',
           sender: (msg.sender as 'user' | 'assistant' | 'system') || 'assistant',
           type: msg.type, // This enables filtering
-          metadata: msg.metadata || {}
+          metadata: (msg.metadata || {}) as ChatMessage["metadata"]
         })
       })
     }
@@ -596,35 +602,36 @@ export class ChatController {
           model: data.model,
           tokens: data.tokens_used,
           duration: data.response_time || data.processing_time,
-          message_type: data.message_type,
-          knowledge_status: data.knowledge_status,
-          sources: data.sources,
-          librarian_engaged: data.librarian_engaged,
-          mcp_used: data.mcp_used
-        }
+        } as ChatMessage["metadata"]
       })
     }
   }
 
   // Enhanced session operations with error handling
   async createNewSession(title?: string): Promise<string> {
+    // MVA-164: Client-mint UUID before any API call (server-round-trip-first pattern)
+    // Generate UUID upfront
+    const sessionId = crypto.randomUUID()
+
+    // Call backend immediately with the client-minted UUID
     try {
-      // #6746: single-path create — local UUID is registered with the backend
-      // in one round-trip. No two-phase create with diverging IDs.
-      const sessionId = this.chatStore.createNewSession(title)
-      try {
-        await chatRepository.createNewChat(title, undefined, sessionId)
-        logger.debug('New chat session synced with backend:', sessionId)
-      } catch (error) {
-        // Backend create failed but local session is usable — autosave / send-
-        // message paths will retry. Surface the warning and continue.
-        logger.warn('Failed to sync new chat with backend, continuing with local session:', error)
-      }
-      return sessionId
-    } catch (error: unknown) {
+      await chatRepository.createNewChat(title, undefined, sessionId)
+      logger.debug('New chat session created on backend:', sessionId)
+    } catch (error) {
+      // Backend create failed - don't create local session if backend fails
+      logger.error('Failed to create chat session on backend:', error)
       this.getAppStore()?.setGlobalError(`Failed to create chat: ${extractErrorMessage(error, 'Unknown error')}`)
       throw error
     }
+
+    // Backend succeeded - now create the local session with the same UUID
+    const localSessionId = this.chatStore.createNewSession(title, sessionId)
+    if (localSessionId !== sessionId) {
+      // This shouldn't happen since we're passing the sessionId to createNewSession
+      logger.warn(`Session ID mismatch: generated ${sessionId}, store created ${localSessionId}`)
+    }
+
+    return sessionId
   }
 
   async loadChatSessions(): Promise<void> {
@@ -704,7 +711,9 @@ export class ChatController {
           this.chatStore.switchToSession(sessionId)
         }
       } else {
-        logger.error(`Session ${sessionId} not found in store`)
+        // #6766: session list may not be loaded yet during startup race.
+        // Downgrade to warn — the caller will retry once sessions are populated.
+        logger.warn(`Session ${sessionId} not found in store (may still be loading)`)
       }
 
     } catch (error: unknown) {
@@ -940,25 +949,6 @@ export class ChatController {
     return this.resetChat()
   }
 
-  // Auto-save functionality with error handling
-  enableAutoSave(intervalMs: number = 30000): void {
-    this.disableAutoSave()
-    this._autoSaveIntervalId = setInterval(() => {
-      if (this.chatStore.settings.autoSave && this.chatStore.currentSessionId) {
-        this.saveChatSession().catch(error => {
-          logger.warn('Auto-save failed:', error)
-          // Don't show global error for auto-save failures
-        })
-      }
-    }, intervalMs)
-  }
-
-  disableAutoSave(): void {
-    if (this._autoSaveIntervalId !== null) {
-      clearInterval(this._autoSaveIntervalId)
-      this._autoSaveIntervalId = null
-    }
-  }
 
   // Enhanced validation helpers
   validateMessage(content: string): { valid: boolean; error?: string } {
@@ -1104,13 +1094,13 @@ export class ChatController {
   ): Promise<boolean> {
     try {
       // Lazy import to avoid circular dependency at module load time
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
+       
       // @ts-ignore
       const { fetchWithAuth } = require('@/utils/fetchWithAuth') as { fetchWithAuth: typeof import('@/utils/fetchWithAuth').fetchWithAuth }
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
+       
       // @ts-ignore
       const appConfig = (require('@/config/AppConfig.js') as { default: { getApiUrl: (p: string) => Promise<string> } }).default
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
+       
       // @ts-ignore
       const { getApiBase } = require('@/config/ssot-config') as { getApiBase: () => string }
 

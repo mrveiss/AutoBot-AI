@@ -12,17 +12,16 @@ Provides:
 """
 
 import asyncio
-import logging
 import sys
 from pathlib import Path
-from typing import Optional
 
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/ownership", tags=["ownership"])
 
@@ -73,7 +72,7 @@ def _get_project_root() -> str:
     return str(Path(__file__).resolve().parents[4])
 
 
-def _validate_path_security(path: str, project_root: str) -> Optional[JSONResponse]:
+def _validate_path_security(path: str, project_root: str) -> JSONResponse | None:
     """
     Validate that path is within project root.
 
@@ -260,7 +259,7 @@ def _build_knowledge_gaps_error(message: str) -> dict:
     }
 
 
-async def _check_ownership_cache(refresh: bool, source_id: Optional[str] = None) -> Optional[JSONResponse]:
+async def _check_ownership_cache(refresh: bool, source_id: str | None = None) -> JSONResponse | None:
     """Check cache for ownership analysis results.
 
     Issue #665: Extracted from get_ownership_analysis to reduce function length.
@@ -277,7 +276,7 @@ async def _check_ownership_cache(refresh: bool, source_id: Optional[str] = None)
     return None
 
 
-async def _cache_ownership_result(result: dict, source_id: Optional[str] = None) -> None:
+async def _cache_ownership_result(result: dict, source_id: str | None = None) -> None:
     """Cache ownership analysis result.
 
     Issue #665: Extracted from get_ownership_analysis to reduce function length.
@@ -298,7 +297,7 @@ async def get_ownership_analysis(
     refresh: bool = Query(False, description="Force fresh analysis"),
     patterns: str = Query("**/*.py,**/*.ts,**/*.vue", description="Glob patterns"),
     days: int = Query(90, description="Days for recency scoring"),
-    source_id: Optional[str] = Query(None, description="#1772: source_id for API consistency"),
+    source_id: str | None = Query(None, description="#1772: source_id for API consistency"),
 ):
     """Analyze code ownership (Issue #248). Issue #665: Refactored with helpers."""
     cached = await _check_ownership_cache(refresh, source_id=source_id)
@@ -365,7 +364,7 @@ async def get_ownership_analysis(
 )
 async def get_expertise_scores(
     path: str = Query(None, description="Root path to analyze"),
-    source_id: Optional[str] = Query(None, description="#1772: source_id for API consistency"),
+    source_id: str | None = Query(None, description="#1772: source_id for API consistency"),
 ):
     """
     Get contributor expertise scores for a codebase (Issue #248).
@@ -418,7 +417,7 @@ async def get_expertise_scores(
 async def get_knowledge_gaps(
     path: str = Query(None, description="Root path to analyze"),
     risk_level: str = Query(None, description="Filter by risk level (critical, high, medium, low)"),
-    source_id: Optional[str] = Query(None, description="#1772: source_id for API consistency"),
+    source_id: str | None = Query(None, description="#1772: source_id for API consistency"),
 ):
     """
     Get knowledge gaps in the codebase (Issue #248).

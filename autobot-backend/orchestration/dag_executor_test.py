@@ -18,6 +18,7 @@ from orchestration.dag_executor import (
     build_dag,
     workflow_has_condition_nodes,
 )
+from orchestration.success_criteria import SuccessCriteria, SuccessCriteriaEvaluator, SuccessCriteriaType
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -360,3 +361,42 @@ class TestHelpers:
         assert isinstance(dag, WorkflowDAG)
         assert "x" in dag.nodes
         assert "y" in dag.nodes
+
+
+# ---------------------------------------------------------------------------
+# DAGExecutor — SuccessCriteriaEvaluator integration
+# ---------------------------------------------------------------------------
+
+
+class TestDAGExecutorCriteriaEvaluator:
+    @pytest.mark.asyncio
+    async def test_dag_executor_evaluates_structured_criteria_when_injected(self):
+        """criteria_evaluation is populated when evaluator + structured_criteria are provided."""
+        nodes = _make_step_nodes("a")
+        dag = WorkflowDAG(nodes, [])
+        criteria = [
+            SuccessCriteria(
+                criteria_type=SuccessCriteriaType.EXIT_CODE,
+                parameters={"expected": 0},
+                description="exit zero",
+            )
+        ]
+
+        async def step_with_exit_code(node: DAGNode, ctx: DAGExecutionContext) -> Dict[str, Any]:
+            return {"success": True, "exit_code": 0, "node_id": node.node_id}
+
+        executor = DAGExecutor(step_with_exit_code, criteria_evaluator=SuccessCriteriaEvaluator())
+        ctx = await executor.execute(dag, "wf_criteria", context={"structured_criteria": criteria})
+
+        assert ctx.status == TaskStatus.COMPLETED.value
+        assert "overall" in ctx.criteria_evaluation
+        assert "score" in ctx.criteria_evaluation
+
+    @pytest.mark.asyncio
+    async def test_dag_executor_skips_criteria_when_no_evaluator(self):
+        """criteria_evaluation stays empty when no evaluator is injected."""
+        nodes = _make_step_nodes("a")
+        dag = WorkflowDAG(nodes, [])
+        executor = DAGExecutor(_noop_executor)
+        ctx = await executor.execute(dag, "wf_no_criteria")
+        assert ctx.criteria_evaluation == {}

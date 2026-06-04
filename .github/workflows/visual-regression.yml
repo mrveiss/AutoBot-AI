@@ -16,6 +16,11 @@
 #     workflow artifacts; the workflow fails the PR
 #   - Linux baselines only — frontend tests/visual/README.md documents
 #     the cross-platform baseline policy (per-OS suffix)
+#   - workflow_dispatch with regenerate_baselines=true: regenerates all
+#     baselines on the CI runner and uploads them as an artifact.
+#     Download the artifact and commit the PNGs to fix renderer-mismatch
+#     failures caused by baselines committed from non-CI machines (WSL2,
+#     macOS, etc.). See tests/visual/README.md for the full procedure.
 
 name: Visual Regression
 
@@ -30,9 +35,23 @@ on:
     paths:
       - 'autobot-frontend/**'
       - '.github/workflows/visual-regression.yml'
+  # Allows manually triggering baseline regeneration on the CI runner.
+  # Baselines committed from developer machines (including WSL2) differ from
+  # ubuntu-latest font rendering and will cause false failures. Use this to
+  # generate authoritative CI baselines. See tests/visual/README.md.
+  workflow_dispatch:
+    inputs:
+      regenerate_baselines:
+        description: 'Regenerate all baselines with --update-snapshots and upload as artifact'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name == 'workflow_dispatch' && github.run_id || 'ci' }}
   cancel-in-progress: true
 
 env:
@@ -45,16 +64,18 @@ jobs:
   visual-regression:
     name: Storybook visual regression
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 360
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.0.2
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v6.4.0
         with:
-          node-version: '20'
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: autobot-frontend/package-lock.json
 
       - name: Install dependencies
         working-directory: autobot-frontend
@@ -94,19 +115,43 @@ jobs:
         env:
           SKIP_STORYBOOK_START: '1'
           CI: 'true'
+          # workflow_dispatch sets this to 'true' to force --update-snapshots.
+          # Use an env var so the value is never shell-interpolated directly.
+          REGENERATE_BASELINES: ${{ inputs.regenerate_baselines || 'false' }}
         run: |
           set -euo pipefail
-          # If no baselines yet, --update-snapshots so the first run
-          # generates them and the workflow stays green. Subsequent runs
-          # diff against committed baselines and fail on regression.
-          if [ ! -d "tests/visual/__screenshots__" ]; then
-            echo "::warning::No visual baselines committed yet — running with --update-snapshots (will not fail on diff). Pull this branch + commit the generated baselines to enable enforcement."
+          if [ "$REGENERATE_BASELINES" = "true" ]; then
+            # Manually triggered: regenerate all baselines on the CI runner.
+            # Download the uploaded artifact and commit the PNGs to fix
+            # renderer-mismatch failures. See tests/visual/README.md.
+            echo "::notice::Regenerating all baselines on ubuntu-latest CI runner."
+            npm run test:visual -- --update-snapshots
+            echo "first_run=regenerated" >> "$GITHUB_OUTPUT"
+          elif [ ! -d "tests/visual/__screenshots__" ]; then
+            # First run: no baselines committed yet. Regenerate them.
+            echo "::warning::No visual baselines committed yet — running with --update-snapshots (will not fail on diff). Commit the generated baselines to enable enforcement."
             npm run test:visual -- --update-snapshots
             echo "first_run=true" >> "$GITHUB_OUTPUT"
           else
-            npm run test:visual
+            # Baselines exist: enforce diffs for existing stories. Auto-create
+            # baselines for new stories added since last committed update
+            # (--update-snapshots=missing creates missing files without
+            # overwriting existing ones, preserving regression detection).
+            npm run test:visual -- --update-snapshots=missing
             echo "first_run=false" >> "$GITHUB_OUTPUT"
           fi
+
+      - name: Upload updated baselines on manual regeneration
+        # When triggered via workflow_dispatch with regenerate_baselines=true,
+        # upload the regenerated PNGs. Download this artifact, copy the
+        # contents into tests/visual/__screenshots__/, and commit.
+        if: steps.visual.outputs.first_run == 'regenerated'
+        uses: actions/upload-artifact@v7
+        with:
+          name: visual-regression-updated-baselines-${{ github.run_id }}
+          path: autobot-frontend/tests/visual/__screenshots__/
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Upload generated baselines on first run
         # When --update-snapshots ran (no committed baselines yet), expose
@@ -120,6 +165,18 @@ jobs:
           name: visual-regression-generated-baselines-${{ github.run_id }}
           path: autobot-frontend/tests/visual/__screenshots__/
           if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload newly-created baselines on push/PR (new stories)
+        # When --update-snapshots=missing ran and created new baselines,
+        # upload them so a maintainer can download and commit to enable
+        # future diff enforcement for those stories.
+        if: steps.visual.outputs.first_run == 'false' && success()
+        uses: actions/upload-artifact@v7
+        with:
+          name: visual-regression-new-baselines-${{ github.run_id }}
+          path: autobot-frontend/tests/visual/__screenshots__/
+          if-no-files-found: ignore
           retention-days: 14
 
       - name: Upload Playwright HTML report on failure

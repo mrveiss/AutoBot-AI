@@ -23,16 +23,16 @@ Usage:
     new_id = await serializer.import_workflow(doc, owner_id="user-xyz")
 """
 
-import logging
 import uuid
 from dataclasses import asdict, dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import utc_timestamp
 from services.workflow_automation.manager import WorkflowAutomationManager
 from services.workflow_automation.models import AutomationMode, WorkflowStep
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Canonical schema version for documents produced by this module.
 SCHEMA_VERSION = "1.0"
@@ -53,14 +53,14 @@ class StepExport:
     step_id: str
     command: str
     description: str
-    explanation: Optional[str] = None
+    explanation: str | None = None
     requires_confirmation: bool = True
     risk_level: str = "low"
     estimated_duration: float = 5.0
     dependencies: List[str] = field(default_factory=list)
-    timeout_seconds: Optional[int] = None
+    timeout_seconds: int | None = None
     step_type: str = "command_execution"
-    step_config: Optional[Dict[str, Any]] = None
+    step_config: Dict[str, Any] | None = None
 
 
 @dataclass
@@ -115,7 +115,7 @@ class WorkflowSerializer:
     # Export
     # ------------------------------------------------------------------
 
-    async def export_workflow(self, workflow_id: str) -> Optional[WorkflowExportFormat]:
+    async def export_workflow(self, workflow_id: str) -> WorkflowExportFormat | None:
         """
         Serialise *workflow_id* to a portable export document.
 
@@ -238,9 +238,9 @@ class WorkflowSerializer:
     async def import_workflow(
         self,
         data: Dict[str, Any],
-        owner_id: Optional[str],
-        session_id: Optional[str] = None,
-    ) -> Optional[str]:
+        owner_id: str | None,
+        session_id: str | None = None,
+    ) -> str | None:
         """
         Create a new workflow from an export document.
 

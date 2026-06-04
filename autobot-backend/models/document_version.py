@@ -13,7 +13,6 @@ import hashlib
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Optional
 
 from autobot_shared.time_utils import now_utc, parse_utc_iso
 from type_defs.common import Metadata
@@ -56,12 +55,12 @@ class DocumentVersion:
     change_type: ChangeType
 
     # Optional fields
-    os_version: Optional[str] = None
-    previous_hash: Optional[str] = None
+    os_version: str | None = None
+    previous_hash: str | None = None
     metadata: Metadata = field(default_factory=dict)
-    content_size: Optional[int] = None
+    content_size: int | None = None
     vectorized: bool = False
-    vector_id: Optional[str] = None
+    vector_id: str | None = None
 
     @staticmethod
     def compute_content_hash(content: str) -> str:
@@ -77,7 +76,7 @@ class DocumentVersion:
         return hashlib.sha256(content.encode("utf-8")).hexdigest()
 
     @staticmethod
-    def detect_change_type(old_hash: Optional[str], new_hash: Optional[str]) -> ChangeType:
+    def detect_change_type(old_hash: str | None, new_hash: str | None) -> ChangeType:
         """
         Automatically detect change type based on content hashes.
 
@@ -151,10 +150,10 @@ class DocumentChangeEvent:
     timestamp: datetime
 
     # Optional details
-    category: Optional[str] = None
+    category: str | None = None
     affected_hosts: list = field(default_factory=list)
-    version_number: Optional[int] = None
-    content_preview: Optional[str] = None
+    version_number: int | None = None
+    content_preview: str | None = None
 
     def to_dict(self) -> Metadata:
         """Convert to dictionary for JSON serialization"""
@@ -205,9 +204,9 @@ class DocumentChangeTracker:
         os_type: str,
         change_type: ChangeType,
         new_version: int,
-        previous_hash: Optional[str],
-        metadata: Optional[Metadata],
-        os_version: Optional[str],
+        previous_hash: str | None,
+        metadata: Metadata | None,
+        os_version: str | None,
     ) -> "DocumentVersion":
         """Helper for record_version. Ref: #1088."""
         return DocumentVersion(
@@ -247,8 +246,8 @@ class DocumentChangeTracker:
         machine_id: str,
         os_type: str,
         change_type: ChangeType,
-        metadata: Optional[Metadata] = None,
-        os_version: Optional[str] = None,
+        metadata: Metadata | None = None,
+        os_version: str | None = None,
     ) -> DocumentVersion:
         """Record a new document version. Ref: #1088."""
         # Get current version number
@@ -300,7 +299,7 @@ class DocumentChangeTracker:
         version = await asyncio.to_thread(self.redis.get, f"doc:latest_version:{document_id}")
         return int(version) if version else 0
 
-    async def get_version(self, document_id: str, version_number: int) -> Optional[DocumentVersion]:
+    async def get_version(self, document_id: str, version_number: int) -> DocumentVersion | None:
         """Get a specific version of a document"""
         version_key = f"{self.VERSION_KEY_PREFIX}{document_id}:v{version_number}"
         # Issue #361 - avoid blocking
@@ -342,7 +341,7 @@ class DocumentChangeTracker:
         """
         self.redis.xadd(self.CHANGES_STREAM, event.to_dict(), maxlen=1000)  # Keep last 1000 events
 
-    async def check_content_changed(self, document_id: str, new_content: str) -> tuple[bool, Optional[str]]:
+    async def check_content_changed(self, document_id: str, new_content: str) -> tuple[bool, str | None]:
         """
         Check if document content has changed.
 

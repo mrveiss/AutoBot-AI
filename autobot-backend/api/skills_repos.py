@@ -3,7 +3,6 @@
 # Author: mrveiss
 """Skills Repo API — CRUD + sync for skill repositories."""
 
-import logging
 from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -19,10 +18,11 @@ from api.schemas_code import (
 )
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from skills.db import get_skills_engine
 from skills.models import RepoType, SkillRepo
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 router = APIRouter()
 
 

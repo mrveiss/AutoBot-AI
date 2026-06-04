@@ -10,14 +10,13 @@ Issue #378: Added threading locks for file operations to prevent race conditions
 
 import base64
 import json
-import logging
 import threading
 import urllib.parse
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import Enum
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List
 from uuid import uuid4
 
 import yaml
@@ -29,10 +28,11 @@ from cryptography.hazmat.primitives.serialization import (
 )
 
 from autobot_shared.http_client import get_http_client
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc, parse_utc_iso, utc_timestamp
 from constants.path_constants import PATH
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class SSOProtocol(Enum):
@@ -356,7 +356,7 @@ class SSOIntegrationFramework:
         protocol: SSOProtocol,
         config: Dict,
         auto_enable: bool = False,
-        metadata: Optional[Dict] = None,
+        metadata: Dict | None = None,
     ) -> str:
         """Create a new SSO provider"""
 
@@ -410,9 +410,7 @@ class SSOIntegrationFramework:
         """Disable an SSO provider"""
         return self.update_provider(provider_id, {"enabled": False})
 
-    async def initiate_sso_authentication(
-        self, provider_id: str, redirect_uri: str, state: Optional[str] = None
-    ) -> Dict:
+    async def initiate_sso_authentication(self, provider_id: str, redirect_uri: str, state: str | None = None) -> Dict:
         """Initiate SSO authentication flow"""
 
         if provider_id not in self.providers:
@@ -436,7 +434,7 @@ class SSOIntegrationFramework:
         else:
             return {"error": "Unsupported protocol"}
 
-    async def _initiate_saml_auth(self, provider: SSOProvider, redirect_uri: str, state: Optional[str]) -> Dict:
+    async def _initiate_saml_auth(self, provider: SSOProvider, redirect_uri: str, state: str | None) -> Dict:
         """Initiate SAML authentication"""
         try:
             # Generate SAML AuthnRequest
@@ -484,7 +482,7 @@ class SSOIntegrationFramework:
             logger.error("SAML auth initiation failed: %s", e)
             return {"error": "Failed to initiate SAML authentication"}
 
-    async def _initiate_oauth_auth(self, provider: SSOProvider, redirect_uri: str, state: Optional[str]) -> Dict:
+    async def _initiate_oauth_auth(self, provider: SSOProvider, redirect_uri: str, state: str | None) -> Dict:
         """Initiate OAuth2/OpenID Connect authentication"""
         try:
             # Generate state for security
@@ -640,7 +638,7 @@ class SSOIntegrationFramework:
             logger.error("OAuth code exchange failed: %s", e)
             return {"error": "Token exchange failed"}
 
-    async def _get_oauth_user_info(self, provider: SSOProvider, access_token: str) -> Optional[Dict]:
+    async def _get_oauth_user_info(self, provider: SSOProvider, access_token: str) -> Dict | None:
         """Get user information using OAuth access token"""
         try:
             headers = {"Authorization": f"Bearer {access_token}"}
@@ -657,7 +655,7 @@ class SSOIntegrationFramework:
             logger.error("OAuth user info failed: %s", e)
             return None
 
-    def _parse_saml_assertion(self, saml_response: str, provider: SSOProvider) -> Optional[Dict]:
+    def _parse_saml_assertion(self, saml_response: str, provider: SSOProvider) -> Dict | None:
         """Parse SAML assertion and extract user attributes"""
         # This is a simplified parser - production should use proper SAML library
         try:
@@ -678,7 +676,7 @@ class SSOIntegrationFramework:
             logger.error("SAML assertion parsing failed: %s", e)
             return None
 
-    async def _create_sso_session(self, provider: SSOProvider, user_attributes: Dict, state: Optional[str]) -> Dict:
+    async def _create_sso_session(self, provider: SSOProvider, user_attributes: Dict, state: str | None) -> Dict:
         """Create SSO session from successful authentication"""
         try:
             # Map attributes to internal user format
@@ -780,7 +778,7 @@ class SSOIntegrationFramework:
         # Guest role removed - all authenticated SSO users get at least "user" role
         return role_mapping.get("default_role", "user")
 
-    def get_sso_session(self, session_id: str) -> Optional[SSOSession]:
+    def get_sso_session(self, session_id: str) -> SSOSession | None:
         """Get SSO session by ID"""
         session = self.active_sessions.get(session_id)
 
@@ -843,7 +841,7 @@ class SSOIntegrationFramework:
 
         return providers
 
-    def get_provider(self, provider_id: str) -> Optional[SSOProvider]:
+    def get_provider(self, provider_id: str) -> SSOProvider | None:
         """Get SSO provider by ID"""
         return self.providers.get(provider_id)
 

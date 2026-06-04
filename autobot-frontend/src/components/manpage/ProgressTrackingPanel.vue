@@ -1,13 +1,13 @@
 <template>
-  <BasePanel v-if="show" variant="bordered" size="medium">
+  <BasePanel v-if="show" variant="bordered" size="md">
     <template #header>
-      <h3><i class="fas fa-tasks"></i> {{ $t('manpage.progressTracking.title') }}</h3>
+      <h3><Icon name="tasks" /> {{ $t('manpage.progressTracking.title') }}</h3>
       <BaseButton
         size="sm"
         variant="outline-solid"
         @click="$emit('hide')"
       >
-        <i class="fas fa-times"></i>
+        <Icon name="times" />
         {{ $t('manpage.progressTracking.hide') }}
       </BaseButton>
     </template>
@@ -50,7 +50,7 @@
           class="progress-message"
           :class="message.type"
         >
-          <i :class="getMessageIcon(message.type)"></i>
+          <Icon :name="getMessageIcon(message.type)" />
           <span class="timestamp">{{ formatTime(new Date(message.timestamp)) }}</span>
           <span class="message">{{ message.text }}</span>
         </div>
@@ -58,7 +58,7 @@
 
       <!-- Connection Status -->
       <div class="connection-status">
-        <i :class="websocketConnected ? 'fas fa-plug connected' : 'fas fa-plug disconnected'"></i>
+        <Icon :name="websocketConnected ? 'plug' : 'plug'" :class="websocketConnected ? 'connected' : 'disconnected'" />
         <span :class="websocketConnected ? 'connected' : 'disconnected'">
           {{ websocketConnected ? $t('manpage.progressTracking.connected') : $t('manpage.progressTracking.disconnected') }}
         </span>
@@ -81,6 +81,7 @@
  * Issue #704: Migrated to design tokens for centralized theming
  */
 
+import Icon from '@/components/ui/Icon.vue'
 import { computed } from 'vue'
 import BasePanel from '@/components/base/BasePanel.vue'
 import BaseButton from '@/components/base/BaseButton.vue'

@@ -29,12 +29,29 @@ Usage:
 import os
 import warnings
 from functools import cached_property
-from typing import Optional
 
-from config.registry import ConfigRegistry
+
+def _get_config_value(key: str, default: str) -> str:
+    """Get configuration value with lazy ConfigRegistry import.
+
+    ConfigRegistry lives in autobot-backend. This function imports it only
+    when needed, avoiding dependency issues when autobot_shared is used
+    independently (e.g., in autobot-slm-backend or CI tooling).
+
+    Issue #7526: Explicit import from autobot_shared pattern, not bare 'config'.
+    """
+    try:
+        from config.registry import ConfigRegistry
+
+        return ConfigRegistry.get(key, default)
+    except (ImportError, ModuleNotFoundError):
+        return default
+
 
 # Deprecation flag - set to True to enable deprecation warnings
-_SHOW_DEPRECATION_WARNINGS = os.getenv("AUTOBOT_SHOW_DEPRECATION_WARNINGS", "").lower() == "true"
+_SHOW_DEPRECATION_WARNINGS = (
+    os.getenv("AUTOBOT_SHOW_DEPRECATION_WARNINGS", "").lower() == "true"
+)  # ssot-config-exempt: module-level init
 
 
 def _emit_deprecation_warning(old_pattern: str, new_pattern: str) -> None:
@@ -67,18 +84,18 @@ class NetworkConstants:
     # === VM Infrastructure IPs (from ConfigRegistry) ===
 
     # Main machine (WSL)
-    MAIN_MACHINE_IP: str = ConfigRegistry.get("vm.main", "")
+    MAIN_MACHINE_IP: str = _get_config_value("vm.main", "")
 
     # VM Infrastructure IPs
-    FRONTEND_VM_IP: str = ConfigRegistry.get("vm.frontend", "")
-    NPU_WORKER_VM_IP: str = ConfigRegistry.get("vm.npu", "")
-    REDIS_VM_IP: str = ConfigRegistry.get("vm.redis", "")
-    AI_STACK_VM_IP: str = ConfigRegistry.get("vm.aistack", "")
-    BROWSER_VM_IP: str = ConfigRegistry.get("vm.browser", "")
-    SLM_VM_IP: str = ConfigRegistry.get("vm.slm", "")
+    FRONTEND_VM_IP: str = _get_config_value("vm.frontend", "")
+    NPU_WORKER_VM_IP: str = _get_config_value("vm.npu", "")
+    REDIS_VM_IP: str = _get_config_value("vm.redis", "")
+    AI_STACK_VM_IP: str = _get_config_value("vm.aistack", "")
+    BROWSER_VM_IP: str = _get_config_value("vm.browser", "")
+    SLM_VM_IP: str = _get_config_value("vm.slm", "")
 
     # Backward compatibility aliases
-    AI_STACK_HOST: str = ConfigRegistry.get("vm.aistack", "")
+    AI_STACK_HOST: str = _get_config_value("vm.aistack", "")
 
     # === Local/Localhost addresses (static - not from SSOT) ===
     LOCALHOST_IP: str = "127.0.0.1"
@@ -108,26 +125,26 @@ class NetworkConstants:
     TEST_HOST_IP: str = "10.0.0.99"  # Test host IP for unit tests (not a real VM)
 
     # === Standard ports (from ConfigRegistry) ===
-    BACKEND_PORT: int = int(ConfigRegistry.get("port.backend", "8001"))
-    FRONTEND_PORT: int = int(ConfigRegistry.get("port.frontend", "5173"))
-    REDIS_PORT: int = int(ConfigRegistry.get("port.redis", "6379"))
-    OLLAMA_PORT: int = int(ConfigRegistry.get("port.ollama", "11434"))
-    VNC_PORT: int = int(ConfigRegistry.get("port.vnc", "6080"))
-    BROWSER_SERVICE_PORT: int = int(ConfigRegistry.get("port.browser", "9001"))
-    AI_STACK_PORT: int = int(ConfigRegistry.get("port.aistack", "8080"))
-    NPU_WORKER_PORT: int = int(ConfigRegistry.get("port.npu", "8081"))
-    SLM_PORT: int = int(ConfigRegistry.get("port.slm", "8000"))
-    NPU_WORKER_WINDOWS_PORT: int = int(ConfigRegistry.get("port.npu_windows", "8081"))
+    BACKEND_PORT: int = int(_get_config_value("port.backend", "8001"))
+    FRONTEND_PORT: int = int(_get_config_value("port.frontend", "5173"))
+    REDIS_PORT: int = int(_get_config_value("port.redis", "6379"))
+    OLLAMA_PORT: int = int(_get_config_value("port.ollama", "11434"))
+    VNC_PORT: int = int(_get_config_value("port.vnc", "6080"))
+    BROWSER_SERVICE_PORT: int = int(_get_config_value("port.browser", "9001"))
+    AI_STACK_PORT: int = int(_get_config_value("port.aistack", "8080"))
+    NPU_WORKER_PORT: int = int(_get_config_value("port.npu", "8081"))
+    SLM_PORT: int = int(_get_config_value("port.slm", "8000"))
+    NPU_WORKER_WINDOWS_PORT: int = int(_get_config_value("port.npu_windows", "8081"))
     CHROME_DEBUGGER_PORT: int = 9222  # Chrome DevTools Protocol port (static)
 
     # Issue #474: Monitoring stack ports (from ConfigRegistry)
-    PROMETHEUS_PORT: int = int(ConfigRegistry.get("port.prometheus", "9090"))
+    PROMETHEUS_PORT: int = int(_get_config_value("port.prometheus", "9090"))
     ALERTMANAGER_PORT: int = 9093  # Not in ConfigRegistry currently
-    GRAFANA_PORT: int = int(ConfigRegistry.get("port.grafana", "3000"))
+    GRAFANA_PORT: int = int(_get_config_value("port.grafana", "3000"))
 
     # Development ports (aliases)
-    DEV_FRONTEND_PORT: int = int(ConfigRegistry.get("port.frontend", "5173"))
-    DEV_BACKEND_PORT: int = int(ConfigRegistry.get("port.backend", "8001"))
+    DEV_FRONTEND_PORT: int = int(_get_config_value("port.frontend", "5173"))
+    DEV_BACKEND_PORT: int = int(_get_config_value("port.backend", "8001"))
 
     # === External service URLs (static) ===
     GOOGLE_SEARCH_BASE_URL: str = "https://www.google.com/search"
@@ -299,13 +316,13 @@ class NetworkConfig:
             mode = ConfigRegistry.get("deployment.mode", "distributed")
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize network config using ConfigRegistry values."""
-        self._deployment_mode = ConfigRegistry.get(
+        self._deployment_mode = _get_config_value(
             "deployment.mode", os.getenv("AUTOBOT_DEPLOYMENT_MODE", "distributed")
         )
         self._is_development = (
-            ConfigRegistry.get(
+            _get_config_value(
                 "deployment.environment",
                 os.getenv("AUTOBOT_ENV", "production"),
             )
@@ -352,7 +369,7 @@ class NetworkConfig:
             "vnc": ServiceURLs.VNC_DESKTOP,
         }
 
-    def get_service_url(self, service_name: str) -> Optional[str]:
+    def get_service_url(self, service_name: str) -> str | None:
         """
         Get service URL by name.
 
@@ -381,7 +398,7 @@ class NetworkConfig:
             "browser": NetworkConstants.BROWSER_VM_IP,
         }
 
-    def get_vm_ip(self, vm_name: str) -> Optional[str]:
+    def get_vm_ip(self, vm_name: str) -> str | None:
         """
         Get VM IP address by name.
 

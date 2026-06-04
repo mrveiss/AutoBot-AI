@@ -65,6 +65,15 @@
                   ({{ message.metadata.model }})
                 </span>
               </span>
+              <!-- MVA-1993: Lightweight mode cost indicator -->
+              <span
+                v-if="message.sender === 'assistant' && message.metadata?.lightweight_mode_used"
+                class="message-type-badge badge-info"
+                :title="$t('chat.lightweightModeTooltip', { default: '~90% cheaper than standard mode' })"
+              >
+                <i class="fas fa-bolt mr-1"></i>
+                {{ $t('chat.lightweightMode', { default: 'Lightweight' }) }}
+              </span>
               <!-- Issue #1310: Visible type badge for typed messages -->
               <span
                 v-if="getMessageTypeBadge(message)"
@@ -88,7 +97,7 @@
               :aria-label="$t('chat.editMessage')"
               :title="$t('chat.editMessage')"
             >
-              <i class="fas fa-edit" aria-hidden="true"></i>
+              <Icon name="edit" />
             </BaseButton>
             <BaseButton
               variant="ghost"
@@ -98,7 +107,7 @@
               :aria-label="$t('chat.copyMessage')"
               :title="$t('chat.copyMessage')"
             >
-              <i class="fas fa-copy" aria-hidden="true"></i>
+              <Icon name="copy" />
             </BaseButton>
             <BaseButton
               variant="ghost"
@@ -108,7 +117,7 @@
               :aria-label="$t('chat.deleteMessage')"
               :title="$t('chat.deleteMessage')"
             >
-              <i class="fas fa-trash" aria-hidden="true"></i>
+              <Icon name="trash" />
             </BaseButton>
           </div>
         </div>
@@ -137,6 +146,29 @@
           :step="message.metadata.step as any"
         />
 
+        <!-- GH#9015: AI-generated image message -->
+        <ImageCell
+          v-else-if="(message.type === 'image' || message.metadata?.display_type === 'image') && message.metadata?.image_payload"
+          :rich-payload="(message.metadata.image_payload as Record<string, unknown>)"
+        />
+
+        <!-- MVA-2006: Context summary message -->
+        <div
+          v-else-if="message.type === 'summary' || message.metadata?.is_summary"
+          class="message-content summary-message"
+        >
+          <div class="summary-header">
+            <span class="summary-icon">📝</span>
+            <span class="summary-title">{{ $t('chat.contextWindow.summaryTitle') }}</span>
+          </div>
+          <details class="summary-details">
+            <summary class="summary-toggle">
+              {{ $t('chat.contextWindow.summaryToggle') }}
+            </summary>
+            <div class="summary-content message-text" v-html="formatMessageContent(message.content, message.id)"></div>
+          </details>
+        </div>
+
         <!-- Message Content -->
         <div v-else class="message-content" :class="getContentClass(message)">
           <!-- Streaming content with typing indicator -->
@@ -157,16 +189,20 @@
           <!-- Message Metadata -->
           <div v-if="message.metadata && shouldShowMetadata(message)" class="message-metadata">
             <div class="metadata-items">
+              <!-- GH#8993: Thinking used indicator -->
+              <span v-if="message.sender === 'assistant' && message.metadata.thinking_used" class="metadata-item thinking-used-badge">
+                🧠 {{ $t('chat.messages.thinkingUsed', 'Extended thinking') }}
+              </span>
               <span v-if="message.metadata.model" class="metadata-item">
-                <i class="fas fa-robot" aria-hidden="true"></i>
+                <Icon name="robot" />
                 {{ message.metadata.model }}
               </span>
               <span v-if="message.metadata.tokens" class="metadata-item">
-                <i class="fas fa-coins" aria-hidden="true"></i>
+                <Icon name="dollar-sign" />
                 {{ $t('chat.messages.tokens', { count: message.metadata.tokens }) }}
               </span>
               <span v-if="message.metadata.duration" class="metadata-item">
-                <i class="fas fa-clock" aria-hidden="true"></i>
+                <Icon name="clock" />
                 {{ message.metadata.duration }}ms
               </span>
             </div>
@@ -186,7 +222,7 @@
           <!-- Attachments -->
           <div v-if="message.attachments && message.attachments.length > 0" class="message-attachments">
             <div class="attachment-header">
-              <i class="fas fa-paperclip" aria-hidden="true"></i>
+              <Icon name="paperclip" />
               <span>{{ $t('chat.messages.attachments', { count: message.attachments.length }, message.attachments.length) }}</span>
             </div>
             <div class="attachment-list">
@@ -196,7 +232,7 @@
                 class="attachment-item"
                 @click="viewAttachment(attachment)"
               >
-                <i :class="getAttachmentIcon(attachment.type)"></i>
+                <Icon :name="getAttachmentIcon(attachment.type)" />
                 <span class="attachment-name">{{ attachment.name }}</span>
                 <span class="attachment-size">{{ formatFileSize(attachment.size) }}</span>
               </div>
@@ -212,7 +248,7 @@
           <!-- PRE-APPROVED STATE - Show blue auto-approval -->
           <div v-if="message.metadata?.approval_status === 'pre_approved'" class="approval-confirmed approval-pre-approved">
             <div class="approval-header">
-              <i class="fas fa-shield-check text-blue-600" aria-hidden="true"></i>
+              <Icon name="shield-check" class="text-blue-600" />
               <span class="font-semibold">{{ $t('chat.approval.autoApproved') }}</span>
             </div>
             <div class="approval-details">
@@ -230,7 +266,7 @@
           <!-- USER APPROVED STATE - Show green confirmation -->
           <div v-else-if="message.metadata?.approval_status === 'approved'" class="approval-confirmed approval-approved">
             <div class="approval-header">
-              <i class="fas fa-check-circle text-green-600" aria-hidden="true"></i>
+              <Icon name="check-circle" class="text-green-600" />
               <span class="font-semibold">{{ $t('chat.approval.commandApproved') }}</span>
             </div>
             <div class="approval-details">
@@ -248,7 +284,7 @@
           <!-- DENIED STATE - Show red rejection -->
           <div v-else-if="message.metadata?.approval_status === 'denied'" class="approval-confirmed approval-denied">
             <div class="approval-header">
-              <i class="fas fa-times-circle text-red-600" aria-hidden="true"></i>
+              <Icon name="times-circle" class="text-red-600" />
               <span class="font-semibold">{{ $t('chat.approval.commandDenied') }}</span>
             </div>
             <div class="approval-details">
@@ -267,7 +303,7 @@
           <!-- FIXED: Only show if requires_approval AND no approval_status yet -->
           <div v-else-if="message.metadata?.requires_approval && !message.metadata?.approval_status" class="approval-request">
             <div class="approval-header">
-              <i class="fas fa-exclamation-triangle text-yellow-600" aria-hidden="true"></i>
+              <Icon name="exclamation-triangle" class="text-yellow-600" />
               <span class="font-semibold">{{ $t('chat.approval.approvalRequired') }}</span>
             </div>
             <div class="approval-details">
@@ -293,7 +329,7 @@
               <!-- Interactive Command Warning (Issue #33) -->
               <div v-if="(message.metadata as any).is_interactive" class="approval-detail-item interactive-warning">
                 <div class="interactive-header">
-                  <i class="fas fa-keyboard text-blue-600" aria-hidden="true"></i>
+                  <Icon name="keyboard" class="text-blue-600" />
                   <span class="detail-label font-semibold text-blue-700">{{ $t('chat.approval.interactiveCommand') }}</span>
                 </div>
                 <div class="interactive-info">
@@ -327,7 +363,7 @@
                   class="cancel-comment-btn"
                   :aria-label="$t('chat.approval.cancelComment')"
                 >
-                  <i class="fas fa-times" aria-hidden="true"></i>
+                  <Icon name="times" />
                   <span>{{ $t('common.cancel') }}</span>
                 </BaseButton>
                 <BaseButton
@@ -338,7 +374,7 @@
                   class="submit-comment-btn"
                   :aria-label="$t('chat.approval.submitWithComment', { action: pendingApprovalDecision ? $t('chat.approval.approval') : $t('chat.approval.denial') })"
                 >
-                  <i class="fas fa-check" aria-hidden="true"></i>
+                  <Icon name="check" />
                   <span>{{ $t('chat.approval.submit') }} {{ pendingApprovalDecision ? $t('chat.approval.approval') : $t('chat.approval.denial') }}</span>
                 </BaseButton>
               </div>
@@ -353,12 +389,12 @@
                   class="checkbox-input"
                 />
                 <span class="checkbox-label">
-                  <i class="fas fa-shield-check" aria-hidden="true"></i>
+                  <Icon name="shield-check" />
                   {{ $t('chat.approval.autoApproveFuture') }}
                 </span>
               </label>
               <div v-if="autoApproveFuture" class="auto-approve-hint">
-                <i class="fas fa-info-circle" aria-hidden="true"></i>
+                <Icon name="info-circle" />
                 <span>{{ $t('chat.approval.autoApproveHint') }}</span>
               </div>
             </div>
@@ -372,12 +408,12 @@
                   class="checkbox-input"
                 />
                 <span class="checkbox-label">
-                  <i class="fas fa-folder-open" aria-hidden="true"></i>
+                  <Icon name="folder-open" />
                   {{ $t('chat.approval.rememberProject') }}
                 </span>
               </label>
               <div v-if="rememberForProject" class="remember-project-hint">
-                <i class="fas fa-info-circle" aria-hidden="true"></i>
+                <Icon name="info-circle" />
                 <span>{{ $t('chat.approval.rememberProjectHint', { path: currentProjectPath || $t('chat.approval.noProjectContext') }) }}</span>
               </div>
             </div>
@@ -391,7 +427,7 @@
                 class="approve-btn"
                 :aria-label="$t('chat.approval.approveCommand')"
               >
-                <i class="fas fa-check" aria-hidden="true"></i>
+                <Icon name="check" />
                 <span>{{ $t('chat.approval.approve') }}</span>
               </BaseButton>
               <BaseButton
@@ -402,18 +438,18 @@
                 class="comment-btn"
                 :aria-label="$t('chat.approval.addComment')"
               >
-                <i class="fas fa-comment" aria-hidden="true"></i>
+                <Icon name="comment" />
                 <span>{{ $t('chat.approval.comment') }}</span>
               </BaseButton>
               <BaseButton
-                variant="danger"
+                variant="error"
                 size="sm"
                 @click="approveCommand((message.metadata as any).terminal_session_id as string, false, undefined, (message.metadata as any).command_id, { command: (message.metadata as any).command as string, risk_level: (message.metadata as any).risk_level as string })"
                 :disabled="processingApproval || showCommentInput"
                 class="deny-btn"
                 :aria-label="$t('chat.approval.denyCommand')"
               >
-                <i class="fas fa-times" aria-hidden="true"></i>
+                <Icon name="times" />
                 <span>{{ $t('chat.approval.deny') }}</span>
               </BaseButton>
             </div>
@@ -478,7 +514,7 @@
   <BaseModal
     v-model="showEditModal"
     :title="$t('chat.messages.editMessage')"
-    size="medium"
+    size="md"
   >
     <textarea
       v-model="editingContent"
@@ -512,6 +548,7 @@
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, nextTick, watch, onMounted } from 'vue'
 import { useExpansion } from '@/composables/useExpansion'
 import { useI18n } from 'vue-i18n'
@@ -531,6 +568,7 @@ import BaseModal from '@/components/ui/BaseModal.vue'
 import OverseerPlanMessage from '@/components/chat/OverseerPlanMessage.vue'
 import OverseerStepMessage from '@/components/chat/OverseerStepMessage.vue'
 import CitationsDisplay from '@/components/chat/CitationsDisplay.vue'
+import ImageCell from '@/components/artifact-cells/ImageCell.vue'
 import { formatFileSize, formatTime } from '@/utils/formatHelpers'
 import { createLogger } from '@/utils/debugUtils'
 import { useCommandApproval } from '@/composables/useCommandApproval'
@@ -744,33 +782,33 @@ const getSenderIcon = (sender: string, messageType?: string): string => {
   // Type-specific icons take precedence over sender icons
   if (messageType) {
     const typeIcons: Record<string, string> = {
-      thought: 'fas fa-brain',
-      planning: 'fas fa-list-check',
-      debug: 'fas fa-bug',
-      utility: 'fas fa-wrench',
-      sources: 'fas fa-book-open',
-      command_approval_request: 'fas fa-shield-halved',
-      terminal_output: 'fas fa-terminal',
-      terminal_command: 'fas fa-terminal',
-      overseer_plan: 'fas fa-sitemap',
-      overseer_step: 'fas fa-tasks',
-      llm_response: 'fas fa-robot',
-      llm_response_chunk: 'fas fa-robot'
+      thought: 'brain',
+      planning: 'list-check',
+      debug: 'bug',
+      utility: 'wrench',
+      sources: 'book-open',
+      command_approval_request: 'shield-alt',
+      terminal_output: 'terminal',
+      terminal_command: 'terminal',
+      overseer_plan: 'sitemap',
+      overseer_step: 'tasks',
+      llm_response: 'robot',
+      llm_response_chunk: 'robot'
     }
     if (typeIcons[messageType]) return typeIcons[messageType]
   }
 
   const icons: Record<string, string> = {
-    user: 'fas fa-user',
-    assistant: 'fas fa-robot',
-    system: 'fas fa-cog',
-    error: 'fas fa-exclamation-triangle',
-    thought: 'fas fa-brain',
-    'tool-code': 'fas fa-code',
-    'tool-output': 'fas fa-terminal'
+    user: 'user',
+    assistant: 'robot',
+    system: 'cog',
+    error: 'exclamation-triangle',
+    thought: 'brain',
+    'tool-code': 'code',
+    'tool-output': 'terminal'
   }
 
-  return icons[sender] || 'fas fa-comment'
+  return icons[sender] || 'comment'
 }
 
 const getSenderName = (sender: string): string => {
@@ -793,11 +831,11 @@ const getMessageTypeBadge = (message: ChatMessage): { label: string; icon: strin
   if (!msgType) return null
 
   const badges: Record<string, { label: string; icon: string; type: string }> = {
-    thought:  { label: t('chat.messages.badgeThought'),  icon: 'fas fa-brain',      type: 'thought' },
-    planning: { label: t('chat.messages.badgePlanning'), icon: 'fas fa-list-check',  type: 'planning' },
-    debug:    { label: t('chat.messages.badgeDebug'),    icon: 'fas fa-bug',         type: 'debug' },
-    utility:  { label: t('chat.messages.badgeUtility'),  icon: 'fas fa-wrench',      type: 'utility' },
-    sources:  { label: t('chat.messages.badgeSources'),  icon: 'fas fa-book-open',   type: 'sources' },
+    thought:  { label: t('chat.messages.badgeThought'),  icon: 'brain',      type: 'thought' },
+    planning: { label: t('chat.messages.badgePlanning'), icon: 'list-check',  type: 'planning' },
+    debug:    { label: t('chat.messages.badgeDebug'),    icon: 'bug',         type: 'debug' },
+    utility:  { label: t('chat.messages.badgeUtility'),  icon: 'wrench',      type: 'utility' },
+    sources:  { label: t('chat.messages.badgeSources'),  icon: 'book-open',   type: 'sources' },
   }
 
   return badges[String(msgType)] || null
@@ -825,13 +863,13 @@ const FORMAT_CACHE_MAX = 500
 const formatMessageContentRaw = (content: string): string => {
   // Strip ANSI escape codes FIRST (terminal color codes, cursor movements, etc.)
   let formatted = content
-    .replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '') // CSI sequences
-    .replace(/\x1b\][0-9;]*[^\x07]*\x07/g, '') // OSC sequences: BEL
-    .replace(/\x1b\][0-9;]*[^\x07\x1b]*(?:\x1b\\)?/g, '') // OSC sequences: ST
-    .replace(/\x1b[=>]/g, '') // Set numeric keypad mode
-    .replace(/\x1b[()][AB012]/g, '') // Character set selection
-    .replace(/\x1b\[[?\d;]*[hlHJ]/g, '') // Bracket sequences
-    .replace(/\x1b\]0;[^\x07\n]*\x07?/g, '') // Set title
+    .replace(/\u001b\[[0-9;]*[a-zA-Z]/g, '') // CSI sequences
+    .replace(/\u001b\][0-9;]*[^\u0007]*\u0007/g, '') // OSC sequences: BEL
+    .replace(/\u001b\][0-9;]*[^\u0007\u001b]*(?:\u001b\\)?/g, '') // OSC sequences: ST
+    .replace(/\u001b[=>]/g, '') // Set numeric keypad mode
+    .replace(/\u001b[()][AB012]/g, '') // Character set selection
+    .replace(/\u001b\[[?\d;]*[hlHJ]/g, '') // Bracket sequences
+    .replace(/\u001b\]0;[^\u0007\n]*\u0007?/g, '') // Set title
     .trim()
 
   // Strip message type tags (Issue #680)
@@ -1010,13 +1048,13 @@ const deleteMessage = (message: ChatMessage) => {
 }
 
 const getAttachmentIcon = (type: string): string => {
-  if (type.startsWith('image/')) return 'fas fa-image'
-  if (type.startsWith('video/')) return 'fas fa-video'
-  if (type.startsWith('audio/')) return 'fas fa-music'
-  if (type.includes('pdf')) return 'fas fa-file-pdf'
-  if (type.includes('word')) return 'fas fa-file-word'
-  if (type.includes('excel')) return 'fas fa-file-excel'
-  return 'fas fa-file'
+  if (type.startsWith('image/')) return 'image'
+  if (type.startsWith('video/')) return 'video'
+  if (type.startsWith('audio/')) return 'music'
+  if (type.includes('pdf')) return 'file-pdf'
+  if (type.includes('word')) return 'file-word'
+  if (type.includes('excel')) return 'file-excel'
+  return 'file'
 }
 
 // NOTE: formatFileSize removed - now using shared utility from @/utils/formatHelpers
@@ -1228,6 +1266,50 @@ onMounted(async () => {
   border-radius: var(--radius-xl);
 }
 
+/* MVA-2006: SUMMARY MESSAGES - Context compression indicator */
+.summary-message {
+  @apply bg-blue-50 border border-blue-200 rounded-lg p-3 mb-2;
+}
+
+.summary-header {
+  @apply flex items-center gap-2 font-semibold text-blue-900 mb-2;
+}
+
+.summary-icon {
+  @apply text-xl;
+}
+
+.summary-title {
+  @apply text-sm;
+}
+
+.summary-details {
+  @apply mt-2;
+}
+
+.summary-toggle {
+  @apply cursor-pointer text-sm text-blue-700 hover:text-blue-900 select-none;
+  list-style: none;
+}
+
+.summary-toggle::marker {
+  display: none;
+}
+
+.summary-toggle::before {
+  content: '▶ ';
+  display: inline-block;
+  transition: transform 0.2s;
+}
+
+.summary-details[open] .summary-toggle::before {
+  transform: rotate(90deg);
+}
+
+.summary-content {
+  @apply mt-2 pt-2 border-t border-blue-200 text-sm text-gray-700;
+}
+
 /* ============================================
    MESSAGE TYPE STYLING
    Different visual styles for message types:
@@ -1240,10 +1322,9 @@ onMounted(async () => {
 
 /* THOUGHT MESSAGES - Purple theme for AI reasoning */
 .message-wrapper.type-thought {
-  background: var(--color-info-bg);
-  border-color: rgba(139, 92, 246, 0.3);
+  background: rgba(139, 92, 246, 0.08);
+  border-color: rgba(139, 92, 246, 0.4);
   color: var(--text-secondary);
-  border-left: 4px solid var(--color-purple-500);
 }
 
 .message-wrapper.type-thought .message-avatar {
@@ -1274,10 +1355,9 @@ onMounted(async () => {
 
 /* PLANNING MESSAGES - Indigo theme for task planning */
 .message-wrapper.type-planning {
-  background: var(--color-info-bg);
-  border-color: rgba(99, 102, 241, 0.3);
+  background: rgba(99, 102, 241, 0.08);
+  border-color: rgba(99, 102, 241, 0.4);
   color: var(--text-secondary);
-  border-left: 4px solid var(--color-indigo-500);
 }
 
 .message-wrapper.type-planning .message-avatar {
@@ -1309,9 +1389,8 @@ onMounted(async () => {
 /* DEBUG MESSAGES - Orange/Amber theme for debug output */
 .message-wrapper.type-debug {
   background: var(--color-warning-bg);
-  border-color: rgba(245, 158, 11, 0.3);
+  border-color: rgba(245, 158, 11, 0.5);
   color: var(--text-secondary);
-  border-left: 4px solid var(--color-amber-500);
 }
 
 .message-wrapper.type-debug .message-avatar {
@@ -1338,7 +1417,6 @@ onMounted(async () => {
 /* UTILITY MESSAGES - Neutral theme-aware for tool/utility output */
 .message-wrapper.type-utility {
   @apply bg-autobot-bg-tertiary border-autobot-border text-autobot-text-primary;
-  border-left: 4px solid var(--border-strong);
 }
 
 .message-wrapper.type-utility .message-avatar {
@@ -1356,9 +1434,8 @@ onMounted(async () => {
 /* SOURCES MESSAGES - Info-tinted theme-aware for source references */
 .message-wrapper.type-sources {
   background: var(--color-info-bg);
-  border-color: var(--color-info-bg-hover);
+  border-color: rgba(59, 130, 246, 0.4);
   color: var(--text-primary);
-  border-left: 4px solid var(--color-info);
 }
 
 .message-wrapper.type-sources .message-avatar {
@@ -1375,10 +1452,9 @@ onMounted(async () => {
 
 /* JSON MESSAGES - Primary-tinted theme-aware for structured data */
 .message-wrapper.type-json {
-  background: var(--color-primary-bg);
-  border-color: var(--color-primary-bg-hover);
+  background: rgba(59, 130, 246, 0.12);
+  border-color: rgba(59, 130, 246, 0.5);
   color: var(--text-primary);
-  border-left: 4px solid var(--color-primary);
 }
 
 .message-wrapper.type-json .message-avatar {
@@ -1391,8 +1467,8 @@ onMounted(async () => {
 
 /* TERMINAL OUTPUT MESSAGES - Always-dark (intentional terminal aesthetic) */
 .message-wrapper.type-terminal_output {
-  @apply bg-gray-900 border-gray-700 text-gray-100;
-  border-left: 4px solid var(--color-success);
+  @apply bg-gray-900 text-gray-100;
+  border-color: rgba(16, 185, 129, 0.5);
 }
 
 .message-wrapper.type-terminal_output .message-avatar {
@@ -1419,9 +1495,8 @@ onMounted(async () => {
 /* COMMAND APPROVAL REQUEST - Warning theme-aware */
 .message-wrapper.type-command_approval_request {
   background: var(--color-warning-bg);
-  border-color: var(--color-warning-border);
+  border-color: rgba(245, 158, 11, 0.5);
   color: var(--text-primary);
-  border-left: 4px solid var(--color-warning);
 }
 
 .message-wrapper.type-command_approval_request .message-avatar {
@@ -1651,6 +1726,11 @@ onMounted(async () => {
 
 .metadata-item {
   @apply flex items-center gap-1;
+}
+
+/* GH#8993: Thinking used badge */
+.thinking-used-badge {
+  @apply bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded text-xs font-medium border border-amber-200;
 }
 
 .message-attachments {

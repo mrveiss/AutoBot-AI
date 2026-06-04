@@ -7,7 +7,7 @@ Synchronous operations for unified config manager.
 """
 
 import json
-import logging
+import logging  # stdlib: avoids deadlock — config is on the logging-manager init path (GH#7765 pattern)
 import time
 from typing import Any, Dict
 

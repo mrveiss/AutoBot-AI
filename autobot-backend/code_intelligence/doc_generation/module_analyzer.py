@@ -12,9 +12,10 @@ Part of god class refactoring initiative.
 
 import ast
 import os
-from typing import List, Optional, Set, Union
+from typing import List, Set
 
 import code_intelligence.doc_generation.helpers as helpers  # direct submodule (#1210)
+from autobot_shared.logging_manager import get_logger
 from code_intelligence.doc_generation.docstring_parser import DocstringParser
 from code_intelligence.doc_generation.models import (
     ClassDoc,
@@ -68,7 +69,7 @@ class ModuleAnalyzer:
         self._analyzed_files: Set[str] = set()
         self._docstring_parser = DocstringParser()
 
-    def analyze_module(self, file_path: str) -> Optional[ModuleDoc]:
+    def analyze_module(self, file_path: str) -> ModuleDoc | None:
         """
         Analyze a Python module and extract documentation.
 
@@ -142,11 +143,10 @@ class ModuleAnalyzer:
             value = helpers.get_node_value(node.value)
             module_doc.add_constant(target.id, value)
 
-    def analyze_package(self, package_path: str, depth: int = 0) -> Optional[PackageDoc]:
+    def analyze_package(self, package_path: str, depth: int = 0) -> PackageDoc | None:
         """Analyze a Python package and all its modules."""
-        import logging
 
-        logger = logging.getLogger(__name__)
+        logger = get_logger(__name__)
 
         if depth > self.max_depth:
             logger.warning("Max depth reached for package: %s", package_path)
@@ -257,7 +257,7 @@ class ModuleAnalyzer:
             if isinstance(target, ast.Name):
                 class_doc.add_class_variable(target.id)
 
-    def analyze_function(self, node: Union[ast.FunctionDef, ast.AsyncFunctionDef], source: str) -> FunctionDoc:
+    def analyze_function(self, node: ast.FunctionDef | ast.AsyncFunctionDef, source: str) -> FunctionDoc:
         """Analyze a function/method definition and extract documentation."""
         is_async = isinstance(node, ast.AsyncFunctionDef)
         element_type = ElementType.METHOD if helpers.is_method(node) else ElementType.FUNCTION
@@ -385,7 +385,7 @@ class ModuleAnalyzer:
 
         return params
 
-    def _extract_parameters(self, node: Union[ast.FunctionDef, ast.AsyncFunctionDef]) -> List[ParameterDoc]:
+    def _extract_parameters(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> List[ParameterDoc]:
         """
         Extract parameter documentation from function definition.
 
@@ -425,7 +425,7 @@ class ModuleAnalyzer:
 _analyzer = ModuleAnalyzer()
 
 
-def analyze_module(file_path: str, **kwargs) -> Optional[ModuleDoc]:
+def analyze_module(file_path: str, **kwargs) -> ModuleDoc | None:
     """
     Convenience function to analyze a module.
 
@@ -442,7 +442,7 @@ def analyze_module(file_path: str, **kwargs) -> Optional[ModuleDoc]:
     return _analyzer.analyze_module(file_path)
 
 
-def analyze_package(package_path: str, **kwargs) -> Optional[PackageDoc]:
+def analyze_package(package_path: str, **kwargs) -> PackageDoc | None:
     """
     Convenience function to analyze a package.
 

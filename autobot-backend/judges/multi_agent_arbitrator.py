@@ -9,14 +9,14 @@ resolving conflicts, and selecting optimal agent responses in multi-agent scenar
 """
 
 import json
-import logging
-from typing import Any, Dict, FrozenSet, List, Optional
+from typing import Any, Dict, FrozenSet, List
 
+from autobot_shared.logging_manager import get_logger
 from constants import AgentThresholds
 
 from . import BaseLLMJudge, JudgmentDimension, JudgmentResult
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level frozenset for approval recommendations
 _APPROVAL_RECOMMENDATIONS: FrozenSet[str] = frozenset({"APPROVE", "CONDITIONAL"})
@@ -373,7 +373,7 @@ Focus on selecting the response that provides the most value to the user while m
         subject: Any,
         criteria: List[JudgmentDimension],
         context: Dict[str, Any],
-        alternatives: Optional[List[Any]] = None,
+        alternatives: List[Any] | None = None,
         **kwargs,
     ) -> str:
         """Prepare the prompt for multi-agent arbitration. Issue #620: Refactored with helpers."""

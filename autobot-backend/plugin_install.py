@@ -14,22 +14,21 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
 import re
 import shutil
 import tempfile
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
 from urllib.parse import urlparse
 
 from fastapi import HTTPException, UploadFile, status
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
 from plugin_sdk.base import PluginManifest
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _NAME_PATTERN = re.compile(r"^[a-z0-9][a-z0-9_-]{0,62}$")
 _GIT_URL_SCHEMES = {"http", "https"}
@@ -279,7 +278,7 @@ def _validate_git_url(url: str) -> None:
         )
 
 
-def _validate_git_ref(ref: Optional[str]) -> Optional[str]:
+def _validate_git_ref(ref: str | None) -> str | None:
     if ref is None or ref == "":
         return None
     if not _GIT_REF_PATTERN.match(ref):
@@ -290,7 +289,7 @@ def _validate_git_ref(ref: Optional[str]) -> Optional[str]:
     return ref
 
 
-async def _git_clone(url: str, ref: Optional[str], dest: Path) -> None:
+async def _git_clone(url: str, ref: str | None, dest: Path) -> None:
     cmd = [
         "git",
         "-c",
@@ -326,7 +325,7 @@ async def _git_clone(url: str, ref: Optional[str], dest: Path) -> None:
         )
 
 
-async def install_from_git(url: str, ref: Optional[str]) -> InstallResult:
+async def install_from_git(url: str, ref: str | None) -> InstallResult:
     _validate_git_url(url)
     ref = _validate_git_ref(ref)
     with tempfile.TemporaryDirectory(prefix="plugin-git-") as tmp:

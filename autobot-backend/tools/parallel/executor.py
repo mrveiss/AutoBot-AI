@@ -9,11 +9,11 @@ Implements Cursor's "DEFAULT TO PARALLEL" pattern for 3-5x faster execution.
 """
 
 import asyncio
-import logging
 import time
 from dataclasses import dataclass, field
-from typing import Any, Awaitable, Callable, Optional
+from typing import Any, Awaitable, Callable
 
+from autobot_shared.logging_manager import get_logger
 from code_intelligence.code_generation.diff import DiffGenerator
 from constants.status_enums import TaskStatus
 from constants.threshold_constants import BatchConfig, RetryConfig
@@ -27,7 +27,7 @@ from events.types import (
 from tools.parallel.analyzer import DependencyAnalyzer
 from tools.parallel.types import ExecutionMetrics, ToolCall
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # =============================================================================
@@ -61,7 +61,7 @@ _TEST_RUNNER_TOOLS: frozenset[str] = frozenset(
 class _ArtifactCapture:
     """Holds artifact capture state during tool execution. Issue #4094."""
 
-    filepath: Optional[str] = None
+    filepath: str | None = None
 
 
 # =============================================================================
@@ -151,8 +151,8 @@ class ParallelToolExecutor:
     def __init__(
         self,
         tool_dispatcher: Callable[[str, dict], Awaitable[Any]],
-        event_stream: Optional[Any] = None,
-        config: Optional[ParallelExecutorConfig] = None,
+        event_stream: Any | None = None,
+        config: ParallelExecutorConfig | None = None,
     ):
         """
         Initialize the parallel executor.
@@ -171,7 +171,7 @@ class ParallelToolExecutor:
         self,
         group: list[ToolCall],
         group_idx: int,
-        task_id: Optional[str],
+        task_id: str | None,
         results: dict[str, Any],
         metrics: ExecutionMetrics,
     ) -> None:
@@ -214,7 +214,7 @@ class ParallelToolExecutor:
         self,
         group: list[ToolCall],
         group_results: list[Any],
-        task_id: Optional[str],
+        task_id: str | None,
         results: dict[str, Any],
     ) -> None:
         """Process results from a group execution."""
@@ -252,7 +252,7 @@ class ParallelToolExecutor:
     async def execute_batch(
         self,
         tool_calls: list[ToolCall],
-        task_id: Optional[str] = None,
+        task_id: str | None = None,
     ) -> dict[str, Any]:
         """
         Execute a batch of tool calls with automatic parallelization.
@@ -293,7 +293,7 @@ class ParallelToolExecutor:
     async def execute_single(
         self,
         call: ToolCall,
-        task_id: Optional[str] = None,
+        task_id: str | None = None,
     ) -> Any:
         """Execute a single tool call"""
         return await self._execute_single(call, task_id)
@@ -301,14 +301,14 @@ class ParallelToolExecutor:
     async def _execute_with_semaphore(
         self,
         call: ToolCall,
-        task_id: Optional[str],
+        task_id: str | None,
         semaphore: asyncio.Semaphore,
     ) -> Any:
         """Execute a single tool call with semaphore limiting"""
         async with semaphore:
             return await self._execute_single(call, task_id)
 
-    async def _publish_action_event(self, call: ToolCall, task_id: Optional[str]) -> Optional[Any]:
+    async def _publish_action_event(self, call: ToolCall, task_id: str | None) -> Any | None:
         """Publish ACTION event to event stream. Issue #620."""
         if not self.event_stream:
             return None
@@ -325,7 +325,7 @@ class ParallelToolExecutor:
         await self.event_stream.publish(action_event)
         return action_event
 
-    async def _execute_tool_with_timeout(self, call: ToolCall) -> tuple[Any, bool, Optional[str]]:
+    async def _execute_tool_with_timeout(self, call: ToolCall) -> tuple[Any, bool, str | None]:
         """Execute tool dispatch with timeout handling. Issue #620."""
         try:
             result = await asyncio.wait_for(
@@ -421,10 +421,10 @@ class ParallelToolExecutor:
         call: ToolCall,
         success: bool,
         result: Any,
-        error: Optional[str],
+        error: str | None,
         execution_time: float,
-        task_id: Optional[str],
-        artifacts: Optional[list[TaskArtifact]] = None,
+        task_id: str | None,
+        artifacts: list[TaskArtifact] | None = None,
     ) -> None:
         """Publish OBSERVATION event to event stream. Issue #620, #4094."""
         if not self.event_stream or not action_event:
@@ -445,7 +445,7 @@ class ParallelToolExecutor:
     async def _execute_single(
         self,
         call: ToolCall,
-        task_id: Optional[str],
+        task_id: str | None,
     ) -> Any:
         """Execute a single tool call with event tracking."""
         call.status = TaskStatus.RUNNING.value
@@ -480,9 +480,9 @@ class ParallelToolExecutor:
     async def _retry_call(
         self,
         call: ToolCall,
-        task_id: Optional[str],
+        task_id: str | None,
         retry_count: int = 0,
-    ) -> Optional[Any]:
+    ) -> Any | None:
         """Retry a failed call"""
         if retry_count >= self.config.max_retries:
             logger.warning(
@@ -541,8 +541,8 @@ def create_tool_calls(
 async def execute_tools_parallel(
     tool_specs: list[dict],
     dispatcher: Callable[[str, dict], Awaitable[Any]],
-    task_id: Optional[str] = None,
-    event_stream: Optional[Any] = None,
+    task_id: str | None = None,
+    event_stream: Any | None = None,
 ) -> dict[str, Any]:
     """
     Convenience function to execute tools in parallel.

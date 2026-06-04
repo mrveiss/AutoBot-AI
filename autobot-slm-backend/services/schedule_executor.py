@@ -12,7 +12,7 @@ code deployments across the fleet.
 import asyncio
 import logging
 from datetime import datetime, timezone
-from typing import Optional, Tuple
+from typing import Tuple
 
 from croniter import croniter
 from fastapi import HTTPException
@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 # Module-level state
 _executor_running = False
-_executor_task: Optional[asyncio.Task] = None
+_executor_task: asyncio.Task | None = None
 
 
 def validate_cron_expression(expression: str) -> bool:

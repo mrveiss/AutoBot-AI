@@ -227,13 +227,13 @@ function formatTime(iso: string | null): string {
   <div class="process-monitor-tab">
     <div v-if="error" class="error-banner">
       {{ error }}
-      <button @click="error = null">Dismiss</button>
+      <button @click="error = null">{{ $t('agents.processMonitorTab.dismiss') }}</button>
     </div>
 
     <!-- Controls -->
     <div class="controls-bar">
       <div class="control-group">
-        <label>Agent ID</label>
+        <label>{{ $t('agents.processMonitorTab.agentID') }}</label>
         <input
           v-model="agentId"
           placeholder="e.g. orchestrator"
@@ -241,64 +241,64 @@ function formatTime(iso: string | null): string {
         />
       </div>
       <div class="control-group">
-        <label>Status</label>
+        <label>{{ $t('agents.processMonitorTab.status') }}</label>
         <select v-model="statusFilter">
-          <option value="">All</option>
-          <option value="queued">Queued</option>
-          <option value="running">Running</option>
-          <option value="completed">Completed</option>
-          <option value="failed">Failed</option>
-          <option value="timed_out">Timed Out</option>
+          <option value="">{{ $t('agents.processMonitorTab.all') }}</option>
+          <option value="queued">{{ $t('agents.processMonitorTab.queued') }}</option>
+          <option value="running">{{ $t('agents.processMonitorTab.running') }}</option>
+          <option value="completed">{{ $t('agents.processMonitorTab.completed') }}</option>
+          <option value="failed">{{ $t('agents.processMonitorTab.failed') }}</option>
+          <option value="timed_out">{{ $t('agents.processMonitorTab.timedOut') }}</option>
         </select>
       </div>
       <button class="btn-primary" @click="fetchProcesses" :disabled="!agentId">
-        Load
+        {{ $t('agents.processMonitorTab.load') }}
       </button>
       <button class="btn-secondary" @click="showSpawnForm = !showSpawnForm">
-        Spawn Process
+        {{ $t('agents.processMonitorTab.spawnProcess') }}
       </button>
     </div>
 
     <!-- Spawn form -->
     <div v-if="showSpawnForm" class="spawn-form-panel">
-      <h4>Spawn New Process</h4>
+      <h4>{{ $t('agents.processMonitorTab.spawnNewProcess') }}</h4>
       <div class="spawn-grid">
         <div class="control-group">
-          <label>Agent ID</label>
+          <label>{{ $t('agents.processMonitorTab.agentID') }}</label>
           <input v-model="spawnForm.agent_id" :placeholder="agentId || 'agent_id'" />
         </div>
         <div class="control-group">
-          <label>Command</label>
+          <label>{{ $t('agents.processMonitorTab.command') }}</label>
           <input v-model="spawnForm.command" placeholder="/usr/bin/python3" />
         </div>
         <div class="control-group">
-          <label>Arguments</label>
+          <label>{{ $t('agents.processMonitorTab.arguments') }}</label>
           <input v-model="spawnForm.args" placeholder="script.py --flag" />
         </div>
         <div class="control-group">
-          <label>Timeout (s)</label>
+          <label>{{ $t('agents.processMonitorTab.timeoutS') }}</label>
           <input v-model.number="spawnForm.timeout_seconds" type="number" min="1" max="86400" />
         </div>
       </div>
       <div class="spawn-actions">
-        <button class="btn-primary" @click="spawnProcess">Spawn</button>
-        <button class="btn-cancel" @click="showSpawnForm = false">Cancel</button>
+        <button class="btn-primary" @click="spawnProcess">{{ $t('agents.processMonitorTab.spawn') }}</button>
+        <button class="btn-cancel" @click="showSpawnForm = false">{{ $t('agents.processMonitorTab.cancel') }}</button>
       </div>
     </div>
 
-    <div v-if="loading" class="loading">Loading processes...</div>
+    <div v-if="loading" class="loading">{{ $t('agents.processMonitorTab.loadingProcesses') }}</div>
 
     <!-- Process table -->
     <div v-else-if="processes.length" class="process-table-wrapper">
       <table class="process-table">
         <thead>
           <tr>
-            <th>Status</th>
-            <th>Command</th>
-            <th>Exit</th>
-            <th>Duration</th>
-            <th>Started</th>
-            <th>Actions</th>
+            <th>{{ $t('agents.processMonitorTab.status') }}</th>
+            <th>{{ $t('agents.processMonitorTab.command') }}</th>
+            <th>{{ $t('agents.processMonitorTab.exit') }}</th>
+            <th>{{ $t('agents.processMonitorTab.duration') }}</th>
+            <th>{{ $t('agents.processMonitorTab.started') }}</th>
+            <th>{{ $t('agents.processMonitorTab.actions') }}</th>
           </tr>
         </thead>
         <tbody>
@@ -325,7 +325,7 @@ function formatTime(iso: string | null): string {
                 class="btn-kill"
                 @click.stop="showKillConfirm = proc.id"
               >
-                Kill
+                {{ $t('agents.processMonitorTab.kill') }}
               </button>
               <div v-if="showKillConfirm === proc.id" class="kill-confirm" @click.stop>
                 <button class="btn-confirm" @click="signalProcess(proc.id, 'SIGTERM')">
@@ -359,14 +359,14 @@ function formatTime(iso: string | null): string {
             class="btn-secondary"
             @click="streamLogs(selectedProcess.id)"
           >
-            Stream Live
+            {{ $t('agents.processMonitorTab.streamLive') }}
           </button>
           <button
             v-if="isStreaming"
             class="btn-cancel"
             @click="stopStream"
           >
-            Stop Stream
+            {{ $t('agents.processMonitorTab.stopStream') }}
           </button>
           <button
             v-if="!isStreaming && !fullLog"

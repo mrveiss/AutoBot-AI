@@ -3,17 +3,19 @@
 # Author: mrveiss
 """Knowledge Base Factory - Breaks circular import between api/knowledge.py and app_factory.py"""
 
+from __future__ import annotations
+
 import asyncio
-import logging
 import time
-from typing import Optional
 
 from fastapi import FastAPI
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 
 # Module-level singleton for knowledge base instance (used when no app context available)
-_knowledge_base_instance: Optional["KnowledgeBase"] = None  # noqa: F821
+_knowledge_base_instance: "KnowledgeBase" | None = None  # noqa: F821
 _knowledge_base_lock = asyncio.Lock()
 
 # Issue #3094/#3106: Retry cooldown — prevent hammering ChromaDB on repeated failures.
@@ -149,7 +151,7 @@ async def get_or_create_knowledge_base(app: FastAPI, force_refresh: bool = False
         return None
 
 
-async def get_knowledge_base_async() -> Optional["KnowledgeBase"]:  # noqa: F821
+async def get_knowledge_base_async() -> "KnowledgeBase" | None:  # noqa: F821
     """
     Get or create a knowledge base instance without requiring FastAPI app context (thread-safe).
 

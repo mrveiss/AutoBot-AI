@@ -13,10 +13,12 @@ Extended with Prometheus integration as part of Issue #469.
 
 import asyncio
 import json
-import logging
 import time
 from dataclasses import asdict
 from typing import Any, Callable, Dict, List
+
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_constants import TTL_1_HOUR
 
 # Issue #469: Import Prometheus metrics manager
 from monitoring.prometheus_metrics import get_metrics_manager
@@ -39,7 +41,7 @@ from utils.performance_monitoring.types import (
     DEFAULT_RETENTION_HOURS,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class PerformanceMonitor:
@@ -75,7 +77,7 @@ class PerformanceMonitor:
 
     def __init__(self):
         """Initialize performance monitor with hardware detection and thresholds."""
-        self.logger = logging.getLogger(__name__)
+        self.logger = get_logger(__name__)
         self.monitoring_active = False
         self.collection_interval = DEFAULT_COLLECTION_INTERVAL
         self.retention_hours = DEFAULT_RETENTION_HOURS
@@ -450,7 +452,7 @@ class PerformanceMonitor:
                 key = "performance_alerts"
                 for alert in alerts:
                     self.redis_client.zadd(key, {json.dumps(alert): time.time()})
-                self.redis_client.expire(key, 3600)
+                self.redis_client.expire(key, TTL_1_HOUR)
 
             await asyncio.to_thread(_store_alerts)
         except Exception as e:

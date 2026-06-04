@@ -17,25 +17,31 @@ Related: #229 (LLM Integration Pattern Analyzer - CLOSED)
 """
 
 import json
-import logging
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from enum import Enum
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 
-from api.schemas_analytics import EmbeddingStatsResponse, EmbeddingUsageRequest
+from api.schemas_analytics import (
+    AnalyticsEmbeddingModelComparisonResponse,
+    AnalyticsEmbeddingOptimizationResponse,
+    AnalyticsEmbeddingRecordResponse,
+    EmbeddingStatsResponse,
+    EmbeddingUsageRequest,
+)
 from api.system_health import ComponentHealth, register_health_probe
 from auth_middleware import check_admin_permission
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import RedisDatabase
 from autobot_shared.redis_mixin import AsyncRedisClientLockedMixin
 from constants.ttl_constants import TTL_30_DAYS, TTL_90_DAYS
 
 router = APIRouter()
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # =============================================================================
@@ -254,7 +260,7 @@ class EmbeddingPatternAnalyzer(AsyncRedisClientLockedMixin):
     async def get_stats(
         self,
         days: int = 7,
-        model: Optional[str] = None,
+        model: str | None = None,
     ) -> Dict[str, Any]:
         """Get embedding usage statistics for a time period"""
         try:
@@ -305,7 +311,7 @@ class EmbeddingPatternAnalyzer(AsyncRedisClientLockedMixin):
             logger.error("Failed to get embedding stats: %s", e)
             return {"status": "error", "error": "Internal server error"}
 
-    def _parse_model_stats(self, key: bytes, stats: dict) -> Optional[dict]:
+    def _parse_model_stats(self, key: bytes, stats: dict) -> dict | None:
         """Parse model stats from Redis hash. (Issue #315 - extracted)"""
         if not stats:
             return None
@@ -435,7 +441,7 @@ import threading
 from api.schemas_common import DataResponse
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
-_embedding_analyzer: Optional[EmbeddingPatternAnalyzer] = None
+_embedding_analyzer: EmbeddingPatternAnalyzer | None = None
 _embedding_analyzer_lock = threading.Lock()
 
 
@@ -454,7 +460,7 @@ def get_embedding_analyzer() -> EmbeddingPatternAnalyzer:
 # =============================================================================
 
 
-@router.post("/record", response_model=DataResponse)
+@router.post("/record", response_model=DataResponse[AnalyticsEmbeddingRecordResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="record_embedding_usage",
@@ -488,7 +494,7 @@ async def record_embedding_usage(
 )
 async def get_embedding_stats(
     days: int = Query(default=7, ge=1, le=90, description="Number of days to analyze"),
-    model: Optional[str] = Query(None, description="Filter by model"),
+    model: str | None = Query(None, description="Filter by model"),
     admin_check: bool = Depends(check_admin_permission),
 ):
     """Get embedding usage statistics
@@ -507,7 +513,7 @@ async def get_embedding_stats(
     )
 
 
-@router.get("/model-comparison", response_model=DataResponse)
+@router.get("/model-comparison", response_model=DataResponse[AnalyticsEmbeddingModelComparisonResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_model_comparison",
@@ -532,7 +538,7 @@ async def get_model_comparison(
     )
 
 
-@router.get("/optimization-recommendations", response_model=DataResponse)
+@router.get("/optimization-recommendations", response_model=DataResponse[AnalyticsEmbeddingOptimizationResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_optimization_recommendations",
@@ -559,7 +565,7 @@ async def get_optimization_recommendations(
 
 @register_health_probe("analytics_embedding_patterns")
 async def probe_analytics_embedding_patterns(
-    request: Optional[Request] = None,
+    request: Request | None = None,
 ) -> ComponentHealth:
     """Issue #3333: probe registration for the embedding-patterns analytics module.
 
@@ -580,44 +586,4 @@ async def probe_analytics_embedding_patterns(
             name="analytics_embedding_patterns",
             status="down",
             detail=f"probe error: {type(exc).__name__}",
-        )
-
-
-@router.get("/health", response_model=DataResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="embedding_analytics_health",
-    error_code_prefix="ANALYTICS_EMBEDDING_PATTERNS",
-)
-async def embedding_analytics_health(
-    admin_check: bool = Depends(check_admin_permission),
-):
-    """Health check for embedding analytics
-
-    Issue #744: Requires admin authentication.
-    """
-    try:
-        analyzer = get_embedding_analyzer()
-        redis = await analyzer._get_redis()
-        await redis.ping()
-
-        return JSONResponse(
-            status_code=200,
-            content={
-                "status": "healthy",
-                "service": "embedding_analytics",
-                "redis_connected": True,
-                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
-            },
-        )
-    except Exception as e:
-        logger.exception("Unexpected error: %s", e)
-        return JSONResponse(
-            status_code=503,
-            content={
-                "status": "unhealthy",
-                "service": "embedding_analytics",
-                "error": "Internal server error",
-                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
-            },
         )

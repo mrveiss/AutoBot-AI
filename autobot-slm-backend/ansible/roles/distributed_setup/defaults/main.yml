@@ -17,7 +17,7 @@ backup_dir: "{{ project_root }}/backups"
 
 # Distributed architecture configuration (from SSOT)
 distributed_mode: true
-coordinator_host: "{{ ansible_facts['default_ipv4'].address }}"
+coordinator_host: "{{ ansible_facts['default_ipv4'].address | default(ansible_host) | default('') }}"
 
 # Fleet nodes (derived from inventory)
 fleet_nodes: []  # Populated dynamically from slm_nodes group

@@ -8,9 +8,11 @@ to the HTML files and tests the protection mechanisms.
 
 import logging
 
+from autobot_shared.logging_manager import get_logger
+
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(message)s")
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level constant for HTML extensions (performance optimization)
 _HTML_EXTENSIONS = _HTML_EXTENSIONS

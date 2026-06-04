@@ -9,10 +9,10 @@ This module provides secure command extraction that prevents prompt injection at
 by validating LLM responses before extracting executable commands.
 """
 
-import logging
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from enhanced_security_layer import EnhancedSecurityLayer
 from security.prompt_injection_detector import (
@@ -22,7 +22,7 @@ from security.prompt_injection_detector import (
 )
 from utils.command_validator import CommandValidator
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -31,7 +31,7 @@ class ValidatedCommand:
 
     command: str
     explanation: str
-    next_step: Optional[str]
+    next_step: str | None
     risk_level: InjectionRisk
     validation_metadata: Dict[str, Any]
 
@@ -50,8 +50,8 @@ class SecureLLMCommandParser:
 
     def __init__(
         self,
-        injection_detector: Optional[PromptInjectionDetector] = None,
-        command_validator: Optional[CommandValidator] = None,
+        injection_detector: PromptInjectionDetector | None = None,
+        command_validator: CommandValidator | None = None,
         strict_mode: bool = True,
     ):
         """
@@ -67,7 +67,7 @@ class SecureLLMCommandParser:
         self.strict_mode = strict_mode
 
         # Security layer for audit logging
-        self._security_layer: Optional[EnhancedSecurityLayer] = None
+        self._security_layer: EnhancedSecurityLayer | None = None
 
         # Statistics tracking
         self.stats = {
@@ -85,7 +85,7 @@ class SecureLLMCommandParser:
             self._security_layer = EnhancedSecurityLayer()
         return self._security_layer
 
-    def _check_response_injection(self, llm_response: str, user_goal: str) -> Optional[List[ValidatedCommand]]:
+    def _check_response_injection(self, llm_response: str, user_goal: str) -> List[ValidatedCommand] | None:
         """Check for injection attempts in LLM response and block if detected. Issue #620.
 
         Args:
@@ -254,7 +254,7 @@ class SecureLLMCommandParser:
 
         return False
 
-    def _run_security_checks(self, command: str, user_goal: str) -> Optional[Any]:
+    def _run_security_checks(self, command: str, user_goal: str) -> Any | None:
         """
         Run injection and validator security checks on a command.
 
@@ -283,7 +283,7 @@ class SecureLLMCommandParser:
 
         return command_validation
 
-    def _validate_single_command(self, command_dict: Dict[str, str], user_goal: str) -> Optional[ValidatedCommand]:
+    def _validate_single_command(self, command_dict: Dict[str, str], user_goal: str) -> ValidatedCommand | None:
         """
         Validate a single command for security.
 
@@ -326,7 +326,7 @@ class SecureLLMCommandParser:
         self,
         command: str,
         explanation: str,
-        next_step: Optional[str],
+        next_step: str | None,
         command_validation: Any,
         user_goal: str,
     ) -> ValidatedCommand:

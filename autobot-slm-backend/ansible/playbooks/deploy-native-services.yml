@@ -4,8 +4,8 @@
 
 - name: Prepare All VMs
   hosts: all
-  become: yes
-  gather_facts: yes
+  become: true
+  gather_facts: true
 
   tasks:
     - name: Install common packages
@@ -23,15 +23,16 @@
           - nginx
           - supervisor
         state: present
-        update_cache: yes
+        update_cache: true
+        cache_valid_time: 3600
 
     - name: Create autobot service user
       user:
         name: autobot-service
-        system: yes
+        system: true
         shell: /bin/bash
         home: /opt/autobot
-        create_home: yes
+        create_home: true
 
     - name: Create service directories
       file:
@@ -50,7 +51,7 @@
 # Deploy Redis Stack natively on VM3 (Database VM)
 - name: Deploy Redis Stack Natively
   hosts: database
-  become: yes
+  become: true
 
   tasks:
     - name: Install Redis Stack from repository
@@ -70,7 +71,7 @@
             name:
               - redis-stack-server
             state: present
-            update_cache: yes
+            update_cache: true
 
     - name: Configure Redis Stack
       copy:
@@ -101,7 +102,7 @@
           logfile /var/log/redis/redis-server.log
           loglevel notice
         dest: /etc/redis/redis.conf
-        backup: yes
+        backup: true
 
     - name: Create Redis log directory
       file:
@@ -114,9 +115,9 @@
     - name: Configure Redis Stack systemd service
       systemd:
         name: redis-stack-server
-        enabled: yes
+        enabled: true
         state: restarted
-        daemon_reload: yes
+        daemon_reload: true
 
     - name: Install and configure RedisInsight
       block:
@@ -152,10 +153,10 @@
         - name: Start RedisInsight
           systemd:
             name: redisinsight
-            enabled: yes
+            enabled: true
             state: started
-            daemon_reload: yes
-      ignore_errors: yes
+            daemon_reload: true
+      ignore_errors: true
 
     - name: Configure firewall for Redis
       ufw:
@@ -178,7 +179,7 @@
 # Deploy Frontend natively on VM1
 - name: Deploy Frontend Natively
   hosts: frontend
-  become: yes
+  become: true
 
   tasks:
     - name: Install Node.js 20
@@ -197,7 +198,7 @@
           apt:
             name: nodejs
             state: present
-            update_cache: yes
+            update_cache: true
 
     - name: Copy frontend source files from deployment directory
       copy:
@@ -209,7 +210,7 @@
         path: /opt/autobot/src
         owner: autobot-service
         group: autobot-service
-        recurse: yes
+        recurse: true
 
     - name: Install frontend dependencies
       shell: |
@@ -277,7 +278,7 @@
               gzip_types text/plain text/css text/xml text/javascript application/javascript application/xml+rss application/json;
           }
         dest: /etc/nginx/sites-available/autobot-frontend
-        backup: yes
+        backup: true
 
     - name: Enable nginx site
       file:
@@ -312,7 +313,7 @@
 # Deploy NPU Worker natively on VM2 with hardware acceleration
 - name: Deploy NPU Worker Service Natively
   hosts: npu
-  become: yes
+  become: true
 
   tasks:
     - name: Install Python dependencies for NPU Worker
@@ -344,10 +345,10 @@
       synchronize:
         src: ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/
         dest: /opt/autobot/src/
-        delete: no
-        recursive: yes
-        owner: no
-        group: no
+        delete: false
+        recursive: true
+        owner: false
+        group: false
       delegate_to: localhost
 
     - name: Set ownership of source code for NPU Worker
@@ -355,7 +356,7 @@
         path: /opt/autobot/src
         owner: autobot-service
         group: autobot-service
-        recurse: yes
+        recurse: true
 
     - name: Create Python virtual environment for NPU Worker
       shell: python3.11 -m venv /opt/autobot/venv
@@ -445,16 +446,16 @@
           [Install]
           WantedBy=multi-user.target
         dest: /etc/systemd/system/autobot-npu-worker.service
-        backup: yes
+        backup: true
 
     - name: Reload systemd daemon for NPU Worker
       systemd:
-        daemon_reload: yes
+        daemon_reload: true
 
     - name: Enable and start NPU Worker service
       systemd:
         name: autobot-npu-worker
-        enabled: yes
+        enabled: true
         state: started
 
     - name: Configure firewall for NPU Worker
@@ -467,7 +468,7 @@
 # Deploy AI Stack natively on VM4
 - name: Deploy AI Services Natively
   hosts: aiml
-  become: yes
+  become: true
 
   tasks:
     - name: Install Python dependencies for AI services
@@ -488,10 +489,10 @@
       synchronize:
         src: ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/
         dest: /opt/autobot/src/
-        delete: no
-        recursive: yes
-        owner: no
-        group: no
+        delete: false
+        recursive: true
+        owner: false
+        group: false
       delegate_to: localhost
 
     - name: Set ownership of source code
@@ -499,7 +500,7 @@
         path: /opt/autobot/src
         owner: autobot-service
         group: autobot-service
-        recurse: yes
+        recurse: true
 
     - name: Create Python virtual environment
       shell: |
@@ -557,9 +558,9 @@
         - name: Start Ollama service
           systemd:
             name: ollama
-            enabled: yes
+            enabled: true
             state: started
-            daemon_reload: yes
+            daemon_reload: true
 
         - name: Pull required Ollama models (6-tier mapping, #2553)
           shell: |
@@ -631,9 +632,9 @@
     - name: Start AI services
       systemd:
         name: "{{ item }}"
-        enabled: yes
+        enabled: true
         state: started
-        daemon_reload: yes
+        daemon_reload: true
       loop:
         - autobot-ai-stack
         - autobot-npu-worker
@@ -652,7 +653,7 @@
 # Deploy Browser Service natively on VM5
 - name: Deploy Browser Service Natively
   hosts: browser
-  become: yes
+  become: true
 
   tasks:
     - name: Install desktop environment and browsers
@@ -679,10 +680,10 @@
       synchronize:
         src: ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/
         dest: /opt/autobot/src/
-        delete: no
-        recursive: yes
-        owner: no
-        group: no
+        delete: false
+        recursive: true
+        owner: false
+        group: false
       delegate_to: localhost
 
     - name: Set ownership of source code
@@ -690,7 +691,7 @@
         path: /opt/autobot/src
         owner: autobot-service
         group: autobot-service
-        recurse: yes
+        recurse: true
 
     - name: Create Playwright service
       copy:
@@ -736,9 +737,9 @@
     - name: Start browser services
       systemd:
         name: "{{ item }}"
-        enabled: yes
+        enabled: true
         state: started
-        daemon_reload: yes
+        daemon_reload: true
       loop:
         - autobot-browser
         - vnc-server
@@ -756,13 +757,13 @@
 # Final validation
 - name: Validate All Services
   hosts: all
-  become: yes
+  become: true
 
   tasks:
     - name: Check systemd services status
       shell: systemctl status {{ item }}
       register: service_status
-      ignore_errors: yes
+      ignore_errors: true
       loop: "{{ services[inventory_hostname_short] | default([]) }}"
       vars:
         services:
@@ -796,11 +797,11 @@
             - { url: 'http://localhost:8081/health', name: 'NPU Worker', expected_status: [200, 404] }
           'autobot-browser':
             - { url: 'http://localhost:3000/health', name: 'Browser Service', expected_status: [200, 404] }
-      ignore_errors: yes
+      ignore_errors: true
 
     - name: Display deployment summary
       debug:
         msg: |
-          VM: {{ ansible_facts['hostname'] }} ({{ ansible_facts['default_ipv4'].address }})
+          VM: {{ ansible_facts['hostname'] }} ({{ ansible_facts['default_ipv4'].address | default(ansible_host) }})
           Services deployed natively (no containers)
           Status: Ready for production use

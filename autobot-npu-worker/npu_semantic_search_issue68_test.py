@@ -70,9 +70,7 @@ async def test_batch_search():
     print(f"Average per query: {batch_time / len(queries):.2f}ms")
 
     for i, (results, metrics) in enumerate(batch_results):
-        print(
-            f"  Query {i+1}: {len(results)} results, {metrics.total_search_time_ms:.2f}ms"
-        )
+        print(f"  Query {i+1}: {len(results)} results, {metrics.total_search_time_ms:.2f}ms")
 
     assert len(batch_results) == len(queries), "Should return results for all queries"
     print("✅ Batch search working correctly")
@@ -84,9 +82,7 @@ async def test_performance_metrics():
 
     engine = await get_npu_search_engine()
 
-    results, metrics = await engine.enhanced_search(
-        "configuration management", similarity_top_k=5
-    )
+    results, metrics = await engine.enhanced_search("configuration management", similarity_top_k=5)
 
     print(f"Total search time: {metrics.total_search_time_ms:.2f}ms")
     print(f"Embedding generation: {metrics.embedding_generation_time_ms:.2f}ms")

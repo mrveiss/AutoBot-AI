@@ -34,8 +34,24 @@
  */
 
 import { findProbeByName, type ProbeResponse } from '@/composables/useHealthProbeRegistry'
-import { useApiWithState } from '@/composables/useApi'
+import { useApiClient } from '@/plugins/api'
+import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
+import type { LegacyHealthStatus } from '@/types/health'
+
+const logger = createLogger('useProbeBackedHealth')
+
+/**
+ * Maps a backend probe status string to the legacy per-module health vocab.
+ * Mirrors the backend's `_PROBE_TO_LEGACY` dict so the two sides stay in sync.
+ *
+ * @example
+ * probeStatusToLegacy('ok')          // → 'healthy'
+ * probeStatusToLegacy('degraded')    // → 'unavailable'
+ */
+export function probeStatusToLegacy(status: ProbeResponse['status']): LegacyHealthStatus {
+  return status === 'ok' ? 'healthy' : 'unavailable'
+}
 
 export interface ProbeBackedHealthOptions<R> {
   /** Probe name to look up in `/api/system/health` payload (e.g. `'batch_jobs'`). */
@@ -62,29 +78,24 @@ export interface ProbeBackedHealthOptions<R> {
 export function useProbeBackedHealth<R>(
   options: ProbeBackedHealthOptions<R>,
 ): () => Promise<R | null> {
-  const { api, withErrorHandling } = useApiWithState()
+  const api = useApiClient()
   const errorMessage = options.errorMessage ?? `Failed to check ${options.probeName} service health`
 
   return async (): Promise<R | null> => {
-    return withErrorHandling(
-      async () => {
-        const response = (await api.get<any>(`${getApiBase()}/system/health`)) as Response
-        const payload = await response.json()
-        const probe = await findProbeByName<ProbeResponse>(payload?.probes, options.probeName)
-        if (!probe) {
-          return options.buildUnavailable(`${options.probeName} probe not registered`)
-        }
-        const data = probe.data ?? {}
-        if (probe.status === 'ok') {
-          return options.buildHealthy(probe, data)
-        }
-        return options.buildUnavailable(probe.detail ?? 'Service unavailable')
-      },
-      {
-        errorMessage,
-        fallbackValue: options.buildUnavailable('Service unavailable'),
-        silent: true,
-      },
-    )
+    try {
+      const payload = await api.get<any>(`${getApiBase()}/system/health`)
+      const probe = await findProbeByName<ProbeResponse>(payload?.probes, options.probeName)
+      if (!probe) {
+        return options.buildUnavailable(`${options.probeName} probe not registered`)
+      }
+      const data = probe.data ?? {}
+      if (probe.status === 'ok') {
+        return options.buildHealthy(probe, data)
+      }
+      return options.buildUnavailable(probe.detail ?? 'Service unavailable')
+    } catch (error: unknown) {
+      logger.error(errorMessage, error)
+      return options.buildUnavailable('Service unavailable')
+    }
   }
 }

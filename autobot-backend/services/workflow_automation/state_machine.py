@@ -20,19 +20,19 @@ Usage::
 """
 
 import json
-import logging
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from pydantic import BaseModel, Field
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.message_bus import get_message_bus
 from autobot_shared.models.service_message import ServiceMessage
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
 from constants.redis_constants import REDIS_KEY
 from constants.ttl_constants import TTL_24_HOURS
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # ------------------------------------------------------------------
@@ -134,7 +134,7 @@ class WorkflowStateMachine(AsyncRedisClientMixin):
         self,
         workflow_id: str,
         goal: str = "",
-        routing_table: Optional[Dict[str, str]] = None,
+        routing_table: Dict[str, str] | None = None,
     ) -> WorkflowState:
         """Create and persist a new workflow state."""
         state = WorkflowState(
@@ -161,9 +161,9 @@ class WorkflowStateMachine(AsyncRedisClientMixin):
         self,
         state: WorkflowState,
         to_phase: str,
-        active_service: Optional[str] = None,
-        step_id: Optional[str] = None,
-        error: Optional[str] = None,
+        active_service: str | None = None,
+        step_id: str | None = None,
+        error: str | None = None,
     ) -> WorkflowState:
         """Move *state* to *to_phase*, updating active service.
 
@@ -196,7 +196,7 @@ class WorkflowStateMachine(AsyncRedisClientMixin):
 
     # -- Load ----------------------------------------------------------
 
-    async def load(self, workflow_id: str) -> Optional[WorkflowState]:
+    async def load(self, workflow_id: str) -> WorkflowState | None:
         """Load workflow state from Redis."""
         redis = await self._get_redis()
         raw = await redis.get(_state_key(workflow_id))

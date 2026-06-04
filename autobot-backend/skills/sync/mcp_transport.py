@@ -13,13 +13,14 @@ is fully transport-agnostic.  Auto-detection maps URI schemes:
 
 import asyncio
 import json
-import logging
 from abc import ABC, abstractmethod
-from typing import Any, AsyncIterator, Dict, Optional
+from typing import Any, AsyncIterator, Dict
 
 import aiohttp
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 
 # JSON-RPC version used by MCP
 _JSONRPC = "2.0"
@@ -49,7 +50,7 @@ class MCPTransport(ABC):
     async def close(self) -> None:
         """Tear down the underlying channel."""
 
-    async def request(self, method: str, params: Optional[Dict[str, Any]] = None, req_id: int = 1) -> Dict[str, Any]:
+    async def request(self, method: str, params: Dict[str, Any] | None = None, req_id: int = 1) -> Dict[str, Any]:
         """Send a request and return its response (convenience wrapper)."""
         payload: Dict[str, Any] = {"jsonrpc": _JSONRPC, "id": req_id, "method": method}
         if params is not None:
@@ -83,7 +84,7 @@ class StdioTransport(MCPTransport):
         """Initialise with a shell command string, e.g. ``"npx -y @modelcontextprotocol/server-filesystem /tmp"``."""
         self._command = command
         self._timeout = timeout
-        self._proc: Optional[asyncio.subprocess.Process] = None
+        self._proc: asyncio.subprocess.Process | None = None
         self._recv_lock = asyncio.Lock()
 
     async def connect(self) -> None:
@@ -154,9 +155,9 @@ class SSETransport(MCPTransport):
         # Normalise sse:// → https://
         self._base_url = base_url.replace("sse://", "https://", 1)
         self._timeout = timeout
-        self._session: Optional[aiohttp.ClientSession] = None
+        self._session: aiohttp.ClientSession | None = None
         self._queue: asyncio.Queue = asyncio.Queue()
-        self._sse_task: Optional[asyncio.Task] = None
+        self._sse_task: asyncio.Task | None = None
 
     async def connect(self) -> None:
         """Open HTTP session and start background SSE reader task."""
@@ -242,7 +243,7 @@ class HTTPTransport(MCPTransport):
         self._base_url = base_url.rstrip("/")
         self._timeout = timeout
         # Pending response stored between send() and receive()
-        self._pending: Optional[Dict[str, Any]] = None
+        self._pending: Dict[str, Any] | None = None
 
     async def connect(self) -> None:
         """HTTP is connectionless — nothing to open."""

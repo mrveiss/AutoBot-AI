@@ -10,7 +10,6 @@ Part of Issue #381 - God Class Refactoring
 """
 
 import re
-from typing import Optional
 
 from ..models import AnalysisContext, SecurityEvent, ThreatEvent
 from ..types import ThreatCategory, ThreatLevel, get_max_severity
@@ -20,7 +19,7 @@ from .base import ThreatAnalyzer
 class CommandInjectionAnalyzer(ThreatAnalyzer):
     """Analyzes events for command injection threats"""
 
-    async def analyze(self, event: SecurityEvent, context: AnalysisContext) -> Optional[ThreatEvent]:
+    async def analyze(self, event: SecurityEvent, context: AnalysisContext) -> ThreatEvent | None:
         """Detect command injection attempts (Issue #315 - refactored)."""
         command_content = event.get_command_content()
 

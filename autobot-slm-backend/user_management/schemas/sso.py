@@ -9,7 +9,7 @@ Pydantic models for SSO-related API requests and responses.
 
 import uuid
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -20,7 +20,7 @@ class SSOProviderCreate(BaseModel):
     provider_type: str = Field(..., description="SSO provider type")
     name: str = Field(..., min_length=1, max_length=255, description="Provider name")
     config: dict[str, Any] = Field(..., description="Provider configuration")
-    org_id: Optional[uuid.UUID] = Field(None, description="Organization ID (null for global)")
+    org_id: uuid.UUID | None = Field(None, description="Organization ID (null for global)")
     is_active: bool = Field(True, description="Whether provider is active")
     is_social: bool = Field(False, description="Whether this is a social login provider")
     allow_user_creation: bool = Field(True, description="Allow JIT user provisioning")
@@ -31,29 +31,29 @@ class SSOProviderCreate(BaseModel):
 class SSOProviderUpdate(BaseModel):
     """Request model for updating an SSO provider."""
 
-    name: Optional[str] = Field(None, min_length=1, max_length=255)
-    config: Optional[dict[str, Any]] = None
-    org_id: Optional[uuid.UUID] = None
-    is_active: Optional[bool] = None
-    is_social: Optional[bool] = None
-    allow_user_creation: Optional[bool] = None
-    default_role: Optional[str] = None
-    group_mapping: Optional[dict[str, str]] = None
+    name: str | None = Field(None, min_length=1, max_length=255)
+    config: dict[str, Any] | None = None
+    org_id: uuid.UUID | None = None
+    is_active: bool | None = None
+    is_social: bool | None = None
+    allow_user_creation: bool | None = None
+    default_role: str | None = None
+    group_mapping: dict[str, str] | None = None
 
 
 class SSOProviderResponse(BaseModel):
     """Response model for an SSO provider (excludes sensitive config)."""
 
     id: uuid.UUID
-    org_id: Optional[uuid.UUID]
+    org_id: uuid.UUID | None
     provider_type: str
     name: str
     is_active: bool
     is_social: bool
     allow_user_creation: bool
-    default_role: Optional[str]
+    default_role: str | None
     group_mapping: dict[str, str]
-    last_sync_at: Optional[datetime]
+    last_sync_at: datetime | None
     created_at: datetime
     updated_at: datetime
 
@@ -75,7 +75,7 @@ class SSOLoginInitResponse(BaseModel):
     provider_type: str
     provider_name: str
     redirect_url: str
-    state: Optional[str] = None
+    state: str | None = None
 
 
 class LDAPLoginRequest(BaseModel):
@@ -91,4 +91,4 @@ class SSOTestResponse(BaseModel):
 
     success: bool
     message: str
-    details: Optional[dict[str, Any]] = None
+    details: dict[str, Any] | None = None

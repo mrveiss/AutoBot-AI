@@ -61,7 +61,7 @@ class SSOProvider(Base):
     )
 
     # Organization (nullable for global/social providers)
-    org_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    org_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=True,
@@ -110,7 +110,7 @@ class SSOProvider(Base):
     )
 
     # Default role for users created via this provider
-    default_role: Mapped[Optional[str]] = mapped_column(
+    default_role: Mapped[str | None] = mapped_column(
         String(100),
         nullable=True,
         default=CategoryDefaults.ROLE_USER,
@@ -124,7 +124,7 @@ class SSOProvider(Base):
     )
 
     # Last successful sync (for LDAP/AD)
-    last_sync_at: Mapped[Optional[datetime]] = mapped_column(
+    last_sync_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
@@ -198,7 +198,7 @@ class UserSSOLink(Base):
     )
 
     # External email (may differ from user's primary email)
-    external_email: Mapped[Optional[str]] = mapped_column(
+    external_email: Mapped[str | None] = mapped_column(
         String(255),
         nullable=True,
     )
@@ -212,7 +212,7 @@ class UserSSOLink(Base):
     )
 
     # Last login via this SSO provider
-    last_login_at: Mapped[Optional[datetime]] = mapped_column(
+    last_login_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )

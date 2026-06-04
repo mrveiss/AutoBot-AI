@@ -1,12 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/vue3';
-import Icon from '@/components/ui/Icon.vue';
+import Icon, { ICONS } from '@/components/ui/Icon.vue';
 
-/**
- * Icon names are mirrored from the ICONS registry in `Icon.vue`. Keep this list
- * in sync if you add new icons there. Each group corresponds to a section
- * comment in Icon.vue so the catalog stays organized.
- */
-const ICON_GROUPS: Array<{ title: string; names: string[] }> = [
+const DEFINED_GROUPS: Array<{ title: string; names: string[] }> = [
   {
     title: 'Navigation',
     names: ['chevron-down', 'sort', 'chevron-up', 'chevron-left', 'chevron-right'],
@@ -171,11 +166,16 @@ const ICON_GROUPS: Array<{ title: string; names: string[] }> = [
   },
 ];
 
-const ALL_ICON_NAMES: string[] = ICON_GROUPS.flatMap((g) => g.names);
+// Derive catalog from the registry — any icon added to ICONS auto-appears here
+const ALL_ICON_NAMES = Object.keys(ICONS);
+const categorized = new Set(DEFINED_GROUPS.flatMap((g) => g.names));
+const uncategorized = ALL_ICON_NAMES.filter((n) => !categorized.has(n));
+const ICON_GROUPS = uncategorized.length > 0
+  ? [...DEFINED_GROUPS, { title: 'Other', names: uncategorized }]
+  : DEFINED_GROUPS;
 
 const meta = {
   title: 'Design System/Icon Library',
-  tags: ['autodocs'],
   parameters: {
     layout: 'fullscreen',
     docs: {

@@ -11,21 +11,21 @@ Issue #379: Optimized sequential awaits with asyncio.gather for concurrent opera
 import asyncio
 import hashlib
 import json
-import logging
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Set
 
 import aiofiles
 import yaml
 
 from agents.system_knowledge_manager import SystemKnowledgeManager
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import parse_utc_iso
 from intelligence.os_detector import LinuxDistro, OSType, get_os_detector
 from knowledge_base import KnowledgeBase
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class MachineProfile:
@@ -36,7 +36,7 @@ class MachineProfile:
         self.machine_id: str = ""
         self.hostname: str = ""
         self.os_type: OSType = OSType.UNKNOWN
-        self.distro: Optional[LinuxDistro] = None
+        self.distro: LinuxDistro | None = None
         self.package_manager: str = ""
         self.available_tools: Set[str] = set()
         self.architecture: str = ""
@@ -95,11 +95,11 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
         self.machine_profiles_dir.mkdir(parents=True, exist_ok=True)
 
         # Current machine profile (protected by _profile_lock)
-        self._current_machine_profile: Optional[MachineProfile] = None
+        self._current_machine_profile: MachineProfile | None = None
         self._profile_lock = asyncio.Lock()
 
     @property
-    def current_machine_profile(self) -> Optional[MachineProfile]:
+    def current_machine_profile(self) -> MachineProfile | None:
         """Thread-safe access to current machine profile (read-only snapshot)."""
         return self._current_machine_profile
 
@@ -190,7 +190,7 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
         except OSError as e:
             logger.error("Failed to save machine profile to %s: %s", profile_file, e)
 
-    async def _load_machine_profile(self, machine_id: str) -> Optional[MachineProfile]:
+    async def _load_machine_profile(self, machine_id: str) -> MachineProfile | None:
         """Load machine profile from disk"""
         profile_file = self.machine_profiles_dir / f"{machine_id}.json"
 
@@ -324,7 +324,7 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
         # Check if installation method exists for this package manager
         return package_manager in installation
 
-    def _adapt_tool_for_machine(self, tool_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    def _adapt_tool_for_machine(self, tool_data: Dict[str, Any]) -> Dict[str, Any] | None:
         """Adapt tool configuration for current machine"""
         if not self.current_machine_profile:
             return tool_data
@@ -389,7 +389,7 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
                 except OSError as e:
                     logger.error(f"Failed to write adapted workflow to {machine_file}: {e}")
 
-    def _adapt_workflow_for_machine(self, workflow_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    def _adapt_workflow_for_machine(self, workflow_data: Dict[str, Any]) -> Dict[str, Any] | None:
         """Adapt workflow based on machine capabilities"""
         if not self.current_machine_profile:
             return workflow_data

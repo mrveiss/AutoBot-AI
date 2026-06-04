@@ -20,13 +20,14 @@ When ``create_entity`` or ``create_relation`` are called the mixin also
 mirrors the data into the PropertyGraph so the two stores stay in sync.
 """
 
-import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
+
+from autobot_shared.logging_manager import get_logger
 
 from .core import AutoBotMemoryGraphCore
 from .property_graph import PropertyGraph
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class PropertyGraphMixin:
@@ -39,7 +40,7 @@ class PropertyGraphMixin:
     """
 
     # Lazily created on first access
-    _property_graph: Optional[PropertyGraph] = None
+    _property_graph: PropertyGraph | None = None
 
     @property
     def graph(self) -> PropertyGraph:
@@ -61,9 +62,9 @@ class PropertyGraphMixin:
         self: AutoBotMemoryGraphCore,
         entity_type: str,
         name: str,
-        observations: Optional[List[str]] = None,
-        metadata: Optional[Dict[str, Any]] = None,
-        tags: Optional[List[str]] = None,
+        observations: List[str] | None = None,
+        metadata: Dict[str, Any] | None = None,
+        tags: List[str] | None = None,
     ) -> Dict[str, Any]:
         """Create entity in the standard store AND mirror into PropertyGraph."""
         entity = await super().create_entity(  # type: ignore[misc]
@@ -100,7 +101,7 @@ class PropertyGraphMixin:
         relation_type: str,
         bidirectional: bool = False,
         strength: float = 1.0,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
         """Create relation in the standard store AND mirror into PropertyGraph."""
         relation = await super().create_relation(  # type: ignore[misc]

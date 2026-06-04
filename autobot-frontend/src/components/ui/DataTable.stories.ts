@@ -4,7 +4,6 @@ import DataTable from './DataTable.vue';
 const meta = {
   title: 'Components/UI/DataTable',
   component: DataTable,
-  tags: ['autodocs'],
   argTypes: {
     columns: {
       control: 'object',

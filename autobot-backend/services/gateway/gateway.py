@@ -9,9 +9,12 @@ Main Gateway class that coordinates session management, message routing,
 and channel adapters.
 """
 
+from __future__ import annotations
+
 import asyncio
-import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict
+
+from autobot_shared.logging_manager import get_logger
 
 from .channel_adapters.base import BaseChannelAdapter
 from .config import GatewayConfig
@@ -19,7 +22,7 @@ from .message_router import MessageRouter
 from .session_manager import SessionManager
 from .types import ChannelType, GatewaySession, MessageType, UnifiedMessage
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class Gateway:
@@ -34,7 +37,7 @@ class Gateway:
     - Rate limiting and security controls
     """
 
-    _instance: Optional["Gateway"] = None
+    _instance: "Gateway" | None = None
     _lock = asyncio.Lock()
 
     def __new__(cls, *args, **kwargs):
@@ -45,9 +48,9 @@ class Gateway:
 
     def __init__(
         self,
-        config: Optional[GatewayConfig] = None,
-        agent_router: Optional[Any] = None,
-    ):
+        config: GatewayConfig | None = None,
+        agent_router: Any | None = None,
+    ) -> None:
         """
         Initialize the Gateway.
 
@@ -119,8 +122,8 @@ class Gateway:
         self,
         user_id: str,
         channel: ChannelType,
-        connection_params: Optional[Dict] = None,
-        metadata: Optional[Dict] = None,
+        connection_params: Dict | None = None,
+        metadata: Dict | None = None,
     ) -> GatewaySession:
         """
         Create a new Gateway session.
@@ -248,7 +251,7 @@ class Gateway:
 
         if success:
             # Update session
-            session.add_message(message.message_id)
+            session.add_message(sender=message.message_id)
 
         return success
 
@@ -256,7 +259,7 @@ class Gateway:
         self,
         raw_data: Any,
         session_id: str,
-    ) -> Optional[UnifiedMessage]:
+    ) -> UnifiedMessage | None:
         """
         Receive and parse a message from a channel.
 
@@ -295,14 +298,14 @@ class Gateway:
         # Parse message
         message = await adapter.receive_message(raw_data, session)
         if message:
-            session.add_message(message.message_id)
+            session.add_message(sender=message.message_id)
 
         return message
 
     async def route_and_process(
         self,
         message: UnifiedMessage,
-        context: Optional[Dict] = None,
+        context: Dict | None = None,
     ) -> Dict[str, Any]:
         """
         Route a message and process with appropriate agent.
@@ -355,13 +358,24 @@ class Gateway:
 
 
 # Singleton instance getter
-_gateway_instance: Optional[Gateway] = None
+_gateway_instance: Gateway | None = None
 
 
 async def get_gateway() -> Gateway:
-    """Get the singleton Gateway instance."""
+    """Get the singleton Gateway instance.
+
+    GH#8268: injects DistributedAgentCoordinator._router so user-chat messages
+    flow through RLRouter's Q-learning selection (GH#881 prerequisite is closed).
+    """
     global _gateway_instance
     if _gateway_instance is None:
-        _gateway_instance = Gateway()
+        try:
+            from agents.agent_orchestration import get_distributed_agent_coordinator
+
+            coordinator = get_distributed_agent_coordinator()
+            _gateway_instance = Gateway(agent_router=coordinator._router)
+        except Exception:
+            logger.warning("DistributedAgentCoordinator unavailable; Gateway starts without RLRouter")
+            _gateway_instance = Gateway()
         await _gateway_instance.start()
     return _gateway_instance

@@ -15,14 +15,15 @@ context actually covers the user's query. Two evaluation tiers:
 Issue: #1374
 """
 
-import logging
 import re
 import time
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # Stop words for keyword extraction (common English)
@@ -289,7 +290,7 @@ def _build_sufficiency_messages(query: str, context: str) -> List[Dict]:
     ]
 
 
-def _parse_llm_verdict(answer: str, elapsed_ms: float) -> Optional[SufficiencyResult]:
+def _parse_llm_verdict(answer: str, elapsed_ms: float) -> SufficiencyResult | None:
     """Parse LLM YES/NO response into a SufficiencyResult. Ref: #1374."""
     text = answer.strip().upper()
     if "YES" in text:
@@ -315,7 +316,7 @@ async def _llm_evaluate(
     query: str,
     context: str,
     timeout: float,
-) -> Optional[SufficiencyResult]:
+) -> SufficiencyResult | None:
     """Ask a small LLM whether context sufficiently answers the query.
 
     Returns None if LLM call fails or times out. Ref: #1374.
@@ -365,7 +366,7 @@ class ContextSufficiencyEvaluator:
             # trigger fresh retrieval
     """
 
-    def __init__(self, config: Optional[SufficiencyConfig] = None):
+    def __init__(self, config: SufficiencyConfig | None = None) -> None:
         self._config = config or SufficiencyConfig()
         self._sufficient_count = 0
         self._insufficient_count = 0
@@ -450,7 +451,7 @@ class ContextSufficiencyEvaluator:
 # Global singleton
 # ---------------------------------------------------------------------------
 
-_instance: Optional[ContextSufficiencyEvaluator] = None
+_instance: ContextSufficiencyEvaluator | None = None
 
 
 def get_context_sufficiency_evaluator() -> ContextSufficiencyEvaluator:

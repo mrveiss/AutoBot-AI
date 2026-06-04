@@ -35,9 +35,9 @@
         name: "{{ emergency_admin_user }}"
         comment: "Emergency Admin User (fallback access)"
         shell: /bin/bash
-        create_home: yes
+        create_home: true
         groups: sudo
-        append: yes
+        append: true
         password: "{{ emergency_admin_password_hash }}"
         state: present
 
@@ -66,10 +66,10 @@
         name: "{{ autobot_user }}"
         group: "{{ autobot_group }}"
         groups: "sudo"
-        append: yes
+        append: true
         shell: /bin/bash
         home: "{{ autobot_home }}"
-        create_home: yes
+        create_home: true
         state: present
 
     - name: Fix home directory ownership

@@ -1,42 +1,20 @@
 ---
-# Single-host co-located deployment inventory
-# All roles run on localhost with loopback aliases (127.0.0.x)
+# Single-host SLM-Manager deployment inventory
+# localhost runs SLM components only.
+# Backend, frontend, AI, browser, NPU, Redis, ChromaDB — all deployed
+# from the SLM instance via the deployment wizard on user-selected nodes.
 # Issue #2961: Single-host deployment runbook
 
 all:
   hosts:
     localhost:
       ansible_connection: local
-      ansible_user: "{{ ansible_user_id }}"
-      ansible_become: yes
+      ansible_user: "{{ lookup('env', 'USER') }}"
+      ansible_become: true
       ansible_become_method: sudo
+      slm_node_id: "00-SLM-Manager"
 
   children:
-    # Single-host: all groups map to localhost
     slm:
-      hosts:
-        localhost:
-
-    backend:
-      hosts:
-        localhost:
-
-    frontend:
-      hosts:
-        localhost:
-
-    database:
-      hosts:
-        localhost:
-
-    aiml:
-      hosts:
-        localhost:
-
-    browser:
-      hosts:
-        localhost:
-
-    npu_workers:
       hosts:
         localhost:

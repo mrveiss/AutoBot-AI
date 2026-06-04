@@ -16,17 +16,17 @@ Features:
 """
 
 import asyncio
-import logging
 import time
 from collections import OrderedDict
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 import aiohttp
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
 from constants.ttl_constants import TTL_5_MINUTES
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class SkillRanker:
@@ -37,7 +37,7 @@ class SkillRanker:
     Caches top N skills with their embeddings for O(1) ranking on subsequent calls.
     """
 
-    def __init__(self, max_cache_size: int = 10, cache_ttl_seconds: int = TTL_5_MINUTES):
+    def __init__(self, max_cache_size: int = 10, cache_ttl_seconds: int = TTL_5_MINUTES) -> None:
         """
         Initialize the skill ranker.
 
@@ -104,7 +104,7 @@ class SkillRanker:
 
         return dot_product / (mag1 * mag2)
 
-    async def _get_embedding(self, text: str) -> Optional[List[float]]:
+    async def _get_embedding(self, text: str) -> List[float] | None:
         """
         Get embedding for text from SLM embedding API.
 
@@ -149,7 +149,7 @@ class SkillRanker:
             return False
         return (time.time() - self.cache_timestamp) < self.cache_ttl_seconds
 
-    def _filter_by_platform(self, skills: List[Dict], platform: Optional[str] = None) -> List[Dict]:
+    def _filter_by_platform(self, skills: List[Dict], platform: str | None = None) -> List[Dict]:
         """
         Filter skills by agent platform.
 
@@ -169,8 +169,8 @@ class SkillRanker:
     async def rank_skills(
         self,
         context: str,
-        platform: Optional[str] = None,
-        top_k: Optional[int] = None,
+        platform: str | None = None,
+        top_k: int | None = None,
     ) -> List[Dict]:
         """
         Rank skills by embedding similarity to conversation context.
@@ -269,7 +269,7 @@ class SkillRanker:
 
 
 # Global instance
-_skill_ranker: Optional[SkillRanker] = None
+_skill_ranker: SkillRanker | None = None
 
 
 def get_skill_ranker() -> SkillRanker:

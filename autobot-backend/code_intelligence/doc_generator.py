@@ -31,9 +31,10 @@ Refactoring History:
   to reduce god class DocGenerator from 48 methods to 5 methods (90% reduction)
 """
 
-import logging
 import os
-from typing import List, Optional, Set
+from typing import List, Set
+
+from autobot_shared.logging_manager import get_logger
 
 # Issue #394: Import refactored modules for delegation
 from code_intelligence.doc_generation.docstring_parser import DocstringParser
@@ -61,7 +62,7 @@ from code_intelligence.doc_generation.types import (
     ReturnDoc,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Re-export for backward compatibility
 __all__ = [
@@ -158,7 +159,7 @@ class DocGenerator:
     # Module and Package Analysis (Issue #394: Delegates to ModuleAnalyzer)
     # =========================================================================
 
-    def analyze_module(self, file_path: str) -> Optional[ModuleDoc]:
+    def analyze_module(self, file_path: str) -> ModuleDoc | None:
         """
         Analyze a Python module and extract documentation.
 
@@ -175,7 +176,7 @@ class DocGenerator:
             self._analyzed_files.add(file_path)
         return result
 
-    def analyze_package(self, package_path: str, depth: int = 0) -> Optional[PackageDoc]:
+    def analyze_package(self, package_path: str, depth: int = 0) -> PackageDoc | None:
         """
         Analyze a Python package and all its modules.
 
@@ -244,7 +245,7 @@ class DocGenerator:
 # =============================================================================
 
 
-def analyze_module(file_path: str, **kwargs) -> Optional[ModuleDoc]:
+def analyze_module(file_path: str, **kwargs) -> ModuleDoc | None:
     """
     Analyze a Python module and extract documentation.
 
@@ -259,7 +260,7 @@ def analyze_module(file_path: str, **kwargs) -> Optional[ModuleDoc]:
     return generator.analyze_module(file_path)
 
 
-def analyze_package(package_path: str, **kwargs) -> Optional[PackageDoc]:
+def analyze_package(package_path: str, **kwargs) -> PackageDoc | None:
     """
     Analyze a Python package and all its modules.
 
@@ -276,7 +277,7 @@ def analyze_package(package_path: str, **kwargs) -> Optional[PackageDoc]:
 
 def generate_docs(
     path: str,
-    output_path: Optional[str] = None,
+    output_path: str | None = None,
     format: DocFormat = DocFormat.MARKDOWN,
     title: str = "API Documentation",
     **kwargs,

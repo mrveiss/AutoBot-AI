@@ -12,12 +12,12 @@ combined list in Redis for 60 seconds to avoid latency on every dropdown open.
 from __future__ import annotations
 
 import json
-import logging
 from typing import Any, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _CACHE_KEY = "model_manager:available_models"
 _CACHE_TTL = 60  # seconds — intentionally short for live-system accuracy
@@ -68,6 +68,8 @@ def _build_model_entry(
     name: str, provider: str, available: bool, extra: Dict[str, Any] | None = None
 ) -> Dict[str, Any]:
     """Return a standardised model metadata dict."""
+    from llm_shared.model_param_registry import get_architecture_family
+
     hints = _hints_for_model(name)
     entry: Dict[str, Any] = {
         "name": name,
@@ -75,6 +77,7 @@ def _build_model_entry(
         "available": available,
         "context_window": hints["context_window"],
         "capabilities": hints["capabilities"],
+        "architecture_family": get_architecture_family(name),
     }
     if extra:
         entry.update(extra)
@@ -125,7 +128,7 @@ async def _fetch_from_providers() -> Dict[str, Any]:
     """Query every registered provider and aggregate results."""
     import asyncio
 
-    from llm_providers.provider_registry import get_provider_registry
+    from llm_shared import get_provider_registry
 
     registry = get_provider_registry()
     providers_info = registry.list_providers()

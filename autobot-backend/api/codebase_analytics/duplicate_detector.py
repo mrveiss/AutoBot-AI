@@ -18,13 +18,14 @@ Issue #554: Enhanced with Vector/Redis/LLM infrastructure:
 """
 
 import hashlib
-import logging
 import re
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Set, Tuple
+
+from autobot_shared.logging_manager import get_logger
 
 # Issue #659: MinHash LSH for O(n) expected duplicate detection
 # Issue #665: Provide type stubs when datasketch not installed for helper signatures
@@ -46,7 +47,7 @@ from utils.file_categorization import (
     VUE_EXTENSIONS,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #554: Flag to enable semantic analysis infrastructure
 SEMANTIC_ANALYSIS_AVAILABLE = False
@@ -613,7 +614,7 @@ class DuplicateCodeDetector(_BaseClass):
 
     def __init__(
         self,
-        project_root: Optional[str] = None,
+        project_root: str | None = None,
         min_similarity: float = LOW_SIMILARITY_THRESHOLD,
         use_semantic_analysis: bool = False,
     ):
@@ -1204,7 +1205,7 @@ class DuplicateCodeDetector(_BaseClass):
 # =============================================================================
 
 
-def detect_duplicates(project_root: Optional[str] = None) -> DuplicateAnalysis:
+def detect_duplicates(project_root: str | None = None) -> DuplicateAnalysis:
     """
     Run duplicate code detection on a project.
 
@@ -1219,7 +1220,7 @@ def detect_duplicates(project_root: Optional[str] = None) -> DuplicateAnalysis:
 
 
 async def detect_duplicates_async(
-    project_root: Optional[str] = None,
+    project_root: str | None = None,
     use_semantic_analysis: bool = True,
 ) -> DuplicateAnalysis:
     """

@@ -8,7 +8,7 @@ Tracks trained code completion models and their metadata.
 """
 
 from datetime import datetime
-from typing import Dict, Optional
+from typing import Dict
 
 from sqlalchemy import Boolean, DateTime, Float, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB
@@ -32,29 +32,29 @@ class MLModel(Base):
     # Model identification
     version: Mapped[str] = mapped_column(String(50), unique=True, nullable=False, index=True)
     model_type: Mapped[str] = mapped_column(String(50), nullable=False)
-    language: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
-    pattern_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    language: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    pattern_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
     # Model metadata
     file_path: Mapped[str] = mapped_column(String(500), nullable=False)
-    config: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    config: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
     # Training metrics
-    val_loss: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
-    accuracy: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
-    mrr: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
-    hit_at_1: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
-    hit_at_5: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
-    hit_at_10: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    val_loss: Mapped[float | None] = mapped_column(Float, nullable=True)
+    accuracy: Mapped[float | None] = mapped_column(Float, nullable=True)
+    mrr: Mapped[float | None] = mapped_column(Float, nullable=True)
+    hit_at_1: Mapped[float | None] = mapped_column(Float, nullable=True)
+    hit_at_5: Mapped[float | None] = mapped_column(Float, nullable=True)
+    hit_at_10: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     # Training info
-    epochs_trained: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    training_duration_seconds: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    num_parameters: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    epochs_trained: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    training_duration_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    num_parameters: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     # Deployment status
     is_active: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
-    deployed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    deployed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
@@ -63,7 +63,7 @@ class MLModel(Base):
     )
 
     # Notes
-    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     def to_dict(self) -> Dict:
         """Convert model to dictionary for API responses."""

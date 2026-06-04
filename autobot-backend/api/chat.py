@@ -14,11 +14,16 @@ Consolidated from chat.py and chat_enhanced.py per Issue #708.
 
 import asyncio
 import json
-import logging
-import os
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 from uuid import uuid4
+
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
+
+# Phase 4 (#7590): feature flag — default-off; enable in staging then flip to default-on.
+# Reads env at import time (process restart required to change).
+_CHAT_SSOT_STRICT = config.chat_ssot_strict.lower() == "true"
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -50,19 +55,18 @@ from constants.threshold_constants import TimingConstants
 # Import dependencies and utilities - Using available dependencies
 from dependencies import get_config, get_knowledge_base
 
+# Import shared exception classes (Issue #292 - Eliminate duplicate code)
+from exceptions import get_exceptions_lazy
+
 # CRITICAL SECURITY FIX: Import session ownership validation
 from security.session_ownership import validate_session_ownership
 from services.ai_stack_client import AIStackError, get_ai_stack_client
 from type_defs.common import STREAMING_MESSAGE_TYPES, Metadata
 
-# Import shared exception classes (Issue #292 - Eliminate duplicate code)
-from utils.chat_exceptions import get_exceptions_lazy
-
 # Import reusable chat utilities - Phase 1 Utility Extraction
 from utils.chat_utils import (
     create_chat_response,
     create_error_response,
-    generate_chat_session_id,
     generate_message_id,
     generate_request_id,
     get_chat_history_manager,
@@ -96,7 +100,7 @@ def get_system_state(request: Request) -> Dict:
     return getattr(request.app.state, "system_state", {})
 
 
-def get_memory_interface(request: Request) -> Optional[Any]:
+def get_memory_interface(request: Request) -> Any | None:
     """Get memory interface from app state"""
     return getattr(request.app.state, "memory_interface", None)
 
@@ -145,7 +149,7 @@ def log_request_context(request: Request, endpoint: str, request_id: str) -> Non
 # ====================================================================
 
 
-def _parse_message_timestamp(msg_ts_str: str) -> Optional[datetime]:
+def _parse_message_timestamp(msg_ts_str: str) -> datetime | None:
     """Parse message timestamp from various formats (Issue #315)."""
     if not isinstance(msg_ts_str, str) or not msg_ts_str:
         return None
@@ -157,7 +161,7 @@ def _parse_message_timestamp(msg_ts_str: str) -> Optional[datetime]:
         return None
 
 
-def _should_start_new_streaming_group(current_ts: datetime, last_streaming_ts: Optional[datetime]) -> bool:
+def _should_start_new_streaming_group(current_ts: datetime, last_streaming_ts: datetime | None) -> bool:
     """Check if a new streaming group should start (Issue #315)."""
     if last_streaming_ts is None:
         return False
@@ -309,7 +313,13 @@ def _process_streaming_groups(merged: List[Dict]) -> List[Dict]:
 # ====================================================================
 
 router = APIRouter(tags=["chat"])
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
+
+# Phase 4 (#7590): log feature flag state at startup so operators know which mode is active
+logger.info(
+    "AUTOBOT_CHAT_SSOT_STRICT=%s",
+    "true" if _CHAT_SSOT_STRICT else "false (default — session_id enforcement via schema only)",
+)
 
 # Include session management router
 from api.chat_sessions import router as sessions_router
@@ -330,11 +340,13 @@ STREAMING_CHUNK_SIZE = 1024
 # ====================================================================
 
 
-def _validate_session_id(session_id: Optional[str]) -> None:
+def _validate_session_id(session_id: str | None) -> None:
     """
     Validate session ID format if provided.
 
     Issue #281: Extracted helper for session validation.
+    Phase 4 (#7590): in SSOT strict mode also reject missing session_id so
+    every message is tied to a known session (AUTOBOT_CHAT_SSOT_STRICT).
 
     Args:
         session_id: Session ID to validate
@@ -342,14 +354,18 @@ def _validate_session_id(session_id: Optional[str]) -> None:
     Raises:
         ValidationError: If session ID format is invalid
     """
+    (
+        AutoBotError,
+        InternalError,
+        ResourceNotFoundError,
+        ValidationError,
+        get_error_code,
+    ) = get_exceptions_lazy()
+
+    if _CHAT_SSOT_STRICT and not session_id:
+        raise ValidationError("session_id is required (AUTOBOT_CHAT_SSOT_STRICT)")
+
     if session_id and not validate_chat_session_id(session_id):
-        (
-            AutoBotError,
-            InternalError,
-            ResourceNotFoundError,
-            ValidationError,
-            get_error_code,
-        ) = get_exceptions_lazy()
         raise ValidationError("Invalid session ID format")
 
 
@@ -393,7 +409,7 @@ async def _store_and_log_user_message(
     message: "ChatMessage",
     session_id: str,
     chat_history_manager,
-    author_id: Optional[str] = None,
+    author_id: str | None = None,
 ) -> str:
     """
     Store user message and log the event.
@@ -454,10 +470,20 @@ async def _store_and_log_user_message(
         },
     )
 
+    # Phase 4 (#7590): structured JSON telemetry for SSOT cardinality query.
+    # Log query: count(distinct session_id where event="chat_send") per request — P99 ≤ 1.0.
+    logger.info(json.dumps({"event": "chat_send", "session_id": session_id, "message_id": user_message_id}))
+    try:
+        from monitoring.prometheus_metrics import get_metrics_manager
+
+        get_metrics_manager().record_chat_message_sent("chat_send")
+    except Exception as e:
+        logger.warning("chat_send Prometheus metrics update failed: %s", e)
+
     return user_message_id
 
 
-async def _get_chat_context(chat_history_manager, session_id: str, model_name: Optional[str]) -> List[Dict]:
+async def _get_chat_context(chat_history_manager, session_id: str, model_name: str | None) -> List[Dict]:
     """
     Get chat context from history with model-aware retrieval.
 
@@ -488,7 +514,7 @@ def _build_llm_context(
     chat_context: List[Dict],
     message: "ChatMessage",
     chat_history_manager,
-    model_name: Optional[str],
+    model_name: str | None,
 ) -> List[Dict]:
     """
     Build LLM context with model-aware message limits.
@@ -604,6 +630,15 @@ async def _store_and_log_ai_response(
         },
     )
 
+    # Phase 4 (#7590): structured JSON telemetry — mirrors chat_send shape for Loki correlation.
+    logger.info(json.dumps({"event": "chat_response_stored", "session_id": session_id, "message_id": ai_message_id}))
+    try:
+        from monitoring.prometheus_metrics import get_metrics_manager
+
+        get_metrics_manager().record_chat_message_sent("chat_response_stored")
+    except Exception as e:
+        logger.warning("chat_response_stored Prometheus metrics update failed: %s", e)
+
     return ai_message_id
 
 
@@ -615,14 +650,13 @@ async def process_chat_message(
     knowledge_base,
     config: Metadata,
     request_id: str,
-    author_id: Optional[str] = None,
+    author_id: str | None = None,
 ) -> ChatMessageData:
     """Process a chat message and generate response (Issue #398: refactored,
     Issue #3282: author_id for multi-user attribution, Issue #6502: typed return)."""
     _validate_session_id(message.session_id)
 
-    # Get or create session
-    session_id = message.session_id or generate_chat_session_id()
+    session_id = message.session_id
 
     # Store user message (Issue #281: uses helper, Issue #3282: author_id)
     await _store_and_log_user_message(message, session_id, chat_history_manager, author_id)
@@ -663,7 +697,7 @@ async def _generate_llm_stream(
 ):
     """Generate LLM streaming response chunks (Issue #398: extracted)."""
     try:
-        session_id = message.session_id or generate_chat_session_id()
+        session_id = message.session_id
         yield f"data: {json.dumps({'type': 'start', 'session_id': session_id})}\n\n"
 
         if hasattr(llm_service, "stream_response"):
@@ -799,7 +833,7 @@ async def send_message(
 
     # Process the chat message with a configurable timeout (Issue #1907).
     # Override via AUTOBOT_CHAT_TIMEOUT env var (seconds, float). Default: 30.0.
-    chat_timeout = float(os.getenv("AUTOBOT_CHAT_TIMEOUT", "30.0"))
+    chat_timeout = float(config.chat_timeout)
     try:
         response_data = await asyncio.wait_for(
             process_chat_message(
@@ -1125,10 +1159,18 @@ async def send_chat_message_by_id(
     _validate_chat_services(chat_history_manager, chat_workflow_manager)
 
     # Issue #1325: Inject language into context for system prompt resolution
+    # Issue #8993: Inject thinking mode parameters into context
     context = request_data.get("context", {})
     language = request_data.get("language")
     if language:
         context["language"] = language
+
+    thinking_mode_enabled = request_data.get("thinking_mode_enabled")
+    thinking_budget_tokens = request_data.get("thinking_budget_tokens")
+    if thinking_mode_enabled is not None:
+        context["thinking_mode_enabled"] = thinking_mode_enabled
+    if thinking_budget_tokens is not None:
+        context["thinking_budget_tokens"] = thinking_budget_tokens
 
     return _create_streaming_response(
         _stream_chat_workflow_messages(
@@ -1521,7 +1563,7 @@ async def _enhance_with_knowledge_base(
     return enhanced_context, knowledge_sources
 
 
-def _get_ai_stack_message_limit(chat_history_manager, model_name: Optional[str]) -> int:
+def _get_ai_stack_message_limit(chat_history_manager, model_name: str | None) -> int:
     """Helper for _generate_ai_stack_chat_response. Ref: #1088."""
     context_manager = getattr(chat_history_manager, "context_manager", None)
     if context_manager:
@@ -1539,9 +1581,9 @@ def _get_ai_stack_message_limit(chat_history_manager, model_name: Optional[str])
 async def _generate_ai_stack_chat_response(
     message: EnhancedChatMessage,
     chat_context: list,
-    enhanced_context: Optional[str],
+    enhanced_context: str | None,
     chat_history_manager,
-    preferences: Optional[ChatPreferences],
+    preferences: ChatPreferences | None,
 ) -> Metadata:
     """Generate response using AI Stack."""
     try:
@@ -1656,7 +1698,7 @@ async def _execute_enhanced_chat_pipeline(
     chat_history_manager,
     knowledge_base,
     request_id: str,
-    preferences: Optional[ChatPreferences],
+    preferences: ChatPreferences | None,
 ) -> EnhancedChatData:
     """Helper for process_enhanced_chat_message. Ref: #1088, #6502 (typed return).
 
@@ -1704,7 +1746,7 @@ async def process_enhanced_chat_message(
     knowledge_base,
     config: Metadata,
     request_id: str,
-    preferences: Optional[ChatPreferences] = None,
+    preferences: ChatPreferences | None = None,
 ) -> EnhancedChatData:
     """
     Process a chat message with AI Stack enhanced capabilities.
@@ -1713,10 +1755,10 @@ async def process_enhanced_chat_message(
     intelligent chat agents for superior conversational experience.
     """
     try:
-        if message.session_id and not validate_chat_session_id(message.session_id):
-            raise HTTPException(status_code=400, detail="Invalid session ID format")
+        if not validate_chat_session_id(message.session_id):
+            raise HTTPException(status_code=422, detail="Invalid session ID format")
 
-        session_id = message.session_id or generate_chat_session_id()
+        session_id = message.session_id
 
         return await _execute_enhanced_chat_pipeline(
             message,
@@ -1727,6 +1769,8 @@ async def process_enhanced_chat_message(
             preferences,
         )
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Error processing enhanced chat message: %s", e)
         raise HTTPException(status_code=500, detail="Failed to process enhanced chat message")
@@ -1747,7 +1791,7 @@ async def _stream_ai_stack_response(
     session_id: str,
     chat_history_manager,
     request_id: str,
-    preferences: Optional[ChatPreferences],
+    preferences: ChatPreferences | None,
 ):
     """Stream AI Stack enhanced response in chunks."""
     try:
@@ -1807,11 +1851,11 @@ async def _generate_enhanced_stream(
     message: EnhancedChatMessage,
     request: Request,
     request_id: str,
-    preferences: Optional[ChatPreferences],
+    preferences: ChatPreferences | None,
 ):
     """Generate streaming response with AI Stack integration."""
     try:
-        session_id = message.session_id or generate_chat_session_id()
+        session_id = message.session_id
         yield _format_sse_event({"type": "start", "session_id": session_id, "enhanced": True})
 
         chat_history_manager = get_chat_history_manager(request)
@@ -1852,7 +1896,7 @@ async def enhanced_chat(
     current_user: dict = Depends(get_current_user),
     message: EnhancedChatMessage = None,
     request: Request = None,
-    preferences: Optional[ChatPreferences] = None,
+    preferences: ChatPreferences | None = None,
     config=Depends(get_config),
     knowledge_base=Depends(get_knowledge_base),
 ):
@@ -1920,7 +1964,7 @@ async def stream_enhanced_chat(
     current_user: dict = Depends(get_current_user),
     message: EnhancedChatMessage = None,
     request: Request = None,
-    preferences: Optional[ChatPreferences] = None,
+    preferences: ChatPreferences | None = None,
 ):
     """
     Stream enhanced chat response for real-time communication.

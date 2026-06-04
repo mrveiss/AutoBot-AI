@@ -9,13 +9,13 @@ import logging
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
 
 from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.logging_manager import get_logger
 from constants.path_constants import PATH
 from constants.threshold_constants import TimingConstants
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ConversationFilesMigration:
@@ -34,9 +34,9 @@ class ConversationFilesMigration:
 
     def __init__(
         self,
-        data_dir: Optional[Path] = None,
-        schema_dir: Optional[Path] = None,
-        db_path: Optional[Path] = None,
+        data_dir: Path | None = None,
+        schema_dir: Path | None = None,
+        db_path: Path | None = None,
     ):
         """
         Initialize migration with configurable paths.
@@ -57,7 +57,7 @@ class ConversationFilesMigration:
 
         self.schema_path = self.schema_dir / "conversation_files_schema.sql"
 
-        self.connection: Optional[sqlite3.Connection] = None
+        self.connection: sqlite3.Connection | None = None
 
     def _ensure_directories(self) -> None:
         """Ensure required directories exist."""
@@ -440,7 +440,7 @@ class ConversationFilesMigration:
                 cursor.execute("SELECT name FROM sqlite_master WHERE type='view'")
                 views = [row[0] for row in cursor.fetchall()]
                 for view in views:
-                    cursor.execute(f"DROP VIEW IF EXISTS {view}")
+                    cursor.execute(f"DROP VIEW IF EXISTS {view}")  # nosemgrep: autobot-sql-string-format  # nosemgrep
                     logger.info(f"Dropped view: {view}")
 
                 # Drop tables (in reverse dependency order)
@@ -454,7 +454,7 @@ class ConversationFilesMigration:
                 ]
 
                 for table in tables_to_drop:
-                    cursor.execute(f"DROP TABLE IF EXISTS {table}")
+                    cursor.execute(f"DROP TABLE IF EXISTS {table}")  # nosemgrep: autobot-sql-string-format  # nosemgrep
                     logger.info(f"Dropped table: {table}")
 
                 self.connection.commit()

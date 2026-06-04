@@ -12,7 +12,6 @@ from __future__ import annotations
 import hashlib
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
 
 
 class RenderMode(str, Enum):
@@ -60,11 +59,11 @@ class FetchResult:
     success: bool
     markdown: str = ""
     title: str = ""
-    render_mode: Optional[RenderMode] = None
+    render_mode: RenderMode | None = None
     source: str = ""
-    error_code: Optional[str] = None
+    error_code: str | None = None
     retryable: bool = False
-    status_code: Optional[int] = None
+    status_code: int | None = None
 
     def cache_key(self, mode: RenderMode) -> str:
         """Return sha256-based cache key for (url, render_mode) pair."""

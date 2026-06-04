@@ -11,14 +11,14 @@ Provides caching functionality for chat sessions:
 """
 
 import json
-import logging
-import os
 from typing import Any, Dict
 
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 from chat_history.file_io import run_in_chat_io_executor
 from constants.ttl_constants import TTL_24_HOURS
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # #6743: chat:session:* cache TTL.
@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 # by default). Override via env var when tuning memory pressure.
 def _resolve_chat_session_cache_ttl() -> int:
     """Return TTL seconds for chat:session:* Redis keys."""
-    raw = os.getenv("AUTOBOT_CHAT_SESSION_CACHE_TTL")
+    raw = config.misc.chat_session_cache_ttl
     if raw is None:
         return TTL_24_HOURS
     try:
@@ -56,6 +56,44 @@ def _resolve_chat_session_cache_ttl() -> int:
 
 
 _CHAT_SESSION_CACHE_TTL = _resolve_chat_session_cache_ttl()
+
+
+# #7570: chat:recent sorted set max-entries cap.
+#
+# The sorted set had no TTL and would grow without bound as sessions accumulated.
+# We trim to the N most-recent entries immediately after each ZADD using
+# ZREMRANGEBYRANK so the set never exceeds this limit.
+#
+# 1000 is well above any realistic concurrent-session count; lower it under
+# memory pressure via AUTOBOT_CHAT_RECENT_MAX_ENTRIES.
+_CHAT_RECENT_MAX_ENTRIES_DEFAULT = 1000
+
+
+def _resolve_chat_recent_max_entries() -> int:
+    """Return max members for the chat:recent sorted set."""
+    raw = config.misc.chat_recent_max_entries
+    if raw is None:
+        return _CHAT_RECENT_MAX_ENTRIES_DEFAULT
+    try:
+        value = int(raw)
+    except ValueError:
+        logger.warning(
+            "AUTOBOT_CHAT_RECENT_MAX_ENTRIES=%r is not an integer; " "falling back to %d",
+            raw,
+            _CHAT_RECENT_MAX_ENTRIES_DEFAULT,
+        )
+        return _CHAT_RECENT_MAX_ENTRIES_DEFAULT
+    if value <= 0:
+        logger.warning(
+            "AUTOBOT_CHAT_RECENT_MAX_ENTRIES=%d must be positive; " "falling back to %d",
+            value,
+            _CHAT_RECENT_MAX_ENTRIES_DEFAULT,
+        )
+        return _CHAT_RECENT_MAX_ENTRIES_DEFAULT
+    return value
+
+
+_CHAT_RECENT_MAX_ENTRIES = _resolve_chat_recent_max_entries()
 
 
 class CacheMixin:

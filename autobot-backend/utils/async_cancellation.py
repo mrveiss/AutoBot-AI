@@ -7,15 +7,15 @@ Provides proper cancellation patterns without arbitrary time limits
 """
 
 import asyncio
-import logging
 import time
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict
 
+from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import TimingConstants
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class CancellationReason(Enum):
@@ -36,9 +36,9 @@ class CancellationToken:
     def __init__(self):
         """Initialize cancellation token with default state and empty callbacks."""
         self.is_cancelled = False
-        self.cancellation_reason: Optional[CancellationReason] = None
+        self.cancellation_reason: CancellationReason | None = None
         self.cancellation_message: str = ""
-        self.cancellation_time: Optional[float] = None
+        self.cancellation_time: float | None = None
         self._callbacks: list = []
 
     def cancel(self, reason: CancellationReason, message: str = ""):
@@ -81,7 +81,7 @@ class OperationCancelledException(Exception):
     def __init__(self, message: str):
         """Initialize exception with message and optional cancellation reason."""
         super().__init__(message)
-        self.reason: Optional[CancellationReason] = None
+        self.reason: CancellationReason | None = None
         self.message: str = message
 
 
@@ -151,7 +151,7 @@ class SmartCancellationHandler:
     def __init__(self):
         """Initialize handler with empty token registry and monitor state."""
         self.active_tokens: Dict[str, CancellationToken] = {}
-        self.monitor_task: Optional[asyncio.Task] = None
+        self.monitor_task: asyncio.Task | None = None
         self._shutdown = False
 
     def create_token(self, operation_id: str) -> CancellationToken:
@@ -355,7 +355,7 @@ class CancellationContext:
     def __init__(self, operation_id: str):
         """Initialize context with operation identifier."""
         self.operation_id = operation_id
-        self.token: Optional[CancellationToken] = None
+        self.token: CancellationToken | None = None
 
     async def __aenter__(self) -> CancellationToken:
         """Enter context and create cancellation token for the operation."""

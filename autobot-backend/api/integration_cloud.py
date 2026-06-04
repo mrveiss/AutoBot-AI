@@ -9,8 +9,7 @@ Provides endpoints for testing connections, listing resources, and
 getting account information.
 """
 
-import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException
 
@@ -26,6 +25,7 @@ from api.schemas_workflows import (
 )
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from integrations.base import IntegrationConfig
 from integrations.cloud_integration import (
     AWSIntegration,
@@ -37,7 +37,7 @@ router = APIRouter(
     tags=["integrations-cloud"],
     dependencies=[Depends(check_admin_permission)],
 )
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @router.get("/providers", response_model=List[CloudProviderInfo])
@@ -116,14 +116,14 @@ async def test_connection(request: CloudConnectionTestRequest):
 )
 async def list_resources(
     provider: str,
-    api_key: Optional[str] = None,
-    api_secret: Optional[str] = None,
-    token: Optional[str] = None,
-    region: Optional[str] = None,
-    subscription_id: Optional[str] = None,
-    tenant_id: Optional[str] = None,
-    project_id: Optional[str] = None,
-    zone: Optional[str] = None,
+    api_key: str | None = None,
+    api_secret: str | None = None,
+    token: str | None = None,
+    region: str | None = None,
+    subscription_id: str | None = None,
+    tenant_id: str | None = None,
+    project_id: str | None = None,
+    zone: str | None = None,
 ):
     """List compute resources (instances/VMs) for a cloud provider."""
     try:
@@ -158,13 +158,13 @@ async def list_resources(
 )
 async def list_storage(
     provider: str,
-    api_key: Optional[str] = None,
-    api_secret: Optional[str] = None,
-    token: Optional[str] = None,
-    region: Optional[str] = None,
-    subscription_id: Optional[str] = None,
-    tenant_id: Optional[str] = None,
-    project_id: Optional[str] = None,
+    api_key: str | None = None,
+    api_secret: str | None = None,
+    token: str | None = None,
+    region: str | None = None,
+    subscription_id: str | None = None,
+    tenant_id: str | None = None,
+    project_id: str | None = None,
 ):
     """List storage resources (buckets/accounts) for a cloud provider."""
     try:
@@ -199,13 +199,13 @@ async def list_storage(
 )
 async def get_account_info(
     provider: str,
-    api_key: Optional[str] = None,
-    api_secret: Optional[str] = None,
-    token: Optional[str] = None,
-    region: Optional[str] = None,
-    subscription_id: Optional[str] = None,
-    tenant_id: Optional[str] = None,
-    project_id: Optional[str] = None,
+    api_key: str | None = None,
+    api_secret: str | None = None,
+    token: str | None = None,
+    region: str | None = None,
+    subscription_id: str | None = None,
+    tenant_id: str | None = None,
+    project_id: str | None = None,
 ):
     """Get account/subscription/project information for a cloud provider."""
     try:
@@ -234,9 +234,9 @@ async def get_account_info(
 
 def _create_integration(
     provider: str,
-    api_key: Optional[str],
-    api_secret: Optional[str],
-    token: Optional[str],
+    api_key: str | None,
+    api_secret: str | None,
+    token: str | None,
     extra: Dict[str, Any],
 ):
     """Create integration instance for the specified provider."""
@@ -263,11 +263,11 @@ def _create_integration(
 
 
 def _build_extra_params(
-    region: Optional[str],
-    subscription_id: Optional[str],
-    tenant_id: Optional[str],
-    project_id: Optional[str],
-    zone: Optional[str],
+    region: str | None,
+    subscription_id: str | None,
+    tenant_id: str | None,
+    project_id: str | None,
+    zone: str | None,
 ) -> Dict[str, Any]:
     """Build extra parameters dict from query params."""
     extra = {}

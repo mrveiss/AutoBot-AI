@@ -9,13 +9,13 @@ Provides vector storage for pattern embeddings and similarity search.
 """
 
 import hashlib
-import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from knowledge.backends import get_async_default_client, get_default_client
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Module-level project root constant
 _PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
@@ -192,7 +192,7 @@ async def store_pattern(
     embedding: List[float],
     metadata: Dict[str, Any],
     collection=None,
-) -> Optional[str]:
+) -> str | None:
     """Store a code pattern in ChromaDB.
 
     Args:
@@ -343,7 +343,7 @@ def _process_search_results(results: Dict[str, Any], min_similarity: float) -> L
 
 async def search_similar_patterns(
     query_embedding: List[float],
-    pattern_type: Optional[str] = None,
+    pattern_type: str | None = None,
     n_results: int = 10,
     min_similarity: float = 0.7,
     collection=None,

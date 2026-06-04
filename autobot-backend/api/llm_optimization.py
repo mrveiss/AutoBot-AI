@@ -6,12 +6,10 @@ LLM Model Optimization API Endpoints
 Provides intelligent model selection, performance tracking, and optimization suggestions.
 """
 
-import logging
 import time
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import JSONResponse
 
 from api.schemas_agent import (
     InferenceOptimizationSettings,
@@ -22,7 +20,6 @@ from api.schemas_agent import (
     LLMModelPerformanceHistoryResponse,
     LLMModelsComparisonResponse,
     LLMOptimizationConfigResponse,
-    LLMOptimizationHealthResponse,
     LLMOptimizationRequest,
     LLMOptimizationSuggestionsResponse,
     LLMProviderOptimizationSummaryResponse,
@@ -34,51 +31,18 @@ from api.schemas_agent import (
 from api.system_health import register_singleton_probe
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from config.manager import get_config_manager
 from services.llm_service import get_llm_service
 from utils.model_optimizer import TaskRequest, get_model_optimizer
 
 router = APIRouter()
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 config = get_config_manager()
 
 
 register_singleton_probe("llm_optimization", get_model_optimizer)
-
-
-@router.get("/health", response_model=LLMOptimizationHealthResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_optimization_health",
-    error_code_prefix="LLM_OPTIMIZATION",
-)
-async def get_optimization_health(admin_check: bool = Depends(check_admin_permission)):
-    """Get model optimization system health status
-
-    Issue #744: Requires admin authentication."""
-    try:
-        optimizer = get_model_optimizer()
-
-        # Test basic functionality
-        models = await optimizer.refresh_available_models()
-
-        health_status = {
-            "status": "healthy" if models else "degraded",
-            "available_models": len(models),
-            "cache_size": len(optimizer._models_cache),
-            "ollama_connection": len(models) > 0,
-            "redis_connected": optimizer._redis_client is not None,
-        }
-
-        return health_status
-
-    except Exception as e:
-        logger.error("Error checking optimization health: %s", e)
-        return JSONResponse(
-            content={"status": "unhealthy", "error": "Internal server error"},
-            status_code=500,
-        )
 
 
 @router.get("/models/available", response_model=LLMAvailableModelsResponse)
@@ -719,8 +683,8 @@ async def get_provider_optimization_summary(provider_type: str, admin_check: boo
     Issue #744: Requires admin authentication.
     """
     try:
-        from llm_interface_pkg.optimization import get_optimization_router
-        from llm_interface_pkg.types import ProviderType
+        from llm_shared.optimization import get_optimization_router
+        from llm_shared.types import ProviderType
 
         # Map provider string to enum
         provider_map = {

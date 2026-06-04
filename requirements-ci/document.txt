@@ -1,6 +1,7 @@
 # Document processing and text extraction
 python-docx==1.1.2
-pypdf==6.10.2
+pypdf==6.11.0
+reportlab>=4.0.0            # MVA-2174: PDF export for transcripts
 markdown==3.8.2
 nltk==3.9.4
 beautifulsoup4==4.13.4

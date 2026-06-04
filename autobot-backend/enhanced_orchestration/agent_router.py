@@ -1,22 +1,31 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
-"""Agent selection, resolution, and capability coverage extracted from WorkflowRunner (#6393)."""
+"""Agent selection, resolution, and capability coverage extracted from WorkflowRunner (#6393).
 
-from typing import Any, Dict, List, Optional, Set
+GH #6819: This class was renamed from ``AgentRouter`` to ``TaskAgentScorer`` to distinguish
+it from ``agents.agent_orchestration.routing.AgentRouter`` (522 LOC, user-request routing).
+``TaskAgentScorer`` handles *workflow-task* scoring; the other ``AgentRouter`` handles
+*user-request* routing.  The old name is retained as an alias for backward compatibility.
+"""
+
+from typing import Any, Dict, List, Set
 
 from autobot_shared.logging_manager import get_logger
 from orchestration import AgentCapability
 from orchestration.performance_tracker import PerformanceTracker
 
-logger = get_logger("agent_router")
+logger = get_logger("task_agent_scorer")
 
 
-class AgentRouter:
-    """Resolves agents, scores recommendations, and computes capability coverage.
+class TaskAgentScorer:
+    """Scores agents for workflow tasks and computes capability coverage.
 
     Extracted from WorkflowRunner (#6393) and addresses hidden AgentClientRegistry
     construction (#6392) by accepting the registry as an injected dependency.
+
+    Renamed from ``AgentRouter`` → ``TaskAgentScorer`` (GH #6819) to avoid
+    name collision with ``agents.agent_orchestration.routing.AgentRouter``.
     """
 
     def __init__(
@@ -46,7 +55,7 @@ class AgentRouter:
         suitable.sort(key=lambda x: x[1], reverse=True)
         return [a for a, _ in suitable]
 
-    async def get_agent_instance(self, agent_type: str) -> Optional[Any]:
+    async def get_agent_instance(self, agent_type: str) -> Any | None:
         agent = self._agent_client_registry.get_agent(agent_type)
         if agent is not None:
             await self._agent_client_registry.update_agent_health(agent_type)
@@ -65,3 +74,8 @@ class AgentRouter:
             agents_with_cap = sum(1 for caps in self.agent_capabilities.values() if capability in caps)
             coverage[capability.value] = agents_with_cap / n_agents
         return coverage
+
+
+# Backward-compatibility alias — callers that imported AgentRouter from this module
+# continue to work unchanged while new code should use TaskAgentScorer (GH #6819).
+AgentRouter = TaskAgentScorer

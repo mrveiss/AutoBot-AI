@@ -6,18 +6,18 @@ Task Storage Implementation - Task execution history management
 """
 
 import json
-import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List
 
 import aiosqlite
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import parse_utc_iso
 
 from ..enums import TaskPriority, TaskStatus
 from ..models import TaskExecutionRecord
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Field categories for update_task (Issue #315: extracted to reduce nesting)
 _ENUM_FIELDS = {"status": TaskStatus, "priority": TaskPriority}
@@ -32,7 +32,7 @@ _DIRECT_FIELDS = {
 }
 
 
-def _process_update_field(key: str, value: Any) -> tuple[Optional[str], Optional[Any]]:
+def _process_update_field(key: str, value: Any) -> tuple[str | None, Any | None]:
     """Process a single update field into SQL clause and value (Issue #315: extracted).
 
     Args:
@@ -67,7 +67,7 @@ class TaskStorage:
     Responsibility: Manage task execution history in SQLite database
     """
 
-    def __init__(self, db_path: Union[str, Path]):
+    def __init__(self, db_path: str | Path):
         """Initialize task storage with SQLite database path."""
         self.db_path = Path(db_path) if isinstance(db_path, str) else db_path
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -179,7 +179,7 @@ class TaskStorage:
             logger.error("Failed to update task %s: %s", task_id, e)
             raise RuntimeError(f"Failed to update task: {e}")
 
-    async def get_task(self, task_id: str) -> Optional[TaskExecutionRecord]:
+    async def get_task(self, task_id: str) -> TaskExecutionRecord | None:
         """Retrieve single task by ID"""
         try:
             async with self._get_connection() as conn:

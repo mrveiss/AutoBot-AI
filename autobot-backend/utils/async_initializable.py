@@ -116,15 +116,14 @@ FEATURES:
 """
 
 import asyncio
-import logging
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Optional
 
 from autobot_shared.error_boundaries import error_boundary
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -132,14 +131,14 @@ class InitializationMetrics:
     """Metrics for initialization process"""
 
     component_name: str
-    start_time: Optional[float] = None
-    end_time: Optional[float] = None
+    start_time: float | None = None
+    end_time: float | None = None
     retry_count: int = 0
-    last_error: Optional[str] = None
+    last_error: str | None = None
     success: bool = False
 
     @property
-    def duration_seconds(self) -> Optional[float]:
+    def duration_seconds(self) -> float | None:
         """Calculate initialization duration"""
         if self.start_time and self.end_time:
             return self.end_time - self.start_time

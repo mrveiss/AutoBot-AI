@@ -25,7 +25,7 @@ from unittest.mock import patch
 class TestVMConfig:
     """Tests for VMConfig class."""
 
-    def test_default_vm_ips(self):
+    def test_default_vm_ips(self) -> None:
         """Test that default VM IPs are correct."""
         from config.ssot_config import VMConfig
 
@@ -40,7 +40,7 @@ class TestVMConfig:
             assert config.browser == "10.0.0.25"
             assert config.ollama == "127.0.0.1"
 
-    def test_vm_config_from_env(self):
+    def test_vm_config_from_env(self) -> None:
         """Test that VM config reads from environment variables."""
         from config.ssot_config import VMConfig
 
@@ -59,7 +59,7 @@ class TestVMConfig:
 class TestPortConfig:
     """Tests for PortConfig class."""
 
-    def test_default_ports(self):
+    def test_default_ports(self) -> None:
         """Test that default ports are correct."""
         from config.ssot_config import PortConfig
 
@@ -75,7 +75,7 @@ class TestPortConfig:
             assert config.aistack == 8080
             assert config.npu == 8081
 
-    def test_port_config_from_env(self):
+    def test_port_config_from_env(self) -> None:
         """Test that port config reads from environment variables."""
         from config.ssot_config import PortConfig
 
@@ -92,7 +92,7 @@ class TestPortConfig:
 class TestLLMConfig:
     """Tests for LLMConfig class."""
 
-    def test_default_llm_models(self):
+    def test_default_llm_models(self) -> None:
         """Test that default LLM models are correct when no env is set."""
         from config.ssot_config import LLMConfig
 
@@ -106,7 +106,7 @@ class TestLLMConfig:
             assert isinstance(config.provider, str)
             assert config.timeout > 0
 
-    def test_llm_config_from_env(self):
+    def test_llm_config_from_env(self) -> None:
         """Test that LLM config reads from environment variables."""
         from config.ssot_config import LLMConfig
 
@@ -123,7 +123,7 @@ class TestLLMConfig:
 class TestTimeoutConfig:
     """Tests for TimeoutConfig class."""
 
-    def test_default_timeouts(self):
+    def test_default_timeouts(self) -> None:
         """Test that default timeouts are correct."""
         from config.ssot_config import TimeoutConfig
 
@@ -133,7 +133,7 @@ class TestTimeoutConfig:
             assert config.llm == 30
             assert config.health_check == 3
 
-    def test_timeout_seconds_property(self):
+    def test_timeout_seconds_property(self) -> None:
         """Test that api_seconds property converts correctly."""
         from config.ssot_config import TimeoutConfig
 
@@ -147,7 +147,7 @@ class TestTimeoutConfig:
 class TestRedisConfig:
     """Tests for RedisConfig class."""
 
-    def test_default_redis_databases(self):
+    def test_default_redis_databases(self) -> None:
         """Test that default Redis database assignments are correct."""
         from config.ssot_config import RedisConfig
 
@@ -159,7 +159,7 @@ class TestRedisConfig:
             assert config.db_cache == 5
             assert config.db_testing == 15
 
-    def test_redis_password_optional(self):
+    def test_redis_password_optional(self) -> None:
         """Test that Redis password can be None or a string."""
         from config.ssot_config import RedisConfig
 
@@ -172,7 +172,7 @@ class TestRedisConfig:
 class TestAutoBotConfig:
     """Tests for AutoBotConfig master class."""
 
-    def test_default_config_loads(self):
+    def test_default_config_loads(self) -> None:
         """Test that configuration loads correctly with valid values."""
         from config.ssot_config import AutoBotConfig
 
@@ -183,7 +183,7 @@ class TestAutoBotConfig:
             assert isinstance(config.debug, bool)
             assert config.log_level in ("DEBUG", "INFO", "WARNING", "ERROR")
 
-    def test_computed_backend_url(self):
+    def test_computed_backend_url(self) -> None:
         """Test that backend URL is computed correctly."""
         from config.ssot_config import AutoBotConfig
 
@@ -191,7 +191,7 @@ class TestAutoBotConfig:
             config = AutoBotConfig()
             assert config.backend_url == "http://10.0.0.20:8001"
 
-    def test_computed_redis_url(self):
+    def test_computed_redis_url(self) -> None:
         """Test that Redis URL is computed correctly."""
         from config.ssot_config import AutoBotConfig
 
@@ -199,7 +199,7 @@ class TestAutoBotConfig:
             config = AutoBotConfig()
             assert config.redis_url == "redis://10.0.0.23:6379"
 
-    def test_computed_redis_url_with_password(self):
+    def test_computed_redis_url_with_password(self) -> None:
         """Test that Redis URL includes password when set."""
         from config.ssot_config import AutoBotConfig
 
@@ -209,7 +209,7 @@ class TestAutoBotConfig:
             assert "secret123" in config.redis_url_with_auth
             assert config.redis_url_with_auth == "redis://:secret123@10.0.0.23:6379"
 
-    def test_computed_websocket_url(self):
+    def test_computed_websocket_url(self) -> None:
         """Test that WebSocket URL is computed correctly."""
         from config.ssot_config import AutoBotConfig
 
@@ -217,7 +217,7 @@ class TestAutoBotConfig:
             config = AutoBotConfig()
             assert config.websocket_url == "ws://10.0.0.20:8001/ws"
 
-    def test_get_service_url(self):
+    def test_get_service_url(self) -> None:
         """Test the get_service_url helper method."""
         from config.ssot_config import AutoBotConfig
 
@@ -227,7 +227,7 @@ class TestAutoBotConfig:
             assert config.get_service_url("redis") == "redis://10.0.0.23:6379"
             assert config.get_service_url("unknown") is None
 
-    def test_get_vm_ip(self):
+    def test_get_vm_ip(self) -> None:
         """Test the get_vm_ip helper method."""
         from config.ssot_config import AutoBotConfig
 
@@ -237,7 +237,7 @@ class TestAutoBotConfig:
             assert config.get_vm_ip("redis") == "10.0.0.23"
             assert config.get_vm_ip("unknown") is None
 
-    def test_get_redis_url_for_db(self):
+    def test_get_redis_url_for_db(self) -> None:
         """Test getting Redis URL for specific database."""
         from config.ssot_config import AutoBotConfig
 
@@ -252,7 +252,7 @@ class TestAutoBotConfig:
 class TestSingletonPattern:
     """Tests for singleton get_config() function."""
 
-    def test_get_config_returns_same_instance(self):
+    def test_get_config_returns_same_instance(self) -> None:
         """Test that get_config returns the same instance."""
         from config.ssot_config import get_config, reload_config
 
@@ -263,7 +263,7 @@ class TestSingletonPattern:
         config2 = get_config()
         assert config1 is config2
 
-    def test_reload_config_creates_new_instance(self):
+    def test_reload_config_creates_new_instance(self) -> None:
         """Test that reload_config creates a new instance."""
         from config.ssot_config import get_config, reload_config
 
@@ -277,7 +277,7 @@ class TestSingletonPattern:
 class TestBackwardCompatibility:
     """Tests for backward compatibility functions."""
 
-    def test_get_backend_url(self):
+    def test_get_backend_url(self) -> None:
         """Test backward compatibility get_backend_url function."""
         from config.ssot_config import get_backend_url, reload_config
 
@@ -286,7 +286,7 @@ class TestBackwardCompatibility:
         assert "http://" in url
         assert ":8001" in url or "AUTOBOT_BACKEND_PORT" in os.environ
 
-    def test_get_redis_url(self):
+    def test_get_redis_url(self) -> None:
         """Test backward compatibility get_redis_url function."""
         from config.ssot_config import get_redis_url, reload_config
 
@@ -294,7 +294,7 @@ class TestBackwardCompatibility:
         url = get_redis_url()
         assert "redis://" in url
 
-    def test_get_default_llm_model(self):
+    def test_get_default_llm_model(self) -> None:
         """Test backward compatibility get_default_llm_model function."""
         from config.ssot_config import get_default_llm_model, reload_config
 
@@ -307,7 +307,7 @@ class TestBackwardCompatibility:
 class TestConfigProxy:
     """Tests for the config proxy object."""
 
-    def test_config_proxy_access(self):
+    def test_config_proxy_access(self) -> None:
         """Test that config proxy provides attribute access."""
         from config.ssot_config import config
 
@@ -316,7 +316,7 @@ class TestConfigProxy:
         assert hasattr(config, "port")
         assert hasattr(config, "llm")
 
-    def test_config_proxy_nested_access(self):
+    def test_config_proxy_nested_access(self) -> None:
         """Test that config proxy provides nested attribute access."""
         from config.ssot_config import config
 
@@ -329,13 +329,13 @@ class TestConfigProxy:
 class TestProjectRoot:
     """Tests for PROJECT_ROOT detection."""
 
-    def test_project_root_is_path(self):
+    def test_project_root_is_path(self) -> None:
         """Test that PROJECT_ROOT is a Path object."""
         from config.ssot_config import PROJECT_ROOT
 
         assert isinstance(PROJECT_ROOT, Path)
 
-    def test_project_root_exists(self):
+    def test_project_root_exists(self) -> None:
         """Test that PROJECT_ROOT directory exists."""
         from config.ssot_config import PROJECT_ROOT
 

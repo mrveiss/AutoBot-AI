@@ -11,6 +11,7 @@ from uuid import uuid4
 
 import pytest
 
+from autobot_shared.datetime_utils import datetime_now
 from knowledge.pipeline.models.chunk import ProcessedChunk
 from knowledge.pipeline.models.entity import Entity
 from knowledge.pipeline.models.event import TemporalEvent
@@ -173,9 +174,7 @@ class TestTemporalEvent:
         assert event.confidence == 1.0
 
     def test_event_with_timestamp(self):
-        from datetime import datetime
-
-        now = datetime.utcnow()
+        now = datetime_now()
         event = TemporalEvent(
             name="Test",
             source_document_id=uuid4(),

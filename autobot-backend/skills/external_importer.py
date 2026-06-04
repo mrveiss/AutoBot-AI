@@ -5,26 +5,98 @@
 External Skill Importer (Issue #5063)
 
 Imports skill packages from external git repositories and HTTP catalogs.
-All imported skills are always assigned TrustLevel.SANDBOXED -- they are never
+All imported skills are always assigned SkillActivationLevel.SANDBOXED -- they are never
 automatically promoted to BUILTIN or TRUSTED.
 """
 
 import asyncio
-import logging
 import os
+import re
 import uuid
 from typing import Any
+from urllib.parse import urlparse
 
 import aiohttp
 
+from autobot_shared.logging_manager import get_logger
 from skills.manifest_parser import parse_manifest
-from skills.models import SkillPackage, SkillState, TrustLevel
+from skills.models import SkillActivationLevel, SkillPackage, SkillState
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _SKILL_CACHE_DIR = "/var/lib/autobot/skill_cache"
 _GIT_TIMEOUT = 120
 _SOURCE_META_KEY = "external_import"
+
+# Allowlist of git URL schemes.  file://, http://, git:// and any other scheme
+# are rejected outright to prevent SSRF via the git binary.
+_ALLOWED_GIT_SCHEMES = frozenset({"https", "ssh", "git+ssh"})
+
+# Valid git ref characters — rejects flag-injection strings like --upload-pack=x
+# and path-traversal sequences.
+_GIT_REF_RE = re.compile(r"^[A-Za-z0-9._/\-]+$")
+
+
+def _parse_git_remote(url: str) -> tuple[str, str]:
+    """Return (scheme, host) for a git remote URL.
+
+    Supports https://, ssh://, git+ssh://, and SCP-style git@host:path remotes.
+    Raises ValueError for disallowed or unrecognisable formats.
+    """
+    if "://" not in url:
+        # SCP-style: [user@]host:path  — treated as SSH
+        host_part = url.split(":", 1)[0]
+        host = host_part.split("@", 1)[-1]
+        if not host:
+            raise ValueError(f"Cannot parse host from SCP-style git URL: {url!r}")
+        return "ssh", host
+
+    parsed = urlparse(url)
+    scheme = (parsed.scheme or "").lower()
+    if scheme not in _ALLOWED_GIT_SCHEMES:
+        raise ValueError(
+            f"Disallowed git URL scheme {scheme!r} in {url!r}: "
+            f"only https and ssh are permitted (got scheme from allowlist {_ALLOWED_GIT_SCHEMES})"
+        )
+    host = parsed.hostname or ""
+    if not host:
+        raise ValueError(f"Git URL has no hostname: {url!r}")
+    return scheme, host
+
+
+async def _validate_git_url(url: str) -> None:
+    """SSRF guard for git remote URLs.
+
+    Rejects file://, http://, git://, and any private/internal host.
+    For https:// delegates to is_public_url_async; for ssh/git+ssh resolves
+    the host via resolve_safe_ip_async to block private RFC-range IPs.
+
+    Raises RuntimeError with a descriptive message on any rejection.
+    """
+    from autobot_shared.url_safety import is_public_url_async, resolve_safe_ip_async
+
+    try:
+        scheme, host = _parse_git_remote(url)
+    except ValueError as exc:
+        raise RuntimeError(f"Git URL rejected: {exc}") from exc
+
+    if scheme == "https":
+        if not await is_public_url_async(url):
+            raise RuntimeError(f"Git HTTPS URL blocked by SSRF guard: {url}")
+    else:
+        # SSH variants: validate the resolved IP is publicly routable.
+        try:
+            await resolve_safe_ip_async(host)
+        except ValueError as exc:
+            raise RuntimeError(f"Git SSH URL blocked by SSRF guard ({host}): {exc}") from exc
+
+
+def _validate_git_ref(ref: str) -> None:
+    """Reject ref strings that look like flag injection or path traversal."""
+    if not ref or ref.startswith("-") or ".." in ref or not _GIT_REF_RE.match(ref):
+        raise RuntimeError(
+            f"Invalid git ref {ref!r}: refs must match [A-Za-z0-9._/-]+ " "and cannot start with '-' or contain '..'"
+        )
 
 
 def _ensure_cache_dir() -> str:
@@ -116,7 +188,7 @@ def _build_package_from_manifest(
         skill_md=skill_md_text,
         skill_py=skill_py,
         manifest={**manifest, **meta},
-        trust_level=TrustLevel.SANDBOXED,
+        trust_level=SkillActivationLevel.SANDBOXED,
         requested_by="external-import",
     )
 
@@ -124,7 +196,7 @@ def _build_package_from_manifest(
 class ExternalSkillImporter:
     """Import skills from git repositories and HTTP catalogs.
 
-    All imported skills are assigned TrustLevel.SANDBOXED and stored in the
+    All imported skills are assigned SkillActivationLevel.SANDBOXED and stored in the
     DB for subsequent review before any promotion attempt.
     """
 
@@ -143,8 +215,17 @@ class ExternalSkillImporter:
             List of SANDBOXED SkillPackage instances (not yet DB-committed).
 
         Raises:
-            RuntimeError: If git is not available or cloning fails.
+            RuntimeError: If git is not available, the URL is blocked by the
+                SSRF guard, or cloning fails.
         """
+        # SSRF protection enforced before any git operation:
+        # 1. Scheme validation: only https/ssh/git+ssh allowed (no file://, git://, etc.)
+        # 2. HTTPS URLs: validated via is_public_url_async() to reject private IPs
+        # 3. SSH URLs: host resolved via resolve_safe_ip_async() to block RFC1918/loopback
+        # See _validate_git_url() implementation and #MVA-2605 for full security analysis.
+        await _validate_git_url(url)
+        _validate_git_ref(ref)
+
         if not await _git_available():
             raise RuntimeError("git binary not found on PATH -- cannot import git repo")
 
@@ -158,7 +239,9 @@ class ExternalSkillImporter:
             await _run_git("checkout", ref, cwd=clone_dir)
         else:
             logger.info("Cloning %s (ref=%s) -> %s", url, ref, clone_dir)
-            await _run_git("clone", "--depth=1", "--branch", ref, url, clone_dir)
+            await _run_git(
+                "clone", "--depth=1", "--branch", ref, url, clone_dir
+            )  # codeql[py/full-ssrf] SSRF mitigated: url validated by _validate_git_url() enforcing https/ssh scheme and blocking private IP ranges
 
         skill_md_paths = _walk_skill_mds(clone_dir)
         logger.info("Found %d SKILL.md file(s) in %s", len(skill_md_paths), clone_dir)
@@ -207,8 +290,13 @@ class ExternalSkillImporter:
             List of catalog entry dicts.
 
         Raises:
-            RuntimeError: On HTTP error or unexpected response shape.
+            RuntimeError: On HTTP error, SSRF guard rejection, or unexpected response shape.
         """
+        from autobot_shared.url_safety import is_public_url_async
+
+        if not await is_public_url_async(url):
+            raise RuntimeError(f"Catalog URL blocked by SSRF guard: {url}")
+
         params = {"page": page, "page_size": page_size}
         timeout = aiohttp.ClientTimeout(total=30)
         async with aiohttp.ClientSession(timeout=timeout) as session:

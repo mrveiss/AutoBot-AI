@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from tests.fixtures import make_async_redis
 from web_fetch.robots import (
     RobotsCache,
     _extract_domain,
@@ -49,7 +50,7 @@ class TestRobotsCacheAllowed:
 
     @pytest.mark.asyncio
     async def test_allow_all_positive(self) -> None:
-        redis = AsyncMock()
+        redis = make_async_redis()
         redis.get = AsyncMock(return_value=None)
         redis.setex = AsyncMock()
 
@@ -61,7 +62,7 @@ class TestRobotsCacheAllowed:
 
     @pytest.mark.asyncio
     async def test_disallow_all_negative(self) -> None:
-        redis = AsyncMock()
+        redis = make_async_redis()
         redis.get = AsyncMock(return_value=None)
         redis.setex = AsyncMock()
 
@@ -77,7 +78,7 @@ class TestRobotsCacheHitMiss:
 
     @pytest.mark.asyncio
     async def test_cache_hit_skips_fetch(self) -> None:
-        redis = AsyncMock()
+        redis = make_async_redis()
         cached_text = _ROBOTS_ALLOW_ALL.encode("utf-8")
         redis.get = AsyncMock(return_value=cached_text)
         redis.setex = AsyncMock()
@@ -98,7 +99,7 @@ class TestRobotsCacheHitMiss:
 
     @pytest.mark.asyncio
     async def test_cache_miss_triggers_fetch_and_stores(self) -> None:
-        redis = AsyncMock()
+        redis = make_async_redis()
         redis.get = AsyncMock(return_value=None)
         redis.setex = AsyncMock()
 
@@ -111,7 +112,7 @@ class TestRobotsCacheHitMiss:
 
     @pytest.mark.asyncio
     async def test_in_memory_cache_prevents_second_redis_lookup(self) -> None:
-        redis = AsyncMock()
+        redis = make_async_redis()
         redis.get = AsyncMock(return_value=None)
         redis.setex = AsyncMock()
 
@@ -129,7 +130,7 @@ class TestRobotsCacheRedisErrors:
 
     @pytest.mark.asyncio
     async def test_load_redis_exception_triggers_network_fetch(self) -> None:
-        redis = AsyncMock()
+        redis = make_async_redis()
         redis.get = AsyncMock(side_effect=Exception("redis down"))
         redis.setex = AsyncMock()
 
@@ -141,7 +142,7 @@ class TestRobotsCacheRedisErrors:
 
     @pytest.mark.asyncio
     async def test_save_redis_exception_swallowed(self) -> None:
-        redis = AsyncMock()
+        redis = make_async_redis()
         redis.get = AsyncMock(return_value=None)
         redis.setex = AsyncMock(side_effect=Exception("write failed"))
 
@@ -155,7 +156,7 @@ class TestRobotsCacheRedisErrors:
     @pytest.mark.asyncio
     async def test_string_cache_value_handled(self) -> None:
         """Redis may return str instead of bytes — both must work."""
-        redis = AsyncMock()
+        redis = make_async_redis()
         # Return plain string (not bytes)
         redis.get = AsyncMock(return_value=_ROBOTS_ALLOW_ALL)
         redis.setex = AsyncMock()
@@ -170,7 +171,7 @@ class TestRobotsCacheFailOpen:
 
     @pytest.mark.asyncio
     async def test_network_failure_allows_fetch(self) -> None:
-        redis = AsyncMock()
+        redis = make_async_redis()
         redis.get = AsyncMock(return_value=None)
         redis.setex = AsyncMock()
 

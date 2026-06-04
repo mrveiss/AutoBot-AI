@@ -8,10 +8,11 @@ Unified Memory Manager - Main memory management class
 import asyncio
 import gc
 import hashlib
-import logging
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List
+
+from autobot_shared.logging_manager import get_logger
 
 from .agent_diary import AgentDiaryService
 from .cache import LRUCacheManager
@@ -23,7 +24,7 @@ from .protocols import ICacheManager, IGeneralStorage, ITaskStorage
 from .storage import GeneralStorage, TaskStorage
 from .working_memory import WorkingMemoryService
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class UnifiedMemoryManager:
@@ -86,10 +87,10 @@ class UnifiedMemoryManager:
         enable_monitoring: bool = False,
         cache_size: int = 1000,
         retention_days: int = 90,
-        task_storage: Optional[ITaskStorage] = None,
-        general_storage: Optional[IGeneralStorage] = None,
-        cache_manager: Optional[ICacheManager] = None,
-        monitor: Optional[MemoryMonitor] = None,
+        task_storage: ITaskStorage | None = None,
+        general_storage: IGeneralStorage | None = None,
+        cache_manager: ICacheManager | None = None,
+        monitor: MemoryMonitor | None = None,
     ):
         """
         Initialize Unified Memory Manager
@@ -125,8 +126,8 @@ class UnifiedMemoryManager:
         self._working_memory: WorkingMemoryService = WorkingMemoryService()
 
         # Lazily-instantiated subsystems
-        self._essential_story: Optional[EssentialStoryGenerator] = None
-        self._agent_diary: Optional[AgentDiaryService] = None
+        self._essential_story: EssentialStoryGenerator | None = None
+        self._agent_diary: AgentDiaryService | None = None
 
         logger.info("Unified Memory Manager created at %s", self.db_path)
 
@@ -227,7 +228,7 @@ class UnifiedMemoryManager:
         await self._ensure_initialized()
         return await self._task_storage.update_task(task_id, status=status, **kwargs)
 
-    async def get_task(self, task_id: str) -> Optional[TaskExecutionRecord]:
+    async def get_task(self, task_id: str) -> TaskExecutionRecord | None:
         """
         Retrieve single task by ID
 
@@ -242,11 +243,11 @@ class UnifiedMemoryManager:
 
     async def get_task_history(
         self,
-        agent_type: Optional[str] = None,
-        status: Optional[TaskStatus] = None,
-        priority: Optional[TaskPriority] = None,
-        start_date: Optional[datetime] = None,
-        end_date: Optional[datetime] = None,
+        agent_type: str | None = None,
+        status: TaskStatus | None = None,
+        priority: TaskPriority | None = None,
+        start_date: datetime | None = None,
+        end_date: datetime | None = None,
         limit: int = 100,
     ) -> List[TaskExecutionRecord]:
         """
@@ -293,11 +294,11 @@ class UnifiedMemoryManager:
 
     async def store_memory(
         self,
-        category: Union[MemoryCategory, str],
+        category: MemoryCategory | str,
         content: str,
-        metadata: Optional[Dict] = None,
-        reference_path: Optional[str] = None,
-        embedding: Optional[bytes] = None,
+        metadata: Dict | None = None,
+        reference_path: str | None = None,
+        embedding: bytes | None = None,
     ) -> int:
         """
         Store general purpose memory entry
@@ -335,11 +336,11 @@ class UnifiedMemoryManager:
 
     async def retrieve_memories(
         self,
-        category: Union[MemoryCategory, str],
+        category: MemoryCategory | str,
         limit: int = 100,
-        start_date: Optional[datetime] = None,
-        end_date: Optional[datetime] = None,
-        reference_path: Optional[str] = None,
+        start_date: datetime | None = None,
+        end_date: datetime | None = None,
+        reference_path: str | None = None,
     ) -> List[MemoryEntry]:
         """
         Retrieve memories by category and filters
@@ -387,7 +388,7 @@ class UnifiedMemoryManager:
         await self._ensure_initialized()
         return await self._general_storage.search(query)
 
-    async def cleanup_old_memories(self, retention_days: Optional[int] = None) -> int:
+    async def cleanup_old_memories(self, retention_days: int | None = None) -> int:
         """
         Remove memories older than retention period
 
@@ -405,7 +406,7 @@ class UnifiedMemoryManager:
     # CACHING API (from optimized_memory_manager.py)
     # ========================================================================
 
-    def cache_get(self, key: str) -> Optional[Any]:
+    def cache_get(self, key: str) -> Any | None:
         """
         Get item from cache
 
@@ -518,9 +519,9 @@ class UnifiedMemoryManager:
 
     async def store(
         self,
-        data: Union[TaskExecutionRecord, MemoryEntry, Any],
+        data: TaskExecutionRecord | MemoryEntry | Any,
         strategy: StorageStrategy = StorageStrategy.TASK_EXECUTION,
-    ) -> Union[str, int]:
+    ) -> str | int:
         """
         Unified storage interface with strategy pattern
 
@@ -608,7 +609,7 @@ class UnifiedMemoryManager:
 
         return stats
 
-    def get_memory_usage(self) -> Optional[Dict[str, Any]]:
+    def get_memory_usage(self) -> Dict[str, Any] | None:
         """
         Get current system memory usage
 

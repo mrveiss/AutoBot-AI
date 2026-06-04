@@ -14,44 +14,44 @@
         <!-- Panel Header -->
         <div class="panel-header">
           <div class="panel-title">
-            <i class="fas fa-code-branch"></i>
+            <Icon name="code-branch" />
             {{ $t('analytics.sources.registry') }}
           </div>
           <div class="panel-header-actions">
             <span v-if="queueLength > 0" class="queue-badge">
-              <i class="fas fa-clock"></i>
+              <Icon name="clock" />
               {{ queueLength }} {{ $t('analytics.sources.queued') }}
             </span>
             <button class="btn-add" @click="$emit('open-add-source')">
-              <i class="fas fa-plus"></i>
+              <Icon name="plus" />
               {{ $t('analytics.sources.addSource') }}
             </button>
             <button class="close-btn" @click="$emit('close')" :aria-label="$t('common.close')">
-              <i class="fas fa-times"></i>
+              <Icon name="times" />
             </button>
           </div>
         </div>
 
         <!-- Loading State -->
         <div v-if="loading" class="panel-loading">
-          <i class="fas fa-spinner fa-spin"></i>
+          <Icon name="spinner" class="animate-spin" />
           {{ $t('analytics.sources.loading') }}
         </div>
 
         <!-- Error State -->
         <div v-else-if="loadError" class="panel-error">
-          <i class="fas fa-exclamation-triangle"></i>
+          <Icon name="exclamation-triangle" />
           {{ loadError }}
           <button class="btn-retry" @click="loadSources">{{ $t('analytics.sources.retry') }}</button>
         </div>
 
         <!-- Empty State -->
         <div v-else-if="sources.length === 0" class="panel-empty">
-          <i class="fas fa-folder-open"></i>
+          <Icon name="folder-open" />
           <p>{{ $t('analytics.sources.noSources') }}</p>
           <p class="panel-empty-hint">{{ $t('analytics.sources.noSourcesHint') }}</p>
           <button class="btn-add" @click="$emit('open-add-source')">
-            <i class="fas fa-plus"></i>
+            <Icon name="plus" />
             {{ $t('analytics.sources.addFirstSource') }}
           </button>
         </div>
@@ -72,7 +72,7 @@
             <div class="source-info" @click="$emit('select-source', source)" role="button" tabindex="0"
               @keydown.enter="$emit('select-source', source)">
               <div class="source-icon">
-                <i :class="source.source_type === 'github' ? 'fab fa-github' : 'fas fa-folder'"></i>
+                <i :class="source.source_type === 'github' ? 'github' : 'folder'"></i>
               </div>
               <div class="source-details">
                 <div class="source-name">{{ source.name }}</div>
@@ -80,7 +80,7 @@
                   <span v-if="source.repo" class="source-repo">{{ source.repo }}</span>
                   <span v-else-if="source.clone_path" class="source-path">{{ source.clone_path }}</span>
                   <span v-if="source.branch" class="source-branch">
-                    <i class="fas fa-code-branch"></i> {{ source.branch }}
+                    <Icon name="code-branch" /> {{ source.branch }}
                   </span>
                 </div>
                 <div class="source-timestamps">
@@ -95,18 +95,18 @@
             <!-- Badges -->
             <div class="source-badges">
               <span class="status-badge" :class="`status-badge--${source.status}`">
-                <i :class="getStatusIcon(source.status)"></i>
+                <Icon :name="getStatusIcon(source.status)" />
                 {{ source.status }}
               </span>
               <span class="access-badge" :class="`access-badge--${source.access}`">
-                <i :class="getAccessIcon(source.access)"></i>
+                <Icon :name="getAccessIcon(source.access)" />
                 {{ source.access }}
               </span>
             </div>
 
             <!-- Error Message -->
             <div v-if="source.status === 'error' && source.error_message" class="source-error">
-              <i class="fas fa-exclamation-circle"></i>
+              <Icon name="exclamation-circle" />
               {{ source.error_message }}
             </div>
 
@@ -118,21 +118,21 @@
                 @click="syncSource(source)"
                 :title="source.status === 'syncing' ? $t('analytics.sources.syncing') : $t('analytics.sources.syncNow')"
               >
-                <i :class="syncingId === source.id ? 'fas fa-spinner fa-spin' : 'fas fa-sync-alt'"></i>
+                <i :class="syncingId === source.id ? 'fas fa-spinner fa-spin' : 'sync-alt'"></i>
               </button>
               <button
                 class="btn-action btn-action--edit"
                 @click="$emit('edit-source', source)"
                 :title="$t('analytics.sources.edit')"
               >
-                <i class="fas fa-edit"></i>
+                <Icon name="edit" />
               </button>
               <button
                 class="btn-action btn-action--share"
                 @click="$emit('share-source', source)"
                 :title="$t('common.share')"
               >
-                <i class="fas fa-share-alt"></i>
+                <Icon name="share-alt" />
               </button>
               <button
                 class="btn-action btn-action--delete"
@@ -140,7 +140,7 @@
                 @click="deleteSource(source)"
                 :title="$t('analytics.sources.deleteTitle')"
               >
-                <i :class="deletingId === source.id ? 'fas fa-spinner fa-spin' : 'fas fa-trash-alt'"></i>
+                <i :class="deletingId === source.id ? 'fas fa-spinner fa-spin' : 'trash-alt'"></i>
               </button>
             </div>
           </div>
@@ -149,7 +149,7 @@
         <!-- Queue Status Footer -->
         <div v-if="runningTask" class="queue-footer">
           <div class="queue-running">
-            <i class="fas fa-spinner fa-spin"></i>
+            <Icon name="spinner" class="animate-spin" />
             <span>{{ $t('analytics.sources.indexingRunning') }}</span>
             <span v-if="runningTask.source_id" class="queue-source-id">
               (source: {{ runningTask.source_id.substring(0, 8) }}...)
@@ -159,7 +159,7 @@
               @click="cancelQueueItem(runningTask.source_id)"
               :title="$t('analytics.sources.removeFromQueue')"
             >
-              <i class="fas fa-ban"></i>
+              <Icon name="ban" />
             </button>
           </div>
         </div>
@@ -179,6 +179,7 @@
  * Issue #1133: Code Source Registry for codebase analytics.
  */
 
+import Icon from '@/components/ui/Icon.vue'
 import { ref, watch, toRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useFocusTrap } from '@/composables/useFocusTrap'
@@ -356,21 +357,21 @@ async function cancelQueueItem(sourceId: string | undefined) {
 
 function getStatusIcon(status: string): string {
   const icons: Record<string, string> = {
-    configured: 'fas fa-cog',
+    configured: 'cog',
     syncing: 'fas fa-spinner fa-spin',
-    ready: 'fas fa-check-circle',
-    error: 'fas fa-exclamation-circle'
+    ready: 'check-circle',
+    error: 'exclamation-circle'
   }
-  return icons[status] ?? 'fas fa-question-circle'
+  return icons[status] ?? 'question-circle'
 }
 
 function getAccessIcon(access: string): string {
   const icons: Record<string, string> = {
-    private: 'fas fa-lock',
-    shared: 'fas fa-users',
-    public: 'fas fa-globe'
+    private: 'lock',
+    shared: 'users',
+    public: 'globe'
   }
-  return icons[access] ?? 'fas fa-lock'
+  return icons[access] ?? 'lock'
 }
 
 function formatRelativeTime(isoString: string): string {

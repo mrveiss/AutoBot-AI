@@ -11,20 +11,20 @@ ROOT CAUSE FIX: Replaces DNS resolution delays with cached service endpoints
 """
 
 import asyncio
-import logging
 import time
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 import aiohttp
 
 from autobot_shared.http_client import get_http_client
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config as ssot_config
 from constants.network_constants import NetworkConstants
 from constants.threshold_constants import ServiceDiscoveryConfig, TimingConstants
 from utils.async_initializable import AsyncInitializable
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def _build_distributed_services_config() -> Dict[str, Any]:
@@ -263,7 +263,7 @@ class DistributedServiceDiscovery(AsyncInitializable):
             ),
         ]
 
-    async def get_service_endpoint(self, service_name: str) -> Optional[ServiceEndpoint]:
+    async def get_service_endpoint(self, service_name: str) -> ServiceEndpoint | None:
         """
         Get healthy service endpoint instantly (no DNS resolution delays)
 
@@ -656,7 +656,7 @@ def _build_service_endpoints_map(
     return endpoints
 
 
-def get_service_endpoint_sync(service_name: str) -> Optional[Dict]:
+def get_service_endpoint_sync(service_name: str) -> Dict | None:
     """Get service endpoint synchronously for sync contexts.
 
     Returns endpoint information as a dict with host, port, protocol.

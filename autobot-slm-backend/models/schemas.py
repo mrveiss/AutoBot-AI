@@ -9,7 +9,7 @@ Request and response models for the SLM API.
 
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -58,7 +58,7 @@ class UserResponse(BaseModel):
     is_active: bool
     is_admin: bool = False
     created_at: datetime
-    last_login: Optional[datetime] = None
+    last_login: datetime | None = None
 
     model_config = {"from_attributes": True}
 
@@ -88,19 +88,19 @@ class PortInfo(BaseModel):
     """Listening port info from agent."""
 
     port: int
-    process: Optional[str] = None
-    pid: Optional[int] = None
+    process: str | None = None
+    pid: int | None = None
 
 
 class RoleReportItem(BaseModel):
     """Single role detection report from agent."""
 
     path_exists: bool = False
-    path: Optional[str] = None
+    path: str | None = None
     service_running: bool = False
-    service_name: Optional[str] = None
+    service_name: str | None = None
     ports: List[int] = Field(default_factory=list)
-    version: Optional[str] = None
+    version: str | None = None
     status: str = "not_installed"
 
 
@@ -110,9 +110,9 @@ class NodeRoleResponse(BaseModel):
     role_name: str
     assignment_type: str = "auto"  # auto | manual
     status: str = "not_installed"  # active | inactive | not_installed
-    current_version: Optional[str] = None
-    last_synced_at: Optional[datetime] = None
-    last_error: Optional[str] = None
+    current_version: str | None = None
+    last_synced_at: datetime | None = None
+    last_error: str | None = None
 
     model_config = {"from_attributes": True}
 
@@ -143,14 +143,14 @@ class NodeCreate(BaseModel):
     """Node registration request."""
 
     hostname: str
-    ansible_name: Optional[str] = Field(None, min_length=1)  # Ansible inventory name (#1814, #2011)
+    ansible_name: str | None = Field(None, min_length=1)  # Ansible inventory name (#1814, #2011)
     ip_address: str
-    node_id: Optional[str] = None  # Custom node_id; if not provided, derived from hostname
+    node_id: str | None = None  # Custom node_id; if not provided, derived from hostname
     roles: List[str] = Field(default_factory=list)
-    ssh_user: Optional[str] = "autobot"
-    ssh_port: Optional[int] = 22
-    ssh_password: Optional[str] = None
-    auth_method: Optional[str] = "password"
+    ssh_user: str | None = "autobot"
+    ssh_port: int | None = 22
+    ssh_password: str | None = None
+    auth_method: str | None = "password"
     import_existing: bool = False
     auto_enroll: bool = False
 
@@ -158,11 +158,11 @@ class NodeCreate(BaseModel):
 class NodeUpdate(BaseModel):
     """Node update request."""
 
-    hostname: Optional[str] = None
-    ansible_name: Optional[str] = Field(None, min_length=1)  # Ansible inventory name (#1814, #2011)
-    ip_address: Optional[str] = None
-    status: Optional[NodeStatus] = None
-    roles: Optional[List[str]] = None
+    hostname: str | None = None
+    ansible_name: str | None = Field(None, min_length=1)  # Ansible inventory name (#1814, #2011)
+    ip_address: str | None = None
+    status: NodeStatus | None = None
+    roles: List[str] | None = None
 
 
 class NodeResponse(BaseModel):
@@ -171,28 +171,28 @@ class NodeResponse(BaseModel):
     id: int
     node_id: str
     hostname: str
-    ansible_name: Optional[str] = None  # Ansible inventory name (#1814)
+    ansible_name: str | None = None  # Ansible inventory name (#1814)
     ip_address: str
     status: str
-    roles: Optional[List[str]] = []
+    roles: List[str] | None = []
     detected_roles: List[str] = Field(default_factory=list)
-    ssh_user: Optional[str] = "autobot"
-    ssh_port: Optional[int] = 22
-    auth_method: Optional[str] = "key"
+    ssh_user: str | None = "autobot"
+    ssh_port: int | None = 22
+    auth_method: str | None = "key"
     cpu_percent: float
     memory_percent: float
     disk_percent: float
-    last_heartbeat: Optional[datetime] = None
-    agent_version: Optional[str] = None
-    os_info: Optional[str] = None
-    code_version: Optional[str] = None
-    code_status: Optional[str] = None
+    last_heartbeat: datetime | None = None
+    agent_version: str | None = None
+    os_info: str | None = None
+    code_version: str | None = None
+    code_status: str | None = None
     created_at: datetime
     updated_at: datetime
-    a2a_card: Optional[Dict[str, Any]] = None
+    a2a_card: Dict[str, Any] | None = None
     # Issue #1019: Per-service health summary counts
-    service_summary: Optional[Dict[str, int]] = None
-    extra_data: Optional[Dict[str, Any]] = Field(None, exclude=True)
+    service_summary: Dict[str, int] | None = None
+    extra_data: Dict[str, Any] | None = Field(None, exclude=True)
 
     model_config = {"from_attributes": True}
 
@@ -225,9 +225,9 @@ class HeartbeatRequest(BaseModel):
     cpu_percent: float = 0.0
     memory_percent: float = 0.0
     disk_percent: float = 0.0
-    agent_version: Optional[str] = None
-    os_info: Optional[str] = None
-    code_version: Optional[str] = None  # Issue #741: Git commit hash
+    agent_version: str | None = None
+    os_info: str | None = None
+    code_version: str | None = None  # Issue #741: Git commit hash
     extra_data: Dict = Field(default_factory=dict)
     # Role detection (Issue #779)
     role_report: Dict[str, RoleReportItem] = Field(default_factory=dict)
@@ -239,14 +239,14 @@ class HeartbeatResponse(BaseModel):
 
     status: str = "ok"
     update_available: bool = False
-    latest_version: Optional[str] = None
-    update_url: Optional[str] = None
+    latest_version: str | None = None
+    update_url: str | None = None
 
 
 class EnrollRequest(BaseModel):
     """Node enrollment request with SSH credentials."""
 
-    ssh_password: Optional[str] = None
+    ssh_password: str | None = None
 
 
 # =============================================================================
@@ -270,10 +270,10 @@ class DeploymentResponse(BaseModel):
     node_id: str
     roles: List[str]
     status: str
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
-    error: Optional[str] = None
-    triggered_by: Optional[str] = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    error: str | None = None
+    triggered_by: str | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -308,13 +308,13 @@ class BackupResponse(BaseModel):
     backup_id: str
     node_id: str
     service_type: str
-    backup_path: Optional[str] = None
+    backup_path: str | None = None
     status: str
     size_bytes: int
-    checksum: Optional[str] = None
-    error: Optional[str] = None
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
+    checksum: str | None = None
+    error: str | None = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -329,7 +329,7 @@ class SettingUpdate(BaseModel):
     """Setting update request."""
 
     value: str
-    description: Optional[str] = None
+    description: str | None = None
 
 
 class SettingResponse(BaseModel):
@@ -337,9 +337,9 @@ class SettingResponse(BaseModel):
 
     id: int
     key: str
-    value: Optional[str] = None
+    value: str | None = None
     value_type: str
-    description: Optional[str] = None
+    description: str | None = None
     updated_at: datetime
 
     model_config = {"from_attributes": True}
@@ -356,15 +356,15 @@ class SecretCreate(BaseModel):
     key: str = Field(..., min_length=1, max_length=128)
     value: str = Field(..., min_length=1)
     category: str = "system"
-    description: Optional[str] = None
+    description: str | None = None
 
 
 class SecretUpdate(BaseModel):
     """Update a system secret."""
 
-    value: Optional[str] = None
-    category: Optional[str] = None
-    description: Optional[str] = None
+    value: str | None = None
+    category: str | None = None
+    description: str | None = None
 
 
 class SecretResponse(BaseModel):
@@ -373,7 +373,7 @@ class SecretResponse(BaseModel):
     id: int
     key: str
     category: str
-    description: Optional[str] = None
+    description: str | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -442,7 +442,7 @@ class ConnectionTestRequest(BaseModel):
     ssh_user: str = "autobot"
     ssh_port: int = 22
     auth_method: str = "password"
-    password: Optional[str] = None
+    password: str | None = None
 
 
 class ConnectionTestResponse(BaseModel):
@@ -450,9 +450,9 @@ class ConnectionTestResponse(BaseModel):
 
     success: bool
     message: str
-    latency_ms: Optional[float] = None
-    os_info: Optional[str] = None
-    error: Optional[str] = None
+    latency_ms: float | None = None
+    os_info: str | None = None
+    error: str | None = None
 
 
 # =============================================================================
@@ -465,14 +465,14 @@ class CertificateResponse(BaseModel):
 
     cert_id: str
     node_id: str
-    serial_number: Optional[str] = None
-    subject: Optional[str] = None
-    issuer: Optional[str] = None
-    not_before: Optional[datetime] = None
-    not_after: Optional[datetime] = None
-    fingerprint: Optional[str] = None
+    serial_number: str | None = None
+    subject: str | None = None
+    issuer: str | None = None
+    not_before: datetime | None = None
+    not_after: datetime | None = None
+    fingerprint: str | None = None
     status: str
-    days_until_expiry: Optional[int] = None
+    days_until_expiry: int | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -485,7 +485,7 @@ class CertificateActionResponse(BaseModel):
     action: str
     success: bool
     message: str
-    cert_id: Optional[str] = None
+    cert_id: str | None = None
 
 
 # =============================================================================
@@ -523,14 +523,14 @@ class UpdateInfoResponse(BaseModel):
     """Update info response."""
 
     update_id: str
-    node_id: Optional[str] = None
+    node_id: str | None = None
     package_name: str
-    current_version: Optional[str] = None
+    current_version: str | None = None
     available_version: str
     severity: str
-    description: Optional[str] = None
+    description: str | None = None
     is_applied: bool
-    applied_at: Optional[datetime] = None
+    applied_at: datetime | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -555,7 +555,7 @@ class UpdateApplyResponse(BaseModel):
 
     success: bool
     message: str
-    job_id: Optional[str] = None
+    job_id: str | None = None
     applied_updates: List[str] = Field(default_factory=list)
     failed_updates: List[str] = Field(default_factory=list)
 
@@ -568,13 +568,13 @@ class UpdateJobResponse(BaseModel):
     status: str
     update_ids: List[str] = Field(default_factory=list)
     progress: int = 0
-    current_step: Optional[str] = None
+    current_step: str | None = None
     total_steps: int = 0
     completed_steps: int = 0
-    error: Optional[str] = None
-    output: Optional[str] = None
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
+    error: str | None = None
+    output: str | None = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -610,8 +610,8 @@ class FleetUpdateSummaryResponse(BaseModel):
 class UpdateDiscoverRequest(BaseModel):
     """Request to discover available system updates on fleet nodes."""
 
-    node_ids: Optional[List[str]] = None
-    role: Optional[str] = None
+    node_ids: List[str] | None = None
+    role: str | None = None
 
 
 class UpdateDiscoverResponse(BaseModel):
@@ -628,13 +628,13 @@ class UpdateDiscoverStatus(BaseModel):
     job_id: str
     status: str
     progress: int = 0
-    message: Optional[str] = None
+    message: str | None = None
     nodes_checked: int = 0
     total_nodes: int = 0
     packages_found: int = 0
     unreachable_nodes: List[str] = []
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
 
 
 class UpdateSummaryResponse(BaseModel):
@@ -643,7 +643,7 @@ class UpdateSummaryResponse(BaseModel):
     system_update_count: int = 0
     security_update_count: int = 0
     nodes_with_updates: int = 0
-    last_checked: Optional[datetime] = None
+    last_checked: datetime | None = None
 
 
 class UpdatePackagesResponse(BaseModel):
@@ -684,11 +684,11 @@ class ReplicationResponse(BaseModel):
     target_node_id: str
     service_type: str
     status: str
-    sync_position: Optional[str] = None
+    sync_position: str | None = None
     lag_bytes: int
-    error: Optional[str] = None
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
+    error: str | None = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -719,7 +719,7 @@ class BackupRestoreResponse(BaseModel):
 
     success: bool
     message: str
-    job_id: Optional[str] = None
+    job_id: str | None = None
 
 
 # =============================================================================
@@ -754,7 +754,7 @@ class ActionResponse(BaseModel):
     action: str
     success: bool
     message: str
-    resource_id: Optional[str] = None
+    resource_id: str | None = None
 
 
 # =============================================================================
@@ -771,19 +771,19 @@ class ServiceResponse(BaseModel):
     status: str
     category: str = "system"  # autobot or system
     enabled: bool
-    description: Optional[str] = None
-    active_state: Optional[str] = None
-    sub_state: Optional[str] = None
-    main_pid: Optional[int] = None
-    memory_bytes: Optional[int] = None
+    description: str | None = None
+    active_state: str | None = None
+    sub_state: str | None = None
+    main_pid: int | None = None
+    memory_bytes: int | None = None
     # Discovery fields (Issue #760)
-    port: Optional[int] = None
+    port: int | None = None
     protocol: str = "http"
-    endpoint_path: Optional[str] = None
+    endpoint_path: str | None = None
     is_discoverable: bool = True
     # Issue #1019: extra_data includes error_message for failed services
     extra_data: Dict = Field(default_factory=dict)
-    last_checked: Optional[datetime] = None
+    last_checked: datetime | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -811,7 +811,7 @@ class ServiceActionResponse(BaseModel):
     node_id: str
     success: bool
     message: str
-    job_id: Optional[str] = None
+    job_id: str | None = None
 
 
 class ServiceScanResponse(BaseModel):
@@ -829,7 +829,7 @@ class ServiceLogsRequest(BaseModel):
     """Service logs request."""
 
     lines: int = Field(default=100, ge=1, le=1000)
-    since: Optional[str] = None  # e.g., "1h", "30m", "2d"
+    since: str | None = None  # e.g., "1h", "30m", "2d"
 
 
 class ServiceLogsResponse(BaseModel):
@@ -844,7 +844,7 @@ class ServiceLogsResponse(BaseModel):
 class RestartAllServicesRequest(BaseModel):
     """Request to restart all services on a node (Issue #725)."""
 
-    category: Optional[str] = Field(
+    category: str | None = Field(
         None,
         pattern="^(autobot|system|all)$",
         description="Category of services to restart. 'all' or null restarts all services.",
@@ -907,10 +907,10 @@ class FleetServicesResponse(BaseModel):
 class MaintenanceWindowCreate(BaseModel):
     """Maintenance window creation request."""
 
-    node_id: Optional[str] = None  # null = all nodes
+    node_id: str | None = None  # null = all nodes
     start_time: datetime
     end_time: datetime
-    reason: Optional[str] = None
+    reason: str | None = None
     auto_drain: bool = False
     suppress_alerts: bool = True
     suppress_remediation: bool = True
@@ -919,13 +919,13 @@ class MaintenanceWindowCreate(BaseModel):
 class MaintenanceWindowUpdate(BaseModel):
     """Maintenance window update request."""
 
-    start_time: Optional[datetime] = None
-    end_time: Optional[datetime] = None
-    reason: Optional[str] = None
-    auto_drain: Optional[bool] = None
-    suppress_alerts: Optional[bool] = None
-    suppress_remediation: Optional[bool] = None
-    status: Optional[str] = None
+    start_time: datetime | None = None
+    end_time: datetime | None = None
+    reason: str | None = None
+    auto_drain: bool | None = None
+    suppress_alerts: bool | None = None
+    suppress_remediation: bool | None = None
+    status: str | None = None
 
 
 class MaintenanceWindowResponse(BaseModel):
@@ -933,15 +933,15 @@ class MaintenanceWindowResponse(BaseModel):
 
     id: int
     window_id: str
-    node_id: Optional[str] = None
+    node_id: str | None = None
     start_time: datetime
     end_time: datetime
-    reason: Optional[str] = None
+    reason: str | None = None
     auto_drain: bool
     suppress_alerts: bool
     suppress_remediation: bool
     status: str
-    created_by: Optional[str] = None
+    created_by: str | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -967,7 +967,7 @@ class BlueGreenCreate(BaseModel):
     green_node_id: str = Field(..., description="Target node (will receive roles)")
     roles: List[str] = Field(..., description="Roles to migrate from blue to green")
     deployment_type: str = Field(default="upgrade", description="upgrade, migration, or failover")
-    health_check_url: Optional[str] = None
+    health_check_url: str | None = None
     health_check_interval: int = Field(default=10, ge=5, le=60)
     health_check_timeout: int = Field(default=300, ge=60, le=1800)
     auto_rollback: bool = True
@@ -999,7 +999,7 @@ class BlueGreenResponse(BaseModel):
     borrowed_roles: List[str]
     purge_on_complete: bool
     deployment_type: str
-    health_check_url: Optional[str] = None
+    health_check_url: str | None = None
     health_check_interval: int
     health_check_timeout: int
     auto_rollback: bool
@@ -1007,17 +1007,17 @@ class BlueGreenResponse(BaseModel):
     post_deploy_monitor_duration: int
     health_failure_threshold: int
     health_failures: int = 0
-    monitoring_started_at: Optional[datetime] = None
+    monitoring_started_at: datetime | None = None
     # Status tracking
     status: str
     progress_percent: int
-    current_step: Optional[str] = None
-    error: Optional[str] = None
-    started_at: Optional[datetime] = None
-    switched_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
-    rollback_at: Optional[datetime] = None
-    triggered_by: Optional[str] = None
+    current_step: str | None = None
+    error: str | None = None
+    started_at: datetime | None = None
+    switched_at: datetime | None = None
+    completed_at: datetime | None = None
+    rollback_at: datetime | None = None
+    triggered_by: str | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -1040,7 +1040,7 @@ class BlueGreenActionResponse(BaseModel):
     bg_deployment_id: str
     success: bool
     message: str
-    status: Optional[str] = None
+    status: str | None = None
 
 
 class RoleBorrowRequest(BaseModel):
@@ -1060,7 +1060,7 @@ class RoleBorrowResponse(BaseModel):
     borrowed_roles: List[str]
     source_node_id: str
     target_node_id: str
-    expires_at: Optional[datetime] = None
+    expires_at: datetime | None = None
 
 
 class RolePurgeRequest(BaseModel):
@@ -1108,11 +1108,11 @@ class VNCCredentialCreate(BaseModel):
     """Create VNC credential for a node."""
 
     vnc_type: str = Field(default="desktop", pattern="^(desktop|browser|custom)$")
-    name: Optional[str] = Field(None, description="Optional friendly name for the credential")
+    name: str | None = Field(None, description="Optional friendly name for the credential")
     password: str = Field(..., min_length=1, description="VNC password (will be encrypted)")
-    port: Optional[int] = Field(None, ge=1, le=65535, description="websockify port")
-    display_number: Optional[int] = Field(None, ge=0, le=99, description="X display number")
-    vnc_port: Optional[int] = Field(
+    port: int | None = Field(None, ge=1, le=65535, description="websockify port")
+    display_number: int | None = Field(None, ge=0, le=99, description="X display number")
+    vnc_port: int | None = Field(
         None,
         ge=1,
         le=65535,
@@ -1125,13 +1125,13 @@ class VNCCredentialCreate(BaseModel):
 class VNCCredentialUpdate(BaseModel):
     """Update VNC credential."""
 
-    password: Optional[str] = Field(None, min_length=1)
-    port: Optional[int] = Field(None, ge=1, le=65535)
-    display_number: Optional[int] = Field(None, ge=0, le=99)
-    vnc_port: Optional[int] = Field(None, ge=1, le=65535)
-    websockify_enabled: Optional[bool] = None
-    is_active: Optional[bool] = None
-    extra_data: Optional[Dict] = None
+    password: str | None = Field(None, min_length=1)
+    port: int | None = Field(None, ge=1, le=65535)
+    display_number: int | None = Field(None, ge=0, le=99)
+    vnc_port: int | None = Field(None, ge=1, le=65535)
+    websockify_enabled: bool | None = None
+    is_active: bool | None = None
+    extra_data: Dict | None = None
 
 
 class VNCCredentialResponse(BaseModel):
@@ -1140,18 +1140,18 @@ class VNCCredentialResponse(BaseModel):
     id: int
     credential_id: str
     node_id: str
-    vnc_type: Optional[str] = None
-    name: Optional[str] = None
-    port: Optional[int] = None
-    display_number: Optional[int] = None
-    vnc_port: Optional[int] = None
+    vnc_type: str | None = None
+    name: str | None = None
+    port: int | None = None
+    display_number: int | None = None
+    vnc_port: int | None = None
     websockify_enabled: bool = True
     is_active: bool = True
-    last_used: Optional[datetime] = None
+    last_used: datetime | None = None
     created_at: datetime
     updated_at: datetime
     # Computed connection URL (no password)
-    websocket_url: Optional[str] = None
+    websocket_url: str | None = None
 
     model_config = {"from_attributes": True}
 
@@ -1174,8 +1174,8 @@ class VNCConnectionInfo(BaseModel):
     display_number: int
     websocket_url: str
     # Short-lived token for password retrieval (one-time use)
-    connection_token: Optional[str] = None
-    token_expires_at: Optional[datetime] = None
+    connection_token: str | None = None
+    token_expires_at: datetime | None = None
 
 
 class VNCEndpointResponse(BaseModel):
@@ -1186,7 +1186,7 @@ class VNCEndpointResponse(BaseModel):
     hostname: str
     ip_address: str
     vnc_type: str
-    name: Optional[str] = None
+    name: str | None = None
     port: int
     websocket_url: str
     is_active: bool
@@ -1200,6 +1200,76 @@ class VNCEndpointsResponse(BaseModel):
 
 
 # =============================================================================
+# RDP Credential Schemas (Issue #1525: xrdp support)
+# =============================================================================
+
+
+class RDPCredentialCreate(BaseModel):
+    """Create RDP credential for a node."""
+
+    name: str | None = Field(None, description="Optional friendly name for the credential")
+    port: int = Field(default=3389, ge=1, le=65535, description="RDP port")
+    auth_method: str = Field(default="pam", description="Authentication method (pam, password)")
+    password: str | None = Field(None, min_length=1, description="RDP password (encrypted at rest)")
+    extra_data: Dict = Field(default_factory=dict, description="Additional configuration")
+
+
+class RDPCredentialUpdate(BaseModel):
+    """Update RDP credential."""
+
+    name: str | None = Field(None, min_length=1)
+    port: int | None = Field(None, ge=1, le=65535)
+    auth_method: str | None = None
+    password: str | None = Field(None, min_length=1)
+    is_active: bool | None = None
+    extra_data: Dict | None = None
+
+
+class RDPCredentialResponse(BaseModel):
+    """RDP credential response (excludes password for security)."""
+
+    id: int
+    credential_id: str
+    node_id: str
+    name: str | None = None
+    port: int = 3389
+    auth_method: str = "pam"
+    is_active: bool = True
+    last_used: datetime | None = None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class RDPCredentialListResponse(BaseModel):
+    """List of RDP credentials."""
+
+    credentials: List[RDPCredentialResponse]
+    total: int
+
+
+class RDPEndpointResponse(BaseModel):
+    """RDP endpoint in fleet-wide listing."""
+
+    credential_id: str
+    node_id: str
+    hostname: str
+    ip_address: str
+    name: str | None = None
+    port: int
+    auth_method: str
+    is_active: bool
+
+
+class RDPEndpointsResponse(BaseModel):
+    """List of all RDP endpoints across the fleet."""
+
+    endpoints: List[RDPEndpointResponse]
+    total: int
+
+
+# =============================================================================
 # TLS Certificate Schemas (Issue #725: mTLS support)
 # =============================================================================
 
@@ -1207,23 +1277,23 @@ class VNCEndpointsResponse(BaseModel):
 class TLSCredentialCreate(BaseModel):
     """Create TLS certificate credential for a node."""
 
-    name: Optional[str] = Field(None, description="Optional friendly name (e.g., 'redis-server', 'api-client')")
+    name: str | None = Field(None, description="Optional friendly name (e.g., 'redis-server', 'api-client')")
     ca_cert: str = Field(..., description="CA certificate (PEM format)")
     server_cert: str = Field(..., description="Server/client certificate (PEM format)")
     server_key: str = Field(..., description="Private key (PEM format, will be encrypted)")
-    common_name: Optional[str] = Field(None, description="CN from certificate (auto-extracted if not provided)")
-    expires_at: Optional[datetime] = Field(None, description="Expiration date (auto-extracted if not provided)")
+    common_name: str | None = Field(None, description="CN from certificate (auto-extracted if not provided)")
+    expires_at: datetime | None = Field(None, description="Expiration date (auto-extracted if not provided)")
     extra_data: Dict = Field(default_factory=dict, description="Additional configuration")
 
 
 class TLSCredentialUpdate(BaseModel):
     """Update TLS certificate credential."""
 
-    ca_cert: Optional[str] = Field(None, description="Updated CA certificate")
-    server_cert: Optional[str] = Field(None, description="Updated server certificate")
-    server_key: Optional[str] = Field(None, description="Updated private key")
-    is_active: Optional[bool] = None
-    extra_data: Optional[Dict] = None
+    ca_cert: str | None = Field(None, description="Updated CA certificate")
+    server_cert: str | None = Field(None, description="Updated server certificate")
+    server_key: str | None = Field(None, description="Updated private key")
+    is_active: bool | None = None
+    extra_data: Dict | None = None
 
 
 class TLSCredentialResponse(BaseModel):
@@ -1232,16 +1302,16 @@ class TLSCredentialResponse(BaseModel):
     id: int
     credential_id: str
     node_id: str
-    name: Optional[str] = None
-    common_name: Optional[str] = None
-    expires_at: Optional[datetime] = None
-    fingerprint: Optional[str] = None
+    name: str | None = None
+    common_name: str | None = None
+    expires_at: datetime | None = None
+    fingerprint: str | None = None
     is_active: bool = True
     created_at: datetime
     updated_at: datetime
     # Certificates (public data only)
-    ca_cert: Optional[str] = None
-    server_cert: Optional[str] = None
+    ca_cert: str | None = None
+    server_cert: str | None = None
     # Private key NEVER returned
 
     model_config = {"from_attributes": True}
@@ -1274,11 +1344,11 @@ class TLSEndpointResponse(BaseModel):
     node_id: str
     hostname: str
     ip_address: str
-    name: Optional[str] = None
-    common_name: Optional[str] = None
-    expires_at: Optional[datetime] = None
+    name: str | None = None
+    common_name: str | None = None
+    expires_at: datetime | None = None
     is_active: bool
-    days_until_expiry: Optional[int] = None
+    days_until_expiry: int | None = None
 
 
 class TLSEndpointsResponse(BaseModel):
@@ -1300,19 +1370,19 @@ class AuditLogResponse(BaseModel):
     id: int
     log_id: str
     timestamp: datetime
-    user_id: Optional[str] = None
-    username: Optional[str] = None
-    ip_address: Optional[str] = None
+    user_id: str | None = None
+    username: str | None = None
+    ip_address: str | None = None
     category: str
     action: str
-    resource_type: Optional[str] = None
-    resource_id: Optional[str] = None
-    description: Optional[str] = None
-    request_method: Optional[str] = None
-    request_path: Optional[str] = None
-    response_status: Optional[int] = None
+    resource_type: str | None = None
+    resource_id: str | None = None
+    description: str | None = None
+    request_method: str | None = None
+    request_path: str | None = None
+    response_status: int | None = None
     success: bool = True
-    error_message: Optional[str] = None
+    error_message: str | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -1335,24 +1405,24 @@ class SecurityEventResponse(BaseModel):
     timestamp: datetime
     event_type: str
     severity: str
-    category: Optional[str] = None
-    source_ip: Optional[str] = None
-    source_user: Optional[str] = None
-    source_node_id: Optional[str] = None
-    target_resource: Optional[str] = None
-    target_node_id: Optional[str] = None
+    category: str | None = None
+    source_ip: str | None = None
+    source_user: str | None = None
+    source_node_id: str | None = None
+    target_resource: str | None = None
+    target_node_id: str | None = None
     title: str
-    description: Optional[str] = None
-    threat_indicator: Optional[str] = None
-    threat_score: Optional[float] = None
-    mitre_technique: Optional[str] = None
+    description: str | None = None
+    threat_indicator: str | None = None
+    threat_score: float | None = None
+    mitre_technique: str | None = None
     is_acknowledged: bool = False
-    acknowledged_by: Optional[str] = None
-    acknowledged_at: Optional[datetime] = None
+    acknowledged_by: str | None = None
+    acknowledged_at: datetime | None = None
     is_resolved: bool = False
-    resolved_by: Optional[str] = None
-    resolved_at: Optional[datetime] = None
-    resolution_notes: Optional[str] = None
+    resolved_by: str | None = None
+    resolved_at: datetime | None = None
+    resolution_notes: str | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -1363,24 +1433,24 @@ class SecurityEventCreate(BaseModel):
 
     event_type: str
     severity: str = "low"
-    category: Optional[str] = None
-    source_ip: Optional[str] = None
-    source_user: Optional[str] = None
-    source_node_id: Optional[str] = None
-    target_resource: Optional[str] = None
-    target_node_id: Optional[str] = None
+    category: str | None = None
+    source_ip: str | None = None
+    source_user: str | None = None
+    source_node_id: str | None = None
+    target_resource: str | None = None
+    target_node_id: str | None = None
     title: str
-    description: Optional[str] = None
-    threat_indicator: Optional[str] = None
-    threat_score: Optional[float] = None
-    mitre_technique: Optional[str] = None
+    description: str | None = None
+    threat_indicator: str | None = None
+    threat_score: float | None = None
+    mitre_technique: str | None = None
     raw_data: Dict = Field(default_factory=dict)
 
 
 class SecurityEventAcknowledge(BaseModel):
     """Acknowledge security event."""
 
-    notes: Optional[str] = None
+    notes: str | None = None
 
 
 class SecurityEventResolve(BaseModel):
@@ -1406,7 +1476,7 @@ class SecurityPolicyResponse(BaseModel):
     id: int
     policy_id: str
     name: str
-    description: Optional[str] = None
+    description: str | None = None
     category: str
     policy_type: str = "custom"
     rules: List = Field(default_factory=list)
@@ -1415,12 +1485,12 @@ class SecurityPolicyResponse(BaseModel):
     applies_to_roles: List = Field(default_factory=list)
     status: str = "draft"
     is_enforced: bool = False
-    last_evaluated: Optional[datetime] = None
-    compliance_score: Optional[float] = None
+    last_evaluated: datetime | None = None
+    compliance_score: float | None = None
     violations_count: int = 0
     version: int = 1
-    created_by: Optional[str] = None
-    updated_by: Optional[str] = None
+    created_by: str | None = None
+    updated_by: str | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -1431,7 +1501,7 @@ class SecurityPolicyCreate(BaseModel):
     """Create security policy."""
 
     name: str = Field(..., min_length=1, max_length=128)
-    description: Optional[str] = None
+    description: str | None = None
     category: str = Field(..., min_length=1, max_length=64)
     policy_type: str = "custom"
     rules: List = Field(default_factory=list)
@@ -1445,15 +1515,15 @@ class SecurityPolicyCreate(BaseModel):
 class SecurityPolicyUpdate(BaseModel):
     """Update security policy."""
 
-    name: Optional[str] = Field(None, min_length=1, max_length=128)
-    description: Optional[str] = None
-    category: Optional[str] = None
-    rules: Optional[List] = None
-    parameters: Optional[Dict] = None
-    applies_to_nodes: Optional[List] = None
-    applies_to_roles: Optional[List] = None
-    status: Optional[str] = None
-    is_enforced: Optional[bool] = None
+    name: str | None = Field(None, min_length=1, max_length=128)
+    description: str | None = None
+    category: str | None = None
+    rules: List | None = None
+    parameters: Dict | None = None
+    applies_to_nodes: List | None = None
+    applies_to_roles: List | None = None
+    status: str | None = None
+    is_enforced: bool | None = None
 
 
 class SecurityPolicyListResponse(BaseModel):
@@ -1501,9 +1571,9 @@ class ThreatSummary(BaseModel):
 class CodeSyncStatusResponse(BaseModel):
     """Code sync status response."""
 
-    latest_version: Optional[str] = None
-    local_version: Optional[str] = None
-    last_fetch: Optional[datetime] = None
+    latest_version: str | None = None
+    local_version: str | None = None
+    last_fetch: datetime | None = None
     has_update: bool = False
     outdated_nodes: int = 0
     total_nodes: int = 0
@@ -1514,7 +1584,7 @@ class CodeSyncRefreshResponse(BaseModel):
 
     success: bool
     message: str
-    latest_version: Optional[str] = None
+    latest_version: str | None = None
     has_update: bool = False
 
 
@@ -1522,8 +1592,8 @@ class DriftedFile(BaseModel):
     """A file whose checksum differs between code_source and deployed (Issue #2834)."""
 
     path: str
-    source_checksum: Optional[str] = None
-    deployed_checksum: Optional[str] = None
+    source_checksum: str | None = None
+    deployed_checksum: str | None = None
     status: Literal["modified", "source_only", "deployed_only"]
 
 
@@ -1560,7 +1630,7 @@ class PendingNodeResponse(BaseModel):
     node_id: str
     hostname: str
     ip_address: str
-    current_version: Optional[str] = None
+    current_version: str | None = None
     code_status: str
 
 
@@ -1569,7 +1639,7 @@ class PendingNodesResponse(BaseModel):
 
     nodes: List[PendingNodeResponse]
     total: int
-    latest_version: Optional[str] = None
+    latest_version: str | None = None
 
 
 class SyncStrategy(str, Enum):
@@ -1593,13 +1663,21 @@ class NodeSyncResponse(BaseModel):
     success: bool
     message: str
     node_id: str
-    job_id: Optional[str] = None
+    job_id: str | None = None
+
+
+class SelfUpdateResponse(BaseModel):
+    """Response from SLM self-update via Ansible (#9073)."""
+
+    success: bool
+    message: str
+    node_id: str | None = None
 
 
 class FleetSyncRequest(BaseModel):
     """Request to sync code to multiple nodes."""
 
-    node_ids: Optional[List[str]] = None
+    node_ids: List[str] | None = None
     strategy: str = Field(default="rolling", pattern="^(immediate|graceful|manual|rolling)$")
     batch_size: int = Field(default=1, ge=1, le=10)
     restart: bool = True
@@ -1620,9 +1698,9 @@ class FleetSyncNodeStatus(BaseModel):
     node_id: str
     hostname: str
     status: str  # pending, syncing, success, failed
-    message: Optional[str] = None
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
+    message: str | None = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
 
 
 class FleetSyncJobStatus(BaseModel):
@@ -1634,10 +1712,10 @@ class FleetSyncJobStatus(BaseModel):
     total_nodes: int
     completed_nodes: int
     failed_nodes: int
-    failure_reason: Optional[str] = None
+    failure_reason: str | None = None
     nodes: List[FleetSyncNodeStatus]
     created_at: datetime
-    completed_at: Optional[datetime] = None
+    completed_at: datetime | None = None
 
 
 class CodeVersionNotification(BaseModel):
@@ -1646,9 +1724,9 @@ class CodeVersionNotification(BaseModel):
     node_id: str
     commit: str
     is_code_source: bool = True
-    branch: Optional[str] = None
-    message: Optional[str] = None
-    timestamp: Optional[datetime] = None
+    branch: str | None = None
+    message: str | None = None
+    timestamp: datetime | None = None
 
 
 class CodeVersionNotificationResponse(BaseModel):
@@ -1681,7 +1759,7 @@ class ScheduleCreate(BaseModel):
     cron_expression: str = Field(..., min_length=9, max_length=100)
     enabled: bool = True
     target_type: str = Field(default="all", pattern="^(all|specific|tag)$")
-    target_nodes: Optional[List[str]] = None
+    target_nodes: List[str] | None = None
     restart_strategy: str = Field(default="graceful", pattern="^(immediate|graceful|manual)$")
     restart_after_sync: bool = True
 
@@ -1689,13 +1767,13 @@ class ScheduleCreate(BaseModel):
 class ScheduleUpdate(BaseModel):
     """Request to update an existing schedule."""
 
-    name: Optional[str] = Field(None, min_length=1, max_length=100)
-    cron_expression: Optional[str] = Field(None, min_length=9, max_length=100)
-    enabled: Optional[bool] = None
-    target_type: Optional[str] = Field(None, pattern="^(all|specific|tag)$")
-    target_nodes: Optional[List[str]] = None
-    restart_strategy: Optional[str] = Field(None, pattern="^(immediate|graceful|manual)$")
-    restart_after_sync: Optional[bool] = None
+    name: str | None = Field(None, min_length=1, max_length=100)
+    cron_expression: str | None = Field(None, min_length=9, max_length=100)
+    enabled: bool | None = None
+    target_type: str | None = Field(None, pattern="^(all|specific|tag)$")
+    target_nodes: List[str] | None = None
+    restart_strategy: str | None = Field(None, pattern="^(immediate|graceful|manual)$")
+    restart_after_sync: bool | None = None
 
 
 class ScheduleResponse(BaseModel):
@@ -1706,15 +1784,15 @@ class ScheduleResponse(BaseModel):
     cron_expression: str
     enabled: bool
     target_type: str
-    target_nodes: Optional[List[str]] = None
+    target_nodes: List[str] | None = None
     restart_strategy: str
     restart_after_sync: bool
-    last_run: Optional[datetime] = None
-    next_run: Optional[datetime] = None
-    last_run_status: Optional[str] = None
-    last_run_message: Optional[str] = None
+    last_run: datetime | None = None
+    next_run: datetime | None = None
+    last_run_status: str | None = None
+    last_run_message: str | None = None
     created_at: datetime
-    created_by: Optional[str] = None
+    created_by: str | None = None
 
     model_config = {"from_attributes": True}
 
@@ -1725,7 +1803,7 @@ class ScheduleRunResponse(BaseModel):
     success: bool
     message: str
     schedule_id: int
-    job_id: Optional[str] = None
+    job_id: str | None = None
 
 
 # =============================================================================
@@ -1738,9 +1816,9 @@ class ServiceDiscoveryResponse(BaseModel):
 
     service_name: str
     host: str
-    port: Optional[int] = None
+    port: int | None = None
     protocol: str = "http"
-    endpoint_path: Optional[str] = None
+    endpoint_path: str | None = None
     url: str  # Fully constructed URL
     healthy: bool
     node_id: str
@@ -1761,9 +1839,9 @@ class NodeConfigResponse(BaseModel):
     """Node configuration response."""
 
     id: int
-    node_id: Optional[str] = None  # None = global default
+    node_id: str | None = None  # None = global default
     config_key: str
-    config_value: Optional[str] = None
+    config_value: str | None = None
     value_type: str = "string"
     is_global: bool = False
     created_at: datetime
@@ -1783,7 +1861,7 @@ class NodeConfigBulkResponse(BaseModel):
     """Bulk config response with casted values."""
 
     node_id: str
-    configs: Dict[str, Optional[str]]  # key -> value
+    configs: Dict[str, str | None]  # key -> value
 
 
 # =============================================================================
@@ -1797,7 +1875,7 @@ class ServiceConflictResponse(BaseModel):
     id: int
     service_name_a: str
     service_name_b: str
-    reason: Optional[str] = None
+    reason: str | None = None
     conflict_type: str = "port"
     created_at: datetime
 
@@ -1809,7 +1887,7 @@ class ServiceConflictCreateRequest(BaseModel):
 
     service_a: str = Field(..., min_length=1, max_length=128)
     service_b: str = Field(..., min_length=1, max_length=128)
-    reason: Optional[str] = None
+    reason: str | None = None
     conflict_type: str = Field(default="port", pattern="^(port|dependency|resource)$")
 
 
@@ -1829,11 +1907,11 @@ class AgentLLMConfig(BaseModel):
     """LLM configuration for an agent (excludes API key)."""
 
     llm_provider: str
-    llm_endpoint: Optional[str] = None
+    llm_endpoint: str | None = None
     llm_model: str
     llm_timeout: int = 30
     llm_temperature: float = 0.7
-    llm_max_tokens: Optional[int] = None
+    llm_max_tokens: int | None = None
 
 
 class AgentResponse(BaseModel):
@@ -1842,13 +1920,13 @@ class AgentResponse(BaseModel):
     id: int
     agent_id: str
     name: str
-    description: Optional[str] = None
+    description: str | None = None
     llm_provider: str
-    llm_endpoint: Optional[str] = None
+    llm_endpoint: str | None = None
     llm_model: str
     llm_timeout: int = 30
     llm_temperature: float = 0.7
-    llm_max_tokens: Optional[int] = None
+    llm_max_tokens: int | None = None
     is_default: bool = False
     is_active: bool = True
     created_at: datetime
@@ -1862,14 +1940,14 @@ class AgentCreateRequest(BaseModel):
 
     agent_id: str = Field(..., min_length=1, max_length=64, pattern="^[a-z0-9-]+$")
     name: str = Field(..., min_length=1, max_length=128)
-    description: Optional[str] = None
+    description: str | None = None
     llm_provider: str = Field(..., pattern="^(ollama|openai|anthropic|vllm)$")
-    llm_endpoint: Optional[str] = None
+    llm_endpoint: str | None = None
     llm_model: str = Field(..., min_length=1, max_length=64)
-    llm_api_key: Optional[str] = None  # Will be encrypted before storage
+    llm_api_key: str | None = None  # Will be encrypted before storage
     llm_timeout: int = Field(default=30, ge=1, le=300)
     llm_temperature: float = Field(default=0.7, ge=0.0, le=2.0)
-    llm_max_tokens: Optional[int] = Field(default=None, ge=1, le=128000)
+    llm_max_tokens: int | None = Field(default=None, ge=1, le=128000)
     is_default: bool = False
     is_active: bool = True
 
@@ -1877,17 +1955,17 @@ class AgentCreateRequest(BaseModel):
 class AgentUpdateRequest(BaseModel):
     """Request to update an agent."""
 
-    name: Optional[str] = Field(default=None, min_length=1, max_length=128)
-    description: Optional[str] = None
-    llm_provider: Optional[str] = Field(default=None, pattern="^(ollama|openai|anthropic|vllm)$")
-    llm_endpoint: Optional[str] = None
-    llm_model: Optional[str] = Field(default=None, min_length=1, max_length=64)
-    llm_api_key: Optional[str] = None  # Will be encrypted before storage
-    llm_timeout: Optional[int] = Field(default=None, ge=1, le=300)
-    llm_temperature: Optional[float] = Field(default=None, ge=0.0, le=2.0)
-    llm_max_tokens: Optional[int] = Field(default=None, ge=1, le=128000)
-    is_default: Optional[bool] = None
-    is_active: Optional[bool] = None
+    name: str | None = Field(default=None, min_length=1, max_length=128)
+    description: str | None = None
+    llm_provider: str | None = Field(default=None, pattern="^(ollama|openai|anthropic|vllm)$")
+    llm_endpoint: str | None = None
+    llm_model: str | None = Field(default=None, min_length=1, max_length=64)
+    llm_api_key: str | None = None  # Will be encrypted before storage
+    llm_timeout: int | None = Field(default=None, ge=1, le=300)
+    llm_temperature: float | None = Field(default=None, ge=0.0, le=2.0)
+    llm_max_tokens: int | None = Field(default=None, ge=1, le=128000)
+    is_default: bool | None = None
+    is_active: bool | None = None
 
 
 class AgentListResponse(BaseModel):
@@ -1900,7 +1978,7 @@ class AgentListResponse(BaseModel):
 class AgentLLMConfigWithKey(AgentLLMConfig):
     """LLM config including decrypted API key (for backend only)."""
 
-    llm_api_key: Optional[str] = None
+    llm_api_key: str | None = None
 
 
 # =============================================================================
@@ -1941,12 +2019,12 @@ class NPUNodeStatusResponse(BaseModel):
     """NPU node status response."""
 
     node_id: str
-    capabilities: Optional[NPUCapabilities] = None
+    capabilities: NPUCapabilities | None = None
     loaded_models: List[str] = Field(default_factory=list, alias="loadedModels")
     queue_depth: int = Field(default=0, alias="queueDepth")
-    last_health_check: Optional[datetime] = Field(None, alias="lastHealthCheck")
+    last_health_check: datetime | None = Field(None, alias="lastHealthCheck")
     detection_status: str = Field(default="pending", alias="detectionStatus")
-    detection_error: Optional[str] = Field(None, alias="detectionError")
+    detection_error: str | None = Field(None, alias="detectionError")
 
     model_config = {"populate_by_name": True}
 
@@ -1966,7 +2044,7 @@ class NPUModelInfo(BaseModel):
     name: str
     size_mb: float = Field(default=0.0)
     loaded: bool = False
-    inference_time_ms: Optional[float] = None
+    inference_time_ms: float | None = None
     total_requests: int = 0
 
 
@@ -1989,7 +2067,7 @@ class NPUDetectionResponse(BaseModel):
     success: bool
     message: str
     node_id: str
-    capabilities: Optional[NPUCapabilities] = None
+    capabilities: NPUCapabilities | None = None
 
 
 class NPURoleAssignResponse(BaseModel):
@@ -2006,7 +2084,7 @@ class NPUWorkerMetrics(BaseModel):
 
     node_id: str
     utilization: float = 0.0
-    temperature_celsius: Optional[float] = None
+    temperature_celsius: float | None = None
     inference_count: int = 0
     avg_latency_ms: float = 0.0
     throughput_rps: float = 0.0
@@ -2015,7 +2093,7 @@ class NPUWorkerMetrics(BaseModel):
     memory_total_gb: float = 0.0
     uptime_seconds: int = 0
     error_count: int = 0
-    timestamp: Optional[datetime] = None
+    timestamp: datetime | None = None
 
     model_config = {"populate_by_name": True}
 
@@ -2102,7 +2180,7 @@ class UpdatePolicyResponse(BaseModel):
 
     node_id: str
     effective_policy: str  # "full" | "security" | "manual"
-    reboot_strategy: Optional[str] = None
+    reboot_strategy: str | None = None
     per_role: Dict[str, str] = Field(default_factory=dict)
 
 

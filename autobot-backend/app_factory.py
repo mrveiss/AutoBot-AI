@@ -1,11 +1,19 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
-import logging
+"""
+FastAPI application factory for the AutoBot backend.
+
+Builds and configures the FastAPI app, registers all routers, middleware,
+and startup/shutdown lifecycle hooks. Entry point for all HTTP/WebSocket requests.
+"""
+
 import os
 import sys
 from pathlib import Path
-from typing import List, Optional
+from typing import List
+
+from autobot_shared.logging_manager import get_logger
 
 # Add the project root to Python path for absolute imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -30,7 +38,7 @@ from initialization import (
 )
 
 # Store logger for app usage
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def _register_exception_handlers(app: FastAPI) -> None:
@@ -88,6 +96,16 @@ def _register_routers(app: FastAPI) -> None:
     except Exception as e:
         logger.warning("⚠️ Failed to register OpenAI-compat router: %s", e)
 
+    # Issue #6591: Anthropic-compatible /v1/messages endpoint so Anthropic-SDK
+    # consumers can point base_url at AutoBot without changing integration code.
+    try:
+        from api.anthropic_compat import router as anthropic_compat_router
+
+        app.include_router(anthropic_compat_router, prefix="/v1")
+        logger.info("✅ Registered Anthropic-compat router at /v1")
+    except Exception as e:
+        logger.warning("⚠️ Failed to register Anthropic-compat router: %s", e)
+
     logger.info("✅ API routes configured with optional AI Stack integration")
 
 
@@ -116,14 +134,14 @@ class AppFactory:
 
     def __init__(self):
         """Initialize app factory with logger instance."""
-        self.logger = logging.getLogger(__name__)
+        self.logger = get_logger(__name__)
 
     @staticmethod
     def create_fastapi_app(
         title: str = "AutoBot - Distributed Autonomous Agent",
         description: str = "AI-powered autonomous Linux administration with distributed VMs",
         version: str = "1.5.0",
-        allow_origins: Optional[List[str]] = None,
+        allow_origins: List[str] | None = None,
     ) -> FastAPI:
         """
         Create and configure FastAPI application with optimal performance settings.

@@ -1,0 +1,117 @@
+# AutoBot Container Image Build, Push, and Cosign Signing
+# Issue #6597: Supply-chain security — signed container images in CI.
+#
+# Triggers on release tags (v*) and can be run manually.
+# Requires secrets:
+#   COSIGN_PRIVATE_KEY — base64-encoded cosign private key
+#   COSIGN_PASSWORD    — passphrase for the cosign private key
+#
+# Setup (one-time, by repo admin):
+#   cosign generate-key-pair
+#   # outputs cosign.key (private, add to Actions secrets) + cosign.pub (commit to repo)
+#   # Set COSIGN_PRIVATE_KEY = $(base64 -w0 cosign.key), COSIGN_PASSWORD = passphrase
+#
+# Verification (by deployers):
+#   cosign verify --key cosign.pub ghcr.io/mrveiss/autobot-backend:<tag>
+#
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+
+name: Build, Push, and Sign Images
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Image tag (e.g. v1.2.3)"
+        required: true
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+
+env:
+  REGISTRY: ghcr.io
+  OWNER: mrveiss
+
+jobs:
+  build-sign:
+    name: Build, push, and sign ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - service: autobot-backend
+            dockerfile: docker/backend/Dockerfile
+          - service: autobot-slm
+            dockerfile: docker/slm/Dockerfile
+          - service: autobot-frontend
+            dockerfile: docker/frontend/Dockerfile
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5  # v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@7ca345011ac4304463197fac0e56eab1bc7e6af0  # v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Determine image tag
+        id: tag
+        env:
+          # Avoid injecting untrusted event inputs directly into run: steps.
+          DISPATCH_TAG: ${{ inputs.tag }}
+          GIT_REF_NAME: ${{ github.ref_name }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "tag=$DISPATCH_TAG" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=$GIT_REF_NAME" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build and push image
+        id: build
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83  # v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.OWNER }}/${{ matrix.service }}:${{ steps.tag.outputs.tag }}
+            ${{ env.REGISTRY }}/${{ env.OWNER }}/${{ matrix.service }}:latest
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ steps.tag.outputs.tag }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6  # v3
+
+      - name: Sign image with cosign (key-based)
+        env:
+          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
+          IMAGE_REF: ${{ env.REGISTRY }}/${{ env.OWNER }}/${{ matrix.service }}@${{ steps.build.outputs.digest }}
+        run: |
+          echo "${{ secrets.COSIGN_PRIVATE_KEY }}" | base64 -d > /tmp/cosign.key
+          cosign sign --yes --key /tmp/cosign.key "$IMAGE_REF"
+          rm -f /tmp/cosign.key
+
+      - name: Verify signature (self-check)
+        env:
+          IMAGE_REF: ${{ env.REGISTRY }}/${{ env.OWNER }}/${{ matrix.service }}@${{ steps.build.outputs.digest }}
+        run: |
+          cosign verify --key cosign.pub "$IMAGE_REF"

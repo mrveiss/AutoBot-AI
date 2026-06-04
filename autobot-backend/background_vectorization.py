@@ -11,11 +11,10 @@ Issue #285: Integrated with Embedding Pattern Analyzer for cost tracking.
 """
 
 import asyncio
-import logging
 import time
 from datetime import datetime, timezone
-from typing import Optional
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.missing_dep import MissingDep as _MissingDep
 from autobot_shared.ssot_config import DEFAULT_EMBEDDING_MODEL
 from constants.threshold_constants import TimingConstants
@@ -31,10 +30,10 @@ try:
 except ImportError as _e:
     EMBEDDING_ANALYTICS_AVAILABLE = False
     EmbeddingUsageRequest = _MissingDep("EmbeddingUsageRequest", _e)  # type: ignore[assignment]
-    logger = logging.getLogger(__name__)
+    logger = get_logger(__name__)
     logger.debug("Embedding analytics not available - usage tracking disabled")
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class BackgroundVectorizer:
@@ -43,7 +42,7 @@ class BackgroundVectorizer:
     def __init__(self):
         """Initialize background vectorizer with default settings."""
         self.is_running = False
-        self.last_run: Optional[datetime] = None
+        self.last_run: datetime | None = None
         self.check_interval = 300  # 5 minutes
         self.batch_size = 50
         self.batch_delay = 0.5
@@ -278,7 +277,7 @@ class BackgroundVectorizer:
 
 # Global instance (thread-safe)
 
-_background_vectorizer: Optional[BackgroundVectorizer] = None
+_background_vectorizer: BackgroundVectorizer | None = None
 
 
 def get_background_vectorizer() -> BackgroundVectorizer:

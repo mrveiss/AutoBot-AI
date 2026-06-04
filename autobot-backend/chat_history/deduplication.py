@@ -10,19 +10,19 @@ Provides deduplication of streaming and duplicate messages:
 - Time-window based grouping
 """
 
-import logging
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import parse_utc_iso
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Performance optimization: O(1) lookup for streaming message types (Issue #326)
 STREAMING_TYPES = frozenset(["llm_response", "llm_response_chunk", "response"])
 
 
-def _parse_timestamp(msg_ts: str) -> Optional[datetime]:
+def _parse_timestamp(msg_ts: str) -> datetime | None:
     """Parse message timestamp string (Issue #315 - extracted)."""
     if not isinstance(msg_ts, str) or not msg_ts:
         return None
@@ -52,7 +52,7 @@ def _group_streaming_by_time_window(
     non_streaming = []
     streaming_groups: List[List[Dict[str, Any]]] = []
     current_group: List[Dict[str, Any]] = []
-    last_streaming_ts: Optional[datetime] = None
+    last_streaming_ts: datetime | None = None
 
     for msg in messages:
         if not _is_streaming_type(msg):

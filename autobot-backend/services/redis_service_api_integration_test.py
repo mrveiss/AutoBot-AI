@@ -21,6 +21,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from autobot_shared.logging_manager import get_logger
+
 try:
     from httpx import AsyncClient, HTTPStatusError
 except ImportError:
@@ -29,7 +31,7 @@ except ImportError:
 
 # Configure logging for tests
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # Fixtures
@@ -101,7 +103,7 @@ class TestStartServiceEndpoint:
 
     @pytest.mark.integration
     @pytest.mark.asyncio
-    async def test_start_service_success_admin(self, api_client, admin_token, mock_redis_service_manager):
+    async def test_start_service_success_admin(self, api_client, admin_token, mock_redis_service_manager) -> None:
         """
         Test Case 1.1: Admin successfully starts stopped service
 
@@ -142,7 +144,7 @@ class TestStartServiceEndpoint:
 
     @pytest.mark.integration
     @pytest.mark.asyncio
-    async def test_start_service_success_operator(self, api_client, operator_token, mock_redis_service_manager):
+    async def test_start_service_success_operator(self, api_client, operator_token, mock_redis_service_manager) -> None:
         """
         Test Case 1.2: Operator can start service
 
@@ -176,7 +178,7 @@ class TestStartServiceEndpoint:
 
     @pytest.mark.integration
     @pytest.mark.asyncio
-    async def test_start_service_unauthorized_no_token(self, api_client):
+    async def test_start_service_unauthorized_no_token(self, api_client) -> None:
         """
         Test Case 1.3: Start service without authentication fails
 
@@ -195,7 +197,7 @@ class TestStartServiceEndpoint:
 
     @pytest.mark.integration
     @pytest.mark.asyncio
-    async def test_start_service_already_running(self, api_client, admin_token, mock_redis_service_manager):
+    async def test_start_service_already_running(self, api_client, admin_token, mock_redis_service_manager) -> None:
         """
         Test Case 1.4: Start service when already running
 
@@ -234,7 +236,7 @@ class TestStopServiceEndpoint:
 
     @pytest.mark.integration
     @pytest.mark.asyncio
-    async def test_stop_service_success_admin(self, api_client, admin_token, mock_redis_service_manager):
+    async def test_stop_service_success_admin(self, api_client, admin_token, mock_redis_service_manager) -> None:
         """
         Test Case 2.1: Admin successfully stops service with confirmation
 
@@ -271,7 +273,7 @@ class TestStopServiceEndpoint:
 
     @pytest.mark.integration
     @pytest.mark.asyncio
-    async def test_stop_service_forbidden_operator(self, api_client, operator_token):
+    async def test_stop_service_forbidden_operator(self, api_client, operator_token) -> None:
         """
         Test Case 2.2: Operator cannot stop service
 
@@ -297,7 +299,7 @@ class TestStopServiceEndpoint:
 
     @pytest.mark.integration
     @pytest.mark.asyncio
-    async def test_stop_service_no_confirmation(self, api_client, admin_token):
+    async def test_stop_service_no_confirmation(self, api_client, admin_token) -> None:
         """
         Test Case 2.3: Stop service without confirmation fails
 
@@ -327,7 +329,7 @@ class TestRestartServiceEndpoint:
 
     @pytest.mark.integration
     @pytest.mark.asyncio
-    async def test_restart_service_success(self, api_client, admin_token, mock_redis_service_manager):
+    async def test_restart_service_success(self, api_client, admin_token, mock_redis_service_manager) -> None:
         """
         Test Case 3.1: Full restart flow from API to Redis VM
 
@@ -386,7 +388,9 @@ class TestRestartServiceEndpoint:
 
     @pytest.mark.integration
     @pytest.mark.asyncio
-    async def test_restart_service_operator_allowed(self, api_client, operator_token, mock_redis_service_manager):
+    async def test_restart_service_operator_allowed(
+        self, api_client, operator_token, mock_redis_service_manager
+    ) -> None:
         """
         Test Case 3.2: Operator can restart service
 
@@ -422,7 +426,7 @@ class TestStatusEndpoint:
 
     @pytest.mark.integration
     @pytest.mark.asyncio
-    async def test_get_status_running(self, api_client, mock_redis_service_manager):
+    async def test_get_status_running(self, api_client, mock_redis_service_manager) -> None:
         """
         Test Case 4.1: Get status when service running
 
@@ -459,7 +463,7 @@ class TestStatusEndpoint:
 
     @pytest.mark.integration
     @pytest.mark.asyncio
-    async def test_get_status_stopped(self, api_client, mock_redis_service_manager):
+    async def test_get_status_stopped(self, api_client, mock_redis_service_manager) -> None:
         """
         Test Case 4.2: Get status when service stopped
 
@@ -491,7 +495,7 @@ class TestStatusEndpoint:
 
     @pytest.mark.integration
     @pytest.mark.asyncio
-    async def test_get_status_no_auth_required(self, api_client, mock_redis_service_manager):
+    async def test_get_status_no_auth_required(self, api_client, mock_redis_service_manager) -> None:
         """
         Test Case 4.3: Status endpoint accessible without authentication
 
@@ -521,7 +525,7 @@ class TestHealthEndpoint:
 
     @pytest.mark.integration
     @pytest.mark.asyncio
-    async def test_get_health_healthy(self, api_client, mock_redis_service_manager):
+    async def test_get_health_healthy(self, api_client, mock_redis_service_manager) -> None:
         """
         Test Case 5.1: Get health status when healthy
 
@@ -574,7 +578,7 @@ class TestHealthEndpoint:
 
     @pytest.mark.integration
     @pytest.mark.asyncio
-    async def test_get_health_degraded(self, api_client, mock_redis_service_manager):
+    async def test_get_health_degraded(self, api_client, mock_redis_service_manager) -> None:
         """
         Test Case 5.2: Get health status when degraded
 
@@ -616,7 +620,7 @@ class TestHealthEndpoint:
 
     @pytest.mark.integration
     @pytest.mark.asyncio
-    async def test_get_health_critical(self, api_client, mock_redis_service_manager):
+    async def test_get_health_critical(self, api_client, mock_redis_service_manager) -> None:
         """
         Test Case 5.3: Get health status when critical
 
@@ -664,7 +668,7 @@ class TestConcurrentRequests:
 
     @pytest.mark.integration
     @pytest.mark.asyncio
-    async def test_concurrent_status_requests(self, api_client, mock_redis_service_manager):
+    async def test_concurrent_status_requests(self, api_client, mock_redis_service_manager) -> None:
         """
         Test Case 6.1: Multiple concurrent status requests
 
@@ -746,7 +750,7 @@ class TestErrorScenarios:
 
     @pytest.mark.integration
     @pytest.mark.asyncio
-    async def test_service_operation_failure(self, api_client, admin_token, mock_redis_service_manager):
+    async def test_service_operation_failure(self, api_client, admin_token, mock_redis_service_manager) -> None:
         """
         Test Case 7.1: Service operation fails
 
@@ -781,7 +785,7 @@ class TestErrorScenarios:
 
     @pytest.mark.integration
     @pytest.mark.asyncio
-    async def test_vm_unreachable(self, api_client, admin_token, mock_redis_service_manager):
+    async def test_vm_unreachable(self, api_client, admin_token, mock_redis_service_manager) -> None:
         """
         Test Case 7.2: Redis VM unreachable
 

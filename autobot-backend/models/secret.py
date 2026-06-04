@@ -11,7 +11,6 @@ Part of Issue #870 - User-Centric Session Tracking (#608 Phase 1-2).
 import uuid
 from datetime import datetime
 from enum import Enum
-from typing import Optional
 
 from sqlalchemy import Boolean, DateTime, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
@@ -39,9 +38,9 @@ class SecretType(str, Enum):
     """Secret type classification."""
 
     SSH_KEY = "ssh_key"
-    PASSWORD = "password"  # nosec B105 - enum value, not actual password
-    API_KEY = "api_key"
-    TOKEN = "token"  # nosec B105 - enum value, not actual token
+    PASSWORD = "password"  # nosec B105 - enum value, not actual password  # nosemgrep: autobot-hardcoded-secret-key  # nosemgrep
+    API_KEY = "api_key"  # nosemgrep: autobot-hardcoded-secret-key  # nosemgrep
+    TOKEN = "token"  # nosec B105 - enum value, not actual token  # nosemgrep: autobot-hardcoded-secret-key  # nosemgrep
     CERTIFICATE = "certificate"
     DATABASE_URL = "database_url"
     INFRASTRUCTURE_HOST = "infrastructure_host"
@@ -84,7 +83,7 @@ class Secret(Base):
         comment="User ID who owns this secret",
     )
 
-    org_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    org_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True),
         nullable=True,
         index=True,
@@ -120,7 +119,7 @@ class Secret(Base):
         comment="Array of team IDs for group-scoped secrets (Issue #685)",
     )
 
-    session_id: Mapped[Optional[str]] = mapped_column(
+    session_id: Mapped[str | None] = mapped_column(
         String(128),
         nullable=True,
         index=True,
@@ -142,7 +141,7 @@ class Secret(Base):
     )
 
     # Metadata
-    description: Mapped[Optional[str]] = mapped_column(
+    description: Mapped[str | None] = mapped_column(
         String(1024),
         nullable=True,
     )
@@ -153,7 +152,7 @@ class Secret(Base):
         nullable=False,
     )
 
-    expires_at: Mapped[Optional[datetime]] = mapped_column(
+    expires_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
@@ -184,9 +183,9 @@ class Secret(Base):
     def is_accessible_by(
         self,
         user_id: uuid.UUID,
-        session_id: Optional[str] = None,
-        user_org_id: Optional[uuid.UUID] = None,
-        user_team_ids: Optional[list] = None,
+        session_id: str | None = None,
+        user_org_id: uuid.UUID | None = None,
+        user_team_ids: list | None = None,
     ) -> bool:
         """
         Check if user can access this secret.

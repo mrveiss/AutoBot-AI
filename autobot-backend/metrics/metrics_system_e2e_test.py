@@ -4,10 +4,11 @@ Test the new metrics and monitoring system
 """
 
 import asyncio
-import os
 import sys
 
-sys.path.append(os.environ.get("AUTOBOT_PROJECT_ROOT", "/opt/autobot/code_source"))
+from autobot_shared.ssot_config import config
+
+sys.path.append(config.project_root)
 
 from metrics.system_monitor import system_monitor
 from metrics.workflow_metrics import workflow_metrics

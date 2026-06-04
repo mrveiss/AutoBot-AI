@@ -7,17 +7,17 @@ Provides interrupt/takeover capabilities for autonomous operations
 """
 
 import asyncio
-import logging
 import time
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Set
+from typing import Any, Callable, Dict, List, Set
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from memory import EnhancedMemoryManager, TaskPriority
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Performance optimization: O(1) lookup for datetime field keys (Issue #326)
 DATETIME_FIELD_KEYS = {"started_at", "ended_at"}
@@ -52,12 +52,12 @@ class TakeoverRequest:
     request_id: str
     trigger: TakeoverTrigger
     priority: TaskPriority
-    requesting_agent: Optional[str]
+    requesting_agent: str | None
     affected_tasks: List[str]
     reason: str
     context_data: Dict[str, Any]
     requested_at: datetime
-    expires_at: Optional[datetime]
+    expires_at: datetime | None
     auto_approve: bool = False
 
 
@@ -68,12 +68,12 @@ class TakeoverSession:
     session_id: str
     request: TakeoverRequest
     state: TakeoverState
-    human_operator: Optional[str]
-    started_at: Optional[datetime]
-    ended_at: Optional[datetime]
+    human_operator: str | None
+    started_at: datetime | None
+    ended_at: datetime | None
     actions_taken: List[Dict[str, Any]]
     system_snapshot: Dict[str, Any]
-    resolution: Optional[str] = None
+    resolution: str | None = None
 
 
 class TakeoverManager:
@@ -81,7 +81,7 @@ class TakeoverManager:
     Manages human-in-the-loop takeover capabilities for autonomous operations
     """
 
-    def __init__(self, memory_manager: Optional[EnhancedMemoryManager] = None):
+    def __init__(self, memory_manager: EnhancedMemoryManager | None = None):
         """Initialize takeover manager with memory and session tracking."""
         self.memory_manager = memory_manager or EnhancedMemoryManager()
 
@@ -109,11 +109,11 @@ class TakeoverManager:
         request_id: str,
         trigger: TakeoverTrigger,
         reason: str,
-        requesting_agent: Optional[str],
-        affected_tasks: Optional[List[str]],
+        requesting_agent: str | None,
+        affected_tasks: List[str] | None,
         priority: TaskPriority,
-        context_data: Optional[Dict[str, Any]],
-        timeout_minutes: Optional[int],
+        context_data: Dict[str, Any] | None,
+        timeout_minutes: int | None,
         auto_approve: bool,
     ) -> TakeoverRequest:
         """
@@ -156,8 +156,8 @@ class TakeoverManager:
         trigger: TakeoverTrigger,
         reason: str,
         priority: TaskPriority,
-        requesting_agent: Optional[str],
-        affected_tasks: Optional[List[str]],
+        requesting_agent: str | None,
+        affected_tasks: List[str] | None,
     ) -> str:
         """
         Record takeover request in memory system.
@@ -230,11 +230,11 @@ class TakeoverManager:
         self,
         trigger: TakeoverTrigger,
         reason: str,
-        requesting_agent: Optional[str] = None,
-        affected_tasks: Optional[List[str]] = None,
+        requesting_agent: str | None = None,
+        affected_tasks: List[str] | None = None,
         priority: TaskPriority = TaskPriority.HIGH,
-        context_data: Optional[Dict[str, Any]] = None,
-        timeout_minutes: Optional[int] = None,
+        context_data: Dict[str, Any] | None = None,
+        timeout_minutes: int | None = None,
         auto_approve: bool = False,
     ) -> str:
         """Request human takeover of autonomous operations. Issue #665, #620."""
@@ -304,7 +304,7 @@ class TakeoverManager:
         self,
         request_id: str,
         human_operator: str,
-        takeover_scope: Optional[Dict[str, Any]] = None,
+        takeover_scope: Dict[str, Any] | None = None,
     ) -> str:
         """Approve a takeover request and start session"""
         request = await self._validate_takeover_request(request_id)
@@ -494,7 +494,7 @@ class TakeoverManager:
         return False
 
     async def complete_takeover_session(
-        self, session_id: str, resolution: str, handback_notes: Optional[str] = None
+        self, session_id: str, resolution: str, handback_notes: str | None = None
     ) -> bool:
         """Complete a takeover session and return control to autonomous system"""
 
@@ -621,7 +621,7 @@ class TakeoverManager:
             logger.info("Takeover request expired: %s", request_id)
             await self._notify_state_change("request_expired", request_id)
 
-    def _get_task_id_for_request(self, request_id: str) -> Optional[str]:
+    def _get_task_id_for_request(self, request_id: str) -> str | None:
         """
         Return the memory task ID recorded when the takeover request was created.
 

@@ -1,0 +1,309 @@
+/**
+ * AutoBot - Design Tokens Canonical Reference
+ * Copyright (c) 2025 mrveiss
+ * 
+ * Canonical CSS Design Tokens
+ * Issue #7453: Tech-debt(frontend/css) — Canonical theming pattern audit
+ * 
+ * This file serves as the primary reference for all design tokens used in AutoBot.
+ * Components should import design-tokens.css which includes this file.
+ * 
+ * Token Organization:
+ * - Color tokens (semantic: --color-*, --bg-*, --text-*, --border-*)
+ * - Spacing tokens (--spacing-*, --space-*)
+ * - Border-radius tokens (--radius-*)
+ * - Typography tokens (--font-*, --text-*, --leading-*, --tracking-*)
+ * - Shadow tokens (--shadow-*)
+ * - Transition tokens (--duration-*, --ease-*, --transition-*)
+ * - Z-index tokens (--z-*)
+ * 
+ * NOTE: The master definition of all tokens is in design-tokens.css
+ * This file is a canonical reference point and may be used for token organization.
+ */
+
+/* ============================================
+ * COLOR TOKENS - SEMANTIC REFERENCE
+ * See design-tokens.css for complete definitions
+ * ============================================ */
+
+/*
+ * Primary Brand Color
+ * --color-primary: #3b82f6 (Electric Blue)
+ * --color-primary-hover: #2563eb
+ * --color-primary-active: #1d4ed8
+ * --color-primary-light: #93c5fd
+ * --color-primary-dark: #1d4ed8
+ * --color-primary-bg: rgba(59, 130, 246, 0.1)
+ */
+
+/*
+ * Status Colors
+ * --color-success: #10b981 (Emerald)
+ * --color-warning: #f59e0b (Amber)
+ * --color-error: #ef4444 (Red)
+ * --color-info: #3b82f6 (Blue)
+ * --color-danger: #dc2626 (Critical Red)
+ */
+
+/*
+ * Background Colors (Theme-Aware)
+ * --bg-primary: main page background
+ * --bg-secondary: secondary surfaces
+ * --bg-card: card/panel backgrounds
+ * --bg-elevated: elevated surfaces
+ * --bg-surface: surface backgrounds
+ * --bg-input: input field backgrounds
+ */
+
+/*
+ * Text Colors (Theme-Aware)
+ * --text-primary: main text (contrast-safe on bg-primary)
+ * --text-secondary: secondary text
+ * --text-tertiary: tertiary text
+ * --text-muted: disabled/muted text
+ * --text-inverse: text on dark backgrounds
+ */
+
+/*
+ * Border Colors
+ * --border-default: standard borders
+ * --border-subtle: subtle/secondary borders
+ * --border-strong: emphasized borders
+ * --border-focus: focus ring borders
+ */
+
+/* ============================================
+ * SPACING TOKENS - CONSISTENT SCALE
+ * ============================================ */
+
+/*
+ * Semantic Spacing
+ * --spacing-xs: 0.25rem (4px)
+ * --spacing-sm: 0.5rem (8px)
+ * --spacing-md: 1rem (16px)
+ * --spacing-lg: 1.5rem (24px)
+ * --spacing-xl: 2rem (32px)
+ * --spacing-2xl: 3rem (48px)
+ */
+
+/*
+ * Numeric Scale: --spacing-1 through --spacing-32
+ * Micro units: --spacing-micro-3, --spacing-micro-4, --spacing-micro-5
+ */
+
+/* ============================================
+ * BORDER-RADIUS TOKENS
+ * ============================================ */
+
+/*
+ * Radius Scale
+ * --radius-none: 0
+ * --radius-sm: 0.125rem (2px)
+ * --radius-md: 0.375rem (6px)
+ * --radius-lg: 0.5rem (8px)
+ * --radius-xl: 0.75rem (12px)
+ * --radius-2xl: 1rem (16px)
+ * --radius-full: 9999px (circles, pills)
+ */
+
+/* ============================================
+ * TYPOGRAPHY TOKENS
+ * ============================================ */
+
+/*
+ * Font Families
+ * --font-sans: 'IBM Plex Sans', system fonts (primary)
+ * --font-mono: 'JetBrains Mono', code fonts
+ * --font-numeric: 'IBM Plex Mono', numeric data
+ */
+
+/*
+ * Font Sizes
+ * --text-xs: 0.75rem (12px)
+ * --text-sm: 0.875rem (14px)
+ * --text-base: 1rem (16px)
+ * --text-lg: 1.125rem (18px)
+ * --text-xl: 1.25rem (20px)
+ * --text-2xl: 1.5rem (24px)
+ * --text-3xl: 1.875rem (30px)
+ */
+
+/*
+ * Font Weights
+ * --font-normal: 400
+ * --font-medium: 500
+ * --font-semibold: 600
+ * --font-bold: 700
+ */
+
+/*
+ * Line Heights
+ * --leading-tight: 1.25
+ * --leading-normal: 1.5
+ * --leading-relaxed: 1.625
+ * --leading-loose: 2
+ */
+
+/* ============================================
+ * SHADOW TOKENS - ELEVATION SYSTEM
+ * ============================================ */
+
+/*
+ * Shadows
+ * --shadow-xs: minimal elevation
+ * --shadow-sm: small elevation
+ * --shadow-md: medium elevation
+ * --shadow-lg: large elevation
+ * --shadow-xl: extra large elevation
+ * --shadow-2xl: maximum elevation
+ * --shadow-focus: focus ring shadow
+ */
+
+/* ============================================
+ * TRANSITION TOKENS - ANIMATION TIMING
+ * ============================================ */
+
+/*
+ * Durations
+ * --duration-75: 75ms
+ * --duration-100: 100ms
+ * --duration-150: 150ms
+ * --duration-200: 200ms
+ * --duration-300: 300ms
+ * --duration-500: 500ms
+ */
+
+/*
+ * Easing Functions
+ * --ease-linear: linear
+ * --ease-in: cubic-bezier(0.4, 0, 1, 1)
+ * --ease-out: cubic-bezier(0, 0, 0.2, 1)
+ * --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1)
+ */
+
+/*
+ * Transition Presets
+ * --transition-colors: color, background-color, border-color changes
+ * --transition-shadow: box-shadow changes
+ * --transition-transform: transform changes
+ */
+
+/* ============================================
+ * Z-INDEX TOKENS - LAYERING SYSTEM
+ * ============================================ */
+
+/*
+ * Z-Index Scale
+ * --z-dropdown: 100
+ * --z-sticky: 200
+ * --z-fixed: 300
+ * --z-modal-backdrop: 900
+ * --z-modal: 1000
+ * --z-popover: 1100
+ * --z-tooltip: 1200
+ * --z-toast: 1300
+ * --z-maximum: 10000
+ */
+
+/* ============================================
+ * COMPONENT-SPECIFIC TOKENS
+ * ============================================ */
+
+/*
+ * Button Tokens
+ * --btn-height-sm: 32px
+ * --btn-height-md: 40px
+ * --btn-height-lg: 48px
+ * --btn-padding-x-md: var(--spacing-4)
+ * --btn-radius: var(--radius-md)
+ */
+
+/*
+ * Input Tokens
+ * --input-height-md: 40px
+ * --input-padding-x: var(--spacing-3)
+ * --input-radius: var(--radius-md)
+ * --input-border: var(--border-default)
+ * --input-bg: var(--bg-input)
+ */
+
+/*
+ * Card Tokens
+ * --card-bg: var(--bg-card)
+ * --card-border: var(--border-subtle)
+ * --card-shadow: var(--shadow-md)
+ * --card-radius: var(--radius-lg)
+ * --card-padding: var(--spacing-4)
+ */
+
+/* ============================================
+ * LAYOUT TOKENS - DIMENSIONS & LAYOUT
+ * ============================================ */
+
+/*
+ * Layout System
+ * --header-height: 56px
+ * --sidebar-width: 240px
+ * --sidebar-width-collapsed: 64px
+ * --content-max-width: 1280px
+ * --view-min-height: calc(100vh - var(--header-height))
+ */
+
+/* ============================================
+ * USAGE INSTRUCTIONS
+ * ============================================ */
+
+/*
+ * How to Use Design Tokens
+ * 
+ * 1. IMPORT: design-tokens.css is imported in:
+ *    - src/assets/main.css (main entry point)
+ *    - src/assets/tailwind.css (Tailwind integration)
+ * 
+ * 2. REFERENCE: Use CSS custom properties in component styles:
+ *    <style scoped>
+ *    .component {
+ *      background: var(--bg-card);
+ *      color: var(--text-primary);
+ *      padding: var(--spacing-md);
+ *      border-radius: var(--radius-lg);
+ *    }
+ *    </style>
+ * 
+ * 3. THEME SWITCHING: Tokens are overridden by theme files:
+ *    - design-tokens.css (base/dark theme definitions)
+ *    - themes/light.css (light theme overrides)
+ *    - themes/dark.css (dark theme overrides)
+ *    Theme switching happens via [data-theme] attribute on root element.
+ * 
+ * 4. NEVER: 
+ *    - Use hardcoded color values (#fff, rgb(), etc.)
+ *    - Use magic numbers for spacing (1rem, 16px, etc.)
+ *    - Use pixel values for sizing (8px, 12px, etc.)
+ *    - Duplicate token definitions in component styles
+ * 
+ * 5. MAINTENANCE:
+ *    - Add new tokens to design-tokens.css
+ *    - Override theme-specific values in light.css/dark.css
+ *    - Document in this reference file (tokens.css)
+ */
+
+/* ============================================
+ * REFERENCE: COMPLETE FILE LOCATION
+ * ============================================ */
+
+/*
+ * Master Design Tokens: src/assets/css/design-tokens.css
+ * This file: src/assets/tokens.css (reference)
+ * 
+ * Theme Overrides:
+ * - src/assets/css/themes/light.css
+ * - src/assets/css/themes/dark.css
+ * 
+ * Tailwind Integration:
+ * - src/assets/tailwind.css
+ * 
+ * Documentation:
+ * - autobot-frontend/THEMING.md (canonical pattern guide)
+ * - autobot-frontend/THEMING-AUDIT.md (audit and compliance)
+ */

@@ -11,7 +11,7 @@ to give FastAPI enough type information to generate correct OpenAPI schemas.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from pydantic import BaseModel, Field
 
@@ -39,30 +39,30 @@ class SessionListData(BaseModel):
 
     sessions: List[Any]
     count: int
-    scope: Optional[str] = None
-    org_id: Optional[str] = None
-    team_id: Optional[str] = None
-    intentional_empty: Optional[bool] = None
+    scope: str | None = None
+    org_id: str | None = None
+    team_id: str | None = None
+    intentional_empty: bool | None = None
 
 
 class SessionCreateData(BaseModel):
     """data payload for POST /chat/sessions."""
 
-    id: Optional[str] = None
-    title: Optional[str] = None
-    metadata: Optional[Dict[str, Any]] = None
-    created_at: Optional[str] = None
-    last_modified: Optional[str] = None
+    id: str | None = None
+    title: str | None = None
+    metadata: Dict[str, Any] | None = None
+    created_at: str | None = None
+    last_modified: str | None = None
 
 
 class SessionUpdateData(BaseModel):
     """data payload for PUT /chat/sessions/{session_id}."""
 
-    id: Optional[str] = None
-    title: Optional[str] = None
-    metadata: Optional[Dict[str, Any]] = None
-    created_at: Optional[str] = None
-    last_modified: Optional[str] = None
+    id: str | None = None
+    title: str | None = None
+    metadata: Dict[str, Any] | None = None
+    created_at: str | None = None
+    last_modified: str | None = None
 
 
 class FileHandlingResult(BaseModel):
@@ -70,10 +70,10 @@ class FileHandlingResult(BaseModel):
 
     files_handled: bool
     action_taken: str
-    files_deleted: Optional[int] = None
-    files_transferred: Optional[int] = None
-    files_failed: Optional[int] = None
-    error: Optional[str] = None
+    files_deleted: int | None = None
+    files_transferred: int | None = None
+    files_failed: int | None = None
+    error: str | None = None
 
 
 class TerminalCleanupResult(BaseModel):
@@ -81,7 +81,7 @@ class TerminalCleanupResult(BaseModel):
 
     terminal_sessions_closed: int
     pending_approvals_cleared: int
-    error: Optional[str] = None
+    error: str | None = None
 
 
 class KbCleanupResult(BaseModel):
@@ -89,14 +89,14 @@ class KbCleanupResult(BaseModel):
 
     facts_deleted: int
     facts_preserved: int
-    cleanup_error: Optional[str] = None
+    cleanup_error: str | None = None
 
 
 class TranscriptCleanupResult(BaseModel):
     """Nested transcript-cleanup sub-payload within SessionDeleteData."""
 
     transcript_deleted: bool
-    error: Optional[str] = None
+    error: str | None = None
 
 
 class SessionDeleteData(BaseModel):
@@ -104,10 +104,10 @@ class SessionDeleteData(BaseModel):
 
     session_id: str
     deleted: bool
-    file_handling: Optional[FileHandlingResult] = None
-    terminal_cleanup: Optional[TerminalCleanupResult] = None
-    kb_cleanup: Optional[KbCleanupResult] = None
-    transcript_cleanup: Optional[TranscriptCleanupResult] = None
+    file_handling: FileHandlingResult | None = None
+    terminal_cleanup: TerminalCleanupResult | None = None
+    kb_cleanup: KbCleanupResult | None = None
+    transcript_cleanup: TranscriptCleanupResult | None = None
 
 
 class ChatResetData(BaseModel):
@@ -122,8 +122,8 @@ class ChatResetData(BaseModel):
 class ActivityAddData(BaseModel):
     """data payload for POST /chat/sessions/{session_id}/activities."""
 
-    activity_id: Optional[str] = None
-    entity_id: Optional[str] = None
+    activity_id: str | None = None
+    entity_id: str | None = None
     stored: bool
 
 
@@ -133,7 +133,7 @@ class ActivityBatchData(BaseModel):
     total: int
     stored: int
     failed: int
-    stored_ids: Optional[List[str]] = None
+    stored_ids: List[str] | None = None
 
 
 class SessionActivitiesData(BaseModel):
@@ -141,7 +141,7 @@ class SessionActivitiesData(BaseModel):
 
     activities: List[Any]
     total: int
-    session_id: Optional[str] = None
+    session_id: str | None = None
 
 
 class SessionShareData(BaseModel):
@@ -150,7 +150,7 @@ class SessionShareData(BaseModel):
     session_id: str
     shared_with: List[str]
     include_knowledge: bool
-    facts_shared: Optional[Any] = None
+    facts_shared: Any | None = None
 
 
 class FactPreview(BaseModel):
@@ -159,7 +159,7 @@ class FactPreview(BaseModel):
     id: str
     content: str
     full_content: str
-    metadata: Optional[Dict[str, Any]] = None
+    metadata: Dict[str, Any] | None = None
 
 
 class SessionSharePreviewData(BaseModel):
@@ -191,9 +191,9 @@ class ChatMessageData(BaseModel):
     content: str
     role: str
     session_id: str
-    message_id: Optional[str] = None
-    timestamp: Optional[str] = None
-    metadata: Optional[Dict[str, Any]] = None
+    message_id: str | None = None
+    timestamp: str | None = None
+    metadata: Dict[str, Any] | None = None
 
 
 class ChatHealthComponents(BaseModel):
@@ -222,17 +222,17 @@ class ChatStatsData(BaseModel):
     session_count, message_count, and a recent-sessions sample.
     """
 
-    stats: Optional[Dict[str, Any]] = None
+    stats: Dict[str, Any] | None = None
 
 
 class ChatSaveData(BaseModel):
     """data payload for POST /chats/{chat_id}/save.
 
     ``save_session`` returns ``None`` so the wrapped data is ``null`` in
-    practice; declared as Optional[Any] for forward compatibility.
+    practice; declared as Any | None for forward compatibility.
     """
 
-    result: Optional[Any] = None
+    result: Any | None = None
 
 
 class ChatDeleteData(BaseModel):
@@ -252,10 +252,10 @@ class EnhancedChatData(BaseModel):
     content: str
     role: str
     session_id: str
-    message_id: Optional[str] = None
-    timestamp: Optional[str] = None
-    metadata: Optional[Dict[str, Any]] = None
-    knowledge_sources: Optional[List[Dict[str, Any]]] = None
+    message_id: str | None = None
+    timestamp: str | None = None
+    metadata: Dict[str, Any] | None = None
+    knowledge_sources: List[Dict[str, Any]] | None = None
 
 
 class EnhancedChatHealthData(BaseModel):
@@ -269,7 +269,7 @@ class EnhancedChatHealthData(BaseModel):
     status: str
     timestamp: str
     components: Dict[str, Any]
-    error: Optional[str] = None
+    error: str | None = None
 
 
 class EnhancedChatCapabilitiesData(BaseModel):
@@ -283,15 +283,15 @@ class EnhancedChatCapabilitiesData(BaseModel):
     enhanced_chat: bool
     ai_stack_integration: bool
     knowledge_base_integration: bool
-    source_citations: Optional[bool] = None
-    streaming_responses: Optional[bool] = None
-    multi_agent_coordination: Optional[bool] = None
-    available_agents: Optional[List[Any]] = None
-    response_styles: Optional[List[str]] = None
-    supported_languages: Optional[List[str]] = None
-    max_message_length: Optional[int] = None
-    context_window: Optional[int] = None
-    error: Optional[str] = None
+    source_citations: bool | None = None
+    streaming_responses: bool | None = None
+    multi_agent_coordination: bool | None = None
+    available_agents: List[Any] | None = None
+    response_styles: List[str] | None = None
+    supported_languages: List[str] | None = None
+    max_message_length: int | None = None
+    context_window: int | None = None
+    error: str | None = None
 
 
 class TranslateData(BaseModel):
@@ -302,11 +302,11 @@ class TranslateData(BaseModel):
     """
 
     status: str
-    response: Optional[str] = None
-    response_text: Optional[str] = None
-    agent_type: Optional[str] = None
-    model_used: Optional[str] = None
-    token_usage: Optional[Dict[str, Any]] = None
+    response: str | None = None
+    response_text: str | None = None
+    agent_type: str | None = None
+    model_used: str | None = None
+    token_usage: Dict[str, Any] | None = None
 
 
 class DetectLanguageData(BaseModel):
@@ -319,11 +319,11 @@ class DetectLanguageData(BaseModel):
     """
 
     status: str
-    response: Optional[str] = None
-    response_text: Optional[str] = None
-    agent_type: Optional[str] = None
-    model_used: Optional[str] = None
-    token_usage: Optional[Dict[str, Any]] = None
+    response: str | None = None
+    response_text: str | None = None
+    agent_type: str | None = None
+    model_used: str | None = None
+    token_usage: Dict[str, Any] | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -338,22 +338,22 @@ class SessionCreate(BaseModel):
     # aligned on a single UUID. Backend validates and uses it as-is; if absent
     # or invalid, backend mints a new one. Eliminates the two-phase create
     # that produced divergent IDs and "blank session" sidebar entries (#6745).
-    id: Optional[str] = Field(
+    id: str | None = Field(
         None,
         max_length=64,
         description="Optional client-supplied session UUID. Validated server-side; "
         "backend mints a new ID when absent or malformed.",
     )
-    title: Optional[str] = Field(None, max_length=200, description="Session title")
-    team_id: Optional[str] = Field(None, description="Team ID for team-scoped sessions (#684)")
-    metadata: Optional[Metadata] = Field(default_factory=dict, description="Session metadata")
+    title: str | None = Field(None, max_length=200, description="Session title")
+    team_id: str | None = Field(None, description="Team ID for team-scoped sessions (#684)")
+    metadata: Metadata | None = Field(default_factory=dict, description="Session metadata")
 
 
 class SessionUpdate(BaseModel):
     """Session update model"""
 
-    title: Optional[str] = Field(None, max_length=200, description="New session title")
-    metadata: Optional[Metadata] = Field(None, description="Updated metadata")
+    title: str | None = Field(None, max_length=200, description="New session title")
+    metadata: Metadata | None = Field(None, description="Updated metadata")
 
 
 class ActivityCreate(BaseModel):
@@ -364,7 +364,7 @@ class ActivityCreate(BaseModel):
     user_id: str = Field(..., description="User who performed the activity")
     content: str = Field(..., max_length=10000, description="Activity content/description")
     secrets_used: list[str] = Field(default_factory=list, description="Secret IDs used")
-    metadata: Optional[Metadata] = Field(default_factory=dict, description="Activity metadata")
+    metadata: Metadata | None = Field(default_factory=dict, description="Activity metadata")
     timestamp: str = Field(..., description="ISO format timestamp from frontend")
 
 
@@ -379,13 +379,58 @@ class SessionShareRequest(BaseModel):
 
     share_with: list[str] = Field(..., min_length=1, description="User IDs to share with")
     include_knowledge: bool = Field(False, description="Include KB facts from this session")
-    knowledge_facts: Optional[list[str]] = Field(None, description="Specific fact IDs to share (all if omitted)")
+    knowledge_facts: list[str] | None = Field(None, description="Specific fact IDs to share (all if omitted)")
+
+
+# ---------------------------------------------------------------------------
+# Shared link schemas (GH#8996)
+# ---------------------------------------------------------------------------
+
+
+class SharedLinkCreateRequest(BaseModel):
+    """Request to create a public shared link for a chat session."""
+
+    password: str | None = Field(None, min_length=1, max_length=128, description="Optional access password")
+    expires_in_seconds: int | None = Field(None, ge=60, description="Link TTL in seconds; omit for no expiry")
+
+
+class SharedLinkData(BaseModel):
+    """Response payload after creating a shared link."""
+
+    token: str
+    session_id: str
+    has_password: bool
+    expires_at: datetime | None
+    created_at: datetime
+
+
+class SharedLinkAccessRequest(BaseModel):
+    """Request body for accessing a password-protected shared link."""
+
+    password: str | None = Field(None, description="Password for protected links")
+
+
+class SharedMessageItem(BaseModel):
+    """A single message in a shared conversation view."""
+
+    role: str
+    content: str
+    created_at: datetime | None = None
+
+
+class SharedLinkSessionData(BaseModel):
+    """Public read-only view of a shared conversation."""
+
+    session_id: str
+    title: str | None = None
+    messages: list[SharedMessageItem]
+    has_password: bool
 
 
 class ChatResetRequest(BaseModel):
     """Request model for chat reset"""
 
-    session_id: Optional[str] = Field(None, description="Session ID to reset (optional)")
+    session_id: str | None = Field(None, description="Session ID to reset (optional)")
     clear_context: bool = Field(True, description="Clear conversation context")
     keep_system_prompt: bool = Field(True, description="Keep system prompt after reset")
 
@@ -399,13 +444,25 @@ class ChatMessage(BaseModel):
         pattern="^(user|assistant|system)$",
         description="Message role",
     )
-    session_id: Optional[str] = Field(None, description="Chat session ID")
-    message_type: Optional[str] = Field("text", description="Message type")
-    metadata: Optional[Metadata] = Field(default_factory=dict, description="Additional metadata")
-    language: Optional[str] = Field(
+    session_id: str = Field(..., description="Chat session ID")
+    message_type: str | None = Field("text", description="Message type")
+    metadata: Metadata | None = Field(default_factory=dict, description="Additional metadata")
+    language: str | None = Field(
         None,
         description="Preferred response language code (e.g. 'en', 'es', 'de'). "
         "Overrides personality language when set.",
+    )
+    thinking_mode_enabled: bool | None = Field(
+        None,
+        description="Enable extended thinking mode for reasoning models (Claude 3.7+, DeepSeek R1). "
+        "When enabled, the model performs chain-of-thought reasoning before responding.",
+    )
+    thinking_budget_tokens: int | None = Field(
+        None,
+        ge=1000,
+        le=128000,
+        description="Thinking budget in tokens (e.g., 1000, 5000, 10000, 63000). "
+        "Only used when thinking_mode_enabled=True. Limits the amount of reasoning tokens.",
     )
 
 
@@ -439,10 +496,10 @@ class EnhancedChatMessage(BaseModel):
         pattern="^(user|assistant|system)$",
         description="Message role",
     )
-    session_id: Optional[str] = Field(None, description="Chat session ID")
-    message_type: Optional[str] = Field("text", description="Message type")
-    metadata: Optional[Metadata] = Field(default_factory=dict, description="Additional metadata")
-    language: Optional[str] = Field(
+    session_id: str = Field(..., description="Chat session ID")
+    message_type: str | None = Field("text", description="Message type")
+    metadata: Metadata | None = Field(default_factory=dict, description="Additional metadata")
+    language: str | None = Field(
         None,
         description="Preferred response language code (e.g. 'en', 'es', 'de'). "
         "Overrides personality language when set.",
@@ -451,6 +508,18 @@ class EnhancedChatMessage(BaseModel):
     use_knowledge_base: bool = Field(True, description="Whether to include knowledge base context")
     response_style: str = Field("conversational", description="Response style preference")
     include_sources: bool = Field(True, description="Whether to include source citations")
+    thinking_mode_enabled: bool | None = Field(
+        None,
+        description="Enable extended thinking mode for reasoning models (Claude 3.7+, DeepSeek R1). "
+        "When enabled, the model performs chain-of-thought reasoning before responding.",
+    )
+    thinking_budget_tokens: int | None = Field(
+        None,
+        ge=1000,
+        le=128000,
+        description="Thinking budget in tokens (e.g., 1000, 5000, 10000, 63000). "
+        "Only used when thinking_mode_enabled=True. Limits the amount of reasoning tokens.",
+    )
 
 
 class ChatPreferences(BaseModel):
@@ -462,12 +531,32 @@ class ChatPreferences(BaseModel):
     fact_checking: bool = Field(True, description="Enable fact checking against knowledge base")
 
 
+class ThinkingPreferences(BaseModel):
+    """Thinking mode preferences per conversation (#8993)."""
+
+    enabled: bool = Field(False, description="Enable extended thinking mode by default")
+    budget_tokens: int = Field(
+        10000,
+        ge=1000,
+        le=128000,
+        description="Default thinking budget in tokens (1k-128k)",
+    )
+
+
+class ThinkingPreferencesData(BaseModel):
+    """Data payload for GET/PUT /chat/sessions/{session_id}/thinking-preferences."""
+
+    session_id: str
+    enabled: bool
+    budget_tokens: int
+
+
 class TranslateRequest(BaseModel):
     """Request model for direct translation."""
 
     text: str = Field(..., min_length=1, max_length=50000, description="Text to translate")
     target_language: str = Field(..., min_length=1, max_length=50, description="Target language name")
-    source_language: Optional[str] = Field(None, description="Source language (auto-detect if omitted)")
+    source_language: str | None = Field(None, description="Source language (auto-detect if omitted)")
 
 
 class DetectLanguageRequest(BaseModel):
@@ -491,4 +580,92 @@ class CompareRequest(BaseModel):
         max_length=10,
         description="List of 'provider/model' strings, e.g. ['ollama/llama3', 'openai/gpt-4o']",
     )
-    context: Optional[str] = Field(None, max_length=50000)
+    context: str | None = Field(None, max_length=50000)
+
+
+# ---------------------------------------------------------------------------
+# conversation_files.py response schemas (#6509c)
+# ---------------------------------------------------------------------------
+
+
+class ConvFileInfoData(BaseModel):
+    """data payload for create/copy/agent-generate conversation file endpoints."""
+
+    model_config = {"extra": "allow"}
+
+    success: bool
+
+
+class ConvFileOpData(BaseModel):
+    """data payload for rename/get-content/update-content conversation file endpoints."""
+
+    model_config = {"extra": "allow"}
+
+    success: bool
+
+
+class ConvFileSearchData(BaseModel):
+    """data payload for GET /sessions/{session_id}/files/search."""
+
+    success: bool
+    files: List[Any]
+    total: int
+
+
+class SessionMcpToolsData(BaseModel):
+    """data payload for GET /sessions/{session_id}/mcp/tools."""
+
+    tools: List[Dict[str, Any]]
+    session_id: str
+
+
+class SessionMcpCallData(BaseModel):
+    """data payload for POST /sessions/{session_id}/mcp/call."""
+
+    model_config = {"extra": "allow"}
+
+    success: bool
+
+
+# ── Chat Folder schemas (GH#8987) ────────────────────────────────────────────
+
+
+class FolderCreate(BaseModel):
+    """Request body for POST /chat/folders."""
+
+    name: str = Field(..., min_length=1, max_length=100, description="Folder display name")
+    parent_id: str | None = Field(None, description="Parent folder ID for nesting (max 3 levels)")
+
+
+class FolderUpdate(BaseModel):
+    """Request body for PUT /chat/folders/{folder_id}."""
+
+    name: str | None = Field(None, min_length=1, max_length=100, description="New folder name")
+    parent_id: str | None = Field(None, description="New parent folder ID (None = root)")
+    pinned: bool | None = Field(None, description="Pin folder to top of list")
+
+
+class FolderData(BaseModel):
+    """Single folder object returned by the API."""
+
+    id: str
+    name: str
+    parent_id: str | None = None
+    owner: str
+    pinned: bool = False
+    created_at: str
+    session_ids: List[str] = Field(default_factory=list)
+    session_count: int = 0
+
+
+class FolderListData(BaseModel):
+    """data payload for GET /chat/folders."""
+
+    folders: List[FolderData]
+    count: int
+
+
+class SessionFolderAssign(BaseModel):
+    """Request body for PUT /chat/sessions/{session_id}/folder."""
+
+    folder_id: str | None = Field(None, description="Folder ID to assign; None removes from folder")

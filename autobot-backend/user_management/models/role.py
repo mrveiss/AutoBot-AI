@@ -14,6 +14,7 @@ from sqlalchemy import Boolean, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import Uuid
 
+from autobot_shared.auth.permissions import SYSTEM_PERMISSIONS, SYSTEM_ROLES
 from user_management.models.base import Base
 
 if TYPE_CHECKING:
@@ -50,7 +51,7 @@ class Permission(Base):
         index=True,
     )
 
-    description: Mapped[Optional[str]] = mapped_column(
+    description: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
@@ -101,7 +102,7 @@ class Role(Base):
     )
 
     # Nullable org_id means system role
-    org_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    org_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=True,
@@ -113,7 +114,7 @@ class Role(Base):
         nullable=False,
     )
 
-    description: Mapped[Optional[str]] = mapped_column(
+    description: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
@@ -225,7 +226,7 @@ class UserRole(Base):
     )
 
     # Who assigned this role
-    assigned_by: Mapped[Optional[uuid.UUID]] = mapped_column(
+    assigned_by: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True),
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
@@ -247,103 +248,9 @@ class UserRole(Base):
         return f"<UserRole(user_id={self.user_id}, role_id={self.role_id})>"
 
 
-# Default system permissions
-SYSTEM_PERMISSIONS = [
-    # User management
-    ("users:read", "users", "read", "View users"),
-    ("users:create", "users", "create", "Create users"),
-    ("users:update", "users", "update", "Update users"),
-    ("users:delete", "users", "delete", "Delete users"),
-    # Team management
-    ("teams:read", "teams", "read", "View teams"),
-    ("teams:create", "teams", "create", "Create teams"),
-    ("teams:manage", "teams", "manage", "Manage team members"),
-    ("teams:delete", "teams", "delete", "Delete teams"),
-    # Knowledge base
-    ("knowledge:read", "knowledge", "read", "View knowledge base"),
-    ("knowledge:write", "knowledge", "write", "Add/edit knowledge"),
-    ("knowledge:delete", "knowledge", "delete", "Delete knowledge entries"),
-    # Chat
-    ("chat:use", "chat", "use", "Use chat functionality"),
-    ("chat:history", "chat", "history", "View chat history"),
-    # Files
-    ("files:view", "files", "view", "View files"),
-    ("files:upload", "files", "upload", "Upload files"),
-    ("files:download", "files", "download", "Download files"),
-    ("files:delete", "files", "delete", "Delete files"),
-    # Settings
-    ("settings:read", "settings", "read", "View settings"),
-    ("settings:write", "settings", "write", "Modify settings"),
-    # Admin
-    ("admin:access", "admin", "access", "Access admin panel"),
-    ("admin:users", "admin", "users", "Manage all users"),
-    ("admin:organization", "admin", "organization", "Manage organization"),
-    # Audit (Issue #683: Role-Based Access Control)
-    ("audit:read", "audit", "read", "View audit logs"),
-    ("audit:write", "audit", "write", "Manage audit logs (cleanup)"),
+# Re-exported from autobot_shared for backward compatibility.
+# Single source of truth lives in autobot_shared.auth.permissions.
+__all__ = [
+    "SYSTEM_PERMISSIONS",
+    "SYSTEM_ROLES",
 ]
-
-# Default system roles with their permissions
-SYSTEM_ROLES = {
-    "admin": {
-        "description": "Full administrative access",
-        "priority": 100,
-        "permissions": [
-            "users:read",
-            "users:create",
-            "users:update",
-            "users:delete",
-            "teams:read",
-            "teams:create",
-            "teams:manage",
-            "teams:delete",
-            "knowledge:read",
-            "knowledge:write",
-            "knowledge:delete",
-            "chat:use",
-            "chat:history",
-            "files:view",
-            "files:upload",
-            "files:download",
-            "files:delete",
-            "settings:read",
-            "settings:write",
-            "admin:access",
-            "admin:users",
-            "admin:organization",
-            "audit:read",
-            "audit:write",
-        ],
-    },
-    "user": {
-        "description": "Standard user access",
-        "priority": 50,
-        "permissions": [
-            "users:read",
-            "teams:read",
-            "knowledge:read",
-            "knowledge:write",
-            "chat:use",
-            "chat:history",
-            "files:view",
-            "files:upload",
-            "files:download",
-            "settings:read",
-        ],
-    },
-    "readonly": {
-        "description": "Read-only access",
-        "priority": 10,
-        "permissions": [
-            "users:read",
-            "teams:read",
-            "knowledge:read",
-            "chat:history",
-            "files:view",
-            "files:download",
-            "settings:read",
-        ],
-    },
-    # Issue #744: Guest role REMOVED - security vulnerability
-    # Unauthenticated requests must be rejected, not assigned guest permissions
-}

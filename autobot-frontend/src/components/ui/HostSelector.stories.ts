@@ -4,7 +4,6 @@ import HostSelector from './HostSelector.vue';
 const meta = {
   title: 'Components/UI/HostSelector',
   component: HostSelector,
-  tags: ['autodocs'],
   argTypes: {
     chatId: {
       control: 'text',

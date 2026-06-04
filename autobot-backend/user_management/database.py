@@ -9,9 +9,8 @@ Follows the canonical client pattern established by Redis utilities.
 Pool sizes are coordinated via SSOT config (#2860).
 """
 
-import logging
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator, Optional
+from typing import AsyncGenerator
 
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -20,13 +19,14 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
+from autobot_shared.logging_manager import get_logger
 from user_management.config import get_deployment_config
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Singleton engine instance
-_async_engine: Optional[AsyncEngine] = None
-_async_session_factory: Optional[async_sessionmaker[AsyncSession]] = None
+_async_engine: AsyncEngine | None = None
+_async_session_factory: async_sessionmaker[AsyncSession] | None = None
 
 
 def _get_pool_config() -> dict:
@@ -127,9 +127,12 @@ async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
     """
     session_factory = get_async_session_factory()
     async with session_factory() as session:
+        session.info["_post_commit_cbs"] = []
         try:
             yield session
             await session.commit()
+            for cb in session.info.pop("_post_commit_cbs", []):
+                await cb()
         except Exception:
             await session.rollback()
             raise
@@ -148,9 +151,12 @@ async def db_session_context() -> AsyncGenerator[AsyncSession, None]:
     """
     session_factory = get_async_session_factory()
     async with session_factory() as session:
+        session.info["_post_commit_cbs"] = []
         try:
             yield session
             await session.commit()
+            for cb in session.info.pop("_post_commit_cbs", []):
+                await cb()
         except Exception:
             await session.rollback()
             raise

@@ -11,10 +11,11 @@ These examples can be copied and adapted for other components.
 """
 
 import asyncio
-import logging
 import os
 import sys
 from typing import Any, Dict, List
+
+from autobot_shared.logging_manager import get_logger
 
 # Add project root to path for imports  # noqa: E402
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -30,7 +31,7 @@ from autobot_shared.error_boundaries import (
 )
 from constants.threshold_constants import TimingConstants  # noqa: E402
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # Example 1: Using decorator for sync functions

@@ -9,7 +9,7 @@ import { expect } from '@playwright/test';
 
 // Custom matchers for AutoBot-specific assertions
 expect.extend({
-  async toHaveKBLibrarianResponse(page, message: string) {
+  async toHaveKBLibrarianResponse(page, _message: string) {
     // Wait for bot response containing KB Librarian indicators
     const botMessages = page.locator('.bot-message');
     const lastMessage = botMessages.last();
@@ -95,7 +95,7 @@ export class AutoBotTestHelpers {
         if (response.ok()) {
           return true;
         }
-      } catch (error) {
+      } catch {
         // Backend not ready yet
       }
 

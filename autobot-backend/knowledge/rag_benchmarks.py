@@ -13,7 +13,6 @@ Author: mrveiss
 import enum
 import hashlib
 import json
-import logging
 import random
 import sys
 import time
@@ -21,9 +20,11 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Set
+from typing import Callable, Dict, List, Set
 
 import pytest
+
+from autobot_shared.logging_manager import get_logger
 
 # Add project root and shared infrastructure to path so benchmark_base is importable
 _repo_root = Path(__file__).parent.parent.parent
@@ -38,7 +39,7 @@ except ModuleNotFoundError:
     BenchmarkRunner = None  # type: ignore[assignment,misc]
     assert_performance = None  # type: ignore[assignment]
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class TestRAGQueryBenchmarks:
@@ -1452,7 +1453,7 @@ def touched_test_leakage(dataset: BenchmarkDataset, split: BenchmarkSplit) -> bo
 def run_benchmark_suite(
     chroma_collection,
     k: int = 5,
-    dataset: Optional[BenchmarkDataset] = None,
+    dataset: BenchmarkDataset | None = None,
     split: BenchmarkSplit = BenchmarkSplit.ALL,
 ) -> List["BenchmarkResult"]:
     """Run the precision@k benchmark suite against *chroma_collection*.

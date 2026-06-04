@@ -8,26 +8,35 @@ CRUD operations for the central agents table and a seed function
 that populates it from DEFAULT_AGENT_CONFIGS at startup.
 """
 
-import logging
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.logging_manager import get_logger
 from models.agent import Agent, AgentStatus
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class AgentRegistryService:
-    """Central agent registry CRUD (#1754)."""
+    """Central agent registry CRUD (#1754).
+
+    Scope (#6828): database-backed CRUD for the agents table.  This is the
+    **persistence** registry — canonical source of truth for agent metadata at
+    startup/shutdown.  Does not track live health or in-process profile state.
+    See also:
+    - orchestration.agent_registry.AgentRegistry — static profile/capability registry
+    - agents.agent_client.AgentRegistry — health-tracking runtime registry
+    - agents.agent_orchestration.distributed_management.DistributedAgentManager — dynamic/distributed
+    """
 
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
     async def list_agents(
         self,
-        status_filter: Optional[str] = None,
+        status_filter: str | None = None,
         limit: int = 100,
     ) -> List[Agent]:
         """Return all agents, optionally filtered by status (#1754)."""
@@ -37,7 +46,7 @@ class AgentRegistryService:
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 
-    async def get_by_agent_id(self, agent_id: str) -> Optional[Agent]:
+    async def get_by_agent_id(self, agent_id: str) -> Agent | None:
         """Fetch agent by canonical string ID (#1754)."""
         stmt = select(Agent).where(Agent.agent_id == agent_id)
         result = await self.session.execute(stmt)
@@ -47,7 +56,7 @@ class AgentRegistryService:
         self,
         agent_id: str,
         name: str,
-        description: Optional[str] = None,
+        description: str | None = None,
         agent_type: str = "worker",
         status: str = AgentStatus.ACTIVE.value,
     ) -> Agent:

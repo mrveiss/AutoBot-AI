@@ -14,35 +14,57 @@ Parent Epic: #217 - Advanced Code Intelligence
 """
 
 import asyncio
-import logging
 import os
 import time
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Tuple
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+from celery.result import AsyncResult
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 
 from api.schemas_code import (
     CachedSecurityScoreResponse,
     ClearStuckResponse,
     CodeIntelAnalysisRequest,
+    CodeIntelAnalysisResultResponse,
+    CodeIntelHealthScoreResultResponse,
     CodeIntelligenceTaskStatusResponse,
+    CodeIntelPatternTypesResultResponse,
     CodeIntelQuickScanRequest,
+    CodeIntelScanFileResultResponse,
     CodeIntelSuggestionsRequest,
+    EvolutionAnalyzeResultResponse,
+    EvolutionPatternsResultResponse,
+    EvolutionRefactoringsResultResponse,
+    EvolutionReportResultResponse,
+    EvolutionTimelineResultResponse,
     FindingsPlaceholderResponse,
     PerformanceAnalysisRequest,
+    PerformanceAnalyzeResultResponse,
     PerformanceFileScanRequest,
+    PerformanceIssueTypesResultResponse,
+    PerformanceScanFileResultResponse,
+    PerformanceScoreResultResponse,
     RedisAnalysisRequest,
+    RedisAnalyzeResultResponse,
     RedisFileScanRequest,
+    RedisHealthScoreResultResponse,
+    RedisOptimizationTypesResultResponse,
+    RedisScanFileResultResponse,
     SecurityAnalysisRequest,
+    SecurityAnalyzeResultResponse,
     SecurityFileScanRequest,
+    SecurityScanFileResultResponse,
+    SecurityScoreResultResponse,
+    SecurityVulnTypesResultResponse,
     StartTaskResponse,
     SuggestionsResponse,
 )
 from api.schemas_common import DataResponse
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import parse_utc_iso
 from code_intelligence.anti_pattern_detector import (
     AntiPatternDetector,
@@ -60,16 +82,16 @@ from code_intelligence.security_analyzer import (
     get_vulnerability_types,
 )
 from constants.ttl_constants import TTL_5_MINUTES
-from utils.background_task_manager import BackgroundTaskManager
+from tasks.analytics_tasks import run_security_analysis
 from utils.catalog_http_exceptions import raise_internal_error, raise_invalid_input, raise_not_found
+from utils.celery_task_status import celery_result_to_status, get_latest_task_result, store_latest_task_id
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 router = APIRouter()
 
-# Background task manager for security score analysis (#1304)
-_sec_manager = BackgroundTaskManager(redis_prefix="sec_task:")
+_REDIS_PREFIX = "sec_task:"
 
 # Issue #380: Module-level tuple for severity ordering (used in 4 endpoints)
 _SEVERITY_ORDER = ("info", "low", "medium", "high", "critical")
@@ -451,7 +473,7 @@ async def _validate_analysis_path(path: str) -> None:
         raise_invalid_input("path", f"not a directory: {path}")
 
 
-def _filter_results_by_severity(results: list, min_severity: Optional[str]) -> list:
+def _filter_results_by_severity(results: list, min_severity: str | None) -> list:
     """
     Filter analysis results by minimum severity level.
 
@@ -518,7 +540,7 @@ async def _validate_path_is_directory(path: str) -> None:
 
 def _filter_antipatterns_by_severity(
     anti_patterns: list,
-    min_severity: Optional[str],
+    min_severity: str | None,
 ) -> list:
     """
     Filter anti-patterns by minimum severity level.
@@ -546,7 +568,7 @@ def _filter_antipatterns_by_severity(
 async def _run_redis_analysis(
     optimizer: RedisOptimizer,
     path: str,
-    exclude_patterns: Optional[list],
+    exclude_patterns: list | None,
 ) -> list:
     """
     Execute Redis analysis on file or directory.
@@ -573,7 +595,7 @@ async def _run_redis_analysis(
 
 def _filter_redis_results_by_severity(
     results: list,
-    min_severity: Optional[str],
+    min_severity: str | None,
 ) -> list:
     """
     Filter Redis optimization results by minimum severity level.
@@ -671,7 +693,7 @@ async def _generate_report_response(
     )
 
 
-@router.post("/analyze", response_model=DataResponse)
+@router.post("/analyze", response_model=DataResponse[CodeIntelAnalysisResultResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="analyze_codebase",
@@ -812,7 +834,7 @@ async def get_code_suggestions(
     return {"suggestions": suggestions}
 
 
-@router.post("/scan-file", response_model=DataResponse)
+@router.post("/scan-file", response_model=DataResponse[CodeIntelScanFileResultResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="quick_scan_file",
@@ -861,7 +883,7 @@ async def quick_scan_file(
         raise_internal_error("Scan failed")
 
 
-@router.get("/health-score", response_model=DataResponse)
+@router.get("/health-score", response_model=DataResponse[CodeIntelHealthScoreResultResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_codebase_health_score",
@@ -912,7 +934,7 @@ async def get_codebase_health_score(
         raise_internal_error("Health check failed")
 
 
-@router.get("/pattern-types", response_model=DataResponse)
+@router.get("/pattern-types", response_model=DataResponse[CodeIntelPatternTypesResultResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_supported_pattern_types",
@@ -947,7 +969,7 @@ async def get_supported_pattern_types(
 # =============================================================================
 
 
-@router.post("/redis/analyze", response_model=DataResponse)
+@router.post("/redis/analyze", response_model=DataResponse[RedisAnalyzeResultResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="analyze_redis_usage_endpoint",
@@ -991,7 +1013,7 @@ async def analyze_redis_usage_endpoint(
         raise_internal_error("Redis analysis failed")
 
 
-@router.post("/redis/scan-file", response_model=DataResponse)
+@router.post("/redis/scan-file", response_model=DataResponse[RedisScanFileResultResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="scan_redis_file",
@@ -1039,7 +1061,7 @@ async def scan_redis_file(
         raise_internal_error("Scan failed")
 
 
-@router.get("/redis/optimization-types", response_model=DataResponse)
+@router.get("/redis/optimization-types", response_model=DataResponse[RedisOptimizationTypesResultResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_redis_optimization_types",
@@ -1075,7 +1097,7 @@ _REDIS_HEALTH_CACHE_TTL = TTL_5_MINUTES
 _REDIS_HEALTH_TIMEOUT = 30.0  # seconds
 
 
-@router.get("/redis/health-score", response_model=DataResponse)
+@router.get("/redis/health-score", response_model=DataResponse[RedisHealthScoreResultResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_redis_usage_health_score",
@@ -1161,7 +1183,7 @@ async def _run_redis_health_analysis(path: str) -> Dict[str, Any]:
 # ============================================================================
 
 
-@router.post("/security/analyze", response_model=DataResponse)
+@router.post("/security/analyze", response_model=DataResponse[SecurityAnalyzeResultResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="security_analyze",
@@ -1214,7 +1236,7 @@ async def security_analyze(
         raise_internal_error("Security analysis failed")
 
 
-@router.post("/security/scan-file", response_model=DataResponse)
+@router.post("/security/scan-file", response_model=DataResponse[SecurityScanFileResultResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="security_scan_file",
@@ -1270,7 +1292,7 @@ async def security_scan_file(
         raise_internal_error("File scan failed")
 
 
-@router.get("/security/vulnerability-types", response_model=DataResponse)
+@router.get("/security/vulnerability-types", response_model=DataResponse[SecurityVulnTypesResultResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_vulnerability_types",
@@ -1309,7 +1331,7 @@ async def list_vulnerability_types(
     )
 
 
-@router.get("/security/score", response_model=DataResponse)
+@router.get("/security/score", response_model=DataResponse[SecurityScoreResultResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_security_score",
@@ -1404,7 +1426,7 @@ async def get_security_report(
 # ============================================================================
 
 
-@router.post("/performance/analyze", response_model=DataResponse)
+@router.post("/performance/analyze", response_model=DataResponse[PerformanceAnalyzeResultResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="performance_analyze",
@@ -1456,7 +1478,7 @@ async def performance_analyze(
         raise_internal_error("Performance analysis failed")
 
 
-@router.post("/performance/scan-file", response_model=DataResponse)
+@router.post("/performance/scan-file", response_model=DataResponse[PerformanceScanFileResultResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="performance_scan_file",
@@ -1512,7 +1534,7 @@ async def performance_scan_file(
         raise_internal_error("File scan failed")
 
 
-@router.get("/performance/issue-types", response_model=DataResponse)
+@router.get("/performance/issue-types", response_model=DataResponse[PerformanceIssueTypesResultResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_performance_issue_types",
@@ -1551,7 +1573,7 @@ async def list_performance_issue_types(
     )
 
 
-@router.get("/performance/score", response_model=DataResponse)
+@router.get("/performance/score", response_model=DataResponse[PerformanceScoreResultResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_performance_score",
@@ -1655,7 +1677,7 @@ async def get_performance_report(
 from code_intelligence.code_evolution_miner import CodeEvolutionMiner
 
 
-@router.post("/evolution/analyze", response_model=DataResponse)
+@router.post("/evolution/analyze", response_model=DataResponse[EvolutionAnalyzeResultResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="analyze_code_evolution",
@@ -1663,8 +1685,8 @@ from code_intelligence.code_evolution_miner import CodeEvolutionMiner
 )
 async def analyze_code_evolution(
     path: str = Query(..., description="Repository path to analyze"),
-    start_date: Optional[str] = Query(None, description="Start date (ISO format)"),
-    end_date: Optional[str] = Query(None, description="End date (ISO format)"),
+    start_date: str | None = Query(None, description="Start date (ISO format)"),
+    end_date: str | None = Query(None, description="End date (ISO format)"),
     admin_check: bool = Depends(check_admin_permission),
 ):
     """
@@ -1711,7 +1733,7 @@ async def analyze_code_evolution(
         raise_internal_error("Evolution analysis failed")
 
 
-@router.get("/evolution/patterns", response_model=DataResponse)
+@router.get("/evolution/patterns", response_model=DataResponse[EvolutionPatternsResultResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_pattern_evolution",
@@ -1719,7 +1741,7 @@ async def analyze_code_evolution(
 )
 async def get_pattern_evolution(
     path: str = Query(..., description="Repository path to analyze"),
-    pattern_type: Optional[str] = Query(None, description="Filter by pattern type"),
+    pattern_type: str | None = Query(None, description="Filter by pattern type"),
     admin_check: bool = Depends(check_admin_permission),
 ):
     """
@@ -1767,7 +1789,7 @@ async def get_pattern_evolution(
         raise_internal_error("Pattern evolution failed")
 
 
-@router.get("/evolution/refactorings", response_model=DataResponse)
+@router.get("/evolution/refactorings", response_model=DataResponse[EvolutionRefactoringsResultResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="detect_refactorings",
@@ -1819,7 +1841,7 @@ async def detect_refactorings(
         raise_internal_error("Refactoring detection failed")
 
 
-@router.get("/evolution/timeline", response_model=DataResponse)
+@router.get("/evolution/timeline", response_model=DataResponse[EvolutionTimelineResultResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_evolution_timeline",
@@ -1887,7 +1909,7 @@ def _build_evolution_summary(evolution_report: dict) -> dict:
     }
 
 
-@router.get("/evolution/report", response_model=DataResponse)
+@router.get("/evolution/report", response_model=DataResponse[EvolutionReportResultResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_full_evolution_report",
@@ -1895,8 +1917,8 @@ def _build_evolution_summary(evolution_report: dict) -> dict:
 )
 async def get_full_evolution_report(
     path: str = Query(..., description="Repository path to analyze"),
-    start_date: Optional[str] = Query(None, description="Start date (ISO format)"),
-    end_date: Optional[str] = Query(None, description="End date (ISO format)"),
+    start_date: str | None = Query(None, description="Start date (ISO format)"),
+    end_date: str | None = Query(None, description="End date (ISO format)"),
     admin_check: bool = Depends(check_admin_permission),
 ):
     """
@@ -1955,49 +1977,18 @@ async def get_full_evolution_report(
 # ------------------------------------------------------------------
 
 
-async def _run_security_analysis(task_id: str, path: str) -> None:
-    """Background worker for security score analysis (#1304)."""
-    try:
-        await _sec_manager.update_progress(task_id, "Initializing security analyzer", 10.0)
-        analyzer = SecurityAnalyzer(project_root=path)
-
-        await _sec_manager.update_progress(task_id, "Scanning for vulnerabilities", 30.0)
-        await asyncio.to_thread(analyzer.analyze_directory)
-
-        await _sec_manager.update_progress(task_id, "Calculating security score", 80.0)
-        summary = analyzer.get_summary()
-        score = summary["security_score"]
-
-        result = {
-            "status": "success",
-            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
-            "path": path,
-            "security_score": score,
-            "grade": _calculate_grade_from_score(score),
-            "risk_level": summary["risk_level"],
-            "status_message": _get_security_status_message(score),
-            "total_findings": summary["total_findings"],
-            "critical_issues": summary["critical_issues"],
-            "high_issues": summary["high_issues"],
-            "files_analyzed": summary["files_analyzed"],
-            "severity_breakdown": summary["by_severity"],
-            "owasp_breakdown": summary["by_owasp_category"],
-        }
-        await _sec_manager.complete_task(task_id, result)
-    except Exception as e:
-        logger.error("Security analysis failed: %s", e)
-        await _sec_manager.fail_task(task_id, str(e))
-
-
 @router.get("/security/score/cached", response_model=CachedSecurityScoreResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_cached_security_score",
     error_code_prefix="CODE_INTELLIGENCE",
 )
-async def get_cached_security_score():
-    """Return the latest completed security score result (#1540)."""
-    cached = await _sec_manager.get_latest_result()
+async def get_cached_security_score(
+    source_id: str | None = Query(default=None, description="GH#8436: scope result by project source_id"),
+):
+    """Return the latest completed security score result (#1540, GH#8436)."""
+    prefix = f"{_REDIS_PREFIX}{source_id}:" if source_id else _REDIS_PREFIX
+    cached = await get_latest_task_result(prefix)
     if cached and cached.get("result"):
         return {
             "status": "success",
@@ -2008,6 +1999,9 @@ async def get_cached_security_score():
     return {"status": "no_data"}
 
 
+_NO_PATH_RESULT = {"status": "no_data", "message": "Path does not exist", "security_score": 0}
+
+
 @router.post("/security/score/analyze", response_model=StartTaskResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -2015,32 +2009,27 @@ async def get_cached_security_score():
     error_code_prefix="CODE_INTELLIGENCE",
 )
 async def start_security_analysis(
-    background_tasks: BackgroundTasks,
     path: str = Query(..., description="Directory path to analyze"),
+    source_id: str | None = Query(default=None, description="GH#8436: scope cached result by project source_id"),
     admin_check: bool = Depends(check_admin_permission),
 ):
-    """Start background security score analysis (#1304).
+    """Enqueue security score analysis as a Celery task (GH#6505).
 
-    Issue #2655: Return a completed no_data task instead of 400 when the path
-    does not exist. This allows the frontend to display an informative message
-    rather than treating a missing path as a hard error.
+    Issue #2655: Return a completed no_data task when the path does not exist.
+    GH#8436: scope latest-result cache by source_id.
     """
     path_exists = await asyncio.to_thread(os.path.exists, path)
     if not path_exists:
         logger.warning("Security score analysis: path does not exist: %s", path)
-        task_id = await _sec_manager.create_task(params={"path": path})
-        await _sec_manager.complete_task(
-            task_id,
-            {
-                "status": "no_data",
-                "message": f"Path does not exist: {path}",
-                "security_score": 0,
-            },
-        )
-        return {"task_id": task_id, "status": "completed"}
-    task_id = await _sec_manager.create_task(params={"path": path})
-    background_tasks.add_task(_run_security_analysis, task_id, path)
-    return {"task_id": task_id, "status": "pending"}
+        return {
+            "task_id": "no_path",
+            "status": "completed",
+            "result": {**_NO_PATH_RESULT, "message": f"Path does not exist: {path}"},
+        }
+    prefix = f"{_REDIS_PREFIX}{source_id}:" if source_id else _REDIS_PREFIX
+    result = run_security_analysis.delay(path)
+    await store_latest_task_id(prefix, result.id)
+    return {"task_id": result.id, "status": "pending"}
 
 
 @router.get("/security/score/status/{task_id}", response_model=CodeIntelligenceTaskStatusResponse)
@@ -2050,11 +2039,22 @@ async def start_security_analysis(
     error_code_prefix="CODE_INTELLIGENCE",
 )
 async def get_security_score_status(task_id: str):
-    """Get security score analysis task status (#1304)."""
-    task = await _sec_manager.get_status(task_id)
-    if task is None:
+    """Get security score analysis task status (GH#8437: handle no_path sentinel)."""
+    if task_id == "no_path":
+        return {
+            "task_id": "no_path",
+            "status": "completed",
+            "progress": 100.0,
+            "current_step": "Complete",
+            "started_at": None,
+            "completed_at": None,
+            "error": None,
+            "result": _NO_PATH_RESULT,
+        }
+    status = celery_result_to_status(AsyncResult(task_id))
+    if status is None:
         raise_not_found("Task", task_id)
-    return task
+    return status
 
 
 @router.post("/security/score/tasks/clear-stuck", response_model=ClearStuckResponse)
@@ -2064,17 +2064,10 @@ async def get_security_score_status(task_id: str):
     error_code_prefix="CODE_INTELLIGENCE",
 )
 async def clear_stuck_sec_tasks(
-    force: bool = Query(
-        default=False,
-        description="Force clear ALL running tasks",
-    ),
+    force: bool = Query(default=False, description="Force clear ALL running tasks"),
 ):
-    """Clear stuck security score tasks (#1304)."""
-    cleaned = await _sec_manager.clear_stuck(force=force)
-    return {
-        "cleared_count": cleaned,
-        "message": f"Cleared {cleaned} task(s)" + (" (forced)" if force else ""),
-    }
+    """No-op: Celery handles stuck-task recovery automatically (GH#6505)."""
+    return {"cleared_count": 0, "message": "Celery handles task recovery automatically"}
 
 
 # Issue #2068: Stub GET endpoints for security/performance/redis findings.

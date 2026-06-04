@@ -66,7 +66,7 @@ export async function loadLocaleMessages(locale: string): Promise<boolean> {
  */
 export function getLocaleDir(locale: string): 'rtl' | 'ltr' {
   const messages = i18n.global.getLocaleMessage(locale)
-  const meta = messages._meta as Record<string, string> | undefined
+  const meta = (messages as Record<string, unknown>)._meta as Record<string, string> | undefined
   return meta?.dir === 'rtl' ? 'rtl' : 'ltr'
 }
 
@@ -76,7 +76,7 @@ export function getLocaleDir(locale: string): 'rtl' | 'ltr' {
  */
 export async function setLocale(locale: string): Promise<void> {
   await loadLocaleMessages(locale)
-  i18n.global.locale.value = locale
+  ;(i18n.global.locale as unknown as { value: string }).value = locale
   localStorage.setItem('autobot-language', locale)
   document.documentElement.setAttribute('lang', locale)
   document.documentElement.setAttribute('dir', getLocaleDir(locale))

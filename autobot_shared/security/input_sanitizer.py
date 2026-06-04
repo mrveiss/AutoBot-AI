@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import re
 import shlex
-from typing import Optional, Sequence
+from typing import Sequence
 from urllib.parse import urlparse
 
 # ── Shell ────────────────────────────────────────────────────────────
@@ -122,9 +122,9 @@ _PRIVATE_IP_PREFIXES: tuple[str, ...] = (
 def validate_url(
     url: str,
     *,
-    allowed_schemes: Optional[frozenset[str]] = None,
+    allowed_schemes: frozenset[str] | None = None,
     allow_private: bool = False,
-    allowed_hosts: Optional[Sequence[str]] = None,
+    allowed_hosts: Sequence[str] | None = None,
 ) -> str:
     """Validate a URL to prevent SSRF attacks.
 

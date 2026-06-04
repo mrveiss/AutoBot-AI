@@ -9,15 +9,16 @@ for cross-language analysis.
 """
 
 import ast
-import logging
 import re
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Pattern, Set
+from typing import Any, Dict, List, Pattern, Set
+
+from autobot_shared.logging_manager import get_logger
 
 from .models import PatternCategory, PatternLocation, PatternType
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # =============================================================================
@@ -162,7 +163,7 @@ class BasePatternExtractor(ABC):
             language=self.language,
         )
 
-    def _find_validation_type(self, code: str) -> Optional[str]:
+    def _find_validation_type(self, code: str) -> str | None:
         """Detect validation type from code."""
         for validation_type, pattern in _VALIDATION_PATTERNS.items():
             if pattern.search(code):
@@ -222,7 +223,7 @@ class PythonPatternExtractor(BasePatternExtractor):
 
         return patterns
 
-    def _analyze_class(self, node: ast.ClassDef) -> Optional[Dict[str, Any]]:
+    def _analyze_class(self, node: ast.ClassDef) -> Dict[str, Any] | None:
         """Analyze a class definition."""
         # Check for Pydantic models
         base_names = [
@@ -301,7 +302,7 @@ class PythonPatternExtractor(BasePatternExtractor):
 
         return "Any"
 
-    def _analyze_function(self, node: ast.FunctionDef) -> Optional[Dict[str, Any]]:
+    def _analyze_function(self, node: ast.FunctionDef) -> Dict[str, Any] | None:
         """Analyze a function definition for patterns."""
         # Skip private/dunder methods
         if node.name.startswith("_"):
@@ -582,8 +583,8 @@ class TypeScriptPatternExtractor(BasePatternExtractor):
         char: str,
         prev_char: str,
         in_string: bool,
-        string_char: Optional[str],
-    ) -> tuple[bool, Optional[str]]:
+        string_char: str | None,
+    ) -> tuple[bool, str | None]:
         """
         Handle string delimiter detection and state transition.
 
@@ -651,7 +652,7 @@ class TypeScriptPatternExtractor(BasePatternExtractor):
         next_char: str,
         prev_char: str,
         state: Dict[str, Any],
-    ) -> tuple[int, Optional[int]]:
+    ) -> tuple[int, int | None]:
         """
         Process single character for brace matching. Issue #620.
 
@@ -689,7 +690,7 @@ class TypeScriptPatternExtractor(BasePatternExtractor):
 
         return 1, None
 
-    def _find_matching_brace(self, start_pos: int) -> Optional[int]:
+    def _find_matching_brace(self, start_pos: int) -> int | None:
         """
         Find the matching closing brace for nested structures.
 

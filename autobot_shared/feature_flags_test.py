@@ -39,27 +39,27 @@ def _fresh_feature_config(**overrides):
 class TestFeatureConfigSubsystemDefaults:
     """All subsystem flags default to True when no env var is set."""
 
-    def test_npu_enabled_default(self):
+    def test_npu_enabled_default(self) -> None:
         cfg = _fresh_feature_config()
         assert cfg.npu_enabled is True
 
-    def test_voice_enabled_default(self):
+    def test_voice_enabled_default(self) -> None:
         cfg = _fresh_feature_config()
         assert cfg.voice_enabled is True
 
-    def test_browser_enabled_default(self):
+    def test_browser_enabled_default(self) -> None:
         cfg = _fresh_feature_config()
         assert cfg.browser_enabled is True
 
-    def test_computer_vision_enabled_default(self):
+    def test_computer_vision_enabled_default(self) -> None:
         cfg = _fresh_feature_config()
         assert cfg.computer_vision_enabled is True
 
-    def test_training_enabled_default(self):
+    def test_training_enabled_default(self) -> None:
         cfg = _fresh_feature_config()
         assert cfg.training_enabled is True
 
-    def test_osint_enabled_default(self):
+    def test_osint_enabled_default(self) -> None:
         cfg = _fresh_feature_config()
         assert cfg.osint_enabled is True
 
@@ -72,31 +72,31 @@ class TestFeatureConfigSubsystemDefaults:
 class TestFeatureConfigEnvVarOverrides:
     """Subsystem flags can be toggled via AUTOBOT_FEATURE_* env vars."""
 
-    def test_npu_disabled_via_env(self):
+    def test_npu_disabled_via_env(self) -> None:
         cfg = _fresh_feature_config(AUTOBOT_FEATURE_NPU="false")
         assert cfg.npu_enabled is False
 
-    def test_voice_disabled_via_env(self):
+    def test_voice_disabled_via_env(self) -> None:
         cfg = _fresh_feature_config(AUTOBOT_FEATURE_VOICE="false")
         assert cfg.voice_enabled is False
 
-    def test_browser_disabled_via_env(self):
+    def test_browser_disabled_via_env(self) -> None:
         cfg = _fresh_feature_config(AUTOBOT_FEATURE_BROWSER="false")
         assert cfg.browser_enabled is False
 
-    def test_computer_vision_disabled_via_env(self):
+    def test_computer_vision_disabled_via_env(self) -> None:
         cfg = _fresh_feature_config(AUTOBOT_FEATURE_COMPUTER_VISION="false")
         assert cfg.computer_vision_enabled is False
 
-    def test_training_disabled_via_env(self):
+    def test_training_disabled_via_env(self) -> None:
         cfg = _fresh_feature_config(AUTOBOT_FEATURE_TRAINING="false")
         assert cfg.training_enabled is False
 
-    def test_osint_disabled_via_env(self):
+    def test_osint_disabled_via_env(self) -> None:
         cfg = _fresh_feature_config(AUTOBOT_FEATURE_OSINT="false")
         assert cfg.osint_enabled is False
 
-    def test_explicit_true_still_enabled(self):
+    def test_explicit_true_still_enabled(self) -> None:
         cfg = _fresh_feature_config(AUTOBOT_FEATURE_NPU="true")
         assert cfg.npu_enabled is True
 
@@ -131,27 +131,27 @@ class TestIsFeatureEnabled:
         mock_cfg.feature = feature_cfg
         return mock_cfg
 
-    def test_returns_true_when_flag_enabled(self):
+    def test_returns_true_when_flag_enabled(self) -> None:
         from autobot_shared.feature_flags import is_feature_enabled
 
         with patch("autobot_shared.feature_flags._get_feature_config") as mock_get:
             mock_get.return_value = self._mock_feature_cfg().feature
             assert is_feature_enabled("npu") is True
 
-    def test_returns_false_when_flag_disabled(self):
+    def test_returns_false_when_flag_disabled(self) -> None:
         from autobot_shared.feature_flags import is_feature_enabled
 
         with patch("autobot_shared.feature_flags._get_feature_config") as mock_get:
             mock_get.return_value = self._mock_feature_cfg(npu_enabled=False).feature
             assert is_feature_enabled("npu") is False
 
-    def test_raises_for_unknown_flag(self):
+    def test_raises_for_unknown_flag(self) -> None:
         from autobot_shared.feature_flags import is_feature_enabled
 
         with pytest.raises(ValueError, match="Unknown feature flag 'nonexistent'"):
             is_feature_enabled("nonexistent")
 
-    def test_all_known_flags_accepted(self):
+    def test_all_known_flags_accepted(self) -> None:
         from autobot_shared.feature_flags import _SUBSYSTEM_FLAG_MAP, is_feature_enabled
 
         with patch("autobot_shared.feature_flags._get_feature_config") as mock_get:
@@ -170,7 +170,7 @@ class TestIsFeatureEnabled:
 class TestGetEnabledFeatures:
     """get_enabled_features returns a sorted list of enabled subsystem names."""
 
-    def test_all_enabled_returns_all_names(self):
+    def test_all_enabled_returns_all_names(self) -> None:
         from unittest.mock import MagicMock
 
         from autobot_shared.feature_flags import (
@@ -187,7 +187,7 @@ class TestGetEnabledFeatures:
 
         assert result == sorted(_SUBSYSTEM_FLAG_MAP.keys())
 
-    def test_none_enabled_returns_empty_list(self):
+    def test_none_enabled_returns_empty_list(self) -> None:
         from unittest.mock import MagicMock
 
         from autobot_shared.feature_flags import (
@@ -204,7 +204,7 @@ class TestGetEnabledFeatures:
 
         assert result == []
 
-    def test_partial_enabled_returns_subset(self):
+    def test_partial_enabled_returns_subset(self) -> None:
         from unittest.mock import MagicMock
 
         from autobot_shared.feature_flags import (
@@ -224,7 +224,7 @@ class TestGetEnabledFeatures:
 
         assert result == sorted(["npu", "voice"])
 
-    def test_result_is_sorted(self):
+    def test_result_is_sorted(self) -> None:
         from unittest.mock import MagicMock
 
         from autobot_shared.feature_flags import (
@@ -274,11 +274,11 @@ class TestRequireFeatureDecorator:
         assert exc_info.value.feature_name == "npu"
         assert "npu" in str(exc_info.value).lower()
 
-    def test_error_message_includes_env_var_hint(self):
+    def test_error_message_includes_env_var_hint(self) -> None:
         from autobot_shared.feature_flags import FeatureDisabledError, require_feature
 
         @require_feature("voice")
-        def _speak():
+        def _speak() -> None:
             pass
 
         with patch("autobot_shared.feature_flags.is_feature_enabled", return_value=False):
@@ -287,20 +287,20 @@ class TestRequireFeatureDecorator:
 
         assert "AUTOBOT_FEATURE_VOICE" in str(exc_info.value)
 
-    def test_raises_value_error_for_unknown_flag_at_decoration_time(self):
+    def test_raises_value_error_for_unknown_flag_at_decoration_time(self) -> None:
         from autobot_shared.feature_flags import require_feature
 
         with pytest.raises(ValueError, match="Unknown feature flag 'bad_flag'"):
 
             @require_feature("bad_flag")
-            def _noop():
+            def _noop() -> None:
                 pass
 
-    def test_preserves_function_name_and_docstring(self):
+    def test_preserves_function_name_and_docstring(self) -> None:
         from autobot_shared.feature_flags import require_feature
 
         @require_feature("osint")
-        def run_osint_sweep():
+        def run_osint_sweep() -> None:
             """Perform an OSINT sweep."""
 
         assert run_osint_sweep.__name__ == "run_osint_sweep"
@@ -318,7 +318,7 @@ class TestRequireFeatureDecorator:
 
         assert result == {"model": "gpt2", "epochs": 10}
 
-    def test_feature_disabled_error_is_runtime_error(self):
+    def test_feature_disabled_error_is_runtime_error(self) -> None:
         from autobot_shared.feature_flags import FeatureDisabledError
 
         err = FeatureDisabledError("browser")
@@ -334,7 +334,7 @@ class TestRequireFeatureDecorator:
 class TestFeatureConfigPlanFields:
     """Verify the short-name subsystem fields added in issue #3009."""
 
-    def test_default_flags_exist(self):
+    def test_default_flags_exist(self) -> None:
         cfg = _fresh_feature_config()
         assert hasattr(cfg, "npu")
         assert hasattr(cfg, "voice")
@@ -344,12 +344,12 @@ class TestFeatureConfigPlanFields:
         assert hasattr(cfg, "graph_rag")
         assert hasattr(cfg, "mcp")
 
-    def test_heavy_features_off_by_default(self):
+    def test_heavy_features_off_by_default(self) -> None:
         cfg = _fresh_feature_config()
         assert cfg.computer_vision is False
         assert cfg.training is False
 
-    def test_standard_features_on_by_default(self):
+    def test_standard_features_on_by_default(self) -> None:
         cfg = _fresh_feature_config()
         assert cfg.npu is True
         assert cfg.voice is True

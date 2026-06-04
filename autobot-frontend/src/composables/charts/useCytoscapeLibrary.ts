@@ -32,6 +32,9 @@
 
 import { ref, shallowRef, type Ref, type ShallowRef } from 'vue'
 import type cytoscape from 'cytoscape'
+import { createLogger } from '@/utils/debugUtils'
+
+const logger = createLogger('useCytoscapeLibrary')
 
 export interface UseCytoscapeLibraryReturn {
   /** True while the dynamic import is in flight. */
@@ -87,7 +90,7 @@ export function useCytoscapeLibrary(
       error.value = `Failed to load visualization library: ${
         err instanceof Error ? err.message : 'Unknown error'
       }`
-      console.error('Cytoscape lazy-load error:', err)
+      logger.error('Cytoscape lazy-load error:', err)
     } finally {
       loading.value = false
     }

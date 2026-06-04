@@ -9,11 +9,11 @@ management. Supports connection testing, listing databases/tables/collections,
 and executing read-only queries.
 """
 
-import logging
 import re
 import time
 from typing import Any, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from integrations.base import (
     BaseIntegration,
     IntegrationAction,
@@ -21,7 +21,7 @@ from integrations.base import (
     IntegrationStatus,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def _validate_readonly_query(query: str) -> bool:

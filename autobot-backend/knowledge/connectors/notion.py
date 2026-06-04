@@ -7,6 +7,8 @@ Notion Knowledge Connector (Issue #4099)
 Ingests Notion database rows and page content into the AutoBot knowledge base.
 Supports incremental sync via last-edited-time comparison and Redis-backed
 content-hash caching to avoid re-ingesting unchanged pages.
+Issue #8145: Declares auth_schema() -> BearerAuth so the API layer can validate
+the required ``token`` field before persisting the config.
 
 Config keys (under ``ConnectorConfig.config``):
     token (str): Notion integration secret.
@@ -16,12 +18,13 @@ Config keys (under ``ConnectorConfig.config``):
 """
 
 import hashlib
-import logging
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import aiohttp
 
+from autobot_shared.auth import BearerAuth
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc, parse_utc_iso
 from knowledge.connectors.base import AbstractConnector
 from knowledge.connectors.models import (
@@ -32,7 +35,7 @@ from knowledge.connectors.models import (
 )
 from knowledge.connectors.registry import ConnectorRegistry
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _NOTION_API_BASE = "https://api.notion.com/v1"
 _NOTION_VERSION = "2022-06-28"
@@ -53,6 +56,11 @@ class NotionConnector(AbstractConnector):
     connector_type = "notion"
     # Issue #4421: needs a free Notion integration token (config.token).
     tier = 1
+
+    @classmethod
+    def auth_schema(cls) -> type:
+        """Notion requires a bearer token (integration secret) — Issue #8145."""
+        return BearerAuth
 
     def __init__(self, config: ConnectorConfig) -> None:
         super().__init__(config)
@@ -83,7 +91,7 @@ class NotionConnector(AbstractConnector):
                 sources.append(_page_to_source_info(page, db_id))
         return sources
 
-    async def fetch_content(self, source_id: str) -> Optional[ContentResult]:
+    async def fetch_content(self, source_id: str) -> ContentResult | None:
         """Fetch block text for the Notion page identified by *source_id* (page ID)."""
         page_result = await self._notion_request("GET", "/pages/%s" % source_id)
         if page_result.get("status_code") != 200:
@@ -123,7 +131,7 @@ class NotionConnector(AbstractConnector):
             },
         )
 
-    async def detect_changes(self, since: Optional[datetime] = None) -> List[ChangeInfo]:
+    async def detect_changes(self, since: datetime | None = None) -> List[ChangeInfo]:
         """Return ChangeInfo for pages added or modified since *since*.
 
         When *since* is None all pages are reported as 'added'.  Otherwise the
@@ -150,7 +158,7 @@ class NotionConnector(AbstractConnector):
         pages: List[Dict[str, Any]] = []
         endpoint = "/databases/%s/query" % database_id
         payload: Dict[str, Any] = {"page_size": self._page_size}
-        cursor: Optional[str] = None
+        cursor: str | None = None
 
         while True:
             if cursor:
@@ -176,8 +184,8 @@ class NotionConnector(AbstractConnector):
         self,
         page_id: str,
         last_edited: str,
-        since: Optional[datetime],
-    ) -> Optional[ChangeInfo]:
+        since: datetime | None,
+    ) -> ChangeInfo | None:
         """Return ChangeInfo when the page is new or was edited after *since*."""
         if since is None:
             return ChangeInfo(
@@ -199,7 +207,7 @@ class NotionConnector(AbstractConnector):
             )
         return None
 
-    async def _load_timestamp(self, page_id: str) -> Optional[str]:
+    async def _load_timestamp(self, page_id: str) -> str | None:
         """Load last-known edited timestamp from Redis."""
         try:
             from autobot_shared.redis_client import get_redis_client
@@ -246,7 +254,7 @@ class NotionConnector(AbstractConnector):
         self,
         method: str,
         endpoint: str,
-        json_data: Optional[Dict[str, Any]] = None,
+        json_data: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
         """Make an authenticated Notion API request."""
         url = "%s%s" % (self._base_url, endpoint)

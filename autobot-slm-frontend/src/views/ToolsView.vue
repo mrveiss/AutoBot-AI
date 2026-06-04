@@ -416,13 +416,13 @@ onMounted(async () => {
           <!-- Network Test Tool -->
           <div v-if="activeTool === 'network-test'" class="space-y-4">
             <div>
-              <label for="net-test-node" class="block text-sm font-medium text-gray-700 mb-2">Select Node</label>
+              <label for="net-test-node" class="block text-sm font-medium text-gray-700 mb-2">{{ $t('toolsView.selectNode') }}</label>
               <select
                 id="net-test-node"
                 v-model="selectedNode"
                 class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               >
-                <option value="">-- Select a node --</option>
+                <option value="">{{ $t('toolsView.selectANode') }}</option>
                 <option v-for="node in nodes" :key="node.node_id" :value="node.node_id">
                   {{ node.hostname }} ({{ node.ip_address }})
                 </option>
@@ -444,13 +444,13 @@ onMounted(async () => {
           <!-- Health Check Tool -->
           <div v-else-if="activeTool === 'health-check'" class="space-y-4">
             <div>
-              <label for="health-check-node" class="block text-sm font-medium text-gray-700 mb-2">Select Node</label>
+              <label for="health-check-node" class="block text-sm font-medium text-gray-700 mb-2">{{ $t('toolsView.selectNode') }}</label>
               <select
                 id="health-check-node"
                 v-model="selectedNode"
                 class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               >
-                <option value="">-- Select a node --</option>
+                <option value="">{{ $t('toolsView.selectANode') }}</option>
                 <option v-for="node in nodes" :key="node.node_id" :value="node.node_id">
                   {{ node.hostname }} ({{ node.ip_address }})
                 </option>
@@ -473,20 +473,20 @@ onMounted(async () => {
           <div v-else-if="activeTool === 'service-restart'" class="space-y-4">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label for="svc-mgr-node" class="block text-sm font-medium text-gray-700 mb-2">Select Node</label>
+                <label for="svc-mgr-node" class="block text-sm font-medium text-gray-700 mb-2">{{ $t('toolsView.selectNode') }}</label>
                 <select
                   id="svc-mgr-node"
                   v-model="selectedNode"
                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                 >
-                  <option value="">-- Select a node --</option>
+                  <option value="">{{ $t('toolsView.selectANode') }}</option>
                   <option v-for="node in nodes" :key="node.node_id" :value="node.node_id">
                     {{ node.hostname }} ({{ node.ip_address }})
                   </option>
                 </select>
               </div>
               <div>
-                <label for="svc-mgr-service" class="block text-sm font-medium text-gray-700 mb-2">Service Name</label>
+                <label for="svc-mgr-service" class="block text-sm font-medium text-gray-700 mb-2">{{ $t('toolsView.serviceName') }}</label>
                 <input
                   type="text"
                   id="svc-mgr-service"
@@ -503,7 +503,7 @@ onMounted(async () => {
                 class="px-4 py-2 bg-success-600 text-white rounded-lg hover:bg-success-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-400"
                 :aria-label="`Start ${selectedService || 'service'}`"
               >
-                Start
+                {{ $t('toolsView.start') }}
               </button>
               <button
                 @click="serviceAction('stop')"
@@ -511,7 +511,7 @@ onMounted(async () => {
                 class="px-4 py-2 bg-danger-600 text-white rounded-lg hover:bg-danger-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-400"
                 :aria-label="`Stop ${selectedService || 'service'}`"
               >
-                Stop
+                {{ $t('toolsView.stop') }}
               </button>
               <button
                 @click="serviceAction('restart')"
@@ -519,7 +519,7 @@ onMounted(async () => {
                 class="px-4 py-2 bg-warning-600 text-white rounded-lg hover:bg-warning-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-400"
                 :aria-label="`Restart ${selectedService || 'service'}`"
               >
-                Restart
+                {{ $t('toolsView.restart') }}
               </button>
             </div>
           </div>
@@ -528,20 +528,20 @@ onMounted(async () => {
           <div v-else-if="activeTool === 'log-viewer'" class="space-y-4">
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <label for="log-viewer-node" class="block text-sm font-medium text-gray-700 mb-2">Select Node</label>
+                <label for="log-viewer-node" class="block text-sm font-medium text-gray-700 mb-2">{{ $t('toolsView.selectNode') }}</label>
                 <select
                   id="log-viewer-node"
                   v-model="selectedNode"
                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                 >
-                  <option value="">-- Select a node --</option>
+                  <option value="">{{ $t('toolsView.selectANode') }}</option>
                   <option v-for="node in nodes" :key="node.node_id" :value="node.node_id">
                     {{ node.hostname }} ({{ node.ip_address }})
                   </option>
                 </select>
               </div>
               <div>
-                <label for="log-viewer-service" class="block text-sm font-medium text-gray-700 mb-2">Service Name</label>
+                <label for="log-viewer-service" class="block text-sm font-medium text-gray-700 mb-2">{{ $t('toolsView.serviceName') }}</label>
                 <input
                   type="text"
                   id="log-viewer-service"
@@ -551,16 +551,16 @@ onMounted(async () => {
                 />
               </div>
               <div>
-                <label for="log-viewer-lines" class="block text-sm font-medium text-gray-700 mb-2">Lines</label>
+                <label for="log-viewer-lines" class="block text-sm font-medium text-gray-700 mb-2">{{ $t('toolsView.lines') }}</label>
                 <select
                   id="log-viewer-lines"
                   v-model="logLines"
                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                 >
-                  <option :value="50">50 lines</option>
-                  <option :value="100">100 lines</option>
-                  <option :value="200">200 lines</option>
-                  <option :value="500">500 lines</option>
+                  <option :value="50">{{ $t('toolsView.50Lines') }}</option>
+                  <option :value="100">{{ $t('toolsView.100Lines') }}</option>
+                  <option :value="200">{{ $t('toolsView.200Lines') }}</option>
+                  <option :value="500">{{ $t('toolsView.500Lines') }}</option>
                 </select>
               </div>
             </div>
@@ -580,7 +580,7 @@ onMounted(async () => {
           <!-- Redis CLI Tool -->
           <div v-else-if="activeTool === 'redis-cli'" class="space-y-4">
             <div>
-              <label for="redis-command" class="block text-sm font-medium text-gray-700 mb-2">Redis Command</label>
+              <label for="redis-command" class="block text-sm font-medium text-gray-700 mb-2">{{ $t('toolsView.redisCommand') }}</label>
               <input
                 type="text"
                 id="redis-command"
@@ -590,7 +590,7 @@ onMounted(async () => {
               />
             </div>
             <p class="text-xs text-gray-500">
-              Command will be executed on the Redis node. Common commands: PING, INFO, DBSIZE, CLIENT LIST
+              {{ $t('toolsView.commandWillBeExecuted') }}
             </p>
             <button
               @click="runRedisCommand"
@@ -609,20 +609,20 @@ onMounted(async () => {
           <div v-else-if="activeTool === 'ansible-runner'" class="space-y-4">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label for="ansible-node" class="block text-sm font-medium text-gray-700 mb-2">Select Node</label>
+                <label for="ansible-node" class="block text-sm font-medium text-gray-700 mb-2">{{ $t('toolsView.selectNode') }}</label>
                 <select
                   id="ansible-node"
                   v-model="selectedNode"
                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                 >
-                  <option value="">-- Select a node --</option>
+                  <option value="">{{ $t('toolsView.selectANode') }}</option>
                   <option v-for="node in nodes" :key="node.node_id" :value="node.node_id">
                     {{ node.hostname }} ({{ node.ip_address }})
                   </option>
                 </select>
               </div>
               <div>
-                <label for="ansible-command" class="block text-sm font-medium text-gray-700 mb-2">Command</label>
+                <label for="ansible-command" class="block text-sm font-medium text-gray-700 mb-2">{{ $t('toolsView.command') }}</label>
                 <input
                   type="text"
                   id="ansible-command"
@@ -633,7 +633,7 @@ onMounted(async () => {
               </div>
             </div>
             <p class="text-xs text-gray-500">
-              Run shell commands on the selected node via Ansible. Be careful with destructive commands.
+              {{ $t('toolsView.runShellCommandsOn') }}
             </p>
             <button
               @click="runAnsibleCommand"
@@ -655,7 +655,7 @@ onMounted(async () => {
 
           <!-- Result Output -->
           <div v-if="result" class="mt-4" role="region" aria-label="Command output">
-            <label for="tool-output" class="block text-sm font-medium text-gray-700 mb-2">Output</label>
+            <label for="tool-output" class="block text-sm font-medium text-gray-700 mb-2">{{ $t('toolsView.output') }}</label>
             <pre id="tool-output" class="p-4 bg-gray-900 text-gray-100 rounded-lg overflow-auto max-h-96 text-sm font-mono whitespace-pre-wrap" role="log">{{ result }}</pre>
           </div>
         </div>

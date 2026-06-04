@@ -16,13 +16,14 @@ Key Principles:
 """
 
 import json
-import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 
 
 class JudgmentConfidence(Enum):
@@ -100,7 +101,7 @@ class BaseLLMJudge:
         subject: Any,
         criteria: List[JudgmentDimension],
         context: Dict[str, Any],
-        alternatives: Optional[List[Any]] = None,
+        alternatives: List[Any] | None = None,
         **kwargs,
     ) -> JudgmentResult:
         """Make a structured judgment with multi-criteria evaluation. Issue #620.
@@ -143,7 +144,7 @@ class BaseLLMJudge:
         subject: Any,
         criteria: List[JudgmentDimension],
         context: Dict[str, Any],
-        alternatives: Optional[List[Any]] = None,
+        alternatives: List[Any] | None = None,
         **kwargs,
     ) -> str:
         """Prepare the prompt for LLM evaluation"""
@@ -201,7 +202,7 @@ Be precise, objective, and helpful in your judgments."""
         subject: Any,
         criteria: List[JudgmentDimension],
         context: Dict[str, Any],
-        alternatives: Optional[List[Any]] = None,
+        alternatives: List[Any] | None = None,
     ) -> JudgmentResult:
         """Parse LLM response into structured JudgmentResult"""
         try:
@@ -278,7 +279,7 @@ Be precise, objective, and helpful in your judgments."""
             llm_model_used="error",
         )
 
-    def get_judgment_history(self, limit: Optional[int] = None) -> List[JudgmentResult]:
+    def get_judgment_history(self, limit: int | None = None) -> List[JudgmentResult]:
         """Get judgment history for analysis and improvement"""
         if limit:
             return self.judgment_history[-limit:]

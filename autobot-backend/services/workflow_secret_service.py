@@ -11,14 +11,14 @@ encryption logic.
 Issue #2153 — Secret management for workflow credentials.
 """
 
-import logging
 import re
-from typing import Dict, FrozenSet, List, Optional
+from typing import Dict, FrozenSet, List
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from services.secrets_service import SecretsService, get_secrets_service
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Pattern: ${secrets.SOME_KEY_NAME}
 _SECRET_REF_RE = re.compile(r"\$\{secrets\.([A-Za-z0-9_\-\.]+)\}")
@@ -42,7 +42,7 @@ class WorkflowSecretService:
     Issue #2153.
     """
 
-    def __init__(self, secrets_service: Optional[SecretsService] = None) -> None:
+    def __init__(self, secrets_service: SecretsService | None = None) -> None:
         """Initialise service, lazily obtaining the SecretsService singleton."""
         self._secrets_service = secrets_service
         logger.info("WorkflowSecretService initialised")
@@ -58,7 +58,7 @@ class WorkflowSecretService:
             self._secrets_service = get_secrets_service()
         return self._secrets_service
 
-    def _build_chat_id(self, workflow_id: Optional[str]) -> Optional[str]:
+    def _build_chat_id(self, workflow_id: str | None) -> str | None:
         """
         Map workflow_id to the chat_id column used by SecretsService.
 
@@ -77,8 +77,8 @@ class WorkflowSecretService:
         value: str,
         owner_id: str,
         secret_type: str = "api_key",  # nosec B107 - secret_type category, not a password
-        workflow_id: Optional[str] = None,
-        description: Optional[str] = None,
+        workflow_id: str | None = None,
+        description: str | None = None,
     ) -> Dict:
         """
         Store an encrypted workflow secret.
@@ -116,7 +116,7 @@ class WorkflowSecretService:
     def list_secrets(
         self,
         owner_id: str,
-        workflow_id: Optional[str] = None,
+        workflow_id: str | None = None,
     ) -> List[Dict]:
         """
         Return secret metadata for the given owner (never includes values).
@@ -142,7 +142,7 @@ class WorkflowSecretService:
         # at this layer — not a hint. (Issue #2321)
         return [r for r in rows if r.get("created_by") == owner_id]
 
-    def get_secret_value(self, name: str, owner_id: str) -> Optional[str]:
+    def get_secret_value(self, name: str, owner_id: str) -> str | None:
         """
         Retrieve and decrypt a secret value by name.
 
@@ -281,7 +281,7 @@ class WorkflowSecretService:
         self,
         text: str,
         owner_id: str,
-        resolved_names: Optional[FrozenSet[str]] = None,
+        resolved_names: FrozenSet[str] | None = None,
     ) -> str:
         """
         Replace resolved secret values in *text* with ***.

@@ -2,7 +2,7 @@
 <template>
   <div class="summary-search">
     <div class="search-header">
-      <h4><i class="fas fa-search"></i> {{ $t('knowledge.summaries.search.title') }}</h4>
+      <h4><Icon name="search" /> {{ $t('knowledge.summaries.search.title') }}</h4>
       <p class="header-description">
         {{ $t('knowledge.summaries.search.description') }}
       </p>
@@ -11,7 +11,7 @@
     <!-- Search Controls -->
     <div class="search-controls">
       <div class="search-bar">
-        <i class="fas fa-search search-icon"></i>
+        <Icon name="search" class="search-icon" />
         <input
           v-model="searchQuery"
           type="text"
@@ -34,7 +34,7 @@
           :disabled="loading || !searchQuery.trim()"
           @click="handleSearch"
         >
-          <i :class="loading ? 'fas fa-spinner fa-spin' : 'fas fa-search'"></i>
+          <i :class="loading ? 'fas fa-spinner fa-spin' : 'search'"></i>
           {{ $t('knowledge.summaries.search.searchBtn') }}
         </button>
       </div>
@@ -42,13 +42,13 @@
 
     <!-- Error -->
     <div v-if="error" class="error-banner">
-      <i class="fas fa-exclamation-triangle"></i>
+      <Icon name="exclamation-triangle" />
       <span>{{ error }}</span>
     </div>
 
     <!-- Loading -->
     <div v-if="loading" class="loading-state">
-      <i class="fas fa-spinner fa-spin"></i>
+      <Icon name="spinner" class="animate-spin" />
       <span>{{ $t('knowledge.summaries.search.searching') }}</span>
     </div>
 
@@ -57,7 +57,7 @@
       v-else-if="hasSearched && summaries.length === 0"
       class="empty-state"
     >
-      <i class="fas fa-search"></i>
+      <Icon name="search" />
       <p>{{ $t('knowledge.summaries.search.noResults') }}</p>
     </div>
 
@@ -123,7 +123,7 @@
             class="action-btn"
             @click="$emit('drill-down', summary.id)"
           >
-            <i class="fas fa-search-plus"></i>
+            <Icon name="search-plus" />
             {{ $t('knowledge.summaries.search.drillDown') }}
           </button>
           <span class="result-meta">
@@ -145,6 +145,7 @@
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
 
+import Icon from '@/components/ui/Icon.vue'
 import { ref } from 'vue'
 import { useKnowledgeGraph } from '@/composables/useKnowledgeGraph'
 import { useExpansion } from '@/composables/useExpansion'

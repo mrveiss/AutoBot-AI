@@ -19,41 +19,41 @@ finding to ChromaDB with ``type="problem"`` so they surface in
 """
 
 import asyncio
-import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional  # noqa: F401  (List used in pub API)
+from typing import Any, Dict, List  # noqa: F401  (List used in pub API)
 
 from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+from .chromadb_storage import make_problem_dict
+
+logger = get_logger(__name__)
 
 
 def _antipattern_to_problem(ap: Any, file_category: str = "code") -> Dict[str, Any]:
-    """Map an ``AntiPatternInstance`` to the dict shape persisted by
-    ``_store_problems_batch_to_chromadb`` in chromadb_storage.py:251-287.
+    """Map an ``AntiPatternInstance`` to the canonical problem dict (#6759).
 
-    The persistence layer reads the keys ``type``, ``severity``, ``file_path``,
-    ``line``, ``description``, ``suggestion`` — others are ignored.  We prefix
-    the type with ``code_smell_`` to match the convention from
-    ``analyzers.py::_run_anti_pattern_analysis`` so the dashboard's existing
-    grouping picks the new findings up automatically.
+    Uses ``make_problem_dict`` from ``chromadb_storage`` as the single source
+    of truth for the schema, so adding a new persistence field only requires
+    updating that factory.  We prefix the type with ``code_smell_`` to match
+    the convention from ``analyzers.py::_run_anti_pattern_analysis``.
     """
     pattern_type = ap.pattern_type.value if hasattr(ap, "pattern_type") else "unknown"
     severity = ap.severity.value if hasattr(ap, "severity") else "medium"
-    return {
-        "type": f"code_smell_{pattern_type}",
-        "severity": severity,
-        "file_path": getattr(ap, "file_path", ""),
-        "file_category": file_category,
-        "line": getattr(ap, "line_number", 0),
-        "description": getattr(ap, "description", ""),
-        "suggestion": getattr(ap, "suggestion", ""),
-    }
+    return make_problem_dict(
+        problem_type=f"code_smell_{pattern_type}",
+        severity=severity,
+        file_path=getattr(ap, "file_path", ""),
+        line=getattr(ap, "line_number", 0),
+        description=getattr(ap, "description", ""),
+        suggestion=getattr(ap, "suggestion", ""),
+        file_category=file_category,
+    )
 
 
 async def _persist_to_chromadb(
     problems: List[Dict[str, Any]],
-    source_id: Optional[str],
+    source_id: str | None,
 ) -> int:
     """Append cross-file findings to the existing problems collection.
 
@@ -88,8 +88,8 @@ async def _persist_to_chromadb(
 
 async def run_cross_file_analysis(
     root_path: str,
-    source_id: Optional[str] = None,
-    exclude_patterns: Optional[List[str]] = None,
+    source_id: str | None = None,
+    exclude_patterns: List[str] | None = None,
 ) -> int:
     """Run the four cross-file rules over ``root_path`` and persist findings.
 
@@ -141,7 +141,7 @@ async def run_cross_file_analysis(
 
 def schedule_cross_file_analysis(
     root_path: str,
-    source_id: Optional[str] = None,
+    source_id: str | None = None,
 ) -> None:
     """Fire-and-forget launcher for the cross-file pass.
 

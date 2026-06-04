@@ -19,12 +19,13 @@ Trigger points
 from __future__ import annotations
 
 import hashlib
-import logging
 import time
 from dataclasses import dataclass, field
-from typing import Any, List, Optional
+from typing import Any, List
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 
 _LESSONS_COLLECTION = "autobot_lessons"
 
@@ -92,7 +93,7 @@ class AnalyzerService:
 
     def __init__(self, llm_service: Any) -> None:
         self._llm = llm_service
-        self._collection: Optional[Any] = None
+        self._collection: Any | None = None
 
     # ------------------------------------------------------------------
     # Public API
@@ -150,7 +151,7 @@ class AnalyzerService:
         self,
         query: str,
         results: List[Any],
-        user_feedback: Optional[str] = None,
+        user_feedback: str | None = None,
     ) -> List[Lesson]:
         """Ask the LLM to distil lessons from a RAG retrieval session.
 
@@ -252,7 +253,7 @@ class AnalyzerService:
     # Internal helpers
     # ------------------------------------------------------------------
 
-    async def _get_collection(self, name: Optional[str] = None) -> Any:
+    async def _get_collection(self, name: str | None = None) -> Any:
         """Return a ChromaDB collection (lazy-init, cached for default name)."""
         target = name or self.COLLECTION_NAME
         if name is None:
@@ -336,7 +337,7 @@ class AnalyzerService:
 # Module-level singleton
 # ---------------------------------------------------------------------------
 
-_analyzer_service: Optional[AnalyzerService] = None
+_analyzer_service: AnalyzerService | None = None
 
 
 def get_analyzer_service(llm_service: Any) -> AnalyzerService:

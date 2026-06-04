@@ -1,0 +1,36 @@
+// AutoBot "Ember" color scheme for just-the-docs
+// Mulberry-plum dark surfaces + marigold orange accent
+
+// ── Backgrounds ──────────────────────────────────────────────────────
+$body-background-color:   #1e1418;   // plum-950
+$sidebar-color:           #281a20;   // plum-900
+$search-background-color: #281a20;
+$table-background-color:  #281a20;
+$code-background-color:   #322229;   // plum-850
+
+// ── Borders ───────────────────────────────────────────────────────────
+$border-color:            #402c34;   // plum-800
+
+// ── Text ──────────────────────────────────────────────────────────────
+$body-text-color:         #f1e8de;   // plum-cream
+$body-heading-color:      #ffffff;
+$nav-child-link-color:    #8f8068;   // wax-400
+
+// ── Links & accent ────────────────────────────────────────────────────
+$link-color:              #e2842e;   // orange-400
+$link-color-visited:      #e99e55;   // orange-300
+$btn-primary-color:       #c4651a;   // orange-600
+$base-button-color:       #523944;   // plum-700
+
+// ── Labels ────────────────────────────────────────────────────────────
+$label-blue:   #c4651a;
+$label-green:  #2f8a5f;
+$label-red:    #cb3326;
+$label-yellow: #eca22a;
+$label-purple: #8a2f57;
+
+// ── Callouts (rgba — no color-mix, Sass-safe) ─────────────────────────
+$callout-color-blue:   rgba(196, 101,  26, 0.15);
+$callout-color-yellow: rgba(236, 162,  42, 0.12);
+$callout-color-green:  rgba( 47, 138,  95, 0.12);
+$callout-color-red:    rgba(203,  51,  38, 0.12);

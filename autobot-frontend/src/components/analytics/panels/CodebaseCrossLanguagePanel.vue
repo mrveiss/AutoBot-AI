@@ -6,7 +6,7 @@
 <template>
   <div class="cross-language-section analytics-section">
     <h3>
-      <i class="fas fa-language"></i> {{ $t('analytics.codebase.crossLanguage.title') }}
+      <Icon name="language" /> {{ $t('analytics.codebase.crossLanguage.title') }}
       <span v-if="analysis" class="total-count">({{ analysis.total_patterns }} patterns)</span>
       <button
         @click="emit('refresh')"
@@ -14,7 +14,7 @@
         class="refresh-btn"
         style="margin-left: 10px;"
       >
-        <i :class="loading ? 'fas fa-spinner fa-spin' : 'fas fa-sync-alt'"></i>
+        <i :class="loading ? 'fas fa-spinner fa-spin' : 'sync-alt'"></i>
       </button>
       <button
         @click="emit('run-full-scan')"
@@ -22,7 +22,7 @@
         class="btn-scan"
         style="margin-left: 5px;"
       >
-        <i :class="loading ? 'fas fa-spinner fa-spin' : 'fas fa-search'"></i>
+        <i :class="loading ? 'fas fa-spinner fa-spin' : 'search'"></i>
         {{ loading ? $t('analytics.codebase.buttons.scanning') : $t('analytics.codebase.crossLanguage.fullScan') }}
       </button>
       <div class="section-export-buttons">
@@ -32,7 +32,7 @@
           :disabled="!analysis"
           :title="$t('analytics.codebase.actions.exportMarkdown')"
         >
-          <i class="fas fa-file-alt"></i> MD
+          <Icon name="file-alt" /> MD
         </button>
         <button
           @click="emit('export', 'json')"
@@ -40,18 +40,18 @@
           :disabled="!analysis"
           :title="$t('analytics.codebase.actions.exportJson')"
         >
-          <i class="fas fa-file-code"></i> JSON
+          <Icon name="file-code" /> JSON
         </button>
       </div>
     </h3>
 
     <div v-if="loading" class="loading-state">
-      <i class="fas fa-spinner fa-spin"></i>
+      <Icon name="spinner" class="animate-spin" />
       {{ $t('analytics.codebase.crossLanguage.analyzing') }}
     </div>
 
     <div v-else-if="error" class="error-state">
-      <i class="fas fa-exclamation-triangle"></i> {{ error }}
+      <Icon name="exclamation-triangle" /> {{ error }}
       <button @click="emit('refresh')" class="btn-link">
         {{ $t('analytics.codebase.actions.retry') }}
       </button>
@@ -85,13 +85,13 @@
 
       <div class="language-breakdown">
         <span class="language-badge python">
-          <i class="fab fa-python"></i> {{ analysis.python_files_analyzed }} Python
+          <Icon name="code" /> {{ analysis.python_files_analyzed }} Python
         </span>
         <span class="language-badge typescript">
-          <i class="fab fa-js-square"></i> {{ analysis.typescript_files_analyzed }} TypeScript
+          <Icon name="code" /> {{ analysis.typescript_files_analyzed }} TypeScript
         </span>
         <span class="language-badge vue">
-          <i class="fab fa-vuejs"></i> {{ analysis.vue_files_analyzed }} Vue
+          <Icon name="code" /> {{ analysis.vue_files_analyzed }} Vue
         </span>
       </div>
 
@@ -103,7 +103,7 @@
             @click="toggle('dtoMismatches')"
           >
             <div class="header-info">
-              <i :class="isExpanded('dtoMismatches') ? 'fas fa-chevron-down' : 'fas fa-chevron-right'"></i>
+              <Icon :name="isExpanded('dtoMismatches') ? 'chevron-down' : 'chevron-right'" />
               <span class="header-name">
                 {{ $t('analytics.codebase.crossLanguage.dtoTypeMismatches') }}
               </span>
@@ -147,7 +147,7 @@
             @click="toggle('apiMismatches')"
           >
             <div class="header-info">
-              <i :class="isExpanded('apiMismatches') ? 'fas fa-chevron-down' : 'fas fa-chevron-right'"></i>
+              <Icon :name="isExpanded('apiMismatches') ? 'chevron-down' : 'chevron-right'" />
               <span class="header-name">
                 {{ $t('analytics.codebase.crossLanguage.apiContractIssues') }}
               </span>
@@ -201,7 +201,7 @@
             @click="toggle('validationDups')"
           >
             <div class="header-info">
-              <i :class="isExpanded('validationDups') ? 'fas fa-chevron-down' : 'fas fa-chevron-right'"></i>
+              <Icon :name="isExpanded('validationDups') ? 'chevron-down' : 'chevron-right'" />
               <span class="header-name">
                 {{ $t('analytics.codebase.crossLanguage.validationDuplications') }}
               </span>
@@ -254,9 +254,7 @@
             @click="toggle('semanticMatches')"
           >
             <div class="header-info">
-              <i
-                :class="isExpanded('semanticMatches') ? 'fas fa-chevron-down' : 'fas fa-chevron-right'"
-              ></i>
+              <Icon :name="isExpanded('semanticMatches') ? 'chevron-down' : 'chevron-right'" />
               <span class="header-name">
                 {{ $t('analytics.codebase.crossLanguage.semanticPatternMatches') }}
               </span>
@@ -302,7 +300,7 @@
       </div>
 
       <div v-if="analysis.scan_timestamp" class="scan-timestamp">
-        <i class="fas fa-clock"></i> {{ $t('analytics.codebase.actions.lastScan') }}:
+        <Icon name="clock" /> {{ $t('analytics.codebase.actions.lastScan') }}:
         {{ formatTimestamp(analysis.scan_timestamp) }}
         <span v-if="analysis.analysis_time_ms" class="analysis-time">
           ({{ (analysis.analysis_time_ms / 1000).toFixed(1) }}s)
@@ -319,6 +317,7 @@
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import { useExpansion } from '@/composables/useExpansion'
 

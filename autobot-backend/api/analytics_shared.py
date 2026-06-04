@@ -8,14 +8,14 @@ Contains utilities reused across analytics_quality, analytics_evolution,
 analytics_code_review, and analytics_code_generation.
 """
 
-import logging
 from pathlib import Path
-from typing import Optional
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 
 
-async def resolve_source_or_404(source_id: Optional[str]) -> None:
+async def resolve_source_or_404(source_id: str | None) -> None:
     """Raise HTTP 404 if source_id is provided but not found.
 
     Uses lazy imports of resolve_source_root and HTTPException to avoid
@@ -32,7 +32,7 @@ async def resolve_source_or_404(source_id: Optional[str]) -> None:
         raise HTTPException(status_code=404, detail=f"Source '{source_id}' not found")
 
 
-async def resolve_source_root_or_404(source_id: Optional[str]) -> Optional[Path]:
+async def resolve_source_root_or_404(source_id: str | None) -> Path | None:
     """Validate source_id and return its filesystem root path.
 
     Issue #3441: Phase 2 — callers need the resolved path to scope query

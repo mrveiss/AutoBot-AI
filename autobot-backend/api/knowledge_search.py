@@ -23,6 +23,7 @@ from fastapi import APIRouter, HTTPException, Request
 
 from api.schemas_knowledge import ConsolidatedSearchRequest, EnhancedSearchRequest
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from knowledge.schemas import (
     EnhancedSearchResponse,
     EnhancedSearchV2Response,
@@ -56,7 +57,7 @@ except ImportError:
     ADVANCED_RAG_AVAILABLE = False
     logging.warning("Advanced RAG Service not available - reranking features disabled")
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Create router for search endpoints
 router = APIRouter(tags=["knowledge-search"])

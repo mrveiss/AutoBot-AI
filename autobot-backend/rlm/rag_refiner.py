@@ -11,13 +11,13 @@ not, to generate a better search query for the next round.
 Issue #1382: Follow-up from #1373.
 """
 
-import logging
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import List
 
+from autobot_shared.logging_manager import get_logger
 from rlm.types import RLMConfig
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # -----------------------------------------------------------------------
 # Evaluation prompt for retrieval quality
@@ -61,7 +61,7 @@ class AdaptiveRAGRefiner:
     the existing ``_expand_query`` heuristic.
     """
 
-    def __init__(self, config: Optional[RLMConfig] = None):
+    def __init__(self, config: RLMConfig | None = None):
         self.config = config or RLMConfig(
             max_reflections=2,
             quality_threshold=0.6,
@@ -179,7 +179,7 @@ class AdaptiveRAGRefiner:
     async def _call_llm(self, prompt: str) -> str:
         """Send prompt to Ollama."""
         from autobot_shared.ssot_config import get_config
-        from llm_providers.ollama_helpers import call_ollama_generate
+        from llm_shared.ollama_helpers import call_ollama_generate
 
         ssot = get_config()
         return await call_ollama_generate(

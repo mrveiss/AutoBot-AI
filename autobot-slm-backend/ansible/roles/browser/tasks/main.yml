@@ -60,7 +60,7 @@
     owner: "{{ browser_user }}"
     group: "{{ browser_group }}"
     mode: '0755'
-  become: yes
+  become: true
   tags: ['browser', 'deploy']
 
 - name: "Browser | Sync browser worker code from code_source"
@@ -90,7 +90,7 @@
       - x11vnc
       - xvfb
     state: present
-  become: yes
+  become: true
   when:
     - install_vnc | default(false)
     - node_roles is not defined or 'vnc' in node_roles
@@ -124,7 +124,7 @@
              if ansible_facts['distribution_release'] == 'noble'
              else ['libasound2', 'libatk1.0-0']) }}
     state: present
-  become: yes
+  become: true
   tags: ['browser', 'packages']
 
 - name: "Browser | Install Playwright and FastAPI dependencies via pip"
@@ -136,7 +136,7 @@
       - fastapi
     state: present
     executable: pip3
-  become: yes
+  become: true
   environment:
     PIP_DEFAULT_TIMEOUT: "120"
   timeout: 300  # Issue #2835: prevent indefinite hang on dependency resolution
@@ -154,7 +154,7 @@
   npm:
     path: /opt/autobot/autobot-browser-worker
     state: present
-  become: yes
+  become: true
   when: _browser_worker_dir.stat.exists | default(false)
   tags: ['browser', 'packages']
 
@@ -169,7 +169,7 @@
     owner: root
     group: root
     mode: "0755"
-  become: yes
+  become: true
   tags: ['browser', 'packages']
 
 # Guard: skip the ~2-minute install when Chromium is already present. (#4855, #4662)
@@ -179,7 +179,7 @@
   ansible.builtin.find:
     paths: /var/lib/autobot/playwright-browsers
     patterns: "chrome"
-    recurse: yes
+    recurse: true
     file_type: file
   register: _chromium_binary
   tags: ['browser', 'packages']
@@ -188,7 +188,7 @@
   ansible.builtin.command:
     cmd: node_modules/.bin/playwright install chromium
     chdir: /opt/autobot/autobot-browser-worker
-  become: yes
+  become: true
   environment:
     PLAYWRIGHT_BROWSERS_PATH: /var/lib/autobot/playwright-browsers
   changed_when: true
@@ -201,9 +201,9 @@
   ansible.builtin.find:
     paths: /var/lib/autobot/playwright-browsers
     file_type: directory
-    recurse: yes
+    recurse: true
   register: _pb_dirs
-  become: yes
+  become: true
   when: _browser_worker_dir.stat.exists | default(false)
   tags: ['browser', 'packages']
 
@@ -213,7 +213,7 @@
     state: directory
     mode: "0755"
   loop: "{{ _pb_dirs.files | default([]) }}"
-  become: yes
+  become: true
   when: _browser_worker_dir.stat.exists | default(false)
   tags: ['browser', 'packages']
 
@@ -221,9 +221,9 @@
   ansible.builtin.find:
     paths: /var/lib/autobot/playwright-browsers
     file_type: file
-    recurse: yes
+    recurse: true
   register: _pb_files
-  become: yes
+  become: true
   when: _browser_worker_dir.stat.exists | default(false)
   tags: ['browser', 'packages']
 
@@ -233,7 +233,7 @@
     state: file
     mode: "0644"
   loop: "{{ _pb_files.files | default([]) }}"
-  become: yes
+  become: true
   when: _browser_worker_dir.stat.exists | default(false)
   tags: ['browser', 'packages']
 
@@ -244,7 +244,7 @@
     owner: autobot
     group: autobot
     mode: '0700'
-  become: yes
+  become: true
   when:
     - install_vnc | default(false)
     - node_roles is not defined or 'vnc' in node_roles
@@ -254,7 +254,7 @@
   stat:
     path: /etc/autobot/vnc-secrets.env
   register: browser_vnc_secrets_stat
-  become: yes
+  become: true
   when:
     - install_vnc | default(false)
     - node_roles is not defined or 'vnc' in node_roles
@@ -268,7 +268,7 @@
     chown root:autobot /etc/autobot/vnc-secrets.env
   args:
     creates: /etc/autobot/vnc-secrets.env
-  become: yes
+  become: true
   when:
     - install_vnc | default(false)
     - node_roles is not defined or 'vnc' in node_roles
@@ -281,7 +281,7 @@
     | cut -d= -f2
   register: browser_vnc_password
   changed_when: false
-  become: yes
+  become: true
   when:
     - install_vnc | default(false)
     - node_roles is not defined or 'vnc' in node_roles
@@ -293,7 +293,7 @@
       > /home/autobot/.vnc/passwd
     chmod 0600 /home/autobot/.vnc/passwd
     chown autobot:autobot /home/autobot/.vnc/passwd
-  become: yes
+  become: true
   when:
     - install_vnc | default(false)
     - node_roles is not defined or 'vnc' in node_roles
@@ -305,7 +305,7 @@
     src: vnc.service.j2
     dest: /etc/systemd/system/autobot-vnc.service
     mode: '0644'
-  become: yes
+  become: true
   when:
     - install_vnc | default(false)
     - node_roles is not defined or 'vnc' in node_roles
@@ -319,7 +319,7 @@
     src: playwright.service.j2
     dest: /etc/systemd/system/autobot-playwright.service
     mode: '0644'
-  become: yes
+  become: true
   notify:
     - reload systemd
     - restart playwright
@@ -332,7 +332,7 @@
     proto: tcp
     from_ip: "{{ network_subnet }}"
     comment: "VNC Server"
-  become: yes
+  become: true
   when:
     - install_vnc | default(false)
     - node_roles is not defined or 'vnc' in node_roles
@@ -346,7 +346,7 @@
     proto: tcp
     from_ip: "{{ network_subnet }}"
     delete: true
-  become: yes
+  become: true
   loop: "{{ playwright_ports_legacy | default([]) }}"
   when: item | int != playwright_port | int
   ignore_errors: true
@@ -359,16 +359,16 @@
     proto: tcp
     from_ip: "{{ network_subnet }}"
     comment: "Playwright API"
-  become: yes
+  become: true
   notify: reload firewall
   tags: ['browser', 'firewall']
 
 - name: "Browser | Enable VNC service"
   systemd:
     name: autobot-vnc
-    enabled: yes
-    daemon_reload: yes
-  become: yes
+    enabled: true
+    daemon_reload: true
+  become: true
   when:
     - install_vnc | default(false)
     - node_roles is not defined or 'vnc' in node_roles
@@ -377,9 +377,9 @@
 - name: "Browser | Enable Playwright service"
   systemd:
     name: autobot-playwright
-    enabled: yes
-    daemon_reload: yes
-  become: yes
+    enabled: true
+    daemon_reload: true
+  become: true
   tags: ['browser', 'service']
 
 - name: "Browser | Display configuration summary"

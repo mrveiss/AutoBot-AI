@@ -7,11 +7,11 @@ Event Extractor Cognifier - Extract temporal events from text.
 Issue #759: Knowledge Pipeline Foundation - Extract, Cognify, Load (ECL).
 """
 
-import logging
 import re
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from knowledge.pipeline.base import BaseCognifier, PipelineContext
 from knowledge.pipeline.cognifiers.llm_utils import (
     build_entity_map,
@@ -23,7 +23,7 @@ from knowledge.pipeline.models.event import EventType, TemporalEvent, TemporalTy
 from knowledge.pipeline.registry import TaskRegistry
 from services.llm_service import get_llm_service
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 EVENT_EXTRACTION_PROMPT = """Extract temporal events from the text.
@@ -171,7 +171,7 @@ class EventExtractor(BaseCognifier):
                 logger.warning("Failed to create event: %s", e)
         return events
 
-    def _parse_temporal(self, expression: str) -> Optional[datetime]:
+    def _parse_temporal(self, expression: str) -> datetime | None:
         """Parse temporal expression to datetime."""
         if not expression:
             return None

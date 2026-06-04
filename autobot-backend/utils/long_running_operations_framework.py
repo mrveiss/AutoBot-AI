@@ -32,13 +32,13 @@ Operation Types Supported:
 """
 
 import asyncio
-import logging
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import TimingConstants
 
 # Re-export all public API from the package
@@ -56,7 +56,7 @@ from utils.long_running_operations import (  # Types and dataclasses; Managers
     OperationType,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Re-export for backward compatibility
 __all__ = [
@@ -347,7 +347,7 @@ async def _save_indexing_checkpoint_if_needed(
 
 def _create_indexing_operation(
     codebase_path: str,
-    file_patterns: Optional[List[str]],
+    file_patterns: List[str] | None,
 ):
     """Create the indexing operation function for execute_codebase_indexing.
 
@@ -394,7 +394,7 @@ def _create_indexing_operation(
 async def execute_codebase_indexing(
     codebase_path: str,
     manager: LongRunningOperationManager,
-    file_patterns: Optional[List[str]] = None,
+    file_patterns: List[str] | None = None,
 ) -> str:
     """Execute codebase indexing operation.
 
@@ -424,7 +424,7 @@ async def execute_codebase_indexing(
 async def execute_comprehensive_test_suite(
     test_suite_path: str,
     manager: LongRunningOperationManager,
-    test_patterns: Optional[List[str]] = None,
+    test_patterns: List[str] | None = None,
 ) -> str:
     """Execute comprehensive test suite operation.
 

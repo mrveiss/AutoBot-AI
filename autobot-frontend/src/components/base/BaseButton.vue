@@ -4,6 +4,7 @@
     :class="buttonClasses"
     :disabled="disabled || loading"
     :type="htmlType"
+    :aria-label="ariaLabel || undefined"
     @click="handleClick"
     @touchstart="handleTouchStart"
     @touchend="handleTouchEnd"
@@ -20,16 +21,27 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watchEffect, useSlots, Comment } from 'vue'
+import type { ButtonVariant, ComponentSize } from '@/types/component-props'
+import { size as SIZE_VALUES } from '@/design-tokens/tokens'
+import { createLogger } from '@/utils/debugUtils'
+
+const BUTTON_VARIANTS: ButtonVariant[] = [
+  'primary', 'secondary', 'success', 'error', 'warning', 'info',
+  'light', 'dark', 'outline-solid', 'ghost', 'link',
+]
+
+const logger = createLogger('BaseButton')
 
 interface Props {
-  variant?: 'primary' | 'secondary' | 'success' | 'danger' | 'warning' | 'info' | 'light' | 'dark' | 'outline-solid' | 'ghost' | 'link'
-  size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl'
+  variant?: ButtonVariant
+  size?: ComponentSize
   disabled?: boolean
   loading?: boolean
   block?: boolean
   rounded?: boolean
   label?: string
+  ariaLabel?: string
   htmlType?: 'button' | 'submit' | 'reset'
   tag?: string
   to?: string | object
@@ -51,6 +63,28 @@ const props = withDefaults(defineProps<Props>(), {
   touchFeedback: true,
   hapticFeedback: true
 })
+
+const slots = useSlots()
+
+if (import.meta.env.DEV) {
+  watchEffect(() => {
+    const hasVisibleText = !!props.label || !!slots.default?.()?.some(
+      (vnode: any) => vnode.type !== Comment && vnode.children
+    )
+    if (!hasVisibleText && !props.ariaLabel) {
+      logger.warn(
+        'Icon-only button rendered without ariaLabel prop. ' +
+        'This is a WCAG 4.1.2 failure. Add :ariaLabel="$t(\'common.actionName\')" to the button.'
+      )
+    }
+    if (props.size !== undefined && !(SIZE_VALUES as readonly string[]).includes(props.size)) {
+      logger.warn(`Invalid "size" prop: "${props.size}". Expected: ${SIZE_VALUES.join(' | ')}`)
+    }
+    if (props.variant !== undefined && !BUTTON_VARIANTS.includes(props.variant)) {
+      logger.warn(`Invalid "variant" prop: "${props.variant}". Expected: ${BUTTON_VARIANTS.join(' | ')}`)
+    }
+  })
+}
 
 const emit = defineEmits<{
   click: [event: MouseEvent]
@@ -239,6 +273,16 @@ const createRipple = (event: TouchEvent) => {
 }
 
 .btn-danger:hover {
+  background-color: var(--color-error-hover);
+}
+
+.btn-error {
+  background-color: var(--color-error);
+  color: var(--text-on-error);
+  font-weight: 500;
+}
+
+.btn-error:hover {
   background-color: var(--color-error-hover);
 }
 

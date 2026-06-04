@@ -7,7 +7,7 @@ SLM Settings API Routes
 
 import json
 import logging
-from typing import List, Optional
+from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
@@ -15,9 +15,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
 
+from autobot_shared.auth.permissions import Permission
 from models.database import Node, Setting
 from models.schemas import SettingResponse, SettingUpdate
-from services.auth import get_current_user, require_admin
+from services.auth import get_current_user, require_permission
 from services.database import get_db
 from services.playbook_executor import get_playbook_executor
 
@@ -42,7 +43,7 @@ class TimeConfig(BaseModel):
 class TimeSyncRequest(BaseModel):
     """Request to trigger time sync on fleet nodes."""
 
-    node_ids: Optional[List[str]] = None  # None = all nodes
+    node_ids: List[str] | None = None  # None = all nodes
 
 
 class TimeSyncResult(BaseModel):
@@ -51,7 +52,7 @@ class TimeSyncResult(BaseModel):
     success: bool
     message: str
     node_count: int
-    output: Optional[str] = None
+    output: str | None = None
 
 
 @router.get("/time/config", response_model=TimeConfig)
@@ -89,7 +90,7 @@ async def _upsert_setting(db: AsyncSession, key: str, value: str, desc: str) -> 
 async def put_time_config(
     config: TimeConfig,
     db: Annotated[AsyncSession, Depends(get_db)],
-    _: Annotated[dict, Depends(require_admin)],
+    _: Annotated[dict, Depends(require_permission(Permission.ADMIN_CONFIG_WRITE))],
 ) -> TimeConfig:
     """Save NTP and timezone configuration (admin only)."""
     await _upsert_setting(db, "time_timezone", config.timezone, "Default system timezone")
@@ -108,7 +109,7 @@ async def put_time_config(
 async def sync_time(
     request: TimeSyncRequest,
     db: Annotated[AsyncSession, Depends(get_db)],
-    _: Annotated[dict, Depends(require_admin)],
+    _: Annotated[dict, Depends(require_permission(Permission.ADMIN_CONFIG_WRITE))],
 ) -> TimeSyncResult:
     """Trigger Ansible time_sync role on fleet nodes (admin only)."""
     # Load current time config
@@ -119,7 +120,7 @@ async def sync_time(
     ntp_servers = json.loads(ntp_raw) if ntp_raw else DEFAULT_NTP_SERVERS
 
     # Resolve target nodes for --limit
-    limit: Optional[List[str]] = None
+    limit: List[str] | None = None
     node_count = 0
     if request.node_ids:
         node_result = await db.execute(select(Node).where(Node.node_id.in_(request.node_ids)))
@@ -200,7 +201,7 @@ async def update_setting(
     key: str,
     setting_data: SettingUpdate,
     db: Annotated[AsyncSession, Depends(get_db)],
-    _: Annotated[dict, Depends(require_admin)],
+    _: Annotated[dict, Depends(require_permission(Permission.ADMIN_CONFIG_WRITE))],
 ) -> SettingResponse:
     """Update a setting (admin only)."""
     result = await db.execute(select(Setting).where(Setting.key == key))
@@ -228,7 +229,7 @@ async def create_setting(
     key: str,
     setting_data: SettingUpdate,
     db: Annotated[AsyncSession, Depends(get_db)],
-    _: Annotated[dict, Depends(require_admin)],
+    _: Annotated[dict, Depends(require_permission(Permission.ADMIN_CONFIG_WRITE))],
 ) -> SettingResponse:
     """Create a new setting (admin only)."""
     result = await db.execute(select(Setting).where(Setting.key == key))
@@ -255,7 +256,7 @@ async def create_setting(
 async def delete_setting(
     key: str,
     db: Annotated[AsyncSession, Depends(get_db)],
-    _: Annotated[dict, Depends(require_admin)],
+    _: Annotated[dict, Depends(require_permission(Permission.ADMIN_CONFIG_WRITE))],
 ) -> None:
     """Delete a setting (admin only)."""
     protected_keys = {

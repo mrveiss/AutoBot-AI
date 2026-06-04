@@ -20,13 +20,12 @@ async variants to prevent event loop blocking. See Issue #369.
 from __future__ import annotations
 
 import json
-import logging
-import os
 import pickle  # nosec B403 — reading ChromaDB internal pickle files only
 import sqlite3
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config as _ssot_config
 
 # Re-export async utilities for convenient imports
@@ -40,11 +39,11 @@ from utils.async_chromadb_client import (
 if TYPE_CHECKING:
     import chromadb  # noqa: F401
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #3094: Use SSOT config port so the default (8100) matches Ansible deployment.
 # Host remains os.getenv-based: empty string = use local PersistentClient (dev mode).
-_CHROMADB_HOST = os.getenv("AUTOBOT_CHROMADB_HOST", "")
+_CHROMADB_HOST = _ssot_config.vm.chromadb
 _CHROMADB_PORT = _ssot_config.port.chromadb
 
 # Module exports

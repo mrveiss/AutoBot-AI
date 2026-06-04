@@ -12,10 +12,10 @@ Issue: #1375
 """
 
 import hashlib
-import logging
-from typing import Optional
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 
 
 def compute_fingerprint(content: str) -> str:
@@ -62,7 +62,7 @@ def compute_content_hash_key(content: str) -> str:
     return hashlib.sha256(content.encode("utf-8")).hexdigest()[:16]
 
 
-def extract_fingerprint(metadata: dict) -> Optional[str]:
+def extract_fingerprint(metadata: dict) -> str | None:
     """Extract stored content fingerprint from fact metadata.
 
     Args:

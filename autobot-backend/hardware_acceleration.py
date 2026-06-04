@@ -8,19 +8,18 @@ Manages hardware acceleration with priority: NPU > GPU > CPU
 Optimizes model execution across different hardware targets.
 """
 
-import logging
 import os
 import platform
 import subprocess  # nosec B404 - hardware detection requires subprocess
-from enum import Enum
 from typing import Any, Dict
 
 import psutil
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from config import config_manager
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Performance optimization: O(1) lookup for NPU hardware keywords (Issue #326)
 NPU_HARDWARE_KEYWORDS = {"neural", "npu", "ai"}
@@ -65,12 +64,13 @@ def _parse_nvidia_smi_output(output: str) -> Dict[str, Dict[str, Any]]:
     return devices
 
 
-class AccelerationType(Enum):
-    """Hardware acceleration types in priority order."""
-
-    NPU = "npu"
-    GPU = "gpu"
-    CPU = "cpu"
+# #6755 round 3: ``AccelerationType`` was a duplicate of
+# ``ai_hardware_accelerator.HardwareDevice`` (Jaccard 1.0 — same
+# NPU/GPU/CPU values, just different class name). Re-export the canonical
+# type so the two surfaces stay in sync. ``AccelerationType.NPU`` etc.
+# at call sites continue to work unchanged because ``AccelerationType``
+# IS ``HardwareDevice`` after this re-export.
+from ai_hardware_accelerator import HardwareDevice as AccelerationType  # noqa: E402
 
 
 class HardwareAccelerationManager:
@@ -597,7 +597,7 @@ class HardwareAccelerationManager:
             # Store environment variables in config and apply them
             config_manager.set("runtime.environment_overrides", env_vars)
             for key, value in env_vars.items():
-                os.environ[key] = value
+                os.environ[key] = value  # ssot-config-exempt: runtime env mutation for hardware optimization
                 logger.debug("Set %s=%s", key, value)
 
             logger.info("System environment configured for hardware optimization")

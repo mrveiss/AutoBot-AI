@@ -14,7 +14,7 @@ import json
 import re
 import subprocess  # nosec B404 - required for shell detection
 from pathlib import Path
-from typing import Any, List, Union
+from typing import Any, List
 
 import aiofiles
 
@@ -38,7 +38,7 @@ _PROMPT_PATTERNS = [
 ]
 
 
-def safe_decode(data: Union[bytes, str], encoding: str = "utf-8", errors: str = "replace") -> str:
+def safe_decode(data: bytes | str, encoding: str = "utf-8", errors: str = "replace") -> str:
     """
     Safely decode bytes to UTF-8 string.
 
@@ -61,7 +61,7 @@ def safe_decode(data: Union[bytes, str], encoding: str = "utf-8", errors: str = 
     return data.decode(encoding, errors=errors)
 
 
-def safe_encode(data: Union[bytes, str], encoding: str = "utf-8", errors: str = "replace") -> bytes:
+def safe_encode(data: bytes | str, encoding: str = "utf-8", errors: str = "replace") -> bytes:
     """
     Safely encode string to UTF-8 bytes.
 
@@ -98,7 +98,7 @@ def json_dumps_utf8(data: Any, **kwargs) -> str:
     return json.dumps(data, **kwargs)
 
 
-def read_utf8_file(file_path: Union[str, Path]) -> str:
+def read_utf8_file(file_path: str | Path) -> str:
     """
     Synchronously read file with UTF-8 encoding.
 
@@ -116,7 +116,7 @@ def read_utf8_file(file_path: Union[str, Path]) -> str:
         return f.read()
 
 
-def write_utf8_file(file_path: Union[str, Path], content: str) -> None:
+def write_utf8_file(file_path: str | Path, content: str) -> None:
     """
     Synchronously write file with UTF-8 encoding.
 
@@ -128,7 +128,7 @@ def write_utf8_file(file_path: Union[str, Path], content: str) -> None:
         f.write(content)
 
 
-async def async_read_utf8_file(file_path: Union[str, Path]) -> str:
+async def async_read_utf8_file(file_path: str | Path) -> str:
     """
     Asynchronously read file with UTF-8 encoding.
 
@@ -149,7 +149,7 @@ async def async_read_utf8_file(file_path: Union[str, Path]) -> str:
         raise OSError(f"Failed to read file {file_path}: {e}") from e
 
 
-async def async_write_utf8_file(file_path: Union[str, Path], content: str) -> None:
+async def async_write_utf8_file(file_path: str | Path, content: str) -> None:
     """
     Asynchronously write file with UTF-8 encoding.
 
@@ -167,7 +167,7 @@ async def async_write_utf8_file(file_path: Union[str, Path], content: str) -> No
         raise OSError(f"Failed to write file {file_path}: {e}") from e
 
 
-def run_command_utf8(cmd: Union[str, List[str]], **kwargs) -> subprocess.CompletedProcess:
+def run_command_utf8(cmd: str | List[str], **kwargs) -> subprocess.CompletedProcess:
     """
     Run subprocess command with UTF-8 encoding.
 

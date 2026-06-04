@@ -16,9 +16,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
 
+from autobot_shared.auth.permissions import Permission
 from models.database import SystemSecret
 from models.schemas import SecretCreate, SecretResponse, SecretUpdate
-from services.auth import require_admin
+from services.auth import require_permission
 from services.database import get_db
 from services.encryption import decrypt_data, encrypt_data
 
@@ -29,7 +30,7 @@ router = APIRouter(prefix="/secrets", tags=["secrets"])
 @router.get("", response_model=List[SecretResponse])
 async def list_secrets(
     db: Annotated[AsyncSession, Depends(get_db)],
-    _: Annotated[dict, Depends(require_admin)],
+    _: Annotated[dict, Depends(require_permission(Permission.SECURITY_MANAGE))],
 ) -> List[SecretResponse]:
     """List all system secrets (values never returned)."""
     result = await db.execute(select(SystemSecret).order_by(SystemSecret.key))
@@ -44,7 +45,7 @@ async def list_secrets(
 async def create_secret(
     data: SecretCreate,
     db: Annotated[AsyncSession, Depends(get_db)],
-    _: Annotated[dict, Depends(require_admin)],
+    _: Annotated[dict, Depends(require_permission(Permission.SECURITY_MANAGE))],
 ) -> SecretResponse:
     """Create a new system secret (admin only)."""
     existing = await db.execute(select(SystemSecret).where(SystemSecret.key == data.key))
@@ -72,7 +73,7 @@ async def create_secret(
 async def get_secret(
     key: str,
     db: Annotated[AsyncSession, Depends(get_db)],
-    _: Annotated[dict, Depends(require_admin)],
+    _: Annotated[dict, Depends(require_permission(Permission.SECURITY_MANAGE))],
 ) -> SecretResponse:
     """Get a system secret metadata (value never returned)."""
     result = await db.execute(select(SystemSecret).where(SystemSecret.key == key))
@@ -89,7 +90,7 @@ async def get_secret(
 async def get_secret_value(
     key: str,
     db: Annotated[AsyncSession, Depends(get_db)],
-    _: Annotated[dict, Depends(require_admin)],
+    _: Annotated[dict, Depends(require_permission(Permission.SECURITY_MANAGE))],
 ) -> dict:
     """Get a decrypted secret value (admin only, for fleet provisioning)."""
     result = await db.execute(select(SystemSecret).where(SystemSecret.key == key))
@@ -107,7 +108,7 @@ async def update_secret(
     key: str,
     data: SecretUpdate,
     db: Annotated[AsyncSession, Depends(get_db)],
-    _: Annotated[dict, Depends(require_admin)],
+    _: Annotated[dict, Depends(require_permission(Permission.SECURITY_MANAGE))],
 ) -> SecretResponse:
     """Update a system secret (admin only)."""
     result = await db.execute(select(SystemSecret).where(SystemSecret.key == key))
@@ -136,7 +137,7 @@ async def update_secret(
 async def delete_secret(
     key: str,
     db: Annotated[AsyncSession, Depends(get_db)],
-    _: Annotated[dict, Depends(require_admin)],
+    _: Annotated[dict, Depends(require_permission(Permission.SECURITY_MANAGE))],
 ) -> None:
     """Delete a system secret (admin only)."""
     result = await db.execute(select(SystemSecret).where(SystemSecret.key == key))

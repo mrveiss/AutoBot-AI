@@ -8,20 +8,18 @@ Provides convenience functions for raising HTTPExceptions using the error catalo
 Makes migration from hardcoded errors to catalog-based errors straightforward
 """
 
-import logging
-from typing import Optional
-
 from fastapi import HTTPException, status
 
+from autobot_shared.logging_manager import get_logger
 from utils.error_catalog import get_error
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def raise_catalog_error(
     error_code: str,
-    additional_context: Optional[str] = None,
-    override_status_code: Optional[int] = None,
+    additional_context: str | None = None,
+    override_status_code: int | None = None,
 ) -> None:
     """
     Raise HTTPException using error catalog
@@ -73,7 +71,7 @@ def raise_catalog_error(
     raise HTTPException(status_code=status_code, detail=detail)
 
 
-def raise_catalog_error_simple(error_code: str, additional_context: Optional[str] = None) -> None:
+def raise_catalog_error_simple(error_code: str, additional_context: str | None = None) -> None:
     """
     Raise HTTPException with simple string detail (backward compatible)
 
@@ -103,8 +101,8 @@ def raise_catalog_error_simple(error_code: str, additional_context: Optional[str
 
 def get_catalog_http_exception(
     error_code: str,
-    additional_context: Optional[str] = None,
-    override_status_code: Optional[int] = None,
+    additional_context: str | None = None,
+    override_status_code: int | None = None,
 ) -> HTTPException:
     """
     Create HTTPException from catalog without raising
@@ -141,7 +139,7 @@ def get_catalog_http_exception(
 
 def catalog_error_response(
     error_code: str,
-    additional_context: Optional[str] = None,
+    additional_context: str | None = None,
     include_metadata: bool = True,
 ) -> dict:
     """
@@ -191,37 +189,37 @@ def catalog_error_response(
 # Convenience functions for common error categories
 
 
-def raise_auth_error(error_code: str = "AUTH_0002", context: Optional[str] = None) -> None:
+def raise_auth_error(error_code: str = "AUTH_0002", context: str | None = None) -> None:
     """Raise authentication error"""
     raise_catalog_error_simple(error_code, context)
 
 
-def raise_validation_error(error_code: str = "API_0001", context: Optional[str] = None) -> None:
+def raise_validation_error(error_code: str = "API_0001", context: str | None = None) -> None:
     """Raise validation error"""
     raise_catalog_error_simple(error_code, context)
 
 
-def raise_server_error(error_code: str = "API_0003", context: Optional[str] = None) -> None:
+def raise_server_error(error_code: str = "API_0003", context: str | None = None) -> None:
     """Raise internal server error"""
     raise_catalog_error_simple(error_code, context)
 
 
-def raise_service_unavailable(error_code: str = "API_0005", context: Optional[str] = None) -> None:
+def raise_service_unavailable(error_code: str = "API_0005", context: str | None = None) -> None:
     """Raise service unavailable error"""
     raise_catalog_error_simple(error_code, context)
 
 
-def raise_kb_error(error_code: str, context: Optional[str] = None) -> None:
+def raise_kb_error(error_code: str, context: str | None = None) -> None:
     """Raise knowledge base error"""
     raise_catalog_error_simple(error_code, context)
 
 
-def raise_llm_error(error_code: str, context: Optional[str] = None) -> None:
+def raise_llm_error(error_code: str, context: str | None = None) -> None:
     """Raise LLM service error"""
     raise_catalog_error_simple(error_code, context)
 
 
-def raise_db_error(error_code: str = "DB_0003", context: Optional[str] = None) -> None:
+def raise_db_error(error_code: str = "DB_0003", context: str | None = None) -> None:
     """Raise database error"""
     raise_catalog_error_simple(error_code, context)
 
@@ -318,7 +316,7 @@ def migrate_http_exception(
     original_status_code: int,
     original_detail: str,
     suggested_error_code: str,
-    additional_context: Optional[str] = None,
+    additional_context: str | None = None,
 ) -> None:
     """
     Helper for migrating existing HTTPException calls

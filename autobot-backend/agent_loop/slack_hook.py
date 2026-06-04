@@ -17,11 +17,12 @@ Environment variables:
                                   (default: same as SLACK_NOTIFICATIONS_CHANNEL)
 """
 
-import logging
-import os
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
+
+logger = get_logger(__name__)
 
 _SLACK_NOTIFICATIONS_CHANNEL_DEFAULT = "#agent-notifications"
 
@@ -29,9 +30,7 @@ _SLACK_NOTIFICATIONS_CHANNEL_DEFAULT = "#agent-notifications"
 class _NullSlackHook:
     """No-op hook returned when Slack is not configured."""
 
-    async def post_agent_status(
-        self, agent_name: str, status: str, message: str, thread_ts: Optional[str] = None
-    ) -> None:
+    async def post_agent_status(self, agent_name: str, status: str, message: str, thread_ts: str | None = None) -> None:
         pass
 
     async def post_task_completion(
@@ -72,9 +71,7 @@ class _SlackHook:
         self._notifications_channel = notifications_channel
         self._approvals_channel = approvals_channel
 
-    async def post_agent_status(
-        self, agent_name: str, status: str, message: str, thread_ts: Optional[str] = None
-    ) -> None:
+    async def post_agent_status(self, agent_name: str, status: str, message: str, thread_ts: str | None = None) -> None:
         params: Dict[str, Any] = {
             "channel": self._notifications_channel,
             "agent_name": agent_name,
@@ -134,7 +131,7 @@ class _SlackHook:
 
 
 # Module-level singleton; resolved lazily on first call to get_slack_hook().
-_hook: Optional[Any] = None
+_hook: Any | None = None
 
 
 def get_slack_hook() -> Any:
@@ -147,14 +144,14 @@ def get_slack_hook() -> Any:
     if _hook is not None:
         return _hook
 
-    token = os.getenv("SLACK_BOT_TOKEN", "").strip()
+    token = config.slack_bot_token.strip()
     if not token:
         logger.debug("SLACK_BOT_TOKEN not set — Slack notifications disabled")
         _hook = _NullSlackHook()
         return _hook
 
-    notifications_channel = os.getenv("SLACK_NOTIFICATIONS_CHANNEL", _SLACK_NOTIFICATIONS_CHANNEL_DEFAULT).strip()
-    approvals_channel = os.getenv("SLACK_APPROVALS_CHANNEL", notifications_channel).strip()
+    notifications_channel = config.slack_notifications_channel.strip()
+    approvals_channel = config.slack_approvals_channel.strip()
 
     logger.info(
         "Slack notifications enabled (channel=%s, approvals=%s)",

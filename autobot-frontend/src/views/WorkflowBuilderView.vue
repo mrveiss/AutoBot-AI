@@ -13,73 +13,68 @@
 
       <!-- Category Navigation -->
       <nav class="category-nav" :aria-label="$t('workflow.views.navAriaLabel')">
-        <button
+        <router-link
+          to="/automation/overview"
+          active-class="active"
           class="category-item"
-          :class="{ active: activeSection === 'overview' }"
-          @click="activeSection = 'overview'"
           :aria-label="$t('workflow.views.overviewAriaLabel')"
-          tabindex="0"
         >
           <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path>
           </svg>
           <span>{{ $t('workflow.views.overview') }}</span>
-        </button>
+        </router-link>
 
         <div class="category-divider">
           <span>{{ $t('workflow.views.build') }}</span>
         </div>
 
-        <button
+        <router-link
+          to="/automation/canvas"
+          active-class="active"
           class="category-item"
-          :class="{ active: activeSection === 'canvas' }"
-          @click="activeSection = 'canvas'"
           :aria-label="$t('workflow.views.visualBuilderAriaLabel')"
-          tabindex="0"
         >
           <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 5a1 1 0 011-1h4a1 1 0 011 1v7a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v3a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 16a1 1 0 011-1h4a1 1 0 011 1v3a1 1 0 01-1 1H5a1 1 0 01-1-1v-3zM14 12a1 1 0 011-1h4a1 1 0 011 1v7a1 1 0 01-1 1h-4a1 1 0 01-1-1v-7z"></path>
           </svg>
           <span>{{ $t('workflow.views.visualBuilder') }}</span>
-        </button>
+        </router-link>
 
-        <button
+        <router-link
+          to="/automation/templates"
+          active-class="active"
           class="category-item"
-          :class="{ active: activeSection === 'templates' }"
-          @click="activeSection = 'templates'"
           :aria-label="$t('workflow.views.templatesAriaLabel')"
-          tabindex="0"
         >
           <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
           </svg>
           <span>{{ $t('workflow.views.templates') }}</span>
-          <span class="count" aria-label="{{ templates.length }} templates">{{ templates.length }}</span>
-        </button>
+          <span class="count" :aria-label="`${templates.length} templates`">{{ templates.length }}</span>
+        </router-link>
 
-        <button
+        <router-link
+          to="/automation/natural-language"
+          active-class="active"
           class="category-item"
-          :class="{ active: activeSection === 'natural-language' }"
-          @click="activeSection = 'natural-language'"
           :aria-label="$t('workflow.views.naturalLanguageAriaLabel')"
-          tabindex="0"
         >
           <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"></path>
           </svg>
           <span>{{ $t('workflow.views.naturalLanguage') }}</span>
-        </button>
+        </router-link>
 
         <div class="category-divider">
           <span>{{ $t('workflow.views.execute') }}</span>
         </div>
 
-        <button
+        <router-link
+          to="/automation/runner"
+          active-class="active"
           class="category-item"
-          :class="{ active: activeSection === 'runner' }"
-          @click="activeSection = 'runner'"
           :aria-label="$t('workflow.views.runnerAriaLabel')"
-          tabindex="0"
         >
           <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path>
@@ -89,47 +84,46 @@
           <span class="count active-badge" v-if="hasActiveWorkflows" :aria-label="`${activeWorkflows.length} active workflows`">
             {{ activeWorkflows.length }}
           </span>
-        </button>
+        </router-link>
 
-        <div
+        <router-link
+          to="/automation/history"
+          active-class="active"
           class="category-item"
-          :class="{ active: activeSection === 'history' }"
-          @click="activeSection = 'history'"
+          :aria-label="$t('workflow.views.historyAriaLabel')"
         >
-          <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
           </svg>
           <span>{{ $t('workflow.views.history') }}</span>
-        </div>
+        </router-link>
 
         <!-- Issue #3139: Per-workflow notification configuration -->
-        <button
+        <router-link
+          to="/automation/notifications"
+          active-class="active"
           class="category-item"
-          :class="{ active: activeSection === 'notifications' }"
-          @click="activeSection = 'notifications'"
           :aria-label="$t('workflow.notifications.sidebarLabel')"
-          tabindex="0"
         >
           <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
               d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
           </svg>
           <span>{{ $t('workflow.notifications.sidebarLabel') }}</span>
-        </button>
+        </router-link>
 
-        <button
+        <router-link
+          to="/automation/gui-automation"
+          active-class="active"
           class="category-item"
-          :class="{ active: activeSection === 'gui-automation' }"
-          @click="activeSection = 'gui-automation'"
           :aria-label="$t('workflow.views.guiAutomationAriaLabel')"
-          tabindex="0"
         >
           <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
               d="M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
           </svg>
           <span>{{ $t('workflow.views.guiAutomation') }}</span>
-        </button>
+        </router-link>
 
         <router-link
           to="/automation/browser-automation"
@@ -150,87 +144,85 @@
           </span>
         </div>
 
-        <button
+        <router-link
+          to="/automation/screen-analysis"
+          active-class="active"
           class="category-item"
-          :class="{ active: activeSection === 'screen-analysis' }"
-          @click="activeSection = 'screen-analysis'"
           :aria-label="$t('workflow.views.screenAnalysisAriaLabel')"
-          tabindex="0"
         >
           <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
               d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
           </svg>
           <span>{{ $t('workflow.views.screenAnalysis') }}</span>
-        </button>
+        </router-link>
 
-        <button
+        <router-link
+          to="/automation/video-processing"
+          active-class="active"
           class="category-item"
-          :class="{ active: activeSection === 'video-processing' }"
-          @click="activeSection = 'video-processing'"
           :aria-label="$t('workflow.views.videoProcessingAriaLabel')"
-          tabindex="0"
         >
           <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
               d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
           </svg>
           <span>{{ $t('workflow.views.videoProcessing') }}</span>
-        </button>
+        </router-link>
 
-        <button
+        <router-link
+          to="/automation/media-gallery"
+          active-class="active"
           class="category-item"
-          :class="{ active: activeSection === 'media-gallery' }"
-          @click="activeSection = 'media-gallery'"
           :aria-label="$t('workflow.views.mediaGalleryAriaLabel')"
-          tabindex="0"
         >
           <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
               d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
           </svg>
           <span>{{ $t('workflow.views.mediaGallery') }}</span>
-        </button>
+        </router-link>
 
         <div class="category-divider">
           <span>{{ $t('workflow.views.orchestration') }}</span>
         </div>
 
         <!-- Issue #2155: Live Execution Dashboard -->
-        <button
+        <router-link
+          to="/automation/live-dashboard"
+          active-class="active"
           class="category-item"
-          :class="{ active: activeSection === 'live-dashboard' }"
-          @click="activeSection = 'live-dashboard'"
           :aria-label="$t('workflow.views.liveDashboardAriaLabel')"
-          tabindex="0"
         >
           <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
           </svg>
           <span>{{ $t('workflow.views.liveDashboard') }}</span>
-        </button>
+        </router-link>
 
-        <div
+        <router-link
+          to="/automation/orchestration"
+          active-class="active"
           class="category-item"
-          :class="{ active: activeSection === 'orchestration' }"
-          @click="activeSection = 'orchestration'"
+          :aria-label="$t('workflow.views.visualizerAriaLabel')"
         >
-          <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
           </svg>
           <span>{{ $t('workflow.views.visualizer') }}</span>
-        </div>
+        </router-link>
 
-        <div
+        <router-link
+          to="/automation/agents"
+          active-class="active"
           class="category-item"
-          :class="{ active: activeSection === 'agents' }"
-          @click="activeSection = 'agents'"
+          :aria-label="$t('workflow.views.agentsAriaLabel')"
         >
-          <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
           </svg>
           <span>{{ $t('workflow.views.agents') }}</span>
-        </div>
+        </router-link>
       </nav>
 
       <!-- Quick Actions -->
@@ -334,19 +326,19 @@
             <div class="overview-card">
               <h4><Icon name="bolt" /> {{ $t('workflow.views.quickActions') }}</h4>
               <div class="quick-actions-grid">
-                <button class="quick-action" @click="activeSection = 'canvas'">
+                <button class="quick-action" @click="navigateTo('canvas')">
                   <Icon name="plus-circle" />
                   <span>{{ $t('workflow.views.newWorkflow') }}</span>
                 </button>
-                <button class="quick-action" @click="activeSection = 'templates'">
+                <button class="quick-action" @click="navigateTo('templates')">
                   <Icon name="clone" />
                   <span>{{ $t('workflow.views.useTemplate') }}</span>
                 </button>
-                <button class="quick-action" @click="activeSection = 'natural-language'">
+                <button class="quick-action" @click="navigateTo('natural-language')">
                   <Icon name="magic" />
                   <span>{{ $t('workflow.views.naturalLanguage') }}</span>
                 </button>
-                <button class="quick-action" @click="activeSection = 'runner'">
+                <button class="quick-action" @click="navigateTo('runner')">
                   <Icon name="play" />
                   <span>{{ $t('workflow.views.viewRunner') }}</span>
                 </button>
@@ -588,7 +580,14 @@
           <div class="agents-container">
             <div class="agents-header">
               <h3><Icon name="users-cog" /> {{ $t('workflow.views.agentCapabilities') }}</h3>
-              <button @click="loadAgentCapabilities" class="btn-refresh-sm" :disabled="loadingCapabilities">
+              <button
+                @click="loadAgentCapabilities"
+                class="btn-refresh-sm"
+                :disabled="loadingCapabilities"
+                :aria-label="$t('common.refresh')"
+                :title="$t('common.refresh')"
+                type="button"
+              >
                 <Icon name="sync-alt" :spin="loadingCapabilities" />
               </button>
             </div>
@@ -647,10 +646,10 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { createLogger } from '@/utils/debugUtils';
-import { useToast } from '@/composables/useToast';
+import { useNotificationBus } from '@/composables/useNotificationBus';
 import {
   useWorkflowBuilder,
   type WorkflowNode,
@@ -660,8 +659,7 @@ import {
 import type { WorkflowTemplateSummary } from '@/types/workflowTemplates';
 import { useWorkflowTemplates } from '@/composables/useWorkflowTemplates';
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue';
-import Icon from '@/components/ui/Icon.vue';
-import type { IconName } from '@/components/ui/Icon.vue';
+import Icon, { type IconName } from '@/components/ui/Icon.vue';
 import WorkflowCanvas from '@/components/workflow/WorkflowCanvas.vue';
 import WorkflowTemplateGallery from '@/components/workflow/WorkflowTemplateGallery.vue';
 import WorkflowRunner from '@/components/workflow/WorkflowRunner.vue';
@@ -681,10 +679,15 @@ import {
 const logger = createLogger('WorkflowBuilderView');
 const { t } = useI18n();
 const route = useRoute();
+const router = useRouter();
 
-/** True when a child route (e.g. /automation/browser-automation) is active (#2368) */
-const isChildRoute = computed(() => route.matched.length > 1);
-const { showToast } = useToast();
+/** True when a non-section child route (e.g. /automation/browser-automation) is active (#2368) */
+const isChildRoute = computed(() => route.matched.length > 1 && !route.meta.sectionRoute);
+
+function navigateTo(section: SectionType): void {
+  router.push(`/automation/${section}`);
+}
+const { showToast } = useNotificationBus();
 
 // Section Types
 type SectionType =
@@ -754,8 +757,10 @@ const {
 // Issue #1367: Fetch full template detail when summary lacks steps
 const { fetchTemplateDetail } = useWorkflowTemplates();
 
-// Local State
-const activeSection = ref<SectionType>('overview');
+// GH#8750: Section derived from URL so back/forward and bookmarks work
+const activeSection = computed<SectionType>(
+  () => (route.params.section as SectionType) || 'overview'
+);
 const naturalLanguageInput = ref('');
 const requireApprovalBeforeRun = ref(true);
 const selectedStrategy = ref<string>('');
@@ -921,7 +926,7 @@ async function refreshAll(): Promise<void> {
 async function runExampleWorkflow(example: { goal: string; strategy: string }): Promise<void> {
   naturalLanguageInput.value = example.goal;
   selectedStrategy.value = example.strategy;
-  activeSection.value = 'natural-language';
+  navigateTo('natural-language');
 }
 
 async function createFromNaturalLanguage(): Promise<void> {
@@ -936,7 +941,7 @@ async function createFromNaturalLanguage(): Promise<void> {
   if (workflowId) {
     showToast('Workflow created successfully', 'success');
     if (!requireApprovalBeforeRun.value) {
-      activeSection.value = 'runner';
+      navigateTo('runner');
     }
   } else {
     showToast(error.value || 'Failed to create workflow', 'error');
@@ -950,7 +955,7 @@ async function handleApprovePlan(): Promise<void> {
   if (success) {
     showToast('Plan approved, workflow starting...', 'success');
     naturalLanguageInput.value = '';
-    activeSection.value = 'runner';
+    navigateTo('runner');
   } else {
     showToast('Failed to approve plan', 'error');
   }
@@ -1013,7 +1018,7 @@ async function handleSaveWorkflow(name: string, description: string): Promise<vo
   const workflowId = await createWorkflowFromTemplate(template, sessionId.value);
   if (workflowId) {
     showToast(`Workflow "${name}" saved`, 'success');
-    activeSection.value = 'runner';
+    navigateTo('runner');
   } else {
     showToast('Failed to save workflow', 'error');
   }
@@ -1041,7 +1046,7 @@ async function handleTemplateSelected(template: WorkflowTemplate | WorkflowTempl
     };
     addNode(node);
   });
-  activeSection.value = 'canvas';
+  navigateTo('canvas');
   showToast(`Template "${template.name}" loaded into canvas`, 'success');
 }
 
@@ -1049,7 +1054,7 @@ async function handleRunTemplate(template: WorkflowTemplate | WorkflowTemplateSu
   const result = await executeApiTemplate(template.id);
   if (result?.success) {
     showToast(`Workflow "${template.name}" started`, 'success');
-    activeSection.value = 'runner';
+    navigateTo('runner');
     await loadActiveWorkflows();
   } else {
     showToast(result?.error || `Failed to run "${template.name}"`, 'error');
@@ -1100,7 +1105,7 @@ async function handleSkipStep(workflowId: string, stepId: string): Promise<void>
 
 async function handleViewWorkflow(workflowId: string): Promise<void> {
   // Issue #1367: Load the selected workflow before switching to runner
-  activeSection.value = 'runner';
+  navigateTo('runner');
   const local = activeWorkflows.value.find(
     (wf) => wf.workflow_id === workflowId,
   );
@@ -1139,7 +1144,7 @@ async function handleReRunWorkflow(workflowId: string): Promise<void> {
   if (newId) {
     await startWorkflow(newId);
     showToast(`Re-running "${existing.name}"`, 'success');
-    activeSection.value = 'runner';
+    navigateTo('runner');
   } else {
     showToast('Failed to re-run workflow', 'error');
   }
@@ -1246,12 +1251,12 @@ watch(hasActiveWorkflows, (hasActive) => {
 }
 
 .health-indicator.healthy {
-  color: #10b981;
+  color: var(--color-success);
   background: rgba(16, 185, 129, 0.1);
 }
 
 .health-indicator.degraded {
-  color: #f59e0b;
+  color: var(--color-warning);
   background: rgba(245, 158, 11, 0.1);
 }
 

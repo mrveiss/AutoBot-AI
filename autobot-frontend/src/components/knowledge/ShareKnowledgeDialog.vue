@@ -3,10 +3,10 @@
     <div class="modal-dialog">
       <div class="modal-header">
         <h3 class="modal-title">
-          <i class="fas fa-share-alt"></i> {{ $t('knowledge.share.title', { name: factTitle }) }}
+          <Icon name="share-alt" /> {{ $t('knowledge.share.title', { name: factTitle }) }}
         </h3>
         <button class="close-button" @click="closeDialog" :aria-label="$t('knowledge.share.closeAriaLabel')">
-          <i class="fas fa-times"></i>
+          <Icon name="times" />
         </button>
       </div>
 
@@ -15,7 +15,7 @@
         <div class="search-section">
           <label for="share-search">{{ $t('knowledge.share.shareWith') }}</label>
           <div class="search-input-wrapper">
-            <i class="fas fa-search search-icon"></i>
+            <Icon name="search" class="search-icon" />
             <input
               id="share-search"
               v-model="searchQuery"
@@ -33,11 +33,11 @@
           class="search-results"
         >
           <div v-if="searching" class="search-status">
-            <i class="fas fa-spinner fa-spin"></i>
+            <Icon name="spinner" class="animate-spin" />
             {{ $t('knowledge.share.searching') }}
           </div>
           <div v-else-if="searchError" class="search-status search-status--error">
-            <i class="fas fa-exclamation-circle"></i>
+            <Icon name="exclamation-circle" />
             {{ searchError }}
           </div>
           <div v-else-if="showNoResults" class="search-status">
@@ -50,7 +50,7 @@
             class="search-result-item"
             @click="addEntity(result)"
           >
-            <i :class="result.type === 'user' ? 'fas fa-user' : 'fas fa-users'"></i>
+            <Icon :name="result.type === 'user' ? 'user' : 'users'" />
             <span class="result-name">{{ result.name }}</span>
             <span class="result-type">{{ result.type === 'user' ? $t('knowledge.share.user') : $t('knowledge.share.team') }}</span>
           </div>
@@ -69,7 +69,7 @@
               class="access-item"
             >
               <div class="access-info">
-                <i :class="access.type === 'user' ? 'fas fa-user' : 'fas fa-users'"></i>
+                <Icon :name="access.type === 'user' ? 'user' : 'users'" />
                 <span class="access-name">{{ access.name }}</span>
                 <span class="access-type">{{ access.type === 'user' ? $t('knowledge.share.user') : $t('knowledge.share.team') }}</span>
               </div>
@@ -88,7 +88,7 @@
                   @click="removeEntity(access)"
                   :aria-label="$t('knowledge.share.removeAccess')"
                 >
-                  <i class="fas fa-trash-alt"></i>
+                  <Icon name="trash-alt" />
                 </button>
               </div>
             </div>
@@ -105,8 +105,8 @@
           @click="saveChanges"
           :disabled="saving || !hasChanges"
         >
-          <i class="fas fa-spinner fa-spin" v-if="saving"></i>
-          <i class="fas fa-save" v-else></i>
+          <Icon name="spinner" class="animate-spin" />
+          <Icon name="save" />
           {{ saving ? $t('knowledge.share.saving') : $t('knowledge.share.saveChanges') }}
         </button>
       </div>
@@ -115,6 +115,7 @@
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { apiService } from '@/services/api'
@@ -198,21 +199,15 @@ const fetchEntityName = async (id: string, type: 'user' | 'group'): Promise<stri
   }
 
   try {
-    let response
-    if (type === 'user') {
-      response = await apiService.getUserById(id)
-    } else {
-      response = await apiService.getGroupById(id)
-    }
-
-    // Extract name from response
     let displayName = id
-    if (response && response.data) {
-      if (type === 'user') {
-        const userData = response.data as { display_name?: string; email?: string; username?: string }
+    if (type === 'user') {
+      const userData = await apiService.getUserById(id)
+      if (userData) {
         displayName = userData.display_name || userData.email || userData.username || id
-      } else {
-        const groupData = response.data as { name?: string }
+      }
+    } else {
+      const groupData = await apiService.getGroupById(id)
+      if (groupData) {
         displayName = groupData.name || id
       }
     }
@@ -490,7 +485,7 @@ const closeDialog = () => {
 }
 
 .search-status--error {
-  color: #ef4444;
+  color: var(--color-error);
 }
 
 .search-result-item {
@@ -596,7 +591,7 @@ const closeDialog = () => {
   border: none;
   padding: var(--spacing-2);
   cursor: pointer;
-  color: #ef4444;
+  color: var(--color-error);
   border-radius: var(--radius-default);
   transition: background-color var(--duration-200);
 }

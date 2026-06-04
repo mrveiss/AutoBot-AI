@@ -6,9 +6,10 @@ Provider Health Manager - Orchestrates health checks across all providers
 """
 
 import asyncio
-import logging
 import time
-from typing import Dict, Optional
+from typing import Dict
+
+from autobot_shared.logging_manager import get_logger
 
 from .base import ProviderHealthResult, ProviderStatus
 from .providers import (
@@ -20,7 +21,7 @@ from .providers import (
     VLLMHealth,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ProviderHealthManager:
@@ -179,7 +180,7 @@ class ProviderHealthManager:
         return health_status
 
     @classmethod
-    def _get_from_cache(cls, provider: str) -> Optional[ProviderHealthResult]:
+    def _get_from_cache(cls, provider: str) -> ProviderHealthResult | None:
         """
         Get cached health result if available and not expired
 
@@ -205,7 +206,7 @@ class ProviderHealthManager:
         return None
 
     @classmethod
-    def _store_in_cache(cls, provider: str, result: ProviderHealthResult):
+    def _store_in_cache(cls, provider: str, result: ProviderHealthResult) -> None:
         """
         Store health result in cache
 
@@ -219,7 +220,7 @@ class ProviderHealthManager:
         }
 
     @classmethod
-    async def clear_cache(cls, provider: Optional[str] = None):
+    async def clear_cache(cls, provider: str | None = None) -> None:
         """
         Clear cached health results (thread-safe)
 

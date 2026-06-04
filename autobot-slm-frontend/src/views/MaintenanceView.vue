@@ -292,7 +292,7 @@ function getNodeName(nodeId: string | null): string {
           role="tab"
           :aria-selected="!isUpdatesTab"
         >
-          Maintenance Windows
+          {{ $t('maintenanceView.maintenanceWindows') }}
         </router-link>
         <router-link
           to="/maintenance/updates"
@@ -303,7 +303,7 @@ function getNodeName(nodeId: string | null): string {
           role="tab"
           :aria-selected="isUpdatesTab"
         >
-          Updates
+          {{ $t('maintenanceView.updates') }}
         </router-link>
       </nav>
     </div>
@@ -316,9 +316,9 @@ function getNodeName(nodeId: string | null): string {
     <!-- Header -->
     <div class="flex items-center justify-between mb-6">
       <div>
-        <h1 class="text-2xl font-bold text-gray-900">Maintenance</h1>
+        <h1 class="text-2xl font-bold text-gray-900">{{ $t('maintenanceView.maintenance') }}</h1>
         <p class="text-sm text-gray-500 mt-1">
-          Schedule maintenance windows and manage node availability
+          {{ $t('maintenanceView.scheduleMaintenanceWindowsAnd') }}
         </p>
       </div>
       <div class="flex items-center gap-3">
@@ -340,7 +340,7 @@ function getNodeName(nodeId: string | null): string {
               d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
             />
           </svg>
-          Refresh
+          {{ $t('maintenanceView.refresh') }}
         </button>
         <button
           @click="openScheduleDialog()"
@@ -349,7 +349,7 @@ function getNodeName(nodeId: string | null): string {
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
           </svg>
-          Schedule Maintenance
+          {{ $t('maintenanceView.scheduleMaintenance') }}
         </button>
       </div>
     </div>
@@ -359,7 +359,7 @@ function getNodeName(nodeId: string | null): string {
       <div class="card p-4">
         <div class="flex items-center justify-between">
           <div>
-            <p class="text-sm text-gray-500">Active Windows</p>
+            <p class="text-sm text-gray-500">{{ $t('maintenanceView.activeWindows') }}</p>
             <p class="text-2xl font-bold text-yellow-600">{{ summaryStats.active }}</p>
           </div>
           <div class="w-10 h-10 rounded-full bg-yellow-100 flex items-center justify-center">
@@ -373,7 +373,7 @@ function getNodeName(nodeId: string | null): string {
       <div class="card p-4">
         <div class="flex items-center justify-between">
           <div>
-            <p class="text-sm text-gray-500">Scheduled</p>
+            <p class="text-sm text-gray-500">{{ $t('maintenanceView.scheduled') }}</p>
             <p class="text-2xl font-bold text-blue-600">{{ summaryStats.scheduled }}</p>
           </div>
           <div class="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
@@ -387,7 +387,7 @@ function getNodeName(nodeId: string | null): string {
       <div class="card p-4">
         <div class="flex items-center justify-between">
           <div>
-            <p class="text-sm text-gray-500">Nodes in Maintenance</p>
+            <p class="text-sm text-gray-500">{{ $t('maintenanceView.nodesInMaintenance') }}</p>
             <p class="text-2xl font-bold text-orange-600">{{ summaryStats.nodesInMaintenance }}</p>
           </div>
           <div class="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center">
@@ -402,7 +402,7 @@ function getNodeName(nodeId: string | null): string {
       <div class="card p-4">
         <div class="flex items-center justify-between">
           <div>
-            <p class="text-sm text-gray-500">Total Nodes</p>
+            <p class="text-sm text-gray-500">{{ $t('maintenanceView.totalNodes') }}</p>
             <p class="text-2xl font-bold text-gray-900">{{ summaryStats.totalNodes }}</p>
           </div>
           <div class="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center">
@@ -416,19 +416,19 @@ function getNodeName(nodeId: string | null): string {
 
     <!-- Quick Actions -->
     <div class="card p-6 mb-6">
-      <h2 class="text-lg font-semibold mb-4">Quick Actions</h2>
+      <h2 class="text-lg font-semibold mb-4">{{ $t('maintenanceView.quickActions') }}</h2>
       <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div class="border border-gray-200 rounded-lg p-4">
-          <h3 class="font-medium text-gray-900 mb-2">Drain Node</h3>
+          <h3 class="font-medium text-gray-900 mb-2">{{ $t('maintenanceView.drainNode') }}</h3>
           <p class="text-sm text-gray-500 mb-3">
-            Put a node into maintenance mode, making it unavailable for new workloads.
+            {{ $t('maintenanceView.putANodeInto') }}
           </p>
           <select
             v-model="selectedDrainNode"
             class="input mb-2"
             :disabled="isDraining"
           >
-            <option value="">Select a node...</option>
+            <option value="">{{ $t('maintenanceView.selectANode') }}</option>
             <option
               v-for="node in nodes.filter(n => n.status !== 'maintenance')"
               :key="node.node_id"
@@ -447,16 +447,16 @@ function getNodeName(nodeId: string | null): string {
         </div>
 
         <div class="border border-gray-200 rounded-lg p-4">
-          <h3 class="font-medium text-gray-900 mb-2">Resume Node</h3>
+          <h3 class="font-medium text-gray-900 mb-2">{{ $t('maintenanceView.resumeNode') }}</h3>
           <p class="text-sm text-gray-500 mb-3">
-            Return a maintenance node to active service.
+            {{ $t('maintenanceView.returnAMaintenanceNode') }}
           </p>
           <select
             v-model="selectedResumeNode"
             class="input mb-2"
             :disabled="isResuming"
           >
-            <option value="">Select a node...</option>
+            <option value="">{{ $t('maintenanceView.selectANode') }}</option>
             <option
               v-for="node in maintenanceNodes"
               :key="node.node_id"
@@ -475,15 +475,15 @@ function getNodeName(nodeId: string | null): string {
         </div>
 
         <div class="border border-gray-200 rounded-lg p-4">
-          <h3 class="font-medium text-gray-900 mb-2">Fleet-Wide Maintenance</h3>
+          <h3 class="font-medium text-gray-900 mb-2">{{ $t('maintenanceView.fleetWideMaintenance') }}</h3>
           <p class="text-sm text-gray-500 mb-3">
-            Schedule maintenance across all nodes with rolling updates.
+            {{ $t('maintenanceView.scheduleMaintenanceAcrossAll') }}
           </p>
           <button
             @click="openScheduleDialog()"
             class="btn btn-primary w-full"
           >
-            Schedule Window
+            {{ $t('maintenanceView.scheduleWindow') }}
           </button>
         </div>
       </div>
@@ -492,7 +492,7 @@ function getNodeName(nodeId: string | null): string {
     <!-- Maintenance Windows Table -->
     <div class="card overflow-hidden">
       <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-        <h2 class="text-lg font-semibold">Maintenance Windows</h2>
+        <h2 class="text-lg font-semibold">{{ $t('maintenanceView.maintenanceWindows') }}</h2>
         <div class="flex items-center gap-4">
           <label class="flex items-center gap-2 text-sm text-gray-600">
             <input
@@ -501,17 +501,17 @@ function getNodeName(nodeId: string | null): string {
               @change="fetchMaintenanceWindows"
               class="rounded-sm text-primary-600 focus:ring-primary-500"
             />
-            Show completed
+            {{ $t('maintenanceView.showCompleted') }}
           </label>
           <select
             v-model="statusFilter"
             class="input py-1.5 text-sm"
           >
-            <option value="">All statuses</option>
-            <option value="scheduled">Scheduled</option>
-            <option value="active">Active</option>
-            <option value="completed">Completed</option>
-            <option value="cancelled">Cancelled</option>
+            <option value="">{{ $t('maintenanceView.allStatuses') }}</option>
+            <option value="scheduled">{{ $t('maintenanceView.scheduled') }}</option>
+            <option value="active">{{ $t('maintenanceView.active') }}</option>
+            <option value="completed">{{ $t('maintenanceView.completed') }}</option>
+            <option value="cancelled">{{ $t('maintenanceView.cancelled') }}</option>
           </select>
         </div>
       </div>
@@ -519,7 +519,7 @@ function getNodeName(nodeId: string | null): string {
       <!-- Loading State -->
       <div v-if="isLoading" class="p-6 text-center">
         <div class="animate-spin w-8 h-8 border-4 border-primary-600 border-t-transparent rounded-full mx-auto"></div>
-        <p class="text-gray-500 mt-2">Loading maintenance windows...</p>
+        <p class="text-gray-500 mt-2">{{ $t('maintenanceView.loadingMaintenanceWindows') }}</p>
       </div>
 
       <!-- Empty State -->
@@ -532,7 +532,7 @@ function getNodeName(nodeId: string | null): string {
           @click="openScheduleDialog()"
           class="btn btn-primary mt-4"
         >
-          Schedule First Window
+          {{ $t('maintenanceView.scheduleFirstWindow') }}
         </button>
       </div>
 
@@ -541,13 +541,13 @@ function getNodeName(nodeId: string | null): string {
         <table class="w-full">
           <thead class="bg-gray-50">
             <tr>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Node</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Start Time</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">End Time</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Reason</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Options</th>
-              <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{{ $t('maintenanceView.status') }}</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{{ $t('maintenanceView.node') }}</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{{ $t('maintenanceView.startTime') }}</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{{ $t('maintenanceView.endTime') }}</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{{ $t('maintenanceView.reason') }}</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{{ $t('maintenanceView.options') }}</th>
+              <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">{{ $t('maintenanceView.actions') }}</th>
             </tr>
           </thead>
           <tbody class="bg-white divide-y divide-gray-200">
@@ -579,21 +579,21 @@ function getNodeName(nodeId: string | null): string {
                     class="px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded-sm"
                     title="Alerts suppressed"
                   >
-                    Alerts
+                    {{ $t('maintenanceView.alerts') }}
                   </span>
                   <span
                     v-if="window.suppress_remediation"
                     class="px-1.5 py-0.5 bg-indigo-100 text-indigo-700 rounded-sm"
                     title="Auto-remediation suppressed"
                   >
-                    Remediation
+                    {{ $t('maintenanceView.remediation') }}
                   </span>
                   <span
                     v-if="window.auto_drain"
                     class="px-1.5 py-0.5 bg-orange-100 text-orange-700 rounded-sm"
                     title="Auto-drain enabled"
                   >
-                    Drain
+                    {{ $t('maintenanceView.drain') }}
                   </span>
                 </div>
               </td>
@@ -678,6 +678,7 @@ function getNodeName(nodeId: string | null): string {
               <button
                 @click="closeScheduleDialog"
                 class="text-gray-400 hover:text-gray-600"
+                aria-label="Close"
               >
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -694,10 +695,10 @@ function getNodeName(nodeId: string | null): string {
               <!-- Node Selection -->
               <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">
-                  Target Node
+                  {{ $t('maintenanceView.targetNode') }}
                 </label>
                 <select v-model="formData.node_id" class="input">
-                  <option :value="undefined">All Nodes (Fleet-Wide)</option>
+                  <option :value="undefined">{{ $t('maintenanceView.allNodesFleetWide') }}</option>
                   <option
                     v-for="node in nodes"
                     :key="node.node_id"
@@ -707,7 +708,7 @@ function getNodeName(nodeId: string | null): string {
                   </option>
                 </select>
                 <p class="text-xs text-gray-500 mt-1">
-                  Leave empty for fleet-wide maintenance
+                  {{ $t('maintenanceView.leaveEmptyForFleet') }}
                 </p>
               </div>
 
@@ -715,7 +716,7 @@ function getNodeName(nodeId: string | null): string {
               <div class="grid grid-cols-2 gap-4">
                 <div>
                   <label class="block text-sm font-medium text-gray-700 mb-1">
-                    Start Time <span class="text-red-500">*</span>
+                    {{ $t('maintenanceView.startTime') }} <span class="text-red-500">*</span>
                   </label>
                   <input
                     type="datetime-local"
@@ -726,7 +727,7 @@ function getNodeName(nodeId: string | null): string {
                 </div>
                 <div>
                   <label class="block text-sm font-medium text-gray-700 mb-1">
-                    End Time <span class="text-red-500">*</span>
+                    {{ $t('maintenanceView.endTime') }} <span class="text-red-500">*</span>
                   </label>
                   <input
                     type="datetime-local"
@@ -740,7 +741,7 @@ function getNodeName(nodeId: string | null): string {
               <!-- Reason -->
               <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">
-                  Reason
+                  {{ $t('maintenanceView.reason') }}
                 </label>
                 <textarea
                   v-model="formData.reason"
@@ -759,8 +760,8 @@ function getNodeName(nodeId: string | null): string {
                     class="rounded-sm text-primary-600 focus:ring-primary-500"
                   />
                   <div>
-                    <span class="text-sm font-medium text-gray-900">Suppress Alerts</span>
-                    <p class="text-xs text-gray-500">Don't send alerts during this window</p>
+                    <span class="text-sm font-medium text-gray-900">{{ $t('maintenanceView.suppressAlerts') }}</span>
+                    <p class="text-xs text-gray-500">{{ $t('maintenanceView.donTSendAlerts') }}</p>
                   </div>
                 </label>
 
@@ -771,8 +772,8 @@ function getNodeName(nodeId: string | null): string {
                     class="rounded-sm text-primary-600 focus:ring-primary-500"
                   />
                   <div>
-                    <span class="text-sm font-medium text-gray-900">Suppress Auto-Remediation</span>
-                    <p class="text-xs text-gray-500">Disable automatic remediation actions</p>
+                    <span class="text-sm font-medium text-gray-900">{{ $t('maintenanceView.suppressAutoRemediation') }}</span>
+                    <p class="text-xs text-gray-500">{{ $t('maintenanceView.disableAutomaticRemediationActions') }}</p>
                   </div>
                 </label>
 
@@ -783,8 +784,8 @@ function getNodeName(nodeId: string | null): string {
                     class="rounded-sm text-primary-600 focus:ring-primary-500"
                   />
                   <div>
-                    <span class="text-sm font-medium text-gray-900">Auto-Drain</span>
-                    <p class="text-xs text-gray-500">Automatically drain services before maintenance starts</p>
+                    <span class="text-sm font-medium text-gray-900">{{ $t('maintenanceView.autoDrain') }}</span>
+                    <p class="text-xs text-gray-500">{{ $t('maintenanceView.automaticallyDrainServicesBefore') }}</p>
                   </div>
                 </label>
               </div>
@@ -797,7 +798,7 @@ function getNodeName(nodeId: string | null): string {
                   :disabled="isSubmitting"
                   class="btn btn-secondary"
                 >
-                  Cancel
+                  {{ $t('maintenanceView.cancel') }}
                 </button>
                 <button
                   type="submit"

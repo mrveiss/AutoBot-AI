@@ -6,15 +6,15 @@
 <template>
   <div class="analytics-header">
     <div class="header-content">
-      <h2><i class="fas fa-code"></i> {{ $t('analytics.codebase.title') }}</h2>
+      <h2><Icon name="code" /> {{ $t('analytics.codebase.title') }}</h2>
       <div class="header-controls">
         <router-link :to="{ name: 'analytics-codebase' }" class="btn-back">
-          <i class="fas fa-arrow-left"></i>
+          <Icon name="arrow-left" />
           {{ $t('analytics.codebase.buttons.backToProjects') }}
         </router-link>
 
         <button @click="emit('index-codebase')" :disabled="analyzing" class="btn-primary">
-          <i :class="analyzing ? 'fas fa-spinner fa-spin' : 'fas fa-database'"></i>
+          <i :class="analyzing ? 'fas fa-spinner fa-spin' : 'database'"></i>
           {{ analyzing ? $t('analytics.codebase.buttons.indexing') : $t('analytics.codebase.buttons.indexCodebase') }}
         </button>
         <button
@@ -22,11 +22,11 @@
           @click="emit('stop')"
           class="btn-cancel"
         >
-          <i class="fas fa-stop-circle"></i>
+          <Icon name="stop-circle" />
           {{ $t('analytics.codebase.actions.stop') }}
         </button>
         <button @click="emit('run-full-analysis')" :disabled="analyzing || (!rootPath && !selectedSource)" class="btn-secondary">
-          <i :class="analyzing ? 'fas fa-spinner fa-spin' : 'fas fa-chart-bar'"></i>
+          <i :class="analyzing ? 'fas fa-spinner fa-spin' : 'chart-bar'"></i>
           {{ analyzing ? $t('analytics.codebase.buttons.analyzing') : $t('analytics.codebase.buttons.analyzeAll') }}
         </button>
 
@@ -41,23 +41,23 @@
           <button @click="emit('test-all-endpoints')" class="btn-debug btn-debug-cyan">{{ $t('analytics.codebase.buttons.testAllApis') }}</button>
           <!-- Issue #527: API Endpoint Checker -->
           <button @click="emit('api-coverage')" :disabled="loadingApiEndpoints" class="btn-debug btn-debug-indigo">
-            <i :class="loadingApiEndpoints ? 'fas fa-spinner fa-spin' : 'fas fa-plug'"></i>
+            <i :class="loadingApiEndpoints ? 'fas fa-spinner fa-spin' : 'plug'"></i>
             {{ loadingApiEndpoints ? $t('analytics.codebase.buttons.scanning') : $t('analytics.codebase.buttons.apiCoverage') }}
           </button>
           <!-- Code Intelligence / Anti-Pattern Detection -->
           <button @click="emit('code-smells')" :disabled="analyzingCodeSmells" class="btn-debug btn-debug-pink">
-            <i :class="analyzingCodeSmells ? 'fas fa-spinner fa-spin' : 'fas fa-bug'"></i>
+            <i :class="analyzingCodeSmells ? 'fas fa-spinner fa-spin' : 'bug'"></i>
             {{ analyzingCodeSmells ? $t('analytics.codebase.buttons.scanning') : $t('analytics.codebase.buttons.codeSmells') }}
           </button>
           <button @click="emit('health-score')" :disabled="analyzingCodeSmells" class="btn-debug btn-debug-violet">
-            <i class="fas fa-heartbeat"></i> {{ $t('analytics.codebase.buttons.healthScore') }}
+            <Icon name="heartbeat" /> {{ $t('analytics.codebase.buttons.healthScore') }}
           </button>
           <button @click="emit('export-report')" :disabled="exportingReport" class="btn-debug btn-debug-secondary">
-            <i :class="exportingReport ? 'fas fa-spinner fa-spin' : 'fas fa-file-export'"></i>
+            <i :class="exportingReport ? 'fas fa-spinner fa-spin' : 'file-export'"></i>
             {{ exportingReport ? $t('analytics.codebase.buttons.exporting') : $t('analytics.codebase.buttons.exportReport') }}
           </button>
           <button @click="emit('clear-cache')" :disabled="clearingCache" class="btn-debug btn-debug-brown">
-            <i :class="clearingCache ? 'fas fa-spinner fa-spin' : 'fas fa-trash-alt'"></i>
+            <i :class="clearingCache ? 'fas fa-spinner fa-spin' : 'trash-alt'"></i>
             {{ clearingCache ? $t('analytics.codebase.buttons.clearing') : $t('analytics.codebase.buttons.clearCache') }}
           </button>
         </div>
@@ -79,6 +79,7 @@
  * Issue #1579: Extracted from CodebaseAnalytics.vue
  */
 
+import Icon from '@/components/ui/Icon.vue'
 import type { CodeSource } from '@/types/analytics'
 
 defineProps<{

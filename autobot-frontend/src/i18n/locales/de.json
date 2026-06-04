@@ -5128,6 +5128,12 @@
     "progressBar": {
       "timeRemaining": "{time} remaining"
     },
+    "offlineBanner": {
+      "backendLost": "Backend connection lost — retrying. Cached data still available.",
+      "queuedForRetry": "{count} action queued for retry. | {count} actions queued for retry.",
+      "checking": "Checking…",
+      "retry": "Retry"
+    },
     "systemStatus": {
       "dismissNotification": "Dismiss notification",
       "close": "Close",
@@ -6977,7 +6983,7 @@
     "secrets": "Geheimnisse",
     "plugins": "Plugins",
     "slmAdmin": "SLM-Verwaltung",
-    "slmAdminTitle": "SLM-Administrationspanel öffnen",
+    "slmAdminTitle": "SLM Admin — öffnet in neuem Tab",
     "profileSettings": "Profileinstellungen",
     "vision": "Vision",
     "preferences": "Preferences",
@@ -7007,7 +7013,11 @@
     "marketplace": "Marketplace",
     "usage": "Usage & Costs",
     "more": "More",
-    "moreItems": "More navigation items"
+    "moreItems": "More navigation items",
+    "llcPortability": "Portability",
+    "settingsAndTools": "Settings & Tools",
+    "adminPanel": "Admin Panel",
+    "documents": "AI Documents"
   },
   "reasoningTrace": {
     "title": "Reasoning-Trace",
@@ -7038,6 +7048,17 @@
     "novnc": {
       "selectHost": "Select a host to connect",
       "selectHostDesc": "Choose a VNC-capable host from the list to open a remote desktop session."
+    }
+  },
+  "mobile": {
+    "pairing": {
+      "title": "Mobiles Gerät koppeln",
+      "instructions": "Scannen Sie diesen QR-Code mit Ihrem Mobilgerät",
+      "instructionsDetail": "Öffnen Sie die AutoBot-Mobile-App und scannen Sie diesen Code, um Ihr Gerät zu koppeln",
+      "generating": "QR-Code wird generiert...",
+      "expired": "Abgelaufen",
+      "refresh": "Neuen Code erhalten",
+      "retry": "Erneut versuchen"
     }
   }
 }

@@ -60,20 +60,20 @@ async function snapshotStory(
 ): Promise<void> {
   await page.goto(
     `/iframe.html?id=${encodeURIComponent(story.id)}&viewMode=story`,
-    { waitUntil: 'networkidle' },
+    { waitUntil: 'load' },
   );
 
-  // Storybook renders into `#storybook-root` (modern) or `#root` (legacy).
-  const root = page.locator('#storybook-root, #root').first();
-  await root.waitFor({ state: 'visible', timeout: 10_000 });
+  // Storybook adds `sb-show-main` to <body> only after it finishes preparing
+  // the story (mounting Vue, running decorators, etc.). Without this wait the
+  // screenshot races against the preparation phase and captures a blank page.
+  await page.waitForFunction(
+    () => document.body.classList.contains('sb-show-main'),
+    { timeout: 10_000 },
+  );
 
-  // Give Vue's mounting + any async setup one tick to settle so the
-  // screenshot doesn't race ongoing renders.
-  await page.waitForTimeout(200);
-
-  // Snapshot the root element (not the whole viewport) so the diff focuses
-  // on the component, not on Storybook's iframe scrollbar / body padding.
-  await expect(root).toHaveScreenshot(`${story.id}.png`);
+  // Full-page screenshot of the iframe document: avoids element-visibility
+  // constraints while scoping the diff to the component story.
+  await expect(page).toHaveScreenshot(`${story.id}.png`, { fullPage: false });
 }
 
 test('all Storybook stories match baseline screenshots', async ({ page }) => {

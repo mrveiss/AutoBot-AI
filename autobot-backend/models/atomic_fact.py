@@ -12,7 +12,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from autobot_shared.time_utils import parse_utc_iso
 
@@ -113,8 +113,8 @@ class AtomicFact:
 
     # Temporal information
     valid_from: datetime  # When this fact became/becomes valid
-    valid_until: Optional[datetime] = None  # When this fact expires (if applicable)
-    last_verified: Optional[datetime] = None  # Last verification timestamp
+    valid_until: datetime | None = None  # When this fact expires (if applicable)
+    last_verified: datetime | None = None  # Last verification timestamp
 
     # Unique identifier
     fact_id: str = field(default_factory=lambda: str(uuid.uuid4()))
@@ -124,14 +124,14 @@ class AtomicFact:
     related_facts: List[str] = field(default_factory=list)  # IDs of related facts
 
     # Context and provenance
-    context: Optional[str] = None  # Surrounding context for this fact
-    original_text: Optional[str] = None  # Original text from which fact was extracted
-    chunk_id: Optional[str] = None  # ID of the chunk containing this fact
+    context: str | None = None  # Surrounding context for this fact
+    original_text: str | None = None  # Original text from which fact was extracted
+    chunk_id: str | None = None  # ID of the chunk containing this fact
 
     # Invalidation tracking
     is_active: bool = True  # Whether this fact is currently considered valid
-    invalidated_by: Optional[str] = None  # ID of fact that invalidated this one
-    invalidation_reason: Optional[str] = None  # Reason for invalidation
+    invalidated_by: str | None = None  # ID of fact that invalidated this one
+    invalidation_reason: str | None = None  # Reason for invalidation
 
     # Additional metadata
     metadata: Dict[str, Any] = field(default_factory=dict)
@@ -344,7 +344,7 @@ class AtomicFact:
             f"facts_by_temporal:{self.temporal_type.value}",
         ]
 
-    def mark_invalidated(self, reason: Optional[Dict[str, Any]] = None, service: str = "unknown") -> None:
+    def mark_invalidated(self, reason: Dict[str, Any] | None = None, service: str = "unknown") -> None:
         """Mark this fact as invalidated with metadata (Issue #372 - reduces feature envy).
 
         Args:
@@ -383,7 +383,7 @@ class FactExtractionResult:
 
     facts: List[AtomicFact]
     extraction_metadata: Dict[str, Any] = field(default_factory=dict)
-    processing_time: Optional[float] = None
+    processing_time: float | None = None
     confidence_distribution: Dict[str, int] = field(default_factory=dict)
     fact_type_distribution: Dict[str, int] = field(default_factory=dict)
     temporal_type_distribution: Dict[str, int] = field(default_factory=dict)

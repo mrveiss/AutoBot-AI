@@ -35,12 +35,11 @@ Overlap note (issue #3336):
 """
 
 import asyncio
-import logging
 import os
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 import aiofiles
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
@@ -49,8 +48,15 @@ from api.schemas_common import DataResponse
 from api.schemas_knowledge import (
     AddKnowledgeRequest,
     AssociateFileRequest,
-    ChatKnowledgeHealthResponse,
+    ChatKnowledgeCompileData,
+    ChatKnowledgeContextData,
+    ChatKnowledgeDecisionData,
+    ChatKnowledgeFileAssocData,
+    ChatKnowledgePendingData,
     ChatKnowledgeSearchRequest,
+    ChatKnowledgeSearchResultData,
+    ChatKnowledgeTempData,
+    ChatKnowledgeUploadData,
     CompileChatRequest,
     CreateContextRequest,
     FileAssociationType,
@@ -63,6 +69,7 @@ from api.schemas_knowledge import (
 from api.system_health import ComponentHealth, register_health_probe
 from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from chat_history import ChatHistoryManager
 
 # Import existing components
@@ -70,7 +77,7 @@ from knowledge_base import KnowledgeBase
 from services.llm_service import get_llm_service
 from type_defs.common import Metadata
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(tags=["chat_knowledge"])
 
@@ -110,9 +117,9 @@ class ChatKnowledgeContext:
     """Knowledge context for a specific chat session (Issue #688: added user_id)."""
 
     chat_id: str
-    topic: Optional[str] = None
+    topic: str | None = None
     keywords: List[str] = field(default_factory=list)
-    summary: Optional[str] = None
+    summary: str | None = None
     created_at: datetime = field(default_factory=datetime.now)
     updated_at: datetime = field(default_factory=datetime.now)
     temporary_knowledge: List[Metadata] = field(default_factory=list)
@@ -120,7 +127,7 @@ class ChatKnowledgeContext:
     file_associations: List[Metadata] = field(default_factory=list)
     metadata: Metadata = field(default_factory=dict)
     # Issue #688: Track user ownership for chat-derived facts
-    user_id: Optional[str] = None
+    user_id: str | None = None
 
 
 @dataclass
@@ -134,8 +141,8 @@ class ChatFileAssociation:
     association_type: FileAssociationType
     created_at: datetime = field(default_factory=datetime.now)
     metadata: Metadata = field(default_factory=dict)
-    content_hash: Optional[str] = None
-    size_bytes: Optional[int] = None
+    content_hash: str | None = None
+    size_bytes: int | None = None
 
 
 class ChatKnowledgeManager:
@@ -164,9 +171,9 @@ class ChatKnowledgeManager:
     async def create_or_update_context(
         self,
         chat_id: str,
-        topic: Optional[str] = None,
-        keywords: Optional[List[str]] = None,
-        user_id: Optional[str] = None,
+        topic: str | None = None,
+        keywords: List[str] | None = None,
+        user_id: str | None = None,
     ) -> ChatKnowledgeContext:
         """Create or update knowledge context for a chat (Issue #688: added user_id)."""
         if chat_id in self.chat_contexts:
@@ -202,7 +209,7 @@ class ChatKnowledgeManager:
         chat_id: str,
         file_path: str,
         association_type: FileAssociationType,
-        metadata: Optional[Metadata] = None,
+        metadata: Metadata | None = None,
     ) -> ChatFileAssociation:
         """Associate a file with a chat session"""
         file_id = str(uuid.uuid4())
@@ -242,7 +249,7 @@ class ChatKnowledgeManager:
         logger.info(f"File associated with chat {chat_id}: {file_name} ({association_type.value})")
         return association
 
-    async def add_temporary_knowledge(self, chat_id: str, content: str, metadata: Optional[Metadata] = None) -> str:
+    async def add_temporary_knowledge(self, chat_id: str, content: str, metadata: Metadata | None = None) -> str:
         """Add temporary knowledge to chat context"""
         knowledge_id = str(uuid.uuid4())
 
@@ -361,7 +368,7 @@ class ChatKnowledgeManager:
         return True
 
     def _build_compiled_knowledge_dict(
-        self, chat_id: str, title: Optional[str], context, messages: list, summary: str
+        self, chat_id: str, title: str | None, context, messages: list, summary: str
     ) -> dict:
         """Helper for compile_chat_to_knowledge. Ref: #1088."""
         return {
@@ -402,7 +409,7 @@ class ChatKnowledgeManager:
     async def compile_chat_to_knowledge(
         self,
         chat_id: str,
-        title: Optional[str] = None,
+        title: str | None = None,
         include_system_messages: bool = False,
     ) -> Metadata:
         """Compile entire chat conversation to knowledge base"""
@@ -439,7 +446,7 @@ class ChatKnowledgeManager:
         return compiled_knowledge
 
     async def search_chat_knowledge(
-        self, query: str, chat_id: Optional[str] = None, include_temporary: bool = True
+        self, query: str, chat_id: str | None = None, include_temporary: bool = True
     ) -> List[Metadata]:
         """Search knowledge across chats or within specific chat"""
         results = []
@@ -491,7 +498,7 @@ chat_knowledge_manager = None
 # API Endpoints
 
 
-@router.post("/context/create", response_model=DataResponse)
+@router.post("/context/create", response_model=DataResponse[ChatKnowledgeContextData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="create_chat_context",
@@ -510,7 +517,8 @@ async def create_chat_context(request_data: CreateContextRequest, request: Reque
 
         return {
             "success": True,
-            "context": {
+            "data": {
+                "success": True,
                 "chat_id": context.chat_id,
                 "topic": context.topic,
                 "keywords": context.keywords,
@@ -525,7 +533,7 @@ async def create_chat_context(request_data: CreateContextRequest, request: Reque
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.post("/files/associate", response_model=DataResponse)
+@router.post("/files/associate", response_model=DataResponse[ChatKnowledgeFileAssocData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="associate_file_with_chat",
@@ -544,7 +552,8 @@ async def associate_file_with_chat(request_data: AssociateFileRequest, request: 
 
         return {
             "success": True,
-            "association": {
+            "data": {
+                "success": True,
                 "file_id": association.file_id,
                 "file_name": association.file_name,
                 "association_type": association.association_type.value,
@@ -557,7 +566,7 @@ async def associate_file_with_chat(request_data: AssociateFileRequest, request: 
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.post("/files/upload/{chat_id}", response_model=DataResponse)
+@router.post("/files/upload/{chat_id}", response_model=DataResponse[ChatKnowledgeUploadData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="upload_file_to_chat",
@@ -597,14 +606,14 @@ async def upload_file_to_chat(
             metadata={"original_filename": file.filename},
         )
 
-        return {"success": True, "file_id": association.file_id, "file_path": file_path}
+        return {"success": True, "data": {"success": True, "file_id": association.file_id, "file_path": file_path}}
 
     except Exception as e:
         logger.error("Failed to upload file: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.post("/knowledge/add_temporary", response_model=DataResponse)
+@router.post("/knowledge/add_temporary", response_model=DataResponse[ChatKnowledgeTempData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="add_temporary_knowledge",
@@ -617,14 +626,14 @@ async def add_temporary_knowledge(request: AddKnowledgeRequest):
             chat_id=request.chat_id, content=request.content, metadata=request.metadata
         )
 
-        return {"success": True, "knowledge_id": knowledge_id}
+        return {"success": True, "data": {"success": True, "knowledge_id": knowledge_id}}
 
     except Exception as e:
         logger.error("Failed to add temporary knowledge: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/knowledge/pending/{chat_id}", response_model=DataResponse)
+@router.get("/knowledge/pending/{chat_id}", response_model=DataResponse[ChatKnowledgePendingData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_pending_knowledge_decisions",
@@ -637,8 +646,11 @@ async def get_pending_knowledge_decisions(chat_id: str):
 
         return {
             "success": True,
-            "pending_items": pending_items,
-            "count": len(pending_items),
+            "data": {
+                "success": True,
+                "pending_items": pending_items,
+                "count": len(pending_items),
+            },
         }
 
     except Exception as e:
@@ -646,7 +658,7 @@ async def get_pending_knowledge_decisions(chat_id: str):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.post("/knowledge/decide", response_model=DataResponse)
+@router.post("/knowledge/decide", response_model=DataResponse[ChatKnowledgeDecisionData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="apply_knowledge_decision",
@@ -662,8 +674,11 @@ async def apply_knowledge_decision(request: KnowledgeDecisionRequest):
         )
 
         return {
-            "success": success,
-            "message": f"Knowledge {request.decision.value} applied",
+            "success": True,
+            "data": {
+                "success": success,
+                "message": f"Knowledge {request.decision.value} applied",
+            },
         }
 
     except Exception as e:
@@ -671,7 +686,7 @@ async def apply_knowledge_decision(request: KnowledgeDecisionRequest):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.post("/compile", response_model=DataResponse)
+@router.post("/compile", response_model=DataResponse[ChatKnowledgeCompileData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="compile_chat_to_knowledge",
@@ -687,14 +702,14 @@ async def compile_chat_to_knowledge(request_data: CompileChatRequest, request: R
             include_system_messages=request_data.include_system_messages,
         )
 
-        return {"success": True, "compiled": compiled}
+        return {"success": True, "data": {"success": True, "compiled": compiled}}
 
     except Exception as e:
         logger.error("Failed to compile chat: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.post("/search", response_model=DataResponse)
+@router.post("/search", response_model=DataResponse[ChatKnowledgeSearchResultData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="search_chat_knowledge",
@@ -709,14 +724,14 @@ async def search_chat_knowledge(request: ChatKnowledgeSearchRequest):
             include_temporary=request.include_temporary,
         )
 
-        return {"success": True, "results": results, "count": len(results)}
+        return {"success": True, "data": {"success": True, "results": results, "count": len(results)}}
 
     except Exception as e:
         logger.error("Failed to search knowledge: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/context/{chat_id}", response_model=DataResponse)
+@router.get("/context/{chat_id}", response_model=DataResponse[ChatKnowledgeContextData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_chat_context",
@@ -728,13 +743,14 @@ async def get_chat_context(chat_id: str):
         context = chat_knowledge_manager.chat_contexts.get(chat_id)
 
         if not context:
-            return {"success": False, "message": "No context found for chat"}
+            return {"success": False, "message": "No context found for chat", "data": None}
 
         file_associations = chat_knowledge_manager.file_associations.get(chat_id, [])
 
         return {
             "success": True,
-            "context": {
+            "data": {
+                "success": True,
                 "chat_id": context.chat_id,
                 "topic": context.topic,
                 "keywords": context.keywords,
@@ -762,7 +778,7 @@ async def get_chat_context(chat_id: str):
 
 @register_health_probe("chat_knowledge")
 async def probe_chat_knowledge(
-    request: Optional[Request] = None,
+    request: Request | None = None,
 ) -> ComponentHealth:
     """Issue #3333: probe registration for the chat-knowledge manager."""
     try:
@@ -783,26 +799,6 @@ async def probe_chat_knowledge(
             status="down",
             detail=f"probe error: {type(exc).__name__}",
         )
-
-
-@router.get("/health", response_model=ChatKnowledgeHealthResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="health_check",
-    error_code_prefix="CHAT_KNOWLEDGE",
-)
-async def health_check():
-    """Health check endpoint for chat knowledge system"""
-    try:
-        return {
-            "status": "healthy",
-            "service": "chat_knowledge",
-            "manager_initialized": chat_knowledge_manager is not None,
-            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
-        }
-    except Exception as e:
-        logger.error("Chat knowledge health check failed: %s", e)
-        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============================================================================

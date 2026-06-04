@@ -9,11 +9,13 @@ Analyzes task history per agent to discover which task types
 each agent excels at and updates agent profiles accordingly.
 """
 
-import logging
 from dataclasses import dataclass
 from typing import Protocol
 
-logger = logging.getLogger(__name__)
+from autobot_shared.agent_registry_protocol import AgentRegistryProtocol
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -34,15 +36,9 @@ class AgentSpecializationDB(Protocol):
     async def get_all_agent_ids(self) -> list[str]: ...
 
 
-class AgentRegistry(Protocol):
-    """Protocol for the registry layer used by AgentEvolutionTracker."""
-
-    async def update_specializations(
-        self,
-        agent_id: str,
-        top_types: list[str],
-        rates: dict[str, float],
-    ) -> None: ...
+# Issue #6828: AgentRegistry Protocol promoted to autobot_shared/agent_registry_protocol.py.
+# Re-exported here for backwards compatibility with any importer of this module.
+AgentRegistry = AgentRegistryProtocol
 
 
 class AgentEvolutionTracker:
@@ -53,7 +49,7 @@ class AgentEvolutionTracker:
     specializations.
     """
 
-    def __init__(self, db: AgentSpecializationDB, registry: AgentRegistry | None = None):
+    def __init__(self, db: AgentSpecializationDB, registry: AgentRegistryProtocol | None = None) -> None:
         self.db = db
         self.registry = registry
 
@@ -81,7 +77,7 @@ class AgentEvolutionTracker:
         """Update agent profile with top specializations."""
         top_types = [s.task_type for s in specializations[:3]]
         rates = {s.task_type: s.success_rate for s in specializations}
-        await self.registry.update_specializations(agent_id, top_types, rates)  # type: ignore[union-attr]
+        await self.registry.update_specializations(agent_id, top_types, rates)  # type: ignore[union-attr]  # noqa: E501
         logger.info(
             "Updated specializations for agent %s: %s",
             agent_id,

@@ -3,26 +3,26 @@
     <!-- Header with Stats -->
     <div class="feed-header">
       <h3 class="feed-title">
-        <i class="fas fa-sync-alt"></i>
+        <Icon name="sync-alt" />
         {{ $t('knowledge.changeFeed.title') }}
       </h3>
 
       <!-- Change Summary Badges -->
       <div class="change-badges">
         <span v-if="changeSummary.added > 0" class="badge badge-success">
-          <i class="fas fa-plus-circle"></i>
+          <Icon name="plus-circle" />
           {{ changeSummary.added }} {{ $t('knowledge.changeFeed.added') }}
         </span>
         <span v-if="changeSummary.updated > 0" class="badge badge-info">
-          <i class="fas fa-sync-alt"></i>
+          <Icon name="sync-alt" />
           {{ changeSummary.updated }} {{ $t('knowledge.changeFeed.updated') }}
         </span>
         <span v-if="changeSummary.removed > 0" class="badge badge-danger">
-          <i class="fas fa-minus-circle"></i>
+          <Icon name="minus-circle" />
           {{ changeSummary.removed }} {{ $t('knowledge.changeFeed.removed') }}
         </span>
         <span v-if="totalChanges === 0" class="badge badge-secondary">
-          <i class="fas fa-check-circle"></i>
+          <Icon name="check-circle" />
           {{ $t('knowledge.changeFeed.noChanges') }}
         </span>
       </div>
@@ -36,14 +36,14 @@
         :loading="isScanning"
         @click="handleScanNow"
       >
-        <i class="fas fa-search"></i>
+        <Icon name="search" />
         {{ isScanning ? $t('knowledge.changeFeed.scanning') : $t('knowledge.changeFeed.scanNow') }}
       </BaseButton>
 
       <!-- Issue #425: Man Page Section Filter -->
       <div class="section-filter">
         <label class="filter-label">
-          <i class="fas fa-book"></i>
+          <Icon name="book" />
           {{ $t('knowledge.changeFeed.sectionLabel') }}
         </label>
         <select v-model="selectedSections" multiple class="section-select">
@@ -80,7 +80,7 @@
       </div>
 
       <div v-if="lastScanTime" class="last-scan">
-        <i class="fas fa-clock"></i>
+        <Icon name="clock" />
         {{ $t('knowledge.changeFeed.lastScan') }} {{ formatRelativeTime(lastScanTime) }}
       </div>
     </div>
@@ -88,20 +88,20 @@
     <!-- Vectorization Status -->
     <div v-if="lastVectorizationResult" class="vectorization-status">
       <div class="status-header">
-        <i class="fas fa-vector-square"></i>
+        <Icon name="th" />
         {{ $t('knowledge.changeFeed.vectorizationResults') }}
       </div>
       <div class="status-stats">
         <span class="stat-item stat-success">
-          <i class="fas fa-check-circle"></i>
+          <Icon name="check-circle" />
           {{ lastVectorizationResult.successful }} {{ $t('knowledge.changeFeed.successful') }}
         </span>
         <span class="stat-item stat-failed" v-if="lastVectorizationResult.failed > 0">
-          <i class="fas fa-times-circle"></i>
+          <Icon name="times-circle" />
           {{ lastVectorizationResult.failed }} {{ $t('knowledge.changeFeed.failed') }}
         </span>
         <span class="stat-item stat-skipped" v-if="lastVectorizationResult.skipped > 0">
-          <i class="fas fa-minus-circle"></i>
+          <Icon name="minus-circle" />
           {{ lastVectorizationResult.skipped }} {{ $t('knowledge.changeFeed.skipped') }}
         </span>
       </div>
@@ -151,7 +151,7 @@
           :class="`change-${change.change_type}`"
         >
           <div class="change-icon">
-            <i :class="getChangeIcon(change.change_type)"></i>
+            <Icon :name="getChangeIcon(change.change_type)" />
           </div>
 
           <div class="change-content">
@@ -192,11 +192,11 @@
     <!-- Actions -->
     <div class="feed-actions" v-if="recentChanges.length > 0">
       <BaseButton variant="outline-solid" size="sm" @click="handleClearChanges">
-        <i class="fas fa-trash"></i>
+        <Icon name="trash" />
         {{ $t('knowledge.changeFeed.clearHistory') }}
       </BaseButton>
       <BaseButton variant="outline-solid" size="sm" @click="handleExportChanges">
-        <i class="fas fa-download"></i>
+        <Icon name="download" />
         {{ $t('knowledge.changeFeed.exportChanges') }}
       </BaseButton>
     </div>
@@ -204,6 +204,7 @@
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils'

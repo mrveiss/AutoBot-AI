@@ -14,15 +14,16 @@ pub/sub doesn't reproduce in-process).
 """
 
 import asyncio
-import logging
 from datetime import datetime, timezone
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict
 
 import redis.asyncio as redis
 
+from autobot_shared.logging_manager import get_logger
+
 from .types import LongRunningOperation, OperationProgress
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class OperationProgressTracker:
@@ -33,7 +34,7 @@ class OperationProgressTracker:
     in-process subscriber callbacks remain local to this façade.
     """
 
-    def __init__(self, redis_client: Optional[redis.Redis] = None):
+    def __init__(self, redis_client: redis.Redis | None = None):
         """Initialize façade. The ``redis_client`` argument is accepted for
         backward compatibility with existing callers but is not used directly —
         Redis access flows through ``TaskExecutionTracker``."""
@@ -62,7 +63,7 @@ class OperationProgressTracker:
         items_processed: int = 0,
         total_items: int = 0,
         estimated_remaining: float = 0.0,
-        details: Optional[Dict[str, Any]] = None,
+        details: Dict[str, Any] | None = None,
     ) -> None:
         """Update progress for an operation.
 
@@ -114,7 +115,7 @@ class OperationProgressTracker:
             except Exception as e:
                 logger.warning("Progress callback failed: %s", e)
 
-    def get_cached_progress(self, operation_id: str) -> Optional[OperationProgress]:
+    def get_cached_progress(self, operation_id: str) -> OperationProgress | None:
         """Return cached progress.
 
         With #6506 the in-memory cache is removed; use :meth:`get_progress`
@@ -123,7 +124,7 @@ class OperationProgressTracker:
         """
         return None
 
-    async def get_progress(self, operation_id: str) -> Optional[Dict[str, Any]]:
+    async def get_progress(self, operation_id: str) -> Dict[str, Any] | None:
         """Read the canonical progress snapshot from ``TaskExecutionTracker``."""
         from task_execution_tracker import get_task_tracker
 

@@ -1,0 +1,16 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# xrdp Role - Handlers (GH#1525)
+---
+- name: reload systemd
+  ansible.builtin.systemd:
+    daemon_reload: true
+  become: true
+
+- name: restart xrdp
+  ansible.builtin.systemd:
+    name: "{{ xrdp_service_name }}"
+    state: restarted
+  become: true

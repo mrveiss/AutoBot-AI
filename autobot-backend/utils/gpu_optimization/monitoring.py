@@ -8,15 +8,15 @@ Issue #381: Extracted from gpu_acceleration_optimizer.py god class refactoring.
 Contains GPU monitoring and efficiency calculation functionality.
 """
 
-import logging
 import time
 from typing import Any, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from utils.performance_monitor import performance_monitor
 
 from .types import DEFAULT_PERFORMANCE_BASELINES, GPUCapabilities
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def calculate_utilization_efficiency(gpu_metrics: Any) -> float:

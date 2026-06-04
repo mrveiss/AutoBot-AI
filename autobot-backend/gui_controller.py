@@ -1,17 +1,25 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
+"""
+GUI automation controller via pyautogui.
+
+Wraps platform mouse/keyboard automation for tasks that require desktop
+interaction, with configurable safety settings and fail-safes.
+"""
+
 import asyncio
-import logging
 import os
 import subprocess
 
 import pyautogui
 
 from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 from constants.threshold_constants import TimingConstants
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class GUIController:
@@ -50,7 +58,7 @@ class GUIController:
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
             )
-            os.environ["DISPLAY"] = ":99"
+            config.display = ":99"
             logger.info("Virtual display started on :99")
         except Exception as e:
             logger.error("Error starting virtual display: %s", e)
@@ -61,7 +69,7 @@ class GUIController:
             self.xvfb_process.terminate()
             self.xvfb_process = None
             if "DISPLAY" in os.environ:
-                del os.environ["DISPLAY"]
+                del config.display
             logger.info("Virtual display stopped")
 
     async def capture_screen(self):

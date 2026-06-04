@@ -22,15 +22,15 @@ All Redis operations are async (redis.asyncio).
 """
 
 import json
-import logging
 import time
 import uuid
 from collections import deque
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Set, Tuple
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Key prefixes
 _PFX_NODE = "pg:node:"
@@ -190,7 +190,7 @@ class PropertyGraph:
         await self._index_properties(node_id, merged)
         logger.debug("add_node: %s props=%s", node_id, list(properties.keys()))
 
-    async def get_node(self, node_id: str) -> Optional[Dict[str, Any]]:
+    async def get_node(self, node_id: str) -> Dict[str, Any] | None:
         """
         Return node properties or None if not found.
 
@@ -261,7 +261,7 @@ class PropertyGraph:
         from_id: str,
         to_id: str,
         relation: str,
-        properties: Optional[Dict[str, Any]] = None,
+        properties: Dict[str, Any] | None = None,
     ) -> str:
         """
         Add a directed edge from ``from_id`` to ``to_id`` with given relation type.
@@ -309,7 +309,7 @@ class PropertyGraph:
         logger.debug("add_edge: %s -[%s]-> %s (edge_id=%s)", from_id, relation, to_id, edge_id)
         return edge_id
 
-    async def get_edge(self, edge_id: str) -> Optional[Dict[str, Any]]:
+    async def get_edge(self, edge_id: str) -> Dict[str, Any] | None:
         """Return edge properties or None if not found."""
         raw = await self._redis.hgetall(_edge_key(edge_id))
         if not raw:
@@ -357,7 +357,7 @@ class PropertyGraph:
     async def get_neighbors(
         self,
         node_id: str,
-        relation: Optional[str] = None,
+        relation: str | None = None,
         direction: str = "outgoing",
     ) -> List[Dict[str, Any]]:
         """
@@ -381,7 +381,7 @@ class PropertyGraph:
         return results
 
     async def _neighbors_one_direction(
-        self, node_id: str, relation: Optional[str], direction: str
+        self, node_id: str, relation: str | None, direction: str
     ) -> List[Dict[str, Any]]:
         """Fetch neighbours in a single direction."""
         results: List[Dict[str, Any]] = []
@@ -467,7 +467,7 @@ class PropertyGraph:
     async def multi_hop(
         self,
         start_node_id: str,
-        relation: Optional[str] = None,
+        relation: str | None = None,
         max_depth: int = 2,
         direction: str = "outgoing",
     ) -> List[Dict[str, Any]]:
@@ -508,7 +508,7 @@ class PropertyGraph:
         self,
         center_node_id: str,
         max_depth: int = 2,
-        relation: Optional[str] = None,
+        relation: str | None = None,
     ) -> Dict[str, Any]:
         """
         Extract a connected subgraph around ``center_node_id``.
@@ -560,9 +560,9 @@ class PropertyGraph:
         self,
         from_id: str,
         to_id: str,
-        relation: Optional[str] = None,
+        relation: str | None = None,
         max_depth: int = 6,
-    ) -> Optional[List[Dict[str, Any]]]:
+    ) -> List[Dict[str, Any]] | None:
         """
         BFS shortest path between two nodes.
 

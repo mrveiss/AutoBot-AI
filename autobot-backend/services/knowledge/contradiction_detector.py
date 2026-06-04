@@ -11,19 +11,19 @@ Issue #4566.
 """
 
 import json
-import logging
 import re
 import uuid
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from typing import Any
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.time_utils import now_utc
-from llm_interface_pkg.types import LLMType
+from llm_shared.types import LLMType
 from services.llm_service import get_llm_service
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Redis key / TTL constants
 _REPORT_KEY = "kb:lint:report"

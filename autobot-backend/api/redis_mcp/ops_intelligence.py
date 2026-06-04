@@ -8,14 +8,14 @@ Issue #2511: server_info, dbsize, memory_stats, stream_health, client_list, slow
 Agents can chain these tools for composite diagnostics.
 """
 
-import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.redis_utils import decode_redis_value as _decode
 from type_defs.common import Metadata
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 async def _get_client(database: str = "main"):
@@ -23,7 +23,7 @@ async def _get_client(database: str = "main"):
     return await get_async_redis_client(database=database)
 
 
-async def handle_redis_server_info(section: Optional[str] = None, database: str = "main") -> Metadata:
+async def handle_redis_server_info(section: str | None = None, database: str = "main") -> Metadata:
     """Get Redis server stats."""
     client = await _get_client(database)
     if section:
@@ -163,7 +163,7 @@ def _stringify_info(info: dict) -> dict:
     return result
 
 
-def _format_stream_entry(entry) -> Optional[Dict[str, Any]]:
+def _format_stream_entry(entry) -> Dict[str, Any] | None:
     """Format a stream entry tuple (id, fields) into a dict."""
     if not entry:
         return None

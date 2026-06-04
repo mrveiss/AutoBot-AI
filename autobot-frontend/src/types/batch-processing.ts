@@ -7,6 +7,8 @@
  * Issue #584 - Batch Processing Manager
  */
 
+import type { BaseModuleHealthResponse } from './health'
+
 /**
  * Batch job status enum
  */
@@ -112,12 +114,9 @@ export interface BatchSchedulesListResponse {
 /**
  * Batch service health check response
  */
-export interface BatchHealthResponse {
-  status: 'healthy' | 'unavailable' | 'error'
+export interface BatchHealthResponse extends BaseModuleHealthResponse {
   active_jobs: number
   total_jobs: number
-  redis_connected: boolean
-  message?: string
 }
 
 /**

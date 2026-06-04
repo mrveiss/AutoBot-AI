@@ -7,7 +7,7 @@ Instruction parsers for KB Librarian.
 Extracted from enhanced_kb_librarian.py as part of Issue #381 god class refactoring.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from .types import TEXT_SECTIONS
 
@@ -16,7 +16,7 @@ class InstructionParser:
     """Helper class for parsing and extracting instructions from content."""
 
     @classmethod
-    def extract_instructions(cls, results: List[Dict], tool_name: str) -> Optional[Dict[str, Any]]:
+    def extract_instructions(cls, results: List[Dict], tool_name: str) -> Dict[str, Any] | None:
         """Extract installation and usage instructions from KB results."""
         for result in results:
             content = result.get("content", "")
@@ -60,7 +60,7 @@ class InstructionParser:
                 cls.add_content_to_section(current_section, line, instructions)
 
     @classmethod
-    def identify_section(cls, line: str) -> Optional[str]:
+    def identify_section(cls, line: str) -> str | None:
         """Identify which section a line belongs to."""
         if line.startswith("Installation:"):
             return "installation"

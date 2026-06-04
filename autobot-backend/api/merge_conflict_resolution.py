@@ -15,24 +15,29 @@ Parent Epic: #217 - Advanced Code Intelligence
 """
 
 import asyncio
-import logging
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import JSONResponse
 
 from api.schemas_code import (
     ApplyResolutionRequest,
     ConflictAnalysisRequest,
     ConflictResolutionRequest,
+    MergeConflictAnalyzeResponse,
+    MergeConflictApplyResponse,
+    MergeConflictCheckResponse,
+    MergeConflictRepositoryAnalyzeResponse,
+    MergeConflictResolveResponse,
+    MergeConflictStrategiesResponse,
     RepositoryAnalysisRequest,
 )
 from api.schemas_common import DataResponse
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.path_validator import validate_path
+from autobot_shared.time_utils import utc_timestamp
 from code_intelligence.merge_conflict_resolver import (
     ConflictBlock,
     ConflictParser,
@@ -41,8 +46,9 @@ from code_intelligence.merge_conflict_resolver import (
     ResolutionStrategy,
     analyze_repository,
 )
+from utils.response_helpers import create_success_response
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter()
 
@@ -87,8 +93,10 @@ def _calculate_severity_distribution(conflicts: list) -> dict:
     }
 
 
-def _build_resolution_response(results: list, file_path: str, safe_mode: bool) -> JSONResponse:
-    """Build the JSONResponse for a successful conflict resolution.
+def _build_resolution_response(
+    results: list, file_path: str, safe_mode: bool
+) -> DataResponse[MergeConflictResolveResponse]:
+    """Build the DataResponse for a successful conflict resolution.
 
     Helper for resolve_conflicts. Ref: #1088.
     """
@@ -97,27 +105,26 @@ def _build_resolution_response(results: list, file_path: str, safe_mode: bool) -
     all_validated = all(r.is_validated for r in results)
     any_require_review = any(r.requires_review for r in results)
 
-    return JSONResponse(
-        status_code=200,
-        content={
-            "status": "success",
-            "file_path": file_path,
-            "resolution_count": len(results),
-            "resolutions": resolutions,
-            "summary": {
+    return create_success_response(
+        data=MergeConflictResolveResponse(
+            status="success",
+            file_path=file_path,
+            resolved_count=len(results),
+            results=resolutions,
+            summary={
                 "average_confidence": round(avg_confidence, 2),
                 "all_validated": all_validated,
                 "requires_review": any_require_review,
             },
-            "safe_mode": safe_mode,
-            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
-        },
+            safe_mode=safe_mode,
+            timestamp=utc_timestamp(),
+        )
     )
 
 
 def _parse_resolution_strategy(
-    strategy_str: Optional[str],
-) -> Optional[ResolutionStrategy]:
+    strategy_str: str | None,
+) -> ResolutionStrategy | None:
     """Parse a strategy string into a ResolutionStrategy enum value.
 
     Helper for resolve_conflicts. Ref: #1088.
@@ -172,17 +179,16 @@ async def _validate_conflict_file(file_path: str) -> Path:
     return safe
 
 
-def _build_no_conflicts_response(file_path: str) -> JSONResponse:
+def _build_no_conflicts_response(file_path: str) -> DataResponse[MergeConflictAnalyzeResponse]:
     """Helper for analyze_conflicts. Ref: #1088."""
-    return JSONResponse(
-        status_code=200,
-        content={
-            "status": "success",
-            "message": "No conflicts found in file",
-            "file_path": file_path,
-            "conflict_count": 0,
-            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
-        },
+    return create_success_response(
+        data=MergeConflictAnalyzeResponse(
+            status="success",
+            file_path=file_path,
+            conflict_count=0,
+            timestamp=utc_timestamp(),
+        ),
+        message="No conflicts found in file",
     )
 
 
@@ -191,7 +197,7 @@ def _build_no_conflicts_response(file_path: str) -> JSONResponse:
 # =============================================================================
 
 
-@router.post("/analyze", response_model=DataResponse)
+@router.post("/analyze", response_model=DataResponse[MergeConflictAnalyzeResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="analyze_conflicts",
@@ -226,16 +232,15 @@ async def analyze_conflicts(
         conflicts_data = [_build_conflict_data(c) for c in conflicts]
         severity_counts = _calculate_severity_distribution(conflicts)
 
-        return JSONResponse(
-            status_code=200,
-            content={
-                "status": "success",
-                "file_path": str(safe_path),
-                "conflict_count": len(conflicts),
-                "conflicts": conflicts_data,
-                "severity_distribution": severity_counts,
-                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
-            },
+        return create_success_response(
+            data=MergeConflictAnalyzeResponse(
+                status="success",
+                file_path=str(safe_path),
+                conflict_count=len(conflicts),
+                conflicts=conflicts_data,
+                severity_distribution=severity_counts,
+                timestamp=utc_timestamp(),
+            )
         )
 
     except Exception as e:
@@ -246,7 +251,7 @@ async def analyze_conflicts(
         )
 
 
-@router.post("/resolve", response_model=DataResponse)
+@router.post("/resolve", response_model=DataResponse[MergeConflictResolveResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="resolve_conflicts",
@@ -294,14 +299,13 @@ async def resolve_conflicts(
         )
 
         if not results:
-            return JSONResponse(
-                status_code=200,
-                content={
-                    "status": "success",
-                    "message": "No conflicts found in file",
-                    "file_path": request.file_path,
-                    "timestamp": datetime.now(tz=timezone.utc).isoformat(),
-                },
+            return create_success_response(
+                data=MergeConflictResolveResponse(
+                    status="success",
+                    file_path=request.file_path,
+                    timestamp=utc_timestamp(),
+                ),
+                message="No conflicts found in file",
             )
 
         return _build_resolution_response(results, request.file_path, request.safe_mode)
@@ -314,7 +318,7 @@ async def resolve_conflicts(
         )
 
 
-@router.post("/analyze-repository", response_model=DataResponse)
+@router.post("/analyze-repository", response_model=DataResponse[MergeConflictRepositoryAnalyzeResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="analyze_repository_conflicts",
@@ -356,16 +360,15 @@ async def analyze_repository_conflicts(
         # Analyze repository
         analysis = await asyncio.to_thread(analyze_repository, str(safe_repo))
 
-        return JSONResponse(
-            status_code=200,
-            content={
-                "status": "success",
-                "repository": request.repo_path,
-                "total_files_with_conflicts": analysis["total_files"],
-                "total_conflicts": analysis["total_conflicts"],
-                "files": analysis["files"],
-                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
-            },
+        return create_success_response(
+            data=MergeConflictRepositoryAnalyzeResponse(
+                status="success",
+                repository=request.repo_path,
+                total_files_with_conflicts=analysis["total_files"],
+                total_conflicts=analysis["total_conflicts"],
+                files=analysis["files"],
+                timestamp=utc_timestamp(),
+            )
         )
 
     except Exception as e:
@@ -376,7 +379,7 @@ async def analyze_repository_conflicts(
         )
 
 
-@router.post("/apply", response_model=DataResponse)
+@router.post("/apply", response_model=DataResponse[MergeConflictApplyResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="apply_resolution",
@@ -419,15 +422,14 @@ async def apply_resolution(
 
         logger.info("Applied resolution to %s", safe_path)
 
-        return JSONResponse(
-            status_code=200,
-            content={
-                "status": "success",
-                "message": "Resolution applied successfully",
-                "file_path": str(safe_path),
-                "backup_path": backup_path,
-                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
-            },
+        return create_success_response(
+            data=MergeConflictApplyResponse(
+                status="success",
+                message="Resolution applied successfully",
+                file_path=str(safe_path),
+                backup_path=backup_path,
+                timestamp=utc_timestamp(),
+            )
         )
 
     except Exception as e:
@@ -438,7 +440,7 @@ async def apply_resolution(
         )
 
 
-@router.get("/strategies", response_model=DataResponse)
+@router.get("/strategies", response_model=DataResponse[MergeConflictStrategiesResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_resolution_strategies",
@@ -494,18 +496,17 @@ async def get_resolution_strategies(
         },
     }
 
-    return JSONResponse(
-        status_code=200,
-        content={
-            "status": "success",
-            "strategies": strategies,
-            "default_strategy": "semantic_merge",
-            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
-        },
+    return create_success_response(
+        data=MergeConflictStrategiesResponse(
+            status="success",
+            strategies=strategies,
+            default_strategy="semantic_merge",
+            timestamp=utc_timestamp(),
+        )
     )
 
 
-@router.get("/check", response_model=DataResponse)
+@router.get("/check", response_model=DataResponse[MergeConflictCheckResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="check_file_conflicts",
@@ -536,14 +537,13 @@ async def check_file_conflicts(
         parser = ConflictParser()
         has_conflicts = await asyncio.to_thread(parser.has_conflicts, str(safe_path))
 
-        return JSONResponse(
-            status_code=200,
-            content={
-                "status": "success",
-                "file_path": str(safe_path),
-                "has_conflicts": has_conflicts,
-                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
-            },
+        return create_success_response(
+            data=MergeConflictCheckResponse(
+                status="success",
+                file_path=str(safe_path),
+                has_conflicts=has_conflicts,
+                timestamp=utc_timestamp(),
+            )
         )
 
     except Exception as e:

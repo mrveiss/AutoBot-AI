@@ -236,7 +236,7 @@
                 :stroke-dasharray="segment.dashArray"
                 :stroke-dashoffset="segment.offset"
                 class="segment"
-                :style="{ animationDelay: `${index * 100}ms` }"
+                :style="{ animationDelay: `${(index as number) * 100}ms` }"
               />
               <!-- Center text -->
               <text x="100" y="95" text-anchor="middle" class="center-value">
@@ -350,7 +350,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { useToast } from '@/composables/useToast'
+import { useNotificationBus } from '@/composables/useNotificationBus'
 import { useGroupingMemo, useAggregationMemo } from '@/composables/useComputedMemo'
 import api from '@/services/api'
 import { createLogger } from '@/utils/debugUtils'
@@ -415,7 +415,7 @@ interface Pattern {
 }
 
 // State
-const { showToast } = useToast()
+const { showToast } = useNotificationBus()
 const loading = ref(false)
 const hasAnalyzed = ref(false)
 const selectedPath = ref('')
@@ -1364,12 +1364,12 @@ onMounted(() => {
 
 .stat.critical {
   background: rgba(239, 68, 68, 0.15);
-  color: #ef4444;
+  color: var(--color-error);
 }
 
 .stat.high {
   background: rgba(245, 158, 11, 0.15);
-  color: #f59e0b;
+  color: var(--color-warning);
 }
 
 .stat.total {

@@ -4,7 +4,6 @@ import PreferencesPanel from './PreferencesPanel.vue';
 const meta = {
   title: 'Components/UI/PreferencesPanel',
   component: PreferencesPanel,
-  tags: ['autodocs'],
   argTypes: {},
 } as Meta<typeof PreferencesPanel>;
 

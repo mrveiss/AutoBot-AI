@@ -8,8 +8,9 @@ Issue #381: Extracted from model_optimizer.py god class refactoring.
 Contains model filtering and selection logic.
 """
 
-import logging
 from typing import List
+
+from autobot_shared.logging_manager import get_logger
 
 from .types import (
     ModelCapabilityTier,
@@ -19,7 +20,7 @@ from .types import (
     TaskRequest,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ModelSelector:

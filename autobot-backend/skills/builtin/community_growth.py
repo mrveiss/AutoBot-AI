@@ -11,11 +11,11 @@ posting operations. Credentials are read from skill config at runtime.
 
 import asyncio
 import json
-import logging
 from typing import Any, Dict, List, Tuple
 
 import aiohttp
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import get_ollama_url
 from skills.base_skill import BaseSkill, SkillConfigField, SkillManifest
 
@@ -24,7 +24,7 @@ try:
 except ImportError:
     praw = None  # type: ignore[assignment]
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def _build_reddit_config() -> Dict[str, SkillConfigField]:

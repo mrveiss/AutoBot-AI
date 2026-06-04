@@ -5,7 +5,7 @@
     name: autobot
     home: /opt/autobot
     shell: /bin/bash
-    system: yes
+    system: true
 
 - name: Create AutoBot directories
   file:
@@ -65,6 +65,6 @@
 - name: Enable and start backend services
   systemd:
     name: autobot-backend
-    enabled: yes
+    enabled: true
     state: started
-    daemon_reload: yes
+    daemon_reload: true

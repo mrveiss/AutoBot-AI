@@ -15,7 +15,7 @@ Part of Issue #381 - God Class Refactoring
 """
 
 import ast
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from ..models import AntiPatternResult
 from ..severity_utils import get_complex_conditional_severity
@@ -353,7 +353,7 @@ class NamingDetector:
         self,
         child: ast.AST,
         file_path: str,
-    ) -> Optional[AntiPatternResult]:
+    ) -> AntiPatternResult | None:
         """Check if public function lacks docstring."""
         if not isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
             return None
@@ -377,7 +377,7 @@ class NamingDetector:
         self,
         child: ast.AST,
         file_path: str,
-    ) -> Optional[AntiPatternResult]:
+    ) -> AntiPatternResult | None:
         """Check if public class lacks docstring."""
         if not isinstance(child, ast.ClassDef):
             return None

@@ -5,17 +5,17 @@
   systemd:
     name: nginx
     state: reloaded
-  become: yes
+  become: true
 
 - name: test nginx config
   command: nginx -t
-  become: yes
+  become: true
 
 - name: restart frontend
   systemd:
     name: autobot-frontend
     state: restarted
-  become: yes
+  become: true
   # (#2872) Intentional: autobot-frontend service may not exist on hosts
   # that serve only the static build via nginx (no dev server).  Handler
   # is notified from tasks that conditionally deploy the unit file.
@@ -23,10 +23,10 @@
 
 - name: reload systemd
   systemd:
-    daemon_reload: yes
-  become: yes
+    daemon_reload: true
+  become: true
 
 - name: reload firewall
   ufw:
     state: reloaded
-  become: yes
+  become: true

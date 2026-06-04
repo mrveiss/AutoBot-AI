@@ -7,30 +7,32 @@ Service Discovery System for AutoBot Distributed Architecture
 Provides dynamic service resolution and health monitoring across 6 VMs
 """
 
+from __future__ import annotations
+
 import asyncio
-import logging
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 
 import aiohttp
 
 from autobot_shared.http_client import get_http_client
+from autobot_shared.logging_manager import get_logger
 from constants.api_constants import PATH_API_HEALTH, PATH_HEALTH, PATH_OLLAMA_TAGS
 from constants.network_constants import NetworkConstants
 from constants.path_constants import PATH
 from constants.threshold_constants import RetryConfig, ServiceDiscoveryConfig
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Performance optimization: O(1) lookup for service health checks (Issue #326)
 DEGRADED_STATUS_FIELDS = {"degraded", "warning"}
 SERVICE_UNAVAILABLE_HTTP_CODES = {503, 502, 504}
 
 
-def _parse_health_response(data: dict, service: "ServiceEndpoint") -> Optional["ServiceStatus"]:
+def _parse_health_response(data: dict, service: "ServiceEndpoint") -> "ServiceStatus" | None:
     """Parse health response JSON for service status (Issue #315: extracted).
 
     Args:
@@ -75,14 +77,14 @@ class ServiceEndpoint:
 
     # Health status tracking
     status: ServiceStatus = ServiceStatus.UNKNOWN
-    last_check: Optional[datetime] = None
-    last_healthy: Optional[datetime] = None
+    last_check: datetime | None = None
+    last_healthy: datetime | None = None
     consecutive_failures: int = 0
-    response_time: Optional[float] = None
-    error_message: Optional[str] = None
+    response_time: float | None = None
+    error_message: str | None = None
 
     # Service metadata
-    version: Optional[str] = None
+    version: str | None = None
     capabilities: List[str] = field(default_factory=list)
 
     @property
@@ -107,7 +109,7 @@ class ServiceDiscovery:
     Eliminates hardcoded IP addresses and provides dynamic service resolution
     """
 
-    def __init__(self, config_file: Optional[str] = None):
+    def __init__(self, config_file: str | None = None):
         """Initialize service discovery with config file and health checks."""
         self.services: Dict[str, ServiceEndpoint] = {}
         # Use centralized PathConstants (Issue #380)
@@ -115,7 +117,7 @@ class ServiceDiscovery:
         self.config_file = config_file or str(default_config)
         self.health_check_interval = ServiceDiscoveryConfig.HEALTH_CHECK_INTERVAL_S
         self.circuit_breaker_threshold = ServiceDiscoveryConfig.CIRCUIT_BREAKER_THRESHOLD
-        self._health_check_task: Optional[asyncio.Task] = None
+        self._health_check_task: asyncio.Task | None = None
         self._http_client = get_http_client()  # Use singleton HTTP client
 
         # Lock for thread-safe access to services dictionary
@@ -125,7 +127,7 @@ class ServiceDiscovery:
         self._init_default_services()
 
     def _get_service_config_with_fallback(
-        self, service_name: str, config_dict: Optional[dict], system_defaults: dict
+        self, service_name: str, config_dict: dict | None, system_defaults: dict
     ) -> tuple:
         """Get host and port from config with system defaults fallback."""
         if config_dict is None:
@@ -345,9 +347,9 @@ class ServiceDiscovery:
     def _should_skip_circuit_breaker_check(
         self,
         consecutive_failures: int,
-        last_check: Optional[datetime],
+        last_check: datetime | None,
         current_status: ServiceStatus,
-    ) -> Optional[ServiceStatus]:
+    ) -> ServiceStatus | None:
         """Check if health check should be skipped due to circuit breaker. Returns status to skip with, or None."""
         if consecutive_failures < self.circuit_breaker_threshold:
             return None
@@ -497,7 +499,7 @@ class ServiceDiscovery:
         except Exception:
             return ServiceStatus.UNHEALTHY
 
-    async def get_service_url(self, service_name: str) -> Optional[str]:
+    async def get_service_url(self, service_name: str) -> str | None:
         """Get service URL with automatic failover (thread-safe)"""
         async with self._lock:
             if service_name not in self.services:
@@ -629,7 +631,7 @@ service_discovery = ServiceDiscovery()
 
 
 # Convenience functions for backward compatibility
-async def get_service_url(service_name: str) -> Optional[str]:
+async def get_service_url(service_name: str) -> str | None:
     """Get service URL - backward compatible function"""
     return await service_discovery.get_service_url(service_name)
 

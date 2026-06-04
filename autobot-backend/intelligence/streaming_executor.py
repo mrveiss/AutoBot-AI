@@ -9,14 +9,15 @@ commentary and analysis for the intelligent agent system.
 """
 
 import asyncio
-import logging
 import shlex
 import subprocess
 import time
 import uuid
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, AsyncGenerator, Dict, List, Optional
+from typing import Any, AsyncGenerator, Dict, List
+
+from autobot_shared.logging_manager import get_logger
 
 # #7127: running this file directly cannot work — top-level project imports
 # below need sys.path entries that an inline `__main__` block cannot install
@@ -36,7 +37,7 @@ if __name__ == "__main__":
 from autobot_shared.ssot_config import config as _ssot_config
 from utils.command_validator import CommandValidator
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ChunkType(Enum):
@@ -102,7 +103,7 @@ class StreamingCommandExecutor:
         self.active_processes: Dict[str, ProcessInfo] = {}
         self._max_processes = 10  # Limit concurrent processes
 
-    def _validate_execution_preconditions(self, command: str) -> Optional[StreamChunk]:
+    def _validate_execution_preconditions(self, command: str) -> StreamChunk | None:
         """Validate command safety and process limits. (Issue #315 - extracted)"""
         if not self.command_validator.is_command_safe(command):
             return StreamChunk(
@@ -120,7 +121,7 @@ class StreamingCommandExecutor:
             )
         return None
 
-    def _parse_command_safe(self, command: str) -> tuple[Optional[List[str]], Optional[StreamChunk]]:
+    def _parse_command_safe(self, command: str) -> tuple[List[str] | None, StreamChunk | None]:
         """Parse command safely, return (parts, error_chunk). (Issue #315 - extracted)"""
         try:
             return shlex.split(command), None
@@ -620,7 +621,7 @@ class StreamingCommandExecutor:
 
         logger.info("All processes terminated")
 
-    def get_process_info(self, process_id: str) -> Optional[Dict[str, Any]]:
+    def get_process_info(self, process_id: str) -> Dict[str, Any] | None:
         """
         Get information about a specific process.
 
@@ -628,7 +629,7 @@ class StreamingCommandExecutor:
             process_id: Process identifier
 
         Returns:
-            Optional[Dict[str, Any]]: Process information or None
+            Dict[str, Any] | None: Process information or None
         """
         if process_id not in self.active_processes:
             return None

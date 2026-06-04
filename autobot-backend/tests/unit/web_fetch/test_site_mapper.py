@@ -9,7 +9,6 @@ All HTTP fetches are mocked — no network calls.
 
 from __future__ import annotations
 
-from typing import Optional
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -80,7 +79,7 @@ class TestParseUrlset:
     def test_extracts_all_locs(self) -> None:
         import xml.etree.ElementTree as ET
 
-        root = ET.fromstring(_URLSET_XML)
+        root = ET.fromstring(_URLSET_XML)  # nosec B314 - test code uses controlled/trusted XML data
         urls = _parse_urlset(root)
         assert urls == ["https://example.com/", "https://example.com/about", "https://example.com/contact"]
 
@@ -88,7 +87,7 @@ class TestParseUrlset:
         import xml.etree.ElementTree as ET
 
         xml = '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"></urlset>'
-        root = ET.fromstring(xml)
+        root = ET.fromstring(xml)  # nosec B314 - test code uses controlled/trusted XML data
         assert _parse_urlset(root) == []
 
 
@@ -96,7 +95,7 @@ class TestParseSitemapindex:
     def test_extracts_child_locs(self) -> None:
         import xml.etree.ElementTree as ET
 
-        root = ET.fromstring(_SITEMAPINDEX_XML)
+        root = ET.fromstring(_SITEMAPINDEX_XML)  # nosec B314 - test code uses controlled/trusted XML data
         locs = _parse_sitemapindex(root)
         assert locs == [
             "https://example.com/sitemap-posts.xml",
@@ -148,7 +147,7 @@ class TestResolveSitemapUrls:
     async def test_sitemapindex_recurses_one_level(self) -> None:
         """sitemapindex fetches child sitemaps and merges their URLs."""
 
-        async def _fake_fetch_xml(url: str) -> Optional[str]:
+        async def _fake_fetch_xml(url: str) -> str | None:
             if url.endswith("sitemap.xml"):
                 return _SITEMAPINDEX_XML
             return _CHILD_SITEMAP_XML  # both children return same content for simplicity

@@ -21,11 +21,13 @@ from typing import Any, List, Tuple
 
 import pytest
 
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 from conversation_file_manager import ConversationFileManager
 
 # Configure logging for tests
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # Issue #618: Helper to run blocking sqlite3 queries in async context
@@ -657,10 +659,10 @@ class TestErrorHandling:
         # Override schema directory via environment variable
         import os
 
-        original_env = os.environ.get("AUTOBOT_SCHEMA_DIR")
+        original_env = config.schema_dir
 
         try:
-            os.environ["AUTOBOT_SCHEMA_DIR"] = str(invalid_schema_dir)
+            config.schema_dir = str(invalid_schema_dir)
 
             # Initialization should fail
             with pytest.raises(RuntimeError) as exc_info:
@@ -693,9 +695,9 @@ class TestErrorHandling:
         finally:
             # Restore environment
             if original_env is not None:
-                os.environ["AUTOBOT_SCHEMA_DIR"] = original_env
+                config.schema_dir = original_env
             elif "AUTOBOT_SCHEMA_DIR" in os.environ:
-                del os.environ["AUTOBOT_SCHEMA_DIR"]
+                del config.schema_dir
 
         logger.info("=== Test 1.8: PASSED ===\n")
 

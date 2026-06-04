@@ -9,20 +9,20 @@ Used in multi_company and provider deployment modes.
 """
 
 import asyncio
-import logging
 import re
 import uuid
-from typing import List, Optional
+from typing import List
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
 from user_management.models import Organization, Team, User
 from user_management.models.audit import AuditAction, AuditLog, AuditResourceType
 from user_management.services.base_service import BaseService, TenantContext
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class OrganizationServiceError(Exception):
@@ -49,7 +49,7 @@ class OrganizationService(BaseService):
     quota management for provider mode.
     """
 
-    def __init__(self, session: AsyncSession, context: Optional[TenantContext] = None):
+    def __init__(self, session: AsyncSession, context: TenantContext | None = None):
         """Initialize organization service."""
         super().__init__(session, context)
 
@@ -60,9 +60,9 @@ class OrganizationService(BaseService):
     async def create_organization(
         self,
         name: str,
-        slug: Optional[str] = None,
-        description: Optional[str] = None,
-        settings: Optional[dict] = None,
+        slug: str | None = None,
+        description: str | None = None,
+        settings: dict | None = None,
         subscription_tier: str = "free",
         max_users: int = -1,
     ) -> Organization:
@@ -106,7 +106,7 @@ class OrganizationService(BaseService):
         logger.info("Created organization: %s (id=%s, slug=%s)", name, org.id, slug)
         return org
 
-    async def get_organization(self, org_id: uuid.UUID) -> Optional[Organization]:
+    async def get_organization(self, org_id: uuid.UUID) -> Organization | None:
         """
         Get organization by ID.
 
@@ -121,7 +121,7 @@ class OrganizationService(BaseService):
         )
         return result.scalar_one_or_none()
 
-    async def get_organization_by_slug(self, slug: str) -> Optional[Organization]:
+    async def get_organization_by_slug(self, slug: str) -> Organization | None:
         """
         Get organization by slug.
 
@@ -143,7 +143,7 @@ class OrganizationService(BaseService):
         limit: int = 50,
         offset: int = 0,
         include_inactive: bool = False,
-        search: Optional[str] = None,
+        search: str | None = None,
     ) -> tuple[List[Organization], int]:
         """
         List organizations with pagination.
@@ -189,11 +189,11 @@ class OrganizationService(BaseService):
     async def update_organization(
         self,
         org_id: uuid.UUID,
-        name: Optional[str] = None,
-        description: Optional[str] = None,
-        settings: Optional[dict] = None,
-        subscription_tier: Optional[str] = None,
-        max_users: Optional[int] = None,
+        name: str | None = None,
+        description: str | None = None,
+        settings: dict | None = None,
+        subscription_tier: str | None = None,
+        max_users: int | None = None,
     ) -> Organization:
         """
         Update organization.
@@ -398,7 +398,7 @@ class OrganizationService(BaseService):
     # Private Helpers
     # -------------------------------------------------------------------------
 
-    async def _validate_and_prepare_slug(self, name: str, slug: Optional[str]) -> str:
+    async def _validate_and_prepare_slug(self, name: str, slug: str | None) -> str:
         """
         Validate slug uniqueness and generate if not provided.
 
@@ -426,8 +426,8 @@ class OrganizationService(BaseService):
         self,
         name: str,
         slug: str,
-        description: Optional[str],
-        settings: Optional[dict],
+        description: str | None,
+        settings: dict | None,
         subscription_tier: str,
         max_users: int,
     ) -> Organization:
@@ -461,11 +461,11 @@ class OrganizationService(BaseService):
     def _apply_organization_updates(
         self,
         org: Organization,
-        name: Optional[str],
-        description: Optional[str],
-        settings: Optional[dict],
-        subscription_tier: Optional[str],
-        max_users: Optional[int],
+        name: str | None,
+        description: str | None,
+        settings: dict | None,
+        subscription_tier: str | None,
+        max_users: int | None,
     ) -> dict:
         """
         Apply field updates to organization and track changes.
@@ -525,8 +525,8 @@ class OrganizationService(BaseService):
         self,
         action: str,
         resource_type: str,
-        resource_id: Optional[uuid.UUID],
-        org_id: Optional[uuid.UUID],
+        resource_id: uuid.UUID | None,
+        org_id: uuid.UUID | None,
         details: dict,
         outcome: str = "success",
     ) -> None:

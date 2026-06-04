@@ -190,6 +190,14 @@
         src: "{{ network_subnet | default('0.0.0.0/0', true) }}"
         comment: "noVNC websockify - internal only"
 
+    - name: "Allow RDP port (3389) from internal subnet (GH#1525)"
+      community.general.ufw:
+        rule: allow
+        port: "3389"
+        proto: tcp
+        src: "{{ network_subnet | default('0.0.0.0/0', true) }}"
+        comment: "xrdp RDP server - internal only"
+
     - name: "Enable UFW with deny-incoming default"
       community.general.ufw:
         state: enabled

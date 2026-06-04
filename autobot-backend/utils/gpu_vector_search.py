@@ -17,20 +17,25 @@ Issue #387: GPU-Accelerated Vector Search Implementation
 """
 
 import asyncio
-import logging
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 import numpy as np
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.missing_dep import MissingDep as _MissingDep
 from knowledge.backends import BaseClient, BaseCollection
+from knowledge.hnsw_prefetch import attach_prefetcher
 from utils.async_initializable import AsyncInitializable
 
+# FAISS and ChromaDB are imported as whole-module objects (faiss.IndexFlatL2(),
+# faiss.StandardGpuResources(), etc.) so optional_import() — which extracts
+# individual symbols — cannot replace these blocks without refactoring all
+# 15+ call sites.  MissingDep is applied at the module level below instead.
 # FAISS import with graceful fallback
 try:
     import faiss
@@ -55,7 +60,7 @@ except ImportError as _e:
     CHROMADB_AVAILABLE = False
     chromadb = _MissingDep("chromadb", _e)  # type: ignore[assignment]
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class IndexType(Enum):
@@ -66,6 +71,7 @@ class IndexType(Enum):
     IVF_FLAT = "ivf_flat"  # Inverted file index, faster for large datasets
     IVF_PQ = "ivf_pq"  # Product quantization, memory efficient
     HNSW = "hnsw"  # Hierarchical NSW, good recall/speed tradeoff
+    SQ8 = "sq8"  # Issue #8155: Scalar Quantization 8-bit — 4× memory reduction, <1% recall loss
 
 
 class SearchBackend(Enum):
@@ -94,8 +100,15 @@ class VectorSearchConfig:
     batch_size: int = 1000
     max_vectors_in_memory: int = 1_000_000
 
+    # IVFPQ settings (for collections > 100K vectors)
+    ivfpq_m_pq: int = 96  # sub-vectors for PQ (dim/8)
+    ivfpq_nbits: int = 8  # bits per sub-code
+    ivfpq_nprobe: int = 64  # cells to probe at search time
+    ivfpq_index_dir: str = "/tmp/autobot_faiss_indexes"  # nosec B108 - test/controlled code uses tmpdir intentionally
+    ivfpq_min_vectors: int = 100_000  # threshold to activate IVFPQ
+
     # Persistence
-    index_path: Optional[str] = None
+    index_path: str | None = None
     auto_save: bool = True
     save_interval_seconds: int = 300
 
@@ -108,7 +121,7 @@ class SearchResult:
     score: float
     distance: float
     metadata: Dict[str, Any] = field(default_factory=dict)
-    content: Optional[str] = None
+    content: str | None = None
 
 
 @dataclass
@@ -134,17 +147,18 @@ class GPUVectorIndex:
     def __init__(self, config: VectorSearchConfig):
         """Initialize GPU vector index."""
         self.config = config
-        self.index: Optional[Any] = None
-        self.gpu_resources: Optional[Any] = None
+        self.index: Any | None = None
+        self.gpu_resources: Any | None = None
         self.id_map: Dict[int, str] = {}  # FAISS internal ID → document ID
         self.reverse_id_map: Dict[str, int] = {}  # document ID → FAISS internal ID
         self.next_id: int = 0
         self.is_trained: bool = False
         self._lock = asyncio.Lock()
+        self._hnsw_prefetcher: Any | None = None  # Issue #8161: HNSW prefetch
 
         # Backend tracking
         self.backend = SearchBackend.CHROMADB  # Default fallback
-        self.last_save_time: Optional[datetime] = None
+        self.last_save_time: datetime | None = None
 
     async def initialize(self) -> bool:
         """Initialize the FAISS index with GPU support if available."""
@@ -240,15 +254,27 @@ class GPUVectorIndex:
 
         elif self.config.index_type == IndexType.IVF_PQ:
             quantizer = faiss.IndexFlatIP(dim)
-            # PQ with 8 sub-quantizers
-            index = faiss.IndexIVFPQ(quantizer, dim, self.config.nlist, 8, 8)
+            index = faiss.IndexIVFPQ(
+                quantizer,
+                dim,
+                self.config.nlist,
+                self.config.ivfpq_m_pq,
+                self.config.ivfpq_nbits,
+            )
             return index
 
         elif self.config.index_type == IndexType.HNSW:
             index = faiss.IndexHNSWFlat(dim, 32)  # 32 neighbors
             index.hnsw.efConstruction = 200
             index.hnsw.efSearch = 64
+            # Issue #8161: attach prefetcher after index creation
+            self._hnsw_prefetcher = attach_prefetcher(index)
             return index
+
+        elif self.config.index_type == IndexType.SQ8:
+            # Issue #8155: Scalar Quantization 8-bit — 4× memory reduction vs float32.
+            # Uses inner-product metric (cosine after L2-norm) matching FLAT_IP behaviour.
+            return faiss.IndexScalarQuantizer(dim, faiss.ScalarQuantizer.QT_8bit, faiss.METRIC_INNER_PRODUCT)
 
         else:
             # Default to flat IP
@@ -398,7 +424,7 @@ class GPUVectorIndex:
             # Convert distance to similarity score
             # For IP (inner product), higher is better
             # For L2, lower is better - convert to similarity
-            if self.config.index_type in (IndexType.FLAT_IP, IndexType.IVF_FLAT):
+            if self.config.index_type in (IndexType.FLAT_IP, IndexType.IVF_FLAT, IndexType.SQ8):
                 score = float(dist)  # Already similarity
             else:
                 score = 1.0 / (1.0 + float(dist))  # Convert L2 distance to similarity
@@ -444,8 +470,17 @@ class GPUVectorIndex:
         if hasattr(self.index, "nprobe"):
             self.index.nprobe = self.config.nprobe
 
+        # Issue #8161: warm HNSW entry-point neighbor lists before traversal
+        if self._hnsw_prefetcher is not None:
+            self._hnsw_prefetcher.warmup_entry_point()
+
         # Execute search
         distances, indices = await asyncio.to_thread(self.index.search, query, top_k)
+
+        # Issue #8161: speculatively prefetch level-0 neighbors of top results
+        if self._hnsw_prefetcher is not None:
+            valid_ids = [int(i) for i in indices[0] if i >= 0]
+            self._hnsw_prefetcher.speculative_prefetch(valid_ids)
 
         # Issue #620: Use helper for result conversion
         results = self._convert_search_results(distances, indices)
@@ -506,7 +541,7 @@ class GPUVectorIndex:
 
                 doc_id = self.id_map.get(idx, f"unknown_{idx}")
 
-                if self.config.index_type in (IndexType.FLAT_IP, IndexType.IVF_FLAT):
+                if self.config.index_type in (IndexType.FLAT_IP, IndexType.IVF_FLAT, IndexType.SQ8):
                     score = float(dist)
                 else:
                     score = 1.0 / (1.0 + float(dist))
@@ -587,7 +622,7 @@ class GPUVectorIndex:
 
         return removed
 
-    async def save(self, path: Optional[str] = None) -> bool:
+    async def save(self, path: str | None = None) -> bool:
         """Save index to disk."""
         save_path = path or self.config.index_path
         if not save_path:
@@ -679,7 +714,7 @@ class GPUVectorIndex:
         self.reverse_id_map = {v: int(k) for k, v in raw_map.items()}
         self.next_id = max(self.id_map.keys()) + 1 if self.id_map else 0
 
-    async def load(self, path: Optional[str] = None) -> bool:
+    async def load(self, path: str | None = None) -> bool:
         """Load index from disk."""
         load_path = path or self.config.index_path
         if not load_path:
@@ -751,14 +786,17 @@ class HybridVectorSearch(AsyncInitializable):
 
     def __init__(
         self,
-        chromadb_client: Optional[BaseClient] = None,
-        config: Optional[VectorSearchConfig] = None,
+        chromadb_client: BaseClient | None = None,
+        config: VectorSearchConfig | None = None,
     ):
         """Initialize hybrid search; FAISS/GPU init is deferred to _initialize_impl."""
         super().__init__(component_name="hybrid_vector_search")
         self.chromadb = chromadb_client
         self.config = config or VectorSearchConfig()
         self.gpu_index = GPUVectorIndex(self.config)
+        # Issue #8357: per-collection IVFPQ indexes built/loaded at startup for
+        # large collections (≥ ivfpq_min_vectors).
+        self._ivfpq_indexes: Dict[str, Any] = {}
 
     async def _initialize_impl(self) -> bool:
         """Initialize FAISS GPU/CPU index backend."""
@@ -769,14 +807,74 @@ class HybridVectorSearch(AsyncInitializable):
         else:
             logger.info("Hybrid Vector Search initialized (ChromaDB fallback)")
 
+        # Issue #8357: build or load IVFPQ indexes for each large collection.
+        if self.chromadb is not None and FAISS_AVAILABLE:
+            await self._init_ivfpq_indexes()
+
         return True
+
+    async def _init_ivfpq_indexes(self) -> None:
+        """Build or load a FAISSIVFPQBuilder index for each large ChromaDB collection.
+
+        Issue #8357: called once at startup.  For collections with a persisted
+        index the builder loads from disk (fast).  For new large collections it
+        trains and persists (slow, once).  Collections below ivfpq_min_vectors
+        are skipped — the flat/IVF FAISS index is sufficient.
+        """
+        from utils.faiss_ivfpq_builder import FAISSIVFPQBuilder
+
+        try:
+            collections = await asyncio.to_thread(self.chromadb.list_collections)
+        except Exception as exc:
+            logger.warning("IVFPQ startup: could not list collections (%s)", exc)
+            return
+
+        for coll in collections:
+            name = coll.name if hasattr(coll, "name") else str(coll)
+            try:
+                collection: BaseCollection = await asyncio.to_thread(self.chromadb.get_collection, name)
+                count = await asyncio.to_thread(collection.count)
+
+                if count < self.config.ivfpq_min_vectors:
+                    logger.debug(
+                        "IVFPQ startup: skipping %s (%d < %d vectors)",
+                        name,
+                        count,
+                        self.config.ivfpq_min_vectors,
+                    )
+                    continue
+
+                builder = FAISSIVFPQBuilder(
+                    dim=self.config.embedding_dim,
+                    index_dir=self.config.ivfpq_index_dir,
+                    collection_name=name,
+                )
+
+                # Try to load persisted index first; only fetch vectors when training.
+                index = await builder.load()
+                if index is None:
+                    all_data = await asyncio.to_thread(collection.get, include=["embeddings"])
+                    if all_data.get("embeddings"):
+                        vectors = np.array(all_data["embeddings"], dtype=np.float32)
+                        index = await builder.build_or_load(vectors)
+
+                if index is not None:
+                    self._ivfpq_indexes[name] = index
+                    logger.info(
+                        "IVFPQ startup: index ready for collection '%s' (%d vectors)",
+                        name,
+                        count,
+                    )
+
+            except Exception as exc:
+                logger.warning("IVFPQ startup: failed for collection '%s' (%s)", name, exc)
 
     async def add_documents(
         self,
         embeddings: np.ndarray,
         doc_ids: List[str],
-        documents: Optional[List[str]] = None,
-        metadatas: Optional[List[Dict[str, Any]]] = None,
+        documents: List[str] | None = None,
+        metadatas: List[Dict[str, Any]] | None = None,
         collection_name: str = "default",
     ) -> int:
         """
@@ -825,7 +923,7 @@ class HybridVectorSearch(AsyncInitializable):
         query_embedding: np.ndarray,
         top_k: int = 10,
         collection_name: str = "default",
-        metadata_filter: Optional[Dict[str, Any]] = None,
+        metadata_filter: Dict[str, Any] | None = None,
         include_documents: bool = True,
     ) -> Tuple[List[SearchResult], SearchMetrics]:
         """
@@ -887,7 +985,7 @@ class HybridVectorSearch(AsyncInitializable):
         self,
         results: List[SearchResult],
         collection_name: str,
-        metadata_filter: Optional[Dict[str, Any]] = None,
+        metadata_filter: Dict[str, Any] | None = None,
     ) -> List[SearchResult]:
         """Fetch document content and metadata from ChromaDB."""
         try:
@@ -968,7 +1066,7 @@ class HybridVectorSearch(AsyncInitializable):
         query_embedding: np.ndarray,
         top_k: int,
         collection_name: str,
-        metadata_filter: Optional[Dict[str, Any]] = None,
+        metadata_filter: Dict[str, Any] | None = None,
     ) -> Tuple[List[SearchResult], SearchMetrics]:
         """Fallback search using ChromaDB."""
         start_time = time.perf_counter()
@@ -1066,13 +1164,13 @@ class HybridVectorSearch(AsyncInitializable):
 
 
 # Singleton instance
-_hybrid_search: Optional[HybridVectorSearch] = None
+_hybrid_search: HybridVectorSearch | None = None
 _hybrid_search_lock = asyncio.Lock()
 
 
 async def get_hybrid_vector_search(
-    chromadb_client: Optional[BaseClient] = None,
-    config: Optional[VectorSearchConfig] = None,
+    chromadb_client: BaseClient | None = None,
+    config: VectorSearchConfig | None = None,
 ) -> HybridVectorSearch:
     """
     Get or create the singleton hybrid vector search instance.

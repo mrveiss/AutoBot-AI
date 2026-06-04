@@ -39,7 +39,7 @@ _SYNTHETIC_USER = {"username": "test", "role": "user"}
 
 def _make_mock_registry(content: str = "Hello from AutoBot", models: list = None):
     """Return a mocked ProviderRegistry with one provider."""
-    from llm_interface_pkg.models import LLMResponse
+    from llm_shared.models import LLMResponse
 
     models = models or ["autobot-model-1"]
 
@@ -59,7 +59,7 @@ def _make_mock_registry(content: str = "Hello from AutoBot", models: list = None
         yield "Hello "
         yield "from AutoBot"
 
-    mock_provider.stream_completion = MagicMock(side_effect=lambda r: _fake_stream(r))
+    mock_provider.stream_completion = _fake_stream
     mock_provider.list_models = AsyncMock(return_value=models)
 
     mock_registry = MagicMock()
@@ -105,6 +105,60 @@ async def test_chat_completions_non_streaming_returns_oai_shape():
     assert "Hello from AutoBot" in choice["message"]["content"]
     assert "usage" in data
     assert data["usage"]["total_tokens"] >= 0
+
+
+@pytest.mark.asyncio
+async def test_non_streaming_usage_omits_cost_usd():
+    """Non-streaming usage object must NOT include cost_usd (GH#7639 / MVA-202).
+
+    Strict OAI clients (LiteLLM, openai-python strict mode) reject unknown fields.
+    cost_usd must be absent entirely when None, not serialized as null.
+    """
+    mock_registry = _make_mock_registry("Hello from AutoBot")
+
+    with (
+        patch("api.openai_compat.get_provider_registry", return_value=mock_registry),
+        patch("api.openai_compat._get_user", return_value=_SYNTHETIC_USER),
+    ):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            resp = await client.post(
+                "/v1/chat/completions",
+                json={
+                    "model": "autobot-model-1",
+                    "messages": [{"role": "user", "content": "Hi"}],
+                    "stream": False,
+                },
+            )
+
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert "usage" in data
+    assert "cost_usd" not in data["usage"], (
+        "cost_usd must be absent from the non-streaming usage object; " "strict OAI clients reject unknown fields"
+    )
+
+
+@pytest.mark.asyncio
+async def test_non_streaming_x_llm_cost_header_present_and_numeric():
+    """Non-streaming response must include x-llm-cost header with a numeric value."""
+    mock_registry = _make_mock_registry("Hello")
+
+    with (
+        patch("api.openai_compat.get_provider_registry", return_value=mock_registry),
+        patch("api.openai_compat._get_user", return_value=_SYNTHETIC_USER),
+        patch("api.openai_compat.get_cost_tracker") as mock_tracker,
+    ):
+        mock_tracker.return_value.calculate_cost.return_value = 0.00123
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            resp = await client.post(
+                "/v1/chat/completions",
+                json={"model": "autobot-model-1", "messages": [{"role": "user", "content": "Hi"}], "stream": False},
+            )
+
+    assert resp.status_code == 200
+    assert "x-llm-cost" in resp.headers, "x-llm-cost header must be present"
+    cost = float(resp.headers["x-llm-cost"])
+    assert cost > 0, "x-llm-cost must be a positive float"
 
 
 @pytest.mark.asyncio
@@ -167,15 +221,22 @@ async def test_chat_completions_streaming_returns_sse_done():
         assert "choices" in chunk
 
 
-def _stream_post(payload):
+def _stream_post(payload, *, mock_tracker=None):
     """Helper that issues the streaming POST and returns decoded SSE text."""
+    import contextlib
+
     mock_registry = _make_mock_registry()
 
     async def _run():
-        with (
+        patches = [
             patch("api.openai_compat.get_provider_registry", return_value=mock_registry),
             patch("api.openai_compat._get_user", return_value=_SYNTHETIC_USER),
-        ):
+        ]
+        if mock_tracker is not None:
+            patches.append(patch("api.openai_compat.get_cost_tracker", return_value=mock_tracker))
+        with contextlib.ExitStack() as stack:
+            for p in patches:
+                stack.enter_context(p)
             async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
                 async with client.stream("POST", "/v1/chat/completions", json=payload) as response:
                     assert response.status_code == 200
@@ -243,3 +304,57 @@ async def test_streaming_omits_usage_when_stream_options_absent():
     )()
     chunks = _parse_sse_chunks(text)
     assert all(c.get("usage") is None for c in chunks)
+
+
+@pytest.mark.asyncio
+async def test_streaming_cost_chunk_is_valid_chat_completion_chunk():
+    """Cost SSE chunk must be a valid ChatCompletionChunk, not a bare dict (#7610)."""
+    mock_tracker = MagicMock()
+    mock_tracker.calculate_cost = MagicMock(return_value=0.00123)
+
+    text = await _stream_post(
+        {
+            "model": "autobot-model-1",
+            "messages": [{"role": "user", "content": "Hi"}],
+            "stream": True,
+        },
+        mock_tracker=mock_tracker,
+    )()
+
+    assert "data: [DONE]" in text
+    chunks = _parse_sse_chunks(text)
+    # Every chunk must have the required ChatCompletionChunk fields
+    for chunk in chunks:
+        assert chunk.get("object") == "chat.completion.chunk", f"Invalid chunk: {chunk}"
+        assert "choices" in chunk, f"Missing 'choices' in chunk: {chunk}"
+        assert "id" in chunk, f"Missing 'id' in chunk: {chunk}"
+        assert "model" in chunk, f"Missing 'model' in chunk: {chunk}"
+    # The cost chunk (choices=[]) must carry cost_usd in usage
+    cost_chunks = [c for c in chunks if c.get("usage") and c["usage"].get("cost_usd") is not None]
+    assert len(cost_chunks) == 1, "Expected exactly one chunk with cost_usd in usage"
+    assert cost_chunks[0]["usage"]["cost_usd"] == pytest.approx(0.00123)
+
+
+@pytest.mark.asyncio
+async def test_streaming_cost_embedded_in_usage_chunk_when_include_usage_true():
+    """When include_usage=true and cost>0, cost_usd must appear in the usage chunk (#7610)."""
+    mock_tracker = MagicMock()
+    mock_tracker.calculate_cost = MagicMock(return_value=0.005)
+
+    text = await _stream_post(
+        {
+            "model": "autobot-model-1",
+            "messages": [{"role": "user", "content": "Hello"}],
+            "stream": True,
+            "stream_options": {"include_usage": True},
+        },
+        mock_tracker=mock_tracker,
+    )()
+
+    chunks = _parse_sse_chunks(text)
+    usage_chunks = [c for c in chunks if c.get("usage") is not None]
+    assert len(usage_chunks) == 1, "Expected exactly one chunk with usage"
+    usage = usage_chunks[0]["usage"]
+    assert usage["prompt_tokens"] >= 1
+    assert usage["total_tokens"] == usage["prompt_tokens"] + usage["completion_tokens"]
+    assert usage.get("cost_usd") == pytest.approx(0.005)

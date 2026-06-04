@@ -8,16 +8,16 @@ Base interface for pluggable execution backends supporting local, Docker, SSH, a
 Provides unified API for task execution with resource limits, health checks, and result capture.
 """
 
-import logging
 from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Tuple
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ExecutionStatus(str, Enum):
@@ -47,7 +47,7 @@ class ResourceLimits:
     cpu_cores: float = 1.0
     memory_mb: int = 512
     timeout_seconds: int = 300
-    disk_mb: Optional[int] = None
+    disk_mb: int | None = None
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
@@ -64,8 +64,8 @@ class ExecutionResult:
     stderr: str = ""
     return_code: int = 0
     execution_time_ms: float = 0.0
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
     backend_type: str = ""
     metadata: Dict[str, Any] = field(default_factory=dict)
 
@@ -88,10 +88,10 @@ class ExecutionTask:
     language: str = "python"
     env_vars: Dict[str, str] = field(default_factory=dict)
     resource_limits: ResourceLimits = field(default_factory=ResourceLimits)
-    timeout_seconds: Optional[int] = None
+    timeout_seconds: int | None = None
     metadata: Dict[str, Any] = field(default_factory=dict)
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate and normalize task."""
         if not self.task_id:
             raise ValueError("task_id is required")
@@ -105,7 +105,7 @@ class ExecutionTask:
 class ExecutionBackend(ABC):
     """Abstract base class for execution backends (Issue #4343)."""
 
-    def __init__(self, backend_type: BackendType):
+    def __init__(self, backend_type: BackendType) -> None:
         """Initialize backend with type.
 
         Args:
@@ -181,3 +181,72 @@ class ExecutionBackend(ABC):
             "healthy": self._health_status,
             "last_health_check": self._last_health_check.isoformat(),
         }
+
+    async def snapshot(self, container_id: str, session_id: str = "", user_id: str = "") -> Any:
+        """Create a snapshot of an execution environment.
+
+        Args:
+            container_id: ID or name of the execution environment to snapshot.
+            session_id: Optional identifier for the agent session.
+            user_id: ID of the authenticated user creating the snapshot.
+                When non-empty, enables ownership validation on restore/delete.
+
+        Returns:
+            Backend-specific snapshot record with snapshot_id and metadata.
+
+        Raises:
+            NotImplementedError: If this backend does not support snapshots.
+            RuntimeError: If snapshot creation fails.
+        """
+        raise NotImplementedError(f"{self.backend_type.value} backend does not support snapshots")
+
+    async def restore(self, snapshot_id: str, caller_user_id: str) -> str:
+        """Restore an execution environment from a snapshot.
+
+        Args:
+            snapshot_id: ID returned by a prior snapshot() call.
+            caller_user_id: ID of the user requesting restore.
+                Must match the snapshot's user_id when ownership validation is enabled.
+
+        Returns:
+            ID of the restored execution environment.
+
+        Raises:
+            NotImplementedError: If this backend does not support snapshots.
+            KeyError: If snapshot_id is not found.
+            PermissionError: If caller_user_id does not own the snapshot.
+            RuntimeError: If restore fails.
+        """
+        raise NotImplementedError(f"{self.backend_type.value} backend does not support snapshots")
+
+    async def delete_snapshot(self, snapshot_id: str, caller_user_id: str) -> bool:
+        """Delete a snapshot and its associated resources.
+
+        Args:
+            snapshot_id: ID returned by a prior snapshot() call.
+            caller_user_id: ID of the user requesting deletion.
+                Must match the snapshot's user_id when ownership validation is enabled.
+
+        Returns:
+            True if the snapshot was found and removed, False if not found.
+
+        Raises:
+            NotImplementedError: If this backend does not support snapshots.
+            PermissionError: If caller_user_id does not own the snapshot.
+        """
+        raise NotImplementedError(f"{self.backend_type.value} backend does not support snapshots")
+
+    async def get_snapshots_for_session(self, session_id: str) -> list:
+        """List all snapshots for a given session.
+
+        Args:
+            session_id: Session identifier to query snapshots for.
+
+        Returns:
+            List of backend-specific snapshot records for the session.
+            Returns empty list if no snapshots found.
+
+        Raises:
+            NotImplementedError: If this backend does not support snapshots.
+        """
+        raise NotImplementedError(f"{self.backend_type.value} backend does not support snapshots")

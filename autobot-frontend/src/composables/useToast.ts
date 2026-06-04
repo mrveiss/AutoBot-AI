@@ -47,8 +47,12 @@ export interface UseToastReturn {
   clearAllToasts: () => void
 }
 
-/** Maximum number of toasts displayed simultaneously (oldest evicted first). */
-export const MAX_TOASTS = 5
+/**
+ * Maximum number of toasts displayed simultaneously (Miller's Law — MVA-347).
+ * Oldest Tier A/B toast is evicted when the stack is full.
+ * Tier C (persistent error) toasts are never auto-evicted.
+ */
+export const MAX_TOASTS = 3
 
 /**
  * Default auto-dismiss durations per toast type (ms).
@@ -57,12 +61,18 @@ export const MAX_TOASTS = 5
 export const TOAST_DURATIONS: Record<ToastType, number> = {
   success: 4000,
   info: 4000,
-  warning: 4000,
+  warning: 6000,  // canonical: extra reading time for warnings
   error: 0,  // errors are persistent until manually dismissed
 }
 
 /** Injection key for provide/inject usage. */
 export const TOAST_INJECT_KEY: InjectionKey<UseToastReturn> = Symbol('useToast')
+
+/**
+ * Returns true for Tier C toasts: persistent errors that must never be
+ * auto-evicted to make room for lower-priority notifications.
+ */
+const isTierC = (t: Toast): boolean => t.type === 'error' && t.duration === 0
 
 // ============================================================
 // Module-level singleton state (shared across all instances
@@ -72,10 +82,28 @@ const _toasts = ref<Toast[]>([])
 let _nextId = 1
 
 function _buildApi(toasts: Ref<Toast[]>, idCounter: { value: number }): UseToastReturn {
+  // Toasts waiting for a visible slot; shown in FIFO order when a slot opens.
+  const pendingQueue: Toast[] = []
+
   const removeToast = (id: number): void => {
+    // Remove from visible stack.
     const index = toasts.value.findIndex((t) => t.id === id)
     if (index > -1) {
       toasts.value.splice(index, 1)
+      // Promote next queued toast now that a slot opened.
+      if (pendingQueue.length > 0) {
+        const next = pendingQueue.shift()!
+        toasts.value.push(next)
+        if (next.duration > 0) {
+          setTimeout(() => removeToast(next.id), next.duration)
+        }
+      }
+      return
+    }
+    // Also handle removal of a still-queued toast.
+    const queueIndex = pendingQueue.findIndex((t) => t.id === id)
+    if (queueIndex > -1) {
+      pendingQueue.splice(queueIndex, 1)
     }
   }
 
@@ -88,9 +116,16 @@ function _buildApi(toasts: Ref<Toast[]>, idCounter: { value: number }): UseToast
     const id = idCounter.value++
     const toast: Toast = { id, message, type, duration: resolvedDuration }
 
-    // Enforce maximum stack size — evict the oldest toast when full.
     if (toasts.value.length >= MAX_TOASTS) {
-      toasts.value.splice(0, toasts.value.length - MAX_TOASTS + 1)
+      // Evict the oldest non-Tier-C toast to make room.
+      const evictIndex = toasts.value.findIndex((t) => !isTierC(t))
+      if (evictIndex !== -1) {
+        toasts.value.splice(evictIndex, 1)
+      } else {
+        // All visible slots are Tier C — queue until the user dismisses one.
+        pendingQueue.push(toast)
+        return id
+      }
     }
 
     toasts.value.push(toast)
@@ -106,6 +141,7 @@ function _buildApi(toasts: Ref<Toast[]>, idCounter: { value: number }): UseToast
 
   const clearAllToasts = (): void => {
     toasts.value.splice(0)
+    pendingQueue.splice(0)
   }
 
   return { toasts, showToast, removeToast, clearAllToasts }

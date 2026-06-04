@@ -10,14 +10,9 @@
         aria-hidden="true"
       ></div>
 
-      <!-- Chat Sidebar with Unified Loading -->
+      <!-- Chat Sidebar -->
       <!-- Desktop: inline. Mobile: fixed overlay when showMobileSidebar is true -->
-      <UnifiedLoadingView
-        :has-content="store.sessions.length > 0"
-        :timeout-ms="10000"
-        @loading-complete="handleSidebarLoadingComplete"
-        @loading-error="handleSidebarLoadingError"
-        @loading-timeout="handleSidebarLoadingTimeout"
+      <div
         :class="[
           'sidebar-loading-view h-full shrink-0',
           'hidden lg:block',
@@ -25,7 +20,7 @@
         ]"
       >
         <ChatSidebar />
-      </UnifiedLoadingView>
+      </div>
 
       <!-- Mobile Sidebar Overlay -->
       <Transition
@@ -54,31 +49,38 @@
           :session-info="sessionInfo"
           :connection-status="connectionStatus"
           :is-connected="isConnected"
+          :context-window-props="contextWindowProps"
           @export-session="exportSession"
           @clear-session="clearSession"
           @toggle-mobile-sidebar="showMobileSidebar = !showMobileSidebar"
+          @open-settings="showChatSettings = true"
           class="shrink-0"
         >
           <!-- File Panel Toggle Button (injected into header) -->
           <template #actions>
-            <!-- Voice Output Toggle (#928) -->
-            <button
-              @click="toggleVoiceOutput"
-              class="header-btn"
-              :class="{ 'bg-electric-100 text-electric-600': voiceOutputEnabled }"
-              :title="voiceOutputEnabled ? $t('chat.interface.voiceOutputOn') : $t('chat.interface.voiceOutputOff')"
-            >
-              <i :class="isSpeaking ? 'fas fa-volume-up animate-pulse' : voiceOutputEnabled ? 'fas fa-volume-up' : 'fas fa-volume-mute'"></i>
-            </button>
-            <!-- Voice Conversation (#1029) -->
-            <button
-              @click="openVoiceConversation"
-              class="header-btn"
-              :class="{ 'bg-electric-100 text-electric-600': showVoiceOverlay || showVoicePanel }"
-              :title="$t('chat.interface.voiceChat')"
-            >
-              <i class="fas fa-headset"></i>
-            </button>
+            <!-- Voice controls group (GH#8755): proximity grouping for audio actions -->
+            <div role="group" aria-label="Voice controls" class="header-btn-group">
+              <!-- Voice Output Toggle (#928) -->
+              <button
+                @click="toggleVoiceOutput"
+                class="header-btn"
+                :class="{ 'bg-electric-100 text-electric-600': voiceOutputEnabled }"
+                :title="voiceOutputEnabled ? $t('chat.interface.voiceOutputOn') : $t('chat.interface.voiceOutputOff')"
+              >
+                <Icon :name="isSpeaking || voiceOutputEnabled ? 'volume-up' : 'volume-mute'" :class="isSpeaking ? 'animate-pulse' : ''" />
+              </button>
+              <!-- Voice Conversation (#1029) -->
+              <button
+                @click="openVoiceConversation"
+                class="header-btn"
+                :class="{ 'bg-electric-100 text-electric-600': showVoiceOverlay || showVoicePanel }"
+                :title="$t('chat.interface.voiceChat')"
+              >
+                <Icon name="headset" />
+              </button>
+            </div>
+            <!-- Divider between voice group and utility actions -->
+            <div class="header-btn-divider" aria-hidden="true"></div>
             <button
               v-if="store.currentSessionId"
               @click="toggleFilePanel"
@@ -86,7 +88,7 @@
               :class="{ 'bg-electric-100 text-electric-600': showFilePanel }"
               :title="$t('chat.interface.toggleFilePanel')"
             >
-              <i class="fas fa-paperclip"></i>
+              <Icon name="paperclip" />
             </button>
             <!-- Issue #4414: multi-model comparison toggle -->
             <button
@@ -96,7 +98,7 @@
               :title="$t('chat.compare.toggleTitle')"
               :aria-pressed="showComparePanel"
             >
-              <i class="fas fa-columns" aria-hidden="true"></i>
+              <Icon name="columns" />
             </button>
           </template>
         </ChatHeader>
@@ -109,14 +111,7 @@
         />
 
         <!-- Scrollable Content Area (Header scrolls away, input stays) -->
-        <UnifiedLoadingView
-          :has-content="store.currentMessages.length > 0"
-          :timeout-ms="15000"
-          @loading-complete="handleContentLoadingComplete"
-          @loading-error="handleContentLoadingError"
-          @loading-timeout="handleContentLoadingTimeout"
-          class="flex-1 min-h-0 flex flex-col overflow-hidden"
-        >
+        <div class="flex-1 min-h-0 flex flex-col overflow-hidden">
           <!-- Issue #3232: Live reasoning trace panel above the chat input -->
           <ReasoningTrace
             v-if="activeTab === 'chat'"
@@ -136,7 +131,7 @@
             @tool-call-detected="handleToolCallDetected"
             @vision-send-to-chat="handleVisionSendToChat"
           />
-        </UnifiedLoadingView>
+        </div>
       </div>
 
       <!-- Right side panels (mutually exclusive) -->
@@ -196,7 +191,7 @@
       >
         <div class="tool-approval-dialog">
           <div class="tool-approval-header">
-            <i class="fas fa-shield-exclamation" aria-hidden="true"></i>
+            <Icon name="shield-alt" />
             <h3>{{ $t('chat.interface.toolApprovalTitle') }}</h3>
           </div>
           <div class="tool-approval-body">
@@ -234,7 +229,7 @@
               :disabled="submittingApproval"
               @click="onToolDenied()"
             >
-              <i class="fas fa-times" aria-hidden="true"></i>
+              <Icon name="times" />
               {{ $t('chat.interface.toolApprovalDeny') }}
             </button>
             <button
@@ -242,7 +237,7 @@
               :disabled="submittingApproval"
               @click="onToolApproved()"
             >
-              <i class="fas fa-check" aria-hidden="true"></i>
+              <Icon name="check" />
               {{ submittingApproval ? $t('chat.interface.toolApprovalSubmitting') : $t('chat.interface.toolApprovalApprove') }}
             </button>
           </div>
@@ -252,7 +247,7 @@
       <!-- Workflow Progress Widget -->
       <div v-if="showWorkflowProgress" class="workflow-progress-widget">
         <WorkflowProgressWidget
-          :workflow-id="currentWorkflowId"
+          :workflow-id="currentWorkflowId ?? undefined"
           @close="showWorkflowProgress = false"
         />
       </div>
@@ -263,10 +258,17 @@
       v-if="showVoiceOverlay"
       @close="showVoiceOverlay = false"
     />
+
+    <!-- Chat Settings Modal (MVA-2006) -->
+    <ChatSettingsModal
+      :show="showChatSettings"
+      @close="showChatSettings = false"
+    />
   </ErrorBoundary>
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted, onUnmounted, onActivated, onDeactivated, watch, provide } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -280,9 +282,12 @@ import { useVoiceConversation } from '@/composables/useVoiceConversation'
 import { useChatStore } from '@/stores/useChatStore'
 import { useChatController } from '@/models/controllers'
 import { useAppStore } from '@/stores/useAppStore'
-import { useToast } from '@/composables/useToast'
+import { useNotificationBus } from '@/composables/useNotificationBus'
 import { usePreferences } from '@/composables/usePreferences'
 import { useOverseerAgent } from '@/composables/useOverseerAgent'
+// GH#9062: migrated from useGlobalWebSocket — context events flow through
+// LiveEventManager (global channel), so useEventBus is the correct subscriber
+import { useEventBus } from '@/composables/useEventBus'
 import ApiClient from '@/utils/ApiClient'
 import batchApiService from '@/services/BatchApiService'
 // MIGRATED: Using AppConfig.js for better configuration management
@@ -296,7 +301,6 @@ const logger = createLogger('ChatInterface')
 
 // Components
 import ErrorBoundary from '@/components/common/ErrorBoundary.vue'
-import UnifiedLoadingView from '@/components/ui/UnifiedLoadingView.vue'
 import ChatSidebar from './ChatSidebar.vue'
 import ChatHeader from './ChatHeader.vue'
 import ChatTabs from './ChatTabs.vue'
@@ -307,6 +311,7 @@ import CommandPermissionDialog from '@/components/ui/CommandPermissionDialog.vue
 import WorkflowProgressWidget from '@/components/workflow/WorkflowProgressWidget.vue'
 import VoiceConversationOverlay from './VoiceConversationOverlay.vue'
 import VoiceConversationPanel from './VoiceConversationPanel.vue'
+import ChatSettingsModal from './ChatSettingsModal.vue'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 // Issue #3232: chain-of-thought reasoning trace
 import ReasoningTrace from './ReasoningTrace.vue'
@@ -315,6 +320,8 @@ import { useReasoningTrace } from '@/composables/useReasoningTrace'
 import { useToolApproval, type PendingToolApproval } from '@/composables/useToolApproval'
 // Issue #4414: multi-model comparison
 import MultiModelChat from './MultiModelChat.vue'
+// GH#8990: context window usage indicator
+import { useContextWindow } from '@/composables/chat/useContextWindow'
 
 // i18n
 const { t } = useI18n()
@@ -334,6 +341,20 @@ const {
   isActive: cotIsActive,
   clear: cotClear,
 } = useReasoningTrace(store.currentSessionId)
+
+// GH#8990: context window usage indicator
+const _ctxWindow = useContextWindow(
+  computed(() => store.currentSession?.messages ?? []),
+  computed(() => store.settings.model),
+)
+const contextWindowProps = computed(() => ({
+  tokensUsed: _ctxWindow.tokensUsed.value,
+  contextWindow: _ctxWindow.contextWindow.value,
+  usagePercent: _ctxWindow.usagePercent.value,
+  isWarning: _ctxWindow.isWarning.value,
+  isCritical: _ctxWindow.isCritical.value,
+  hasData: _ctxWindow.hasData.value,
+}))
 
 // Issue #4952: agent-loop tool approval via POST /api/agent-terminal/tools/approve/{id}
 const {
@@ -422,7 +443,7 @@ const {
 const voiceConversation = useVoiceConversation()
 const showVoiceOverlay = ref(false)
 const showVoicePanel = ref(false)
-const { voiceDisplayMode } = usePreferences()
+const { voiceDisplayMode, contextOverflowMode } = usePreferences()
 
 function openVoiceConversation(): void {
   if (voiceDisplayMode.value === 'sidepanel') {
@@ -439,10 +460,49 @@ function closeVoicePanel(): void {
 }
 
 // Toast notifications
-const { showToast } = useToast()
+const { showToast } = useNotificationBus()
 const notify = (message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info') => {
-  showToast(message, type, type === 'error' ? 5000 : 3000)
+  showToast(message, type, type === 'error' ? 0 : type === 'warning' ? 6000 : 4000)
 }
+
+// MVA-2006: Context window overflow WebSocket listeners
+// GH#9062: migrated to useEventBus for channel-based event subscriptions
+const { subscribe } = useEventBus()
+const contextWarningShown = ref(false)
+
+// Listen for context_warning events (80% threshold)
+subscribe('global', (event) => {
+  if (event.event_type === 'context_warning') {
+    const data = event.payload as any
+    logger.debug('[ContextWindow] Warning event received:', data)
+
+    // Only show toast if mode is 'auto' or 'warn', and not already shown
+    if (contextOverflowMode.value !== 'disabled' && !contextWarningShown.value) {
+      const percent = data.usage_percent ?? _ctxWindow.usagePercent.value
+      notify(
+        t('chat.contextWindow.warningToast', { percent: percent.toFixed(1) }),
+        'warning'
+      )
+      contextWarningShown.value = true
+    }
+  } else if (event.event_type === 'context_compressed') {
+    const data = event.payload as any
+    logger.info('[ContextWindow] Context compressed:', data)
+
+    // Reset warning flag so next session can show it again
+    contextWarningShown.value = false
+
+    // Notify user that compression occurred
+    if (contextOverflowMode.value === 'auto') {
+      notify(t('chat.contextWindow.compressedToast'), 'info')
+    }
+  }
+})
+
+// Reset warning flag when session changes
+watch(() => store.currentSessionId, () => {
+  contextWarningShown.value = false
+})
 
 // Issue #4414: multi-model compare panel toggle
 const showComparePanel = ref(false)
@@ -454,6 +514,8 @@ const showWorkflowProgress = ref(false)
 const showFilePanel = ref(false)
 // Mobile sidebar overlay (#1804)
 const showMobileSidebar = ref(false)
+// Chat settings modal (MVA-2006)
+const showChatSettings = ref(false)
 
 // Dialog data
 const currentChatContext = ref<any>(null)
@@ -659,33 +721,6 @@ const clearSession = async () => {
       appStore.setGlobalError(t('chat.interface.failedToClear'))
     }
   }
-}
-
-// Unified loading event handlers
-const handleSidebarLoadingComplete = () => {
-  logger.debug('Sidebar loading completed')
-}
-
-const handleSidebarLoadingError = (error: any) => {
-  logger.error('Sidebar loading error:', error)
-  appStore.setGlobalError(t('chat.interface.failedToLoadSessions'))
-}
-
-const handleSidebarLoadingTimeout = () => {
-  logger.warn('Sidebar loading timed out')
-}
-
-const handleContentLoadingComplete = () => {
-  logger.debug('Content loading completed')
-}
-
-const handleContentLoadingError = (error: any) => {
-  logger.error('Content loading error:', error)
-  appStore.setGlobalError(t('chat.interface.failedToLoadContent'))
-}
-
-const handleContentLoadingTimeout = () => {
-  logger.warn('Content loading timed out')
 }
 
 // Tab change handler — updates local state and syncs URL to the named tab route (#6415)
@@ -1300,6 +1335,19 @@ function _extractCompleteSentences(text: string): string[] {
 /* Header button styling for file panel toggle */
 .header-btn {
   @apply w-8 h-8 flex items-center justify-center rounded-md transition-colors text-autobot-text-secondary hover:bg-autobot-bg-tertiary;
+}
+
+/* GH#8755: voice action group — subtle pill wraps related audio controls */
+.header-btn-group {
+  @apply flex items-center gap-0.5 rounded-md px-0.5;
+  background: var(--bg-tertiary);
+}
+
+/* GH#8755: vertical divider between voice group and utility buttons */
+.header-btn-divider {
+  @apply self-stretch my-1 mx-1;
+  width: 1px;
+  background: var(--border-light);
 }
 
 /* Agent-loop tool approval dialog (#4952) */

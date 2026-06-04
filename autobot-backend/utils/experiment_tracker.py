@@ -20,15 +20,15 @@ Usage:
 """
 
 import json
-import logging
 import time
 import uuid
 from dataclasses import asdict, dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 REDIS_KEY = "autobot:experiments"
 
@@ -45,7 +45,7 @@ class ExperimentRecord:
     result: str  # kept, discarded, inconclusive
     rationale: str
     timestamp: float = field(default_factory=time.time)
-    related_issue: Optional[str] = None
+    related_issue: str | None = None
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialize to dict for Redis storage."""
@@ -63,7 +63,7 @@ class ExperimentTracker:
         measurement: Dict[str, Any],
         result: str,
         rationale: str,
-        related_issue: Optional[str] = None,
+        related_issue: str | None = None,
     ) -> ExperimentRecord:
         """Log a new experiment."""
         record = ExperimentRecord(
@@ -83,7 +83,7 @@ class ExperimentTracker:
         logger.info("Experiment logged: %s -> %s", name, result)
         return record
 
-    async def list_experiments(self, area: Optional[str] = None) -> List[Dict[str, Any]]:
+    async def list_experiments(self, area: str | None = None) -> List[Dict[str, Any]]:
         """List all experiments, optionally filtered by area."""
         redis_client = await get_async_redis_client(database="analytics")
         if not redis_client:

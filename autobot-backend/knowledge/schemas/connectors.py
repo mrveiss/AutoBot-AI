@@ -15,6 +15,8 @@ class ConnectorTypeEntry(BaseModel):
 
     connector_type: str
     tier: int
+    # Issue #8147: JSONSchema describing ContentResult.metadata for this type.
+    output_schema: Dict[str, Any] = Field(default_factory=dict)
 
 
 class ConnectorTypesResponse(BaseModel):
@@ -33,11 +35,11 @@ class ConnectorStatusDict(BaseModel):
 
     connector_id: str
     is_healthy: bool
-    last_sync_at: Optional[str] = None
-    last_sync_status: Optional[str] = None
-    documents_indexed: Optional[int] = None
-    last_error: Optional[str] = None
-    scheduled: Optional[bool] = None
+    last_sync_at: str | None = None
+    last_sync_status: str | None = None
+    documents_indexed: int | None = None
+    last_error: str | None = None
+    scheduled: bool | None = None
 
 
 class ConnectorConfigDict(BaseModel):
@@ -51,12 +53,14 @@ class ConnectorConfigDict(BaseModel):
     config: Dict[str, Any]
     enabled: bool
     verification_mode: str
-    schedule_cron: Optional[str] = None
+    schedule_cron: str | None = None
     created_at: str
-    last_sync_at: Optional[str] = None
+    last_sync_at: str | None = None
     include_patterns: List[str]
     exclude_patterns: List[str]
     tier: int
+    # Issue #8148: max parallel source fetches for this connector instance.
+    max_concurrency: int | None = None
 
 
 class ConnectorEntry(BaseModel):
@@ -135,18 +139,26 @@ class ConnectorSyncResponse(BaseModel):
 
 
 class ConnectorHistoryEntry(BaseModel):
-    """Single history record stored per sync run."""
+    """Single history record stored per sync run.
+
+    Issue #8149: enriched with duration_seconds, source counters, and
+    structured per-source error list.
+    """
 
     model_config = ConfigDict(extra="allow")
 
     connector_id: str
     started_at: str
-    completed_at: Optional[str] = None
-    status: Optional[str] = None
-    added: Optional[int] = None
-    updated: Optional[int] = None
-    deleted: Optional[int] = None
-    errors: Optional[int] = None
+    completed_at: str | None = None
+    status: str | None = None
+    added: int | None = None
+    updated: int | None = None
+    deleted: int | None = None
+    # Issue #8149: was scalar error count; now structured list.
+    errors: List[str] | int | None = None
+    duration_seconds: float | None = None
+    sources_total: int | None = None
+    sources_done: int | None = None
 
 
 class ConnectorHistoryResponse(BaseModel):
@@ -159,6 +171,37 @@ class ConnectorHistoryResponse(BaseModel):
     total: int
 
 
+class ConnectorJobResponse(BaseModel):
+    """GET /knowledge_base/connectors/{connector_id}/job — in-flight job state.
+
+    Issue #8149: Returns 404 when no sync is currently in flight.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    connector_id: str
+    job_id: str
+    started_at: str
+    status: str  # "running" | "success" | "failed" | "partial"
+    sources_total: int
+    sources_done: int
+    sources_failed: int
+    worker_id: str
+    last_updated: str
+
+
+class ConnectorLeaderResponse(BaseModel):
+    """GET /knowledge_base/connectors/scheduler/leader.
+
+    Issue #8149: Returns the currently elected scheduler leader worker ID,
+    or leader=null when no leader holds the lease.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    leader: Optional[str] = None
+
+
 class CreateConnectorRequest(BaseModel):
     """Request body for POST /knowledge_base/connectors."""
 
@@ -167,18 +210,22 @@ class CreateConnectorRequest(BaseModel):
     config: Dict[str, Any] = Field(default_factory=dict)
     enabled: bool = True
     verification_mode: str = "collaborative"
-    schedule_cron: Optional[str] = None
+    schedule_cron: str | None = None
     include_patterns: List[str] = Field(default_factory=list)
     exclude_patterns: List[str] = Field(default_factory=list)
+    # Issue #8148: optional per-instance concurrency override (None = class default).
+    max_concurrency: int | None = None
 
 
 class UpdateConnectorRequest(BaseModel):
     """Request body for PUT /knowledge_base/connectors/{id}."""
 
-    name: Optional[str] = Field(None, min_length=1, max_length=128)
-    config: Optional[Dict[str, Any]] = None
-    enabled: Optional[bool] = None
-    verification_mode: Optional[str] = None
-    schedule_cron: Optional[str] = None
-    include_patterns: Optional[List[str]] = None
-    exclude_patterns: Optional[List[str]] = None
+    name: str | None = Field(None, min_length=1, max_length=128)
+    config: Dict[str, Any] | None = None
+    enabled: bool | None = None
+    verification_mode: str | None = None
+    schedule_cron: str | None = None
+    include_patterns: List[str] | None = None
+    exclude_patterns: List[str] | None = None
+    # Issue #8148: update per-instance concurrency without a full config replace.
+    max_concurrency: int | None = None

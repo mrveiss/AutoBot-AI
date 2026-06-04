@@ -44,6 +44,7 @@ class DatabaseService:
             max_overflow=settings.db_pool_max_overflow,
             pool_recycle=settings.db_pool_recycle,
             pool_pre_ping=True,  # Verify connections before use
+            connect_args={"timeout": 10},  # Prevent indefinite hang on DB unavailable (#7689)
         )
 
         self.session_factory = async_sessionmaker(

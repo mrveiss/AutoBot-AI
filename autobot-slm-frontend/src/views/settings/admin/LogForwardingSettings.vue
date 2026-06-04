@@ -282,7 +282,7 @@ onMounted(async () => {
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
       </svg>
       {{ error }}
-      <button @click="error = null" class="ml-auto text-red-500 hover:text-red-700">
+      <button @click="error = null" class="ml-auto text-red-500 hover:text-red-700" aria-label="Dismiss error">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
         </svg>
@@ -308,7 +308,7 @@ onMounted(async () => {
           ></div>
           <div>
             <h2 class="text-lg font-semibold text-gray-900">
-              Log Forwarding Service
+              {{ $t('settings.admin.logForwardingSettings.logForwardingService') }}
             </h2>
             <p class="text-sm text-gray-500">
               {{ status.running ? 'Service Running' : 'Service Stopped' }}
@@ -352,7 +352,7 @@ onMounted(async () => {
             <svg v-else class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            Test All
+            {{ $t('settings.admin.logForwardingSettings.testAll') }}
           </button>
 
           <button
@@ -370,19 +370,19 @@ onMounted(async () => {
       <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         <div class="p-4 bg-gray-50 rounded-lg text-center">
           <p class="text-2xl font-bold text-gray-900">{{ status.total_destinations }}</p>
-          <p class="text-sm text-gray-500">Total</p>
+          <p class="text-sm text-gray-500">{{ $t('settings.admin.logForwardingSettings.total') }}</p>
         </div>
         <div class="p-4 bg-green-50 rounded-lg text-center">
           <p class="text-2xl font-bold text-green-600">{{ status.healthy_destinations }}</p>
-          <p class="text-sm text-gray-500">Healthy</p>
+          <p class="text-sm text-gray-500">{{ $t('settings.admin.logForwardingSettings.healthy') }}</p>
         </div>
         <div class="p-4 bg-blue-50 rounded-lg text-center">
           <p class="text-2xl font-bold text-blue-600">{{ status.total_sent }}</p>
-          <p class="text-sm text-gray-500">Sent</p>
+          <p class="text-sm text-gray-500">{{ $t('settings.admin.logForwardingSettings.sent') }}</p>
         </div>
         <div class="p-4 bg-red-50 rounded-lg text-center">
           <p class="text-2xl font-bold text-red-600">{{ status.total_failed }}</p>
-          <p class="text-sm text-gray-500">Failed</p>
+          <p class="text-sm text-gray-500">{{ $t('settings.admin.logForwardingSettings.failed') }}</p>
         </div>
       </div>
 
@@ -397,14 +397,14 @@ onMounted(async () => {
           />
           <div class="w-11 h-6 bg-gray-200 peer-focus:outline-hidden peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
         </label>
-        <span class="text-sm text-gray-700">Auto-start on backend startup</span>
+        <span class="text-sm text-gray-700">{{ $t('settings.admin.logForwardingSettings.autoStartOnBackend') }}</span>
       </div>
     </div>
 
     <!-- Destinations -->
     <div class="bg-white rounded-lg shadow-xs border border-gray-200 overflow-hidden">
       <div class="p-4 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
-        <h3 class="font-semibold text-gray-900">Destinations</h3>
+        <h3 class="font-semibold text-gray-900">{{ $t('settings.admin.logForwardingSettings.destinations') }}</h3>
         <button
           @click="openAddModal"
           class="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 flex items-center gap-2"
@@ -412,7 +412,7 @@ onMounted(async () => {
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
           </svg>
-          Add Destination
+          {{ $t('settings.admin.logForwardingSettings.addDestination') }}
         </button>
       </div>
 
@@ -429,12 +429,12 @@ onMounted(async () => {
         <svg class="w-12 h-12 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" />
         </svg>
-        <p class="text-gray-500 mb-4">No log forwarding destinations configured</p>
+        <p class="text-gray-500 mb-4">{{ $t('settings.admin.logForwardingSettings.noLogForwardingDestinations') }}</p>
         <button
           @click="openAddModal"
           class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
         >
-          Add Your First Destination
+          {{ $t('settings.admin.logForwardingSettings.addYourFirstDestination') }}
         </button>
       </div>
 
@@ -511,7 +511,7 @@ onMounted(async () => {
           <h3 class="text-lg font-semibold text-gray-900">
             {{ editingDestination ? 'Edit Destination' : 'Add Destination' }}
           </h3>
-          <button @click="closeModal" class="text-gray-400 hover:text-gray-600">
+          <button @click="closeModal" class="text-gray-400 hover:text-gray-600" aria-label="Close">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
             </svg>
@@ -521,7 +521,7 @@ onMounted(async () => {
         <div class="p-6 space-y-4">
           <!-- Name -->
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Name *</label>
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.logForwardingSettings.name') }}</label>
             <input
               v-model="formData.name"
               type="text"
@@ -533,7 +533,7 @@ onMounted(async () => {
 
           <!-- Type -->
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Type *</label>
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.logForwardingSettings.type') }}</label>
             <select
               v-model="formData.type"
               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
@@ -548,7 +548,7 @@ onMounted(async () => {
           <template v-if="formData.type === 'syslog'">
             <div class="grid grid-cols-2 gap-4">
               <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Host *</label>
+                <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.logForwardingSettings.host') }}</label>
                 <input
                   v-model="formData.config.host"
                   type="text"
@@ -557,7 +557,7 @@ onMounted(async () => {
                 />
               </div>
               <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Port *</label>
+                <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.logForwardingSettings.port') }}</label>
                 <input
                   v-model.number="formData.config.port"
                   type="number"
@@ -567,14 +567,14 @@ onMounted(async () => {
               </div>
             </div>
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">Protocol</label>
+              <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.logForwardingSettings.protocol') }}</label>
               <select
                 v-model="formData.config.protocol"
                 class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
               >
-                <option value="udp">UDP (unreliable, fast)</option>
-                <option value="tcp">TCP (reliable)</option>
-                <option value="tcp_tls">TCP + TLS (encrypted)</option>
+                <option value="udp">{{ $t('settings.admin.logForwardingSettings.uDPUnreliableFast') }}</option>
+                <option value="tcp">{{ $t('settings.admin.logForwardingSettings.tCPReliable') }}</option>
+                <option value="tcp_tls">{{ $t('settings.admin.logForwardingSettings.tCPTLSEncrypted') }}</option>
               </select>
             </div>
           </template>

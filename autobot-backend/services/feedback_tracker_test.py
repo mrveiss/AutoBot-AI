@@ -10,14 +10,15 @@ Tests for feedback tracking and learning loop.
 from datetime import datetime, timedelta
 from unittest.mock import MagicMock, patch
 
+from autobot_shared.datetime_utils import datetime_now
 from models.code_pattern import CodePattern
 from models.completion_feedback import CompletionFeedback
 
 
-def test_completion_feedback_model():
+def test_completion_feedback_model() -> None:
     """Test CompletionFeedback model creation."""
     feedback = CompletionFeedback(
-        timestamp=datetime.utcnow(),
+        timestamp=datetime_now(),
         user_id="user123",
         context="def calculate_",
         suggestion="sum(numbers)",
@@ -31,11 +32,11 @@ def test_completion_feedback_model():
     assert feedback.was_accepted is True
 
 
-def test_completion_feedback_to_dict():
+def test_completion_feedback_to_dict() -> None:
     """Test feedback serialization."""
     feedback = CompletionFeedback(
         id=1,
-        timestamp=datetime.utcnow(),
+        timestamp=datetime_now(),
         context="def test():",
         suggestion="pass",
         action="rejected",
@@ -49,7 +50,7 @@ def test_completion_feedback_to_dict():
     assert "suggestion" in data
 
 
-def test_feedback_was_accepted_property():
+def test_feedback_was_accepted_property() -> None:
     """Test was_accepted property."""
     accepted = CompletionFeedback(action="accepted")
     rejected = CompletionFeedback(action="rejected")
@@ -60,7 +61,7 @@ def test_feedback_was_accepted_property():
 
 @patch("services.feedback_tracker.get_redis_client")
 @patch("services.feedback_tracker.create_engine")
-def test_feedback_tracker_initialization(mock_engine, mock_redis):
+def test_feedback_tracker_initialization(mock_engine, mock_redis) -> None:
     """Test FeedbackTracker initialization."""
     from services.feedback_tracker import FeedbackTracker
 
@@ -73,7 +74,7 @@ def test_feedback_tracker_initialization(mock_engine, mock_redis):
 
 @patch("services.feedback_tracker.get_redis_client")
 @patch("services.feedback_tracker.create_engine")
-def test_record_feedback_creates_record(mock_engine, mock_redis):
+def test_record_feedback_creates_record(mock_engine, mock_redis) -> None:
     """Test feedback recording creates database record."""
     from services.feedback_tracker import FeedbackTracker
 
@@ -98,7 +99,7 @@ def test_record_feedback_creates_record(mock_engine, mock_redis):
     mock_session.commit.assert_called_once()
 
 
-def test_pattern_statistics_update():
+def test_pattern_statistics_update() -> None:
     """Test pattern statistics calculation."""
     pattern = CodePattern(
         id=1,
@@ -115,7 +116,7 @@ def test_pattern_statistics_update():
     assert pattern.acceptance_rate == 0.7
 
 
-def test_acceptance_rate_after_feedback():
+def test_acceptance_rate_after_feedback() -> None:
     """Test acceptance rate updates after feedback."""
     pattern = CodePattern(
         id=1,
@@ -137,7 +138,7 @@ def test_acceptance_rate_after_feedback():
     assert pattern.acceptance_rate == 4 / 6  # ~0.667
 
 
-def test_acceptance_rate_after_rejection():
+def test_acceptance_rate_after_rejection() -> None:
     """Test acceptance rate after rejection."""
     pattern = CodePattern(
         id=1,
@@ -161,7 +162,7 @@ def test_acceptance_rate_after_rejection():
 
 @patch("services.feedback_tracker.get_redis_client")
 @patch("services.feedback_tracker.create_engine")
-def test_get_acceptance_metrics(mock_engine, mock_redis):
+def test_get_acceptance_metrics(mock_engine, mock_redis) -> None:
     """Test metrics calculation."""
     from services.feedback_tracker import FeedbackTracker
 
@@ -189,7 +190,7 @@ def test_get_acceptance_metrics(mock_engine, mock_redis):
     assert "language_breakdown" in metrics
 
 
-def test_feedback_event_time_filtering():
+def test_feedback_event_time_filtering() -> None:
     """Test feedback time window filtering."""
     now = datetime.utcnow()
     old_feedback = CompletionFeedback(
@@ -211,7 +212,7 @@ def test_feedback_event_time_filtering():
     assert recent_feedback.timestamp > seven_days_ago
 
 
-def test_retrain_threshold_check():
+def test_retrain_threshold_check() -> None:
     """Test retraining threshold logic."""
     threshold = 1000
     current_feedback = 500
@@ -224,7 +225,7 @@ def test_retrain_threshold_check():
     assert should_retrain is True
 
 
-def test_feedback_action_validation():
+def test_feedback_action_validation() -> None:
     """Test action field validation."""
     valid_actions = ["accepted", "rejected"]
 
@@ -237,7 +238,7 @@ def test_feedback_action_validation():
         assert feedback.action in valid_actions
 
 
-def test_pattern_boost_from_acceptance():
+def test_pattern_boost_from_acceptance() -> None:
     """Test pattern boosting from high acceptance rate."""
     high_accept_pattern = CodePattern(
         id=1,
@@ -264,7 +265,7 @@ def test_pattern_boost_from_acceptance():
     assert high_accept_pattern.acceptance_rate >= 0.8  # Good threshold
 
 
-def test_context_truncation_in_to_dict():
+def test_context_truncation_in_to_dict() -> None:
     """Test context truncation for display."""
     long_context = "x" * 200
     feedback = CompletionFeedback(
@@ -282,7 +283,7 @@ def test_context_truncation_in_to_dict():
     assert data["context"].endswith("...")
 
 
-def test_confidence_score_storage():
+def test_confidence_score_storage() -> None:
     """Test confidence score storage."""
     feedback = CompletionFeedback(
         context="test",
@@ -294,7 +295,7 @@ def test_confidence_score_storage():
     assert feedback.confidence_score == "0.85"
 
 
-def test_completion_rank_storage():
+def test_completion_rank_storage() -> None:
     """Test completion rank storage."""
     feedback = CompletionFeedback(
         context="test",

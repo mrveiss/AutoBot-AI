@@ -11,17 +11,17 @@ Part of Issue #381 - God Class Refactoring
 """
 
 import json
-import logging
 import os
 import sqlite3
-from typing import List, Optional, Tuple
+from typing import List, Tuple
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import parse_utc_iso
 
 from .models import StateSnapshot
 from .types import TrackingMetric
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #281: SQL schema definitions
 DATABASE_SCHEMA_TABLES = (
@@ -174,10 +174,10 @@ def record_state_change_sync(
     db_path: str,
     timestamp_iso: str,
     change_type: str,
-    before_state_json: Optional[str],
+    before_state_json: str | None,
     after_state_json: str,
     description: str,
-    user_id: Optional[str],
+    user_id: str | None,
     metadata_json: str,
 ) -> None:
     """Record state change to database synchronously (Issue #357: for use with asyncio.to_thread)."""
@@ -211,7 +211,7 @@ def save_milestone_sync(
     description: str,
     criteria_json: str,
     achieved: bool,
-    achieved_at_iso: Optional[str],
+    achieved_at_iso: str | None,
     evidence_json: str,
     updated_at_iso: str,
 ) -> None:

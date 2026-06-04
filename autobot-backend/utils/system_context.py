@@ -10,7 +10,7 @@ Collects OS, machine, and architecture information for knowledge base tagging
 import platform
 import socket
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from constants.network_constants import NetworkConstants
@@ -19,7 +19,7 @@ from constants.network_constants import NetworkConstants
 logger = get_logger(__name__, "backend")
 
 
-def _parse_os_release_field(field_prefix: str) -> Optional[str]:
+def _parse_os_release_field(field_prefix: str) -> str | None:
     """Parse a field from /etc/os-release. (Issue #315 - extracted)"""
     os_release_path = Path("/etc/os-release")
     if not os_release_path.exists():
@@ -32,7 +32,7 @@ def _parse_os_release_field(field_prefix: str) -> Optional[str]:
     return None
 
 
-def get_system_context(machine_id: Optional[str] = None) -> Dict[str, any]:
+def get_system_context(machine_id: str | None = None) -> Dict[str, any]:
     """
     Collect comprehensive system information for man page tagging and context awareness
 

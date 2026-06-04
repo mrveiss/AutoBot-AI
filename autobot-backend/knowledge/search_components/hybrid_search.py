@@ -9,10 +9,11 @@ Contains hybrid search with Reciprocal Rank Fusion (RRF).
 """
 
 import asyncio
-import logging
-from typing import Any, Callable, Coroutine, Dict, List, Optional
+from typing import Any, Callable, Coroutine, Dict, List
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 
 
 class HybridSearcher:
@@ -77,8 +78,8 @@ class HybridSearcher:
         self,
         query: str,
         limit: int,
-        category: Optional[str] = None,
-        board_filter: Optional[Dict[str, Any]] = None,
+        category: str | None = None,
+        board_filter: Dict[str, Any] | None = None,
     ) -> List[Dict[str, Any]]:
         """
         Perform hybrid search combining semantic and keyword results.
@@ -97,7 +98,7 @@ class HybridSearcher:
             Combined and ranked search results
         """
         # Build merged filter for the semantic leg
-        semantic_filters: Optional[Dict[str, Any]] = None
+        semantic_filters: Dict[str, Any] | None = None
         filter_parts: Dict[str, Any] = {}
         if category:
             filter_parts["category"] = category

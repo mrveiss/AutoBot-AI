@@ -11,7 +11,7 @@ Contains type definitions, enums, and routing pattern constants.
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import TYPE_CHECKING, List, Optional, Set
+from typing import TYPE_CHECKING, List, Set
 
 if TYPE_CHECKING:
     from agents.base_agent import AgentHealth, BaseAgent
@@ -145,7 +145,11 @@ class AgentType(Enum):
 
 @dataclass
 class AgentCapabilityDescriptor:
-    """Describes an agent's capabilities and constraints."""
+    """Static capability descriptor for an agent *type* (model_size, strengths, limitations).
+
+    Distinct from ``orchestration.types.AgentProfile``, which tracks runtime
+    state of a specific agent instance (workload, success rate, availability).
+    """
 
     agent_type: AgentType
     model_size: str
@@ -175,9 +179,9 @@ class DistributedAgentInfo:
     # Circuit breaker fields (Issue #4694)
     circuit_state: CircuitState = field(default=CircuitState.CLOSED)
     circuit_failure_count: int = field(default=0)
-    circuit_opened_at: Optional[datetime] = field(default=None)
+    circuit_opened_at: datetime | None = field(default=None)
     # Timestamp of the last half-open probe task dispatch.
-    circuit_probe_dispatched_at: Optional[datetime] = field(default=None)
+    circuit_probe_dispatched_at: datetime | None = field(default=None)
 
 
 # Default agent capabilities configuration

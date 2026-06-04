@@ -13,7 +13,6 @@ Functions:
     handle_ai_stack_error: Handle AI Stack errors gracefully
 """
 
-import logging
 from typing import TYPE_CHECKING, TypeVar
 
 from fastapi import HTTPException
@@ -24,10 +23,11 @@ from autobot_shared.time_utils import utc_timestamp
 
 if TYPE_CHECKING:
     from services.ai_stack_client import AIStackError
+from autobot_shared.logging_manager import get_logger
 
 T = TypeVar("T")
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def create_success_response(

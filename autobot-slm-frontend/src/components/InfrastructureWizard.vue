@@ -294,13 +294,14 @@ function getStatusColor(status: string): string {
       <!-- Header -->
       <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200">
         <div>
-          <h3 class="text-lg font-semibold text-gray-900">Infrastructure Setup Wizard</h3>
+          <h3 class="text-lg font-semibold text-gray-900">{{ $t('infrastructureWizard.infrastructureSetupWizard') }}</h3>
           <p class="text-sm text-gray-500">Step {{ step }} of 3</p>
         </div>
         <button
           @click="$emit('close')"
           class="text-gray-400 hover:text-gray-600 transition-colors"
           :disabled="currentExecution?.status === 'running'"
+          aria-label="Close"
         >
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -321,9 +322,9 @@ function getStatusColor(status: string): string {
           />
         </div>
         <div class="flex justify-between mt-2 text-xs text-gray-500">
-          <span>Select Playbook</span>
-          <span>Review & Configure</span>
-          <span>Execute</span>
+          <span>{{ $t('infrastructureWizard.selectPlaybook') }}</span>
+          <span>{{ $t('infrastructureWizard.reviewConfigure') }}</span>
+          <span>{{ $t('infrastructureWizard.execute') }}</span>
         </div>
       </div>
 
@@ -331,7 +332,7 @@ function getStatusColor(status: string): string {
       <div class="flex-1 overflow-y-auto px-6 py-4">
         <!-- Step 1: Select Playbook -->
         <div v-if="step === 1">
-          <h4 class="text-base font-medium text-gray-900 mb-4">Select Infrastructure Playbook</h4>
+          <h4 class="text-base font-medium text-gray-900 mb-4">{{ $t('infrastructureWizard.selectInfrastructurePlaybook') }}</h4>
 
           <div v-if="isLoadingPlaybooks" class="flex items-center justify-center py-8">
             <div class="animate-spin w-6 h-6 border-2 border-primary-600 border-t-transparent rounded-full" />
@@ -396,7 +397,7 @@ function getStatusColor(status: string): string {
 
         <!-- Step 2: Review & Configure -->
         <div v-else-if="step === 2 && selectedPlaybook">
-          <h4 class="text-base font-medium text-gray-900 mb-4">Review Configuration</h4>
+          <h4 class="text-base font-medium text-gray-900 mb-4">{{ $t('infrastructureWizard.reviewConfiguration') }}</h4>
 
           <!-- Error Message -->
           <div
@@ -409,14 +410,14 @@ function getStatusColor(status: string): string {
           <div class="space-y-4">
             <!-- Playbook Summary -->
             <div class="p-4 bg-gray-50 rounded-lg">
-              <div class="text-sm text-gray-500 mb-1">Selected Playbook</div>
+              <div class="text-sm text-gray-500 mb-1">{{ $t('infrastructureWizard.selectedPlaybook') }}</div>
               <div class="font-medium text-gray-900">{{ selectedPlaybook.name }}</div>
               <div class="text-sm text-gray-600 mt-1">{{ selectedPlaybook.description }}</div>
             </div>
 
             <!-- Target Hosts -->
             <div class="p-4 bg-gray-50 rounded-lg">
-              <div class="text-sm text-gray-500 mb-2">Target Hosts</div>
+              <div class="text-sm text-gray-500 mb-2">{{ $t('infrastructureWizard.targetHosts') }}</div>
               <div class="flex flex-wrap gap-2">
                 <span
                   v-for="host in selectedPlaybook.target_hosts"
@@ -430,7 +431,7 @@ function getStatusColor(status: string): string {
 
             <!-- Default Variables -->
             <div class="p-4 bg-gray-50 rounded-lg">
-              <div class="text-sm text-gray-500 mb-2">Default Variables</div>
+              <div class="text-sm text-gray-500 mb-2">{{ $t('infrastructureWizard.defaultVariables') }}</div>
               <div class="font-mono text-sm">
                 <div
                   v-for="(value, key) in selectedPlaybook.variables"
@@ -453,9 +454,9 @@ function getStatusColor(status: string): string {
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                 </svg>
                 <div class="flex-1">
-                  <p class="font-medium text-amber-800">Confirmation Required</p>
+                  <p class="font-medium text-amber-800">{{ $t('infrastructureWizard.confirmationRequired') }}</p>
                   <p class="text-sm text-amber-700 mt-1">
-                    This playbook will make changes to your infrastructure. Please review the configuration carefully before proceeding.
+                    {{ $t('infrastructureWizard.thisPlaybookWillMake') }}
                   </p>
                   <label class="flex items-center gap-2 mt-3">
                     <input
@@ -464,7 +465,7 @@ function getStatusColor(status: string): string {
                       class="rounded-sm border-amber-300 text-amber-600 focus:ring-amber-500"
                     />
                     <span class="text-sm text-amber-800">
-                      I understand the changes and want to proceed
+                      {{ $t('infrastructureWizard.iUnderstandTheChanges') }}
                     </span>
                   </label>
                 </div>
@@ -478,12 +479,12 @@ function getStatusColor(status: string): string {
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
                 <div class="text-sm text-blue-700">
-                  <p class="font-medium">What happens next?</p>
+                  <p class="font-medium">{{ $t('infrastructureWizard.whatHappensNext') }}</p>
                   <ul class="mt-1 space-y-1 text-blue-600">
-                    <li>1. Ansible playbook will be executed</li>
-                    <li>2. SSH connections to target hosts established</li>
-                    <li>3. Infrastructure components installed and configured</li>
-                    <li>4. Services will be started and verified</li>
+                    <li>{{ $t('infrastructureWizard.1AnsiblePlaybookWill') }}</li>
+                    <li>{{ $t('infrastructureWizard.2SSHConnectionsTo') }}</li>
+                    <li>{{ $t('infrastructureWizard.3InfrastructureComponentsInstalled') }}</li>
+                    <li>{{ $t('infrastructureWizard.4ServicesWillBe') }}</li>
                   </ul>
                   <p class="mt-2 text-blue-500">
                     Estimated time: {{ selectedPlaybook.estimated_duration }}
@@ -497,7 +498,7 @@ function getStatusColor(status: string): string {
         <!-- Step 3: Execution -->
         <div v-else-if="step === 3 && currentExecution">
           <div class="flex items-center justify-between mb-4">
-            <h4 class="text-base font-medium text-gray-900">Execution Progress</h4>
+            <h4 class="text-base font-medium text-gray-900">{{ $t('infrastructureWizard.executionProgress') }}</h4>
             <span
               :class="[
                 'px-3 py-1 rounded-full text-sm font-medium',
@@ -539,7 +540,7 @@ function getStatusColor(status: string): string {
             v-if="currentExecution.error"
             class="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm"
           >
-            <strong>Error:</strong> {{ currentExecution.error }}
+            <strong>{{ $t('infrastructureWizard.error') }}</strong> {{ currentExecution.error }}
           </div>
 
           <!-- Completion Message -->
@@ -552,9 +553,9 @@ function getStatusColor(status: string): string {
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               <div>
-                <p class="font-medium text-green-800">Infrastructure setup completed successfully!</p>
+                <p class="font-medium text-green-800">{{ $t('infrastructureWizard.infrastructureSetupCompletedSuccessfully') }}</p>
                 <p class="text-sm text-green-600 mt-1">
-                  All tasks have been executed. You may need to restart services or run migrations.
+                  {{ $t('infrastructureWizard.allTasksHaveBeen') }}
                 </p>
               </div>
             </div>
@@ -570,7 +571,7 @@ function getStatusColor(status: string): string {
           class="btn btn-secondary"
           :disabled="isExecuting"
         >
-          Back
+          {{ $t('infrastructureWizard.back') }}
         </button>
         <div v-else></div>
 
@@ -580,7 +581,7 @@ function getStatusColor(status: string): string {
             @click="cancelExecution"
             class="btn btn-secondary text-red-600 hover:bg-red-50"
           >
-            Cancel Execution
+            {{ $t('infrastructureWizard.cancelExecution') }}
           </button>
           <button
             @click="$emit('close')"
@@ -595,7 +596,7 @@ function getStatusColor(status: string): string {
             :disabled="!canProceedStep1"
             class="btn btn-primary"
           >
-            Next
+            {{ $t('infrastructureWizard.next') }}
           </button>
           <button
             v-else-if="step === 2"

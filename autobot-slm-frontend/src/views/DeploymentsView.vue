@@ -645,9 +645,9 @@ function getNodeHostname(nodeId: string): string {
     <!-- Header -->
     <div class="flex items-center justify-between mb-6">
       <div>
-        <h1 class="text-2xl font-bold text-gray-900">Deployments</h1>
+        <h1 class="text-2xl font-bold text-gray-900">{{ $t('deploymentsView.deployments') }}</h1>
         <p class="text-sm text-gray-500 mt-1">
-          Deploy and manage roles across your fleet
+          {{ $t('deploymentsView.deployAndManageRoles') }}
         </p>
       </div>
       <div class="flex items-center gap-3">
@@ -670,7 +670,7 @@ function getNodeHostname(nodeId: string): string {
               d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
             />
           </svg>
-          Refresh
+          {{ $t('deploymentsView.refresh') }}
         </button>
         <button
           v-if="activeTab === 'standard'"
@@ -680,7 +680,7 @@ function getNodeHostname(nodeId: string): string {
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
           </svg>
-          New Deployment
+          {{ $t('deploymentsView.newDeployment') }}
         </button>
         <button
           v-else
@@ -690,7 +690,7 @@ function getNodeHostname(nodeId: string): string {
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
           </svg>
-          New Blue-Green
+          {{ $t('deploymentsView.newBlueGreen') }}
         </button>
       </div>
     </div>
@@ -707,7 +707,7 @@ function getNodeHostname(nodeId: string): string {
               : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
           ]"
         >
-          Standard Deployments
+          {{ $t('deploymentsView.standardDeployments') }}
           <span class="ml-2 px-2 py-0.5 text-xs font-medium rounded-full bg-gray-100 text-gray-600">
             {{ standardStats.total }}
           </span>
@@ -721,7 +721,7 @@ function getNodeHostname(nodeId: string): string {
               : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
           ]"
         >
-          Blue-Green Deployments
+          {{ $t('deploymentsView.blueGreenDeployments') }}
           <span class="ml-2 px-2 py-0.5 text-xs font-medium rounded-full bg-gray-100 text-gray-600">
             {{ bgStats.total }}
           </span>
@@ -736,7 +736,7 @@ function getNodeHostname(nodeId: string): string {
         <div class="card p-4">
           <div class="flex items-center justify-between">
             <div>
-              <p class="text-sm text-gray-500">Total</p>
+              <p class="text-sm text-gray-500">{{ $t('deploymentsView.total') }}</p>
               <p class="text-2xl font-bold text-gray-900">{{ standardStats.total }}</p>
             </div>
             <div class="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center">
@@ -750,7 +750,7 @@ function getNodeHostname(nodeId: string): string {
         <div class="card p-4">
           <div class="flex items-center justify-between">
             <div>
-              <p class="text-sm text-gray-500">Completed</p>
+              <p class="text-sm text-gray-500">{{ $t('deploymentsView.completed') }}</p>
               <p class="text-2xl font-bold text-green-600">{{ standardStats.completed }}</p>
             </div>
             <div class="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
@@ -764,7 +764,7 @@ function getNodeHostname(nodeId: string): string {
         <div class="card p-4">
           <div class="flex items-center justify-between">
             <div>
-              <p class="text-sm text-gray-500">In Progress</p>
+              <p class="text-sm text-gray-500">{{ $t('deploymentsView.inProgress') }}</p>
               <p class="text-2xl font-bold text-blue-600">{{ standardStats.inProgress }}</p>
             </div>
             <div class="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
@@ -778,7 +778,7 @@ function getNodeHostname(nodeId: string): string {
         <div class="card p-4">
           <div class="flex items-center justify-between">
             <div>
-              <p class="text-sm text-gray-500">Failed</p>
+              <p class="text-sm text-gray-500">{{ $t('deploymentsView.failed') }}</p>
               <p class="text-2xl font-bold text-red-600">{{ standardStats.failed }}</p>
             </div>
             <div class="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
@@ -792,7 +792,7 @@ function getNodeHostname(nodeId: string): string {
         <div class="card p-4">
           <div class="flex items-center justify-between">
             <div>
-              <p class="text-sm text-gray-500">Rolled Back</p>
+              <p class="text-sm text-gray-500">{{ $t('deploymentsView.rolledBack') }}</p>
               <p class="text-2xl font-bold text-orange-600">{{ standardStats.rolledBack }}</p>
             </div>
             <div class="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center">
@@ -807,18 +807,18 @@ function getNodeHostname(nodeId: string): string {
       <!-- Standard Deployments Table -->
       <div class="card overflow-hidden">
         <div class="px-6 py-4 border-b border-gray-200">
-          <h2 class="text-lg font-semibold">Recent Deployments</h2>
+          <h2 class="text-lg font-semibold">{{ $t('deploymentsView.recentDeployments') }}</h2>
         </div>
         <div class="overflow-x-auto">
           <table class="min-w-full divide-y divide-gray-200">
             <thead class="bg-gray-50">
               <tr>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Node</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Roles</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Started</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Completed</th>
-                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('deploymentsView.status') }}</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('deploymentsView.node') }}</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('deploymentsView.roles') }}</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('deploymentsView.started') }}</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('deploymentsView.completed') }}</th>
+                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">{{ $t('deploymentsView.actions') }}</th>
               </tr>
             </thead>
             <tbody class="bg-white divide-y divide-gray-200">
@@ -921,7 +921,7 @@ function getNodeHostname(nodeId: string): string {
                   <svg class="w-12 h-12 mx-auto text-gray-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                   </svg>
-                  <p>No deployments yet. Click "New Deployment" to get started.</p>
+                  <p>{{ $t('deploymentsView.noDeploymentsYetClick') }}</p>
                 </td>
               </tr>
             </tbody>
@@ -941,7 +941,7 @@ function getNodeHostname(nodeId: string): string {
         <div class="card p-4">
           <div class="flex items-center justify-between">
             <div>
-              <p class="text-sm text-gray-500">Total</p>
+              <p class="text-sm text-gray-500">{{ $t('deploymentsView.total') }}</p>
               <p class="text-2xl font-bold text-gray-900">{{ bgStats.total }}</p>
             </div>
             <div class="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center">
@@ -955,7 +955,7 @@ function getNodeHostname(nodeId: string): string {
         <div class="card p-4">
           <div class="flex items-center justify-between">
             <div>
-              <p class="text-sm text-gray-500">Active</p>
+              <p class="text-sm text-gray-500">{{ $t('deploymentsView.active') }}</p>
               <p class="text-2xl font-bold text-blue-600">{{ bgStats.active }}</p>
             </div>
             <div class="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
@@ -969,7 +969,7 @@ function getNodeHostname(nodeId: string): string {
         <div class="card p-4">
           <div class="flex items-center justify-between">
             <div>
-              <p class="text-sm text-gray-500">Completed</p>
+              <p class="text-sm text-gray-500">{{ $t('deploymentsView.completed') }}</p>
               <p class="text-2xl font-bold text-green-600">{{ bgStats.completed }}</p>
             </div>
             <div class="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
@@ -983,7 +983,7 @@ function getNodeHostname(nodeId: string): string {
         <div class="card p-4">
           <div class="flex items-center justify-between">
             <div>
-              <p class="text-sm text-gray-500">Failed</p>
+              <p class="text-sm text-gray-500">{{ $t('deploymentsView.failed') }}</p>
               <p class="text-2xl font-bold text-red-600">{{ bgStats.failed }}</p>
             </div>
             <div class="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
@@ -997,7 +997,7 @@ function getNodeHostname(nodeId: string): string {
         <div class="card p-4">
           <div class="flex items-center justify-between">
             <div>
-              <p class="text-sm text-gray-500">Rolled Back</p>
+              <p class="text-sm text-gray-500">{{ $t('deploymentsView.rolledBack') }}</p>
               <p class="text-2xl font-bold text-orange-600">{{ bgStats.rolledBack }}</p>
             </div>
             <div class="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center">
@@ -1012,19 +1012,19 @@ function getNodeHostname(nodeId: string): string {
       <!-- Blue-Green Deployments Table -->
       <div class="card overflow-hidden">
         <div class="px-6 py-4 border-b border-gray-200">
-          <h2 class="text-lg font-semibold">Blue-Green Deployments</h2>
+          <h2 class="text-lg font-semibold">{{ $t('deploymentsView.blueGreenDeployments') }}</h2>
         </div>
         <div class="overflow-x-auto">
           <table class="min-w-full divide-y divide-gray-200">
             <thead class="bg-gray-50">
               <tr>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Blue Node</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Green Node</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Roles</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Progress</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Started</th>
-                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('deploymentsView.status') }}</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('deploymentsView.blueNode') }}</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('deploymentsView.greenNode') }}</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('deploymentsView.roles') }}</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('deploymentsView.progress') }}</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('deploymentsView.started') }}</th>
+                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">{{ $t('deploymentsView.actions') }}</th>
               </tr>
             </thead>
             <tbody class="bg-white divide-y divide-gray-200">
@@ -1136,7 +1136,7 @@ function getNodeHostname(nodeId: string): string {
                   <svg class="w-12 h-12 mx-auto text-gray-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
                   </svg>
-                  <p>No blue-green deployments yet. Click "New Blue-Green" to start.</p>
+                  <p>{{ $t('deploymentsView.noBlueGreenDeployments') }}</p>
                 </td>
               </tr>
             </tbody>
@@ -1157,20 +1157,20 @@ function getNodeHostname(nodeId: string): string {
     >
       <div class="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto">
         <div class="px-6 py-4 border-b border-gray-200">
-          <h3 class="text-lg font-semibold text-gray-900">New Deployment</h3>
+          <h3 class="text-lg font-semibold text-gray-900">{{ $t('deploymentsView.newDeployment') }}</h3>
           <p class="text-sm text-gray-500 mt-1">
-            Deploy roles to a node in your fleet
+            {{ $t('deploymentsView.deployRolesToA') }}
           </p>
         </div>
         <div class="px-6 py-4 space-y-4">
           <!-- Node Selection -->
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Target Node</label>
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('deploymentsView.targetNode') }}</label>
             <select
               v-model="newDeployment.node_id"
               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
             >
-              <option value="">Select a node...</option>
+              <option value="">{{ $t('deploymentsView.selectANode') }}</option>
               <option v-for="opt in nodeOptions" :key="opt.value" :value="opt.value">
                 {{ opt.label }}
               </option>
@@ -1179,7 +1179,7 @@ function getNodeHostname(nodeId: string): string {
 
           <!-- Node Info (if selected) -->
           <div v-if="newDeployment.node_id" class="bg-gray-50 rounded-lg p-3">
-            <p class="text-sm font-medium text-gray-700 mb-1">Current Roles</p>
+            <p class="text-sm font-medium text-gray-700 mb-1">{{ $t('deploymentsView.currentRoles') }}</p>
             <div class="flex flex-wrap gap-1">
               <span
                 v-for="role in (nodeOptions.find(n => n.value === newDeployment.node_id)?.roles || [])"
@@ -1189,16 +1189,16 @@ function getNodeHostname(nodeId: string): string {
                 {{ role }}
               </span>
               <span v-if="(nodeOptions.find(n => n.value === newDeployment.node_id)?.roles || []).length === 0" class="text-xs text-gray-500">
-                No roles assigned
+                {{ $t('deploymentsView.noRolesAssigned') }}
               </span>
             </div>
           </div>
 
           <!-- Roles Selection by Category -->
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-2">Roles to Deploy</label>
+            <label class="block text-sm font-medium text-gray-700 mb-2">{{ $t('deploymentsView.rolesToDeploy') }}</label>
             <p v-if="availableRoles.length === 0" class="text-sm text-gray-500">
-              Loading available roles...
+              {{ $t('deploymentsView.loadingAvailableRoles') }}
             </p>
             <div v-else class="space-y-3">
               <template v-for="(category, _catKey) in roleCategories" :key="_catKey">
@@ -1518,7 +1518,7 @@ function getNodeHostname(nodeId: string): string {
                   {{ selectedDeployment.status.replaceAll('_', ' ') }}
                 </span>
               </div>
-              <button @click="closeDetails" class="text-gray-400 hover:text-gray-600">
+              <button @click="closeDetails" class="text-gray-400 hover:text-gray-600" aria-label="Close">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                 </svg>
@@ -1622,7 +1622,7 @@ function getNodeHostname(nodeId: string): string {
                   {{ selectedBgDeployment.status.replaceAll('_', ' ') }}
                 </span>
               </div>
-              <button @click="closeBgDetails" class="text-gray-400 hover:text-gray-600">
+              <button @click="closeBgDetails" class="text-gray-400 hover:text-gray-600" aria-label="Close">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                 </svg>

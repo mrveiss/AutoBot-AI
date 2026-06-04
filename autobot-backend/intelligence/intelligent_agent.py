@@ -9,10 +9,9 @@ to OS-aware command execution with real-time streaming and intelligent commentar
 """
 
 import asyncio
-import logging
 import time
 from dataclasses import dataclass
-from typing import Any, AsyncGenerator, Dict, FrozenSet, List, Optional
+from typing import Any, AsyncGenerator, Dict, FrozenSet, List
 
 # #7127: running this file directly cannot work — top-level project imports
 # below need sys.path entries that an inline `__main__` block cannot install
@@ -34,6 +33,7 @@ from intelligence.goal_processor import GoalProcessor, ProcessedGoal
 # Issue #380: Module-level frozenset for package managers requiring sudo
 _SUDO_PACKAGE_MANAGERS: FrozenSet[str] = frozenset({"apt", "yum", "dn", "pacman", "zypper"})
 
+from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import TimingConstants
 
 # Import our new intelligent agent components
@@ -51,16 +51,16 @@ from reasoning.causal_reasoning import CAUSAL_REASONING_SNIPPET
 from utils.command_validator import CommandValidator
 from worker_node import WorkerNode
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass
 class AgentState:
     """Current state of the intelligent agent."""
 
-    os_info: Optional[OSInfo] = None
+    os_info: OSInfo | None = None
     conversation_context: List[Dict[str, Any]] = None
-    last_command_result: Optional[Dict[str, Any]] = None
+    last_command_result: Dict[str, Any] | None = None
     active_processes: List[str] = None
     initialized: bool = False
 
@@ -72,11 +72,11 @@ class AgentState:
             self.active_processes = []
 
     # Issue #321: Helper methods to reduce message chains (Law of Demeter)
-    def get_os_type_value(self) -> Optional[str]:
+    def get_os_type_value(self) -> str | None:
         """Get OS type value, reducing self.state.os_info.os_type.value chains."""
         return self.os_info.os_type.value if self.os_info else None
 
-    def get_distro_value(self) -> Optional[str]:
+    def get_distro_value(self) -> str | None:
         """Get distro value, reducing self.state.os_info.distro.value chains."""
         if self.os_info and self.os_info.distro:
             return self.os_info.distro.value
@@ -131,10 +131,10 @@ class IntelligentAgent:
         self.command_validator = command_validator
 
         # Initialize intelligent agent components
-        self.os_detector: Optional[OSDetector] = None
+        self.os_detector: OSDetector | None = None
         self.goal_processor = GoalProcessor()
-        self.tool_selector: Optional[OSAwareToolSelector] = None
-        self.streaming_executor: Optional[StreamingCommandExecutor] = None
+        self.tool_selector: OSAwareToolSelector | None = None
+        self.streaming_executor: StreamingCommandExecutor | None = None
 
         # Agent state
         self.state = AgentState()
@@ -354,7 +354,7 @@ class IntelligentAgent:
                 yield chunk
 
     async def process_natural_language_goal(
-        self, user_input: str, context: Optional[Dict[str, Any]] = None
+        self, user_input: str, context: Dict[str, Any] | None = None
     ) -> AsyncGenerator[StreamChunk, None]:
         """Process natural language input and execute appropriate commands. Issue #620."""
         if not self.state.initialized:
@@ -808,7 +808,7 @@ OS-specific commands.
 # Global instance for reuse (thread-safe)
 import asyncio as _asyncio
 
-_agent_instance: Optional[IntelligentAgent] = None
+_agent_instance: IntelligentAgent | None = None
 _agent_lock = _asyncio.Lock()
 
 

@@ -10,11 +10,11 @@
 
 import asyncio
 import base64
-import logging
 import os
 import tempfile
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
+from autobot_shared.logging_manager import get_logger
 from media.core.pipeline import BasePipeline
 from media.core.types import MediaInput, MediaType, ProcessingResult
 
@@ -26,7 +26,7 @@ try:
 except ImportError:
     _CV2_AVAILABLE = False
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Magic bytes for common video formats
 _VIDEO_MAGIC: List[Tuple[bytes, str]] = [
@@ -215,7 +215,7 @@ class VideoPipeline(BasePipeline):
 
         return frames
 
-    def _encode_frame(self, frame: Any) -> Optional[str]:
+    def _encode_frame(self, frame: Any) -> str | None:
         """Encode a cv2 frame to a base64 JPEG string."""
         try:
             _, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 60])

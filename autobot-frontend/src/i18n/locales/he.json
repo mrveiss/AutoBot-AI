@@ -91,7 +91,7 @@
     "analytics": "אנליטיקה",
     "profile": "פרופיל",
     "slmAdmin": "ניהול SLM",
-    "slmAdminTitle": "פתח לוח בקרת SLM",
+    "slmAdminTitle": "SLM Admin — נפתח בכרטיסייה חדשה",
     "profileSettings": "הגדרות פרופיל",
     "vision": "Vision",
     "preferences": "Preferences",
@@ -123,7 +123,11 @@
     "marketplace": "Marketplace",
     "usage": "Usage & Costs",
     "more": "More",
-    "moreItems": "More navigation items"
+    "moreItems": "More navigation items",
+    "llcPortability": "Portability",
+    "settingsAndTools": "Settings & Tools",
+    "adminPanel": "Admin Panel",
+    "documents": "AI Documents"
   },
   "agent": {
     "registry": {
@@ -4479,6 +4483,12 @@
     "progressBar": {
       "timeRemaining": "{time} remaining"
     },
+    "offlineBanner": {
+      "backendLost": "Backend connection lost — retrying. Cached data still available.",
+      "queuedForRetry": "{count} action queued for retry. | {count} actions queued for retry.",
+      "checking": "Checking…",
+      "retry": "Retry"
+    },
     "alert": {
       "dismissAlert": "Dismiss alert"
     },
@@ -7132,6 +7142,17 @@
     "novnc": {
       "selectHost": "Select a host to connect",
       "selectHostDesc": "Choose a VNC-capable host from the list to open a remote desktop session."
+    }
+  },
+  "mobile": {
+    "pairing": {
+      "title": "זיווג התקן נייד",
+      "instructions": "סרוק קוד QR זה בעזרת ההתקן הנייד שלך",
+      "instructionsDetail": "פתח את אפליקציית AutoBot הנייד וסרוק קוד זה כדי לזווג את ההתקן שלך",
+      "generating": "יוצר קוד QR...",
+      "expired": "פג תוקף",
+      "refresh": "קבל קוד חדש",
+      "retry": "נסה שוב"
     }
   }
 }

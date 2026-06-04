@@ -8,13 +8,13 @@ FastAPI endpoints for workflow automation.
 """
 
 import json
-import logging
 from dataclasses import asdict
 
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from constants.error_constants import ERR_WORKFLOW_NOT_FOUND
 from services.notification_service import NotificationConfig
@@ -32,7 +32,7 @@ from .models import (
 )
 from .persistence import load_notification_config, save_notification_config
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(tags=["workflow_automation"])
 
@@ -566,7 +566,7 @@ async def get_workflow_state(
     error_code_prefix="WORKFLOW_AUTOMATION",
 )
 @router.websocket("/workflow_ws/{session_id}")
-async def workflow_websocket(websocket: WebSocket, session_id: str):
+async def workflow_websocket(websocket: WebSocket, session_id: str) -> None:
     """WebSocket endpoint for real-time workflow communication"""
     await websocket.accept()
 

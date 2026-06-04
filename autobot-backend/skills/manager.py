@@ -8,14 +8,14 @@ High-level manager for the skills system. Handles initialization,
 per-user skill preferences (via Redis), and skill execution routing.
 """
 
-import logging
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_management.cache_wrapper import RedisCache
 from skills.registry import SkillRegistry, get_skill_registry
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 REDIS_SKILL_PREFIX = "skills:config:"
 REDIS_SKILL_ENABLED_PREFIX = "skills:enabled:"
@@ -29,9 +29,9 @@ class SkillManager:
     Includes metrics tracking for skill performance monitoring (Issue #4339).
     """
 
-    def __init__(self, registry: Optional[SkillRegistry] = None) -> None:
+    def __init__(self, registry: SkillRegistry | None = None) -> None:
         self._registry = registry or get_skill_registry()
-        self._metrics: Optional[Any] = None
+        self._metrics: Any | None = None
 
     @property
     def registry(self) -> SkillRegistry:
@@ -203,15 +203,13 @@ class SkillManager:
             RuntimeError: If the underlying import fails (e.g. git not available).
         """
         from sqlalchemy import select
-        from sqlalchemy.ext.asyncio import AsyncSession
 
         from autobot_shared.time_utils import now_utc
-        from skills.db import get_skills_engine
+        from skills.db import skills_session_context
         from skills.external_importer import ExternalSkillImporter
         from skills.models import RepoType, SkillPackage, SkillRepo
 
-        engine = get_skills_engine()
-        async with AsyncSession(engine) as session:
+        async with skills_session_context() as session:
             result = await session.execute(select(SkillRepo).where(SkillRepo.id == repo_id))
             repo = result.scalar_one_or_none()
             if repo is None:
@@ -246,7 +244,6 @@ class SkillManager:
 
             repo.skill_count = len(imported)
             repo.last_synced = now_utc()
-            await session.commit()
 
         logger.info(
             "sync_external_repo: imported %d package(s) from repo %s",
@@ -254,6 +251,30 @@ class SkillManager:
             repo_id,
         )
         return imported
+
+    async def install_from_hub(self, skill_id: str) -> Dict[str, Any]:
+        """Install a skill from the community hub registry.
+
+        Delegates to :class:`~skills.hub.SkillHub`, which handles registry
+        lookup, governance, Redis persistence, and MCP process startup.
+
+        Args:
+            skill_id: Registry id or name of the skill to install.
+
+        Returns:
+            Dict with ``id``, ``name``, ``mcp_url``, ``version``, and ``installed_at``.
+        """
+        from skills.hub import SkillHub
+
+        hub = SkillHub()
+        installed = await hub.install(skill_id)
+        return {
+            "id": installed.id,
+            "name": installed.name,
+            "mcp_url": installed.mcp_url,
+            "version": installed.version,
+            "installed_at": installed.installed_at,
+        }
 
     def search_skills(self, query: str) -> List[Dict[str, Any]]:
         """Search skills by name, description, or tags."""
@@ -264,7 +285,7 @@ class SkillManager:
                 results.append(skill_info)
         return results
 
-    async def _get_metrics(self) -> Optional[Any]:
+    async def _get_metrics(self) -> Any | None:
         """Get or create the SkillMetrics instance (lazy initialization)."""
         if self._metrics is None:
             try:

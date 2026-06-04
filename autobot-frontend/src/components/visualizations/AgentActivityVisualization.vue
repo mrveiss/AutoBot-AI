@@ -18,19 +18,19 @@
             :class="{ active: viewMode === 'grid' }"
             :title="t('visualizations.agentActivity.gridView')"
           >
-            <i class="fas fa-th-large"></i>
+            <Icon name="th-large" />
           </button>
           <button
             @click="viewMode = 'timeline'"
             :class="{ active: viewMode === 'timeline' }"
             :title="t('visualizations.agentActivity.timelineView')"
           >
-            <i class="fas fa-stream"></i>
+            <Icon name="stream" />
           </button>
         </div>
         <div class="status-summary">
           <span class="active-count">
-            <i class="fas fa-circle pulse"></i>
+            <Icon name="circle" class="pulse" />
             {{ t('visualizations.agentActivity.activeCount', { count: activeAgentCount }) }}
           </span>
         </div>
@@ -65,11 +65,15 @@
             <span class="activity-text">{{ truncate(agent.currentTask || t('visualizations.agentActivity.processing'), 30) }}</span>
           </div>
           <div v-else-if="agent.status === 'idle'" class="activity-idle">
-            <i class="fas fa-pause-circle"></i>
+            <Icon name="pause-circle" />
             <span>{{ t('visualizations.agentActivity.idle') }}</span>
           </div>
+          <div v-else-if="agent.status === 'abstained'" class="activity-abstained">
+            <Icon name="help-circle" />
+            <span>{{ t('visualizations.agentActivity.abstained') }}</span>
+          </div>
           <div v-else-if="agent.status === 'error'" class="activity-error">
-            <i class="fas fa-exclamation-triangle"></i>
+            <Icon name="exclamation-triangle" />
             <span>{{ t('visualizations.agentActivity.error') }}</span>
           </div>
         </div>
@@ -108,10 +112,10 @@
             </div>
             <div class="detail-actions">
               <button @click.stop="viewDetails(agent)" class="action-btn">
-                <i class="fas fa-eye"></i> {{ t('visualizations.agentActivity.detailsBtn') }}
+                <Icon name="eye" /> {{ t('visualizations.agentActivity.detailsBtn') }}
               </button>
               <button @click.stop="pauseAgent(agent)" class="action-btn" :disabled="agent.status !== 'working'">
-                <i class="fas fa-pause"></i> {{ t('visualizations.agentActivity.pauseBtn') }}
+                <Icon name="pause" /> {{ t('visualizations.agentActivity.pauseBtn') }}
               </button>
             </div>
           </div>
@@ -156,7 +160,7 @@
     <!-- Live Activity Feed -->
     <div class="activity-feed">
       <h4>
-        <i class="fas fa-rss"></i>
+        <Icon name="signal" />
         {{ t('visualizations.agentActivity.liveActivityFeed') }}
       </h4>
       <div class="feed-items">
@@ -179,6 +183,7 @@
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { getCssVar } from '@/composables/useCssVars'
@@ -580,7 +585,8 @@ defineExpose({
 }
 
 .activity-idle,
-.activity-error {
+.activity-error,
+.activity-abstained {
   display: flex;
   align-items: center;
   gap: var(--spacing-2);
@@ -589,6 +595,10 @@ defineExpose({
 
 .activity-idle {
   color: var(--text-tertiary);
+}
+
+.activity-abstained {
+  color: oklch(0.5 0.15 85);
 }
 
 .activity-error {

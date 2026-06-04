@@ -170,7 +170,7 @@ onUnmounted(() => {
   <div class="p-6">
     <!-- Header -->
     <div class="flex items-center justify-between mb-6">
-      <h2 class="text-xl font-bold text-gray-900">Log Viewer</h2>
+      <h2 class="text-xl font-bold text-gray-900">{{ $t('monitoring.logViewer.logViewer') }}</h2>
       <div class="flex items-center gap-2">
         <button
           @click="toggleAutoRefresh"
@@ -189,13 +189,13 @@ onUnmounted(() => {
           :disabled="isLoading"
           class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
         >
-          Refresh
+          {{ $t('monitoring.logViewer.refresh') }}
         </button>
         <button
           @click="clearLogs"
           class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
         >
-          Clear
+          {{ $t('monitoring.logViewer.clear') }}
         </button>
       </div>
     </div>
@@ -215,7 +215,7 @@ onUnmounted(() => {
 
         <!-- Level Filter -->
         <div class="flex items-center gap-2">
-          <label class="text-sm text-gray-600">Level:</label>
+          <label class="text-sm text-gray-600">{{ $t('monitoring.logViewer.level') }}</label>
           <select
             v-model="selectedLevel"
             class="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
@@ -228,7 +228,7 @@ onUnmounted(() => {
 
         <!-- Source Filter -->
         <div class="flex items-center gap-2">
-          <label class="text-sm text-gray-600">Source:</label>
+          <label class="text-sm text-gray-600">{{ $t('monitoring.logViewer.source') }}</label>
           <select
             v-model="selectedSource"
             class="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
@@ -253,16 +253,16 @@ onUnmounted(() => {
           <thead class="bg-gray-50 sticky top-0">
             <tr>
               <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-24">
-                Time
+                {{ $t('monitoring.logViewer.time') }}
               </th>
               <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-20">
-                Level
+                {{ $t('monitoring.logViewer.level1') }}
               </th>
               <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-32">
-                Source
+                {{ $t('monitoring.logViewer.source1') }}
               </th>
               <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Message
+                {{ $t('monitoring.logViewer.message') }}
               </th>
             </tr>
           </thead>

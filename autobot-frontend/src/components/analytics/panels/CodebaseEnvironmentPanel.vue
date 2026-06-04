@@ -6,7 +6,7 @@
 <template>
   <div class="environment-analysis-section analytics-section">
     <h3>
-      <i class="fas fa-leaf"></i> {{ $t('analytics.codebase.environment.title') }}
+      <Icon name="leaf" /> {{ $t('analytics.codebase.environment.title') }}
       <span v-if="analysis" class="total-count">
         ({{ analysis.total_hardcoded_values }} hardcoded values)
       </span>
@@ -24,14 +24,14 @@
           class="export-btn"
           :title="$t('analytics.codebase.actions.exportMarkdown')"
         >
-          <i class="fas fa-file-alt"></i> MD
+          <Icon name="file-alt" /> MD
         </button>
         <button
           @click="emit('export', 'json')"
           class="export-btn"
           :title="$t('analytics.codebase.actions.exportJson')"
         >
-          <i class="fas fa-file-code"></i> JSON
+          <Icon name="file-code" /> JSON
         </button>
       </div>
     </h3>
@@ -53,7 +53,7 @@
           style="width: 18px; height: 18px; cursor: pointer;"
         />
         <span style="font-weight: 500;">
-          <i class="fas fa-robot"></i> {{ $t('analytics.codebase.environment.useAiFiltering') }}
+          <Icon name="robot" /> {{ $t('analytics.codebase.environment.useAiFiltering') }}
         </span>
       </label>
       <span
@@ -74,19 +74,19 @@
         <span class="ai-filter-model-hint">Model: {{ aiFilteringModel }}</span>
       </span>
       <span v-if="llmFilteringResult" class="llm-result-badge">
-        <i class="fas fa-check-circle"></i>
+        <Icon name="check-circle" />
         {{ llmFilteringResult.original_count }} → {{ llmFilteringResult.filtered_count }}
         ({{ llmFilteringResult.reduction_percent }}% reduced)
       </span>
     </div>
 
     <div v-if="loading" class="loading-state">
-      <i class="fas fa-spinner fa-spin"></i>
+      <Icon name="spinner" :spin="true" />
       {{ useAiFiltering ? 'Scanning with AI filtering...' : 'Scanning for hardcoded values...' }}
     </div>
 
     <div v-else-if="error" class="error-state">
-      <i class="fas fa-exclamation-triangle"></i> {{ error }}
+      <Icon name="exclamation-triangle" /> {{ error }}
       <button @click="emit('refresh')" class="btn-link">
         {{ $t('analytics.codebase.actions.retry') }}
       </button>
@@ -184,13 +184,13 @@
             <span class="value-type">{{ hv.type }}</span>
           </div>
           <div v-if="hv.suggested_env_var" class="hv-suggestion">
-            <i class="fas fa-lightbulb"></i> Use: <code>{{ hv.suggested_env_var }}</code>
+            <Icon name="lightbulb" /> Use: <code>{{ hv.suggested_env_var }}</code>
           </div>
         </div>
       </div>
 
       <div class="scan-timestamp">
-        <i class="fas fa-clock"></i>
+        <Icon name="clock" />
         Analysis completed in {{ analysis.analysis_time_seconds.toFixed(2) }}s
       </div>
     </div>
@@ -199,7 +199,7 @@
       v-else-if="analysis && analysis.total_hardcoded_values === 0"
       class="success-state"
     >
-      <i class="fas fa-check-circle"></i>
+      <Icon name="check-circle" />
       {{ $t('analytics.codebase.environment.noHardcodedValues') }}
     </div>
 
@@ -215,6 +215,7 @@
 import EmptyState from '@/components/ui/EmptyState.vue'
 // #5311: canonical HardcodedValue from analyticsTypes — was inline-duplicated here.
 import type { HardcodedValue } from '@/composables/analytics/analyticsTypes'
+import Icon from '@/components/ui/Icon.vue'
 
 interface EnvRecommendation {
   env_var_name: string

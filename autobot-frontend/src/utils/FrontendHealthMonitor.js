@@ -178,7 +178,7 @@ class FrontendHealthMonitor {
             this.healthStatus.backend = backendHealth.status === 'healthy' ? 'healthy' : 'degraded';
             this.healthStatus.overall = this.healthStatus.backend;
             this.notifyHealthChange();
-        } catch (_error) {
+        } catch {
             // Silently ignore health check errors
         }
     }

@@ -9,28 +9,28 @@
   ansible.builtin.systemd:
     name: autobot-backend
     state: restarted
-    daemon_reload: yes
+    daemon_reload: true
   listen: "restart autobot services"
 
 - name: Restart AI stack service
   ansible.builtin.systemd:
     name: autobot-aistack
     state: restarted
-    daemon_reload: yes
+    daemon_reload: true
   listen: "restart autobot services"
 
 - name: Restart NPU worker service
   ansible.builtin.systemd:
     name: autobot-npu
     state: restarted
-    daemon_reload: yes
+    daemon_reload: true
   listen: "restart autobot services"
 
 - name: Restart frontend service
   ansible.builtin.systemd:
     name: autobot-frontend
     state: restarted
-    daemon_reload: yes
+    daemon_reload: true
   listen: "restart autobot services"
 
 - name: Restart Redis service
@@ -41,5 +41,5 @@
 
 - name: Reload systemd
   ansible.builtin.systemd:
-    daemon_reload: yes
+    daemon_reload: true
   listen: "reload systemd"

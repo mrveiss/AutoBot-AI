@@ -18,7 +18,7 @@
           <header class="voice-overlay__header">
             <div class="flex items-center gap-3">
               <div class="voice-overlay__icon">
-                <i class="fas fa-headset"></i>
+                <Icon name="headset" />
               </div>
               <div>
                 <h2 class="text-base font-semibold text-autobot-text-primary">
@@ -48,7 +48,7 @@
                 class="voice-overlay__lang-badge"
                 :title="$t('chat.voice.languageLabel')"
               >
-                <i class="fas fa-globe"></i>
+                <Icon name="globe" />
                 {{ voiceConversation.currentLanguage.value.toUpperCase() }}
               </div>
 
@@ -58,9 +58,9 @@
                 class="voice-overlay__ws-indicator"
                 :class="{
                   'voice-overlay__ws-indicator--connected':
-                    voiceConversation.wsConnected.value,
+                    wsConnected.value,
                 }"
-                :title="voiceConversation.wsConnected.value
+                :title="wsConnected.value
                   ? $t('chat.voice.connected') : $t('chat.voice.disconnected')"
               ></div>
 
@@ -70,7 +70,7 @@
                 class="voice-overlay__close-btn"
                 :aria-label="$t('chat.voice.closeVoiceChat')"
               >
-                <i class="fas fa-times"></i>
+                <Icon name="times" />
               </button>
             </div>
           </header>
@@ -81,7 +81,7 @@
               v-if="voiceConversation.bubbles.value.length === 0"
               class="voice-overlay__empty"
             >
-              <i class="fas fa-comments text-2xl opacity-20"></i>
+              <Icon name="comments" class="text-2xl opacity-20" />
               <p>{{ $t('chat.voice.tapMicToStart') }}</p>
             </div>
 
@@ -96,10 +96,7 @@
                 }"
               >
                 <div class="voice-overlay__bubble-icon">
-                  <i :class="bubble.sender === 'user'
-                    ? 'fas fa-user'
-                    : 'fas fa-robot'"
-                  ></i>
+                  <Icon :name="bubble.sender === 'user' ? 'user' : 'robot'" />
                 </div>
                 <div class="voice-overlay__bubble-content">
                   <span class="voice-overlay__bubble-sender">
@@ -116,7 +113,7 @@
                 v-if="voiceConversation.currentTranscript.value"
                 class="voice-overlay__live-transcript"
               >
-                <i class="fas fa-ellipsis-h animate-pulse me-2"></i>
+                <Icon name="ellipsis-h" class="animate-pulse me-2" />
                 {{ voiceConversation.currentTranscript.value }}
               </div>
             </Transition>
@@ -128,7 +125,7 @@
               v-if="voiceConversation.errorMessage.value"
               class="voice-overlay__error"
             >
-              <i class="fas fa-exclamation-triangle me-2"></i>
+              <Icon name="exclamation-triangle" class="me-2" />
               {{ voiceConversation.errorMessage.value }}
             </div>
           </Transition>
@@ -141,7 +138,7 @@
               class="voice-overlay__cert-warning"
             >
               <p class="voice-overlay__cert-warning-title">
-                <i class="fas fa-lock-open me-2"></i>{{ $t('chat.voice.micBlocked') }}
+                <Icon name="lock" class="me-2" />{{ $t('chat.voice.micBlocked') }}
               </p>
               <p class="voice-overlay__cert-warning-body">
                 {{ $t('chat.voice.certRequired') }}
@@ -155,7 +152,7 @@
                 </li>
               </ol>
               <p class="voice-overlay__cert-warning-fallback">
-                <i class="fas fa-info-circle me-1"></i>
+                <Icon name="info-circle" class="me-1" />
                 {{ $t('chat.voice.walkieTalkieFallback') }}
               </p>
             </div>
@@ -223,7 +220,7 @@
                 "
                 :aria-label="voiceConversation.stateLabel.value"
               >
-                <i :class="micIcon" class="text-xl"></i>
+                <Icon :name="micIcon" />
               </button>
             </div>
 
@@ -238,6 +235,7 @@
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import {
   computed,
   nextTick,
@@ -247,6 +245,7 @@ import {
 } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useVoiceConversation } from '@/composables/useVoiceConversation'
+import { useVoiceOutput } from '@/composables/useVoiceOutput'
 
 const emit = defineEmits<{
   (e: 'close'): void
@@ -254,17 +253,18 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 const voiceConversation = useVoiceConversation()
+const { wsConnected } = useVoiceOutput()
 const overlayRef = ref<HTMLElement | null>(null)
 const conversationRef = ref<HTMLElement | null>(null)
 
 const micIcon = computed(() => {
   switch (voiceConversation.state.value) {
     case 'listening':
-      return isAutoMode.value ? 'fas fa-microphone' : 'fas fa-stop'
-    case 'processing': return 'fas fa-spinner fa-spin'
+      return isAutoMode.value ? 'microphone' : 'stop'
+    case 'processing': return 'spinner'
     case 'speaking':
-      return 'fas fa-stop'
-    default: return 'fas fa-microphone'
+      return 'stop'
+    default: return 'microphone'
   }
 })
 

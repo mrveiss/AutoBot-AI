@@ -4,7 +4,6 @@ import LoadingSpinner from './LoadingSpinner.vue';
 const meta = {
   title: 'Components/UI/LoadingSpinner',
   component: LoadingSpinner,
-  tags: ['autodocs'],
   argTypes: {
     size: {
       control: 'select',

@@ -4,7 +4,13 @@
 """Issue #6902: SunsetLegacyHealthMiddleware adds Sunset/Deprecation headers
 to legacy /api/<module>/health routes — but NOT to the canonical aggregator
 at /api/system/health.
+
+Issue #6919: middleware also emits an INFO log and increments
+autobot_legacy_health_hits_total{path, user_agent} on every legacy hit.
 """
+
+import logging
+from unittest.mock import MagicMock, patch
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -113,3 +119,77 @@ def test_is_legacy_excludes_non_api_prefix():
     assert _is_legacy_module_health("/health") is False
     assert _is_legacy_module_health("/redis/health") is False
     assert _is_legacy_module_health("/static/health") is False
+
+
+# --- Telemetry signals (#6919) -----------------------------------------------
+
+
+def test_legacy_hit_emits_info_log(caplog):
+    client = _build_app()
+    with caplog.at_level(logging.INFO, logger="middleware.sunset_legacy_health"):
+        client.get("/api/redis/health")
+    legacy_records = [r for r in caplog.records if "Legacy health hit" in r.message]
+    assert len(legacy_records) == 1
+    assert "/api/redis/health" in legacy_records[0].message
+
+
+def test_canonical_path_does_not_emit_info_log(caplog):
+    client = _build_app()
+    with caplog.at_level(logging.INFO, logger="middleware.sunset_legacy_health"):
+        client.get("/api/system/health")
+    legacy_records = [r for r in caplog.records if "Legacy health hit" in r.message]
+    assert len(legacy_records) == 0
+
+
+def test_legacy_hit_increments_counter():
+    import middleware.sunset_legacy_health as mw
+
+    mock_counter = MagicMock()
+    mock_labels = MagicMock()
+    mock_counter.labels.return_value = mock_labels
+
+    client = _build_app()
+    with patch.object(mw, "autobot_legacy_health_hits_total", mock_counter):
+        client.get("/api/redis/health", headers={"User-Agent": "prometheus/2.x"})
+
+    mock_counter.labels.assert_called_once_with(path="/api/redis/health", user_agent="prometheus/2.x")
+    mock_labels.inc.assert_called_once()
+
+
+def test_canonical_path_does_not_increment_counter():
+    import middleware.sunset_legacy_health as mw
+
+    mock_counter = MagicMock()
+    client = _build_app()
+    with patch.object(mw, "autobot_legacy_health_hits_total", mock_counter):
+        client.get("/api/system/health")
+
+    mock_counter.labels.assert_not_called()
+
+
+def test_user_agent_truncated_to_120_chars():
+    import middleware.sunset_legacy_health as mw
+
+    mock_counter = MagicMock()
+    mock_counter.labels.return_value = MagicMock()
+
+    client = _build_app()
+    with patch.object(mw, "autobot_legacy_health_hits_total", mock_counter):
+        client.get("/api/redis/health", headers={"User-Agent": "A" * 200})
+
+    call_kwargs = mock_counter.labels.call_args.kwargs
+    assert len(call_kwargs["user_agent"]) == 120
+
+
+def test_missing_user_agent_defaults_to_unknown():
+    import middleware.sunset_legacy_health as mw
+
+    mock_counter = MagicMock()
+    mock_counter.labels.return_value = MagicMock()
+
+    client = _build_app()
+    with patch.object(mw, "autobot_legacy_health_hits_total", mock_counter):
+        client.get("/api/redis/health", headers={})
+
+    call_kwargs = mock_counter.labels.call_args.kwargs
+    assert call_kwargs["user_agent"] == "unknown"

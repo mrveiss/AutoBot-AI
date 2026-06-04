@@ -17,7 +17,7 @@ from autobot_shared.monitoring.metrics.mcp_worker import MCPWorkerMetricsRecorde
 class TestMCPWorkerMetricsRecorder:
     """MCPWorkerMetricsRecorder metric recording."""
 
-    def test_record_restart(self):
+    def test_record_restart(self) -> None:
         """Record restart count updates the gauge."""
         registry = CollectorRegistry()
         recorder = MCPWorkerMetricsRecorder(registry)
@@ -31,7 +31,7 @@ class TestMCPWorkerMetricsRecorder:
         metric_dict = {m.name: m for m in metrics}
         assert "autobot_mcp_worker_restart_count" in metric_dict
 
-    def test_record_restart_budget_exhaustion(self):
+    def test_record_restart_budget_exhaustion(self) -> None:
         """Record restart budget exhaustion increments counter."""
         registry = CollectorRegistry()
         recorder = MCPWorkerMetricsRecorder(registry)
@@ -44,7 +44,7 @@ class TestMCPWorkerMetricsRecorder:
         metric_dict = {m.name: m for m in metrics}
         assert "autobot_mcp_worker_restart_budget_exhaustion_total" in metric_dict
 
-    def test_record_crash_interval(self):
+    def test_record_crash_interval(self) -> None:
         """Record crash interval records to histogram."""
         registry = CollectorRegistry()
         recorder = MCPWorkerMetricsRecorder(registry)
@@ -58,7 +58,7 @@ class TestMCPWorkerMetricsRecorder:
         metric_dict = {m.name: m for m in metrics}
         assert "autobot_mcp_worker_crash_seconds" in metric_dict
 
-    def test_set_circuit_breaker_activated(self):
+    def test_set_circuit_breaker_activated(self) -> None:
         """Set circuit breaker activation state."""
         registry = CollectorRegistry()
         recorder = MCPWorkerMetricsRecorder(registry)
@@ -71,7 +71,7 @@ class TestMCPWorkerMetricsRecorder:
         metric_dict = {m.name: m for m in metrics}
         assert "autobot_mcp_worker_circuit_breaker_activated" in metric_dict
 
-    def test_set_worker_uptime(self):
+    def test_set_worker_uptime(self) -> None:
         """Set worker uptime in seconds."""
         registry = CollectorRegistry()
         recorder = MCPWorkerMetricsRecorder(registry)
@@ -84,7 +84,7 @@ class TestMCPWorkerMetricsRecorder:
         metric_dict = {m.name: m for m in metrics}
         assert "autobot_mcp_worker_uptime_seconds" in metric_dict
 
-    def test_set_permanently_failed(self):
+    def test_set_permanently_failed(self) -> None:
         """Set permanent failure flag."""
         registry = CollectorRegistry()
         recorder = MCPWorkerMetricsRecorder(registry)
@@ -97,7 +97,7 @@ class TestMCPWorkerMetricsRecorder:
         metric_dict = {m.name: m for m in metrics}
         assert "autobot_mcp_worker_permanently_failed" in metric_dict
 
-    def test_multiple_bridges(self):
+    def test_multiple_bridges(self) -> None:
         """Track metrics for multiple bridges independently."""
         registry = CollectorRegistry()
         recorder = MCPWorkerMetricsRecorder(registry)
@@ -110,7 +110,7 @@ class TestMCPWorkerMetricsRecorder:
         metric_dict = {m.name: m for m in metrics}
         assert "autobot_mcp_worker_restart_count" in metric_dict
 
-    def test_all_metrics_initialized(self):
+    def test_all_metrics_initialized(self) -> None:
         """All metric attributes are initialized."""
         registry = CollectorRegistry()
         recorder = MCPWorkerMetricsRecorder(registry)

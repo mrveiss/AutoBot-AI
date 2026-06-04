@@ -7,9 +7,9 @@
 
 """Centralized manager for all media processing pipelines."""
 
-import logging
-from typing import Dict, List, Optional
+from typing import Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from media.audio.pipeline import AudioPipeline
 from media.core.pipeline import MediaPipeline
 from media.core.types import MediaInput, MediaType, ProcessingResult
@@ -18,7 +18,7 @@ from media.image.pipeline import ImagePipeline
 from media.link.pipeline import LinkPipeline
 from media.video.pipeline import VideoPipeline
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class MediaPipelineManager:
@@ -39,7 +39,7 @@ class MediaPipelineManager:
             "link": LinkPipeline(),
         }
 
-    def get_pipeline(self, media_type: MediaType) -> Optional[MediaPipeline]:
+    def get_pipeline(self, media_type: MediaType) -> MediaPipeline | None:
         """
         Get appropriate pipeline for media type.
 
@@ -91,7 +91,7 @@ class MediaPipelineManager:
         """
         return list(self.pipelines.keys())
 
-    def get_pipeline_by_name(self, name: str) -> Optional[MediaPipeline]:
+    def get_pipeline_by_name(self, name: str) -> MediaPipeline | None:
         """
         Get pipeline by name.
 
@@ -130,7 +130,7 @@ class MediaPipelineManager:
 
 
 # Singleton instance for global access
-_manager_instance: Optional[MediaPipelineManager] = None
+_manager_instance: MediaPipelineManager | None = None
 
 
 def get_media_pipeline_manager() -> MediaPipelineManager:

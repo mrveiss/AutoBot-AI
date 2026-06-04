@@ -20,3 +20,7 @@
 - name: Configure firewall rules
   ansible.builtin.include_tasks: firewall.yml
   when: ansible_facts['os_family'] == "Debian"
+
+- name: Include daily health check cron installation
+  ansible.builtin.include_tasks: health_check_cron.yml
+  when: monitoring_install_health_check_cron | bool

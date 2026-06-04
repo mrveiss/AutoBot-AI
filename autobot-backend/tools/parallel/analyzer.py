@@ -8,12 +8,12 @@ Analyzes dependencies between tool calls to enable parallel execution.
 Based on Cursor's dependency detection patterns.
 """
 
-import logging
-from typing import Callable, Optional
+from typing import Callable
 
+from autobot_shared.logging_manager import get_logger
 from tools.parallel.types import DependencyType, ToolCall
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class DependencyAnalyzer:
@@ -58,7 +58,7 @@ class DependencyAnalyzer:
     }
 
     # Resource extraction patterns for common tools
-    RESOURCE_EXTRACTORS: dict[str, Callable[[dict], Optional[str]]] = {
+    RESOURCE_EXTRACTORS: dict[str, Callable[[dict], str | None]] = {
         "read_file": lambda args: args.get("file_path") or args.get("path"),
         "edit_file": lambda args: args.get("file_path") or args.get("path"),
         "write_file": lambda args: args.get("file_path") or args.get("path"),
@@ -72,12 +72,12 @@ class DependencyAnalyzer:
     }
 
     def __init__(self):
-        self._custom_extractors: dict[str, Callable[[dict], Optional[str]]] = {}
+        self._custom_extractors: dict[str, Callable[[dict], str | None]] = {}
 
     def register_resource_extractor(
         self,
         tool_name: str,
-        extractor: Callable[[dict], Optional[str]],
+        extractor: Callable[[dict], str | None],
     ) -> None:
         """Register a custom resource extractor for a tool"""
         self._custom_extractors[tool_name] = extractor
@@ -143,7 +143,7 @@ class DependencyAnalyzer:
 
         return DependencyType.NONE
 
-    def _extract_resource(self, call: ToolCall) -> Optional[str]:
+    def _extract_resource(self, call: ToolCall) -> str | None:
         """Extract resource identifier from tool call"""
         # Check custom extractors first
         if call.tool_name in self._custom_extractors:

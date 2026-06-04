@@ -32,7 +32,7 @@ import hashlib
 import json
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Protocol
+from typing import Any, Dict, List, Protocol
 
 from agents.machine_aware_system_knowledge_manager import (
     MachineAwareSystemKnowledgeManager,
@@ -119,7 +119,7 @@ class IMachineAwareManager(Protocol):
         """Initialize with machine-specific adaptation"""
         ...
 
-    async def get_machine_info(self) -> Optional[Dict[str, Any]]:
+    async def get_machine_info(self) -> Dict[str, Any] | None:
         """Get current machine profile"""
         ...
 
@@ -194,8 +194,8 @@ class UnifiedKnowledgeManager:
         knowledge_base: KnowledgeBase,
         enable_temporal: bool = True,
         enable_machine_aware: bool = True,
-        temporal_manager: Optional[ITemporalManager] = None,
-        system_manager: Optional[ISystemKnowledgeManager] = None,
+        temporal_manager: ITemporalManager | None = None,
+        system_manager: ISystemKnowledgeManager | None = None,
     ):
         """
         Initialize Unified Knowledge Manager with composition
@@ -228,7 +228,7 @@ class UnifiedKnowledgeManager:
             self._system_manager: ISystemKnowledgeManager = system_manager or SystemKnowledgeManager(knowledge_base)
 
         # Optional component: Temporal knowledge manager
-        self._temporal_manager: Optional[ITemporalManager] = temporal_manager or (
+        self._temporal_manager: ITemporalManager | None = temporal_manager or (
             TemporalKnowledgeManager() if enable_temporal else None
         )
 
@@ -385,7 +385,7 @@ class UnifiedKnowledgeManager:
         # Already initialized in _initialize_managers(), this is for explicit calls
         await self._system_manager.initialize_machine_aware_knowledge(force_reinstall)
 
-    async def get_machine_info(self) -> Optional[Dict[str, Any]]:
+    async def get_machine_info(self) -> Dict[str, Any] | None:
         """
         Get current machine profile
 
@@ -414,7 +414,7 @@ class UnifiedKnowledgeManager:
 
         # Access machine profile from MachineAwareSystemKnowledgeManager
         if hasattr(self._system_manager, "current_machine_profile"):
-            profile: Optional[MachineProfile] = self._system_manager.current_machine_profile
+            profile: MachineProfile | None = self._system_manager.current_machine_profile
             if profile:
                 return profile.to_dict()
 
@@ -516,9 +516,7 @@ class UnifiedKnowledgeManager:
     # TEMPORAL TRACKING API (delegates to TemporalKnowledgeManager)
     # ========================================================================
 
-    def register_content(
-        self, content_id: str, metadata: Dict[str, Any], content_hash: str
-    ) -> Optional[TemporalMetadata]:
+    def register_content(self, content_id: str, metadata: Dict[str, Any], content_hash: str) -> TemporalMetadata | None:
         """
         Register content with temporal tracking
 
@@ -719,7 +717,7 @@ class UnifiedKnowledgeManager:
         if self._temporal_manager:
             await self._temporal_manager.stop_background_processing()
 
-    def get_content_status(self, content_id: str) -> Optional[Dict[str, Any]]:
+    def get_content_status(self, content_id: str) -> Dict[str, Any] | None:
         """
         Get detailed temporal status for specific content
 
@@ -752,7 +750,7 @@ class UnifiedKnowledgeManager:
     # INTEGRATED OPERATIONS - Unified functionality
     # ========================================================================
 
-    async def _process_import_file(self, file_path: str, category: str, metadata: Optional[Dict[str, Any]]) -> bool:
+    async def _process_import_file(self, file_path: str, category: str, metadata: Dict[str, Any] | None) -> bool:
         """
         Process a single file for import and temporal tracking.
 
@@ -805,7 +803,7 @@ class UnifiedKnowledgeManager:
                 raise ValueError(f"Invalid file path in files list: '{file_path}'")
 
     async def import_knowledge_with_tracking(
-        self, category: str, files: List[str], metadata: Optional[Dict[str, Any]] = None
+        self, category: str, files: List[str], metadata: Dict[str, Any] | None = None
     ) -> Dict[str, Any]:
         """
         Import knowledge with automatic temporal tracking.
@@ -1065,12 +1063,12 @@ class UnifiedKnowledgeManager:
 
 import threading
 
-_unified_knowledge_manager_instance: Optional[UnifiedKnowledgeManager] = None
+_unified_knowledge_manager_instance: UnifiedKnowledgeManager | None = None
 _unified_knowledge_manager_lock = threading.Lock()
 
 
 def get_unified_knowledge_manager(
-    knowledge_base: Optional[KnowledgeBase] = None,
+    knowledge_base: KnowledgeBase | None = None,
     enable_temporal: bool = True,
     enable_machine_aware: bool = True,
 ) -> UnifiedKnowledgeManager:

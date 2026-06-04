@@ -9,9 +9,13 @@ decorators and FastAPI dependencies. It integrates with the existing SecurityLay
 for permission checks and audit logging.
 
 Issue #744: Phase 6 - RBAC permission decorators for API endpoints.
+Issue #6511: Permission/Role/ROLE_PERMISSIONS moved to autobot_shared.auth.permissions
+             for cross-service consistency.  This module re-exports them so all
+             existing callers (``from auth_rbac import Permission``) continue to work.
 
 Usage:
     from auth_rbac import require_permission, require_role, Permission
+from autobot_shared.logging_manager import get_logger
 
     @router.get("/admin/users")
     async def list_users(
@@ -28,23 +32,24 @@ Usage:
         ...
 """
 
-import logging
-from typing import Callable, List, Union
+from typing import Callable, List
 
 from fastapi import Request
 
 from auth_middleware import get_auth_middleware
-from autobot_shared.auth.permissions import ROLE_PERMISSIONS, Permission, Role  # GH #6511
+from autobot_shared.auth.permissions import (  # noqa: F401 — re-exported for callers
+    ROLE_PERMISSIONS,
+    Permission,
+    Role,
+)
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from security_layer import SecurityLayer
 from utils.catalog_http_exceptions import raise_auth_error
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _get_security_layer = lazy_singleton(SecurityLayer)
-
-# Re-export so existing call-sites that do `from auth_rbac import Permission` keep working.
-__all__ = ["Permission", "Role", "ROLE_PERMISSIONS", "require_permission", "require_role", "require_any_permission"]
 
 
 def _get_user_permissions(user_role: str) -> List[str]:
@@ -77,7 +82,7 @@ def _get_user_permissions(user_role: str) -> List[str]:
     return list(set(permissions))  # Remove duplicates
 
 
-def has_permission(user_data: dict, permission: Union[Permission, str]) -> bool:
+def has_permission(user_data: dict, permission: Permission | str) -> bool:
     """
     Check if a user has a specific permission.
 
@@ -102,7 +107,7 @@ def has_permission(user_data: dict, permission: Union[Permission, str]) -> bool:
     return _get_security_layer().check_permission(user_role, perm_str)
 
 
-def _check_single_user_bypass(permission: Union[Permission, str]) -> bool:
+def _check_single_user_bypass(permission: Permission | str) -> bool:
     """
     Check if single-user mode bypass should apply. Issue #620.
 
@@ -153,7 +158,7 @@ def _deny_permission_access(user_data: dict, perm_str: str, request: Request) ->
 
 
 def require_permission(
-    permission: Union[Permission, str],
+    permission: Permission | str,
     allow_single_user_bypass: bool = True,
 ) -> Callable:
     """
@@ -252,7 +257,7 @@ def _deny_any_permission_access(user_data: dict, perm_strs: List[str], request: 
     )
 
 
-def require_role(*roles: Union[Role, str], allow_single_user_bypass: bool = True) -> Callable:
+def require_role(*roles: Role | str, allow_single_user_bypass: bool = True) -> Callable:
     """
     FastAPI dependency that requires one of the specified roles.
 
@@ -295,7 +300,7 @@ def require_role(*roles: Union[Role, str], allow_single_user_bypass: bool = True
 
 
 def require_any_permission(
-    *permissions: Union[Permission, str],
+    *permissions: Permission | str,
     allow_single_user_bypass: bool = True,
 ) -> Callable:
     """

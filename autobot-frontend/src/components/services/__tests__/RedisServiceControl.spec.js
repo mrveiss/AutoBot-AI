@@ -22,6 +22,9 @@ import { ref } from 'vue';
 import en from '@/i18n/locales/en.json';
 import RedisServiceControl from '@/components/services/RedisServiceControl.vue';
 
+// eslint-disable-next-line no-restricted-syntax -- test fixture value
+const REDIS_VM_HOST = '172.16.168.23'
+
 // Create i18n with real English messages so $t() returns translated text (#2641)
 const createTestI18n = () =>
   createI18n({
@@ -43,7 +46,7 @@ const createDefaultMockReturn = (overrides = {}) => ({
     connections: 42,
     commands_processed: 500000,
     last_check: new Date().toISOString(),
-    vm_info: { host: '172.16.168.23', name: 'Redis VM', ssh_accessible: true },
+    vm_info: { host: REDIS_VM_HOST, name: 'Redis VM', ssh_accessible: true },
   }),
   healthStatus: ref({
     overall_status: 'healthy',
@@ -77,7 +80,7 @@ let mockReturn;
 
 // Mock composables
 vi.mock('@/composables/useServiceManagement', () => ({
-  useServiceManagement: vi.fn((...args) => mockReturn),
+  useServiceManagement: vi.fn((..._args) => mockReturn),
 }));
 
 // Mock debugUtils logger to suppress output
@@ -99,7 +102,7 @@ const mountWithPlugins = (options = {}) => {
         // Stub Teleport so BaseModal content renders inline
         teleport: true,
       },
-      ...(options.global || {}),
+      ...options.global,
     },
     ...options,
   });

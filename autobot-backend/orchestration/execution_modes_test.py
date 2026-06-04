@@ -19,6 +19,8 @@ import logging
 
 import pytest
 
+from autobot_shared.logging_manager import get_logger
+
 from .execution_modes import (
     DebugController,
     DryRunReport,
@@ -28,7 +30,7 @@ from .execution_modes import (
 )
 from .workflow_executor import WorkflowExecutor
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # ---------------------------------------------------------------------------

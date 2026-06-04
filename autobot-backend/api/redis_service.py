@@ -12,29 +12,26 @@ Features:
 - Audit logging for all operations
 """
 
-import logging
-from typing import Optional
-
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from api.schemas_system import (
-    HealthStatusResponse,
     ServiceOperationResponse,
     ServiceStatusResponse,
 )
 from api.system_health import ComponentHealth, register_health_probe
 from auth_middleware import get_auth_middleware
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from services.redis_service_manager import RedisConnectionError, RedisServiceManager
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 router = APIRouter(tags=["Redis Service Management"])
 
 # Performance optimization: O(1) lookup for privileged roles (Issue #326)
 PRIVILEGED_ROLES = {"admin", "operator"}
 
 # Global service manager instance (singleton)
-_service_manager: Optional[RedisServiceManager] = None
+_service_manager: RedisServiceManager | None = None
 _service_manager_started: bool = False
 
 
@@ -275,7 +272,7 @@ async def get_redis_status(manager: RedisServiceManager = Depends(get_service_ma
 
 @register_health_probe("redis_service")
 async def probe_redis_service(
-    request: Optional[Request] = None,
+    request: Request | None = None,
 ) -> ComponentHealth:
     """Issue #3333: probe registration for Redis service-manager health."""
     try:
@@ -301,33 +298,3 @@ async def probe_redis_service(
             status="down",
             detail=f"probe error: {type(exc).__name__}",
         )
-
-
-@router.get("/health", response_model=HealthStatusResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_redis_health",
-    error_code_prefix="REDIS_SERVICE",
-)
-async def get_redis_health(manager: RedisServiceManager = Depends(get_service_manager)):
-    """
-    Get detailed Redis service health status
-
-    No authentication required (public endpoint)
-    """
-    try:
-        health = await manager.get_health()
-
-        return HealthStatusResponse(
-            overall_status=health.overall_status,
-            service_running=health.service_running,
-            connectivity=health.connectivity,
-            response_time_ms=health.response_time_ms,
-            last_successful_command=health.last_successful_command,
-            error_count_last_hour=health.error_count_last_hour,
-            recommendations=health.recommendations or [],
-        )
-
-    except Exception as e:
-        logger.error("Get health error: %s", e)
-        raise HTTPException(status_code=500, detail="Failed to get health status")

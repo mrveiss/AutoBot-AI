@@ -27,7 +27,6 @@ Safety:
 from __future__ import annotations
 
 import asyncio
-import logging
 import os
 import re
 import shutil
@@ -35,7 +34,9 @@ import time
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
+
+from autobot_shared.logging_manager import get_logger
 
 from .archive import Archive
 from .auto_research_agent import ApprovalGate
@@ -43,7 +44,7 @@ from .config import AutoResearchConfig
 from .meta_agent import MetaPatch
 from .models import VariantArchiveEntry
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -57,7 +58,7 @@ class MetaEvalResult:
     test_output: str = ""  # raw pytest output for diagnostics
     decision: str = "skipped"  # "approved" | "rejected" | "skipped" | "timeout"
     applied: bool = False  # True only when patch is written to live file
-    error: Optional[str] = None
+    error: str | None = None
     evaluated_at: float = field(default_factory=time.time)
 
     @property
@@ -93,8 +94,8 @@ class MetaEvalHarness:
 
     def __init__(
         self,
-        config: Optional[AutoResearchConfig] = None,
-        approval_gate: Optional[ApprovalGate] = None,
+        config: AutoResearchConfig | None = None,
+        approval_gate: ApprovalGate | None = None,
     ) -> None:
         self.config = config or AutoResearchConfig()
         self._gate = approval_gate or ApprovalGate(self.config)
@@ -104,7 +105,7 @@ class MetaEvalHarness:
         patch: MetaPatch,
         archive: Archive,
         session_id: str = "",
-        test_paths: Optional[List[str]] = None,
+        test_paths: List[str] | None = None,
     ) -> MetaEvalResult:
         """Evaluate *patch* and return a MetaEvalResult.
 
@@ -126,7 +127,7 @@ class MetaEvalHarness:
             self._add_to_archive(archive, patch, result)
             return result
 
-        tmp_path: Optional[Path] = None
+        tmp_path: Path | None = None
         try:
             tmp_path = self._write_temp_module(patch)
             passed, total, output = await self._run_tests(

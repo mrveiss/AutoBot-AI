@@ -22,20 +22,20 @@ Architecture:
 """
 
 import asyncio
-import logging
 import threading
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from enum import Enum
-from typing import Dict, List, Optional
+from typing import Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import RetryConfig, TimingConstants
-from event_manager import get_event_manager
+from events.bus import PersistStrategy, publish_event
 from npu_integration import NPUWorkerClient
 from type_defs.common import Metadata
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # ==============================================
@@ -92,10 +92,10 @@ class Worker:
     total_tasks_completed: int = 0
     total_tasks_failed: int = 0
     consecutive_failures: int = 0
-    last_health_check: Optional[datetime] = None
-    last_success: Optional[datetime] = None
+    last_health_check: datetime | None = None
+    last_success: datetime | None = None
     circuit_breaker_state: CircuitBreakerState = CircuitBreakerState.CLOSED
-    circuit_open_until: Optional[datetime] = None
+    circuit_open_until: datetime | None = None
 
     def is_available(self) -> bool:
         """Check if worker is available for new tasks"""
@@ -115,7 +115,7 @@ class Worker:
             and self.circuit_breaker_state in (CircuitBreakerState.CLOSED, CircuitBreakerState.HALF_OPEN)
         )
 
-    def record_success(self):
+    def record_success(self) -> None:
         """Record successful task completion"""
         self.current_load = max(0, self.current_load - 1)
         self.total_tasks_completed += 1
@@ -126,7 +126,7 @@ class Worker:
             self.circuit_breaker_state = CircuitBreakerState.CLOSED
             self.circuit_open_until = None
 
-    def record_failure(self, circuit_breaker_threshold: int = 3, circuit_breaker_timeout: int = 300):
+    def record_failure(self, circuit_breaker_threshold: int = 3, circuit_breaker_timeout: int = 300) -> None:
         """Record task failure and update circuit breaker"""
         self.current_load = max(0, self.current_load - 1)
         self.total_tasks_failed += 1
@@ -142,7 +142,7 @@ class Worker:
                 f"{self.consecutive_failures} failures. Will retry at {self.circuit_open_until}"
             )
 
-    def check_circuit_breaker_recovery(self):
+    def check_circuit_breaker_recovery(self) -> None:
         """Check if circuit breaker can transition from OPEN to HALF_OPEN"""
         if self.circuit_breaker_state == CircuitBreakerState.OPEN:
             if self.circuit_open_until and datetime.now(tz=timezone.utc) >= self.circuit_open_until:
@@ -166,7 +166,7 @@ class Worker:
             return True
         return False
 
-    def handle_unhealthy_check(self, circuit_breaker_threshold: int, circuit_breaker_timeout: int):
+    def handle_unhealthy_check(self, circuit_breaker_threshold: int, circuit_breaker_timeout: int) -> None:
         """Handle failed health check result (Issue #372 - reduces feature envy).
 
         Args:
@@ -230,7 +230,7 @@ class LoadBalancingStrategy(ABC):
     """Abstract base class for load balancing strategies"""
 
     @abstractmethod
-    def select_worker(self, workers: List[Worker]) -> Optional[Worker]:
+    def select_worker(self, workers: List[Worker]) -> Worker | None:
         """
         Select a worker from available workers.
 
@@ -245,11 +245,11 @@ class LoadBalancingStrategy(ABC):
 class RoundRobinStrategy(LoadBalancingStrategy):
     """Round-robin load balancing strategy"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize round-robin strategy with starting index."""
         self._last_index = -1
 
-    def select_worker(self, workers: List[Worker]) -> Optional[Worker]:
+    def select_worker(self, workers: List[Worker]) -> Worker | None:
         """Select next worker in round-robin fashion"""
         if not workers:
             return None
@@ -267,7 +267,7 @@ class RoundRobinStrategy(LoadBalancingStrategy):
 class LeastLoadedStrategy(LoadBalancingStrategy):
     """Least-loaded load balancing strategy"""
 
-    def select_worker(self, workers: List[Worker]) -> Optional[Worker]:
+    def select_worker(self, workers: List[Worker]) -> Worker | None:
         """Select worker with lowest current load"""
         if not workers:
             return None
@@ -284,7 +284,7 @@ class LeastLoadedStrategy(LoadBalancingStrategy):
 class WeightedStrategy(LoadBalancingStrategy):
     """Weighted load balancing based on worker priority"""
 
-    def select_worker(self, workers: List[Worker]) -> Optional[Worker]:
+    def select_worker(self, workers: List[Worker]) -> Worker | None:
         """Select worker based on priority weights"""
         if not workers:
             return None
@@ -302,7 +302,7 @@ class WeightedStrategy(LoadBalancingStrategy):
 class PriorityFailoverStrategy(LoadBalancingStrategy):
     """Priority-based failover strategy"""
 
-    def select_worker(self, workers: List[Worker]) -> Optional[Worker]:
+    def select_worker(self, workers: List[Worker]) -> Worker | None:
         """Select highest priority available worker (primary with failover)"""
         if not workers:
             return None
@@ -336,7 +336,7 @@ class NPULoadBalancer:
         health_check_interval: int = 30,
         circuit_breaker_threshold: int = 3,
         circuit_breaker_timeout: int = 300,
-    ):
+    ) -> None:
         """
         Initialize NPU Load Balancer.
 
@@ -351,7 +351,7 @@ class NPULoadBalancer:
         self._health_check_interval = health_check_interval
         self._circuit_breaker_threshold = circuit_breaker_threshold
         self._circuit_breaker_timeout = circuit_breaker_timeout
-        self._health_monitor_task: Optional[asyncio.Task] = None
+        self._health_monitor_task: asyncio.Task | None = None
         self._running = False
         self._selection_lock = asyncio.Lock()
         self._workers_lock = threading.Lock()  # CRITICAL: Protect concurrent worker dictionary access
@@ -428,7 +428,7 @@ class NPULoadBalancer:
                 return True
         return False
 
-    def get_worker(self, worker_id: str) -> Optional[Worker]:
+    def get_worker(self, worker_id: str) -> Worker | None:
         """Get worker by ID"""
         with self._workers_lock:
             return self._workers.get(worker_id)
@@ -438,7 +438,7 @@ class NPULoadBalancer:
         with self._workers_lock:
             return list(self._workers.values())
 
-    async def select_worker(self) -> Optional[Worker]:
+    async def select_worker(self) -> Worker | None:
         """
         Select best worker for new task using configured strategy.
 
@@ -522,7 +522,7 @@ class NPULoadBalancer:
         finally:
             await client.close()
 
-    async def get_worker_status(self, worker_id: str) -> Optional[Metadata]:
+    async def get_worker_status(self, worker_id: str) -> Metadata | None:
         """
         Get status of specific worker.
 
@@ -547,7 +547,7 @@ class NPULoadBalancer:
             workers = list(self._workers.values())
         return [worker.to_dict() for worker in workers]
 
-    async def start_health_monitoring(self):
+    async def start_health_monitoring(self) -> None:
         """Start background health monitoring task"""
         if self._running:
             logger.warning("Health monitoring already running")
@@ -557,7 +557,7 @@ class NPULoadBalancer:
         self._health_monitor_task = asyncio.create_task(self._health_monitor_loop())
         logger.info("Started NPU worker health monitoring")
 
-    async def stop_health_monitoring(self):
+    async def stop_health_monitoring(self) -> None:
         """Stop background health monitoring task"""
         self._running = False
         if self._health_monitor_task:
@@ -569,7 +569,7 @@ class NPULoadBalancer:
             self._health_monitor_task = None
         logger.info("Stopped NPU worker health monitoring")
 
-    async def _health_monitor_loop(self):
+    async def _health_monitor_loop(self) -> None:
         """Background task for periodic health checks"""
         logger.info("Health monitor loop started")
 
@@ -596,7 +596,7 @@ class NPULoadBalancer:
                 # Error recovery delay before continuing monitoring
                 await asyncio.sleep(TimingConstants.ERROR_RECOVERY_DELAY)
 
-    async def _check_worker_health(self, worker: Worker):
+    async def _check_worker_health(self, worker: Worker) -> None:
         """
         Check health of a single worker (Issue #372 - uses model methods).
 
@@ -635,7 +635,7 @@ class NPULoadBalancer:
         finally:
             await client.close()
 
-    async def _emit_worker_status_change(self, worker: Worker, reason: str):
+    async def _emit_worker_status_change(self, worker: Worker, reason: str) -> None:
         """
         Emit WebSocket event for worker status change (Issue #372 - uses model method).
 
@@ -644,9 +644,8 @@ class NPULoadBalancer:
             reason: Reason for status change
         """
         try:
-            await get_event_manager().publish(
-                "npu_worker_status_change",
-                worker.to_status_event_dict(reason),
+            await publish_event(
+                "global", "npu_worker_status_change", worker.to_status_event_dict(reason), persist=PersistStrategy.NONE
             )
         except Exception as e:
             logger.error("Failed to emit worker status change event: %s", e)
@@ -657,7 +656,7 @@ class NPULoadBalancer:
 # ==============================================
 
 # Global load balancer instance with thread-safe initialization (Issue #662)
-_global_load_balancer: Optional[NPULoadBalancer] = None
+_global_load_balancer: NPULoadBalancer | None = None
 _load_balancer_lock = threading.Lock()
 
 

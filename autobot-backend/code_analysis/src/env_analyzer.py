@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import ast
 import json
-import logging
 import re
 import sys
 import time
@@ -19,7 +18,9 @@ from pathlib import Path
 from typing import Any
 
 from autobot_shared.async_compat import run_or_schedule
-from autobot_shared.ssot_config import QUALITY_MODEL
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import QUALITY_MODEL, config
+from autobot_shared.ssot_constants import TTL_1_HOUR
 
 # Issue #542: Handle imports for both standalone execution and backend import
 # When imported from backend, project root is in sys.path
@@ -57,7 +58,7 @@ except ImportError:
     SSOTMapping = None
 
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level tuple for literal value AST types
 _LITERAL_VALUE_TYPES = (ast.Str, ast.Num)
@@ -1237,7 +1238,7 @@ class EnvironmentAnalyzer:
             try:
                 key = self.RECOMMENDATIONS_KEY
                 value = json.dumps(results, default=str)
-                await self.redis_client.setex(key, 3600, value)  # 1 hour TTL
+                await self.redis_client.setex(key, TTL_1_HOUR, value)  # 1 hour TTL
             except Exception as e:
                 logger.warning(f"Failed to cache results: {e}")
 
@@ -1281,10 +1282,9 @@ class EnvironmentAnalyzer:
         priority_filter: str | None = None,
     ) -> list[HardcodedValue]:
         """Use LLM to filter false positives. Issue #633."""
-        import os
 
-        ollama_host = os.getenv("AUTOBOT_OLLAMA_HOST", "localhost")
-        ollama_port = os.getenv("AUTOBOT_OLLAMA_PORT", "11434")
+        ollama_host = config.ollama_host
+        ollama_port = config.port.ollama
         ollama_url = f"http://{ollama_host}:{ollama_port}/api/generate"
 
         candidates = self._select_llm_candidates(hardcoded_values, priority_filter)

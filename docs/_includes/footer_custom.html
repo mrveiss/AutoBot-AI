@@ -1,0 +1,66 @@
+<!-- Cookie consent banner for docs pages -->
+<style>
+  #consent-banner{
+    position:fixed;bottom:0;left:0;right:0;z-index:9999;
+    background:#281a20;border-top:1px solid #402c34;
+    box-shadow:0 -4px 24px rgba(0,0,0,.4);
+    transform:translateY(100%);
+    transition:transform .35s cubic-bezier(0.4,0,0.2,1);
+    font-family:system-ui,sans-serif;
+  }
+  #consent-banner.visible{transform:translateY(0)}
+  .consent-inner{
+    max-width:1120px;margin:0 auto;padding:14px 24px;
+    display:flex;align-items:center;flex-wrap:wrap;gap:14px;
+  }
+  .consent-text{flex:1;min-width:240px;font-size:.875rem;color:#b3a596;line-height:1.5}
+  .consent-text strong{color:#f1e8de;font-weight:600}
+  .consent-text a{color:#e2842e;font-size:.8125rem}
+  .consent-actions{display:flex;gap:10px;align-items:center}
+  .consent-btn{
+    padding:8px 18px;border-radius:999px;border:none;cursor:pointer;
+    font-size:.875rem;font-weight:600;font-family:inherit;white-space:nowrap;
+    transition:opacity .2s;
+  }
+  .consent-btn:hover{opacity:.85}
+  .consent-btn-accept{
+    background:linear-gradient(135deg,#f7b94a,#e2842e,#cf5f22,#a2374a);color:#fff;
+  }
+  .consent-btn-decline{
+    background:#402c34;color:#b3a596;border:1px solid #523944;
+  }
+</style>
+
+<div id="consent-banner" role="dialog" aria-label="Cookie consent">
+  <div class="consent-inner">
+    <p class="consent-text">
+      <strong>Analytics cookies</strong> — page-view data only via Google Analytics. No ads or personal tracking.
+      <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Privacy Policy</a>
+    </p>
+    <div class="consent-actions">
+      <button class="consent-btn consent-btn-decline" id="consent-decline">Decline</button>
+      <button class="consent-btn consent-btn-accept" id="consent-accept">Accept</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  (function(){
+    var banner = document.getElementById('consent-banner');
+    if (!localStorage.getItem('ab-consent')) {
+      setTimeout(function(){ banner.classList.add('visible'); }, 600);
+    }
+    function grant() {
+      gtag('consent','update',{analytics_storage:'granted',ad_storage:'denied',ad_user_data:'denied',ad_personalization:'denied'});
+      localStorage.setItem('ab-consent','granted');
+      banner.classList.remove('visible');
+    }
+    function deny() {
+      gtag('consent','update',{analytics_storage:'denied',ad_storage:'denied',ad_user_data:'denied',ad_personalization:'denied'});
+      localStorage.setItem('ab-consent','denied');
+      banner.classList.remove('visible');
+    }
+    document.getElementById('consent-accept').addEventListener('click', grant);
+    document.getElementById('consent-decline').addEventListener('click', deny);
+  })();
+</script>

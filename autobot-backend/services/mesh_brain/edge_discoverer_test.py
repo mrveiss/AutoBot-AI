@@ -73,7 +73,7 @@ class TestDiscoverTypesEdges:
     """EdgeDiscoverer.discover() calls update_edge with the LLM label."""
 
     @pytest.mark.asyncio
-    async def test_discover_types_candidate_edges(self):
+    async def test_discover_types_candidate_edges(self) -> None:
         """update_edge is called for each candidate with the LLM-assigned label."""
         db = _make_db_mock()
         edge1 = _make_edge(_EDGE_A, _NODE_X)
@@ -87,7 +87,7 @@ class TestDiscoverTypesEdges:
         db.update_edge.assert_any_call(_EDGE_B, edge_type="CALLS", origin="discoverer")
 
     @pytest.mark.asyncio
-    async def test_discover_returns_report_with_counts(self):
+    async def test_discover_returns_report_with_counts(self) -> None:
         """DiscoveryReport reflects the number of edges typed and LLM calls made."""
         db = _make_db_mock()
         # Two edges from different from_nodes → 2 clusters → 2 LLM calls
@@ -190,7 +190,7 @@ class TestClassifyRelationship:
 class TestClustering:
     """_cluster_by_content_similarity groups edges by from_node."""
 
-    def test_clustering_groups_by_from_node(self):
+    def test_clustering_groups_by_from_node(self) -> None:
         """Edges with the same from_node form one cluster; different from_nodes → two clusters."""
         db = _make_db_mock()
         discoverer = EdgeDiscoverer(db=db, llm=AsyncMock())
@@ -205,7 +205,7 @@ class TestClustering:
         cluster_sizes = sorted(len(c) for c in clusters)
         assert cluster_sizes == [1, 2]
 
-    def test_clustering_single_from_node_is_one_cluster(self):
+    def test_clustering_single_from_node_is_one_cluster(self) -> None:
         """All edges from the same node → exactly one cluster."""
         db = _make_db_mock()
         discoverer = EdgeDiscoverer(db=db, llm=AsyncMock())
@@ -221,7 +221,7 @@ class TestEvolutionLogging:
     """log_evolution is called once per typed edge."""
 
     @pytest.mark.asyncio
-    async def test_evolution_logged_for_each_typed_edge(self):
+    async def test_evolution_logged_for_each_typed_edge(self) -> None:
         """log_evolution is called for every edge, recording CO_RETRIEVED → new label."""
         db = _make_db_mock()
         edge1 = _make_edge(_EDGE_A, _NODE_X)

@@ -7,16 +7,16 @@ Terminal Security Module
 Command risk assessment and security enforcement for terminal operations.
 """
 
-import logging
 from typing import Set
 
 from api.schemas_terminal import (
     CommandRiskLevel,
     SecurityLevel,
 )
+from autobot_shared.logging_manager import get_logger
 from constants.terminal_constants import MODERATE_RISK_PATTERNS, RISKY_COMMAND_PATTERNS
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Performance optimization: O(1) lookup for shell operators (Issue #326)
 SHELL_OPERATORS: Set[str] = {">", ">>", "|", "&&", "||"}

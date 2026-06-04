@@ -13,7 +13,7 @@ Updated for Issue #850 - Complete orchestration consolidation.
 
 import logging
 from datetime import datetime, timezone
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
@@ -39,7 +39,7 @@ router = APIRouter(prefix="/orchestration", tags=["orchestration"])
 class ServiceActionRequest(BaseModel):
     """Request for a service action."""
 
-    node_id: Optional[str] = Field(
+    node_id: str | None = Field(
         None,
         description="Target node ID. If not specified, uses default host from SSOT config.",
     )
@@ -63,8 +63,8 @@ class ServiceActionResponse(BaseModel):
     action: str
     success: bool
     message: str
-    node_id: Optional[str] = None
-    host: Optional[str] = None
+    node_id: str | None = None
+    host: str | None = None
 
 
 class ServiceDefinitionResponse(BaseModel):
@@ -74,7 +74,7 @@ class ServiceDefinitionResponse(BaseModel):
     service_type: str
     default_host: str
     default_port: int
-    systemd_service: Optional[str]
+    systemd_service: str | None
     description: str
     health_check_type: str
 
@@ -112,8 +112,8 @@ class FleetServiceNodeStatus(BaseModel):
     node_id: str
     hostname: str
     status: str
-    ip_address: Optional[str] = None
-    port: Optional[int] = None
+    ip_address: str | None = None
+    port: int | None = None
 
 
 class FleetServiceStatus(BaseModel):
@@ -150,7 +150,7 @@ async def _per_node_systemd_action(
     db: AsyncSession,
     service_name: str,
     action: str,
-    node_id: Optional[str],
+    node_id: str | None,
 ) -> ServiceActionResponse:
     """Run a systemctl action on a specific node for a raw systemd service.
 
@@ -281,7 +281,7 @@ async def start_service(
     service_name: str,
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(get_current_user)],
-    request: Optional[ServiceActionRequest] = None,
+    request: ServiceActionRequest | None = None,
 ) -> ServiceActionResponse:
     """
     Start an AutoBot service.
@@ -318,7 +318,7 @@ async def stop_service(
     service_name: str,
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(get_current_user)],
-    request: Optional[ServiceActionRequest] = None,
+    request: ServiceActionRequest | None = None,
 ) -> ServiceActionResponse:
     """
     Stop an AutoBot service.
@@ -352,7 +352,7 @@ async def restart_service(
     service_name: str,
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(get_current_user)],
-    request: Optional[ServiceActionRequest] = None,
+    request: ServiceActionRequest | None = None,
 ) -> ServiceActionResponse:
     """
     Restart an AutoBot service.
@@ -424,7 +424,7 @@ async def migrate_service(
 async def start_all_services(
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(get_current_user)],
-    request: Optional[BulkActionRequest] = None,
+    request: BulkActionRequest | None = None,
 ) -> BulkActionResponse:
     """
     Start all AutoBot services in dependency order.
@@ -461,7 +461,7 @@ async def start_all_services(
 async def stop_all_services(
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(get_current_user)],
-    request: Optional[BulkActionRequest] = None,
+    request: BulkActionRequest | None = None,
 ) -> BulkActionResponse:
     """
     Stop all AutoBot services in reverse dependency order.
@@ -498,7 +498,7 @@ async def stop_all_services(
 async def restart_all_services(
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(get_current_user)],
-    request: Optional[BulkActionRequest] = None,
+    request: BulkActionRequest | None = None,
 ) -> BulkActionResponse:
     """
     Restart all AutoBot services.
@@ -756,9 +756,9 @@ async def _apply_fleet_action(
     action: str,
     services: list,
     nodes: dict,
-    running_state: Optional[str],
-    active_state: Optional[str],
-    sub_state: Optional[str],
+    running_state: str | None,
+    active_state: str | None,
+    sub_state: str | None,
 ) -> tuple:
     """Helper for start/stop/restart_fleet_service. Ref: #1088.
 

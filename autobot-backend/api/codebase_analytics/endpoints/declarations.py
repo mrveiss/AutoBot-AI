@@ -6,23 +6,22 @@ Code declarations endpoints
 """
 
 import asyncio
-import logging
-from typing import Optional
 
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from utils.chromadb_client import get_all_paginated
 
 from ..storage import get_code_collection
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter()
 
 
-def _query_chromadb_declarations(code_collection, source_id: Optional[str] = None) -> tuple:
+def _query_chromadb_declarations(code_collection, source_id: str | None = None) -> tuple:
     """Helper for get_code_declarations (#1088, #1710: per-source filter).
 
     Returns:
@@ -86,8 +85,8 @@ def _build_declarations_response(all_declarations: list, storage_type: str) -> d
     error_code_prefix="CODEBASE",
 )
 async def get_code_declarations(
-    declaration_type: Optional[str] = None,
-    source_id: Optional[str] = None,
+    declaration_type: str | None = None,
+    source_id: str | None = None,
 ):
     """Get code declarations (#1710: per-source filtering)."""
     code_collection = await asyncio.to_thread(get_code_collection)

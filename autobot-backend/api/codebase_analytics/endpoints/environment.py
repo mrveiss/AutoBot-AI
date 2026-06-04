@@ -11,27 +11,26 @@ Provides:
 """
 
 import asyncio
-import logging
 import sys
 from pathlib import Path
-from typing import Optional
 
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import QUALITY_MODEL
 
 from ..analyzers import normalize_hardcode_record
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter()
 
 # Cache for environment analysis (in-memory, refreshed on demand)
-_env_analysis_cache: Optional[dict] = None
+_env_analysis_cache: dict | None = None
 # Full analysis cache for export (Issue #631)
-_env_analysis_full_cache: Optional[dict] = None
+_env_analysis_full_cache: dict | None = None
 # Lock for thread-safe access to _env_analysis_cache (Issue #559)
 _env_analysis_cache_lock = asyncio.Lock()
 
@@ -41,7 +40,7 @@ def _get_project_root() -> str:
     return str(Path(__file__).resolve().parents[4])
 
 
-def _validate_env_path_security(path: str, project_root: str) -> Optional[JSONResponse]:
+def _validate_env_path_security(path: str, project_root: str) -> JSONResponse | None:
     """
     Validate that path is within project root.
 
@@ -99,7 +98,7 @@ async def _run_llm_filtered_analysis(
     path: str,
     pattern_list: list,
     llm_model: str,
-    filter_priority: Optional[str],
+    filter_priority: str | None,
 ):
     """
     Run environment analysis with LLM filtering (Issue #633).
@@ -254,7 +253,7 @@ def _build_error_response(message: str, status: str = "error") -> dict:
     }
 
 
-async def _check_env_analysis_cache(use_llm_filter: bool, refresh: bool) -> Optional[JSONResponse]:
+async def _check_env_analysis_cache(use_llm_filter: bool, refresh: bool) -> JSONResponse | None:
     """
     Check if cached environment analysis is available and valid.
 
@@ -284,7 +283,7 @@ async def _execute_env_analysis(
     use_llm_filter: bool,
     llm_model: str,
     filter_priority: str,
-) -> Optional[dict]:
+) -> dict | None:
     """
     Execute environment analysis with optional LLM filtering.
 
@@ -373,7 +372,7 @@ async def get_environment_analysis(
         "high",
         description="Priority level to filter: 'high', 'medium', 'low', or 'all'",
     ),
-    source_id: Optional[str] = Query(None, description="#1772: source_id for API consistency"),
+    source_id: str | None = Query(None, description="#1772: source_id for API consistency"),
 ):
     """
     Analyze codebase for hardcoded values and environment variable opportunities (Issue #538).
@@ -415,7 +414,7 @@ async def get_environment_analysis(
 )
 async def get_env_recommendations(
     path: str = Query(None, description="Root path to analyze (defaults to project root)"),
-    source_id: Optional[str] = Query(None, description="#1772: source_id for API consistency"),
+    source_id: str | None = Query(None, description="#1772: source_id for API consistency"),
 ):
     """
     Get environment variable recommendations for a codebase (Issue #538).
@@ -497,7 +496,7 @@ _SEVERITY_ORDER = {"high": 0, "medium": 1, "low": 2}
 _VALID_SEVERITIES = {"high", "medium", "low"}
 
 
-def _filter_hardcoded_values(values: list, category: Optional[str], severity: Optional[str]) -> list:
+def _filter_hardcoded_values(values: list, category: str | None, severity: str | None) -> list:
     """
     Filter hardcoded values by category and/or severity.
 
@@ -538,9 +537,9 @@ def _build_export_response_json(
     hardcoded_values: list,
     recommendations: list,
     include_recommendations: bool,
-    category: Optional[str],
-    severity: Optional[str],
-    limit: Optional[int],
+    category: str | None,
+    severity: str | None,
+    limit: int | None,
 ) -> JSONResponse:
     """Helper for export_env_analysis. Ref: #1088."""
     category_counts = _calculate_category_breakdown(hardcoded_values)
@@ -593,7 +592,7 @@ async def _load_env_analysis_cache() -> tuple:
         return _env_analysis_full_cache.copy(), None
 
 
-def _validate_export_severity(severity: Optional[str]) -> Optional[JSONResponse]:
+def _validate_export_severity(severity: str | None) -> JSONResponse | None:
     """Return a 400 JSONResponse if severity is invalid, else None. Issue #2735."""
     if severity and severity.lower() not in _VALID_SEVERITIES:
         return JSONResponse(
@@ -620,7 +619,7 @@ async def export_env_analysis(
     severity: str = Query(None, description="Filter by severity ('high', 'medium', 'low')"),
     limit: int = Query(None, description="Limit number of results (default: all)"),
     include_recommendations: bool = Query(True, description="Include recommendations in export"),
-    source_id: Optional[str] = Query(None, description="#1772: source_id for API consistency"),
+    source_id: str | None = Query(None, description="#1772: source_id for API consistency"),
 ):
     """
     Export full environment analysis results without truncation (Issue #631).

@@ -16,10 +16,11 @@ Usage:
 """
 
 import asyncio
-import logging
-from typing import Any, Callable, Optional, TypeVar
+from typing import Any, Callable, TypeVar
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 
 T = TypeVar("T")
 
@@ -30,7 +31,7 @@ def _create_and_store_instance(
     factory: Callable[..., T],
     *args,
     **kwargs,
-) -> Optional[T]:
+) -> T | None:
     """
     Create instance using factory and store on storage object.
 
@@ -90,10 +91,10 @@ def _create_and_validate_instance(
     storage: Any,
     attribute_name: str,
     factory: Callable[..., T],
-    validator: Optional[Callable[[T], bool]],
+    validator: Callable[[T], bool] | None,
     *args,
     **kwargs,
-) -> Optional[T]:
+) -> T | None:
     """
     Create a new instance and optionally validate it before storing.
 
@@ -133,7 +134,7 @@ def lazy_init_singleton(
     factory: Callable[..., T],
     *args,
     **kwargs,
-) -> Optional[T]:
+) -> T | None:
     """
     Lazy-initialize a singleton object on a storage object (e.g., app.state).
 
@@ -165,7 +166,7 @@ async def lazy_init_singleton_async(
     factory: Callable[..., T],
     *args,
     **kwargs,
-) -> Optional[T]:
+) -> T | None:
     """
     Async version of lazy_init_singleton for factories that return coroutines.
 
@@ -203,10 +204,10 @@ def lazy_init_singleton_with_check(
     storage: Any,
     attribute_name: str,
     factory: Callable[..., T],
-    validator: Optional[Callable[[T], bool]] = None,
+    validator: Callable[[T], bool] | None = None,
     *args,
     **kwargs,
-) -> Optional[T]:
+) -> T | None:
     """
     Lazy-initialize singleton with optional validation check.
 
@@ -290,7 +291,7 @@ class SingletonStorage:
 _global_singleton_storage = SingletonStorage()
 
 
-def global_lazy_singleton(attribute_name: str, factory: Callable[..., T], *args, **kwargs) -> Optional[T]:
+def global_lazy_singleton(attribute_name: str, factory: Callable[..., T], *args, **kwargs) -> T | None:
     """
     Lazy-initialize a global singleton (module-level).
 

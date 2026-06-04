@@ -102,8 +102,8 @@ export class ApiRepository {
 
   private trackApiCall(method: string, endpoint: string, startTime: number, endTime: number, status: number | string, error?: Error): void {
     // Fix TypeScript error with proper window.rum type checking
-    if (typeof window !== 'undefined' && (window as Record<string, unknown>).rum && typeof ((window as Record<string, unknown>).rum as Record<string, unknown>)?.trackApiCall === 'function') {
-      ((window as Record<string, unknown>).rum as { trackApiCall: (...args: unknown[]) => void }).trackApiCall(method, endpoint, startTime, endTime, status, error)
+    if (typeof window !== 'undefined' && (window as unknown as Record<string, unknown>).rum && typeof ((window as unknown as Record<string, unknown>).rum as Record<string, unknown>)?.trackApiCall === 'function') {
+      ((window as unknown as Record<string, unknown>).rum as { trackApiCall: (...args: unknown[]) => void }).trackApiCall(method, endpoint, startTime, endTime, status, error)
     }
   }
 

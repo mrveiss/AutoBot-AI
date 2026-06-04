@@ -25,13 +25,13 @@ Configuration keys (all under ConnectorConfig.config):
 """
 
 import hashlib
-import logging
 import os
 import re
 import tempfile
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import List
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
 from knowledge.connectors.base import AbstractConnector
 from knowledge.connectors.models import (
@@ -42,7 +42,7 @@ from knowledge.connectors.models import (
 )
 from knowledge.connectors.registry import ConnectorRegistry
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # Supported local extensions
@@ -72,9 +72,9 @@ def _source_id_for(path_or_url: str) -> str:
 async def _transcribe_with_npu(
     audio_path: str,
     model_name: str,
-    language: Optional[str],
+    language: str | None,
     timeout: float,
-) -> Optional[str]:
+) -> str | None:
     """Attempt transcription via the NPU worker. Returns None on failure."""
     try:
         from services.npu_client import get_npu_client
@@ -97,7 +97,7 @@ async def _transcribe_with_npu(
 def _transcribe_with_whisper_cpu(
     audio_path: str,
     model_name: str,
-    language: Optional[str],
+    language: str | None,
 ) -> str:
     """Transcribe using the local whisper package (CPU). Raises on failure."""
     try:
@@ -202,7 +202,7 @@ class AudioConnector(AbstractConnector):
         cfg = config.config
         self._sources: List[str] = cfg.get("sources", [])
         self._whisper_model: str = cfg.get("whisper_model", "base")
-        self._language: Optional[str] = cfg.get("language") or None
+        self._language: str | None = cfg.get("language") or None
         self._npu_timeout: float = float(cfg.get("npu_timeout", 120.0))
 
     # ------------------------------------------------------------------
@@ -248,7 +248,7 @@ class AudioConnector(AbstractConnector):
             )
         return results
 
-    async def detect_changes(self, since: Optional[datetime] = None) -> List[ChangeInfo]:
+    async def detect_changes(self, since: datetime | None = None) -> List[ChangeInfo]:
         """Return all sources as 'added' (audio content is immutable once ingested)."""
         sources = await self.discover_sources()
         return [
@@ -261,10 +261,10 @@ class AudioConnector(AbstractConnector):
             for s in sources
         ]
 
-    async def fetch_content(self, source_id: str) -> Optional[ContentResult]:
+    async def fetch_content(self, source_id: str) -> ContentResult | None:
         """Fetch and transcribe a single source identified by *source_id*."""
         # Resolve original path from source_id
-        original_path: Optional[str] = None
+        original_path: str | None = None
         for src in self._sources:
             if _source_id_for(src) == source_id:
                 original_path = src

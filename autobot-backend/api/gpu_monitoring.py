@@ -11,17 +11,24 @@ reporting, multimodal optimization, and config updates.
 Issue #2315: Fix decorator order, router prefix, GPU guard, and tag case.
 """
 
-import logging
 from dataclasses import asdict
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from api.schemas_common import DataResponse
-from api.schemas_system import GPUConfigUpdateRequest
+from api.schemas_system import (
+    GPUBenchmarkResponse,
+    GPUCapabilitiesResponse,
+    GPUConfigUpdateRequest,
+    GPUConfigUpdateResponse,
+    GPUEfficiencyResponse,
+    GPUOptimizeResponse,
+)
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(tags=["gpu-monitoring"])
 
@@ -37,7 +44,7 @@ def _gpu_unavailable_error() -> HTTPException:
     )
 
 
-@router.get("/efficiency", response_model=DataResponse)
+@router.get("/efficiency", response_model=DataResponse[GPUEfficiencyResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_gpu_efficiency",
@@ -63,7 +70,7 @@ async def get_gpu_efficiency(
     return {"success": True, "efficiency": result}
 
 
-@router.get("/capabilities", response_model=DataResponse)
+@router.get("/capabilities", response_model=DataResponse[GPUCapabilitiesResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_gpu_capabilities",
@@ -86,7 +93,7 @@ async def get_gpu_capabilities(
     return {"success": True, "capabilities": caps}
 
 
-@router.post("/benchmark", response_model=DataResponse)
+@router.post("/benchmark", response_model=DataResponse[GPUBenchmarkResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="run_gpu_benchmark",
@@ -109,7 +116,7 @@ async def run_gpu_benchmark(
     return {"success": True, "benchmark": result}
 
 
-@router.post("/optimize", response_model=DataResponse)
+@router.post("/optimize", response_model=DataResponse[GPUOptimizeResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="optimize_gpu_multimodal",
@@ -136,7 +143,7 @@ async def optimize_gpu_multimodal(
     return {"success": True, "optimization": asdict(result)}
 
 
-@router.patch("/config", response_model=DataResponse)
+@router.patch("/config", response_model=DataResponse[GPUConfigUpdateResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="update_gpu_config",

@@ -16,12 +16,13 @@ Avoids heavy ML models for performance.
 Related Issue: #159 - Prevent Premature Conversation Endings
 """
 
-import logging
 from dataclasses import dataclass
 from enum import Enum
-from typing import Dict, List, Optional
+from typing import Dict, List
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 
 # Issue #380: Module-level frozenset for acknowledgment word detection
 _ACKNOWLEDGMENT_WORDS = frozenset({"ok", "okay", "yes", "no", "sure", "thanks", "thank you"})
@@ -197,7 +198,7 @@ class IntentClassifier:
     def classify(
         self,
         message: str,
-        conversation_history: Optional[List[Dict[str, str]]] = None,
+        conversation_history: List[Dict[str, str]] | None = None,
     ) -> IntentClassification:
         """
         Classify user's intent from message.
@@ -230,7 +231,7 @@ class IntentClassifier:
         # Classify based on signals
         return self._classify_from_signals(message, message_lower, words, signals, conversation_history)
 
-    def _check_exit_phrase_intent(self, signals: Dict[str, bool]) -> Optional[IntentClassification]:
+    def _check_exit_phrase_intent(self, signals: Dict[str, bool]) -> IntentClassification | None:
         """
         Check if exit phrase signals indicate END or CONTINUE intent.
 
@@ -271,7 +272,7 @@ class IntentClassifier:
             signals=signals,
         )
 
-    def _check_question_intent(self, signals: Dict[str, bool]) -> Optional[IntentClassification]:
+    def _check_question_intent(self, signals: Dict[str, bool]) -> IntentClassification | None:
         """
         Check if question signals indicate CLARIFICATION or CONTINUE intent.
 
@@ -305,8 +306,8 @@ class IntentClassifier:
         self,
         words: List[str],
         signals: Dict[str, bool],
-        conversation_history: Optional[List[Dict[str, str]]],
-    ) -> Optional[IntentClassification]:
+        conversation_history: List[Dict[str, str]] | None,
+    ) -> IntentClassification | None:
         """
         Check if short message context indicates continuation intent.
 
@@ -349,7 +350,7 @@ class IntentClassifier:
         self,
         words: List[str],
         signals: Dict[str, bool],
-        conversation_history: Optional[List[Dict[str, str]]],
+        conversation_history: List[Dict[str, str]] | None,
     ) -> IntentClassification:
         """Helper for _classify_from_signals. Ref: #1088."""
         # RULE 3: Task request indicators
@@ -398,7 +399,7 @@ class IntentClassifier:
         message_lower: str,
         words: List[str],
         signals: Dict[str, bool],
-        conversation_history: Optional[List[Dict[str, str]]],
+        conversation_history: List[Dict[str, str]] | None,
     ) -> IntentClassification:
         """
         Internal classification logic based on detected signals.

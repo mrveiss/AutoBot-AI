@@ -2,7 +2,7 @@
   <div class="access-metrics" :class="{ compact }">
     <div class="section-header">
       <div class="header-info">
-        <h3><i class="fas fa-chart-bar"></i> {{ $t('featureFlags.accessMetrics.title') }}</h3>
+        <h3><Icon name="chart-bar" /> {{ $t('featureFlags.accessMetrics.title') }}</h3>
         <p v-if="!compact" class="description">
           {{ $t('featureFlags.accessMetrics.description') }}
         </p>
@@ -24,7 +24,7 @@
           :disabled="loading"
           :aria-label="$t('common.refresh')"
         >
-          <i class="fas fa-sync-alt" :class="{ 'fa-spin': loading }"></i>
+          <Icon name="sync-alt" />
         </button>
       </div>
     </div>
@@ -37,7 +37,7 @@
     <!-- No Data State -->
     <div v-else-if="!metrics || metrics.total_violations === 0" class="no-data-state">
       <div class="no-data-icon">
-        <i class="fas fa-check-circle"></i>
+        <Icon name="check-circle" />
       </div>
       <h4>{{ $t('featureFlags.accessMetrics.noData') }}</h4>
       <p>{{ $t('featureFlags.accessMetrics.noData') }}</p>
@@ -49,7 +49,7 @@
       <div class="summary-stats">
         <div class="summary-card total" :class="{ alert: metrics.total_violations > 0 }">
           <div class="summary-icon">
-            <i class="fas fa-exclamation-circle"></i>
+            <Icon name="exclamation-circle" />
           </div>
           <div class="summary-info">
             <span class="summary-value">{{ metrics.total_violations }}</span>
@@ -57,7 +57,7 @@
           </div>
           <div class="trend" v-if="metrics.daily_change_percent !== undefined">
             <span :class="trendClass">
-              <i :class="trendIcon"></i>
+              <Icon :name="trendIcon" />
               {{ Math.abs(metrics.daily_change_percent) }}%
             </span>
             <span class="trend-label">{{ $t('featureFlags.accessMetrics.vsYesterday') }}</span>
@@ -66,7 +66,7 @@
 
         <div class="summary-card">
           <div class="summary-icon">
-            <i class="fas fa-sitemap"></i>
+            <Icon name="sitemap" />
           </div>
           <div class="summary-info">
             <span class="summary-value">{{ endpointCount }}</span>
@@ -76,7 +76,7 @@
 
         <div class="summary-card">
           <div class="summary-icon">
-            <i class="fas fa-users"></i>
+            <Icon name="users" />
           </div>
           <div class="summary-info">
             <span class="summary-value">{{ userCount }}</span>
@@ -86,7 +86,7 @@
 
         <div class="summary-card">
           <div class="summary-icon">
-            <i class="fas fa-calendar"></i>
+            <Icon name="calendar" />
           </div>
           <div class="summary-info">
             <span class="summary-value">{{ metrics.period_days }}</span>
@@ -99,7 +99,7 @@
       <div v-if="!compact" class="breakdowns">
         <!-- By Endpoint -->
         <div class="breakdown-section">
-          <h4><i class="fas fa-sitemap"></i> {{ $t('featureFlags.accessMetrics.byEndpoint') }}</h4>
+          <h4><Icon name="sitemap" /> {{ $t('featureFlags.accessMetrics.byEndpoint') }}</h4>
           <div v-if="Object.keys(metrics.by_endpoint).length === 0" class="empty-breakdown">
             {{ $t('featureFlags.accessMetrics.noEndpointData') }}
           </div>
@@ -126,7 +126,7 @@
 
         <!-- By User -->
         <div class="breakdown-section">
-          <h4><i class="fas fa-users"></i> {{ $t('featureFlags.accessMetrics.byUser') }}</h4>
+          <h4><Icon name="users" /> {{ $t('featureFlags.accessMetrics.byUser') }}</h4>
           <div v-if="Object.keys(metrics.by_user).length === 0" class="empty-breakdown">
             {{ $t('featureFlags.accessMetrics.noUserData') }}
           </div>
@@ -153,7 +153,7 @@
 
         <!-- Daily Trend -->
         <div class="breakdown-section full-width">
-          <h4><i class="fas fa-chart-line"></i> {{ $t('featureFlags.accessMetrics.dailyTrend') }}</h4>
+          <h4><Icon name="chart-line" /> {{ $t('featureFlags.accessMetrics.dailyTrend') }}</h4>
           <div v-if="Object.keys(metrics.by_day).length === 0" class="empty-breakdown">
             {{ $t('featureFlags.accessMetrics.noTrendData') }}
           </div>
@@ -177,7 +177,7 @@
 
         <!-- Recent Violations -->
         <div v-if="metrics.recent_violations?.length" class="breakdown-section full-width">
-          <h4><i class="fas fa-clock"></i> {{ $t('featureFlags.accessMetrics.recentViolations') }}</h4>
+          <h4><Icon name="clock" /> {{ $t('featureFlags.accessMetrics.recentViolations') }}</h4>
           <div class="violations-table">
             <div class="table-header">
               <span class="col-time">{{ $t('featureFlags.accessMetrics.time') }}</span>
@@ -205,6 +205,7 @@
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { ref, computed } from 'vue';
 import type { ViolationStatistics } from '@/utils/FeatureFlagsApiClient';
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue';
@@ -279,10 +280,10 @@ const trendClass = computed(() => {
 
 const trendIcon = computed(() => {
   const change = props.metrics?.daily_change_percent;
-  if (change === undefined) return 'fas fa-minus';
-  if (change > 0) return 'fas fa-arrow-up';
-  if (change < 0) return 'fas fa-arrow-down';
-  return 'fas fa-minus';
+  if (change === undefined) return 'minus';
+  if (change > 0) return 'arrow-up';
+  if (change < 0) return 'arrow-down';
+  return 'minus';
 });
 
 // Methods

@@ -15,6 +15,7 @@ LLMService is the single entry-point for all inference in AutoBot.  It:
 Usage example::
 
     from services.llm_service import get_llm_service
+from autobot_shared.logging_manager import get_logger
 
     svc = get_llm_service()
     response = await svc.chat(
@@ -34,17 +35,19 @@ Usage example::
 
 from __future__ import annotations
 
-import logging
 import time
 import uuid
-from typing import Any, AsyncIterator, Dict, List, Optional, Union
+from typing import Any, AsyncIterator, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.tracing import get_tracer
-from llm_interface_pkg.cache import CachedResponse, get_llm_cache
-from llm_interface_pkg.models import LLMRequest, LLMResponse
-from llm_interface_pkg.tiered_routing import TierConfig, TieredModelRouter
-from llm_interface_pkg.types import LLMType
-from llm_providers.provider_registry import ProviderRegistry, get_provider_registry
+from llm_shared import ProviderRegistry, get_provider_registry
+from llm_shared.cache import CachedResponse, get_llm_cache
+from llm_shared.fallback_chain import get_fallback_chain_manager
+from llm_shared.models import LLMRequest, LLMResponse
+from llm_shared.rate_limit_backoff import extract_rate_limit_info
+from llm_shared.tiered_routing import TierConfig, TieredModelRouter
+from llm_shared.types import LLMType
 
 try:
     from services.provider_health import ProviderHealthManager, ProviderStatus
@@ -55,10 +58,10 @@ except Exception:  # pragma: no cover
     ProviderHealthManager = None  # type: ignore[assignment]
     ProviderStatus = None  # type: ignore[assignment]
 
-# OTel tracer shared with llm_interface_pkg — same span names so traces merge.
+# OTel tracer shared with llm_shared — same span names so traces merge.
 _llm_tracer = get_tracer("autobot.llm")
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Default parameters per task type.  These are applied when the caller does
 # not supply explicit temperature / max_tokens values.
@@ -74,7 +77,7 @@ _TASK_TYPE_DEFAULTS: Dict[str, Dict[str, Any]] = {
 }
 
 
-def _normalize_llm_type(llm_type: Union[str, LLMType, None]) -> LLMType:
+def _normalize_llm_type(llm_type: str | LLMType | None) -> LLMType:
     """Coerce string or None to an LLMType enum value."""
     if isinstance(llm_type, LLMType):
         return llm_type
@@ -88,9 +91,9 @@ def _normalize_llm_type(llm_type: Union[str, LLMType, None]) -> LLMType:
 
 def _apply_task_defaults(
     llm_type: LLMType,
-    temperature: Optional[float],
-    max_tokens: Optional[int],
-) -> tuple[float, Optional[int]]:
+    temperature: float | None,
+    max_tokens: int | None,
+) -> tuple[float, int | None]:
     """
     Return (temperature, max_tokens) with task-type defaults filled in.
 
@@ -121,7 +124,7 @@ class LLMService:
     individual BaseProvider implementations.
     """
 
-    def __init__(self, registry: Optional[ProviderRegistry] = None) -> None:
+    def __init__(self, registry: ProviderRegistry | None = None) -> None:
         self._registry = registry or get_provider_registry()
         self._request_count = 0
         self._error_count = 0
@@ -129,10 +132,10 @@ class LLMService:
         # get_cache_metrics and the optimized chat path (#3185).
         self._response_cache = get_llm_cache()
         # Runtime provider override set via switch_provider() (#3185).
-        self._active_provider: Optional[str] = None
+        self._active_provider: str | None = None
         # Tiered model routing — mirrors LLMInterface._init_tiered_routing() (#3185).
         try:
-            self._tier_router: Optional[TieredModelRouter] = TieredModelRouter(TierConfig.from_config())
+            self._tier_router: TieredModelRouter | None = TieredModelRouter(TierConfig.from_config())
         except Exception as exc:  # pragma: no cover
             logger.warning("Tiered routing init failed, disabled: %s", exc)
             self._tier_router = None
@@ -157,17 +160,21 @@ class LLMService:
         self,
         messages: List[Dict[str, str]],
         *,
-        conversation_id: Optional[str] = None,
-        provider_name: Optional[str] = None,
-        model_name: Optional[str] = None,
-        llm_type: Union[str, LLMType, None] = None,
-        temperature: Optional[float] = None,
-        max_tokens: Optional[int] = None,
+        conversation_id: str | None = None,
+        provider_name: str | None = None,
+        model_name: str | None = None,
+        llm_type: str | LLMType | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
         timeout: int = 60,
         **kwargs: Any,
     ) -> LLMResponse:
         """
         Execute a non-streaming chat completion.
+
+        GH#8998: Supports quota-triggered fallback chains. When a model hits
+        rate limit (429) or quota exceeded, automatically tries fallback models
+        from the configured chain before failing.
 
         Args:
             messages: OpenAI-format message list
@@ -199,37 +206,129 @@ class LLMService:
             **kwargs,
         )
 
-        provider = await self._registry.get_provider_for_request(
-            provider_name=provider_name,
-            conversation_id=conversation_id,
-        )
-        if provider is None:
-            self._error_count += 1
-            logger.error("No available provider for chat request")
-            return _build_error_response(request, "No available LLM provider", "none")
+        # GH#8998: Track attempted models to avoid infinite loops
+        attempted_models = []
+        fallback_manager = get_fallback_chain_manager()
+        current_provider_name = provider_name
+        current_model = model_name
+        max_fallback_attempts = 10  # Safety limit
 
-        response = await provider.chat_completion(request)
-        if response.error:
+        while len(attempted_models) < max_fallback_attempts:
+            provider = await self._registry.get_provider_for_request(
+                provider_name=current_provider_name,
+                conversation_id=conversation_id,
+            )
+            if provider is None:
+                self._error_count += 1
+                logger.error("No available provider for chat request")
+                return _build_error_response(request, "No available LLM provider", "none")
+
+            # Update request with current model
+            request.model_name = current_model
+
+            # Track this attempt
+            attempt_key = f"{provider.provider_name}:{current_model or 'default'}"
+            if attempt_key in attempted_models:
+                # Avoid infinite loop - this model was already tried
+                logger.warning(
+                    "Fallback chain loop detected at %s, breaking",
+                    attempt_key,
+                )
+                break
+            attempted_models.append(attempt_key)
+
+            logger.debug(
+                "Attempting chat completion with %s (attempt %d/%d)",
+                attempt_key,
+                len(attempted_models),
+                max_fallback_attempts,
+            )
+
+            response = await provider.chat_completion(request)
+
+            # Success case
+            if not response.error:
+                if len(attempted_models) > 1:
+                    logger.info(
+                        "Fallback successful: %s worked after %d attempts (tried: %s)",
+                        attempt_key,
+                        len(attempted_models),
+                        " → ".join(attempted_models),
+                    )
+                self._track_usage(response, conversation_id)
+                return response
+
+            # GH#8998: Check if this is a rate limit error that should trigger fallback
+            is_rate_limited, _ = extract_rate_limit_info(response)
+
+            if is_rate_limited:
+                # Try to find a fallback model
+                fallback_result = fallback_manager.get_next_fallback(
+                    current_model or provider.provider_name,
+                    provider.provider_name,
+                )
+
+                if fallback_result:
+                    next_model, next_provider = fallback_result
+                    logger.info(
+                        "Rate limit hit on %s, falling back to %s:%s",
+                        attempt_key,
+                        next_provider or current_provider_name,
+                        next_model,
+                    )
+                    current_model = next_model
+                    if next_provider:
+                        current_provider_name = next_provider
+                    continue
+                else:
+                    logger.warning(
+                        "Rate limit hit on %s but no fallback chain configured, returning error",
+                        attempt_key,
+                    )
+
+            # Non-rate-limit error or no fallback available
             self._error_count += 1
-            logger.warning("Provider %s returned error: %s", provider.provider_name, response.error)
-        self._track_usage(response, conversation_id)
-        return response
+            logger.warning(
+                "Provider %s returned error: %s (attempted: %s)",
+                provider.provider_name,
+                response.error,
+                " → ".join(attempted_models),
+            )
+            self._track_usage(response, conversation_id)
+            return response
+
+        # Max attempts reached
+        self._error_count += 1
+        logger.error(
+            "Exhausted fallback chain after %d attempts: %s",
+            len(attempted_models),
+            " → ".join(attempted_models),
+        )
+        return _build_error_response(
+            request,
+            f"All fallback models exhausted ({len(attempted_models)} attempts)",
+            attempted_models[-1] if attempted_models else "none",
+        )
 
     async def stream(
         self,
         messages: List[Dict[str, str]],
         *,
-        conversation_id: Optional[str] = None,
-        provider_name: Optional[str] = None,
-        model_name: Optional[str] = None,
-        llm_type: Union[str, LLMType, None] = None,
-        temperature: Optional[float] = None,
-        max_tokens: Optional[int] = None,
+        conversation_id: str | None = None,
+        provider_name: str | None = None,
+        model_name: str | None = None,
+        llm_type: str | LLMType | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
         timeout: int = 120,
         **kwargs: Any,
     ) -> AsyncIterator[str]:
         """
         Stream a chat completion, yielding text chunks.
+
+        GH#8998: Supports quota-triggered fallback chains. When a model hits
+        rate limit (429) or quota exceeded, automatically tries fallback models
+        from the configured chain before failing.
 
         Args are identical to ``chat()``.
 
@@ -237,7 +336,7 @@ class LLMService:
             String chunks of the generated response.
 
         Raises:
-            RuntimeError: if no provider is available.
+            RuntimeError: if no provider is available or all fallbacks exhausted.
         """
         self._request_count += 1
         resolved_type = _normalize_llm_type(llm_type)
@@ -254,21 +353,122 @@ class LLMService:
             **kwargs,
         )
 
-        provider = await self._registry.get_provider_for_request(
-            provider_name=provider_name,
-            conversation_id=conversation_id,
-        )
-        if provider is None:
-            self._error_count += 1
-            raise RuntimeError("No available LLM provider for streaming request")
+        # GH#8998: Track attempted models to avoid infinite loops
+        attempted_models = []
+        fallback_manager = get_fallback_chain_manager()
+        current_provider_name = provider_name
+        current_model = model_name
+        max_fallback_attempts = 10  # Safety limit
 
-        try:
-            async for chunk in provider.stream_completion(request):
-                yield chunk
-        except Exception as exc:
-            self._error_count += 1
-            logger.error("Stream error from provider %s: %s", provider.provider_name, exc)
-            raise
+        while len(attempted_models) < max_fallback_attempts:
+            provider = await self._registry.get_provider_for_request(
+                provider_name=current_provider_name,
+                conversation_id=conversation_id,
+            )
+            if provider is None:
+                self._error_count += 1
+                raise RuntimeError("No available LLM provider for streaming request")
+
+            # Update request with current model
+            request.model_name = current_model
+
+            # Track this attempt
+            attempt_key = f"{provider.provider_name}:{current_model or 'default'}"
+            if attempt_key in attempted_models:
+                # Avoid infinite loop - this model was already tried
+                logger.warning(
+                    "Fallback chain loop detected at %s, breaking",
+                    attempt_key,
+                )
+                break
+            attempted_models.append(attempt_key)
+
+            logger.debug(
+                "Attempting stream completion with %s (attempt %d/%d)",
+                attempt_key,
+                len(attempted_models),
+                max_fallback_attempts,
+            )
+
+            try:
+                chunks_yielded = False
+                async for chunk in provider.stream_completion(request):
+                    chunks_yielded = True
+                    yield chunk
+
+                # Success - stream completed without errors
+                if len(attempted_models) > 1:
+                    logger.info(
+                        "Fallback successful: %s worked after %d attempts (tried: %s)",
+                        attempt_key,
+                        len(attempted_models),
+                        " → ".join(attempted_models),
+                    )
+                return
+
+            except Exception as exc:
+                # If we already yielded chunks, we can't retry - raise immediately
+                if chunks_yielded:
+                    self._error_count += 1
+                    logger.error(
+                        "Stream error from provider %s after yielding chunks: %s",
+                        provider.provider_name,
+                        exc,
+                    )
+                    raise
+
+                # Check if this is a rate limit error that should trigger fallback
+                error_str = str(exc).lower()
+                is_rate_limited = (
+                    "429" in error_str
+                    or "rate limit" in error_str
+                    or "quota" in error_str
+                    or "too many requests" in error_str
+                )
+
+                if is_rate_limited:
+                    # Try to find a fallback model
+                    fallback_result = fallback_manager.get_next_fallback(
+                        current_model or provider.provider_name,
+                        provider.provider_name,
+                    )
+
+                    if fallback_result:
+                        next_model, next_provider = fallback_result
+                        logger.info(
+                            "Rate limit hit on %s, falling back to %s:%s",
+                            attempt_key,
+                            next_provider or current_provider_name,
+                            next_model,
+                        )
+                        current_model = next_model
+                        if next_provider:
+                            current_provider_name = next_provider
+                        continue
+                    else:
+                        logger.warning(
+                            "Rate limit hit on %s but no fallback chain configured",
+                            attempt_key,
+                        )
+
+                # Non-rate-limit error or no fallback available
+                self._error_count += 1
+                logger.error(
+                    "Stream error from provider %s: %s (attempted: %s)",
+                    provider.provider_name,
+                    exc,
+                    " → ".join(attempted_models),
+                )
+                raise
+
+        # Max attempts reached
+        self._error_count += 1
+        logger.error(
+            "Exhausted fallback chain after %d attempts: %s",
+            len(attempted_models),
+            " → ".join(attempted_models),
+        )
+        raise RuntimeError(f"All fallback models exhausted ({len(attempted_models)} attempts)")
 
     # ------------------------------------------------------------------
     # Provider management helpers
@@ -282,7 +482,7 @@ class LLMService:
             entry["available"] = availability.get(str(entry["name"]), False)
         return {"providers": providers}
 
-    async def list_models(self, provider_name: Optional[str] = None) -> Dict[str, List[str]]:
+    async def list_models(self, provider_name: str | None = None) -> Dict[str, List[str]]:
         """
         Return available models, optionally filtered to a single provider.
 
@@ -319,11 +519,11 @@ class LLMService:
         agent_type: str,
         user_message: str,
         session_id: str,
-        user_name: Optional[str] = None,
-        user_role: Optional[str] = None,
-        available_tools: Optional[List] = None,
-        recent_context: Optional[str] = None,
-        additional_params: Optional[Dict] = None,
+        user_name: str | None = None,
+        user_role: str | None = None,
+        available_tools: List | None = None,
+        recent_context: str | None = None,
+        additional_params: Dict | None = None,
         **llm_params: Any,
     ) -> LLMResponse:
         """Chat completion with vLLM prefix-cache-optimised prompts.
@@ -362,7 +562,7 @@ class LLMService:
         if available_tools is None:
             available_tools = get_tool_registry().get_available_tools()
 
-        tool_descriptions: Optional[Dict] = None
+        tool_descriptions: Dict | None = None
         try:
             registry = get_tool_registry()
             tool_set = set(available_tools)
@@ -414,7 +614,7 @@ class LLMService:
         ]
 
         # Issue #3858: check L1/L2 cache before hitting vLLM.
-        cache_key: Optional[str] = None
+        cache_key: str | None = None
         with _llm_tracer.start_as_current_span("llm.chat_optimized") as span:
             span.set_attribute("llm.provider", "vllm")
             span.set_attribute("llm.request_id", request_id)
@@ -582,7 +782,7 @@ class LLMService:
     # ------------------------------------------------------------------
 
     @property
-    def tier_router(self) -> Optional[TieredModelRouter]:
+    def tier_router(self) -> TieredModelRouter | None:
         """Return the shared TieredModelRouter instance, or None if disabled.
 
         Callers in api/llm.py reach this to get/set metrics and config.
@@ -644,7 +844,7 @@ class LLMService:
     # Provider health check (#3185, ported from LLMInterface._is_provider_healthy)
     # ------------------------------------------------------------------
 
-    async def is_provider_healthy(self, provider_name: str) -> tuple[bool, Optional[str]]:
+    async def is_provider_healthy(self, provider_name: str) -> tuple[bool, str | None]:
         """Check whether a named provider is currently healthy.
 
         Public equivalent of ``LLMInterface._is_provider_healthy()``
@@ -750,7 +950,7 @@ class LLMService:
             ),
         )
 
-    def _track_usage(self, response: LLMResponse, conversation_id: Optional[str]) -> None:
+    def _track_usage(self, response: LLMResponse, conversation_id: str | None) -> None:
         """Forward usage data to the cost tracker when available."""
         if not response.usage:
             return
@@ -772,7 +972,7 @@ class LLMService:
 # Singleton accessor
 # ---------------------------------------------------------------------------
 
-_service_instance: Optional[LLMService] = None
+_service_instance: LLMService | None = None
 
 
 def get_llm_service() -> LLMService:

@@ -22,11 +22,10 @@ Related Issues: #185 (Split), #210 (Terminal split), #290 (God class refactoring
 
 import asyncio
 import json
-import logging
 import os
 import time
 from datetime import datetime, timezone
-from typing import Awaitable, Callable, Dict, Optional
+from typing import Awaitable, Callable, Dict
 
 from fastapi import WebSocket
 
@@ -35,6 +34,7 @@ from api.schemas_terminal import (
     CommandRiskLevel,
     SecurityLevel,
 )
+from autobot_shared.logging_manager import get_logger
 from chat_history import ChatHistoryManager
 from constants.path_constants import PATH
 from constants.terminal_constants import (
@@ -65,7 +65,7 @@ _SIGNAL_MAP = {
     "SIGHUP": _signal_module.SIGHUP,
 }
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 async def _flush_cleanup_buffer(
@@ -153,7 +153,7 @@ class ConsolidatedTerminalWebSocket:
         websocket: WebSocket,
         session_id: str,
         security_level: SecurityLevel = SecurityLevel.STANDARD,
-        conversation_id: Optional[str] = None,
+        conversation_id: str | None = None,
         redis_client=None,
     ):
         """Initialize terminal handler with WebSocket and session config."""
@@ -832,7 +832,7 @@ class ConsolidatedTerminalWebSocket:
             return False
         return True
 
-    async def _write_stdin_to_pty(self, content: str, is_password: bool, command_id: Optional[str]) -> bool:
+    async def _write_stdin_to_pty(self, content: str, is_password: bool, command_id: str | None) -> bool:
         """
         Write stdin to PTY with password echo handling (Issue #315 - extracted helper).
 

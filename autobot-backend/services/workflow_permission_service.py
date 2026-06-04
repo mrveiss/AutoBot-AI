@@ -14,17 +14,17 @@ Roles and their capabilities:
   viewer — read-only access
 """
 
-import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.logging_manager import get_logger
 from models.workflow_audit import WorkflowAuditLog
 from models.workflow_permission import WorkflowPermission
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Ordered from most to least privileged; used for hierarchy checks.
 ROLE_HIERARCHY = ["owner", "editor", "runner", "viewer"]
@@ -94,7 +94,7 @@ class WorkflowPermissionService:
             return False
         return _role_satisfies(row.role, required_role)
 
-    async def _fetch_permission(self, user_id: str, workflow_id: str) -> Optional[WorkflowPermission]:
+    async def _fetch_permission(self, user_id: str, workflow_id: str) -> WorkflowPermission | None:
         """Retrieve the permission row for (user_id, workflow_id), or None."""
         stmt = select(WorkflowPermission).where(
             WorkflowPermission.user_id == user_id,
@@ -231,7 +231,7 @@ class WorkflowPermissionService:
         user_id: str,
         workflow_id: str,
         action: str,
-        details: Optional[Dict[str, Any]] = None,
+        details: Dict[str, Any] | None = None,
     ) -> None:
         """
         Append an audit log entry for a workflow lifecycle event (#2152).

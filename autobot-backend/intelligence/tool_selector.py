@@ -7,15 +7,16 @@ OS-Aware Tool Selection Module
 Selects appropriate tools based on OS capabilities and goal requirements.
 """
 
-import logging
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import Dict, List
 
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 from constants.network_constants import NetworkConstants
 from intelligence.goal_processor import GoalCategory, ProcessedGoal
 from intelligence.os_detector import LinuxDistro, OSDetector, OSType
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -24,7 +25,7 @@ class ToolSelection:
 
     primary_command: str
     fallback_commands: List[str]
-    install_command: Optional[str]
+    install_command: str | None
     requires_install: bool
     explanation: str
     # #7245: `IntelligentAgent._build_tool_selection_chunks` iterates
@@ -195,7 +196,7 @@ class OSAwareToolSelector:
             },
         }
 
-    def _get_tools_for_os(self, intent_tools: Dict, os_info) -> Optional[List[str]]:
+    def _get_tools_for_os(self, intent_tools: Dict, os_info) -> List[str] | None:
         """Get tools for the current OS/distro (Issue #315 - extracted helper)."""
         if os_info.os_type not in intent_tools:
             return None
@@ -215,7 +216,7 @@ class OSAwareToolSelector:
             list(tools.values())[0] if tools.values() else [],
         )
 
-    def _get_mapped_tools(self, goal: ProcessedGoal, os_info) -> Optional[List[str]]:
+    def _get_mapped_tools(self, goal: ProcessedGoal, os_info) -> List[str] | None:
         """Get mapped tools for goal (Issue #315 - extracted helper)."""
         if goal.category not in self.tool_mappings:
             return None
@@ -307,9 +308,8 @@ class OSAwareToolSelector:
         formatted = command
 
         # Get default network from environment; DEFAULT_SCAN_NETWORK="" until configured
-        import os
 
-        default_network = os.getenv("AUTOBOT_DEFAULT_SCAN_NETWORK", NetworkConstants.DEFAULT_SCAN_NETWORK)
+        default_network = config.default_scan_network
         resolved_network = parameters.get("network", default_network)
         if "{network}" in command and not resolved_network:
             logger.warning(

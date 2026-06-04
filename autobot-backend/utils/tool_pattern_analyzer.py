@@ -18,17 +18,17 @@ Key features:
 
 import asyncio
 import json
-import logging
 import statistics
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, FrozenSet, List, Optional
+from typing import Any, Dict, FrozenSet, List
 
+from autobot_shared.logging_manager import get_logger
 from constants.ttl_constants import TTL_5_MINUTES
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Performance optimization: O(1) lookup for tool classification (Issue #326)
 READ_KEYWORDS = {"read", "list", "glob", "get"}
@@ -82,9 +82,9 @@ class ToolCall:
     parameters: Dict[str, Any]
     response_time: float
     success: bool
-    error_message: Optional[str] = None
+    error_message: str | None = None
     api_cost: int = 1  # Estimated API cost (1-10 scale)
-    call_type: Optional[ToolCallType] = None
+    call_type: ToolCallType | None = None
     session_id: str = ""
     sequence_position: int = 0
 
@@ -124,7 +124,7 @@ class ToolPatternAnalyzer:
     and optimization opportunities that can prevent Claude API rate limiting.
     """
 
-    def __init__(self, config: Optional[Dict[str, Any]] = None):
+    def __init__(self, config: Dict[str, Any] | None = None):
         """Initialize tool pattern analyzer"""
         self.config = config or {}
 
@@ -156,8 +156,8 @@ class ToolPatternAnalyzer:
         self.parameter_patterns: Dict[str, Dict[str, int]] = defaultdict(lambda: defaultdict(int))
 
         # Analysis results cache
-        self.last_analysis_time: Optional[datetime] = None
-        self.cached_analysis: Optional[Dict[str, Any]] = None
+        self.last_analysis_time: datetime | None = None
+        self.cached_analysis: Dict[str, Any] | None = None
         self.cache_ttl = TTL_5_MINUTES
 
         logger.info("Tool pattern analyzer initialized")
@@ -168,7 +168,7 @@ class ToolPatternAnalyzer:
         parameters: Dict[str, Any],
         response_time: float,
         success: bool,
-        error_message: Optional[str],
+        error_message: str | None,
         session_id: str,
     ) -> ToolCall:
         """Create a ToolCall record with classification and cost estimation.
@@ -208,7 +208,7 @@ class ToolPatternAnalyzer:
         parameters: Dict[str, Any],
         response_time: float,
         success: bool,
-        error_message: Optional[str] = None,
+        error_message: str | None = None,
         session_id: str = "",
     ) -> None:
         """Record a tool call for pattern analysis.
@@ -846,12 +846,12 @@ import threading
 
 from autobot_shared.async_compat import run_or_schedule
 
-_global_analyzer: Optional[ToolPatternAnalyzer] = None
+_global_analyzer: ToolPatternAnalyzer | None = None
 _global_analyzer_lock = threading.Lock()
 
 
 def get_tool_pattern_analyzer(
-    config: Optional[Dict[str, Any]] = None,
+    config: Dict[str, Any] | None = None,
 ) -> ToolPatternAnalyzer:
     """Get global tool pattern analyzer instance (thread-safe)"""
     global _global_analyzer
@@ -869,7 +869,7 @@ def record_tool_usage(
     parameters: Dict[str, Any],
     response_time: float,
     success: bool,
-    error_message: Optional[str] = None,
+    error_message: str | None = None,
 ) -> None:
     """Convenience function to record tool usage"""
     analyzer = get_tool_pattern_analyzer()

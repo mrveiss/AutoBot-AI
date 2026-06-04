@@ -10,7 +10,7 @@ Enums, dataclasses, and constants for the advanced workflow system.
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from services.workflow_automation import WorkflowStep
 from type_defs.common import Metadata
@@ -76,8 +76,8 @@ class SmartWorkflowStep(WorkflowStep):
     confidence_score: float = 0.0
     alternative_commands: List[str] = field(default_factory=list)
     success_probability: float = 0.0
-    rollback_command: Optional[str] = None
-    validation_command: Optional[str] = None
+    rollback_command: str | None = None
+    validation_command: str | None = None
     learning_metadata: Metadata = field(default_factory=dict)
     ai_generated: bool = True
     user_customizations: List[str] = field(default_factory=list)

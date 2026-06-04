@@ -9,6 +9,8 @@ import logging
 import os
 import sys
 
+from autobot_shared.logging_manager import get_logger
+
 # Add src to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
@@ -22,7 +24,7 @@ from agents.base_agent import (
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class TestAgent(LocalAgent):

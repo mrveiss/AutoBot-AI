@@ -317,6 +317,8 @@
       {{ slm_admin_password
          if (slm_admin_password | default('') | length > 0)
          else lookup('password', '/dev/null length=24 chars=ascii_letters,digits') }}
+    slm_auth_token: >-
+      {{ lookup('password', '/dev/null length=48 chars=ascii_letters,digits') }}
   when: not slm_secrets_stat.stat.exists
   no_log: true
   tags: ['slm', 'secrets']
@@ -329,6 +331,33 @@
     group: "{{ slm_group }}"
     mode: "0600"
   when: not slm_secrets_stat.stat.exists
+  no_log: true
+  tags: ['slm', 'secrets']
+
+# #7689: On existing installations the secrets file already exists and the
+# template task above is skipped. Idempotently add SLM_AUTH_TOKEN when absent.
+- name: "SLM | Check if SLM_AUTH_TOKEN present in secrets file (#7689)"
+  ansible.builtin.shell:
+    cmd: >-
+      grep -q '^SLM_AUTH_TOKEN='
+      {{ slm_credentials_dir }}/{{ slm_credentials_file }}
+  register: _slm_auth_tok_check
+  changed_when: false
+  failed_when: false
+  when: slm_secrets_stat.stat.exists
+  no_log: true
+  tags: ['slm', 'secrets']
+
+- name: "SLM | Add SLM_AUTH_TOKEN to existing secrets file (#7689)"
+  ansible.builtin.lineinfile:
+    path: "{{ slm_credentials_dir }}/{{ slm_credentials_file }}"
+    regexp: "^SLM_AUTH_TOKEN="
+    line: >-
+      SLM_AUTH_TOKEN={{ lookup('password', '/dev/null length=48 chars=ascii_letters,digits') }}
+    create: false
+  when:
+    - slm_secrets_stat.stat.exists
+    - _slm_auth_tok_check.rc != 0
   no_log: true
   tags: ['slm', 'secrets']
 
@@ -395,6 +424,23 @@
 # ==========================================================
 # Frontend build
 # ==========================================================
+# Sync autobot-plugins so file: workspace symlinks resolve (MVA-893).
+# package.json declares "@autobot/vnc": "file:../autobot-plugins/vnc" and
+# "@autobot/terminal": "file:../autobot-plugins/terminal". npm install
+# creates symlinks from node_modules/@autobot/* → ../../../autobot-plugins/*
+# at install time; if the target directory is absent the symlinks dangle
+# and Vite's rolldown bundler fails to resolve the import at build time.
+- name: "SLM | Sync autobot-plugins from code_source (MVA-893)"
+  ansible.posix.synchronize:
+    src: "{{ code_source_dir | default('/opt/autobot/code_source') }}/autobot-plugins/"
+    dest: "{{ slm_base_dir }}/autobot-plugins/"
+    rsync_opts:
+      - "--exclude=node_modules"
+      - "--exclude=dist"
+      - "--exclude=.git"
+    delete: true
+  tags: ['slm', 'frontend']
+
 - name: "SLM | Check if package.json exists"
   ansible.builtin.stat:
     path: "{{ slm_frontend_dir }}/package.json"
@@ -460,30 +506,48 @@
   tags: ['slm', 'grafana']
 
 # ==========================================================
-# WSL2 host override for co-located user backend (#5608)
-# 127.0.0.1 is ECONNREFUSED via WSL2 mirrored networking;
-# use 10.255.255.254 (lo alias) so nginx upstream reaches uvicorn.
+# WSL2 note (#5608 / MVA-1423 / MVA-1454)
+# uvicorn now binds to 0.0.0.0 on WSL2 so nginx can reach it on
+# 127.0.0.1. No frontend_backend_host override is needed.
+# The UFW loopback0 rule in the backend role permits loopback traffic.
 # ==========================================================
-- name: "SLM | Read /proc/version to detect WSL2 (#5608)"
-  ansible.builtin.slurp:
-    src: /proc/version
-  register: _slm_proc_version
-  changed_when: false
-  failed_when: false
-  tags: ['slm', 'nginx']
-
-- name: "SLM | Set frontend_backend_host=10.255.255.254 on WSL2 hosts (#5608)"
-  ansible.builtin.set_fact:
-    frontend_backend_host: "10.255.255.254"
-  when:
-    - _slm_proc_version.content is defined
-    - (_slm_proc_version.content | b64decode | lower) is search('microsoft')
-    - frontend_backend_host == '127.0.0.1'
-  tags: ['slm', 'nginx']
 
 # ==========================================================
 # Nginx configuration
 # ==========================================================
+
+# #6842: DRY security-headers via nginx snippets (avoids repeating 5 add_header
+# lines at every location that overrides parent context).
+- name: "SLM | Ensure nginx snippets directory exists"
+  ansible.builtin.file:
+    path: /etc/nginx/snippets
+    state: directory
+    mode: "0755"
+  become: true
+  tags: ['slm', 'nginx']
+
+- name: "SLM | Deploy strict security-headers nginx snippet (#6842)"
+  ansible.builtin.template:
+    src: autobot-security-headers-strict.conf.j2
+    dest: /etc/nginx/snippets/autobot-security-headers-strict.conf
+    mode: "0644"
+  become: true
+  notify:
+    - test nginx config
+    - reload nginx
+  tags: ['slm', 'nginx']
+
+- name: "SLM | Deploy iframe-host security-headers nginx snippet (#6842)"
+  ansible.builtin.template:
+    src: autobot-security-headers-iframe-host.conf.j2
+    dest: /etc/nginx/snippets/autobot-security-headers-iframe-host.conf
+    mode: "0644"
+  become: true
+  notify:
+    - test nginx config
+    - reload nginx
+  tags: ['slm', 'nginx']
+
 - name: "SLM | Deploy nginx configuration"
   ansible.builtin.template:
     src: autobot-slm.conf.j2
@@ -499,14 +563,14 @@
   ansible.builtin.stat:
     path: /etc/nginx/sites-enabled/{{ slm_nginx_config }}
   register: nginx_sites_enabled_stat
-  become: yes
+  become: true
   tags: ['slm', 'nginx']
 
 - name: "SLM | Remove standalone sites-enabled file if not a symlink (#1122)"
   ansible.builtin.file:
     path: /etc/nginx/sites-enabled/{{ slm_nginx_config }}
     state: absent
-  become: yes
+  become: true
   when:
     - nginx_sites_enabled_stat.stat.exists
     - not nginx_sites_enabled_stat.stat.islnk
@@ -517,7 +581,7 @@
     src: /etc/nginx/sites-available/{{ slm_nginx_config }}
     dest: /etc/nginx/sites-enabled/{{ slm_nginx_config }}
     state: link
-  become: yes
+  become: true
   notify: reload nginx
   tags: ['slm', 'nginx']
 
@@ -569,6 +633,42 @@
 # ==========================================================
 # (#2872) Removed ignore_errors — service start failures must surface.
 # If the service fails to start, deployment should report the real state.
+
+# Smoke test: verify Python can import the app before starting the service (MVA-514).
+# Catches import errors immediately — the full traceback appears inline in Ansible output
+# and is saved to slm-startup-smoke.log for reference.
+# Sources the deployed env files so PYTHONPATH and secrets match the live service.
+- name: "SLM | Smoke-test Python import before service start (MVA-514)"
+  ansible.builtin.shell:
+    cmd: >-
+      set -a ;
+      test -f {{ postgresql_credentials_dir }}/{{ postgresql_credentials_file }} &&
+        . {{ postgresql_credentials_dir }}/{{ postgresql_credentials_file }} || true ;
+      test -f {{ slm_credentials_dir }}/{{ slm_credentials_file }} &&
+        . {{ slm_credentials_dir }}/{{ slm_credentials_file }} || true ;
+      set +a ;
+      PYTHONPATH="{{ slm_backend_dir }}:{{ slm_shared_dir }}:{{ slm_base_dir }}"
+      {{ slm_backend_dir }}/venv/bin/python3 -c "import main" 2>&1
+      | tee -a {{ slm_log_dir }}/slm-startup-smoke.log
+  args:
+    chdir: "{{ slm_backend_dir }}"
+    executable: /bin/bash
+  register: _slm_import_check
+  become: true
+  become_user: "{{ slm_user }}"
+  changed_when: false
+  failed_when: false
+  tags: ['slm', 'service']
+
+- name: "SLM | Fail immediately on Python import error (MVA-514)"
+  ansible.builtin.fail:
+    msg: >-
+      SLM backend Python import failed — see error above and in
+      {{ slm_log_dir }}/slm-startup-smoke.log.
+      Last output: {{ (_slm_import_check.stdout_lines | default([]))[-20:] }}
+  when: _slm_import_check.rc | default(0) != 0
+  tags: ['slm', 'service']
+
 - name: "SLM | Start backend service"
   ansible.builtin.systemd:
     name: "{{ slm_backend_service }}"
@@ -579,16 +679,88 @@
   ansible.builtin.meta: flush_handlers
   tags: ['slm', 'service']
 
-- name: "SLM | Wait for backend to be healthy (retry-based)"
-  ansible.builtin.uri:
-    url: "http://{{ slm_backend_host }}:{{ slm_backend_port }}/api/health"
-    method: GET
-    status_code: 200
-  register: _slm_health
-  retries: 60
-  delay: 5
-  until: _slm_health is succeeded
+# Fast-fail if the service crashed before burning all 120 health-check retries (#7920).
+# After flush_handlers the service should be 'active' or 'activating'; anything else
+# (failed, inactive) means it will never pass the health check — detect it immediately.
+- name: "SLM | Check service state before health poll (#7920)"
+  ansible.builtin.command:
+    cmd: systemctl is-active {{ slm_backend_service }}
+  register: _slm_pre_health_active
+  changed_when: false
+  failed_when: false
   tags: ['slm', 'service']
+
+- name: "SLM | Collect startup logs when service is not starting (#7920)"
+  ansible.builtin.shell:
+    cmd: >-
+      journalctl -u {{ slm_backend_service }} -n 100 --no-pager 2>&1 ||
+      tail -100 {{ slm_log_dir }}/slm-backend.log 2>/dev/null ||
+      echo "No logs available yet"
+  register: _slm_startup_log
+  changed_when: false
+  failed_when: false
+  when: _slm_pre_health_active.stdout | default('') not in ['active', 'activating']
+  tags: ['slm', 'service']
+
+- name: "SLM | Fail early when service is in failed or inactive state (#7920)"
+  ansible.builtin.fail:
+    msg: >-
+      SLM backend is in '{{ _slm_pre_health_active.stdout | default("unknown") }}'
+      state after restart — it will not become healthy. Logs:
+      {{ _slm_startup_log.stdout_lines | default(['(none)']) }}
+  when: _slm_pre_health_active.stdout | default('') not in ['active', 'activating']
+  tags: ['slm', 'service']
+
+# block/rescue ensures diagnostic tasks run even when the health check fails (#7919).
+# Without this, Ansible halts the play on failure and the log tasks are never reached.
+- block:
+    - name: "SLM | Wait for backend to be healthy (retry-based)"
+      ansible.builtin.uri:
+        url: "http://{{ slm_backend_host }}:{{ slm_backend_port }}/api/health"
+        method: GET
+        status_code: 200
+        timeout: 10
+      register: _slm_health
+      retries: 120
+      delay: 5
+      until: _slm_health is succeeded
+      tags: ['slm', 'service']
+
+  rescue:
+    - name: "SLM | Collect backend logs on health check failure"
+      ansible.builtin.shell:
+        cmd: >-
+          journalctl -u {{ slm_backend_service }} -n 100 --no-pager 2>&1 ||
+          tail -100 {{ slm_log_dir }}/slm-backend.log 2>/dev/null ||
+          echo "No logs available yet"
+      register: _slm_backend_log_output
+      changed_when: false
+      failed_when: false
+      tags: ['slm', 'service', 'debug']
+
+    - name: "SLM | Write backend crash log to file for easier access (MVA-514)"
+      ansible.builtin.copy:
+        content: "{{ _slm_backend_log_output.stdout | default('(empty)') }}"
+        dest: "{{ slm_log_dir }}/slm-health-check-failure.log"
+        owner: "{{ slm_user }}"
+        group: "{{ slm_group }}"
+        mode: '0640'
+      changed_when: false
+      failed_when: false
+      tags: ['slm', 'service', 'debug']
+
+    - name: "SLM | Display last 30 lines of backend log on failure"
+      ansible.builtin.debug:
+        msg: "{{ (_slm_backend_log_output.stdout_lines | default([]))[-30:] }}"
+      tags: ['slm', 'service', 'debug']
+
+    - name: "SLM | Fail with diagnostic context"
+      ansible.builtin.fail:
+        msg: >-
+          SLM backend health check failed after {{ 120 * 5 }}s.
+          Full crash log: {{ slm_log_dir }}/slm-health-check-failure.log
+          Import smoke log: {{ slm_log_dir }}/slm-startup-smoke.log
+      tags: ['slm', 'service']
 
 - name: "SLM | Export admin password for downstream plays"
   ansible.builtin.shell:

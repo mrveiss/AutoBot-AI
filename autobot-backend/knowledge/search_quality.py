@@ -14,16 +14,16 @@ This module implements advanced search quality improvements including:
 Related Issues: #78 (Search Quality Improvements)
 """
 
-import logging
 import re
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Set, Tuple
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import parse_utc_iso
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #78: Pre-compiled patterns for performance
 _WORD_PATTERN = re.compile(r"\b\w+\b")
@@ -227,7 +227,7 @@ class RelevanceScorer:
 
     def calculate_recency_boost(
         self,
-        created_at: Optional[datetime],
+        created_at: datetime | None,
         max_age_days: int = 365,
     ) -> float:
         """
@@ -332,7 +332,7 @@ class RelevanceScorer:
             return self.factors.exact_match_boost
         return 1.0
 
-    def _parse_result_metadata(self, result: Dict[str, Any]) -> Tuple[str, str, str, str, bool, Optional[datetime]]:
+    def _parse_result_metadata(self, result: Dict[str, Any]) -> Tuple[str, str, str, str, bool, datetime | None]:
         """Parse metadata from result for scoring (Issue #398: extracted)."""
         metadata = result.get("metadata", {})
         content = result.get("content", "")
@@ -359,7 +359,7 @@ class RelevanceScorer:
         doc_id: str,
         source: str,
         verified: bool,
-        created_at: Optional[datetime],
+        created_at: datetime | None,
     ) -> float:
         """Compute boosted score from all factors (Issue #398: extracted)."""
         recency_boost = self.calculate_recency_boost(created_at)
@@ -407,27 +407,27 @@ class SearchFilters:
     """Advanced search filter configuration."""
 
     # Date filters
-    created_after: Optional[datetime] = None
-    created_before: Optional[datetime] = None
-    modified_after: Optional[datetime] = None
-    modified_before: Optional[datetime] = None
+    created_after: datetime | None = None
+    created_before: datetime | None = None
+    modified_after: datetime | None = None
+    modified_before: datetime | None = None
 
     # Category/tag filters
-    categories: Optional[List[str]] = None
-    tags: Optional[List[str]] = None
+    categories: List[str] | None = None
+    tags: List[str] | None = None
     tags_match_all: bool = False
 
     # Source filters
-    sources: Optional[List[str]] = None
-    exclude_sources: Optional[List[str]] = None
+    sources: List[str] | None = None
+    exclude_sources: List[str] | None = None
 
     # Content filters
-    exclude_terms: Optional[List[str]] = None
-    require_terms: Optional[List[str]] = None
+    exclude_terms: List[str] | None = None
+    require_terms: List[str] | None = None
 
     # Metadata filters
     verified_only: bool = False
-    min_authority: Optional[float] = None
+    min_authority: float | None = None
 
     # Result limits
     min_score: float = 0.0
@@ -684,11 +684,11 @@ class SearchEvent:
     query: str
     timestamp: datetime
     result_count: int
-    clicked_result_id: Optional[str] = None
-    session_id: Optional[str] = None
-    user_id: Optional[str] = None
-    search_duration_ms: Optional[int] = None
-    filters_used: Optional[Dict[str, Any]] = None
+    clicked_result_id: str | None = None
+    session_id: str | None = None
+    user_id: str | None = None
+    search_duration_ms: int | None = None
+    filters_used: Dict[str, Any] | None = None
 
 
 class SearchAnalytics:
@@ -861,10 +861,10 @@ class SearchAnalytics:
 
 import threading
 
-_query_expander: Optional[QueryExpander] = None
-_relevance_scorer: Optional[RelevanceScorer] = None
-_result_clusterer: Optional[ResultClusterer] = None
-_search_analytics: Optional[SearchAnalytics] = None
+_query_expander: QueryExpander | None = None
+_relevance_scorer: RelevanceScorer | None = None
+_result_clusterer: ResultClusterer | None = None
+_search_analytics: SearchAnalytics | None = None
 _instances_lock = threading.Lock()
 
 

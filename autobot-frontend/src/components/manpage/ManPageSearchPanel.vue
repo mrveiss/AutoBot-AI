@@ -1,7 +1,7 @@
 <template>
-  <BasePanel v-if="show" variant="bordered" size="medium">
+  <BasePanel v-if="show" variant="bordered" size="md">
     <template #header>
-      <h3><i class="fas fa-search"></i> {{ $t('manpage.searchPanel.title') }}</h3>
+      <h3><Icon name="search" /> {{ $t('manpage.searchPanel.title') }}</h3>
     </template>
 
     <div class="search-input">
@@ -18,7 +18,7 @@
         @click="$emit('search')"
         :disabled="!query.trim() || loading"
       >
-        <i class="fas fa-search"></i>
+        <Icon name="search" />
         {{ $t('manpage.searchPanel.search') }}
       </BaseButton>
     </div>
@@ -62,6 +62,7 @@
  * Issue #184: Split oversized Vue components
  */
 
+import Icon from '@/components/ui/Icon.vue'
 import BasePanel from '@/components/base/BasePanel.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'

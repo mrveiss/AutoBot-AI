@@ -8,12 +8,12 @@ Issue #1074: Extract duplicated parse/build helpers from cognifiers (ARCH-3/4).
 """
 
 import json
-import logging
 from typing import Any, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from knowledge.pipeline.models.entity import Entity
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def parse_llm_json_response(

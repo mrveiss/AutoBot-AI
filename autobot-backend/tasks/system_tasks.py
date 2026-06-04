@@ -10,11 +10,10 @@ NOTE: These tasks have been moved to SLM server (#729).
 Stubs maintained for backward compatibility with existing API endpoints.
 """
 
-import logging
-
+from autobot_shared.logging_manager import get_logger
 from celery_app import celery_app
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @celery_app.task(bind=True, name="tasks.initialize_rbac")

@@ -30,6 +30,7 @@ Exit code:
   1 — banned patterns found (PR/commit blocked)
   2 — usage error
 """
+
 from __future__ import annotations
 
 import re
@@ -85,9 +86,10 @@ def _suggestion_for(rel_path: str) -> str:
     return "`utc_timestamp()` from `autobot_shared.time_utils`."
 
 
-# Patterns are intentionally precise — this hook only prevents regression
-# of the #5178 migration, not the broader datetime.utcnow() backlog
-# tracked by #5211.
+# Patterns prevent regression of prior migrations (#5178) and enforce the
+# canonical UTC helper going forward (#7436). The bare datetime.utcnow()
+# pattern (#7436) was added to replace the deprecated Python 3.12 call
+# with the tz-aware canonical helper from autobot_shared.datetime_utils.
 PATTERNS: List[Tuple[str, re.Pattern[str], str]] = [
     (
         "isoformat",
@@ -98,7 +100,7 @@ PATTERNS: List[Tuple[str, re.Pattern[str], str]] = [
     (
         "z-suffix-isoformat",
         re.compile(r'datetime\.utcnow\(\)\.isoformat\(\)\s*\+\s*["\']Z["\']'),
-        "`datetime.utcnow().isoformat() + \"Z\"` produces invalid ISO-8601 "
+        '`datetime.utcnow().isoformat() + "Z"` produces invalid ISO-8601 '
         "(microseconds + Z mutually exclusive) — fails `fromisoformat` on "
         "Python 3.10 (#5238).",
     ),
@@ -109,8 +111,14 @@ PATTERNS: List[Tuple[str, re.Pattern[str], str]] = [
         # Matches strftime calls with the ISO format and NO comma after
         # the format string (no time tuple passed).
         re.compile(r'time\.strftime\(\s*["\']%Y-%m-%dT[^"\']*["\']\s*\)'),
-        "`time.strftime(\"%Y-%m-%dT...\")` with no time argument defaults to "
+        '`time.strftime("%Y-%m-%dT...")` with no time argument defaults to '
         "`time.localtime()` (LOCAL time, mislabeled as UTC) (#5178 audit).",
+    ),
+    (
+        "bare-utcnow",
+        re.compile(r"datetime\.utcnow\(\)"),
+        "`datetime.utcnow()` is deprecated (Python 3.12) and returns tz-naive datetimes. "
+        "Use `datetime_now()` from `autobot_shared.datetime_utils` instead (#7436).",
     ),
 ]
 
@@ -165,8 +173,7 @@ def main(argv: List[str]) -> int:
             total_hits += 1
     if total_hits:
         print(
-            f"\n[no-utcnow-isoformat] {total_hits} banned pattern(s) found. "
-            f"See per-line fix suggestions above.",
+            f"\n[no-utcnow-isoformat] {total_hits} banned pattern(s) found. " f"See per-line fix suggestions above.",
             file=sys.stderr,
         )
         return 1

@@ -20,18 +20,18 @@ rag:rl:cursors                                   HASH   — last processed strea
 
 import hashlib
 import json
-import logging
 import math
 import threading
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from constants.ttl_constants import TTL_30_DAYS
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -184,8 +184,8 @@ class RetrievalLearner:
 
     async def consume_feedback_stream(
         self,
-        date_key: Optional[str] = None,
-        user_id: Optional[str] = None,
+        date_key: str | None = None,
+        user_id: str | None = None,
     ) -> int:
         """Consume new events from rag:feedback:{user_id}:{date_key} and distil patterns.
 
@@ -363,10 +363,10 @@ class RetrievalLearner:
         self,
         query: str,
         complexity: str = "simple",
-        categories: Optional[List[str]] = None,
-        user_id: Optional[str] = None,
-        exploration_constant: Optional[float] = None,
-    ) -> Optional[RetrievalPattern]:
+        categories: List[str] | None = None,
+        user_id: str | None = None,
+        exploration_constant: float | None = None,
+    ) -> RetrievalPattern | None:
         """Return the best matching historical pattern for a query, or None.
 
         Issue #3240: Matching is attempted in order:
@@ -453,7 +453,7 @@ class RetrievalLearner:
         self,
         pattern_hash: str,
         success: bool,
-        user_id: Optional[str] = None,
+        user_id: str | None = None,
     ) -> None:
         """Update the success_rate of an existing pattern with a new outcome.
 

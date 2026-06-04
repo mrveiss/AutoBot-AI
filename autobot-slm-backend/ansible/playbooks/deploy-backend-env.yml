@@ -53,7 +53,7 @@
         src: "{{ backend_install_dir }}/../autobot_shared"
         dest: "{{ backend_code_dir }}/autobot_shared"
         state: link
-        force: yes
+        force: true
         owner: "{{ backend_user }}"
         group: "{{ backend_group }}"
 

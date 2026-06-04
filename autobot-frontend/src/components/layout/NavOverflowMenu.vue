@@ -5,7 +5,7 @@
       aria-haspopup="menu"
       :aria-label="$t('nav.moreItems')"
       :class="[
-        'px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center space-x-1',
+        'px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center gap-1',
         hasActiveItem
           ? 'bg-autobot-primary text-white'
           : 'text-autobot-text-primary hover:bg-autobot-bg-tertiary'
@@ -14,6 +14,11 @@
       @keydown.escape="close(true)"
     >
       <span>{{ $t('nav.more') }}</span>
+      <!-- GH#8748: count badge — Information Scent for hidden items -->
+      <span
+        class="ml-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-autobot-primary text-white text-[10px] font-bold leading-[18px] text-center"
+        aria-hidden="true"
+      >{{ items.length }}</span>
       <svg
         class="w-3 h-3 transition-transform duration-150"
         :class="open ? 'rotate-180' : ''"
@@ -43,7 +48,7 @@
           role="menuitem"
           active-class=""
           exact-active-class="text-autobot-primary"
-          class="flex items-center space-x-2 px-3 py-2 text-sm transition-colors duration-150 hover:bg-autobot-bg-tertiary text-autobot-text-primary"
+          class="flex items-center gap-2 px-3 py-2 text-sm transition-colors duration-150 hover:bg-autobot-bg-tertiary text-autobot-text-primary"
           @click="close"
         >
           <svg

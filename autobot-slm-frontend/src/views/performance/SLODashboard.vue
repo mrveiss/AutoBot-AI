@@ -166,7 +166,7 @@ async function handleDelete(): Promise<void> {
     <!-- Header -->
     <div class="flex items-center justify-between mb-6">
       <div>
-        <h2 class="text-lg font-semibold text-gray-900">Service Level Objectives</h2>
+        <h2 class="text-lg font-semibold text-gray-900">{{ $t('performance.sLODashboard.serviceLevelObjectives') }}</h2>
         <p class="text-sm text-gray-500">{{ slos.length }} SLO{{ slos.length !== 1 ? 's' : '' }} defined</p>
       </div>
       <button
@@ -176,13 +176,13 @@ async function handleDelete(): Promise<void> {
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
         </svg>
-        Create SLO
+        {{ $t('performance.sLODashboard.createSLO') }}
       </button>
     </div>
 
     <!-- SLO Cards -->
     <div v-if="slos.length === 0 && !loading" class="text-center text-gray-400 py-12">
-      No SLOs defined. Create one to start tracking service level objectives.
+      {{ $t('performance.sLODashboard.noSLOsDefinedCreate') }}
     </div>
     <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
       <div
@@ -210,7 +210,7 @@ async function handleDelete(): Promise<void> {
         <!-- Compliance Bar -->
         <div class="mb-3">
           <div class="flex items-center justify-between text-xs mb-1">
-            <span class="text-gray-500">Compliance</span>
+            <span class="text-gray-500">{{ $t('performance.sLODashboard.compliance') }}</span>
             <span class="font-medium text-gray-700">
               {{ (slo.current_compliance ?? 0).toFixed(1) }}% / {{ slo.target_percent }}%
             </span>
@@ -232,19 +232,19 @@ async function handleDelete(): Promise<void> {
         <!-- Metadata -->
         <div class="grid grid-cols-2 gap-2 text-xs text-gray-500 mb-3">
           <div>
-            <span class="text-gray-400">Metric:</span>
+            <span class="text-gray-400">{{ $t('performance.sLODashboard.metric') }}</span>
             <span class="ml-1 capitalize">{{ slo.metric_type }}</span>
           </div>
           <div>
-            <span class="text-gray-400">Threshold:</span>
+            <span class="text-gray-400">{{ $t('performance.sLODashboard.threshold') }}</span>
             <span class="ml-1">{{ slo.threshold_value }}{{ slo.threshold_unit }}</span>
           </div>
           <div>
-            <span class="text-gray-400">Window:</span>
+            <span class="text-gray-400">{{ $t('performance.sLODashboard.window') }}</span>
             <span class="ml-1">{{ slo.window_days }}d</span>
           </div>
           <div v-if="slo.node_id">
-            <span class="text-gray-400">Node:</span>
+            <span class="text-gray-400">{{ $t('performance.sLODashboard.node') }}</span>
             <span class="ml-1">{{ slo.node_id }}</span>
           </div>
         </div>
@@ -255,7 +255,7 @@ async function handleDelete(): Promise<void> {
             @click="confirmDelete(slo)"
             class="text-xs text-red-600 hover:text-red-800 transition-colors"
           >
-            Delete
+            {{ $t('performance.sLODashboard.delete') }}
           </button>
         </div>
       </div>
@@ -273,10 +273,10 @@ async function handleDelete(): Promise<void> {
       <div v-if="showCreateModal" class="fixed inset-0 z-50 flex items-center justify-center">
         <div class="fixed inset-0 bg-black/50" @click="showCreateModal = false"></div>
         <div class="relative bg-white rounded-lg shadow-xl w-full max-w-lg mx-4 p-6">
-          <h3 class="text-lg font-semibold text-gray-900 mb-4">Create SLO</h3>
+          <h3 class="text-lg font-semibold text-gray-900 mb-4">{{ $t('performance.sLODashboard.createSLO') }}</h3>
           <form @submit.prevent="handleCreate" class="space-y-4">
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">Name</label>
+              <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('performance.sLODashboard.name') }}</label>
               <input
                 v-model="form.name"
                 type="text"
@@ -286,7 +286,7 @@ async function handleDelete(): Promise<void> {
               />
             </div>
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
+              <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('performance.sLODashboard.description') }}</label>
               <input
                 v-model="form.description"
                 type="text"
@@ -296,7 +296,7 @@ async function handleDelete(): Promise<void> {
             </div>
             <div class="grid grid-cols-2 gap-4">
               <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Target %</label>
+                <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('performance.sLODashboard.target') }}</label>
                 <input
                   v-model.number="form.target_percent"
                   type="number"
@@ -308,7 +308,7 @@ async function handleDelete(): Promise<void> {
                 />
               </div>
               <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Metric Type</label>
+                <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('performance.sLODashboard.metricType') }}</label>
                 <select
                   v-model="form.metric_type"
                   class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
@@ -321,7 +321,7 @@ async function handleDelete(): Promise<void> {
             </div>
             <div class="grid grid-cols-3 gap-4">
               <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Threshold</label>
+                <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('performance.sLODashboard.threshold1') }}</label>
                 <input
                   v-model.number="form.threshold_value"
                   type="number"
@@ -331,7 +331,7 @@ async function handleDelete(): Promise<void> {
                 />
               </div>
               <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Unit</label>
+                <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('performance.sLODashboard.unit') }}</label>
                 <select
                   v-model="form.threshold_unit"
                   class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
@@ -342,7 +342,7 @@ async function handleDelete(): Promise<void> {
                 </select>
               </div>
               <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Window (days)</label>
+                <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('performance.sLODashboard.windowDays') }}</label>
                 <input
                   v-model.number="form.window_days"
                   type="number"
@@ -353,7 +353,7 @@ async function handleDelete(): Promise<void> {
               </div>
             </div>
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">Node ID (optional)</label>
+              <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('performance.sLODashboard.nodeIDOptional') }}</label>
               <input
                 v-model="form.node_id"
                 type="text"
@@ -368,7 +368,7 @@ async function handleDelete(): Promise<void> {
                 id="slo-enabled"
                 class="rounded-sm border-gray-300"
               />
-              <label for="slo-enabled" class="text-sm text-gray-700">Enabled</label>
+              <label for="slo-enabled" class="text-sm text-gray-700">{{ $t('performance.sLODashboard.enabled') }}</label>
             </div>
             <div class="flex justify-end gap-3 pt-2">
               <button
@@ -376,14 +376,14 @@ async function handleDelete(): Promise<void> {
                 @click="showCreateModal = false"
                 class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
               >
-                Cancel
+                {{ $t('performance.sLODashboard.cancel') }}
               </button>
               <button
                 type="submit"
                 :disabled="!form.name || loading"
                 class="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 disabled:opacity-50"
               >
-                Create
+                {{ $t('performance.sLODashboard.create') }}
               </button>
             </div>
           </form>
@@ -403,25 +403,24 @@ async function handleDelete(): Promise<void> {
       <div v-if="showDeleteConfirm" class="fixed inset-0 z-50 flex items-center justify-center">
         <div class="fixed inset-0 bg-black/50" @click="showDeleteConfirm = false"></div>
         <div class="relative bg-white rounded-lg shadow-xl w-full max-w-sm mx-4 p-6">
-          <h3 class="text-lg font-semibold text-gray-900 mb-2">Delete SLO</h3>
+          <h3 class="text-lg font-semibold text-gray-900 mb-2">{{ $t('performance.sLODashboard.deleteSLO') }}</h3>
           <p class="text-sm text-gray-600 mb-4">
-            Are you sure you want to delete
-            <span class="font-medium">"{{ deleteTarget?.name }}"</span>?
-            This action cannot be undone.
+            {{ $t('performance.sLODashboard.areYouSureYou') }}
+            <span class="font-medium">"{{ deleteTarget?.name }}"</span>{{ $t('performance.sLODashboard.thisActionCannotBe') }}
           </p>
           <div class="flex justify-end gap-3">
             <button
               @click="showDeleteConfirm = false"
               class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
             >
-              Cancel
+              {{ $t('performance.sLODashboard.cancel') }}
             </button>
             <button
               @click="handleDelete"
               :disabled="loading"
               class="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50"
             >
-              Delete
+              {{ $t('performance.sLODashboard.delete') }}
             </button>
           </div>
         </div>

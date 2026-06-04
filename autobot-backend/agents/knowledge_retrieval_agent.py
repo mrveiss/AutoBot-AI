@@ -8,10 +8,11 @@ Uses lightweight Llama 3.2 1B model for efficient knowledge base searches,
 simple fact retrieval, and quick question answering without complex synthesis.
 """
 
-import logging
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import (
     get_agent_endpoint_explicit,
     get_agent_model_explicit,
@@ -22,9 +23,10 @@ from knowledge_base import KnowledgeBase
 from services.llm_service import get_llm_service
 
 from .base_agent import DeploymentMode
+from .payloads import AgentStatus, KnowledgeQueryPayload
 from .standardized_agent import ActionHandler, StandardizedAgent
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level tuples for knowledge retrieval patterns
 _KNOWLEDGE_PATTERNS = (
@@ -166,33 +168,28 @@ class KnowledgeRetrievalAgent(StandardizedAgent):
         processing_time: float,
         similarity_threshold: float,
     ) -> Dict[str, Any]:
-        """
-        Build the knowledge-retrieval-specific payload dict.
+        """Build the knowledge-retrieval-specific payload dict (#6650, #6703).
 
-        Returned as the ``result`` field of the AgentResponse the base class
-        ``StandardizedAgent._build_success_response`` constructs (#6650). The
-        prior name shadowed the base method with an incompatible signature,
-        so any AI Stack ``/agents/knowledge_retrieval/process`` request would
-        crash with a TypeError.
-
-        (Issue #398: extracted helper)
+        Constructs a typed KnowledgeQueryPayload then returns model_dump() so
+        the public API contract (Dict[str, Any]) is unchanged.
         """
-        return {
-            "status": "success",
-            "query": query,
-            "documents_found": processed_results["documents_found"],
-            "documents": processed_results["documents"],
-            "summary": summary,
-            "processing_time": processing_time,
-            "is_question": self._is_question(query),
-            "agent_type": "knowledge_retrieval",
-            "model_used": self.model_name,
-            "metadata": {
+        return KnowledgeQueryPayload(
+            status=AgentStatus.SUCCESS,
+            agent_type="knowledge_retrieval",
+            model_used=self.model_name,
+            query=query,
+            documents_found=processed_results["documents_found"],
+            documents=processed_results["documents"],
+            summary=summary,
+            processing_time=processing_time,
+            is_question=self._is_question(query),
+            similarity_threshold=similarity_threshold,
+            metadata={
                 "agent": "KnowledgeRetrievalAgent",
                 "search_type": "fast_lookup",
                 "similarity_threshold": similarity_threshold,
             },
-        }
+        ).model_dump()
 
     def _build_error_response(self, query: str, error: Exception) -> Dict[str, Any]:
         """
@@ -215,7 +212,7 @@ class KnowledgeRetrievalAgent(StandardizedAgent):
         query: str,
         limit: int = 5,
         similarity_threshold: float = 0.6,
-        context: Optional[Dict[str, Any]] = None,
+        context: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
         """
         Process a simple knowledge query and return quick results.
@@ -506,14 +503,14 @@ If the information is not in the provided text, respond with "Information not fo
             logger.error("Fact extraction error: %s", e)
             return "Could not extract fact from documents."
 
-    def _try_extract_message_content(self, response: Dict) -> Optional[str]:
+    def _try_extract_message_content(self, response: Dict) -> str | None:
         """Try to extract content from message dict (Issue #334 - extracted helper)."""
         if "message" not in response or not isinstance(response["message"], dict):
             return None
         content = response["message"].get("content")
         return content.strip() if content else None
 
-    def _try_extract_choices_content(self, response: Dict) -> Optional[str]:
+    def _try_extract_choices_content(self, response: Dict) -> str | None:
         """Try to extract content from choices list (Issue #334 - extracted helper)."""
         if "choices" not in response or not isinstance(response["choices"], list):
             return None
@@ -599,19 +596,5 @@ If the information is not in the provided text, respond with "Information not fo
         return False
 
 
-# Singleton instance (thread-safe)
-import threading
-
-_knowledge_retrieval_agent_instance = None
-_knowledge_retrieval_agent_lock = threading.Lock()
-
-
-def get_knowledge_retrieval_agent() -> KnowledgeRetrievalAgent:
-    """Get the singleton Knowledge Retrieval Agent instance (thread-safe)."""
-    global _knowledge_retrieval_agent_instance
-    if _knowledge_retrieval_agent_instance is None:
-        with _knowledge_retrieval_agent_lock:
-            # Double-check after acquiring lock
-            if _knowledge_retrieval_agent_instance is None:
-                _knowledge_retrieval_agent_instance = KnowledgeRetrievalAgent()
-    return _knowledge_retrieval_agent_instance
+get_knowledge_retrieval_agent = lazy_singleton(KnowledgeRetrievalAgent)
+"""Get the singleton Knowledge Retrieval Agent instance (thread-safe)."""

@@ -11,7 +11,7 @@
       <!-- Repopulate Section -->
       <div class="section-card">
         <div class="section-header">
-          <h4><i class="fas fa-database"></i> {{ $t('knowledge.advanced.knowledgeBasePopulation') }}</h4>
+          <h4><Icon name="database" /> {{ $t('knowledge.advanced.knowledgeBasePopulation') }}</h4>
           <p>{{ $t('knowledge.advanced.populationDescription') }}</p>
         </div>
 
@@ -20,7 +20,7 @@
           <div class="action-card">
             <div class="action-content">
               <div class="action-icon autobot-docs">
-                <i class="fas fa-cogs"></i>
+                <Icon name="cogs" />
               </div>
               <h5>{{ $t('knowledge.advanced.autobotDocumentation') }}</h5>
               <p>{{ $t('knowledge.advanced.autobotDocsDescription') }}</p>
@@ -33,7 +33,7 @@
               :loading="populateStatus.autobotDocs === 'loading'"
               class="action-btn"
             >
-              <i v-if="populateStatus.autobotDocs !== 'loading'" class="fas fa-plus"></i>
+              <Icon name="plus" v-if="populateStatus.autobotDocs !== 'loading'" />
               {{ getButtonText('autobotDocs') }}
             </BaseButton>
           </div>
@@ -42,7 +42,7 @@
           <div class="action-card">
             <div class="action-content">
               <div class="action-icon system-commands">
-                <i class="fas fa-terminal"></i>
+                <Icon name="terminal" />
               </div>
               <h5>{{ $t('knowledge.advanced.systemCommands') }}</h5>
               <p>{{ $t('knowledge.advanced.systemCommandsDescription') }}</p>
@@ -55,7 +55,7 @@
               :loading="populateStatus.systemCommands === 'loading'"
               class="action-btn"
             >
-              <i v-if="populateStatus.systemCommands !== 'loading'" class="fas fa-plus"></i>
+              <Icon name="plus" v-if="populateStatus.systemCommands !== 'loading'" />
               {{ getButtonText('systemCommands') }}
             </BaseButton>
           </div>
@@ -64,7 +64,7 @@
           <div class="action-card">
             <div class="action-content">
               <div class="action-icon man-pages">
-                <i class="fas fa-book"></i>
+                <Icon name="book" />
               </div>
               <h5>{{ $t('knowledge.advanced.manualPages') }}</h5>
               <p>{{ $t('knowledge.advanced.manualPagesDescription') }}</p>
@@ -77,7 +77,7 @@
               :loading="populateStatus.manPages === 'loading'"
               class="action-btn"
             >
-              <i v-if="populateStatus.manPages !== 'loading'" class="fas fa-plus"></i>
+              <Icon name="plus" v-if="populateStatus.manPages !== 'loading'" />
               {{ getButtonText('manPages') }}
             </BaseButton>
           </div>
@@ -87,7 +87,7 @@
       <!-- Management Section -->
       <div class="section-card">
         <div class="section-header">
-          <h4><i class="fas fa-tools"></i> {{ $t('knowledge.advanced.databaseManagement') }}</h4>
+          <h4><Icon name="tools" /> {{ $t('knowledge.advanced.databaseManagement') }}</h4>
           <p>{{ $t('knowledge.advanced.databaseManagementDescription') }}</p>
         </div>
 
@@ -95,20 +95,20 @@
           <div class="action-card danger-zone">
             <div class="action-content">
               <div class="action-icon danger">
-                <i class="fas fa-trash-alt"></i>
+                <Icon name="trash-alt" />
               </div>
               <h5>{{ $t('knowledge.advanced.clearAllKnowledge') }}</h5>
               <p>{{ $t('knowledge.advanced.clearAllDescription') }} <strong>{{ $t('knowledge.advanced.clearAllWarning') }}</strong></p>
               <small class="action-meta">{{ $t('knowledge.advanced.clearAllMeta') }}</small>
             </div>
             <BaseButton
-              variant="danger"
+              variant="error"
               @click="clearAllKnowledge"
               :disabled="isClearing || isPopulating"
               :loading="isClearing"
               class="action-btn"
             >
-              <i v-if="!isClearing" class="fas fa-exclamation-triangle"></i>
+              <Icon name="exclamation-triangle" v-if="!isClearing" />
               {{ isClearing ? $t('knowledge.advanced.clearing') : $t('knowledge.advanced.clearAll') }}
             </BaseButton>
           </div>
@@ -118,7 +118,7 @@
       <!-- Progress Section -->
       <div v-if="showProgress" class="section-card">
         <div class="section-header">
-          <h4><i class="fas fa-chart-line"></i> {{ $t('knowledge.advanced.operationProgress') }}</h4>
+          <h4><Icon name="chart-line" /> {{ $t('knowledge.advanced.operationProgress') }}</h4>
         </div>
 
         <div class="progress-container">
@@ -150,7 +150,7 @@
         :key="index"
         :class="['status-message', message.type]"
       >
-        <i :class="getMessageIcon(message.type)"></i>
+        <Icon :name="getMessageIcon(message.type)" />
         <div class="message-content">
           <div class="message-title">{{ message.title }}</div>
           <div v-if="message.details" class="message-details">{{ message.details }}</div>
@@ -162,7 +162,7 @@
           class="dismiss-btn"
           :aria-label="$t('knowledge.advanced.dismissMessage')"
         >
-          <i class="fas fa-times"></i>
+          <Icon name="times" />
         </BaseButton>
       </div>
     </div>
@@ -170,6 +170,7 @@
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
@@ -261,12 +262,12 @@ const getButtonText = (type: keyof typeof populateStatus.value) => {
 
 const getMessageIcon = (type: string) => {
   const icons = {
-    success: 'fas fa-check-circle',
-    error: 'fas fa-exclamation-circle',
-    warning: 'fas fa-exclamation-triangle',
-    info: 'fas fa-info-circle'
+    success: 'check-circle',
+    error: 'exclamation-circle',
+    warning: 'exclamation-triangle',
+    info: 'info-circle'
   }
-  return icons[type as keyof typeof icons] || 'fas fa-info-circle'
+  return icons[type as keyof typeof icons] || 'info-circle'
 }
 
 const addStatusMessage = (type: 'success' | 'error' | 'warning' | 'info', title: string, details?: string) => {

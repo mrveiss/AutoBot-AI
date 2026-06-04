@@ -8,23 +8,23 @@ Business logic for user management operations including CRUD,
 authentication, and role assignment.
 """
 
-import logging
 import secrets
 import uuid
-from typing import List, Optional
+from typing import List
 
 import bcrypt
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
 from user_management.models import Role, User, UserRole
 from user_management.models.audit import AuditAction, AuditLog, AuditResourceType
 from user_management.services.base_service import BaseService, TenantContext
 from user_management.services.session_service import SessionService
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class UserServiceError(Exception):
@@ -54,7 +54,7 @@ class UserService(BaseService):
     # Password hashing configuration
     BCRYPT_ROUNDS = 12
 
-    def __init__(self, session: AsyncSession, context: Optional[TenantContext] = None):
+    def __init__(self, session: AsyncSession, context: TenantContext | None = None):
         """Initialize user service."""
         super().__init__(session, context)
 
@@ -115,10 +115,10 @@ class UserService(BaseService):
         self,
         email_lower: str,
         username_lower: str,
-        password: Optional[str],
-        display_name: Optional[str],
+        password: str | None,
+        display_name: str | None,
         username: str,
-        effective_org_id: Optional[uuid.UUID],
+        effective_org_id: uuid.UUID | None,
         is_platform_admin: bool,
     ) -> User:
         """Build User model instance with provided attributes. Issue #620."""
@@ -141,7 +141,7 @@ class UserService(BaseService):
         user: User,
         email: str,
         username: str,
-        effective_org_id: Optional[uuid.UUID],
+        effective_org_id: uuid.UUID | None,
         is_platform_admin: bool,
     ) -> None:
         """Log audit entry for user creation. Issue #620."""
@@ -157,7 +157,7 @@ class UserService(BaseService):
             },
         )
 
-    async def _persist_user(self, user: User, role_ids: Optional[List[uuid.UUID]]) -> None:
+    async def _persist_user(self, user: User, role_ids: List[uuid.UUID] | None) -> None:
         """Add user to session and assign roles. Issue #620."""
         self.session.add(user)
         await self.session.flush()
@@ -168,11 +168,11 @@ class UserService(BaseService):
         self,
         email: str,
         username: str,
-        password: Optional[str] = None,
-        display_name: Optional[str] = None,
-        org_id: Optional[uuid.UUID] = None,
+        password: str | None = None,
+        display_name: str | None = None,
+        org_id: uuid.UUID | None = None,
         is_platform_admin: bool = False,
-        role_ids: Optional[List[uuid.UUID]] = None,
+        role_ids: List[uuid.UUID] | None = None,
     ) -> User:
         """
         Create a new user. Issue #620.
@@ -211,7 +211,7 @@ class UserService(BaseService):
         logger.info("Created user: %s (id=%s)", username, user.id)
         return user
 
-    async def get_user(self, user_id: uuid.UUID) -> Optional[User]:
+    async def get_user(self, user_id: uuid.UUID) -> User | None:
         """
         Get user by ID.
 
@@ -232,7 +232,7 @@ class UserService(BaseService):
         result = await self.session.execute(query)
         return result.scalar_one_or_none()
 
-    async def get_user_by_email(self, email: str) -> Optional[User]:
+    async def get_user_by_email(self, email: str) -> User | None:
         """
         Get user by email address.
 
@@ -253,7 +253,7 @@ class UserService(BaseService):
         result = await self.session.execute(query)
         return result.scalar_one_or_none()
 
-    async def get_user_by_username(self, username: str) -> Optional[User]:
+    async def get_user_by_username(self, username: str) -> User | None:
         """
         Get user by username.
 
@@ -279,7 +279,7 @@ class UserService(BaseService):
         limit: int = 50,
         offset: int = 0,
         include_inactive: bool = False,
-        search: Optional[str] = None,
+        search: str | None = None,
     ) -> tuple[List[User], int]:
         """
         List users with pagination.
@@ -351,10 +351,10 @@ class UserService(BaseService):
     def _update_optional_profile_fields(
         self,
         user: User,
-        display_name: Optional[str],
-        bio: Optional[str],
-        avatar_url: Optional[str],
-        preferences: Optional[dict],
+        display_name: str | None,
+        bio: str | None,
+        avatar_url: str | None,
+        preferences: dict | None,
         changes: dict,
     ) -> None:
         """Update optional profile fields on user object. Issue #620.
@@ -396,12 +396,12 @@ class UserService(BaseService):
     async def update_user(
         self,
         user_id: uuid.UUID,
-        email: Optional[str] = None,
-        username: Optional[str] = None,
-        display_name: Optional[str] = None,
-        bio: Optional[str] = None,
-        avatar_url: Optional[str] = None,
-        preferences: Optional[dict] = None,
+        email: str | None = None,
+        username: str | None = None,
+        display_name: str | None = None,
+        bio: str | None = None,
+        avatar_url: str | None = None,
+        preferences: dict | None = None,
     ) -> User:
         """
         Update user profile fields.
@@ -438,10 +438,10 @@ class UserService(BaseService):
     async def change_password(
         self,
         user_id: uuid.UUID,
-        current_password: Optional[str],
+        current_password: str | None,
         new_password: str,
         require_current: bool = True,
-        current_token: Optional[str] = None,
+        current_token: str | None = None,
     ) -> bool:
         """
         Change user password.
@@ -593,9 +593,9 @@ class UserService(BaseService):
     async def _log_auth_failure(
         self,
         reason: str,
-        ip_address: Optional[str],
-        user_id: Optional[uuid.UUID] = None,
-        username_or_email: Optional[str] = None,
+        ip_address: str | None,
+        user_id: uuid.UUID | None = None,
+        username_or_email: str | None = None,
     ) -> None:
         """Issue #665: Extracted from authenticate to reduce function length."""
         details = {"reason": reason, "ip_address": ip_address}
@@ -608,14 +608,14 @@ class UserService(BaseService):
             details=details,
         )
 
-    async def _lookup_user_for_auth(self, username_or_email: str) -> Optional[User]:
+    async def _lookup_user_for_auth(self, username_or_email: str) -> User | None:
         """Issue #665: Extracted from authenticate to reduce function length."""
         user = await self.get_user_by_email(username_or_email)
         if not user:
             user = await self.get_user_by_username(username_or_email)
         return user
 
-    async def _validate_user_can_login(self, user: User, password: str, ip_address: Optional[str]) -> bool:
+    async def _validate_user_can_login(self, user: User, password: str, ip_address: str | None) -> bool:
         """Issue #665: Extracted from authenticate to reduce function length."""
         if not user.is_active:
             await self._log_auth_failure("account_inactive", ip_address, user.id)
@@ -632,8 +632,8 @@ class UserService(BaseService):
         self,
         username_or_email: str,
         password: str,
-        ip_address: Optional[str] = None,
-    ) -> Optional[User]:
+        ip_address: str | None = None,
+    ) -> User | None:
         """
         Authenticate user with username/email and password.
 
@@ -673,7 +673,7 @@ class UserService(BaseService):
         self,
         user_id: uuid.UUID,
         role_id: uuid.UUID,
-        assigned_by: Optional[uuid.UUID] = None,
+        assigned_by: uuid.UUID | None = None,
     ) -> bool:
         """
         Assign a role to a user.
@@ -700,6 +700,18 @@ class UserService(BaseService):
         )
         self.session.add(user_role)
         await self.session.flush()
+
+        # Lazy import avoids the circular dependency: rbac_middleware → UserService → rbac_middleware
+        from user_management.middleware.rbac_middleware import rbac_middleware as _rbac  # noqa: PLC0415
+
+        # Schedule cache invalidation after commit to avoid the flush→publish→stale-re-cache race (GH#7605).
+        # Falls back to immediate clear when session.info is unavailable (e.g. unit tests with mock sessions).
+        _uid = user_id
+        post_cbs = self.session.info.get("_post_commit_cbs")
+        if post_cbs is not None:
+            post_cbs.append(lambda: _rbac.clear_cache(_uid))
+        else:
+            await _rbac.clear_cache(user_id)
 
         await self._audit_log(
             action=AuditAction.ROLE_ASSIGNED,
@@ -730,6 +742,17 @@ class UserService(BaseService):
 
         await self.session.delete(user_role)
         await self.session.flush()
+
+        # Lazy import avoids the circular dependency: rbac_middleware → UserService → rbac_middleware
+        from user_management.middleware.rbac_middleware import rbac_middleware as _rbac  # noqa: PLC0415
+
+        # Schedule cache invalidation after commit to avoid the flush→publish→stale-re-cache race (GH#7605).
+        _uid = user_id
+        post_cbs = self.session.info.get("_post_commit_cbs")
+        if post_cbs is not None:
+            post_cbs.append(lambda: _rbac.clear_cache(_uid))
+        else:
+            await _rbac.clear_cache(user_id)
 
         await self._audit_log(
             action=AuditAction.ROLE_REVOKED,
@@ -790,7 +813,7 @@ class UserService(BaseService):
     # Private Helpers
     # -------------------------------------------------------------------------
 
-    async def _find_by_email_or_username(self, email: str, username: str) -> Optional[User]:
+    async def _find_by_email_or_username(self, email: str, username: str) -> User | None:
         """Find user by email or username."""
         # Cache lower() values to avoid repeated calls
         email_lower = email.lower()
@@ -814,7 +837,7 @@ class UserService(BaseService):
         self,
         action: str,
         resource_type: str,
-        resource_id: Optional[uuid.UUID],
+        resource_id: uuid.UUID | None,
         details: dict,
         outcome: str = "success",
     ) -> None:

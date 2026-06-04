@@ -8,14 +8,15 @@ Issue #658: Manages the lifecycle of extensions and coordinates
 hook invocations across all registered extensions.
 """
 
-import logging
 import threading
-from typing import Any, Dict, List, Optional, Type
+from typing import Any, Dict, List, Type
 
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.plugin_sdk.unified_registry import get_unified_registry
 from extensions.base import Extension, HookContext
 from extensions.hooks import HookPoint
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ExtensionManager:
@@ -78,6 +79,8 @@ class ExtensionManager:
         # Sort by priority
         self.extensions.sort(key=lambda e: e.priority)
 
+        get_unified_registry().register(extension.manifest)
+
         logger.info(
             "[Issue #658] Registered extension '%s' (priority=%d)",
             extension.name,
@@ -100,11 +103,12 @@ class ExtensionManager:
 
         extension = self._extension_map.pop(name)
         self.extensions.remove(extension)
+        get_unified_registry().unregister(name)
 
         logger.info("[Issue #658] Unregistered extension '%s'", name)
         return True
 
-    def get_extension(self, name: str) -> Optional[Extension]:
+    def get_extension(self, name: str) -> Extension | None:
         """
         Get an extension by name.
 
@@ -220,7 +224,7 @@ class ExtensionManager:
         self,
         hook: HookPoint,
         context: HookContext,
-    ) -> Optional[Any]:
+    ) -> Any | None:
         """
         Invoke extensions until one returns a truthy value.
 
@@ -373,7 +377,7 @@ class ExtensionManager:
 
 
 # Singleton instance for global access (Issue #662: thread-safe)
-_global_manager: Optional[ExtensionManager] = None
+_global_manager: ExtensionManager | None = None
 _global_manager_lock = threading.Lock()
 
 

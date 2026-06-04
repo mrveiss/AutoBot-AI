@@ -10,18 +10,18 @@ and conversation history loading/saving with deduplication.
 
 import asyncio
 import json
-import logging
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List
 
 import aiofiles
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
 
 from .models import WorkflowSession
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ConversationHandlerMixin:

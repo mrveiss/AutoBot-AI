@@ -2,7 +2,7 @@
   <BaseModal
     :model-value="visible"
     :title="$t('chat.deleteDialog.title')"
-    size="medium"
+    size="md"
     @update:model-value="$emit('update:visible', $event)"
     @close="handleCancel"
   >
@@ -10,7 +10,7 @@
         <div class="p-4 space-y-4 max-h-[70vh] overflow-y-auto">
           <!-- Warning Message -->
           <div class="flex items-start gap-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-            <i class="fas fa-exclamation-triangle text-yellow-600 mt-0.5"></i>
+            <Icon name="exclamation-triangle" class="text-yellow-600 mt-0.5" />
             <div class="flex-1 min-w-0">
               <p class="text-sm text-yellow-800 font-medium">
                 {{ $t('chat.deleteDialog.cannotUndo') }}
@@ -24,7 +24,7 @@
           <!-- Knowledge Base Facts Section (Issue #547) -->
           <div v-if="kbFacts && kbFacts.length > 0" class="space-y-3">
             <div class="flex items-center gap-2 p-3 bg-purple-50 rounded-lg">
-              <i class="fas fa-brain text-purple-600"></i>
+              <Icon name="brain" class="text-purple-600" />
               <div class="flex-1">
                 <p class="text-sm font-medium text-purple-700">
                   {{ $t('chat.deleteDialog.kbFactsCount', { count: kbFacts.length }) }}
@@ -54,7 +54,7 @@
                   <div class="flex items-center gap-2 mt-1">
                     <span class="text-xs px-2 py-0.5 bg-autobot-bg-tertiary text-autobot-text-muted rounded">{{ fact.category }}</span>
                     <span v-if="fact.important" class="text-xs px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded">
-                      <i class="fas fa-star text-xs"></i> {{ $t('common.important') }}
+                      <Icon name="star" class="text-xs" /> {{ $t('common.important') }}
                     </span>
                   </div>
                 </div>
@@ -86,7 +86,7 @@
           <!-- No KB Facts Message -->
           <div v-else-if="kbFactsLoading" class="p-3 bg-purple-50 rounded-lg">
             <p class="text-sm text-purple-600">
-              <i class="fas fa-spinner fa-spin mr-2"></i>
+              <Icon name="spinner" class="animate-spin mr-2" />
               {{ $t('chat.deleteDialog.loadingFacts') }}
             </p>
           </div>
@@ -94,7 +94,7 @@
           <!-- File Information -->
           <div v-if="fileStats && fileStats.total_files > 0" class="space-y-3">
             <div class="flex items-center gap-2 p-3 bg-autobot-bg-secondary rounded-lg">
-              <i class="fas fa-paperclip text-autobot-text-secondary"></i>
+              <Icon name="paperclip" class="text-autobot-text-secondary" />
               <div class="flex-1">
                 <p class="text-sm font-medium text-autobot-text-primary">
                   {{ $t('chat.deleteDialog.attachedFiles', { count: fileStats.total_files }) }}
@@ -119,7 +119,7 @@
                 />
                 <div class="flex-1">
                   <div class="flex items-center gap-2">
-                    <i class="fas fa-trash text-red-600"></i>
+                    <Icon name="trash" class="text-red-600" />
                     <span class="text-sm font-medium text-autobot-text-primary">{{ $t('chat.deleteDialog.deleteFiles') }}</span>
                   </div>
                   <p class="text-xs text-autobot-text-secondary mt-1">
@@ -138,7 +138,7 @@
                 />
                 <div class="flex-1">
                   <div class="flex items-center gap-2">
-                    <i class="fas fa-book text-autobot-primary"></i>
+                    <Icon name="book" class="text-autobot-primary" />
                     <span class="text-sm font-medium text-autobot-text-primary">{{ $t('chat.deleteDialog.transferToKb') }}</span>
                   </div>
                   <p class="text-xs text-autobot-text-secondary mt-1">
@@ -157,7 +157,7 @@
                 />
                 <div class="flex-1">
                   <div class="flex items-center gap-2">
-                    <i class="fas fa-share-alt text-green-600"></i>
+                    <Icon name="share-alt" class="text-green-600" />
                     <span class="text-sm font-medium text-autobot-text-primary">{{ $t('chat.deleteDialog.transferToShared') }}</span>
                   </div>
                   <p class="text-xs text-autobot-text-secondary mt-1">
@@ -214,7 +214,7 @@
           <!-- No Files Message -->
           <div v-else class="p-3 bg-autobot-bg-secondary rounded-lg">
             <p class="text-sm text-autobot-text-secondary">
-              <i class="fas fa-info-circle mr-2"></i>
+              <Icon name="info-circle" class="mr-2" />
               {{ $t('chat.deleteDialog.noAttachedFiles') }}
             </p>
           </div>
@@ -223,13 +223,13 @@
           <div class="p-3 bg-autobot-bg-secondary rounded-lg border border-autobot-border">
             <p class="text-sm font-medium text-autobot-text-primary mb-2">{{ $t('chat.deleteDialog.actionSummary') }}</p>
             <ul class="text-xs text-autobot-text-secondary space-y-1">
-              <li><i class="fas fa-check text-green-600 mr-2"></i>{{ $t('chat.deleteDialog.deleteConversation') }}</li>
+              <li><Icon name="check" class="text-green-600 mr-2" />{{ $t('chat.deleteDialog.deleteConversation') }}</li>
               <li v-if="kbFacts && kbFacts.length > 0">
-                <i class="fas fa-check text-green-600 mr-2"></i>
+                <Icon name="check" class="text-green-600 mr-2" />
                 {{ getKBFactsSummary() }}
               </li>
               <li v-if="fileStats && fileStats.total_files > 0">
-                <i class="fas fa-check text-green-600 mr-2"></i>
+                <Icon name="check" class="text-green-600 mr-2" />
                 {{ getFileActionSummary() }}
               </li>
             </ul>
@@ -250,8 +250,8 @@
         class="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 flex items-center gap-2"
         :disabled="isDeleting"
       >
-        <i v-if="isDeleting" class="fas fa-spinner fa-spin"></i>
-        <i v-else class="fas fa-trash"></i>
+        <Icon name="spinner" class="animate-spin" v-if="isDeleting" />
+        <Icon name="trash" v-else />
         {{ isDeleting ? $t('chat.deleteDialog.deleting') : $t('chat.deleteDialog.title') }}
       </button>
     </template>
@@ -259,6 +259,7 @@
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { FileStats } from '@/composables/useConversationFiles'

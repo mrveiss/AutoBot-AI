@@ -4,8 +4,8 @@
 
 - name: "Manage AutoBot Services"
   hosts: "{{ target_host | default('all') }}"
-  gather_facts: yes
-  become: yes
+  gather_facts: true
+  become: true
 
   vars:
     service_action: "{{ action | default('status') }}"
@@ -47,7 +47,7 @@
         - autobot-frontend
       when: is_frontend | bool
       register: frontend_service_result
-      ignore_errors: yes
+      ignore_errors: true
       tags: ['frontend']
 
     - name: "Manage Redis Service"
@@ -57,7 +57,7 @@
         enabled: "{{ true if service_action == 'enable' else false if service_action == 'disable' else omit }}"
       when: is_database | bool
       register: redis_service_result
-      ignore_errors: yes
+      ignore_errors: true
       tags: ['redis']
 
     - name: "Manage NPU Worker Service"
@@ -67,7 +67,7 @@
         enabled: "{{ true if service_action == 'enable' else false if service_action == 'disable' else omit }}"
       when: is_npu | bool
       register: npu_service_result
-      ignore_errors: yes
+      ignore_errors: true
       tags: ['npu_worker']
 
     - name: "Manage AI Stack Service"
@@ -80,7 +80,7 @@
         - autobot-ai-stack
       when: is_ai_stack | bool
       register: ai_service_result
-      ignore_errors: yes
+      ignore_errors: true
       tags: ['ai_stack']
 
     - name: "Manage SLM Backend Service"
@@ -93,7 +93,7 @@
         - nginx
       when: is_slm | bool
       register: slm_service_result
-      ignore_errors: yes
+      ignore_errors: true
       tags: ['slm']
 
     - name: "Manage Browser Services"
@@ -106,7 +106,7 @@
         - autobot-playwright
       when: is_browser | bool
       register: browser_service_result
-      ignore_errors: yes
+      ignore_errors: true
       tags: ['browser']
 
   post_tasks:
@@ -116,7 +116,7 @@
       register: service_status
       loop: "{{ services | default([]) }}"
       when: service_action == 'status'
-      ignore_errors: yes
+      ignore_errors: true
 
     - name: "Display service management summary"
       debug:

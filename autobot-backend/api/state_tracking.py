@@ -7,9 +7,7 @@ Provides endpoints for comprehensive project state tracking and reporting
 """
 
 import asyncio
-import logging
 from datetime import datetime, timedelta, timezone
-from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 from fastapi.responses import JSONResponse
@@ -30,6 +28,7 @@ from api.schemas_workflows import (
     StateTrackingTrendsResponse,
 )
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from enhanced_project_state_tracker import (
     StateChangeType,
     TrackingMetric,
@@ -37,7 +36,7 @@ from enhanced_project_state_tracker import (
 )
 
 router = APIRouter()
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @router.get("/status", response_model=StateTrackingStatusResponse)
@@ -269,7 +268,7 @@ async def get_metric_trends(metric: str, days: int = Query(7, ge=1, le=90)):
     operation="get_recent_changes",
     error_code_prefix="STATE_TRACKING",
 )
-async def get_recent_changes(limit: int = Query(10, ge=1, le=100), change_type: Optional[str] = None):
+async def get_recent_changes(limit: int = Query(10, ge=1, le=100), change_type: str | None = None):
     """Get recent state changes"""
     try:
         tracker = get_state_tracker()

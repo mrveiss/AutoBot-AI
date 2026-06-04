@@ -14,6 +14,7 @@ import { useSlmApi } from '@/composables/useSlmApi'
 import { useSlmWebSocket } from '@/composables/useSlmWebSocket'
 import { useFleetStore } from '@/stores/fleet'
 import { formatDateTime as formatDateTimeTz } from '@/composables/useTimezone'
+import { useToast } from '@/composables/useToast'
 import { createLogger } from '@/utils/debugUtils'
 import type { Replication, ReplicationRequest } from '@/types/slm'
 
@@ -21,6 +22,7 @@ const logger = createLogger('ReplicationView')
 const api = useSlmApi()
 const ws = useSlmWebSocket()
 const fleetStore = useFleetStore()
+const { showToast } = useToast()
 
 // State
 const replications = ref<Replication[]>([])
@@ -112,7 +114,7 @@ async function handleCreateReplication(): Promise<void> {
     await fetchReplications()
   } catch (err) {
     logger.error('Failed to start replication:', err)
-    alert('Failed to start replication')
+    showToast('Failed to start replication', 'error')
   } finally {
     isCreating.value = false
   }
@@ -128,7 +130,7 @@ async function handlePromote(replicationId: string): Promise<void> {
     await fetchReplications()
   } catch (err) {
     logger.error('Failed to promote replica:', err)
-    alert('Failed to promote replica')
+    showToast('Failed to promote replica', 'error')
   }
 }
 
@@ -142,7 +144,7 @@ async function handleStop(replicationId: string): Promise<void> {
     await fetchReplications()
   } catch (err) {
     logger.error('Failed to stop replication:', err)
-    alert('Failed to stop replication')
+    showToast('Failed to stop replication', 'error')
   }
 }
 
@@ -220,9 +222,9 @@ function getNodeHostname(nodeId: string): string {
     <!-- Header -->
     <div class="flex items-center justify-between mb-6">
       <div>
-        <h1 class="text-2xl font-bold text-gray-900">Redis Replication</h1>
+        <h1 class="text-2xl font-bold text-gray-900">{{ $t('replicationView.redisReplication') }}</h1>
         <p class="text-sm text-gray-500 mt-1">
-          Manage Redis master-replica replication with Ansible orchestration
+          {{ $t('replicationView.manageRedisMasterReplica') }}
         </p>
       </div>
       <div class="flex items-center gap-3">
@@ -234,7 +236,7 @@ function getNodeHostname(nodeId: string): string {
           <svg :class="['w-4 h-4', isLoading ? 'animate-spin' : '']" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
           </svg>
-          Refresh
+          {{ $t('replicationView.refresh') }}
         </button>
         <button
           @click="showCreateDialog = true"
@@ -244,7 +246,7 @@ function getNodeHostname(nodeId: string): string {
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
           </svg>
-          New Replication
+          {{ $t('replicationView.newReplication') }}
         </button>
       </div>
     </div>
@@ -267,7 +269,7 @@ function getNodeHostname(nodeId: string): string {
       <div class="card p-4">
         <div class="flex items-center justify-between">
           <div>
-            <p class="text-sm text-gray-500">Total</p>
+            <p class="text-sm text-gray-500">{{ $t('replicationView.total') }}</p>
             <p class="text-2xl font-bold text-gray-900">{{ stats.total }}</p>
           </div>
           <div class="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center">
@@ -281,7 +283,7 @@ function getNodeHostname(nodeId: string): string {
       <div class="card p-4">
         <div class="flex items-center justify-between">
           <div>
-            <p class="text-sm text-gray-500">Active</p>
+            <p class="text-sm text-gray-500">{{ $t('replicationView.active') }}</p>
             <p class="text-2xl font-bold text-green-600">{{ stats.active }}</p>
           </div>
           <div class="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
@@ -295,7 +297,7 @@ function getNodeHostname(nodeId: string): string {
       <div class="card p-4">
         <div class="flex items-center justify-between">
           <div>
-            <p class="text-sm text-gray-500">Syncing</p>
+            <p class="text-sm text-gray-500">{{ $t('replicationView.syncing') }}</p>
             <p class="text-2xl font-bold text-blue-600">{{ stats.syncing }}</p>
           </div>
           <div class="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
@@ -309,7 +311,7 @@ function getNodeHostname(nodeId: string): string {
       <div class="card p-4">
         <div class="flex items-center justify-between">
           <div>
-            <p class="text-sm text-gray-500">Pending</p>
+            <p class="text-sm text-gray-500">{{ $t('replicationView.pending') }}</p>
             <p class="text-2xl font-bold text-yellow-600">{{ stats.pending }}</p>
           </div>
           <div class="w-10 h-10 rounded-full bg-yellow-100 flex items-center justify-center">
@@ -323,7 +325,7 @@ function getNodeHostname(nodeId: string): string {
       <div class="card p-4">
         <div class="flex items-center justify-between">
           <div>
-            <p class="text-sm text-gray-500">Failed</p>
+            <p class="text-sm text-gray-500">{{ $t('replicationView.failed') }}</p>
             <p class="text-2xl font-bold text-red-600">{{ stats.failed }}</p>
           </div>
           <div class="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
@@ -338,19 +340,19 @@ function getNodeHostname(nodeId: string): string {
     <!-- Replications Table -->
     <div class="card overflow-hidden">
       <div class="px-6 py-4 border-b border-gray-200">
-        <h2 class="text-lg font-semibold">Replication Links</h2>
+        <h2 class="text-lg font-semibold">{{ $t('replicationView.replicationLinks') }}</h2>
       </div>
       <div class="overflow-x-auto">
         <table class="min-w-full divide-y divide-gray-200">
           <thead class="bg-gray-50">
             <tr>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Source (Primary)</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Target (Replica)</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Service</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Lag</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Started</th>
-              <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('replicationView.status') }}</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('replicationView.sourcePrimary') }}</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('replicationView.targetReplica') }}</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('replicationView.service') }}</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('replicationView.lag') }}</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('replicationView.started') }}</th>
+              <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">{{ $t('replicationView.actions') }}</th>
             </tr>
           </thead>
           <tbody class="bg-white divide-y divide-gray-200">
@@ -446,7 +448,7 @@ function getNodeHostname(nodeId: string): string {
                 <svg class="w-12 h-12 mx-auto text-gray-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
                 </svg>
-                <p>No replications configured yet. Click "New Replication" to set up master-replica replication.</p>
+                <p>{{ $t('replicationView.noReplicationsConfiguredYet') }}</p>
               </td>
             </tr>
           </tbody>
@@ -467,9 +469,9 @@ function getNodeHostname(nodeId: string): string {
     >
       <div class="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4">
         <div class="px-6 py-4 border-b border-gray-200">
-          <h3 class="text-lg font-semibold text-gray-900">New Replication</h3>
+          <h3 class="text-lg font-semibold text-gray-900">{{ $t('replicationView.newReplication') }}</h3>
           <p class="text-sm text-gray-500 mt-1">
-            Set up Redis master-replica replication using Ansible
+            {{ $t('replicationView.setUpRedisMaster') }}
           </p>
         </div>
         <div class="px-6 py-4 space-y-4">
@@ -478,14 +480,14 @@ function getNodeHostname(nodeId: string): string {
             <label class="block text-sm font-medium text-gray-700 mb-1">
               <span class="flex items-center gap-2">
                 <div class="w-3 h-3 rounded-full bg-purple-500"></div>
-                Source Node (Primary/Master)
+                {{ $t('replicationView.sourceNodePrimaryMaster') }}
               </span>
             </label>
             <select
               v-model="newReplication.source_node_id"
               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
             >
-              <option value="">Select primary node...</option>
+              <option value="">{{ $t('replicationView.selectPrimaryNode') }}</option>
               <option v-for="opt in redisNodes" :key="opt.value" :value="opt.value">
                 {{ opt.label }} - {{ opt.status }}
               </option>
@@ -497,7 +499,7 @@ function getNodeHostname(nodeId: string): string {
             <label class="block text-sm font-medium text-gray-700 mb-1">
               <span class="flex items-center gap-2">
                 <div class="w-3 h-3 rounded-full bg-cyan-500"></div>
-                Target Node (Replica)
+                {{ $t('replicationView.targetNodeReplica') }}
               </span>
             </label>
             <select
@@ -505,7 +507,7 @@ function getNodeHostname(nodeId: string): string {
               :disabled="!newReplication.source_node_id"
               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100"
             >
-              <option value="">Select replica node...</option>
+              <option value="">{{ $t('replicationView.selectReplicaNode') }}</option>
               <option v-for="opt in availableTargets" :key="opt.value" :value="opt.value">
                 {{ opt.label }} - {{ opt.status }}
               </option>
@@ -514,22 +516,21 @@ function getNodeHostname(nodeId: string): string {
 
           <!-- Service Type -->
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Service Type</label>
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('replicationView.serviceType') }}</label>
             <select
               v-model="newReplication.service_type"
               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
             >
-              <option value="redis">Redis</option>
+              <option value="redis">{{ $t('replicationView.redis') }}</option>
             </select>
-            <p class="text-xs text-gray-500 mt-1">Currently only Redis replication is supported</p>
+            <p class="text-xs text-gray-500 mt-1">{{ $t('replicationView.currentlyOnlyRedisReplication') }}</p>
           </div>
 
           <!-- Info Box -->
           <div class="bg-blue-50 border border-blue-200 rounded-md p-3">
             <p class="text-sm text-blue-700">
-              This will configure the target node as a replica of the source using the
-              <code class="bg-blue-100 px-1 rounded-sm">REPLICAOF</code> command via Ansible.
-              The replica will sync all data from the primary and stay in read-only mode.
+              {{ $t('replicationView.thisWillConfigureThe') }}
+              <code class="bg-blue-100 px-1 rounded-sm">REPLICAOF</code> {{ $t('replicationView.commandViaAnsibleThe') }}
             </p>
           </div>
         </div>
@@ -538,7 +539,7 @@ function getNodeHostname(nodeId: string): string {
             @click="showCreateDialog = false; resetForm()"
             class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
           >
-            Cancel
+            {{ $t('replicationView.cancel') }}
           </button>
           <button
             @click="handleCreateReplication"
@@ -546,7 +547,7 @@ function getNodeHostname(nodeId: string): string {
             class="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
             <div v-if="isCreating" class="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></div>
-            Start Replication
+            {{ $t('replicationView.startReplication') }}
           </button>
         </div>
       </div>
@@ -570,12 +571,12 @@ function getNodeHostname(nodeId: string): string {
           <div class="relative bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[80vh] overflow-hidden">
             <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200">
               <div class="flex items-center gap-3">
-                <h3 class="text-lg font-semibold text-gray-900">Replication Details</h3>
+                <h3 class="text-lg font-semibold text-gray-900">{{ $t('replicationView.replicationDetails') }}</h3>
                 <span :class="['px-2 py-1 text-xs font-medium rounded-full', getStatusClass(selectedReplication.status)]">
                   {{ selectedReplication.status }}
                 </span>
               </div>
-              <button @click="closeDetails" class="text-gray-400 hover:text-gray-600">
+              <button @click="closeDetails" class="text-gray-400 hover:text-gray-600" aria-label="Close">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                 </svg>
@@ -586,12 +587,12 @@ function getNodeHostname(nodeId: string): string {
               <!-- Node Info -->
               <div class="grid grid-cols-2 gap-4 mb-6">
                 <div class="p-4 bg-purple-50 rounded-lg">
-                  <p class="text-sm font-medium text-purple-800 mb-1">Source (Primary)</p>
+                  <p class="text-sm font-medium text-purple-800 mb-1">{{ $t('replicationView.sourcePrimary') }}</p>
                   <p class="text-lg font-semibold text-purple-900">{{ getNodeHostname(selectedReplication.source_node_id) }}</p>
                   <p class="text-xs text-purple-600 mt-1">{{ selectedReplication.source_node_id }}</p>
                 </div>
                 <div class="p-4 bg-cyan-50 rounded-lg">
-                  <p class="text-sm font-medium text-cyan-800 mb-1">Target (Replica)</p>
+                  <p class="text-sm font-medium text-cyan-800 mb-1">{{ $t('replicationView.targetReplica') }}</p>
                   <p class="text-lg font-semibold text-cyan-900">{{ getNodeHostname(selectedReplication.target_node_id) }}</p>
                   <p class="text-xs text-cyan-600 mt-1">{{ selectedReplication.target_node_id }}</p>
                 </div>
@@ -600,7 +601,7 @@ function getNodeHostname(nodeId: string): string {
               <!-- Lag & Sync Info -->
               <div class="mb-6 p-4 border border-gray-200 rounded-lg">
                 <div class="flex items-center justify-between mb-2">
-                  <p class="text-sm font-medium text-gray-700">Replication Lag</p>
+                  <p class="text-sm font-medium text-gray-700">{{ $t('replicationView.replicationLag') }}</p>
                   <span :class="[
                     'text-lg font-bold',
                     selectedReplication.lag_bytes === 0 ? 'text-green-600' :
@@ -617,7 +618,7 @@ function getNodeHostname(nodeId: string): string {
               <!-- Sync Verification Results -->
               <div v-if="isVerifying" class="mb-6 flex items-center justify-center py-8">
                 <div class="animate-spin w-8 h-8 border-4 border-primary-600 border-t-transparent rounded-full"></div>
-                <span class="ml-3 text-gray-600">Verifying sync status...</span>
+                <span class="ml-3 text-gray-600">{{ $t('replicationView.verifyingSyncStatus') }}</span>
               </div>
 
               <div v-else-if="syncVerifyResult" class="mb-6">
@@ -680,22 +681,22 @@ function getNodeHostname(nodeId: string): string {
               <!-- Timestamps -->
               <div class="grid grid-cols-2 gap-4 mb-6">
                 <div>
-                  <p class="text-sm text-gray-500">Created</p>
+                  <p class="text-sm text-gray-500">{{ $t('replicationView.created') }}</p>
                   <p class="text-sm font-medium">{{ formatDateTime(selectedReplication.created_at) }}</p>
                 </div>
                 <div>
-                  <p class="text-sm text-gray-500">Started</p>
+                  <p class="text-sm text-gray-500">{{ $t('replicationView.started') }}</p>
                   <p class="text-sm font-medium">{{ formatDateTime(selectedReplication.started_at) }}</p>
                 </div>
                 <div v-if="selectedReplication.completed_at">
-                  <p class="text-sm text-gray-500">Completed</p>
+                  <p class="text-sm text-gray-500">{{ $t('replicationView.completed') }}</p>
                   <p class="text-sm font-medium">{{ formatDateTime(selectedReplication.completed_at) }}</p>
                 </div>
               </div>
 
               <!-- Error -->
               <div v-if="selectedReplication.error" class="mb-6">
-                <p class="text-sm text-gray-500 mb-2">Error</p>
+                <p class="text-sm text-gray-500 mb-2">{{ $t('replicationView.error') }}</p>
                 <div class="p-4 bg-red-50 border border-red-200 rounded-lg">
                   <p class="text-sm text-red-800 font-mono whitespace-pre-wrap">{{ selectedReplication.error }}</p>
                 </div>
@@ -709,17 +710,17 @@ function getNodeHostname(nodeId: string): string {
                 class="btn btn-secondary flex items-center gap-2"
               >
                 <div v-if="isVerifying" class="animate-spin w-4 h-4 border-2 border-gray-500 border-t-transparent rounded-full"></div>
-                Verify Sync
+                {{ $t('replicationView.verifySync') }}
               </button>
               <button
                 v-if="selectedReplication.status === 'active'"
                 @click="handlePromote(selectedReplication.replication_id); closeDetails()"
                 class="btn bg-green-600 text-white hover:bg-green-700"
               >
-                Promote to Primary
+                {{ $t('replicationView.promoteToPrimary') }}
               </button>
               <button @click="closeDetails" class="btn btn-secondary">
-                Close
+                {{ $t('replicationView.close') }}
               </button>
             </div>
           </div>

@@ -32,6 +32,28 @@ export interface BrowserSessionResponse {
   [key: string]: unknown
 }
 
+export interface RegionRect {
+  x: number
+  y: number
+  w: number
+  h: number
+}
+
+/** DOM region returned by POST /playwright/snapshot-with-regions (#5136). */
+export interface PageRegion {
+  selector: string
+  xpath: string
+  rect: RegionRect
+  textPreview: string
+  role: string
+}
+
+export interface SnapshotWithRegionsResult {
+  screenshot: string
+  regions: PageRegion[]
+  viewport: Record<string, unknown>
+}
+
 // ===== Composable =====
 
 export function useBrowserSessionData() {
@@ -144,6 +166,59 @@ export function useBrowserSessionData() {
     })
   }
 
+  /**
+   * Take a screenshot of a research browser session and return detected DOM regions.
+   *
+   * Calls POST /playwright/snapshot-with-regions (#5136 / #6446). Returns a
+   * base64 PNG screenshot together with a list of interactive DOM regions so
+   * the caller can display an overlay for scraping-template creation.
+   *
+   * The backend wraps the response in DataResponse[SnapshotWithRegionsResponse],
+   * so the parsed JSON shape is { data: { screenshot, regions, viewport } }.
+   * Backend sends `text_preview` (snake_case) — mapped here to `textPreview`.
+   */
+  async function snapshotWithRegions(
+    sessionId: string,
+    goal = ''
+  ): Promise<SnapshotWithRegionsResult> {
+    const envelope = await apiClient.post<any>(
+      `${getApiBase()}/playwright/snapshot-with-regions`,
+      { session_id: sessionId, goal }
+    ) as { data: Record<string, unknown> }
+    const payload = envelope?.data ?? (envelope as unknown as Record<string, unknown>)
+    const rawRegions = (payload.regions as Array<Record<string, unknown>>) ?? []
+    return {
+      screenshot: (payload.screenshot as string) ?? '',
+      regions: rawRegions.map(r => ({
+        selector: (r.selector as string) ?? '',
+        xpath: (r.xpath as string) ?? '',
+        rect: (r.rect as RegionRect) ?? { x: 0, y: 0, w: 0, h: 0 },
+        textPreview: (r.text_preview as string) ?? '',
+        role: (r.role as string) ?? '',
+      })),
+      viewport: (payload.viewport as Record<string, unknown>) ?? {},
+    }
+  }
+
+  async function aiProposeRegions(
+    sessionId: string,
+    goal: string
+  ): Promise<PageRegion[]> {
+    const envelope = await apiClient.post<any>(
+      `${getApiBase()}/playwright/ai-propose-regions`,
+      { session_id: sessionId, goal }
+    ) as { data: Record<string, unknown> }
+    const payload = envelope?.data ?? (envelope as unknown as Record<string, unknown>)
+    const rawRegions = (payload.proposed_regions as Array<Record<string, unknown>>) ?? []
+    return rawRegions.map(r => ({
+      selector: (r.selector as string) ?? '',
+      xpath: (r.xpath as string) ?? '',
+      rect: (r.rect as RegionRect) ?? { x: 0, y: 0, w: 0, h: 0 },
+      textPreview: (r.text_preview as string) ?? '',
+      role: (r.role as string) ?? '',
+    }))
+  }
+
   return {
     fetchSession,
     fetchPlaywrightHealth,
@@ -153,6 +228,8 @@ export function useBrowserSessionData() {
     reloadPage,
     webSearch,
     runFrontendTests,
-    sendTestMessage
+    sendTestMessage,
+    snapshotWithRegions,
+    aiProposeRegions,
   }
 }

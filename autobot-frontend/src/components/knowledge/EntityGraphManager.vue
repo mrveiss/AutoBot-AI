@@ -3,18 +3,18 @@
     <!-- Header -->
     <div class="manager-header">
       <div class="header-content">
-        <h3><i class="fas fa-sitemap"></i> {{ $t('knowledge.entityGraph.title') }}</h3>
+        <h3><Icon name="sitemap" /> {{ $t('knowledge.entityGraph.title') }}</h3>
         <p class="header-description">
           {{ $t('knowledge.entityGraph.description') }}
         </p>
       </div>
       <div class="header-actions">
         <button @click="refreshStats" class="action-btn" :disabled="isLoadingStats">
-          <i :class="isLoadingStats ? 'fas fa-spinner fa-spin' : 'fas fa-sync'"></i>
+          <i :class="isLoadingStats ? 'fas fa-spinner fa-spin' : 'sync'"></i>
           {{ $t('knowledge.entityGraph.refreshStats') }}
         </button>
         <router-link to="/knowledge/graph" class="action-btn">
-          <i class="fas fa-project-diagram"></i>
+          <Icon name="project-diagram" />
           {{ $t('knowledge.entityGraph.viewGraph') }}
         </router-link>
       </div>
@@ -28,7 +28,7 @@
         :class="['tab-button', { active: activeTab === tab.id }]"
         @click="activeTab = tab.id"
       >
-        <i :class="tab.icon"></i>
+        <Icon :name="tab.icon" />
         {{ tab.label }}
       </button>
     </div>
@@ -51,25 +51,25 @@
       <!-- Statistics Tab -->
       <div v-if="activeTab === 'stats'" class="tab-panel">
         <div class="stats-section">
-          <h4><i class="fas fa-chart-bar"></i> {{ $t('knowledge.entityGraph.graphStatistics') }}</h4>
+          <h4><Icon name="chart-bar" /> {{ $t('knowledge.entityGraph.graphStatistics') }}</h4>
 
           <div v-if="isLoadingStats" class="loading-state">
-            <i class="fas fa-spinner fa-spin"></i>
+            <Icon name="spinner" class="animate-spin" />
             <span>{{ $t('knowledge.entityGraph.loadingStatistics') }}</span>
           </div>
 
           <div v-else-if="statsError" class="error-state">
-            <i class="fas fa-exclamation-triangle"></i>
+            <Icon name="exclamation-triangle" />
             <span>{{ statsError }}</span>
             <button @click="refreshStats" class="retry-btn">
-              <i class="fas fa-redo"></i> {{ $t('knowledge.entityGraph.retry') }}
+              <Icon name="redo" /> {{ $t('knowledge.entityGraph.retry') }}
             </button>
           </div>
 
           <div v-else class="stats-grid">
             <div class="stat-card">
               <div class="stat-icon">
-                <i class="fas fa-circle"></i>
+                <Icon name="circle" />
               </div>
               <div class="stat-info">
                 <span class="stat-value">{{ graphStats.entityCount }}</span>
@@ -79,7 +79,7 @@
 
             <div class="stat-card">
               <div class="stat-icon">
-                <i class="fas fa-link"></i>
+                <Icon name="link" />
               </div>
               <div class="stat-info">
                 <span class="stat-value">{{ graphStats.relationCount }}</span>
@@ -89,7 +89,7 @@
 
             <div class="stat-card">
               <div class="stat-icon">
-                <i class="fas fa-tags"></i>
+                <Icon name="tags" />
               </div>
               <div class="stat-info">
                 <span class="stat-value">{{ graphStats.entityTypes }}</span>
@@ -99,7 +99,7 @@
 
             <div class="stat-card">
               <div class="stat-icon">
-                <i class="fas fa-exchange-alt"></i>
+                <Icon name="exchange-alt" />
               </div>
               <div class="stat-info">
                 <span class="stat-value">{{ graphStats.relationTypes }}</span>
@@ -110,7 +110,7 @@
 
           <!-- Service Health -->
           <div class="health-section">
-            <h5><i class="fas fa-heartbeat"></i> {{ $t('knowledge.entityGraph.serviceHealth') }}</h5>
+            <h5><Icon name="heartbeat" /> {{ $t('knowledge.entityGraph.serviceHealth') }}</h5>
 
             <div class="health-cards">
               <div class="health-card" :class="extractionHealth.status">
@@ -124,7 +124,7 @@
                     :key="component"
                     class="component-status"
                   >
-                    <i :class="getStatusIcon(status)"></i>
+                    <Icon :name="getStatusIcon(status)" />
                     <span>{{ formatComponentName(component) }}</span>
                   </div>
                 </div>
@@ -141,7 +141,7 @@
                     :key="component"
                     class="component-status"
                   >
-                    <i :class="getStatusIcon(status)"></i>
+                    <Icon :name="getStatusIcon(status)" />
                     <span>{{ formatComponentName(component) }}</span>
                   </div>
                 </div>
@@ -151,7 +151,7 @@
 
           <!-- Recent Activity -->
           <div v-if="recentExtractions.length > 0" class="activity-section">
-            <h5><i class="fas fa-history"></i> {{ $t('knowledge.entityGraph.recentExtractions') }}</h5>
+            <h5><Icon name="history" /> {{ $t('knowledge.entityGraph.recentExtractions') }}</h5>
             <div class="activity-list">
               <div
                 v-for="extraction in recentExtractions"
@@ -193,6 +193,7 @@
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
 
+import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
@@ -241,9 +242,9 @@ const {
 // ============================================================================
 
 const tabs = computed<Tab[]>(() => [
-  { id: 'extract', label: t('knowledge.entityGraph.tabExtract'), icon: 'fas fa-brain' },
-  { id: 'query', label: t('knowledge.entityGraph.tabQuery'), icon: 'fas fa-search-plus' },
-  { id: 'stats', label: t('knowledge.entityGraph.tabStatistics'), icon: 'fas fa-chart-bar' }
+  { id: 'extract', label: t('knowledge.entityGraph.tabExtract'), icon: 'brain' },
+  { id: 'query', label: t('knowledge.entityGraph.tabQuery'), icon: 'search-plus' },
+  { id: 'stats', label: t('knowledge.entityGraph.tabStatistics'), icon: 'chart-bar' }
 ])
 
 const activeTab = ref('extract')
@@ -263,11 +264,11 @@ function handleViewGraph(): void {
 
 function getStatusIcon(status: string): string {
   switch (status) {
-    case 'healthy': return 'fas fa-check-circle text-success'
-    case 'degraded': return 'fas fa-exclamation-triangle text-warning'
+    case 'healthy': return 'check-circle'
+    case 'degraded': return 'exclamation-triangle'
     case 'unavailable':
-    case 'unhealthy': return 'fas fa-times-circle text-error'
-    default: return 'fas fa-question-circle text-muted'
+    case 'unhealthy': return 'times-circle'
+    default: return 'question-circle'
   }
 }
 

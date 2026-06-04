@@ -8,10 +8,11 @@ Static type analysis for better completion suggestions.
 """
 
 import ast
-import logging
-from typing import Dict, Optional, Set
+from typing import Dict, Set
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 
 
 class TypeInferencer:
@@ -22,7 +23,7 @@ class TypeInferencer:
     function returns, and type annotations.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.type_map: Dict[str, str] = {}
         self.builtins = {
             "int",
@@ -36,7 +37,7 @@ class TypeInferencer:
             "None",
         }
 
-    def infer_from_assignment(self, target: str, value: ast.expr) -> Optional[str]:
+    def infer_from_assignment(self, target: str, value: ast.expr) -> str | None:
         """
         Infer type from assignment.
 
@@ -116,7 +117,7 @@ class TypeInferencer:
             return self.type_map.get(node.id, "Any")
         return "Any"
 
-    def infer_from_annotation(self, annotation: ast.expr) -> Optional[str]:
+    def infer_from_annotation(self, annotation: ast.expr) -> str | None:
         """
         Extract type from type annotation.
 
@@ -143,7 +144,7 @@ class TypeInferencer:
 
         return "Any"
 
-    def infer_function_return_type(self, func_node: ast.FunctionDef) -> Optional[str]:
+    def infer_function_return_type(self, func_node: ast.FunctionDef) -> str | None:
         """
         Infer function return type from annotation or body.
 
@@ -191,7 +192,7 @@ class TypeInferencer:
             params.append((param_name, param_type))
         return params
 
-    def analyze_scope(self, tree: ast.AST, scope_node: Optional[ast.AST] = None):
+    def analyze_scope(self, tree: ast.AST, scope_node: ast.AST | None = None):
         """
         Analyze variables in scope.
 

@@ -13,15 +13,15 @@ Issue #2154: Pattern-based error recovery optimization.
 
 import hashlib
 import json
-import logging
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.time_utils import now_utc
 from constants.ttl_constants import TTL_30_DAYS
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Redis key patterns
 PATTERN_KEY_PREFIX = "failure:pattern:"
@@ -84,8 +84,8 @@ class FailurePatternDetector:
     - Feedback loop for improving recommendations over time
     """
 
-    def __init__(self):
-        self._redis: Optional[Any] = None
+    def __init__(self) -> None:
+        self._redis: Any | None = None
 
     def _get_redis(self) -> Any:
         """Lazy-init sync Redis client."""
@@ -95,9 +95,9 @@ class FailurePatternDetector:
 
     def hash_causal_chain(self, causal_chain: str) -> str:
         """Hash a causal chain for pattern matching."""
-        return hashlib.md5(causal_chain.encode()).hexdigest()[:16]
+        return hashlib.md5(causal_chain.encode(), usedforsecurity=False).hexdigest()[:16]
 
-    async def detect_pattern(self, causal_chain: str, error_type: str) -> Optional[FailurePattern]:
+    async def detect_pattern(self, causal_chain: str, error_type: str) -> FailurePattern | None:
         """
         Check if a causal chain matches a known failure pattern.
 
@@ -147,7 +147,7 @@ class FailurePatternDetector:
         self,
         causal_chain: str,
         error_type: str,
-        successful_action: Optional[str] = None,
+        successful_action: str | None = None,
     ) -> FailurePattern:
         """
         Learn/update a pattern from error experience.

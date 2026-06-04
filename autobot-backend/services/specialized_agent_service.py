@@ -10,12 +10,13 @@ definitions in the web UI.  Each .md file uses YAML frontmatter
 prompt.
 """
 
-import logging
 import re
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 
 # Repository root — two levels up from services/
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -126,7 +127,7 @@ def _extract_system_prompt_excerpt(content: str, max_chars: int = 300) -> str:
 class SpecializedAgentService:
     """Read-only service that discovers AutoBot specialized agents (#1794)."""
 
-    def __init__(self, agents_dir: Optional[Path] = None) -> None:
+    def __init__(self, agents_dir: Path | None = None) -> None:
         self.agents_dir = agents_dir or _AGENTS_DIR
 
     # ------------------------------------------------------------------
@@ -147,7 +148,7 @@ class SpecializedAgentService:
 
         return agents
 
-    def get_agent(self, agent_id: str) -> Optional[Dict[str, Any]]:
+    def get_agent(self, agent_id: str) -> Dict[str, Any] | None:
         """Return a single agent by ID (stem of .md filename) (#1794)."""
         if not self.agents_dir.exists():
             return None
@@ -158,7 +159,7 @@ class SpecializedAgentService:
 
         return self._parse_file(md_file, include_full_prompt=True)
 
-    def get_categories_summary(self, agents: Optional[List[Dict[str, Any]]] = None) -> Dict[str, int]:
+    def get_categories_summary(self, agents: List[Dict[str, Any]] | None = None) -> Dict[str, int]:
         """Return count per category (#1794)."""
         if agents is None:
             agents = self.list_agents()
@@ -173,7 +174,7 @@ class SpecializedAgentService:
     # Internals
     # ------------------------------------------------------------------
 
-    def _parse_file(self, md_file: Path, include_full_prompt: bool = False) -> Optional[Dict[str, Any]]:
+    def _parse_file(self, md_file: Path, include_full_prompt: bool = False) -> Dict[str, Any] | None:
         """Parse a single .md agent file (#1794)."""
         try:
             content = md_file.read_text(encoding="utf-8")

@@ -1,11 +1,20 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
+from __future__ import annotations
+
 """
 Workflow Executor
 
 Issue #381: Extracted from enhanced_orchestrator.py god class refactoring.
 Contains workflow execution, step coordination, and agent interaction handling.
+
+Executor scope (#6826): WorkflowExecutor is the **main linear/parallel workflow
+engine**.  It handles step dependency grouping, variable resolution, sub-workflow
+delegation, error handlers, and notifications.  For DAG/condition workflows it
+delegates to DAGExecutor; checkpoint logic delegates to CheckpointResumer (#6827).
+The long-term migration path (replacing DAGExecutor with GraphRunner) is tracked
+in #6826.
 
 Issue #2168: Added circuit breaker + retry decorators to step execution.
 Issue #2172: Added parallel execution for independent workflow steps.
@@ -20,12 +29,12 @@ Issue #2143: Sub-workflow composition — a step with type="sub_workflow" delega
 """
 
 import asyncio
-import logging
 import time
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from circuit_breaker import circuit_breaker_async
 from constants.status_enums import TaskStatus
 from constants.threshold_constants import (
@@ -34,6 +43,7 @@ from constants.threshold_constants import (
 )
 from retry_mechanism import RetryStrategy, retry_async
 
+from .checkpoint_resumer import CheckpointResumer
 from .dag_executor import (
     DAGExecutionContext,
     DAGExecutor,
@@ -42,10 +52,8 @@ from .dag_executor import (
     workflow_has_condition_nodes,
 )
 from .error_handler import (
-    StepCheckpoint,
     StepErrorAction,
     StepErrorHandler,
-    WorkflowCheckpointManager,
 )
 from .execution_modes import DebugController, DryRunValidator, ExecutionMode
 from .sub_workflow import (
@@ -53,6 +61,7 @@ from .sub_workflow import (
     extract_sub_workflow_step,
     is_sub_workflow_step,
 )
+from .success_criteria import SuccessCriteriaEvaluator
 from .types import AgentInteraction, AgentProfile
 from .variable_resolver import StepOutput, VariableResolver
 from .workflow_memory import WorkflowMemory
@@ -60,7 +69,7 @@ from .workflow_memory import WorkflowMemory
 # Issue #3101: lazy import to avoid circular deps at module level
 _notification_service = None
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def _get_notification_service():
@@ -91,8 +100,9 @@ class WorkflowExecutor:
         reserve_agent_callback: Callable[[str], None],
         release_agent_callback: Callable[[str], None],
         update_performance_callback: Callable[[str, bool, float], None],
-        workflow_fetcher: Optional[Callable[[str], Optional[Dict[str, Any]]]] = None,
-        memory: Optional[WorkflowMemory] = None,
+        workflow_fetcher: Callable[[str], Dict[str, Any] | None] | None = None,
+        memory: WorkflowMemory | None = None,
+        criteria_evaluator: SuccessCriteriaEvaluator | None = None,
     ):
         """
         Initialize the workflow executor.
@@ -111,6 +121,9 @@ class WorkflowExecutor:
                                          collaboration state (Issue #3009).  When provided,
                                          parallel step agents can read and write a common
                                          KV store scoped to this workflow execution.
+            criteria_evaluator:          Optional SuccessCriteriaEvaluator (GH #6832).
+                                         When provided, evaluates structured_criteria in
+                                         execution_context after status is determined.
         """
         self.agent_registry = agent_registry
         self.agent_interactions = agent_interactions
@@ -121,15 +134,17 @@ class WorkflowExecutor:
         self.memory = memory
         # Issue #2141: variable resolver for ${steps…} piping between steps
         self._variable_resolver = VariableResolver()
-        # Issue #2154: checkpoint manager and error handler
-        self._checkpoint_manager = WorkflowCheckpointManager()
+        # Issue #2154 / #6827: checkpoint logic delegated to CheckpointResumer.
+        self._checkpoint_resumer = CheckpointResumer()
         self._error_handler = StepErrorHandler()
         # Issue #2143: sub-workflow executor (None when fetcher not provided)
-        self._sub_workflow_executor: Optional[SubWorkflowExecutor] = (
+        self._sub_workflow_executor: SubWorkflowExecutor | None = (
             SubWorkflowExecutor(workflow_executor=self, workflow_fetcher=workflow_fetcher)
             if workflow_fetcher is not None
             else None
         )
+        # GH #6832: optional success criteria evaluator
+        self._criteria_evaluator = criteria_evaluator
 
     def _group_steps_by_dependency(self, steps: List[Dict[str, Any]]) -> List[List[Dict[str, Any]]]:
         """
@@ -244,7 +259,7 @@ class WorkflowExecutor:
         workflow_id: str,
         step_id: str,
         error: str,
-        execution_context: Optional[Dict[str, Any]] = None,
+        execution_context: Dict[str, Any] | None = None,
     ) -> None:
         """Fire a STEP_FAILED notification (#3101, #3168)."""
         from services.notification_service import NotificationEvent
@@ -546,32 +561,19 @@ class WorkflowExecutor:
             raise
 
     def _save_checkpoint(self, workflow_id: str, step_id: str, step_result: Dict[str, Any]) -> None:
-        """
-        Persist a checkpoint for *step_id* after successful execution.
-
-        Silently skips when *workflow_id* is empty (e.g. DAG adapter calls).
-
-        Issue #2154.
-        """
-        if not workflow_id:
-            return
-        checkpoint = StepCheckpoint(
-            step_id=step_id,
-            status=TaskStatus.COMPLETED.value,
-            output=step_result,
-        )
-        self._checkpoint_manager.save(workflow_id, checkpoint)
+        """Delegate to CheckpointResumer.save (#6827)."""
+        self._checkpoint_resumer.save(workflow_id, step_id, step_result)
 
     async def execute_coordinated_workflow(
         self,
         workflow_id: str,
         steps: List[Dict[str, Any]],
         context: Dict[str, Any],
-        edges: Optional[List[Dict[str, Any]]] = None,
+        edges: List[Dict[str, Any]] | None = None,
         resume_from_checkpoint: bool = False,
         mode: ExecutionMode = ExecutionMode.NORMAL,
-        debug_controller: Optional[DebugController] = None,
-        notification_config: Optional[Any] = None,
+        debug_controller: DebugController | None = None,
+        notification_config: Any | None = None,
     ) -> Dict[str, Any]:
         """
         Execute workflow with coordinated agent management.
@@ -715,11 +717,18 @@ class WorkflowExecutor:
 
             self._determine_workflow_status(steps, execution_context)
 
+            # GH #6832: optional success criteria evaluation
+            if self._criteria_evaluator and execution_context.get("structured_criteria"):
+                eval_result = await self._criteria_evaluator.evaluate(
+                    execution_context["structured_criteria"], execution_context
+                )
+                execution_context["criteria_evaluation"] = eval_result.to_dict()
+
             # Issue #2154: clear checkpoints on full success.
             # Issue #3019: also clear shared memory — no longer needed once the
             # workflow reaches a terminal state.
             if execution_context.get("status") == TaskStatus.COMPLETED.value:
-                self._checkpoint_manager.clear(workflow_id)
+                self._checkpoint_resumer.clear(workflow_id)
                 shared_memory.clear()
 
             # Issue #3101: fire notification on terminal status.
@@ -741,39 +750,8 @@ class WorkflowExecutor:
         steps: List[Dict[str, Any]],
         execution_context: Dict[str, Any],
     ) -> None:
-        """
-        Load checkpoints from Redis and mark already-completed steps.
-
-        Mutates *steps* in-place (sets ``status="completed"``) and populates
-        ``execution_context["step_results"]`` and ``execution_context["step_outputs"]``
-        so variable resolution works correctly for resumed steps.
-
-        Issue #2154.
-        """
-        checkpoints = self._checkpoint_manager.load_all(workflow_id)
-        if not checkpoints:
-            return
-
-        # Issue #3231: refresh TTL at resume time so a workflow that was
-        # paused for human approval (potentially for days) gets a fresh
-        # 30-day window from this moment rather than from the last step save.
-        self._checkpoint_manager.refresh_ttl(workflow_id)
-
-        logger.info(
-            "Workflow %s: resuming with %d checkpointed steps: %s",
-            workflow_id,
-            len(checkpoints),
-            list(checkpoints.keys()),
-        )
-
-        for step in steps:
-            step_id = step["id"]
-            cp = checkpoints.get(step_id)
-            if cp is None:
-                continue
-            step["status"] = TaskStatus.COMPLETED.value
-            execution_context["step_results"][step_id] = cp.output
-            execution_context["step_outputs"][step_id] = StepOutput.from_step_result(cp.output)
+        """Delegate to CheckpointResumer.apply (#6827)."""
+        self._checkpoint_resumer.apply(workflow_id, steps, execution_context)
 
     async def _execute_debug_workflow(
         self,
@@ -781,7 +759,7 @@ class WorkflowExecutor:
         steps: List[Dict[str, Any]],
         context: Dict[str, Any],
         controller: DebugController,
-        notification_config: Optional[Any] = None,
+        notification_config: Any | None = None,
     ) -> Dict[str, Any]:
         """Step-by-step execution gated by an external DebugController.
 
@@ -861,7 +839,7 @@ class WorkflowExecutor:
         steps: List[Dict[str, Any]],
         edges: List[Dict[str, Any]],
         context: Dict[str, Any],
-        notification_config: Optional[Any] = None,
+        notification_config: Any | None = None,
     ) -> Dict[str, Any]:
         """
         Execute a branching workflow via DAGExecutor.
@@ -1019,7 +997,7 @@ class WorkflowExecutor:
     def _build_step_success_result(
         self,
         result: Dict[str, Any],
-        agent_id: Optional[str],
+        agent_id: str | None,
         step_id: str,
     ) -> Dict[str, Any]:
         """
@@ -1045,7 +1023,7 @@ class WorkflowExecutor:
     def _build_step_failure_result(
         self,
         error: Exception,
-        agent_id: Optional[str],
+        agent_id: str | None,
         step_id: str,
     ) -> Dict[str, Any]:
         """
@@ -1099,7 +1077,7 @@ class WorkflowExecutor:
 
         logger.info("Executing step %s with agent %s", step_id, agent_id)
 
-        interaction: Optional[AgentInteraction] = None
+        interaction: AgentInteraction | None = None
         if agent_id:
             interaction = self._create_agent_interaction(step, execution_context)
 
@@ -1197,7 +1175,7 @@ class WorkflowExecutor:
         workflow_id: str,
         user_request: str,
         plan_summary: Dict[str, Any],
-        approval_callback: Optional[callable] = None,
+        approval_callback: callable | None = None,
     ) -> Dict[str, Any]:
         """
         Request approval for the workflow plan before execution.

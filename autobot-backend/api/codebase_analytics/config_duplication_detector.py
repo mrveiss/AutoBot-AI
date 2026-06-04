@@ -16,13 +16,15 @@ Issue #554: Enhanced with Vector/Redis/LLM infrastructure:
 """
 
 import ast
-import logging
 import os
 from collections import defaultdict
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
+
+logger = get_logger(__name__)
 
 # Issue #554: Flag to enable semantic analysis infrastructure
 SEMANTIC_ANALYSIS_AVAILABLE = False
@@ -515,7 +517,7 @@ if __name__ == "__main__":
     # Test the detector
     import sys
 
-    project_root = sys.argv[1] if len(sys.argv) > 1 else os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot")
+    project_root = sys.argv[1] if len(sys.argv) > 1 else config.base_dir
     result = detect_config_duplicates(project_root)
 
     logger.info(result["report"])

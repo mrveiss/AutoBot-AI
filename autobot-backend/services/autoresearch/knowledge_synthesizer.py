@@ -17,19 +17,19 @@ Issue #4564: BaseSynthesizer ABC extracted for shared interface reuse.
 from __future__ import annotations
 
 import json
-import logging
 import time
 import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from services.knowledge.synthesis_provenance import SynthesisProvenanceLog
 
 from .config import AutoResearchConfig
 from .store import ExperimentStore
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _SYNTHESIS_SYSTEM_PROMPT = (
     "You are an ML experiment analyst. Analyze the following experiment results "
@@ -53,7 +53,7 @@ class ExperimentInsight:
     supporting_experiments: List[str] = field(default_factory=list)
     related_hyperparams: List[str] = field(default_factory=list)
     synthesized_at: float = field(default_factory=time.time)
-    session_id: Optional[str] = None
+    session_id: str | None = None
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -76,7 +76,7 @@ class BaseSynthesizer(ABC):
     """
 
     @abstractmethod
-    async def _get_collection(self):
+    async def _get_collection(self) -> None:
         """Return the ChromaDB collection (lazy-init). Must be idempotent."""
 
     @abstractmethod
@@ -97,8 +97,8 @@ class KnowledgeSynthesizer(BaseSynthesizer):
         self,
         store: ExperimentStore,
         llm_service: Any,
-        config: Optional[AutoResearchConfig] = None,
-        provenance_log: Optional[SynthesisProvenanceLog] = None,
+        config: AutoResearchConfig | None = None,
+        provenance_log: SynthesisProvenanceLog | None = None,
     ) -> None:
         self._store = store
         self._llm = llm_service
@@ -256,7 +256,7 @@ class KnowledgeSynthesizer(BaseSynthesizer):
     async def _index_insights(
         self,
         insights: List[ExperimentInsight],
-        source_doc_ids: Optional[List[str]] = None,
+        source_doc_ids: List[str] | None = None,
     ) -> None:
         """Store insights in ChromaDB and log provenance."""
         if not insights:

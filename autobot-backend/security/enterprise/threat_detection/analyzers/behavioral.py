@@ -9,8 +9,6 @@ Detects behavioral anomalies using user profiles.
 Part of Issue #381 - God Class Refactoring
 """
 
-from typing import Optional
-
 from ..models import AnalysisContext, SecurityEvent, ThreatEvent
 from ..types import ThreatCategory, ThreatLevel
 from .base import ThreatAnalyzer
@@ -77,7 +75,7 @@ class BehavioralAnomalyAnalyzer(ThreatAnalyzer):
             **base_fields,
         )
 
-    async def analyze(self, event: SecurityEvent, context: AnalysisContext) -> Optional[ThreatEvent]:
+    async def analyze(self, event: SecurityEvent, context: AnalysisContext) -> ThreatEvent | None:
         """Detect behavioral anomalies using user profiles"""
         if event.user_id == "unknown":
             return None

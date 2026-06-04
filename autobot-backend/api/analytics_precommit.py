@@ -9,13 +9,11 @@ Features fast pattern checking, clear error messages, and bypass mechanism.
 """
 
 import asyncio
-import logging
 import re
 import subprocess  # nosec B404
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
@@ -35,9 +33,10 @@ from api.schemas_analytics import (
 )
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from constants.network_constants import NetworkConstants
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(tags=["precommit", "analytics"])  # Prefix set in router_registry
 
@@ -228,7 +227,7 @@ def get_staged_files() -> list[str]:
         return []
 
 
-def get_file_content(filepath: str) -> Optional[str]:
+def get_file_content(filepath: str) -> str | None:
     """Get content of a file."""
     try:
         # Try to get staged content first

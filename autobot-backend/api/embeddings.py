@@ -8,26 +8,33 @@ Provides endpoints for configuring and managing embedding models and providers.
 Handles vector storage configuration and embedding model selection.
 """
 
-import logging
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 
 from api.schemas_common import DataResponse
-from api.schemas_knowledge import EmbeddingUpdate
+from api.schemas_knowledge import (
+    EmbeddingModelsData,
+    EmbeddingRefreshData,
+    EmbeddingSettingsData,
+    EmbeddingStatusData,
+    EmbeddingUpdate,
+    EmbeddingUpdateData,
+)
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import DEFAULT_EMBEDDING_MODEL
 from config import unified_config_manager
 from services.config_service import ConfigService
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(tags=["embeddings"])
 
 
-@router.get("/settings", response_model=DataResponse)
+@router.get("/settings", response_model=DataResponse[EmbeddingSettingsData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_embedding_settings",
@@ -73,7 +80,7 @@ async def get_embedding_settings(
         raise HTTPException(status_code=500, detail="Failed to get embedding settings")
 
 
-@router.put("/settings", response_model=DataResponse)
+@router.put("/settings", response_model=DataResponse[EmbeddingUpdateData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="update_embedding_settings",
@@ -126,7 +133,7 @@ async def update_embedding_settings(
         raise HTTPException(status_code=500, detail="Failed to update embedding settings")
 
 
-@router.get("/models", response_model=DataResponse)
+@router.get("/models", response_model=DataResponse[EmbeddingModelsData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_available_embedding_models",
@@ -172,7 +179,7 @@ async def get_available_embedding_models(
         raise HTTPException(status_code=500, detail="Failed to get embedding models")
 
 
-@router.post("/providers/{provider_name}/refresh-models", response_model=DataResponse)
+@router.post("/providers/{provider_name}/refresh-models", response_model=DataResponse[EmbeddingRefreshData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="refresh_embedding_models",
@@ -229,7 +236,7 @@ async def refresh_embedding_models(
         raise HTTPException(status_code=500, detail="Failed to refresh embedding models")
 
 
-@router.get("/status", response_model=DataResponse)
+@router.get("/status", response_model=DataResponse[EmbeddingStatusData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_embedding_status",

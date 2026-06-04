@@ -14,20 +14,18 @@ Related Issue: #964 - Multi-profile personality system
 """
 
 import json
-import logging
-import os
 import uuid
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List
 
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 from autobot_shared.time_utils import now_utc
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
-_PERSONALITIES_DIR = (
-    Path(os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot")) / "autobot-backend" / "resources" / "personalities"
-)
+_PERSONALITIES_DIR = Path(config.base_dir) / "autobot-backend" / "resources" / "personalities"
 
 # Fallback for local dev (relative to this file)
 _DEV_PERSONALITIES_DIR = Path(__file__).parent.parent / "resources" / "personalities"
@@ -188,7 +186,7 @@ class PersonalityManager:
     def _profile_path(self, pid: str) -> Path:
         return self._dir / f"{pid}.json"
 
-    def _load_profile(self, pid: str) -> Optional[PersonalityProfile]:
+    def _load_profile(self, pid: str) -> PersonalityProfile | None:
         path = self._profile_path(pid)
         if not path.exists():
             return None
@@ -215,7 +213,7 @@ class PersonalityManager:
             result.append({**entry, "active": entry["id"] == active})
         return result
 
-    def get_profile(self, pid: str) -> Optional[PersonalityProfile]:
+    def get_profile(self, pid: str) -> PersonalityProfile | None:
         """Return a specific profile by id, or None if not found."""
         return self._load_profile(pid)
 
@@ -337,7 +335,7 @@ class PersonalityManager:
         logger.info("Personality profile reset to default: %s", pid)
         return profile
 
-    def get_active_profile(self) -> Optional[PersonalityProfile]:
+    def get_active_profile(self) -> PersonalityProfile | None:
         """Return the active profile if personality is enabled, else None."""
         index = self._read_index()
         if not index.get("enabled", True):
@@ -357,7 +355,7 @@ class PersonalityManager:
 
 
 # Module-level singleton
-_manager: Optional[PersonalityManager] = None
+_manager: PersonalityManager | None = None
 
 
 def get_personality_manager() -> PersonalityManager:

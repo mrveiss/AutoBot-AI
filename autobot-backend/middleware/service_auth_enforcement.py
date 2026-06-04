@@ -7,7 +7,6 @@ Enforces service-to-service authentication on internal endpoints
 Week 3 Phase 2: Comprehensive endpoint categorization and selective enforcement
 """
 
-import os
 import random
 import secrets
 import time
@@ -18,6 +17,7 @@ import structlog
 from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse
 
+from autobot_shared.ssot_config import config
 from constants.api_constants import PATH_API_HEALTH, PATH_HEALTH
 from security.service_auth import validate_service_auth
 
@@ -41,6 +41,8 @@ EXEMPT_PATHS: List[str] = [
     "/api/chats",
     "/api/conversations",
     "/api/conversation_files",
+    # Live Canvas — JWT-auth endpoints (MVA-359)
+    "/api/canvas",
     # Knowledge base user operations
     "/api/knowledge",
     "/api/knowledge_base",
@@ -221,7 +223,7 @@ def _has_override_token(request: Request) -> bool:
     Helper for enforce_service_auth (Issue #255).
     """
     override_token = request.headers.get("X-Override-Token")
-    expected = os.getenv("SERVICE_AUTH_OVERRIDE_TOKEN", "")
+    expected = config.service_auth_override_token
     if not override_token or not expected:
         return False
     return secrets.compare_digest(override_token, expected)
@@ -232,7 +234,7 @@ def _get_enforcement_percentage() -> int:
 
     Helper for enforce_service_auth (Issue #255).
     """
-    return int(os.getenv("SERVICE_AUTH_CIRCUIT_BREAKER_PERCENTAGE", "100"))
+    return int(config.service_auth_circuit_breaker_percentage)
 
 
 def _should_enforce_by_circuit_breaker() -> bool:
@@ -253,8 +255,8 @@ def _is_rate_limited(ip: str) -> bool:
 
     Helper for enforce_service_auth (Issue #255).
     """
-    window = int(os.getenv("SERVICE_AUTH_RATE_LIMIT_WINDOW", "300"))
-    max_failures = int(os.getenv("SERVICE_AUTH_RATE_LIMIT_MAX_FAILURES", "10"))
+    window = int(config.service_auth_rate_limit_window)
+    max_failures = int(config.service_auth_rate_limit_max_failures)
     now = time.time()
     cutoff = now - window
     _failed_auth_tracker[ip] = [t for t in _failed_auth_tracker[ip] if t > cutoff]
@@ -398,7 +400,7 @@ def get_enforcement_mode() -> bool:
     Returns:
         True if enforcement mode is active
     """
-    mode = os.getenv("SERVICE_AUTH_ENFORCEMENT_MODE", "false").lower()
+    mode = config.service_auth_enforcement_mode.lower()
     return mode == "true"
 
 
@@ -410,7 +412,7 @@ def log_enforcement_status():
             exempt_paths_count=len(EXEMPT_PATHS),
             service_only_paths_count=len(SERVICE_ONLY_PATHS),
             circuit_breaker_pct=_get_enforcement_percentage(),
-            override_token_set=bool(os.getenv("SERVICE_AUTH_OVERRIDE_TOKEN", "")),
+            override_token_set=bool(config.service_auth_override_token),
         )
         logger.info("Service-only paths", paths=SERVICE_ONLY_PATHS)
     else:
@@ -434,8 +436,8 @@ def get_endpoint_categories() -> dict:
     return {
         "enforcement_mode": get_enforcement_mode(),
         "circuit_breaker_percentage": _get_enforcement_percentage(),
-        "override_token_configured": bool(os.getenv("SERVICE_AUTH_OVERRIDE_TOKEN", "")),
-        "rate_limit_max_failures": int(os.getenv("SERVICE_AUTH_RATE_LIMIT_MAX_FAILURES", "10")),
+        "override_token_configured": bool(config.service_auth_override_token),
+        "rate_limit_max_failures": int(config.service_auth_rate_limit_max_failures),
         "exempt_paths": EXEMPT_PATHS,
         "service_only_paths": SERVICE_ONLY_PATHS,
         "total_exempt": len(EXEMPT_PATHS),

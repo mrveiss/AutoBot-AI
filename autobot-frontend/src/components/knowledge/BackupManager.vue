@@ -2,7 +2,7 @@
   <div class="backup-manager">
     <div class="section-header">
       <div class="header-content">
-        <h4><i class="fas fa-database"></i> {{ $t('knowledge.backup.title') }}</h4>
+        <h4><Icon name="database" /> {{ $t('knowledge.backup.title') }}</h4>
         <p class="header-description">
           {{ $t('knowledge.backup.description') }}
         </p>
@@ -39,7 +39,7 @@
           :disabled="isCreatingBackup"
           :loading="isCreatingBackup"
         >
-          <i v-if="!isCreatingBackup" class="fas fa-download"></i>
+          <Icon name="download" v-if="!isCreatingBackup" />
           {{ isCreatingBackup ? $t('knowledge.backup.creatingBackup') : $t('knowledge.backup.createBackup') }}
         </BaseButton>
       </div>
@@ -54,17 +54,17 @@
             @click="loadBackups"
             :disabled="isLoadingBackups"
           >
-            <i class="fas fa-sync" :class="{ 'fa-spin': isLoadingBackups }"></i>
+            <Icon name="sync" />
           </BaseButton>
         </div>
 
         <div v-if="isLoadingBackups" class="loading-state">
-          <i class="fas fa-spinner fa-spin"></i>
+          <Icon name="spinner" class="animate-spin" />
           <span>{{ $t('knowledge.backup.loadingBackups') }}</span>
         </div>
 
         <div v-else-if="backups.length === 0" class="empty-state">
-          <i class="fas fa-folder-open"></i>
+          <Icon name="folder-open" />
           <p>{{ $t('knowledge.backup.noBackupsFound') }}</p>
         </div>
 
@@ -77,7 +77,7 @@
             @click="selectedBackup = backup.name"
           >
             <div class="backup-icon">
-              <i class="fas fa-file-archive"></i>
+              <Icon name="file" />
             </div>
             <div class="backup-info">
               <span class="backup-name">{{ backup.name }}</span>
@@ -93,7 +93,7 @@
                 :disabled="isRestoring"
                 :title="$t('knowledge.backup.restoreTitle')"
               >
-                <i class="fas fa-upload"></i>
+                <Icon name="upload" />
               </button>
               <button
                 class="action-btn delete"
@@ -101,7 +101,7 @@
                 :disabled="isDeletingBackup"
                 :title="$t('knowledge.backup.deleteTitle')"
               >
-                <i class="fas fa-trash"></i>
+                <Icon name="trash" />
               </button>
             </div>
           </div>
@@ -110,14 +110,14 @@
 
       <!-- Status Messages -->
       <div v-if="statusMessage" :class="['status-message', statusMessage.type]">
-        <i :class="statusMessage.icon"></i>
+        <Icon :name="statusMessage.icon" />
         <span>{{ statusMessage.text }}</span>
         <button
           @click="statusMessage = null"
           class="dismiss-btn"
           :aria-label="$t('common.dismiss')"
         >
-          <i class="fas fa-times"></i>
+          <Icon name="times" />
         </button>
       </div>
     </div>
@@ -125,6 +125,7 @@
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { formatFileSize, formatDateTime } from '@/utils/formatHelpers'
@@ -169,10 +170,10 @@ const statusMessage = ref<StatusMessage | null>(null)
 // Methods
 const showStatus = (type: StatusMessage['type'], text: string) => {
   const icons = {
-    success: 'fas fa-check-circle',
-    error: 'fas fa-exclamation-circle',
-    warning: 'fas fa-exclamation-triangle',
-    info: 'fas fa-info-circle',
+    success: 'check-circle',
+    error: 'exclamation-circle',
+    warning: 'exclamation-triangle',
+    info: 'info-circle',
   }
   statusMessage.value = { type, text, icon: icons[type] }
 

@@ -13,18 +13,18 @@ Issue #697: Added OpenTelemetry tracing for SSH operations.
 """
 
 import asyncio
-import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 import asyncssh
 from opentelemetry import trace
 from opentelemetry.trace import SpanKind, Status, StatusCode
 
+from autobot_shared.logging_manager import get_logger
 from pki.config import VM_DEFINITIONS, TLSConfig, VMCertificateInfo
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #697: Get tracer for PKI operations
 _tracer = trace.get_tracer("autobot.pki.distributor", "2.0.0")
@@ -55,13 +55,13 @@ class CertificateDistributor:
     - Certificate verification after distribution
     """
 
-    def __init__(self, config: Optional[TLSConfig] = None):
+    def __init__(self, config: TLSConfig | None = None):
         """Initialize distributor with configuration."""
         self.config = config or TLSConfig()
 
     async def distribute_all(
         self,
-        exclude_vms: Optional[List[str]] = None,
+        exclude_vms: List[str] | None = None,
     ) -> Dict[str, DistributionResult]:
         """
         Distribute certificates to all VMs.
@@ -189,7 +189,7 @@ class CertificateDistributor:
         self,
         span: trace.Span,
         error: Exception,
-        error_type: Optional[str] = None,
+        error_type: str | None = None,
     ) -> None:
         """
         Record error information on OpenTelemetry span.

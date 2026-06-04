@@ -9,7 +9,7 @@
 
 import { ref, computed } from 'vue'
 import { useFetchEndpoint } from '@/composables/api/useFetchEndpoint'
-import { useApi } from '@/composables/useApi'
+import { useApiClient } from '@/plugins/api'
 import { usePreferences } from '@/composables/usePreferences'
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
@@ -97,6 +97,8 @@ const personalityEndpoint = useFetchEndpoint<PersonalityRaw, PersonalityRaw>({
 })
 
 export function useVoiceProfiles() {
+  const api = useApiClient()
+
   async function fetchVoices(): Promise<void> {
     error.value = null
     await voicesEndpoint.load()
@@ -118,7 +120,7 @@ export function useVoiceProfiles() {
       const formData = new FormData()
       formData.append('name', name)
       formData.append('audio', audioBlob, filename)
-      await useApi().post(`${getApiBase()}/voice/voices/create`, formData)
+      await api.post(`${getApiBase()}/voice/voices/create`, formData)
       await fetchVoices()
       return true
     }).catch((e: unknown) => {
@@ -131,7 +133,7 @@ export function useVoiceProfiles() {
   async function deleteVoice(voiceId: string): Promise<boolean> {
     error.value = null
     return wrap(async () => {
-      await useApi().delete(`${getApiBase()}/voice/voices/${voiceId}`)
+      await api.delete(`${getApiBase()}/voice/voices/${voiceId}`)
       if (selectedVoiceId.value === voiceId) {
         selectVoice('')
       }

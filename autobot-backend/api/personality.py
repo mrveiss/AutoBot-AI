@@ -10,8 +10,7 @@ Mutations (create, update, delete, activate, reset, toggle) require admin.
 Related Issue: #964 - Multi-profile personality system
 """
 
-import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
@@ -25,9 +24,10 @@ from api.schemas_agent import (
 )
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from services.personality_service import SUPPORTED_LANGUAGES, get_personality_manager
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 router = APIRouter(tags=["personality"])
 
 
@@ -79,13 +79,13 @@ async def list_profiles() -> List[Dict[str, Any]]:
     return get_personality_manager().list_profiles()
 
 
-@router.get("/active", response_model=Optional[PersonalityProfileDetail])
+@router.get("/active", response_model=PersonalityProfileDetail | None)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_active",
     error_code_prefix="PERSONALITY",
 )
-async def get_active() -> Optional[PersonalityProfileDetail]:
+async def get_active() -> PersonalityProfileDetail | None:
     """Return the active profile, or null if personality is disabled."""
     mgr = get_personality_manager()
     profile = mgr.get_active_profile()

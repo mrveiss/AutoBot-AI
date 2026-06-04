@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -24,8 +24,8 @@ class AdvancedSearchResponse(BaseModel):
     query: str = ""
     metrics: Dict[str, Any] = Field(default_factory=dict)
     reranking_enabled: bool = True
-    context: Optional[str] = None
-    context_length: Optional[int] = None
+    context: str | None = None
+    context_length: int | None = None
 
 
 class RerankResultsResponse(BaseModel):
@@ -45,7 +45,7 @@ class RagConfigResponse(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     config: Dict[str, Any] = Field(default_factory=dict)
-    source: Optional[str] = None
+    source: str | None = None
 
 
 class UpdateRagConfigResponse(BaseModel):
@@ -54,7 +54,7 @@ class UpdateRagConfigResponse(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     message: str = ""
-    updated_fields: Optional[List[str]] = None
+    updated_fields: List[str] | None = None
     config: Dict[str, Any] = Field(default_factory=dict)
 
 
@@ -103,14 +103,14 @@ class BenchmarkRunResponse(BaseModel):
 
     published: int = 0
     total: int = 0
-    stream_key: Optional[str] = None
-    split_used: Optional[str] = None
-    dev_size: Optional[int] = None
-    test_size: Optional[int] = None
-    tuned_on_dev: Optional[bool] = None
-    held_out_score: Optional[bool] = None
-    mean_precision_at_k: Optional[float] = None
-    reason: Optional[str] = None
+    stream_key: str | None = None
+    split_used: str | None = None
+    dev_size: int | None = None
+    test_size: int | None = None
+    tuned_on_dev: bool | None = None
+    held_out_score: bool | None = None
+    mean_precision_at_k: float | None = None
+    reason: str | None = None
 
 
 class EntityHistoryResponse(BaseModel):
@@ -130,7 +130,7 @@ class AdvancedSearchRequest(BaseModel):
     max_results: int = Field(default=5, ge=1, le=50, description="Maximum results")
     enable_reranking: bool = Field(default=True, description="Enable cross-encoder reranking")
     return_context: bool = Field(default=False, description="Return optimized context for RAG")
-    timeout: Optional[float] = Field(default=None, description="Optional timeout in seconds")
+    timeout: float | None = Field(default=None, description="Optional timeout in seconds")
 
 
 class RerankRequest(BaseModel):
@@ -143,11 +143,11 @@ class RerankRequest(BaseModel):
 class RAGConfigUpdate(BaseModel):
     """Request body for PUT /rag/config."""
 
-    hybrid_weight_semantic: Optional[float] = Field(default=None, ge=0.0, le=1.0)
-    hybrid_weight_keyword: Optional[float] = Field(default=None, ge=0.0, le=1.0)
-    enable_reranking: Optional[bool] = Field(default=None)
-    diversity_threshold: Optional[float] = Field(default=None, ge=0.0, le=1.0)
-    max_results_per_stage: Optional[int] = Field(default=None, ge=1, le=100)
+    hybrid_weight_semantic: float | None = Field(default=None, ge=0.0, le=1.0)
+    hybrid_weight_keyword: float | None = Field(default=None, ge=0.0, le=1.0)
+    enable_reranking: bool | None = Field(default=None)
+    diversity_threshold: float | None = Field(default=None, ge=0.0, le=1.0)
+    max_results_per_stage: int | None = Field(default=None, ge=1, le=100)
 
 
 class RunBenchmarkRequest(BaseModel):

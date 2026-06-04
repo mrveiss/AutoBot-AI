@@ -16,7 +16,7 @@ import sys
 import tempfile
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 from unittest.mock import MagicMock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -55,7 +55,7 @@ class MockKnowledgeBase:
             "workflows": {},
         }
 
-    async def get_tool_knowledge(self, tool_name: str) -> Optional[Dict[str, Any]]:
+    async def get_tool_knowledge(self, tool_name: str) -> Dict[str, Any] | None:
         """Mock get_tool_knowledge"""
         return self.data.get(f"tool:{tool_name}")
 
@@ -63,7 +63,7 @@ class MockKnowledgeBase:
         """Mock store_knowledge"""
         self.data[f"{category}:{content_id}"] = content
 
-    async def store_fact(self, content: str, metadata: Optional[Dict[str, Any]] = None):
+    async def store_fact(self, content: str, metadata: Dict[str, Any] | None = None):
         """Mock store_fact (required by librarian)"""
         fact_id = f"fact:{len(self.data)}"
         self.data[fact_id] = {"content": content, "metadata": metadata or {}}
@@ -128,7 +128,7 @@ class MockMachineAwareSystemKnowledgeManager(MockSystemKnowledgeManager):
         """Mock machine-aware initialize"""
         self.initialized = True
 
-    async def get_machine_info(self) -> Optional[Dict[str, Any]]:
+    async def get_machine_info(self) -> Dict[str, Any] | None:
         """Mock get_machine_info"""
         return self.current_machine_profile.to_dict()
 
@@ -197,7 +197,7 @@ async def test_2_temporal_manager_features():
     manager = UnifiedKnowledgeManager(knowledge_base=kb, enable_temporal=True, enable_machine_aware=False)
 
     # Register content with temporal tracking
-    content_hash = hashlib.md5(b"test content").hexdigest()
+    content_hash = hashlib.md5(b"test content", usedforsecurity=False).hexdigest()
     metadata = manager.register_content("tool:steghide", {"category": "tools"}, content_hash)
 
     assert metadata is not None, "Failed to register content"
@@ -212,7 +212,7 @@ async def test_2_temporal_manager_features():
     assert status["access_count"] == 1
 
     # Update modification tracking
-    new_hash = hashlib.md5(b"updated content").hexdigest()
+    new_hash = hashlib.md5(b"updated content", usedforsecurity=False).hexdigest()
     manager.update_content_modification("tool:steghide", new_hash)
 
     print("✅ PASSED: Temporal manager features work correctly")  # noqa: print
@@ -370,7 +370,7 @@ async def test_7_backward_compatibility():
     assert temporal_mgr is not None
 
     # Register content directly with temporal manager
-    content_hash = hashlib.md5(b"test").hexdigest()
+    content_hash = hashlib.md5(b"test", usedforsecurity=False).hexdigest()
     meta = temporal_mgr.register_content("test-001", {}, content_hash)
     assert meta is not None
     assert meta.content_id == "test-001"
@@ -511,7 +511,7 @@ async def test_11_integration():
     await manager.initialize(force_reinstall=False)
 
     # Register content with temporal tracking
-    content_hash = hashlib.md5(b"integrated content").hexdigest()
+    content_hash = hashlib.md5(b"integrated content", usedforsecurity=False).hexdigest()
     meta = manager.register_content("tool:integrated", {"category": "tools"}, content_hash)
     assert meta is not None
 
@@ -542,7 +542,7 @@ async def test_12_analytics():
 
     # Register multiple content items
     for i in range(5):
-        content_hash = hashlib.md5(f"content-{i}".encode()).hexdigest()
+        content_hash = hashlib.md5(f"content-{i}".encode(), usedforsecurity=False).hexdigest()
         manager.register_content(f"item-{i}", {"category": "test"}, content_hash)
 
     # Get temporal analytics

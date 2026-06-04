@@ -83,7 +83,7 @@ function openInGrafana() {
     <!-- Header -->
     <div class="flex items-center justify-between mb-6">
       <div>
-        <h2 class="text-xl font-bold text-gray-900">Grafana Dashboards</h2>
+        <h2 class="text-xl font-bold text-gray-900">{{ $t('monitoring.grafanaDashboards.grafanaDashboards') }}</h2>
         <p class="text-sm text-gray-500 mt-1">{{ currentDashboard.name }} - {{ currentDashboard.description }}</p>
       </div>
       <div class="flex items-center gap-2">
@@ -106,7 +106,7 @@ function openInGrafana() {
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
           </svg>
-          Open in Grafana
+          {{ $t('monitoring.grafanaDashboards.openInGrafana') }}
         </button>
       </div>
     </div>
@@ -117,7 +117,7 @@ function openInGrafana() {
         <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-4">
           <!-- Category Filter -->
           <div class="mb-4">
-            <label class="text-xs font-medium text-gray-500 uppercase tracking-wider">Category</label>
+            <label class="text-xs font-medium text-gray-500 uppercase tracking-wider">{{ $t('monitoring.grafanaDashboards.category') }}</label>
             <select
               v-model="selectedCategory"
               class="mt-1 w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"

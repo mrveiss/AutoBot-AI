@@ -15,18 +15,19 @@ Canonical result type: SearchResult dataclass (text, score, metadata, source).
 
 All callers should import from this module:
     from knowledge.vector_search_engine import get_vector_search_engine, SearchResult
+from autobot_shared.logging_manager import get_logger
 """
 
 from __future__ import annotations
 
 import asyncio
-import logging
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # Public types
@@ -56,8 +57,8 @@ class SearchResult:
 # ---------------------------------------------------------------------------
 
 # Lazy-import flags — evaluated once at first engine construction.
-_FAISS_GPU_AVAILABLE: Optional[bool] = None
-_FAISS_AVAILABLE: Optional[bool] = None
+_FAISS_GPU_AVAILABLE: bool | None = None
+_FAISS_AVAILABLE: bool | None = None
 
 
 def _check_faiss_flags() -> tuple[bool, bool]:
@@ -101,7 +102,7 @@ class _NPUBackend:
     """Thin adapter over NPUSemanticSearch for use by VectorSearchEngine."""
 
     def __init__(self) -> None:
-        self._engine: Optional[Any] = None
+        self._engine: Any | None = None
 
     async def _get_engine(self) -> Any:
         if self._engine is None:
@@ -114,7 +115,7 @@ class _NPUBackend:
         self,
         query: str,
         top_k: int,
-        filters: Optional[Dict[str, Any]],
+        filters: Dict[str, Any] | None,
     ) -> List[SearchResult]:
         engine = await self._get_engine()
         npu_results, _ = await engine.enhanced_search(
@@ -143,7 +144,7 @@ class _GPUBackend:
     """
 
     def __init__(self) -> None:
-        self._hybrid: Optional[Any] = None
+        self._hybrid: Any | None = None
 
     async def _get_hybrid(self) -> Any:
         if self._hybrid is None:
@@ -172,7 +173,7 @@ class _GPUBackend:
         self,
         query: str,
         top_k: int,
-        filters: Optional[Dict[str, Any]],
+        filters: Dict[str, Any] | None,
     ) -> List[SearchResult]:
         import numpy as np  # noqa: PLC0415
 
@@ -203,7 +204,7 @@ class _CPUBackend:
         self,
         query: str,
         top_k: int,
-        filters: Optional[Dict[str, Any]],
+        filters: Dict[str, Any] | None,
     ) -> List[SearchResult]:
         from knowledge import get_knowledge_base  # noqa: PLC0415
 
@@ -259,6 +260,9 @@ class VectorSearchEngine:
             return self._cpu
 
         # "auto": NPU > GPU > CPU
+        # Note: IVFPQ activation for large collections (>ivfpq_min_vectors) is handled
+        # inside FAISSIVFPQBuilder.build_or_load(), called from GPUVectorIndex
+        # initialization when IndexType.IVF_PQ is selected via VectorSearchConfig.
         if _npu_enabled():
             logger.debug("VectorSearchEngine: auto-selected NPU backend")
             return self._npu
@@ -272,9 +276,9 @@ class VectorSearchEngine:
         self,
         query: str,
         top_k: int = 10,
-        filters: Optional[Dict[str, Any]] = None,
+        filters: Dict[str, Any] | None = None,
         hardware_backend: str = "auto",
-        reranker: Optional[RerankerCallable] = None,
+        reranker: RerankerCallable | None = None,
     ) -> List[SearchResult]:
         """Execute vector search and return standardized SearchResult list.
 
@@ -332,7 +336,7 @@ class VectorSearchEngine:
 # Singleton factory
 # ---------------------------------------------------------------------------
 
-_instance: Optional[VectorSearchEngine] = None
+_instance: VectorSearchEngine | None = None
 _lock = asyncio.Lock()
 
 

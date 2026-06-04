@@ -30,7 +30,7 @@ import type {
   WorkflowStepStatus,
   RiskLevel,
 } from './_generated/workflow'
-export type { PromptSpec, WorkflowTask, WorkflowPlan, WorkflowStepStatus, RiskLevel }
+export type { PromptSpec, WorkflowTask, WorkflowPlan, RiskLevel }
 
 /**
  * Static template step — matches backend `_template_step_dict()` from
@@ -53,6 +53,24 @@ export interface TemplateStep {
   tools_allowed: string[] | null
   tools_denied: string[]
 }
+
+/**
+ * Runtime workflow step status — string union mirroring
+ * `services/workflow_automation/models.py:WorkflowStepStatus`.
+ *
+ * #7123: declared here as the canonical types module. The previous local
+ * declaration in `composables/useWorkflowBuilder.ts` is now a re-export
+ * pointing at this definition (single source of truth).
+ */
+export type WorkflowStepStatus =
+  | 'pending'
+  | 'waiting_approval'
+  | 'approved'
+  | 'executing'
+  | 'completed'
+  | 'skipped'
+  | 'failed'
+  | 'paused'
 
 /**
  * Runtime workflow step — matches backend

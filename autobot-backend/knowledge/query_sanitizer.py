@@ -62,13 +62,13 @@ Tuning decisions are recorded here for quarterly review cadence.
 
 from __future__ import annotations
 
-import logging
 import re
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Optional
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -128,7 +128,7 @@ class SanitizerResult:
 
     sanitized_text: str
     rejected: bool = False
-    reason: Optional[str] = None
+    reason: str | None = None
     # Maps rule_name -> number of matches. Empty when text was clean.
     hits: dict[str, int] = field(default_factory=dict)
 
@@ -141,7 +141,7 @@ class SanitizerResult:
 class QuerySanitizer:
     """Applies an ordered list of injection-defence rules to text."""
 
-    def __init__(self, rules: Optional[list[SanitizerRule]] = None) -> None:
+    def __init__(self, rules: list[SanitizerRule] | None = None) -> None:
         self.rules = rules if rules is not None else self._default_rules()
 
     @staticmethod

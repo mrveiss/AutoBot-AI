@@ -7,8 +7,9 @@ Template Manager
 Handles creation and management of workflow templates.
 """
 
-import logging
-from typing import Dict, List, Optional
+from typing import Dict, List
+
+from autobot_shared.logging_manager import get_logger
 
 from .models import (
     SmartWorkflowStep,
@@ -17,18 +18,18 @@ from .models import (
     WorkflowTemplate,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class TemplateManager:
     """Manages intelligent workflow templates"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize template manager with built-in workflow templates."""
         self.templates: Dict[str, WorkflowTemplate] = {}
         self._initialize_templates()
 
-    def _initialize_templates(self):
+    def _initialize_templates(self) -> None:
         """Initialize built-in workflow templates"""
         templates = [
             self._create_smart_development_environment_template(),
@@ -43,7 +44,7 @@ class TemplateManager:
 
         logger.info("Initialized %s intelligent workflow templates", len(templates))
 
-    def get_template(self, template_id: str) -> Optional[WorkflowTemplate]:
+    def get_template(self, template_id: str) -> WorkflowTemplate | None:
         """Get a template by ID"""
         return self.templates.get(template_id)
 

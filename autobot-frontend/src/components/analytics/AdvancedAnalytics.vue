@@ -2,13 +2,13 @@
   <div class="advanced-analytics">
     <!-- Header -->
     <div class="analytics-header">
-      <h2><i class="fas fa-chart-pie"></i> {{ $t('analytics.advanced.title') }}</h2>
+      <h2><Icon name="chart-pie" /> {{ $t('analytics.advanced.title') }}</h2>
       <div class="header-actions">
         <BaseButton variant="secondary" size="sm" @click="refreshAll" :loading="loading">
-          <i class="fas fa-sync"></i> {{ $t('analytics.advanced.refresh') }}
+          <Icon name="sync" /> {{ $t('analytics.advanced.refresh') }}
         </BaseButton>
         <BaseButton variant="primary" size="sm" @click="showExportModal = true">
-          <i class="fas fa-download"></i> {{ $t('analytics.advanced.export') }}
+          <Icon name="download" /> {{ $t('analytics.advanced.export') }}
         </BaseButton>
       </div>
     </div>
@@ -21,7 +21,7 @@
         :class="['tab-btn', { active: activeTab === tab.id }]"
         @click="activeTab = tab.id"
       >
-        <i :class="tab.icon"></i>
+        <Icon :name="tab.icon" />
         {{ tab.label }}
       </button>
     </div>
@@ -30,23 +30,23 @@
     <div v-if="activeTab === 'cost'" class="tab-content">
       <div class="metrics-grid">
         <!-- Total Cost Card -->
-        <BasePanel variant="bordered" size="small">
+        <BasePanel variant="bordered" size="sm">
           <template #header>
-            <h4><i class="fas fa-dollar-sign"></i> {{ $t('analytics.advanced.totalCost30d') }}</h4>
+            <h4><Icon name="dollar-sign" /> {{ $t('analytics.advanced.totalCost30d') }}</h4>
           </template>
           <div class="metric-value large">
             ${{ costSummary?.total_cost_usd?.toFixed(2) || '0.00' }}
           </div>
           <div class="metric-trend" :class="costTrend">
-            <i :class="trendIcon"></i>
+            <Icon :name="trendIcon" />
             {{ costTrends?.growth_rate_percent?.toFixed(1) || 0 }}% {{ $t('analytics.advanced.vsPreviousPeriod') }}
           </div>
         </BasePanel>
 
         <!-- Daily Average Card -->
-        <BasePanel variant="bordered" size="small">
+        <BasePanel variant="bordered" size="sm">
           <template #header>
-            <h4><i class="fas fa-calendar-day"></i> {{ $t('analytics.advanced.dailyAverage') }}</h4>
+            <h4><Icon name="calendar" /> {{ $t('analytics.advanced.dailyAverage') }}</h4>
           </template>
           <div class="metric-value">
             ${{ costSummary?.avg_daily_cost?.toFixed(2) || '0.00' }}
@@ -54,9 +54,9 @@
         </BasePanel>
 
         <!-- Trend Card -->
-        <BasePanel variant="bordered" size="small">
+        <BasePanel variant="bordered" size="sm">
           <template #header>
-            <h4><i class="fas fa-trending-up"></i> {{ $t('analytics.advanced.costTrend') }}</h4>
+            <h4><Icon name="arrow-trend-up" /> {{ $t('analytics.advanced.costTrend') }}</h4>
           </template>
           <div class="metric-value" :class="costTrend">
             {{ costTrends?.trend || 'stable' }}
@@ -67,7 +67,7 @@
       <!-- Cost by Model Table -->
       <BasePanel variant="elevated" class="mt-4">
         <template #header>
-          <h4><i class="fas fa-robot"></i> {{ $t('analytics.advanced.costByModel') }}</h4>
+          <h4><Icon name="robot" /> {{ $t('analytics.advanced.costByModel') }}</h4>
         </template>
         <table class="data-table" v-if="modelCosts?.length">
           <thead>
@@ -97,17 +97,17 @@
     <div v-if="activeTab === 'agents'" class="tab-content">
       <div class="metrics-grid">
         <!-- Total Agents -->
-        <BasePanel variant="bordered" size="small">
+        <BasePanel variant="bordered" size="sm">
           <template #header>
-            <h4><i class="fas fa-users-cog"></i> {{ $t('analytics.advanced.totalAgents') }}</h4>
+            <h4><Icon name="users-cog" /> {{ $t('analytics.advanced.totalAgents') }}</h4>
           </template>
           <div class="metric-value large">{{ agentMetrics?.total_agents || 0 }}</div>
         </BasePanel>
 
         <!-- Total Tasks -->
-        <BasePanel variant="bordered" size="small">
+        <BasePanel variant="bordered" size="sm">
           <template #header>
-            <h4><i class="fas fa-tasks"></i> {{ $t('analytics.advanced.totalTasks') }}</h4>
+            <h4><Icon name="tasks" /> {{ $t('analytics.advanced.totalTasks') }}</h4>
           </template>
           <div class="metric-value">
             {{ formatNumber(agentMetrics?.summary?.total_tasks || 0) }}
@@ -115,9 +115,9 @@
         </BasePanel>
 
         <!-- Avg Success Rate -->
-        <BasePanel variant="bordered" size="small">
+        <BasePanel variant="bordered" size="sm">
           <template #header>
-            <h4><i class="fas fa-check-circle"></i> {{ $t('analytics.advanced.avgSuccessRate') }}</h4>
+            <h4><Icon name="check-circle" /> {{ $t('analytics.advanced.avgSuccessRate') }}</h4>
           </template>
           <div class="metric-value success">
             {{ agentMetrics?.summary?.avg_success_rate?.toFixed(1) || 0 }}%
@@ -128,7 +128,7 @@
       <!-- Agent Performance Table -->
       <BasePanel variant="elevated" class="mt-4">
         <template #header>
-          <h4><i class="fas fa-chart-line"></i> {{ $t('analytics.advanced.agentPerformance') }}</h4>
+          <h4><Icon name="chart-line" /> {{ $t('analytics.advanced.agentPerformance') }}</h4>
         </template>
         <table class="data-table" v-if="agentMetrics?.agents?.length">
           <thead>
@@ -162,7 +162,7 @@
       <!-- Recommendations -->
       <BasePanel variant="bordered" class="mt-4" v-if="recommendations?.recommendations?.length">
         <template #header>
-          <h4><i class="fas fa-lightbulb"></i> {{ $t('analytics.advanced.recommendations') }}</h4>
+          <h4><Icon name="lightbulb" /> {{ $t('analytics.advanced.recommendations') }}</h4>
         </template>
         <div class="recommendations-list">
           <div
@@ -177,7 +177,7 @@
                 :key="idx"
                 :class="'severity-' + r.severity"
               >
-                <i :class="getSeverityIcon(r.severity)"></i>
+                <Icon :name="getSeverityIcon(r.severity)" />
                 {{ r.message }} - <em>{{ r.suggestion }}</em>
               </li>
             </ul>
@@ -190,9 +190,9 @@
     <div v-if="activeTab === 'behavior'" class="tab-content">
       <div class="metrics-grid">
         <!-- Total Sessions -->
-        <BasePanel variant="bordered" size="small">
+        <BasePanel variant="bordered" size="sm">
           <template #header>
-            <h4><i class="fas fa-users"></i> {{ $t('analytics.advanced.totalSessions') }}</h4>
+            <h4><Icon name="users" /> {{ $t('analytics.advanced.totalSessions') }}</h4>
           </template>
           <div class="metric-value large">
             {{ formatNumber(engagementMetrics?.metrics?.total_sessions || 0) }}
@@ -200,9 +200,9 @@
         </BasePanel>
 
         <!-- Page Views -->
-        <BasePanel variant="bordered" size="small">
+        <BasePanel variant="bordered" size="sm">
           <template #header>
-            <h4><i class="fas fa-eye"></i> {{ $t('analytics.advanced.pageViews') }}</h4>
+            <h4><Icon name="eye" /> {{ $t('analytics.advanced.pageViews') }}</h4>
           </template>
           <div class="metric-value">
             {{ formatNumber(engagementMetrics?.metrics?.total_page_views || 0) }}
@@ -210,9 +210,9 @@
         </BasePanel>
 
         <!-- Avg Session Duration -->
-        <BasePanel variant="bordered" size="small">
+        <BasePanel variant="bordered" size="sm">
           <template #header>
-            <h4><i class="fas fa-clock"></i> {{ $t('analytics.advanced.avgSessionDuration') }}</h4>
+            <h4><Icon name="clock" /> {{ $t('analytics.advanced.avgSessionDuration') }}</h4>
           </template>
           <div class="metric-value">
             {{ formatDuration(engagementMetrics?.metrics?.avg_session_duration_ms || 0) }}
@@ -220,9 +220,9 @@
         </BasePanel>
 
         <!-- Pages Per Session -->
-        <BasePanel variant="bordered" size="small">
+        <BasePanel variant="bordered" size="sm">
           <template #header>
-            <h4><i class="fas fa-file-alt"></i> {{ $t('analytics.advanced.pagesPerSession') }}</h4>
+            <h4><Icon name="file-alt" /> {{ $t('analytics.advanced.pagesPerSession') }}</h4>
           </template>
           <div class="metric-value">
             {{ engagementMetrics?.metrics?.pages_per_session?.toFixed(1) || '0.0' }}
@@ -233,7 +233,7 @@
       <!-- Feature Popularity -->
       <BasePanel variant="elevated" class="mt-4">
         <template #header>
-          <h4><i class="fas fa-star"></i> {{ $t('analytics.advanced.featurePopularity') }}</h4>
+          <h4><Icon name="star" /> {{ $t('analytics.advanced.featurePopularity') }}</h4>
         </template>
         <table class="data-table" v-if="engagementMetrics?.feature_popularity?.length">
           <thead>
@@ -267,7 +267,7 @@
       <!-- Usage Heatmap -->
       <BasePanel variant="bordered" class="mt-4" v-if="usageHeatmap?.peak_hours?.length">
         <template #header>
-          <h4><i class="fas fa-fire"></i> {{ $t('analytics.advanced.peakUsageHours') }}</h4>
+          <h4><Icon name="bolt" /> {{ $t('analytics.advanced.peakUsageHours') }}</h4>
         </template>
         <div class="peak-hours-list">
           <div
@@ -293,7 +293,7 @@
           class="export-card"
         >
           <template #header>
-            <h4><i :class="format.icon"></i> {{ format.format }}</h4>
+            <h4><Icon :name="format.icon" /> {{ format.format }}</h4>
           </template>
           <p>{{ format.description }}</p>
           <div class="export-actions">
@@ -313,13 +313,14 @@
 
     <!-- Loading Overlay -->
     <div v-if="loading" class="loading-overlay">
-      <i class="fas fa-spinner fa-spin fa-2x"></i>
+      <Icon name="spinner" class="animate-spin" />
       <span>{{ $t('analytics.advanced.loading') }}</span>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BasePanel from '@/components/base/BasePanel.vue'
@@ -357,10 +358,10 @@ const usageHeatmap = ref<any>(null)
 
 // Tabs configuration
 const tabs = computed(() => [
-  { id: 'cost', label: t('analytics.advanced.tabs.cost'), icon: 'fas fa-dollar-sign' },
-  { id: 'agents', label: t('analytics.advanced.tabs.agents'), icon: 'fas fa-robot' },
-  { id: 'behavior', label: t('analytics.advanced.tabs.behavior'), icon: 'fas fa-users' },
-  { id: 'export', label: t('analytics.advanced.tabs.export'), icon: 'fas fa-download' }
+  { id: 'cost', label: t('analytics.advanced.tabs.cost'), icon: 'dollar-sign' },
+  { id: 'agents', label: t('analytics.advanced.tabs.agents'), icon: 'robot' },
+  { id: 'behavior', label: t('analytics.advanced.tabs.behavior'), icon: 'users' },
+  { id: 'export', label: t('analytics.advanced.tabs.export'), icon: 'download' }
 ])
 
 // Computed
@@ -373,9 +374,9 @@ const costTrend = computed(() => {
 
 const trendIcon = computed(() => {
   const trend = costTrends.value?.trend
-  if (trend === 'increasing') return 'fas fa-arrow-up'
-  if (trend === 'decreasing') return 'fas fa-arrow-down'
-  return 'fas fa-minus'
+  if (trend === 'increasing') return 'arrow-up'
+  if (trend === 'decreasing') return 'arrow-down'
+  return 'minus'
 })
 
 // Methods
@@ -403,9 +404,9 @@ const getErrorClass = (rate: number): string => {
 }
 
 const getSeverityIcon = (severity: string): string => {
-  if (severity === 'high') return 'fas fa-exclamation-circle'
-  if (severity === 'medium') return 'fas fa-exclamation-triangle'
-  return 'fas fa-info-circle'
+  if (severity === 'high') return 'exclamation-circle'
+  if (severity === 'medium') return 'exclamation-triangle'
+  return 'info-circle'
 }
 
 const fetchCostData = async () => {
@@ -448,11 +449,11 @@ const fetchExportFormats = async () => {
     exportFormats.value = (res as ApiDataResponse).data?.formats || []
     // Add icons
     exportFormats.value.forEach((f: any) => {
-      if (f.format === 'CSV') f.icon = 'fas fa-file-csv'
-      else if (f.format === 'JSON') f.icon = 'fas fa-file-code'
-      else if (f.format === 'Prometheus') f.icon = 'fas fa-chart-area'
-      else if (f.format === 'Grafana') f.icon = 'fas fa-tachometer-alt'
-      else f.icon = 'fas fa-file'
+      if (f.format === 'CSV') f.icon = 'file-csv'
+      else if (f.format === 'JSON') f.icon = 'file-code'
+      else if (f.format === 'Prometheus') f.icon = 'chart-area'
+      else if (f.format === 'Grafana') f.icon = 'tachometer-alt'
+      else f.icon = 'file'
     })
   } catch (error) {
     logger.error('Failed to fetch export formats:', error)

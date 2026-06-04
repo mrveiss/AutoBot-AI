@@ -9,17 +9,19 @@ for the intelligent agent system.
 """
 
 import asyncio
-import logging
 import os
 import platform
 import shutil
 from dataclasses import dataclass
 from enum import Enum
-from typing import Dict, FrozenSet, Optional, Set, Tuple
+from typing import Dict, FrozenSet, Set, Tuple
 
 import aiofiles
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
+
+logger = get_logger(__name__)
 
 # Issue #380: Module-level cached tool category sets to avoid repeated set creation
 _NETWORK_TOOLS: FrozenSet[str] = frozenset(
@@ -141,7 +143,7 @@ class OSInfo:
     """System information container."""
 
     os_type: OSType
-    distro: Optional[LinuxDistro] = None
+    distro: LinuxDistro | None = None
     version: str = ""
     architecture: str = ""
     user: str = ""
@@ -162,8 +164,8 @@ class OSDetector:
 
     def __init__(self):
         """Initialize the OS detector."""
-        self._os_info: Optional[OSInfo] = None
-        self._capabilities_cache: Optional[Dict[str, bool]] = None
+        self._os_info: OSInfo | None = None
+        self._capabilities_cache: Dict[str, bool] | None = None
 
     def _get_basic_system_details(self) -> Tuple[str, str, str, bool, str]:
         """
@@ -175,15 +177,15 @@ class OSDetector:
         """
         version = platform.release()
         architecture = platform.machine()
-        user = os.getenv("USER", os.getenv("USERNAME", "unknown"))
+        user = config.user or config.username or "unknown"
         is_root = os.geteuid() == 0 if hasattr(os, "geteuid") else False
-        shell = os.getenv("SHELL", "unknown")
+        shell = config.shell or "unknown"
         return version, architecture, user, is_root, shell
 
     def _log_detection_results(
         self,
         os_type: OSType,
-        distro: Optional[LinuxDistro],
+        distro: LinuxDistro | None,
         user: str,
         is_root: bool,
         capabilities: Set[str],
@@ -272,14 +274,14 @@ class OSDetector:
         "/etc/arch-release": LinuxDistro.ARCH,
     }
 
-    def _match_distro_keyword(self, content: str) -> Optional[LinuxDistro]:
+    def _match_distro_keyword(self, content: str) -> LinuxDistro | None:
         """Match distro from content keywords (Issue #315 - extracted helper)."""
         for keyword, distro in self._DISTRO_KEYWORDS:
             if keyword in content:
                 return distro
         return None
 
-    async def _detect_from_os_release(self) -> Optional[LinuxDistro]:
+    async def _detect_from_os_release(self) -> LinuxDistro | None:
         """Detect distro from /etc/os-release (Issue #315 - extracted helper)."""
         os_release_exists = await asyncio.to_thread(os.path.exists, "/etc/os-release")
         if not os_release_exists:
@@ -289,7 +291,7 @@ class OSDetector:
             content = (await f.read()).lower()
             return self._match_distro_keyword(content)
 
-    async def _detect_from_fallback_files(self) -> Optional[LinuxDistro]:
+    async def _detect_from_fallback_files(self) -> LinuxDistro | None:
         """Detect distro from fallback files (Issue #315 - extracted helper)."""
         for file_path, distro in self._FALLBACK_FILES.items():
             file_exists = await asyncio.to_thread(os.path.exists, file_path)
@@ -342,14 +344,14 @@ class OSDetector:
     _WINDOWS_PM = ["winget", "choco"]
     _LINUX_PM_FALLBACK = ["apt", "dnf", "yum", "pacman", "zypper"]
 
-    def _find_available_pm(self, pm_list: list[str]) -> Optional[str]:
+    def _find_available_pm(self, pm_list: list[str]) -> str | None:
         """Find first available package manager (Issue #315 - extracted helper)."""
         for pm in pm_list:
             if shutil.which(pm):
                 return pm
         return None
 
-    async def _detect_package_manager(self, os_type: OSType, distro: Optional[LinuxDistro]) -> str:
+    async def _detect_package_manager(self, os_type: OSType, distro: LinuxDistro | None) -> str:
         """Detect the system package manager (Issue #315 - refactored)."""
         if os_type == OSType.LINUX:
             if distro and distro in self._LINUX_DISTRO_PM:
@@ -473,7 +475,7 @@ class OSDetector:
         if self._os_info:
             self._os_info.capabilities = await self._detect_capabilities()
 
-    async def get_install_command(self, tool_name: str) -> Optional[str]:
+    async def get_install_command(self, tool_name: str) -> str | None:
         """
         Get the installation command for a specific tool.
 
@@ -481,7 +483,7 @@ class OSDetector:
             tool_name: Name of the tool to install
 
         Returns:
-            Optional[str]: Installation command or None if not available
+            str | None: Installation command or None if not available
         """
         if not self._os_info:
             await self.detect_system()

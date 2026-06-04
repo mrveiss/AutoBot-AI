@@ -13,6 +13,7 @@
  * - Safety checks for categories with children
  */
 
+import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, watch } from 'vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
@@ -93,18 +94,18 @@ const colorOptions = [
 
 // Predefined icon options
 const iconOptions = computed(() => [
-  { value: 'fas fa-folder', label: t('knowledge.modals.categoryEdit.iconFolder') },
-  { value: 'fas fa-book', label: t('knowledge.modals.categoryEdit.iconBook') },
-  { value: 'fas fa-code', label: t('knowledge.modals.categoryEdit.iconCode') },
-  { value: 'fas fa-cog', label: t('knowledge.modals.categoryEdit.iconSettings') },
-  { value: 'fas fa-file-alt', label: t('knowledge.modals.categoryEdit.iconDocument') },
-  { value: 'fas fa-database', label: t('knowledge.modals.categoryEdit.iconDatabase') },
-  { value: 'fas fa-lightbulb', label: t('knowledge.modals.categoryEdit.iconIdeas') },
-  { value: 'fas fa-users', label: t('knowledge.modals.categoryEdit.iconUsers') },
-  { value: 'fas fa-shield-alt', label: t('knowledge.modals.categoryEdit.iconSecurity') },
-  { value: 'fas fa-rocket', label: t('knowledge.modals.categoryEdit.iconLaunch') },
-  { value: 'fas fa-brain', label: t('knowledge.modals.categoryEdit.iconAiMl') },
-  { value: 'fas fa-terminal', label: t('knowledge.modals.categoryEdit.iconTerminal') },
+  { value: 'folder', label: t('knowledge.modals.categoryEdit.iconFolder') },
+  { value: 'book', label: t('knowledge.modals.categoryEdit.iconBook') },
+  { value: 'code', label: t('knowledge.modals.categoryEdit.iconCode') },
+  { value: 'cog', label: t('knowledge.modals.categoryEdit.iconSettings') },
+  { value: 'file-alt', label: t('knowledge.modals.categoryEdit.iconDocument') },
+  { value: 'database', label: t('knowledge.modals.categoryEdit.iconDatabase') },
+  { value: 'lightbulb', label: t('knowledge.modals.categoryEdit.iconIdeas') },
+  { value: 'users', label: t('knowledge.modals.categoryEdit.iconUsers') },
+  { value: 'shield-alt', label: t('knowledge.modals.categoryEdit.iconSecurity') },
+  { value: 'rocket', label: t('knowledge.modals.categoryEdit.iconLaunch') },
+  { value: 'brain', label: t('knowledge.modals.categoryEdit.iconAiMl') },
+  { value: 'terminal', label: t('knowledge.modals.categoryEdit.iconTerminal') },
 ])
 
 // =============================================================================
@@ -144,7 +145,7 @@ watch(() => props.category, (newCategory) => {
     formData.value = {
       name: newCategory.name || '',
       description: newCategory.description || '',
-      icon: newCategory.icon || 'fas fa-folder',
+      icon: newCategory.icon || 'folder',
       color: newCategory.color || '#3b82f6'
     }
     // Reset state when category changes
@@ -257,32 +258,32 @@ function selectIcon(icon: string): void {
   <BaseModal
     v-model="isOpen"
     :title="t('knowledge.modals.categoryEdit.editTitle', { name: categoryTitle })"
-    size="medium"
+    size="md"
     @close="closeModal"
   >
     <div class="category-edit-modal">
       <!-- Success Message -->
       <div v-if="successMessage" class="alert alert-success">
-        <i class="fas fa-check-circle"></i>
+        <Icon name="check-circle" />
         {{ successMessage }}
       </div>
 
       <!-- Error Message -->
       <div v-if="error" class="alert alert-error">
-        <i class="fas fa-exclamation-circle"></i>
+        <Icon name="exclamation-circle" />
         {{ error }}
       </div>
 
       <!-- Delete Confirmation View -->
       <div v-if="showDeleteConfirm" class="delete-confirm">
         <div class="delete-warning">
-          <i class="fas fa-exclamation-triangle"></i>
+          <Icon name="exclamation-triangle" />
           <h3>{{ $t('knowledge.modals.categoryEdit.deleteConfirmTitle') }}</h3>
           <p>
             {{ $t('knowledge.modals.categoryEdit.deleteConfirmMessage', { name: categoryTitle }) }}
           </p>
           <p v-if="factCount > 0" class="fact-warning">
-            <i class="fas fa-file-alt"></i>
+            <Icon name="file-alt" />
             {{ $t('knowledge.modals.categoryEdit.factWarning', { count: factCount }) }}
           </p>
           <p class="delete-note">{{ $t('knowledge.modals.categoryEdit.cannotUndo') }}</p>
@@ -296,11 +297,11 @@ function selectIcon(icon: string): void {
             {{ $t('knowledge.modals.categoryEdit.cancel') }}
           </BaseButton>
           <BaseButton
-            variant="danger"
+            variant="error"
             @click="deleteCategory"
             :disabled="isLoading"
           >
-            <i v-if="isLoading" class="fas fa-spinner fa-spin"></i>
+            <Icon name="spinner" class="animate-spin" v-if="isLoading" />
             <span v-else>{{ $t('knowledge.modals.categoryEdit.deleteCategory') }}</span>
           </BaseButton>
         </div>
@@ -354,7 +355,7 @@ function selectIcon(icon: string): void {
               @click="selectIcon(icon.value)"
               :disabled="isLoading"
             >
-              <i :class="icon.value"></i>
+              <Icon :name="icon.value" />
             </button>
           </div>
         </div>
@@ -384,7 +385,7 @@ function selectIcon(icon: string): void {
               class="preview-icon"
               :style="{ backgroundColor: formData.color }"
             >
-              <i :class="formData.icon"></i>
+              <Icon :name="formData.icon" />
             </div>
             <span class="preview-name">{{ formData.name || $t('knowledge.modals.categoryEdit.namePlaceholder') }}</span>
           </div>
@@ -395,15 +396,15 @@ function selectIcon(icon: string): void {
           <div class="left-actions">
             <BaseButton
               v-if="canDelete"
-              variant="danger"
+              variant="error"
               @click="confirmDelete"
               :disabled="isLoading"
             >
-              <i class="fas fa-trash"></i>
+              <Icon name="trash" />
               {{ $t('knowledge.modals.categoryEdit.delete') }}
             </BaseButton>
             <span v-else class="delete-disabled-hint">
-              <i class="fas fa-info-circle"></i>
+              <Icon name="info-circle" />
               {{ $t('knowledge.modals.categoryEdit.hasSubcategories') }}
             </span>
           </div>
@@ -420,7 +421,7 @@ function selectIcon(icon: string): void {
               @click="saveChanges"
               :disabled="isLoading || !hasUnsavedChanges"
             >
-              <i v-if="isLoading" class="fas fa-spinner fa-spin"></i>
+              <Icon name="spinner" class="animate-spin" v-if="isLoading" />
               <span v-else>{{ $t('knowledge.modals.categoryEdit.saveChanges') }}</span>
             </BaseButton>
           </div>

@@ -38,12 +38,13 @@ from api.schemas_workflows import (
     RUMStatusResponse,
 )
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import parse_utc_iso
 from monitoring.prometheus_metrics import get_metrics_manager
 from type_defs.common import Metadata
 
 router = APIRouter()
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # RUM configuration storage
 rum_config = {
@@ -150,7 +151,7 @@ def _log_rum_event_by_type(event_type: str, log_message: str, interaction_tracki
 
 def setup_rum_logger():
     """Set up dedicated RUM logger using centralized path configuration"""
-    rum_logger = logging.getLogger("rum")
+    rum_logger = get_logger("rum")
     rum_logger.setLevel(getattr(logging, rum_config["log_level"].upper(), logging.INFO))
 
     # Use centralized path management

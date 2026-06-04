@@ -14,8 +14,7 @@ Endpoints:
 - GET  /nl-database/history       - Retrieve query history
 """
 
-import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
@@ -28,9 +27,10 @@ from api.schemas_knowledge import (
 )
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from services.nl_database_service import get_nl_database_service
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter()
 
@@ -45,7 +45,7 @@ router = APIRouter()
 # ---------------------------------------------------------------------------
 
 
-async def _resolve_db_url(db_secret_id: Optional[str], request: Request) -> Optional[str]:
+async def _resolve_db_url(db_secret_id: str | None, request: Request) -> str | None:
     """
     Resolve a database URL from a secret ID.
 
@@ -87,7 +87,7 @@ async def _resolve_db_url(db_secret_id: Optional[str], request: Request) -> Opti
         ) from exc
 
 
-def _extract_user_id(request: Request) -> Optional[str]:
+def _extract_user_id(request: Request) -> str | None:
     """
     Extract user ID from the request state if available.
 

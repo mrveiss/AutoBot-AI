@@ -6,7 +6,6 @@ Tests the complete multi-agent coordination system for production readiness
 
 import asyncio
 import json
-import os
 import sys
 import time
 from dataclasses import dataclass
@@ -16,8 +15,10 @@ from typing import Dict, List
 
 import requests
 
+from autobot_shared.ssot_config import config
+
 # Add AutoBot paths
-sys.path.append(os.environ.get("AUTOBOT_PROJECT_ROOT", "/opt/autobot/code_source"))
+sys.path.append(config.project_root)
 
 
 @dataclass

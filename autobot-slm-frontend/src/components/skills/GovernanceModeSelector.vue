@@ -3,7 +3,7 @@
 <!-- Author: mrveiss -->
 <template>
   <div class="governance-mode-selector flex items-center gap-4">
-    <label class="text-sm text-gray-400 whitespace-nowrap">Governance Mode</label>
+    <label class="text-sm text-gray-400 whitespace-nowrap">{{ $t('skills.governanceModeSelector.governanceMode') }}</label>
     <div class="flex gap-1">
       <button
         v-for="m in modes"

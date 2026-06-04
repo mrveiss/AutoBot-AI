@@ -9,7 +9,7 @@ Defines the interface that all channel adapters must implement.
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from ..types import ChannelType, GatewaySession, UnifiedMessage
 
@@ -22,7 +22,7 @@ class BaseChannelAdapter(ABC):
     and the unified Gateway message format.
     """
 
-    def __init__(self, channel_type: ChannelType):
+    def __init__(self, channel_type: ChannelType) -> None:
         """
         Initialize the channel adapter.
 
@@ -36,7 +36,7 @@ class BaseChannelAdapter(ABC):
         self,
         message: UnifiedMessage,
         session: GatewaySession,
-        connection_context: Optional[Any] = None,
+        connection_context: Any | None = None,
     ) -> bool:
         """
         Send a message through this channel.
@@ -55,7 +55,7 @@ class BaseChannelAdapter(ABC):
         self,
         raw_data: Any,
         session: GatewaySession,
-    ) -> Optional[UnifiedMessage]:
+    ) -> UnifiedMessage | None:
         """
         Receive and parse a message from this channel.
 
@@ -88,7 +88,7 @@ class BaseChannelAdapter(ABC):
     async def disconnect(
         self,
         session: GatewaySession,
-        connection_context: Optional[Any] = None,
+        connection_context: Any | None = None,
     ) -> None:
         """
         Close a connection for this channel.
@@ -102,7 +102,7 @@ class BaseChannelAdapter(ABC):
     async def handle_heartbeat(
         self,
         session: GatewaySession,
-        connection_context: Optional[Any] = None,
+        connection_context: Any | None = None,
     ) -> bool:
         """
         Handle heartbeat/keepalive for this channel.

@@ -6,8 +6,9 @@
  */
 
 import { ref, computed, watch, onUnmounted } from 'vue'
-// @ts-ignore - JS module without type declarations
-import { useGlobalWebSocket } from '@/composables/useGlobalWebSocket'
+// GH#9062: migrated from useGlobalWebSocket — captcha events flow through the
+// LiveEventManager (global channel), so useEventBus is the correct subscriber.
+import { useEventBus } from '@/composables/useEventBus'
 import apiClient from '@/utils/ApiClient'
 import { getApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
@@ -89,11 +90,17 @@ export function useCaptchaStatus() {
     }
   }
 
-  const { on } = useGlobalWebSocket()
-  // Casts are safe: the data IS the correct type at runtime, matching the server event schema
-  on('captcha_detected', handleCaptchaDetected as (data: unknown) => void)
-  on('captcha_timeout', handleCaptchaTimeout as (data: unknown) => void)
-  on('captcha_resolved', handleCaptchaResolved as (data: unknown) => void)
+  // Events arrive as LiveEvent{ event_type, payload }. The handlers already
+  // extract payload via the defensive `'payload' in data ? data.payload : data` check.
+  const { subscribe } = useEventBus()
+  subscribe('global', (event) => {
+    if (event.event_type === 'captcha_detected')
+      handleCaptchaDetected(event as unknown as { payload: CaptchaEvent })
+    else if (event.event_type === 'captcha_timeout')
+      handleCaptchaTimeout(event as unknown as { payload: { captcha_id: string } })
+    else if (event.event_type === 'captcha_resolved')
+      handleCaptchaResolved(event as unknown as { payload: { captcha_id: string } })
+  })
 
   // --------------------------------------------------------------------------
   // Computed

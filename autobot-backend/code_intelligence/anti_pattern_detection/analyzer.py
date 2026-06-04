@@ -14,10 +14,11 @@ Issue #607 - Uses shared FileListCache and ASTCache for performance
 
 import ast
 import asyncio
-import logging
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
+
+from autobot_shared.logging_manager import get_logger
 
 from .detectors import (
     BloaterDetector,
@@ -49,7 +50,7 @@ try:
 except ImportError:
     HAS_SHARED_CACHE = False
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class AntiPatternDetector(SemanticAnalysisMixin):
@@ -83,7 +84,7 @@ class AntiPatternDetector(SemanticAnalysisMixin):
 
     def __init__(
         self,
-        exclude_dirs: Optional[List[str]] = None,
+        exclude_dirs: List[str] | None = None,
         detect_circular: bool = True,
         detect_naming: bool = True,
         use_semantic_analysis: bool = False,
@@ -180,7 +181,7 @@ class AntiPatternDetector(SemanticAnalysisMixin):
 
         return self._create_analysis_report(directory, python_files, patterns)
 
-    def _parse_file_source(self, file_path: str) -> tuple[Optional[ast.AST], List[str], Optional[str]]:
+    def _parse_file_source(self, file_path: str) -> tuple[ast.AST | None, List[str], str | None]:
         """Parse file and return AST tree and lines. Issue #620.
 
         Args:
@@ -686,7 +687,7 @@ class AntiPatternDetector(SemanticAnalysisMixin):
     async def get_cached_analysis(
         self,
         directory: str,
-    ) -> Optional[Dict[str, Any]]:
+    ) -> Dict[str, Any] | None:
         """
         Get cached analysis results from Redis.
 
@@ -710,7 +711,7 @@ class AntiPatternDetector(SemanticAnalysisMixin):
 
 def analyze_codebase(
     directory: str,
-    exclude_dirs: Optional[List[str]] = None,
+    exclude_dirs: List[str] | None = None,
     detect_circular: bool = True,
     detect_naming: bool = True,
 ) -> AnalysisReport:
@@ -736,7 +737,7 @@ def analyze_codebase(
 
 async def analyze_codebase_async(
     directory: str,
-    exclude_dirs: Optional[List[str]] = None,
+    exclude_dirs: List[str] | None = None,
     detect_circular: bool = True,
     detect_naming: bool = True,
     use_semantic_analysis: bool = True,

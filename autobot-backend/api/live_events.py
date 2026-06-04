@@ -21,15 +21,15 @@ Protocol:
 
 import asyncio
 import json
-import logging
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from starlette.websockets import WebSocketState
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from live_event_manager import get_live_event_manager
+from autobot_shared.logging_manager import get_logger
+from events.bus import get_event_bus
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 router = APIRouter()
 
 _PING_INTERVAL = 30  # seconds between server-side pings
@@ -76,7 +76,7 @@ async def _handle_subscribe(ws: WebSocket, channel: str, user_payload: dict | No
         if not is_admin and claimed_id not in (user_id, username):
             await _send_error(ws, f"Not authorized to subscribe to {channel}")
             return
-    ok = await get_live_event_manager().subscribe(ws, channel)
+    ok = await get_event_bus().subscribe_ws(ws, channel)
     if ok:
         await ws.send_json({"type": "subscribed", "channel": channel})
     else:
@@ -85,7 +85,7 @@ async def _handle_subscribe(ws: WebSocket, channel: str, user_payload: dict | No
 
 async def _handle_unsubscribe(ws: WebSocket, channel: str) -> None:
     """Process an unsubscribe action from the client."""
-    await get_live_event_manager().unsubscribe(ws, channel)
+    await get_event_bus().unsubscribe_ws(ws, channel)
     await ws.send_json({"type": "unsubscribed", "channel": channel})
 
 
@@ -172,5 +172,5 @@ async def live_events_endpoint(websocket: WebSocket):
             await keepalive_task
         except asyncio.CancelledError:
             pass
-        await get_live_event_manager().remove_client(websocket)
+        await get_event_bus().remove_client(websocket)
         logger.info("Live events WebSocket connection cleaned up")

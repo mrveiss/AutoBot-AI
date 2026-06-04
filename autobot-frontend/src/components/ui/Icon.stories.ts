@@ -4,7 +4,6 @@ import Icon from './Icon.vue';
 const meta = {
   title: 'Components/UI/Icon',
   component: Icon,
-  tags: ['autodocs'],
   argTypes: {
     name: {
       control: 'select',

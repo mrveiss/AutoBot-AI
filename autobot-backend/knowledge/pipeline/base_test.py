@@ -7,11 +7,11 @@ Unit tests for pipeline base classes and models.
 Issue #759: Knowledge Pipeline Foundation - Extract, Cognify, Load (ECL).
 """
 
-from datetime import datetime
 from uuid import uuid4
 
 import pytest
 
+from autobot_shared.datetime_utils import datetime_now
 from knowledge.pipeline.base import (
     BaseCognifier,
     BaseExtractor,
@@ -67,7 +67,7 @@ class TestPipelineResult:
 
     def test_init_with_params(self):
         doc_id = uuid4()
-        now = datetime.utcnow()
+        now = datetime_now()
         result = PipelineResult(document_id=doc_id, started_at=now)
         assert result.document_id == doc_id
         assert result.started_at == now

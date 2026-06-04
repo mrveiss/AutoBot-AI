@@ -12,7 +12,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import Boolean, DateTime, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import Uuid
@@ -61,7 +61,7 @@ class Organization(Base):
         index=True,
     )
 
-    description: Mapped[Optional[str]] = mapped_column(
+    description: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
@@ -74,7 +74,7 @@ class Organization(Base):
     )
 
     # Provider mode: subscription management
-    subscription_tier: Mapped[Optional[str]] = mapped_column(
+    subscription_tier: Mapped[str | None] = mapped_column(
         String(50),
         nullable=True,
         default="free",
@@ -94,9 +94,110 @@ class Organization(Base):
     )
 
     # Soft delete
-    deleted_at: Mapped[Optional[datetime]] = mapped_column(
+    deleted_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
+    )
+
+    # ------------------------------------------------------------------ #
+    # LLC extension columns (GH#8211)                                     #
+    # ------------------------------------------------------------------ #
+
+    # Sub-company hierarchy: nullable for root companies
+    parent_org_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("organizations.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
+    # Per-company issue numbering (e.g. "ABO", "MVA")
+    issue_prefix: Mapped[Optional[str]] = mapped_column(
+        Text,
+        nullable=True,
+        unique=True,
+        index=True,
+    )
+    issue_counter: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        nullable=False,
+    )
+
+    # Budget tracking in cents to avoid floating-point precision issues
+    budget_monthly_cents: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        nullable=False,
+    )
+    spent_monthly_cents: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        nullable=False,
+    )
+
+    # Branding
+    brand_color: Mapped[Optional[str]] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    # Governance
+    require_approval_for_hires: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        nullable=False,
+    )
+
+    # LLC lifecycle status — stored as string, validated by LLCCompanyStatus enum
+    llc_status: Mapped[str] = mapped_column(
+        String(32),
+        default="onboarding",
+        nullable=False,
+    )
+    pause_reason: Mapped[Optional[str]] = mapped_column(
+        Text,
+        nullable=True,
+    )
+    paused_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    # ------------------------------------------------------------------ #
+    # External PM sync config (GH#8257)                                   #
+    # ------------------------------------------------------------------ #
+
+    external_pm_type: Mapped[Optional[str]] = mapped_column(
+        String(32),
+        nullable=True,
+    )
+
+    # AES-256-encrypted JSON blob — never store plaintext credentials
+    external_pm_config: Mapped[Optional[str]] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    # KB inheritance weight multiplier (GH#8241)
+    kb_inheritance_weight: Mapped[float] = mapped_column(
+        Float,
+        default=0.6,
+        nullable=False,
+    )
+
+    # Self-referential relationships for sub-company tree
+    children: Mapped[list["Organization"]] = relationship(
+        "Organization",
+        back_populates="parent",
+        foreign_keys="Organization.parent_org_id",
+        lazy="select",
+    )
+    parent: Mapped[Optional["Organization"]] = relationship(
+        "Organization",
+        back_populates="children",
+        foreign_keys="Organization.parent_org_id",
+        remote_side="Organization.id",
     )
 
     # Relationships

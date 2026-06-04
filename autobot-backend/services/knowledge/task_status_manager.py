@@ -10,14 +10,13 @@ Used by documentation indexing, man pages, and other background tasks.
 
 import asyncio
 import json
-import logging
 from dataclasses import asdict, dataclass
-from typing import Optional
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.time_utils import now_utc
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Redis key prefix for task status
 TASK_STATUS_PREFIX = "task_status:"
@@ -34,12 +33,12 @@ class TaskStatusRecord:
     progress_percent: int = 0
     items_processed: int = 0
     items_total: int = 0
-    error: Optional[str] = None
+    error: str | None = None
     created_at: str = None
     updated_at: str = None
     elapsed_seconds: float = 0.0
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if self.created_at is None:
             self.created_at = now_utc().isoformat()
         if self.updated_at is None:
@@ -133,7 +132,7 @@ class TaskStatusManager:
         return existing
 
     @classmethod
-    async def get_task(cls, task_id: str) -> Optional[TaskStatusRecord]:
+    async def get_task(cls, task_id: str) -> TaskStatusRecord | None:
         """
         Retrieve task status from Redis.
 

@@ -24,13 +24,13 @@ Reports include:
 - CausalSeverity (CRITICAL, DEGRADED, WARNING)
 """
 
-import logging
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import List, Optional
+from typing import List
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from context_aware_decision.counterfactual_reasoner import CounterfactualReasoner
 from knowledge.temporal_search import TemporalSearchService
@@ -41,7 +41,7 @@ from services.root_cause_analyzer import (
     RootCauseReport,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class CausalSeverity(str, Enum):
@@ -82,7 +82,7 @@ class CausalAnalysisReport:
 
     task_id: str
     error_description: str
-    root_cause: Optional[CausalEvent] = None
+    root_cause: CausalEvent | None = None
     causal_chain: List[CausalEvent] = field(default_factory=list)
     confounders: List[CausalEvent] = field(default_factory=list)
     interventions: List[Intervention] = field(default_factory=list)
@@ -93,7 +93,7 @@ class CausalAnalysisReport:
     analysis_duration_ms: float = 0.0
     timestamp: str = field(default_factory=lambda: datetime.now(tz=timezone.utc).isoformat())
     analysis_status: str = "success"  # success, partial, failed
-    error_message: Optional[str] = None
+    error_message: str | None = None
     recommendations: List[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
@@ -131,7 +131,7 @@ class CausalAnalysisReport:
         }
 
     @staticmethod
-    def _event_to_dict(event: Optional[CausalEvent]) -> Optional[dict]:
+    def _event_to_dict(event: CausalEvent | None) -> dict | None:
         """Convert CausalEvent to dictionary."""
         if not event:
             return None
@@ -184,7 +184,7 @@ class CausalInferenceEngine:
                 logger.error("Failed to initialize Redis client: %s", e)
                 raise
 
-    async def analyze_failure(self, task_id: str, error_description: Optional[str] = None) -> CausalAnalysisReport:
+    async def analyze_failure(self, task_id: str, error_description: str | None = None) -> CausalAnalysisReport:
         """
         Analyze a task failure and produce root-cause report with interventions.
 
@@ -242,7 +242,7 @@ class CausalInferenceEngine:
     def _error_report(
         self,
         task_id: str,
-        error_description: Optional[str],
+        error_description: str | None,
         error_message: str,
         start_time: float,
     ) -> CausalAnalysisReport:
@@ -258,7 +258,7 @@ class CausalInferenceEngine:
     async def _synthesize_analysis(
         self,
         task_id: str,
-        error_description: Optional[str],
+        error_description: str | None,
         base_report: RootCauseReport,
         start_time: float,
     ) -> CausalAnalysisReport:
@@ -334,7 +334,7 @@ class CausalInferenceEngine:
         return num_strength + confidence_strength
 
     async def _predict_interventions(
-        self, chain: List[CausalEvent], root_cause: Optional[CausalEvent]
+        self, chain: List[CausalEvent], root_cause: CausalEvent | None
     ) -> List[Intervention]:
         """
         Predict effectiveness of interventions for each cause in chain.

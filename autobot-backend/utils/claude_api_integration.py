@@ -6,13 +6,15 @@ Claude API Integration with Intelligent Request Batching
 Integrates the batching system with AutoBot's existing Claude API infrastructure
 """
 
+from __future__ import annotations
+
 import asyncio
-import logging
 import time
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config as _ssot_config
 from constants.threshold_constants import RetryConfig, TimingConstants
 from utils.async_initializable import AsyncInitializable
@@ -29,7 +31,7 @@ from .request_batcher import (
 # Import our components
 
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -54,7 +56,7 @@ class ClaudeAPIBatchManager:
         self.config = config or ClaudeAPIConfig()
 
         # Core components
-        self.batcher: Optional[IntelligentRequestBatcher] = None
+        self.batcher: IntelligentRequestBatcher | None = None
         self.rate_limiter = ConversationRateLimiter() if self.config.enable_rate_limiting else None
         self.payload_optimizer = PayloadOptimizer() if self.config.enable_payload_optimization else None
 
@@ -454,13 +456,13 @@ class AutoBotClaudeAPIAdapter(AsyncInitializable):
     The module-level singleton is created lazily via get_autobot_claude_adapter().
     """
 
-    _instance: Optional["AutoBotClaudeAPIAdapter"] = None
+    _instance: "AutoBotClaudeAPIAdapter" | None = None
 
     def __init__(self):
         """Initialize adapter with empty manager; real init deferred to _initialize_impl."""
         super().__init__(component_name="autobot_claude_adapter")
-        self.manager: Optional[ClaudeAPIBatchManager] = None
-        self._adapter_config: Optional[ClaudeAPIConfig] = None
+        self.manager: ClaudeAPIBatchManager | None = None
+        self._adapter_config: ClaudeAPIConfig | None = None
 
     async def _initialize_impl(self) -> bool:
         """Create the Claude API batch manager on first use."""
@@ -528,7 +530,7 @@ _claude_adapter_lock = asyncio.Lock()
 
 
 async def get_autobot_claude_adapter(
-    adapter_config: Optional[ClaudeAPIConfig] = None,
+    adapter_config: ClaudeAPIConfig | None = None,
 ) -> "AutoBotClaudeAPIAdapter":
     """Get and lazily initialize the global AutoBotClaudeAPIAdapter singleton."""
     async with _claude_adapter_lock:
@@ -541,7 +543,7 @@ async def get_autobot_claude_adapter(
 
 # Backward-compatible module-level name; instance is NOT initialized until first await.
 # Use `await get_autobot_claude_adapter()` for production code.
-autobot_claude_adapter: Optional["AutoBotClaudeAPIAdapter"] = None
+autobot_claude_adapter: "AutoBotClaudeAPIAdapter" | None = None
 
 
 # Example usage and testing

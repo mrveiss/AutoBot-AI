@@ -14,15 +14,16 @@ Part of Issue #381 - God Class Refactoring
 """
 
 import ast
-import logging
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Set, Tuple
+
+from autobot_shared.logging_manager import get_logger
 
 from ..models import AntiPatternResult
 from ..severity_utils import get_feature_envy_severity, get_message_chain_severity
 from ..types import AntiPatternSeverity, AntiPatternType, Thresholds
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # Issue #380: Pre-computed excluded objects for feature envy detection
@@ -181,7 +182,7 @@ class CouplerDetector:
         path: List[str],
         visited: Set[str],
         rec_stack: Set[str],
-    ) -> Optional[List[str]]:
+    ) -> List[str] | None:
         """Recursively find circular dependency cycle using DFS. Issue #620.
 
         Args:
@@ -308,7 +309,7 @@ class CouplerDetector:
         self,
         node: ast.FunctionDef,
         file_path: str,
-        class_name: Optional[str] = None,
+        class_name: str | None = None,
     ) -> List[AntiPatternResult]:
         """
         Detect feature envy - method uses other class's data more than its own.

@@ -12,13 +12,14 @@ This module contains search and query operations:
 Part of the modular autobot_memory_graph package (Issue #716).
 """
 
-import logging
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
+
+from autobot_shared.logging_manager import get_logger
 
 from .core import AutoBotMemoryGraphCore
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def _is_entity_valid(entity: Dict[str, Any]) -> bool:
@@ -61,9 +62,9 @@ class QueryOperationsMixin:
     def _build_redis_search_query(
         self: AutoBotMemoryGraphCore,
         query: str,
-        entity_type: Optional[str] = None,
-        tags: Optional[List[str]] = None,
-        status: Optional[str] = None,
+        entity_type: str | None = None,
+        tags: List[str] | None = None,
+        status: str | None = None,
     ) -> str:
         """Issue #665: Extracted from search_entities to reduce function length.
 
@@ -157,7 +158,7 @@ class QueryOperationsMixin:
         self: AutoBotMemoryGraphCore,
         entity: Dict[str, Any],
         query_lower: str,
-        entity_type: Optional[str],
+        entity_type: str | None,
     ) -> bool:
         """Check if entity matches search criteria (Issue #315 - extracted helper)."""
         if entity_type and entity.get("type") != entity_type:
@@ -197,7 +198,7 @@ class QueryOperationsMixin:
         self: AutoBotMemoryGraphCore,
         keys: List[str],
         query_lower: str,
-        entity_type: Optional[str],
+        entity_type: str | None,
         limit: int,
         include_expired: bool = False,
     ) -> List[Dict[str, Any]]:
@@ -243,7 +244,7 @@ class QueryOperationsMixin:
     async def _fallback_search(
         self: AutoBotMemoryGraphCore,
         query: str,
-        entity_type: Optional[str],
+        entity_type: str | None,
         limit: int,
         include_expired: bool = False,
     ) -> List[Dict[str, Any]]:
@@ -281,9 +282,9 @@ class QueryOperationsMixin:
     async def search_entities(
         self: AutoBotMemoryGraphCore,
         query: str,
-        entity_type: Optional[str] = None,
-        tags: Optional[List[str]] = None,
-        status: Optional[str] = None,
+        entity_type: str | None = None,
+        tags: List[str] | None = None,
+        status: str | None = None,
         limit: int = 50,
         include_expired: bool = False,
     ) -> List[Dict[str, Any]]:

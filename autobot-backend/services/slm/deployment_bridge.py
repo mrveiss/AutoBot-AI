@@ -16,12 +16,12 @@ Related to Issue #3407.
 from __future__ import annotations
 
 import enum
-import logging
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
+from autobot_shared.logging_manager import get_logger
 from models.infrastructure import (
     DeploymentStrategy,
     DockerContainerSpec,
@@ -29,7 +29,7 @@ from models.infrastructure import (
     DockerDeploymentStatus,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -70,10 +70,10 @@ class DeploymentStep:
     node_id: str
     node_name: str
     description: str
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
-    success: Optional[bool] = None
-    error: Optional[str] = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    success: bool | None = None
+    error: str | None = None
 
 
 @dataclass
@@ -84,12 +84,12 @@ class DeploymentContext:
     strategy: DeploymentStrategy
     role_name: str
     target_nodes: list[str]
-    playbook_path: Optional[str] = None
+    playbook_path: str | None = None
     status: DeploymentStatus = DeploymentStatus.QUEUED
     steps: list[DeploymentStep] = field(default_factory=list)
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
-    error: Optional[str] = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    error: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -149,7 +149,7 @@ class SLMDeploymentBridge:
         response = await self._client.get_deployment(deployment_id)
         return self._map_response(response)
 
-    async def list_deployments(self, node_id: Optional[str] = None) -> list[DockerDeploymentStatus]:
+    async def list_deployments(self, node_id: str | None = None) -> list[DockerDeploymentStatus]:
         """List deployments, optionally filtered by node_id."""
         response = await self._client.list_deployments(node_id=node_id)
         deployments = response.get("deployments", [])
@@ -190,7 +190,7 @@ class DeploymentCoordinator:
         role_name: str,
         target_nodes: list[str],
         strategy: DeploymentStrategy = DeploymentStrategy.SEQUENTIAL,
-        playbook_path: Optional[str] = None,
+        playbook_path: str | None = None,
     ) -> DeploymentContext:
         """Create and queue a new deployment context."""
         ctx = DeploymentContext(
@@ -210,7 +210,7 @@ class DeploymentCoordinator:
         )
         return ctx
 
-    def get_deployment(self, deployment_id: str) -> Optional[DeploymentContext]:
+    def get_deployment(self, deployment_id: str) -> DeploymentContext | None:
         """Return the DeploymentContext for the given id, or None."""
         for ctx in self.active_deployments:
             if ctx.deployment_id == deployment_id:
@@ -286,10 +286,10 @@ class DeploymentCoordinator:
 # Module-level singleton
 # ---------------------------------------------------------------------------
 
-_orchestrator: Optional[DeploymentCoordinator] = None
+_orchestrator: DeploymentCoordinator | None = None
 
 
-def get_orchestrator() -> Optional[DeploymentCoordinator]:
+def get_orchestrator() -> DeploymentCoordinator | None:
     """Return the module-level DeploymentCoordinator singleton, or None."""
     return _orchestrator
 

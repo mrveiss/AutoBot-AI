@@ -11,12 +11,12 @@ window) with automatic Retry-After and X-RateLimit-Reset handling.
 """
 
 import asyncio
-import logging
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import aiohttp
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
 from integrations.base import (
     BaseIntegration,
@@ -32,7 +32,7 @@ from integrations.rate_limiter import (
 )
 from integrations.rate_limiter import integration_rate_limiter as _shared_rate_limiter
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # In-memory limiter retained solely for apply_response_headers() (Retry-After /
 # X-RateLimit-* header parsing).  Distributed acquire() uses _shared_rate_limiter
@@ -267,8 +267,8 @@ class GitHubIntegration(BaseIntegration):
         self,
         method: str,
         path: str,
-        query_params: Optional[Dict[str, Any]] = None,
-        json_data: Optional[Dict[str, Any]] = None,
+        query_params: Dict[str, Any] | None = None,
+        json_data: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
         """Rate-limited HTTP request to the GitHub REST API.
 

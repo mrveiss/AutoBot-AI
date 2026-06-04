@@ -4,42 +4,42 @@
     <div class="canvas-toolbar">
       <div class="toolbar-left">
         <button class="tool-btn" @click="addStepNode" :title="$t('workflow.canvas.addStep')">
-          <i class="fas fa-plus"></i> {{ $t('workflow.canvas.addStep') }}
+          <Icon name="plus" /> {{ $t('workflow.canvas.addStep') }}
         </button>
         <button class="tool-btn" @click="addConditionNode" :title="$t('workflow.canvas.addCondition') + ' (coming soon — #2140)'" :class="{ 'btn-experimental': true }">
-          <i class="fas fa-code-branch"></i> {{ $t('workflow.canvas.condition') }}
+          <Icon name="code-branch" /> {{ $t('workflow.canvas.condition') }}
           <span class="badge-experimental">beta</span>
         </button>
         <div class="toolbar-divider"></div>
         <div class="dropdown-container">
           <button class="tool-btn" @click="showVisionDropdown = !showVisionDropdown" :title="$t('workflow.canvas.addVisionNode')">
-            <i class="fas fa-eye"></i> {{ $t('workflow.canvas.vision') }}
-            <i class="fas fa-caret-down"></i>
+            <Icon name="eye" /> {{ $t('workflow.canvas.vision') }}
+            <Icon name="caret-down" />
           </button>
           <div v-if="showVisionDropdown" class="dropdown-menu" @mouseleave="showVisionDropdown = false">
-            <button @click="addVisionNode('vision-capture')"><i class="fas fa-camera"></i> {{ $t('workflow.canvas.visionCapture') }}</button>
-            <button @click="addVisionNode('vision-find-element')"><i class="fas fa-search"></i> {{ $t('workflow.canvas.visionFindElement') }}</button>
-            <button @click="addVisionNode('vision-click')"><i class="fas fa-mouse-pointer"></i> {{ $t('workflow.canvas.visionClick') }}</button>
-            <button @click="addVisionNode('vision-type-text')"><i class="fas fa-keyboard"></i> {{ $t('workflow.canvas.visionTypeText') }}</button>
-            <button @click="addVisionNode('vision-ocr')"><i class="fas fa-font"></i> {{ $t('workflow.canvas.visionOcr') }}</button>
-            <button @click="addVisionNode('vision-wait')"><i class="fas fa-clock"></i> {{ $t('workflow.canvas.visionWait') }}</button>
+            <button @click="addVisionNode('vision-capture')"><Icon name="camera" /> {{ $t('workflow.canvas.visionCapture') }}</button>
+            <button @click="addVisionNode('vision-find-element')"><Icon name="search" /> {{ $t('workflow.canvas.visionFindElement') }}</button>
+            <button @click="addVisionNode('vision-click')"><Icon name="mouse-pointer" /> {{ $t('workflow.canvas.visionClick') }}</button>
+            <button @click="addVisionNode('vision-type-text')"><Icon name="keyboard" /> {{ $t('workflow.canvas.visionTypeText') }}</button>
+            <button @click="addVisionNode('vision-ocr')"><Icon name="font" /> {{ $t('workflow.canvas.visionOcr') }}</button>
+            <button @click="addVisionNode('vision-wait')"><Icon name="clock" /> {{ $t('workflow.canvas.visionWait') }}</button>
           </div>
         </div>
         <div class="toolbar-divider"></div>
-        <button class="tool-btn" @click="clearCanvas" :title="$t('workflow.canvas.clear')">
-          <i class="fas fa-trash-alt"></i>
+        <button class="tool-btn" @click="clearCanvas" :title="$t('workflow.canvas.clear')" :aria-label="$t('workflow.canvas.clear')">
+          <Icon name="trash-alt" />
         </button>
-        <button class="tool-btn" @click="autoLayout" :title="$t('workflow.canvas.autoLayout')">
-          <i class="fas fa-magic"></i>
+        <button class="tool-btn" @click="autoLayout" :title="$t('workflow.canvas.autoLayout')" :aria-label="$t('workflow.canvas.autoLayout')">
+          <Icon name="magic" />
         </button>
       </div>
       <div class="toolbar-right">
-        <button class="tool-btn" @click="zoomIn"><i class="fas fa-search-plus"></i></button>
-        <button class="tool-btn" @click="zoomOut"><i class="fas fa-search-minus"></i></button>
-        <button class="tool-btn" @click="resetZoom"><i class="fas fa-compress-arrows-alt"></i></button>
+        <button class="tool-btn" @click="zoomIn" :aria-label="$t('common.zoomIn')"><Icon name="search-plus" /></button>
+        <button class="tool-btn" @click="zoomOut" :aria-label="$t('common.zoomOut')"><Icon name="search-minus" /></button>
+        <button class="tool-btn" @click="resetZoom" :aria-label="$t('common.fitToView')"><Icon name="compress-arrows-alt" /></button>
         <div class="toolbar-divider"></div>
         <button class="tool-btn primary" @click="saveWorkflow" :disabled="nodes.length === 0">
-          <i class="fas fa-save"></i> {{ $t('workflow.canvas.save') }}
+          <Icon name="save" /> {{ $t('workflow.canvas.save') }}
         </button>
       </div>
     </div>
@@ -66,7 +66,7 @@
           <div class="node-header">
             <i :class="nodeIcons[node.type]"></i>
             <span>{{ nodeLabels[node.type] }}</span>
-            <button class="delete-btn" @click.stop="deleteNode(node.id)"><i class="fas fa-times"></i></button>
+            <button class="delete-btn" @click.stop="deleteNode(node.id)" :aria-label="$t('common.delete')"><Icon name="times" /></button>
           </div>
           <div class="node-body">
             <template v-if="node.type === 'step'">
@@ -126,10 +126,10 @@
 
         <!-- Empty State -->
         <div v-if="nodes.length === 0" class="empty-state">
-          <i class="fas fa-project-diagram"></i>
+          <Icon name="project-diagram" />
           <h3>{{ $t('workflow.canvas.emptyTitle') }}</h3>
           <p>{{ $t('workflow.canvas.emptyDescription') }}</p>
-          <button class="btn-primary" @click="addStepNode"><i class="fas fa-plus"></i> {{ $t('workflow.canvas.addStep') }}</button>
+          <button class="btn-primary" @click="addStepNode"><Icon name="plus" /> {{ $t('workflow.canvas.addStep') }}</button>
         </div>
       </div>
     </div>
@@ -137,7 +137,7 @@
     <!-- Save Dialog -->
     <div v-if="showSaveDialog" class="dialog-overlay" @click.self="showSaveDialog = false">
       <div class="dialog">
-        <h3><i class="fas fa-save"></i> {{ $t('workflow.canvas.saveWorkflow') }}</h3>
+        <h3><Icon name="save" /> {{ $t('workflow.canvas.saveWorkflow') }}</h3>
         <input v-model="saveName" :placeholder="$t('workflow.canvas.workflowName')" />
         <textarea v-model="saveDesc" :placeholder="$t('workflow.canvas.description')" rows="3"></textarea>
         <div class="dialog-actions">
@@ -150,6 +150,7 @@
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { ref, reactive, computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import type { WorkflowNode } from '@/composables/useWorkflowBuilder';
@@ -169,15 +170,15 @@ const emit = defineEmits<{
 const showVisionDropdown = ref(false);
 
 const nodeIcons: Record<string, string> = {
-  step: 'fas fa-terminal',
-  condition: 'fas fa-code-branch',
-  parallel: 'fas fa-columns',
-  'vision-capture': 'fas fa-camera',
-  'vision-find-element': 'fas fa-search',
-  'vision-click': 'fas fa-mouse-pointer',
-  'vision-type-text': 'fas fa-keyboard',
-  'vision-ocr': 'fas fa-font',
-  'vision-wait': 'fas fa-clock',
+  step: 'terminal',
+  condition: 'code-branch',
+  parallel: 'columns',
+  'vision-capture': 'camera',
+  'vision-find-element': 'search',
+  'vision-click': 'mouse-pointer',
+  'vision-type-text': 'keyboard',
+  'vision-ocr': 'font',
+  'vision-wait': 'clock',
 };
 const nodeLabels = computed(() => ({
   step: t('workflow.canvas.stepLabel'),

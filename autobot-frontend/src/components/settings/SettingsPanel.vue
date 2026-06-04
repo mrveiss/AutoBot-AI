@@ -11,7 +11,7 @@
 
     <!-- Settings status message -->
     <div v-if="settingsLoadingStatus === 'offline'" class="settings-status offline">
-      <i class="fas fa-exclamation-triangle"></i>
+      <Icon name="exclamation-triangle" />
       <span>{{ $t('settings.backendOffline') }}</span>
     </div>
 
@@ -52,11 +52,11 @@
     <!-- Save Settings Button -->
     <div v-if="isSettingsLoaded && hasUnsavedChanges" class="settings-actions">
       <button @click="saveSettings" :disabled="isSaving" class="save-settings-btn">
-        <i :class="isSaving ? 'fas fa-spinner fa-spin' : 'fas fa-save'"></i>
+        <i :class="isSaving ? 'fas fa-spinner fa-spin' : 'save'"></i>
         {{ isSaving ? $t('settings.saving') : $t('settings.save') }}
       </button>
       <button @click="discardChanges" :disabled="isSaving" class="discard-btn">
-        <i class="fas fa-undo"></i>
+        <Icon name="undo" />
         {{ $t('settings.discardChanges') }}
       </button>
     </div>
@@ -66,6 +66,7 @@
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { ref, reactive, onMounted, provide } from 'vue'
 import { useI18n } from 'vue-i18n'
 import axios from 'axios'
@@ -77,7 +78,7 @@ const { t } = useI18n()
 
 // Import error handling composables
 import { useAsyncHandler } from '@/composables/useErrorHandler'
-import { useToast } from '@/composables/useToast'
+import { useNotificationBus } from '@/composables/useNotificationBus'
 
 // Import sub-components
 import ErrorBoundary from '../common/ErrorBoundary.vue'
@@ -140,7 +141,7 @@ const cacheActivity = ref<CacheActivityItem[]>([])
 const cacheStats = ref<CacheStats | null>(null)
 
 // Toast notifications
-const { showToast } = useToast()
+const { showToast } = useNotificationBus()
 
 // Notification helper for useAsyncHandler
 const notify = (message: string, type: 'success' | 'error' | 'info') => {
@@ -356,11 +357,11 @@ const getCurrentLLMDisplay = (): string => {
   const providerType = llmConfig.provider_type || 'local'
   if (providerType === 'local') {
     const provider = llmConfig.local?.provider || 'ollama'
-    const model = llmConfig.local?.providers?.[provider]?.selected_model || 'Not selected'
+    const model = (llmConfig.local?.providers?.[provider] as { selected_model?: string } | undefined)?.selected_model || 'Not selected'
     return `${provider.toUpperCase()}: ${model}`
   } else {
     const provider = llmConfig.cloud?.provider || 'openai'
-    const model = llmConfig.cloud?.providers?.[provider]?.selected_model || 'Not selected'
+    const model = (llmConfig.cloud?.providers?.[provider] as { selected_model?: string } | undefined)?.selected_model || 'Not selected'
     return `${provider.toUpperCase()}: ${model}`
   }
 }

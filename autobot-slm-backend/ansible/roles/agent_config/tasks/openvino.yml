@@ -49,7 +49,7 @@
   user:
     name: "{{ service_user }}"
     groups: render
-    append: yes
+    append: true
 
 - name: Set up OpenVINO environment in venv
   pip:

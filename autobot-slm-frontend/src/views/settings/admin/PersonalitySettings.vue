@@ -228,7 +228,7 @@ onMounted(async () => {
       <!-- Header + toggle -->
       <div class="px-4 py-4 border-b border-gray-100">
         <div class="flex items-center justify-between mb-3">
-          <h2 class="text-sm font-semibold text-gray-800">Personality</h2>
+          <h2 class="text-sm font-semibold text-gray-800">{{ $t('settings.admin.personalitySettings.personality') }}</h2>
           <!-- Enable toggle -->
           <button
             type="button"
@@ -269,11 +269,11 @@ onMounted(async () => {
           <span
             v-if="p.active"
             class="px-1.5 py-0.5 rounded-sm text-xs bg-indigo-100 text-indigo-700 font-medium"
-          >Active</span>
+          >{{ $t('settings.admin.personalitySettings.active') }}</span>
           <span
             v-if="p.is_system"
             class="px-1.5 py-0.5 rounded-sm text-xs bg-gray-100 text-gray-500"
-          >System</span>
+          >{{ $t('settings.admin.personalitySettings.system') }}</span>
         </li>
       </ul>
 
@@ -283,13 +283,13 @@ onMounted(async () => {
           type="button"
           class="flex-1 text-xs px-2 py-1.5 rounded-sm border border-indigo-300 text-indigo-700 hover:bg-indigo-50 transition-colors"
           @click="showNewDialog = true"
-        >+ New</button>
+        >{{ $t('settings.admin.personalitySettings.new') }}</button>
         <button
           type="button"
           :disabled="!selectedId"
           class="flex-1 text-xs px-2 py-1.5 rounded-sm border border-gray-300 text-gray-600 hover:bg-gray-50 disabled:opacity-40 transition-colors"
           @click="handleDuplicate"
-        >Duplicate</button>
+        >{{ $t('settings.admin.personalitySettings.duplicate') }}</button>
       </div>
     </div>
 
@@ -312,7 +312,7 @@ onMounted(async () => {
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
             d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
         </svg>
-        <p class="text-sm">Select a profile to edit</p>
+        <p class="text-sm">{{ $t('settings.admin.personalitySettings.selectAProfileTo') }}</p>
       </div>
 
       <!-- Editor form -->
@@ -332,22 +332,22 @@ onMounted(async () => {
               type="button"
               class="text-xs px-3 py-1.5 rounded-sm bg-indigo-600 text-white hover:bg-indigo-700 transition-colors"
               @click="handleActivate"
-            >Set Active</button>
+            >{{ $t('settings.admin.personalitySettings.setActive') }}</button>
             <span
               v-else
               class="text-xs px-3 py-1.5 rounded-sm bg-indigo-100 text-indigo-700 font-medium"
-            >Currently Active</span>
+            >{{ $t('settings.admin.personalitySettings.currentlyActive') }}</span>
             <button
               type="button"
               class="text-xs px-3 py-1.5 rounded-sm border border-amber-300 text-amber-700 hover:bg-amber-50 transition-colors"
               @click="handleReset"
-            >Reset to Default</button>
+            >{{ $t('settings.admin.personalitySettings.resetToDefault') }}</button>
             <button
               v-if="!editForm.is_system"
               type="button"
               class="text-xs px-3 py-1.5 rounded-sm border border-red-300 text-red-600 hover:bg-red-50 transition-colors"
               @click="confirmDeleteId = selectedId"
-            >Delete</button>
+            >{{ $t('settings.admin.personalitySettings.delete') }}</button>
           </div>
         </div>
 
@@ -356,7 +356,7 @@ onMounted(async () => {
           <!-- Name + Tagline row -->
           <div class="grid grid-cols-2 gap-4">
             <div>
-              <label class="block text-xs font-medium text-gray-600 mb-1">Name</label>
+              <label class="block text-xs font-medium text-gray-600 mb-1">{{ $t('settings.admin.personalitySettings.name') }}</label>
               <input
                 v-model="editForm.name"
                 type="text"
@@ -364,7 +364,7 @@ onMounted(async () => {
               />
             </div>
             <div>
-              <label class="block text-xs font-medium text-gray-600 mb-1">Tagline</label>
+              <label class="block text-xs font-medium text-gray-600 mb-1">{{ $t('settings.admin.personalitySettings.tagline') }}</label>
               <input
                 v-model="editForm.tagline"
                 type="text"
@@ -376,7 +376,7 @@ onMounted(async () => {
 
           <!-- Tone selector -->
           <div>
-            <label class="block text-xs font-medium text-gray-600 mb-1">Tone</label>
+            <label class="block text-xs font-medium text-gray-600 mb-1">{{ $t('settings.admin.personalitySettings.tone') }}</label>
             <div class="flex gap-2 flex-wrap">
               <button
                 v-for="opt in TONE_OPTIONS"
@@ -395,7 +395,7 @@ onMounted(async () => {
 
           <!-- Character Traits tag list -->
           <div>
-            <label class="block text-xs font-medium text-gray-600 mb-1">Character Traits</label>
+            <label class="block text-xs font-medium text-gray-600 mb-1">{{ $t('settings.admin.personalitySettings.characterTraits') }}</label>
             <div class="flex flex-wrap gap-1.5 mb-2">
               <span
                 v-for="trait in (editForm.character_traits as string[])"
@@ -418,13 +418,13 @@ onMounted(async () => {
                 type="button"
                 class="px-3 py-1.5 text-xs rounded-sm border border-gray-300 text-gray-600 hover:bg-gray-50"
                 @click="addTrait"
-              >Add</button>
+              >{{ $t('settings.admin.personalitySettings.add') }}</button>
             </div>
           </div>
 
           <!-- Operating Style tag list -->
           <div>
-            <label class="block text-xs font-medium text-gray-600 mb-1">Operating Style</label>
+            <label class="block text-xs font-medium text-gray-600 mb-1">{{ $t('settings.admin.personalitySettings.operatingStyle') }}</label>
             <div class="flex flex-wrap gap-1.5 mb-2">
               <span
                 v-for="s in (editForm.operating_style as string[])"
@@ -447,13 +447,13 @@ onMounted(async () => {
                 type="button"
                 class="px-3 py-1.5 text-xs rounded-sm border border-gray-300 text-gray-600 hover:bg-gray-50"
                 @click="addStyle"
-              >Add</button>
+              >{{ $t('settings.admin.personalitySettings.add') }}</button>
             </div>
           </div>
 
           <!-- Off Limits tag list -->
           <div>
-            <label class="block text-xs font-medium text-gray-600 mb-1">Off Limits</label>
+            <label class="block text-xs font-medium text-gray-600 mb-1">{{ $t('settings.admin.personalitySettings.offLimits') }}</label>
             <div class="flex flex-wrap gap-1.5 mb-2">
               <span
                 v-for="o in (editForm.off_limits as string[])"
@@ -476,13 +476,13 @@ onMounted(async () => {
                 type="button"
                 class="px-3 py-1.5 text-xs rounded-sm border border-gray-300 text-gray-600 hover:bg-gray-50"
                 @click="addLimit"
-              >Add</button>
+              >{{ $t('settings.admin.personalitySettings.add') }}</button>
             </div>
           </div>
 
           <!-- Custom Notes -->
           <div>
-            <label class="block text-xs font-medium text-gray-600 mb-1">Custom Notes</label>
+            <label class="block text-xs font-medium text-gray-600 mb-1">{{ $t('settings.admin.personalitySettings.customNotes') }}</label>
             <textarea
               v-model="editForm.custom_notes"
               rows="4"
@@ -493,12 +493,12 @@ onMounted(async () => {
 
           <!-- Voice Assignment (#1135) -->
           <div>
-            <label class="block text-xs font-medium text-gray-600 mb-1">Voice</label>
+            <label class="block text-xs font-medium text-gray-600 mb-1">{{ $t('settings.admin.personalitySettings.voice') }}</label>
             <select
               v-model="editForm.voice_id"
               class="w-full px-3 py-2 text-sm border border-gray-200 rounded-md bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-400"
             >
-              <option value="">None (use user's voice setting)</option>
+              <option value="">{{ $t('settings.admin.personalitySettings.noneUseUserS') }}</option>
               <option
                 v-for="v in voiceList"
                 :key="v.id"
@@ -506,7 +506,7 @@ onMounted(async () => {
               >{{ v.name }}{{ v.builtin ? ' (built-in)' : '' }}</option>
             </select>
             <p class="mt-1 text-xs text-gray-400">
-              When this personality is active, voice output will use the selected voice.
+              {{ $t('settings.admin.personalitySettings.whenThisPersonalityIs') }}
             </p>
           </div>
 
@@ -536,7 +536,7 @@ onMounted(async () => {
         @click.self="showNewDialog = false"
       >
         <div class="bg-white rounded-xl shadow-xl p-6 w-80">
-          <h3 class="text-sm font-semibold text-gray-800 mb-3">New Personality Profile</h3>
+          <h3 class="text-sm font-semibold text-gray-800 mb-3">{{ $t('settings.admin.personalitySettings.newPersonalityProfile') }}</h3>
           <input
             v-model="newName"
             type="text"
@@ -550,13 +550,13 @@ onMounted(async () => {
               type="button"
               class="px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50 rounded-sm border border-gray-200"
               @click="showNewDialog = false"
-            >Cancel</button>
+            >{{ $t('settings.admin.personalitySettings.cancel') }}</button>
             <button
               type="button"
               :disabled="!newName.trim()"
               class="px-4 py-1.5 text-sm rounded-sm bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-40"
               @click="handleNewProfile"
-            >Create</button>
+            >{{ $t('settings.admin.personalitySettings.create') }}</button>
           </div>
         </div>
       </div>
@@ -572,21 +572,21 @@ onMounted(async () => {
         @click.self="confirmDeleteId = null"
       >
         <div class="bg-white rounded-xl shadow-xl p-6 w-80">
-          <h3 class="text-sm font-semibold text-gray-800 mb-2">Delete Profile</h3>
+          <h3 class="text-sm font-semibold text-gray-800 mb-2">{{ $t('settings.admin.personalitySettings.deleteProfile') }}</h3>
           <p class="text-sm text-gray-600 mb-4">
-            This action cannot be undone. The profile will be permanently removed.
+            {{ $t('settings.admin.personalitySettings.thisActionCannotBe') }}
           </p>
           <div class="flex justify-end gap-2">
             <button
               type="button"
               class="px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50 rounded-sm border border-gray-200"
               @click="confirmDeleteId = null"
-            >Cancel</button>
+            >{{ $t('settings.admin.personalitySettings.cancel') }}</button>
             <button
               type="button"
               class="px-4 py-1.5 text-sm rounded-sm bg-red-600 text-white hover:bg-red-700"
               @click="handleDelete"
-            >Delete</button>
+            >{{ $t('settings.admin.personalitySettings.delete') }}</button>
           </div>
         </div>
       </div>

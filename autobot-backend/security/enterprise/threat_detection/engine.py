@@ -11,13 +11,12 @@ Issue #378: Added threading locks for file operations to prevent race conditions
 """
 
 import asyncio
-import logging
 import pickle  # nosec B403 - internal profile storage only
 import threading
 from collections import defaultdict, deque
 from datetime import timedelta
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 import numpy as np
 import yaml
@@ -25,6 +24,7 @@ from sklearn.cluster import DBSCAN
 from sklearn.ensemble import IsolationForest
 from sklearn.preprocessing import StandardScaler
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc, parse_utc_iso, utc_timestamp
 from constants.path_constants import PATH
 from constants.threshold_constants import TimingConstants
@@ -47,7 +47,7 @@ from .models import (
     UserProfile,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ThreatDetectionEngine:
@@ -130,7 +130,7 @@ class ThreatDetectionEngine:
     def _initialize_learner(self) -> None:
         """Initialize adaptive learning layer. Issue #2110."""
         try:
-            self.learner: Optional[ThreatDetectionLearner] = ThreatDetectionLearner()
+            self.learner: ThreatDetectionLearner | None = ThreatDetectionLearner()
         except Exception as exc:
             logger.error(
                 "Failed to initialise ThreatDetectionLearner (Redis unavailable?): %s",
@@ -429,7 +429,7 @@ class ThreatDetectionEngine:
 
         return primary_threat
 
-    async def analyze_event(self, event: Dict) -> Optional[ThreatEvent]:
+    async def analyze_event(self, event: Dict) -> ThreatEvent | None:
         """
         Analyze a security event for potential threats.
 

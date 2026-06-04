@@ -178,21 +178,21 @@ onMounted(() => {
             >
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
-            Test
+            {{ $t('settings.backendSettings.test') }}
           </button>
         </div>
       </div>
 
       <!-- SLM Settings -->
       <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6 mb-6">
-        <h2 class="text-lg font-semibold mb-6">SLM Configuration</h2>
+        <h2 class="text-lg font-semibold mb-6">{{ $t('settings.backendSettings.sLMConfiguration') }}</h2>
 
         <div class="space-y-6">
           <!-- Heartbeat Timeout -->
           <div class="flex items-center justify-between pb-4 border-b border-gray-100">
             <div>
-              <label class="block text-sm font-medium text-gray-900">Heartbeat Timeout</label>
-              <p class="text-xs text-gray-500 mt-1">Time before a node is marked offline (seconds)</p>
+              <label class="block text-sm font-medium text-gray-900">{{ $t('settings.backendSettings.heartbeatTimeout') }}</label>
+              <p class="text-xs text-gray-500 mt-1">{{ $t('settings.backendSettings.timeBeforeANode') }}</p>
             </div>
             <div class="flex gap-2">
               <input
@@ -207,7 +207,7 @@ onMounted(() => {
                 :disabled="saving"
                 class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50"
               >
-                Save
+                {{ $t('settings.backendSettings.save') }}
               </button>
             </div>
           </div>
@@ -215,8 +215,8 @@ onMounted(() => {
           <!-- Auto Reconcile -->
           <div class="flex items-center justify-between pb-4 border-b border-gray-100">
             <div>
-              <label class="block text-sm font-medium text-gray-900">Auto Reconciliation</label>
-              <p class="text-xs text-gray-500 mt-1">Automatically attempt to fix degraded nodes</p>
+              <label class="block text-sm font-medium text-gray-900">{{ $t('settings.backendSettings.autoReconciliation') }}</label>
+              <p class="text-xs text-gray-500 mt-1">{{ $t('settings.backendSettings.automaticallyAttemptToFix') }}</p>
             </div>
             <label class="relative inline-flex items-center cursor-pointer">
               <input
@@ -232,37 +232,37 @@ onMounted(() => {
           <!-- Backup Retention -->
           <div class="flex items-center justify-between pb-4 border-b border-gray-100">
             <div>
-              <label class="block text-sm font-medium text-gray-900">Backup Retention</label>
-              <p class="text-xs text-gray-500 mt-1">How long to keep backup files (days)</p>
+              <label class="block text-sm font-medium text-gray-900">{{ $t('settings.backendSettings.backupRetention') }}</label>
+              <p class="text-xs text-gray-500 mt-1">{{ $t('settings.backendSettings.howLongToKeep') }}</p>
             </div>
             <select
               v-model="settings.backup_retention"
               @change="saveSetting('backup_retention', settings.backup_retention)"
               class="w-40 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
             >
-              <option value="7">7 days</option>
-              <option value="14">14 days</option>
-              <option value="30">30 days</option>
-              <option value="60">60 days</option>
-              <option value="90">90 days</option>
+              <option value="7">{{ $t('settings.backendSettings.7Days') }}</option>
+              <option value="14">{{ $t('settings.backendSettings.14Days') }}</option>
+              <option value="30">{{ $t('settings.backendSettings.30Days') }}</option>
+              <option value="60">{{ $t('settings.backendSettings.60Days') }}</option>
+              <option value="90">{{ $t('settings.backendSettings.90Days') }}</option>
             </select>
           </div>
 
           <!-- Log Level -->
           <div class="flex items-center justify-between">
             <div>
-              <label class="block text-sm font-medium text-gray-900">Log Level</label>
-              <p class="text-xs text-gray-500 mt-1">Backend logging verbosity</p>
+              <label class="block text-sm font-medium text-gray-900">{{ $t('settings.backendSettings.logLevel') }}</label>
+              <p class="text-xs text-gray-500 mt-1">{{ $t('settings.backendSettings.backendLoggingVerbosity') }}</p>
             </div>
             <select
               v-model="settings.log_level"
               @change="saveSetting('log_level', settings.log_level)"
               class="w-40 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
             >
-              <option value="DEBUG">Debug</option>
-              <option value="INFO">Info</option>
-              <option value="WARNING">Warning</option>
-              <option value="ERROR">Error</option>
+              <option value="DEBUG">{{ $t('settings.backendSettings.debug') }}</option>
+              <option value="INFO">{{ $t('settings.backendSettings.info') }}</option>
+              <option value="WARNING">{{ $t('settings.backendSettings.warning') }}</option>
+              <option value="ERROR">{{ $t('settings.backendSettings.error') }}</option>
             </select>
           </div>
         </div>
@@ -270,16 +270,16 @@ onMounted(() => {
 
       <!-- Server Info -->
       <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
-        <h2 class="text-lg font-semibold mb-6">Server Configuration</h2>
+        <h2 class="text-lg font-semibold mb-6">{{ $t('settings.backendSettings.serverConfiguration') }}</h2>
         <p class="text-sm text-gray-500 mb-4">
-          These settings are read-only and configured in the backend.
+          {{ $t('settings.backendSettings.theseSettingsAreRead') }}
         </p>
 
         <div class="space-y-4">
           <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
             <div>
-              <p class="font-medium text-gray-900">API Endpoint</p>
-              <p class="text-sm text-gray-500">Current backend API URL</p>
+              <p class="font-medium text-gray-900">{{ $t('settings.backendSettings.aPIEndpoint') }}</p>
+              <p class="text-sm text-gray-500">{{ $t('settings.backendSettings.currentBackendAPIURL') }}</p>
             </div>
             <p class="font-mono text-sm text-gray-700 bg-gray-100 px-3 py-1 rounded-sm">
               {{ settings.api_endpoint || authStore.getApiUrl() }}
@@ -288,8 +288,8 @@ onMounted(() => {
 
           <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
             <div>
-              <p class="font-medium text-gray-900">Server Host</p>
-              <p class="text-sm text-gray-500">Bind address</p>
+              <p class="font-medium text-gray-900">{{ $t('settings.backendSettings.serverHost') }}</p>
+              <p class="text-sm text-gray-500">{{ $t('settings.backendSettings.bindAddress') }}</p>
             </div>
             <p class="font-mono text-sm text-gray-700 bg-gray-100 px-3 py-1 rounded-sm">
               {{ settings.server_host }}
@@ -298,8 +298,8 @@ onMounted(() => {
 
           <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
             <div>
-              <p class="font-medium text-gray-900">Server Port</p>
-              <p class="text-sm text-gray-500">API port</p>
+              <p class="font-medium text-gray-900">{{ $t('settings.backendSettings.serverPort') }}</p>
+              <p class="text-sm text-gray-500">{{ $t('settings.backendSettings.aPIPort') }}</p>
             </div>
             <p class="font-mono text-sm text-gray-700 bg-gray-100 px-3 py-1 rounded-sm">
               {{ settings.server_port }}

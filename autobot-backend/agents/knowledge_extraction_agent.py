@@ -15,7 +15,7 @@ import json
 import re
 import time
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_llm_logger
 from autobot_shared.ssot_config import (
@@ -24,7 +24,7 @@ from autobot_shared.ssot_config import (
     get_agent_provider_explicit,
 )
 from config.manager import get_config_manager as _get_config_manager
-from llm_interface_pkg.types import LLMType
+from llm_shared.types import LLMType
 from models.atomic_fact import AtomicFact, FactExtractionResult, FactType, TemporalType
 from services.llm_service import get_llm_service
 
@@ -301,7 +301,7 @@ class KnowledgeExtractionAgent(StandardizedAgent):
 
 Respond only with valid JSON."""
 
-    def _build_extraction_prompt(self, content: str, context: Optional[str] = None) -> str:
+    def _build_extraction_prompt(self, content: str, context: str | None = None) -> str:
         """Build the LLM prompt for fact extraction.
 
         Args:
@@ -462,7 +462,7 @@ Return the results as a JSON array of facts. Example format:
 
         return True
 
-    async def _get_llm_facts_response(self, content: str, context: Optional[str]) -> Optional[List[Dict[str, Any]]]:
+    async def _get_llm_facts_response(self, content: str, context: str | None) -> List[Dict[str, Any]] | None:
         """Get raw facts from LLM response. Returns None on error."""
         prompt = self._build_extraction_prompt(content, context)
         response = await self.llm_interface.chat(
@@ -506,8 +506,8 @@ Return the results as a JSON array of facts. Example format:
         fact_data: Dict[str, Any],
         source: str,
         content: str,
-        context: Optional[str],
-        chunk_id: Optional[str],
+        context: str | None,
+        chunk_id: str | None,
     ) -> AtomicFact:
         """Create AtomicFact object from fact data."""
         return AtomicFact(
@@ -536,8 +536,8 @@ Return the results as a JSON array of facts. Example format:
         raw_facts: List[Dict[str, Any]],
         source: str,
         content: str,
-        context: Optional[str],
-        chunk_id: Optional[str],
+        context: str | None,
+        chunk_id: str | None,
     ) -> tuple:
         """Convert raw facts to AtomicFact objects. Returns (facts, error_count)."""
         extracted_facts = []
@@ -570,7 +570,7 @@ Return the results as a JSON array of facts. Example format:
         validation_errors: int,
         source: str,
         content_length: int,
-        chunk_id: Optional[str],
+        chunk_id: str | None,
         processing_time: float,
     ) -> FactExtractionResult:
         """
@@ -618,8 +618,8 @@ Return the results as a JSON array of facts. Example format:
         self,
         content: str,
         source: str,
-        context: Optional[str] = None,
-        chunk_id: Optional[str] = None,
+        context: str | None = None,
+        chunk_id: str | None = None,
     ) -> FactExtractionResult:
         """Extract atomic facts from text content."""
         start_time = time.time()
@@ -719,9 +719,9 @@ Return the results as a JSON array of facts. Example format:
     def filter_facts(
         self,
         facts: List[AtomicFact],
-        fact_types: Optional[List[FactType]] = None,
-        temporal_types: Optional[List[TemporalType]] = None,
-        min_confidence: Optional[float] = None,
+        fact_types: List[FactType] | None = None,
+        temporal_types: List[TemporalType] | None = None,
+        min_confidence: float | None = None,
         active_only: bool = True,
     ) -> List[AtomicFact]:
         """

@@ -18,12 +18,12 @@ Examples include:
 """
 
 import asyncio
-import logging
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from constants.path_constants import PATH
 from constants.threshold_constants import TimingConstants
 
@@ -40,7 +40,7 @@ from .long_running_operations_framework import (
 )
 from .operation_timeout_integration import operation_integration_manager
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level tuple for sequence type checks
 _SEQUENCE_TYPES = (list, tuple)
@@ -875,7 +875,7 @@ def _estimate_items_from_arg(arg: Any) -> int:
     return 1
 
 
-def _get_estimated_items(estimated_items: Optional[int], args: tuple) -> int:
+def _get_estimated_items(estimated_items: int | None, args: tuple) -> int:
     """Calculate estimated items for operation (Issue #315 - extracted helper)."""
     if estimated_items is not None:
         return estimated_items
@@ -951,7 +951,7 @@ async def _execute_via_operation_manager(enhanced_operation, operation_type, fun
 
 def migrate_timeout_operation(
     operation_type: OperationType,
-    estimated_items: Optional[int] = None,
+    estimated_items: int | None = None,
     priority: OperationPriority = OperationPriority.NORMAL,
 ):
     """

@@ -28,7 +28,7 @@
       {{ entry.ip }}    {{ entry.hostnames | join(' ') }}
       {% endfor %}
     state: present
-    create: yes
+    create: true
     mode: '0644'
 
 - name: Verify /etc/hosts entries

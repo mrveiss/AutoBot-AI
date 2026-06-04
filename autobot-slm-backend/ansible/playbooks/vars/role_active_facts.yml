@@ -1,4 +1,4 @@
-# #7050/#7051 shared role-active facts — DUPLICATE of inventory/group_vars/all.yml.
+# #7050/#7051/#7053 shared role-active facts — DUPLICATE of inventory/group_vars/all.yml.
 #
 # WHY DUPLICATED:
 # When SLM triggers provision-fleet-roles.yml from a node-add or wizard flow,
@@ -16,6 +16,15 @@
 # DRY trade-off: kept identical to group_vars/all.yml definitions. If they
 # diverge, the CI test playbook (#7068) won't catch it — that test loads
 # group_vars directly. TODO follow-up: single source of truth via include.
+#
+# CANONICAL ROLE NAMES (#7053):
+# The short-form names in the OR-chains below (e.g. 'backend', 'frontend')
+# are DEPRECATED. Canonical form is 'autobot-X' (e.g. 'autobot-backend').
+# The OR-chain is retained for backward compatibility only. New node_roles
+# inventory entries MUST use canonical form. See also:
+#   - inventory/group_vars/all.yml (_role_aliases dict + CANONICAL ROLE NAMES section)
+#   - tools/lint/check_canonical_role_names.py (pre-commit enforcement)
+#   - docs/developer/ANSIBLE_ROLE_NAMES.md (full reference)
 ---
 role_backend_active: >-
   {{ ('backend' in (node_roles | default([]))) or
@@ -63,6 +72,11 @@ role_vnc_active: >-
      (inventory_hostname in (groups.get('main', []) | default([]))) or
      (inventory_hostname in (groups.get('backend', []) | default([]))) or
      (inventory_hostname in (groups.get('vnc_nodes', []) | default([]))) }}
+
+role_xrdp_active: >-
+  {{ ('xrdp' in (node_roles | default([]))) or
+     ('autobot-xrdp' in (node_roles | default([]))) or
+     (inventory_hostname in (groups.get('rdp_nodes', []) | default([]))) }}
 
 role_llm_active: >-
   {{ ('llm' in (node_roles | default([]))) or

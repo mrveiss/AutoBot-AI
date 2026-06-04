@@ -27,8 +27,7 @@ Performance:
 - Relation traversal: <100ms
 """
 
-import logging
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query, Request
 from fastapi.responses import JSONResponse
@@ -40,12 +39,15 @@ from api.schemas_knowledge import (
     InvalidateRelationRequest,
     MemoryDeleteEntityResponse,
     MemoryDeleteRelationResponse,
+    MemoryEntityData,
     MemoryEntityDetailResponse,
+    MemoryEntityGraphData,
     MemoryEntityInvalidateResponse,
     MemoryEntityListResponse,
     MemoryOrphanCleanupResponse,
     MemoryOrphanScanResponse,
     MemoryRelatedEntitiesResponse,
+    MemoryRelationData,
     MemoryRelationInvalidateResponse,
     MemorySearchResponse,
     ObservationAddRequest,
@@ -55,7 +57,8 @@ from api.system_health import ComponentHealth, register_health_probe
 from auth_middleware import check_admin_permission
 from autobot_memory_graph import AutoBotMemoryGraph
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from autobot_shared.time_utils import now_utc, utc_timestamp
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.time_utils import now_utc
 from utils.request_utils import generate_request_id
 
 # ====================================================================
@@ -63,7 +66,7 @@ from utils.request_utils import generate_request_id
 # ====================================================================
 
 router = APIRouter(tags=["memory"])
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # ====================================================================
 # Dependency Injection
@@ -121,7 +124,7 @@ async def _get_entity_name_by_id(memory_graph: AutoBotMemoryGraph, entity_id: st
     return entity["name"]
 
 
-def _parse_tag_list(tags: Optional[str]) -> Optional[List[str]]:
+def _parse_tag_list(tags: str | None) -> List[str] | None:
     """Parse comma-separated tags into list. Issue #398: Extracted."""
     if not tags:
         return None
@@ -255,7 +258,7 @@ def _build_related_entities_response(
     entity_id: str,
     entity_name: str,
     related: List[Dict],
-    relation_type: Optional[str],
+    relation_type: str | None,
     direction: str,
     max_depth: int,
 ) -> JSONResponse:
@@ -299,7 +302,7 @@ def _build_related_entities_response(
 def _build_list_entities_response(
     request_id: str,
     entities: List[Dict],
-    entity_type: Optional[str],
+    entity_type: str | None,
     limit: int,
 ) -> JSONResponse:
     """
@@ -338,7 +341,7 @@ def _build_list_entities_response(
 # ====================================================================
 
 
-@router.post("/entities", status_code=201, response_model=DataResponse)
+@router.post("/entities", status_code=201, response_model=DataResponse[MemoryEntityData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="create_entity",
@@ -408,7 +411,7 @@ async def create_entity(
 )
 async def list_all_entities(
     admin_check: bool = Depends(check_admin_permission),
-    entity_type: Optional[str] = Query(None, description="Filter by entity type"),
+    entity_type: str | None = Query(None, description="Filter by entity type"),
     limit: int = Query(100, ge=1, le=500, description="Maximum results to return"),
     memory_graph: AutoBotMemoryGraph = Depends(get_memory_graph),
 ) -> JSONResponse:
@@ -834,7 +837,7 @@ async def get_entity_by_id(
         raise HTTPException(status_code=500, detail="Failed to retrieve entity")
 
 
-@router.get("/entities", response_model=DataResponse)
+@router.get("/entities", response_model=DataResponse[MemoryEntityData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_entity_by_name",
@@ -888,7 +891,7 @@ async def get_entity_by_name(
         raise HTTPException(status_code=500, detail="Failed to search entity")
 
 
-@router.patch("/entities/{entity_id}/observations", response_model=DataResponse)
+@router.patch("/entities/{entity_id}/observations", response_model=DataResponse[MemoryEntityData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="add_observations",
@@ -1004,7 +1007,7 @@ async def delete_entity(
 # ====================================================================
 
 
-@router.post("/relations", status_code=201, response_model=DataResponse)
+@router.post("/relations", status_code=201, response_model=DataResponse[MemoryRelationData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="create_relation",
@@ -1082,7 +1085,7 @@ async def create_relation(
 async def get_related_entities(
     entity_id: str = Path(..., description="Entity UUID"),
     admin_check: bool = Depends(check_admin_permission),
-    relation_type: Optional[str] = Query(None, description="Filter by relation type"),
+    relation_type: str | None = Query(None, description="Filter by relation type"),
     direction: str = Query("both", pattern="^(outgoing|incoming|both)$", description="Relation direction"),
     max_depth: int = Query(1, ge=1, le=3, description="Relationship traversal depth (1-3)"),
     memory_graph: AutoBotMemoryGraph = Depends(get_memory_graph),
@@ -1201,9 +1204,9 @@ async def delete_relation(
 async def search_entities(
     admin_check: bool = Depends(check_admin_permission),
     query: str = Query(..., min_length=1, description="Search query"),
-    entity_type: Optional[str] = Query(None, description="Filter by entity type"),
-    tags: Optional[str] = Query(None, description="Filter by tags (comma-separated)"),
-    status: Optional[str] = Query(None, description="Filter by status"),
+    entity_type: str | None = Query(None, description="Filter by entity type"),
+    tags: str | None = Query(None, description="Filter by tags (comma-separated)"),
+    status: str | None = Query(None, description="Filter by status"),
     limit: int = Query(50, ge=1, le=500, description="Maximum results to return"),
     memory_graph: AutoBotMemoryGraph = Depends(get_memory_graph),
 ) -> JSONResponse:
@@ -1263,7 +1266,7 @@ async def search_entities(
         raise HTTPException(status_code=500, detail="Search failed")
 
 
-@router.get("/graph", response_model=DataResponse)
+@router.get("/graph", response_model=DataResponse[MemoryEntityGraphData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_entity_graph",
@@ -1271,7 +1274,7 @@ async def search_entities(
 )
 async def get_entity_graph(
     admin_check: bool = Depends(check_admin_permission),
-    entity_id: Optional[str] = Query(None, description="Root entity ID (optional)"),
+    entity_id: str | None = Query(None, description="Root entity ID (optional)"),
     max_depth: int = Query(2, ge=1, le=3, description="Graph traversal depth"),
     memory_graph: AutoBotMemoryGraph = Depends(get_memory_graph),
 ) -> JSONResponse:
@@ -1326,7 +1329,7 @@ async def get_entity_graph(
 
 @register_health_probe("memory")
 async def probe_memory(
-    request: Optional[Request] = None,
+    request: Request | None = None,
 ) -> ComponentHealth:
     """Issue #3333: probe registration for the memory graph."""
     if request is None:
@@ -1351,58 +1354,6 @@ async def probe_memory(
             name="memory",
             status="down",
             detail=f"probe error: {type(exc).__name__}",
-        )
-
-
-@router.get("/health", response_model=DataResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="memory_health_check",
-    error_code_prefix="MEMORY",
-)
-async def memory_health_check(
-    admin_check: bool = Depends(check_admin_permission),
-    memory_graph: AutoBotMemoryGraph = Depends(get_memory_graph),
-) -> JSONResponse:
-    """
-    Health check for Memory Graph service
-
-    Issue #744: Requires admin authentication.
-
-    Args:
-        admin_check: Admin permission verification
-        memory_graph: Memory graph instance
-
-    Returns:
-        Health status and component information
-    """
-    try:
-        health_status = {
-            "status": "healthy",
-            "timestamp": utc_timestamp(),
-            "components": {
-                "memory_graph": ("healthy" if memory_graph.initialized else "unavailable"),
-                "redis_connection": ("healthy" if memory_graph.redis_client else "unavailable"),
-                "knowledge_base": ("healthy" if memory_graph.knowledge_base else "unavailable"),
-            },
-        }
-
-        overall_healthy = all(status == "healthy" for status in health_status["components"].values())
-
-        if not overall_healthy:
-            health_status["status"] = "degraded"
-
-        return JSONResponse(status_code=200 if overall_healthy else 503, content=health_status)
-
-    except Exception as e:
-        logger.error("Health check failed: %s", e)
-        return JSONResponse(
-            status_code=503,
-            content={
-                "status": "unhealthy",
-                "error": "Internal server error",
-                "timestamp": utc_timestamp(),
-            },
         )
 
 

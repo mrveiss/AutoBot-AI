@@ -11,10 +11,11 @@ Supports OAuth2 (Google, GitHub, Facebook), LDAP/AD, and SAML.
 import logging
 import secrets
 import uuid
-from typing import Any, Optional
+from typing import Any
 
 from sqlalchemy import select
 
+from autobot_shared.redis_client import get_redis_client
 from user_management.models.sso import SSOProvider, SSOProviderType, UserSSOLink
 from user_management.models.user import User
 from user_management.schemas.sso import SSOProviderCreate, SSOProviderUpdate
@@ -39,9 +40,6 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
-# Module-level OAuth2 state storage
-_oauth_states: dict[str, uuid.UUID] = {}
-
 
 class SSOServiceError(Exception):
     """Base exception for SSO service errors."""
@@ -57,6 +55,37 @@ class SSOAuthenticationError(SSOServiceError):
 
 class SSOService(BaseService):
     """SSO provider management and authentication service."""
+
+    @staticmethod
+    def get_provider_endpoint_template(provider_type: str, domain: str = "") -> dict[str, str]:
+        """Return pre-filled OIDC endpoint config for known provider types."""
+        templates = {
+            SSOProviderType.OKTA.value: {
+                "authorize_url": f"https://{domain}/oauth2/v1/authorize",
+                "token_url": f"https://{domain}/oauth2/v1/token",
+                "userinfo_url": f"https://{domain}/oauth2/v1/userinfo",
+                "scope": "openid email profile groups",
+            },
+            SSOProviderType.MICROSOFT_ENTRA.value: {
+                "authorize_url": f"https://login.microsoftonline.com/{domain}/oauth2/v2.0/authorize",
+                "token_url": f"https://login.microsoftonline.com/{domain}/oauth2/v2.0/token",
+                "userinfo_url": "https://graph.microsoft.com/oidc/userinfo",
+                "scope": "openid email profile",
+            },
+            SSOProviderType.GOOGLE_WORKSPACE.value: {
+                "authorize_url": "https://accounts.google.com/o/oauth2/v2/auth",
+                "token_url": "https://oauth2.googleapis.com/token",
+                "userinfo_url": "https://openidconnect.googleapis.com/v1/userinfo",
+                "scope": "openid email profile",
+            },
+            SSOProviderType.GITHUB.value: {
+                "authorize_url": "https://github.com/login/oauth/authorize",
+                "token_url": "https://github.com/login/oauth/access_token",
+                "userinfo_url": "https://api.github.com/user",
+                "scope": "user:email read:user",
+            },
+        }
+        return templates.get(provider_type, {})
 
     async def create_provider(self, data: SSOProviderCreate) -> SSOProvider:
         """Create a new SSO provider."""
@@ -77,7 +106,7 @@ class SSOService(BaseService):
         return provider
 
     async def list_providers(
-        self, org_id: Optional[uuid.UUID] = None, active_only: bool = False
+        self, org_id: uuid.UUID | None = None, active_only: bool = False
     ) -> tuple[list[SSOProvider], int]:
         """List SSO providers with optional filtering."""
         query = select(SSOProvider)
@@ -143,18 +172,23 @@ class SSOService(BaseService):
             logger.error("LDAP connection test failed: %s", e)
             return {"success": False, "message": "LDAP connection test failed"}
 
-    def _generate_oauth_state(self, provider_id: uuid.UUID) -> str:
-        """Generate OAuth2 state token and store provider mapping."""
+    async def _generate_oauth_state(self, provider_id: uuid.UUID) -> str:
+        """Generate OAuth2 state token and store provider mapping in Redis with 10-min TTL."""
         state = secrets.token_urlsafe(32)
-        _oauth_states[state] = provider_id
+        redis = get_redis_client()
+        if redis:
+            await redis.set(f"sso:state:{state}", str(provider_id), ex=600)
         return state
 
-    def _validate_oauth_state(self, state: str) -> uuid.UUID:
-        """Validate OAuth2 state token and return provider ID."""
-        provider_id = _oauth_states.pop(state, None)
-        if not provider_id:
-            raise SSOAuthenticationError("Invalid or expired OAuth state")
-        return provider_id
+    async def _validate_oauth_state(self, state: str) -> uuid.UUID:
+        """Validate OAuth2 state token via atomic GETDEL (single-use, replay-safe)."""
+        redis = get_redis_client()
+        if redis:
+            provider_id_str = await redis.getdel(f"sso:state:{state}")
+            if not provider_id_str:
+                raise SSOAuthenticationError("Invalid or expired OAuth state")
+            return uuid.UUID(provider_id_str)
+        raise SSOAuthenticationError("Redis unavailable for state validation")
 
     def _build_oauth_client(self, provider: SSOProvider) -> Any:
         """Build OAuth2 client from provider config."""
@@ -170,7 +204,7 @@ class SSOService(BaseService):
     async def _get_oauth_authorize_url(self, provider: SSOProvider, callback_url: str) -> tuple[str, str]:
         """Generate OAuth2 authorization URL."""
         client = self._build_oauth_client(provider)
-        state = self._generate_oauth_state(provider.id)
+        state = await self._generate_oauth_state(provider.id)
         authorize_url = provider.config.get("authorize_url")
         scope = provider.config.get("scope", "openid email profile")
         url, _ = await client.create_authorization_url(
@@ -208,11 +242,9 @@ class SSOService(BaseService):
             raise SSOAuthenticationError(f"SSO provider {provider.name} is disabled")
         return await self._get_oauth_authorize_url(provider, callback_url)
 
-    async def complete_oauth_login(self, provider_id: uuid.UUID, code: str, state: str, callback_url: str) -> User:
+    async def complete_oauth_login(self, code: str, state: str, callback_url: str) -> User:
         """Complete OAuth2 login flow and return authenticated user."""
-        validated_provider_id = self._validate_oauth_state(state)
-        if validated_provider_id != provider_id:
-            raise SSOAuthenticationError("OAuth state mismatch")
+        provider_id = await self._validate_oauth_state(state)
         provider = await self.get_provider(provider_id)
         token = await self._exchange_oauth_code(provider, code, callback_url)
         userinfo = await self._get_oauth_userinfo(provider, token)
@@ -246,7 +278,7 @@ class SSOService(BaseService):
         user_dn = user_dn_template.format(safe_username)
         return Connection(server, user_dn, password)
 
-    def _search_ldap_user(self, conn: Any, provider: SSOProvider, username: str) -> Optional[dict[str, Any]]:
+    def _search_ldap_user(self, conn: Any, provider: SSOProvider, username: str) -> dict[str, Any] | None:
         """Search for user in LDAP directory."""
         from autobot_shared.security.input_sanitizer import sanitize_ldap_filter
 
@@ -314,11 +346,13 @@ class SSOService(BaseService):
         saml_config.load(config_dict)
         return Saml2Client(config=saml_config)
 
-    def _generate_saml_authn_request(self, provider: SSOProvider) -> tuple[str, str]:
-        """Generate SAML AuthnRequest."""
+    async def _generate_saml_authn_request(self, provider: SSOProvider) -> tuple[str, str]:
+        """Generate SAML AuthnRequest; relay state stored in Redis with 10-min TTL."""
         client = self._build_saml_client(provider)
         relay_state = secrets.token_urlsafe(32)
-        _oauth_states[relay_state] = provider.id
+        redis = get_redis_client()
+        if redis:
+            await redis.set(f"sso:state:{relay_state}", str(provider.id), ex=600)
         request_id, info = client.prepare_for_authenticate()
         redirect_url = dict(info["headers"])["Location"]
         return redirect_url, relay_state
@@ -343,7 +377,7 @@ class SSOService(BaseService):
         user_data = self._extract_saml_user_data(authn_response, provider)
         return await self._find_or_provision_user(provider, external_id, user_data)
 
-    async def _find_existing_sso_link(self, provider_id: uuid.UUID, external_id: str) -> Optional[UserSSOLink]:
+    async def _find_existing_sso_link(self, provider_id: uuid.UUID, external_id: str) -> UserSSOLink | None:
         """Find existing SSO link."""
         result = await self.session.execute(
             select(UserSSOLink).where(
@@ -353,7 +387,7 @@ class SSOService(BaseService):
         )
         return result.scalar_one_or_none()
 
-    async def _find_user_by_email(self, email: str) -> Optional[User]:
+    async def _find_user_by_email(self, email: str) -> User | None:
         """Find user by email address."""
         result = await self.session.execute(select(User).where(User.email == email))
         return result.scalar_one_or_none()

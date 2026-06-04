@@ -7,16 +7,16 @@ ChromaDB Loader - Load chunks and summaries with embeddings to ChromaDB.
 Issue #759: Knowledge Pipeline Foundation - Extract, Cognify, Load (ECL).
 """
 
-import logging
-from typing import Any, List, Optional
+from typing import Any, List
 
+from autobot_shared.logging_manager import get_logger
 from knowledge.backends import get_async_default_client
 from knowledge.pipeline.base import BaseLoader, PipelineContext
 from knowledge.pipeline.models.chunk import ProcessedChunk
 from knowledge.pipeline.models.summary import Summary
 from knowledge.pipeline.registry import TaskRegistry
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @TaskRegistry.register_loader("chromadb")
@@ -43,7 +43,7 @@ class ChromaDBLoader(BaseLoader):
         self.summary_collection_name = summary_collection_name
         self.batch_size = batch_size
         self.load_summaries = load_summaries
-        self.client: Optional[Any] = None
+        self.client: Any | None = None
 
     async def load(self, context: PipelineContext) -> None:
         """

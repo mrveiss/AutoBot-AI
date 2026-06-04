@@ -4,8 +4,8 @@
 """
 Security utilities for AutoBot (#1721).
 
-Shared path validation, safe error responses, and input sanitization
-used across all backend services to resolve CodeQL alerts.
+Shared path validation, safe error responses, input sanitization, and
+SSRF protection used across all backend services.
 """
 
 from autobot_shared.security.input_sanitizer import (
@@ -17,7 +17,12 @@ from autobot_shared.security.input_sanitizer import (
 )
 from autobot_shared.security.path_validator import validate_path, validate_relative_path
 from autobot_shared.security.safe_response import safe_error_response
-from autobot_shared.security.ssrf_guard import SSRFError, fetch_safe_url, resolve_safe_ip, safe_aiohttp_resolver
+from autobot_shared.security.ssrf_guard import (
+    SSRFError,
+    fetch_safe_url,
+    resolve_safe_ip,
+    safe_aiohttp_resolver,
+)
 
 __all__ = [
     "validate_path",

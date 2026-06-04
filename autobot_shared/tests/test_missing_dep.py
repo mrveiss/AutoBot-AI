@@ -4,14 +4,14 @@
 """Unit tests for autobot_shared.missing_dep.MissingDep (#6807).
 
 Closes the test gap from #6794: the dunder short-circuit and
-__getitem__ pass-through were added to support Optional[stub] /
+__getitem__ pass-through were added to support stub | None /
 List[stub] at module-load time, but PR #6800 verified the behavior
 only with a one-shot script. These tests pin the contract so a future
 refactor that breaks any of the three paths (subscript / call /
 attribute) fails CI loudly.
 """
 
-from typing import List, Optional
+from typing import List
 
 import pytest
 
@@ -23,11 +23,11 @@ def _stub() -> MissingDep:
 
 
 def test_subscript_does_not_raise() -> None:
-    """Optional[stub] / List[stub] must evaluate at module load (#6794)."""
+    """stub | None / List[stub] must evaluate at module load (#6794)."""
     stub = _stub()
     # Both must succeed without raising — that's the entire point of
     # the __getitem__ override.
-    assert Optional[stub] is not None
+    assert stub | None is not None
     assert List[stub] is not None
 
 

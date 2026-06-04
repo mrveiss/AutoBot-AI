@@ -18,7 +18,7 @@ re-introduced without the AUTOBOT_DEV_AUTH_BYPASS env-flag gate, or if the
 env-flag gate is widened to other truthy-ish strings.
 """
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi import HTTPException

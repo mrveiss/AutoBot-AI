@@ -23,9 +23,7 @@ class MCPWrapperPlugin(BasePlugin):
         """Initialize MCP wrapper plugin."""
         super().__init__(manifest, config)
         self.enabled_tools = (
-            config.get("enabled_tools", ["memory", "filesystem"])
-            if config
-            else ["memory", "filesystem"]
+            config.get("enabled_tools", ["memory", "filesystem"]) if config else ["memory", "filesystem"]
         )
         self.tool_registry: Dict[str, any] = {}
 
@@ -41,9 +39,7 @@ class MCPWrapperPlugin(BasePlugin):
             elif tool_name == "filesystem":
                 self.tool_registry["filesystem"] = self._get_filesystem_tool_wrapper()
 
-        self._logger.info(
-            "MCP Wrapper Plugin initialized with %d tools", len(self.tool_registry)
-        )
+        self._logger.info("MCP Wrapper Plugin initialized with %d tools", len(self.tool_registry))
 
     async def shutdown(self) -> None:
         """Clean up plugin resources."""
@@ -90,9 +86,7 @@ class MCPWrapperPlugin(BasePlugin):
         This is a placeholder - in real implementation,
         would call actual MCP memory tool.
         """
-        self._logger.info(
-            "MCP memory create_entities called with %d entities", len(entities)
-        )
+        self._logger.info("MCP memory create_entities called with %d entities", len(entities))
         return {"status": "success", "count": len(entities)}
 
     async def _read_file(self, path: str) -> str:

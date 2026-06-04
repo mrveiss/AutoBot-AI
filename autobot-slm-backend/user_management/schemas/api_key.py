@@ -9,7 +9,7 @@ Pydantic schemas for API Key management endpoints.
 
 import uuid
 from datetime import datetime
-from typing import List, Optional
+from typing import List
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -18,9 +18,9 @@ class APIKeyCreate(BaseModel):
     """Request to create a new API key."""
 
     name: str = Field(..., min_length=1, max_length=255)
-    description: Optional[str] = Field(None, max_length=500)
+    description: str | None = Field(None, max_length=500)
     scopes: List[str]
-    expires_days: Optional[int] = Field(None, ge=1, le=365)
+    expires_days: int | None = Field(None, ge=1, le=365)
 
 
 class APIKeyCreateResponse(BaseModel):
@@ -33,7 +33,7 @@ class APIKeyCreateResponse(BaseModel):
     key_prefix: str
     name: str
     scopes: List[str]
-    expires_at: Optional[datetime] = None
+    expires_at: datetime | None = None
     created_at: datetime
 
 
@@ -45,11 +45,11 @@ class APIKeyResponse(BaseModel):
     id: uuid.UUID
     key_prefix: str
     name: str
-    description: Optional[str] = None
+    description: str | None = None
     scopes: List[str]
     is_active: bool
-    expires_at: Optional[datetime] = None
-    last_used_at: Optional[datetime] = None
+    expires_at: datetime | None = None
+    last_used_at: datetime | None = None
     usage_count: int = 0
     created_at: datetime
 
@@ -64,8 +64,8 @@ class APIKeyListResponse(BaseModel):
 class APIKeyUpdate(BaseModel):
     """Request to update an API key."""
 
-    name: Optional[str] = Field(None, max_length=255)
-    description: Optional[str] = Field(None, max_length=500)
+    name: str | None = Field(None, max_length=255)
+    description: str | None = Field(None, max_length=500)
 
 
 class APIScopesResponse(BaseModel):

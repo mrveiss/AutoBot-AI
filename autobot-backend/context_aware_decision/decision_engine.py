@@ -11,9 +11,9 @@ Part of Issue #381 - God Class Refactoring
 """
 
 import asyncio
-import logging
 from typing import Any, Callable, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from enhanced_memory_manager_async import TaskPriority
 from task_execution_tracker import get_task_tracker
 
@@ -27,7 +27,7 @@ from .types import (
     DecisionType,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class DecisionEngine:

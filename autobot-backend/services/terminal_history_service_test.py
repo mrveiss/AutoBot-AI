@@ -36,26 +36,26 @@ class TestTerminalHistoryService:
             return svc
 
     @pytest.mark.asyncio
-    async def test_add_command(self, service, mock_redis):
+    async def test_add_command(self, service, mock_redis) -> None:
         """Add command to history."""
         await service.add_command("user1", "ls -la")
         mock_redis.zadd.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_add_command_empty_ignored(self, service, mock_redis):
+    async def test_add_command_empty_ignored(self, service, mock_redis) -> None:
         """Empty commands should be ignored."""
         await service.add_command("user1", "   ")
         mock_redis.zadd.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_get_history(self, service, mock_redis):
+    async def test_get_history(self, service, mock_redis) -> None:
         """Get recent history."""
         result = await service.get_history("user1", limit=10)
         assert result == ["ls -la", "cd ..", "git status"]
         mock_redis.zrevrange.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_search_history(self, service, mock_redis):
+    async def test_search_history(self, service, mock_redis) -> None:
         """Search history by query."""
         mock_redis.zrevrange.return_value = ["git status", "git commit", "ls -la"]
         result = await service.search_history("user1", "git")
@@ -64,7 +64,7 @@ class TestTerminalHistoryService:
         assert "ls -la" not in result
 
     @pytest.mark.asyncio
-    async def test_clear_history(self, service, mock_redis):
+    async def test_clear_history(self, service, mock_redis) -> None:
         """Clear all history."""
         await service.clear_history("user1")
         mock_redis.delete.assert_called_once()

@@ -19,8 +19,67 @@ helper, so the tests are now at the helper-level and the integration
 tests below pin the per-endpoint configuration.
 """
 
+import asyncio
+import inspect
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+from fastapi import HTTPException
+
 from api import openai_compat
 from autobot_shared.rate_limit import IPRateLimiter
+
+
+class TestGetUserAsync:
+    """MVA-169: _get_user must be async and await get_current_user."""
+
+    def test_get_user_is_coroutine_function(self):
+        assert inspect.iscoroutinefunction(openai_compat._get_user)
+
+    def test_get_user_awaits_get_current_user(self):
+        fake_request = MagicMock()
+        fake_user = {"id": "u1", "email": "test@example.com"}
+
+        async def run():
+            with patch(
+                "api.openai_compat.get_current_user", new_callable=AsyncMock, return_value=fake_user
+            ) as mock_gcu:
+                result = await openai_compat._get_user(fake_request)
+                mock_gcu.assert_awaited_once_with(fake_request)
+                assert result == fake_user
+
+        asyncio.get_event_loop().run_until_complete(run())
+
+    def test_get_user_propagates_http_exception(self):
+        fake_request = MagicMock()
+
+        async def run():
+            with patch(
+                "api.openai_compat.get_current_user",
+                new_callable=AsyncMock,
+                side_effect=HTTPException(status_code=401, detail="Unauthorized"),
+            ):
+                with pytest.raises(HTTPException) as exc_info:
+                    await openai_compat._get_user(fake_request)
+                assert exc_info.value.status_code == 401
+
+        asyncio.get_event_loop().run_until_complete(run())
+
+    def test_get_user_converts_unexpected_exception_to_401(self):
+        fake_request = MagicMock()
+
+        async def run():
+            with patch(
+                "api.openai_compat.get_current_user",
+                new_callable=AsyncMock,
+                side_effect=RuntimeError("jwt decode failed"),
+            ):
+                with pytest.raises(HTTPException) as exc_info:
+                    await openai_compat._get_user(fake_request)
+                assert exc_info.value.status_code == 401
+                assert exc_info.value.detail == "Unauthorized"
+
+        asyncio.get_event_loop().run_until_complete(run())
 
 
 class TestOAIRateLimitWiring:

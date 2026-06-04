@@ -17,7 +17,7 @@
 
 - name: "AutoBot Dependency Rollback - Pre-flight"
   hosts: localhost
-  gather_facts: no
+  gather_facts: false
   tasks:
     - name: Display rollback warning
       ansible.builtin.debug:
@@ -42,7 +42,7 @@
 
 - name: "Rollback NPU Worker Services"
   hosts: npu
-  become: yes
+  become: true
   serial: 1
   vars:
     # Use most recent backup if not specified
@@ -57,7 +57,7 @@
 
 - name: "Rollback AI/ML Stack Services"
   hosts: aiml
-  become: yes
+  become: true
   serial: 1
   vars:
     latest_backup: "{{ lookup('pipe', 'ls -t ' ~ backup_base_path | default('/opt/autobot/backups') ~ '/venv-*.tar.gz 2>/dev/null | head -1') | default(omit) }}"
@@ -71,7 +71,7 @@
 
 - name: "Rollback Backend Services"
   hosts: backend
-  become: yes
+  become: true
   serial: 1
   vars:
     latest_backup: "{{ lookup('pipe', 'ls -t ' ~ backup_base_path | default('/opt/autobot/backups') ~ '/venv-*.tar.gz 2>/dev/null | head -1') | default(omit) }}"
@@ -85,7 +85,7 @@
 
 - name: "Post-Rollback Summary"
   hosts: localhost
-  gather_facts: no
+  gather_facts: false
   tasks:
     - name: Display completion summary
       ansible.builtin.debug:

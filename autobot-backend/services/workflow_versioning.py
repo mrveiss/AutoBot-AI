@@ -37,14 +37,14 @@ Usage:
 """
 
 import json
-import logging
 from dataclasses import asdict, dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.time_utils import utc_timestamp as _utc_now
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # Redis key helpers
@@ -117,7 +117,7 @@ class WorkflowVersionStore:
         workflow_id: str,
         data: Dict[str, Any],
         notes: str = "",
-    ) -> Optional[int]:
+    ) -> int | None:
         """
         Persist *data* as the next version of *workflow_id* (#2145).
 
@@ -235,7 +235,7 @@ class WorkflowVersionStore:
 
         return summaries
 
-    async def get_version(self, workflow_id: str, version: int) -> Optional[WorkflowVersion]:
+    async def get_version(self, workflow_id: str, version: int) -> WorkflowVersion | None:
         """
         Retrieve the full snapshot for *workflow_id* at *version* (#2145).
 
@@ -262,7 +262,7 @@ class WorkflowVersionStore:
 
         return WorkflowVersion.from_dict(json.loads(raw))
 
-    async def restore_version(self, workflow_id: str, version: int) -> Optional[Dict[str, Any]]:
+    async def restore_version(self, workflow_id: str, version: int) -> Dict[str, Any] | None:
         """
         Return the data dict stored in *version* of *workflow_id* (#2145).
 
@@ -290,7 +290,7 @@ class WorkflowVersionStore:
         workflow_id: str,
         v1: int,
         v2: int,
-    ) -> Optional[Dict[str, Any]]:
+    ) -> Dict[str, Any] | None:
         """
         Compare two versions of *workflow_id* and return a diff (#2145).
 

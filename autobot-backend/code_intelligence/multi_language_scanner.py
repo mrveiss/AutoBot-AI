@@ -13,11 +13,11 @@ analyzer into a single scanning interface.
 Part of EPIC #217 - Advanced Code Intelligence Methods
 """
 
-import logging
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Set
 
+from autobot_shared.logging_manager import get_logger
 from code_intelligence.base_analyzer import (
     AnalysisIssue,
     AnalysisResult,
@@ -28,7 +28,7 @@ from code_intelligence.shell_analyzer import ShellAnalyzer
 from code_intelligence.typescript_analyzer import TypeScriptAnalyzer
 from code_intelligence.vue_analyzer import VueAnalyzer
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def create_multi_language_scanner() -> MultiLanguageAnalyzer:
@@ -128,8 +128,8 @@ class CodebaseScanner:
         self,
         directory: Path,
         recursive: bool = True,
-        exclude_patterns: Optional[List[str]] = None,
-        languages: Optional[Set[Language]] = None,
+        exclude_patterns: List[str] | None = None,
+        languages: Set[Language] | None = None,
     ) -> AnalysisResult:
         """Scan all supported files in a directory.
 
@@ -158,8 +158,8 @@ class CodebaseScanner:
 
     def scan_codebase(
         self,
-        root_path: Optional[Path] = None,
-        exclude_patterns: Optional[List[str]] = None,
+        root_path: Path | None = None,
+        exclude_patterns: List[str] | None = None,
     ) -> AnalysisResult:
         """Scan the entire AutoBot codebase.
 
@@ -336,7 +336,7 @@ def scan_directory(directory: str, recursive: bool = True) -> AnalysisResult:
     return scanner.scan_directory(Path(directory), recursive=recursive)
 
 
-def scan_codebase(root_path: Optional[str] = None) -> AnalysisResult:
+def scan_codebase(root_path: str | None = None) -> AnalysisResult:
     """Quick scan the entire codebase.
 
     Args:

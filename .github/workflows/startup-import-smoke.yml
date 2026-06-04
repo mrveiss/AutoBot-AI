@@ -36,13 +36,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.0.2
 
       - name: Set up Python 3.12
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
           cache: 'pip'
+          cache-dependency-path: |
+            requirements*.txt
+            autobot-backend/requirements*.txt
 
       - name: Install backend dependencies
         # #6947: pipefail required so pip install failures surface (was masked by `| tail -5`).

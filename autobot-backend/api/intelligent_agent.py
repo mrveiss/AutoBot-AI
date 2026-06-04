@@ -8,14 +8,14 @@ Provides REST and WebSocket endpoints for the intelligent agent system.
 """
 
 import asyncio
-import logging
 import time
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket, WebSocketDisconnect
 
-from api.system_health import ComponentHealth, register_health_probe
+from api.system_health import ComponentHealth, KnownProbes, register_health_probe
 from auth_middleware import check_admin_permission, get_current_user
+from autobot_shared.logging_manager import get_logger
 
 if TYPE_CHECKING:
     from intelligence.intelligent_agent import IntelligentAgent
@@ -25,13 +25,12 @@ from api.schemas_agent import (
     AgentSystemCapabilitiesResponse,
     GoalRequest,
     GoalResponse,
-    HealthResponse,
 )
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from monitoring.prometheus_metrics import get_metrics_manager
 
 # CRITICAL FIX: Use lazy loading to prevent startup deadlock
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Prometheus metrics instance
 prometheus_metrics = get_metrics_manager()
@@ -201,9 +200,9 @@ async def get_system_info(
     )
 
 
-@register_health_probe("intelligent_agent")
+@register_health_probe(KnownProbes.INTELLIGENT_AGENT)
 async def probe_intelligent_agent(
-    request: Optional[Request] = None,
+    request: Request | None = None,
 ) -> ComponentHealth:
     """Issue #3333: probe registration for intelligent_agent module.
 
@@ -224,45 +223,6 @@ async def probe_intelligent_agent(
             name="intelligent_agent",
             status="down",
             detail=f"probe error: {type(exc).__name__}",
-        )
-
-
-@router.get("/health", response_model=HealthResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="health_check",
-    error_code_prefix="INTELLIGENT_AGENT",
-)
-async def health_check(
-    current_user: dict = Depends(get_current_user),
-):
-    """
-    Health check for the intelligent agent system.
-
-    Issue #744: Requires authenticated user.
-    """
-    try:
-        await get_agent()
-
-        # Check component health
-        components = {
-            "agent": "healthy",
-            "os_detector": "healthy",
-            "goal_processor": "healthy",
-            "tool_selector": "healthy",
-            "streaming_executor": "healthy",
-        }
-
-        # Get uptime (placeholder - would need to track actual start time)
-        uptime = 0.0
-        return HealthResponse(status="healthy", components=components, uptime=uptime)
-
-    except Exception as e:
-        logger.error("Health check failed: %s", e)
-        return HealthResponse(
-            status="unhealthy",
-            components={"error": "Internal server error"},
-            uptime=0.0,
         )
 
 

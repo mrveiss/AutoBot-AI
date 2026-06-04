@@ -13,12 +13,13 @@ This addresses the critical duplicate pattern identified in the codebase analysi
 """
 
 import asyncio
-import logging
 import time
 from abc import abstractmethod
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List
 
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.prompt_rules import LEDGER_VS_EXECUTOR_RULE
 from memory.manager import UnifiedMemoryManager
 from prompt_manager import get_language_instruction, resolve_language
 
@@ -50,11 +51,11 @@ class StandardizedAgent(BaseAgent):
     def __init__(self, agent_type: str, deployment_mode: DeploymentMode = DeploymentMode.LOCAL):
         """Initialize standardized agent with action handlers and metrics."""
         super().__init__(agent_type, deployment_mode)
-        self.logger = logging.getLogger(f"{__name__}.{agent_type}")
+        self.logger = get_logger(f"{__name__}.{agent_type}")
 
         # Lazy memory facade — created on first access so agents that never
         # use memory don't pay the UnifiedMemoryManager construction cost.
-        self._memory_manager: Optional[UnifiedMemoryManager] = None
+        self._memory_manager: UnifiedMemoryManager | None = None
 
         # Action handlers mapping - to be configured by subclasses
         self._action_handlers: Dict[str, ActionHandler] = {}
@@ -93,7 +94,7 @@ class StandardizedAgent(BaseAgent):
 
     def _validate_action_and_handler(
         self, request: AgentRequest
-    ) -> tuple[Optional[AgentResponse], Optional[ActionHandler], Optional[Callable]]:
+    ) -> tuple[AgentResponse | None, ActionHandler | None, Callable | None]:
         """Validate action and get handler method (Issue #398: extracted).
 
         Returns:
@@ -143,15 +144,16 @@ class StandardizedAgent(BaseAgent):
         return None, handler_config, handler_method
 
     def _get_localized_system_prompt(self, language=None):
-        """Get system prompt with language instruction appended.
+        """Get system prompt with language instruction and rules appended.
 
         Issue #1327: Wraps _get_system_prompt() with language injection.
+        Issue #7380: Injects LEDGER_VS_EXECUTOR rule to clarify coordination semantics.
         Resolves language from request param > personality > 'en'.
         English adds no extra instruction.
         """
         base = self._get_system_prompt()
         lang_code = resolve_language(language)
-        return base + get_language_instruction(lang_code)
+        return base + "\n\n" + LEDGER_VS_EXECUTOR_RULE + "\n\n" + get_language_instruction(lang_code)
 
     def _build_success_response(self, request: AgentRequest, result: Any, processing_time: float) -> AgentResponse:
         """Build successful response (Issue #398: extracted)."""
@@ -282,7 +284,7 @@ class StandardizedAgent(BaseAgent):
                 {"processing_time": processing_time, "error_type": type(e).__name__},
             )
 
-    def _validate_request_params(self, request: AgentRequest, handler_config: ActionHandler) -> Optional[str]:
+    def _validate_request_params(self, request: AgentRequest, handler_config: ActionHandler) -> str | None:
         """Validate request parameters against handler requirements"""
         if not handler_config.required_params:
             return None

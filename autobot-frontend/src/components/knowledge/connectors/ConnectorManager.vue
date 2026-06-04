@@ -16,12 +16,14 @@ import type {
 } from '@/types/knowledgeBase'
 import ConnectorStatusCard from './ConnectorStatusCard.vue'
 import ConnectorConfigModal from './ConnectorConfigModal.vue'
+import ConnectorHistoryPanel from './ConnectorHistoryPanel.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import { formatTimeAgo } from '@/utils/formatHelpers'
 import { createLogger } from '@/utils/debugUtils'
 import { useI18n } from 'vue-i18n'
+import Icon from '@/components/ui/Icon.vue'
 
 const logger = createLogger('ConnectorManager')
 const { t } = useI18n()
@@ -222,7 +224,7 @@ onMounted(() => {
 
     <!-- Loading State -->
     <div v-if="store.connectorsLoading" class="loading-state">
-      <i class="fas fa-spinner fa-spin"></i>
+      <Icon name="spinner" :spin="true" />
       <p>{{ $t('knowledge.connectors.loadingConnectors') }}</p>
     </div>
 
@@ -262,72 +264,18 @@ onMounted(() => {
       @saved="onConnectorSaved"
     />
 
-    <!-- History Modal -->
+    <!-- History Modal — Issue #8149: replaced with ConnectorHistoryPanel -->
     <BaseModal
       v-model="showHistoryModal"
       :title="t('knowledge.connectors.syncHistoryTitle', { name: historyConnectorName })"
-      size="medium"
+      size="md"
     >
-      <div v-if="historyLoading" class="loading-state compact">
-        <i class="fas fa-spinner fa-spin"></i>
-        <p>{{ $t('knowledge.connectors.loadingHistory') }}</p>
-      </div>
-
-      <div
-        v-else-if="historyItems.length === 0"
-        class="history-empty"
-      >
-        {{ $t('knowledge.connectors.noSyncHistory') }}
-      </div>
-
-      <div v-else class="history-list">
-        <div
-          v-for="(item, idx) in historyItems"
-          :key="idx"
-          class="history-item"
-        >
-          <div class="history-header">
-            <span
-              class="history-status"
-              :class="`status-${item.status}`"
-            >
-              {{ item.status }}
-            </span>
-            <span class="history-time">
-              {{ formatTimeAgo(item.started_at) }}
-            </span>
-          </div>
-          <div class="history-stats">
-            <span class="history-stat">
-              <span class="stat-num added">+{{ item.added }}</span>
-              {{ $t('knowledge.connectors.historyAdded') }}
-            </span>
-            <span class="history-stat">
-              <span class="stat-num updated">~{{ item.updated }}</span>
-              {{ $t('knowledge.connectors.historyUpdated') }}
-            </span>
-            <span class="history-stat">
-              <span class="stat-num deleted">-{{ item.deleted }}</span>
-              {{ $t('knowledge.connectors.historyDeleted') }}
-            </span>
-          </div>
-          <div v-if="item.errors.length > 0" class="history-errors">
-            <span
-              v-for="(err, eidx) in item.errors.slice(0, 3)"
-              :key="eidx"
-              class="history-error"
-            >
-              {{ err }}
-            </span>
-            <span
-              v-if="item.errors.length > 3"
-              class="history-more-errors"
-            >
-              {{ $t('knowledge.connectors.moreErrors', { count: item.errors.length - 3 }) }}
-            </span>
-          </div>
-        </div>
-      </div>
+      <ConnectorHistoryPanel
+        v-if="historyConnectorId"
+        :connector-id="historyConnectorId"
+        :sync-active="getStatus(historyConnectorId).last_sync_status === 'running'"
+        @close="showHistoryModal = false"
+      />
     </BaseModal>
   </div>
 </template>

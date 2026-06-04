@@ -18,8 +18,7 @@ Routes:
 Issue #2153 — Secret management for workflow credentials.
 """
 
-import logging
-from typing import List, Optional
+from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
@@ -31,12 +30,13 @@ from api.schemas_workflows import (
 )
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from services.workflow_secret_service import (
     WorkflowSecretService,
     get_workflow_secret_service,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter()
 
@@ -125,7 +125,7 @@ async def create_workflow_secret(
     error_code_prefix="WORKFLOW_SECRETS",
 )
 async def list_workflow_secrets(
-    workflow_id: Optional[str] = Query(default=None, max_length=128),
+    workflow_id: str | None = Query(default=None, max_length=128),
     current_user: dict = Depends(get_current_user),
 ) -> List[WorkflowSecretMetadata]:
     """

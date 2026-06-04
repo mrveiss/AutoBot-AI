@@ -8,10 +8,9 @@ Handles privilege escalation requests through GUI dialogs
 """
 
 import asyncio
-import logging
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Dict, Optional
+from typing import Dict
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
@@ -20,7 +19,6 @@ from api.schemas_workflows import (
     ElevationAuthorization,
     ElevationAuthorizeResponse,
     ElevationExecuteResponse,
-    ElevationHealthResponse,
     ElevationPendingResponse,
     ElevationRequest,
     ElevationRequestResponse,
@@ -29,8 +27,9 @@ from api.schemas_workflows import (
 from api.system_health import ComponentHealth, register_health_probe
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(
     tags=["elevation"],
@@ -313,7 +312,7 @@ async def revoke_elevation_session(session_token: str):
 
 @register_health_probe("elevation")
 async def probe_elevation(
-    request: Optional[Request] = None,
+    request: Request | None = None,
 ) -> ComponentHealth:
     """Issue #3333: probe registration for elevation module."""
     try:
@@ -331,20 +330,3 @@ async def probe_elevation(
             status="down",
             detail=f"probe error: {type(exc).__name__}",
         )
-
-
-@router.get("/health", response_model=ElevationHealthResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="elevation_health_check",
-    error_code_prefix="ELEVATION",
-)
-async def elevation_health_check():
-    """Health check for elevation system"""
-    return {
-        "status": "healthy",
-        "service": "elevation",
-        "active_sessions": len(elevation_sessions),
-        "pending_requests": len([r for r in pending_requests.values() if r["status"] == "pending"]),
-        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
-    }

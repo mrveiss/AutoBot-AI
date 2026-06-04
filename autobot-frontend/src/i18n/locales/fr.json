@@ -5128,6 +5128,12 @@
     "progressBar": {
       "timeRemaining": "{time} remaining"
     },
+    "offlineBanner": {
+      "backendLost": "Backend connection lost — retrying. Cached data still available.",
+      "queuedForRetry": "{count} action queued for retry. | {count} actions queued for retry.",
+      "checking": "Checking…",
+      "retry": "Retry"
+    },
     "systemStatus": {
       "dismissNotification": "Dismiss notification",
       "close": "Close",
@@ -7007,7 +7013,11 @@
     "marketplace": "Marketplace",
     "usage": "Usage & Costs",
     "more": "More",
-    "moreItems": "More navigation items"
+    "moreItems": "More navigation items",
+    "llcPortability": "Portability",
+    "settingsAndTools": "Settings & Tools",
+    "adminPanel": "Admin Panel",
+    "documents": "AI Documents"
   },
   "reasoningTrace": {
     "title": "Trace de raisonnement",
@@ -7038,6 +7048,17 @@
     "novnc": {
       "selectHost": "Select a host to connect",
       "selectHostDesc": "Choose a VNC-capable host from the list to open a remote desktop session."
+    }
+  },
+  "mobile": {
+    "pairing": {
+      "title": "Appareiller un appareil mobile",
+      "instructions": "Scannez ce code QR avec votre appareil mobile",
+      "instructionsDetail": "Ouvrez l'application mobile AutoBot et scannez ce code pour appairer votre appareil",
+      "generating": "Génération du code QR...",
+      "expired": "Expiré",
+      "refresh": "Obtenir un nouveau code",
+      "retry": "Réessayer"
     }
   }
 }

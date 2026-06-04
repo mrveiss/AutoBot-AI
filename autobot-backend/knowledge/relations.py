@@ -17,14 +17,14 @@ plus additional knowledge-specific types.
 
 import asyncio
 import json
-import logging
 from collections import defaultdict
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Set
 
 from autobot_shared.error_boundaries import error_boundary
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Knowledge-specific relation types extend the memory graph set
 KB_RELATION_TYPES: Set[str] = {
@@ -65,7 +65,7 @@ class RelationsMixin:
         """Check whether a fact key exists in Redis."""
         return bool(await self.redis().exists(f"fact:{fact_id}"))
 
-    async def _get_fact_content(self, fact_id: str) -> Optional[dict]:
+    async def _get_fact_content(self, fact_id: str) -> dict | None:
         """Return decoded fact hash or None."""
         raw = await self.redis().hgetall(f"fact:{fact_id}")
         if not raw:
@@ -85,7 +85,7 @@ class RelationsMixin:
         source_fact_id: str,
         target_fact_id: str,
         relation_type: str,
-        metadata: Optional[dict] = None,
+        metadata: dict | None = None,
     ) -> Dict[str, Any]:
         """Create a relation between two knowledge-base facts."""
         self.ensure_initialized()
@@ -144,7 +144,7 @@ class RelationsMixin:
         self,
         source_fact_id: str,
         target_fact_id: str,
-        relation_type: Optional[str] = None,
+        relation_type: str | None = None,
     ) -> Dict[str, Any]:
         """Delete relation(s) between two facts."""
         self.ensure_initialized()
@@ -191,7 +191,7 @@ class RelationsMixin:
         self,
         fact_id: str,
         direction: str = "both",
-        relation_type: Optional[str] = None,
+        relation_type: str | None = None,
         include_fact_details: bool = False,
     ) -> Dict[str, Any]:
         """Get relations for a fact."""
@@ -240,7 +240,7 @@ class RelationsMixin:
         self,
         start_fact_id: str,
         max_depth: int = 2,
-        relation_types: Optional[List[str]] = None,
+        relation_types: List[str] | None = None,
         include_fact_details: bool = False,
     ) -> Dict[str, Any]:
         """BFS traversal of fact-relation graph."""
@@ -302,7 +302,7 @@ class RelationsMixin:
         top_k: int = 10,
         expand_relations: bool = True,
         relation_depth: int = 1,
-        relation_types: Optional[List[str]] = None,
+        relation_types: List[str] | None = None,
     ) -> Dict[str, Any]:
         """Combine vector search with graph-relation expansion."""
         self.ensure_initialized()

@@ -9,11 +9,11 @@ Supports any database engine with a SQLAlchemy-compatible connection string.
 """
 
 import hashlib
-import logging
 from contextlib import asynccontextmanager
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc, parse_utc_iso
 from knowledge.connectors.base import AbstractConnector
 from knowledge.connectors.models import (
@@ -24,7 +24,7 @@ from knowledge.connectors.models import (
 )
 from knowledge.connectors.registry import ConnectorRegistry
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def _row_to_source_id(connector_id: str, id_value: Any) -> str:
@@ -58,7 +58,7 @@ class DatabaseConnector(AbstractConnector):
         self._query: str = cfg.get("query", "")
         self._id_column: str = cfg.get("id_column", "id")
         self._content_columns: List[str] = cfg.get("content_columns", [])
-        self._timestamp_column: Optional[str] = cfg.get("timestamp_column")
+        self._timestamp_column: str | None = cfg.get("timestamp_column")
 
     # ------------------------------------------------------------------
     # AbstractConnector interface
@@ -87,7 +87,7 @@ class DatabaseConnector(AbstractConnector):
             self.logger.error("discover_sources failed: %s", exc)
             return []
 
-    async def fetch_content(self, source_id: str) -> Optional[ContentResult]:
+    async def fetch_content(self, source_id: str) -> ContentResult | None:
         """Fetch row matching *source_id* and assemble content."""
         try:
             rows = await self._execute_query(since=None)
@@ -102,7 +102,7 @@ class DatabaseConnector(AbstractConnector):
             self.logger.error("fetch_content failed for %s: %s", source_id, exc)
             return None
 
-    async def detect_changes(self, since: Optional[datetime] = None) -> List[ChangeInfo]:
+    async def detect_changes(self, since: datetime | None = None) -> List[ChangeInfo]:
         """Return rows newer than *since* based on timestamp_column."""
         try:
             rows = await self._execute_query(since=since)
@@ -145,7 +145,7 @@ class DatabaseConnector(AbstractConnector):
         finally:
             await engine.dispose()
 
-    async def _execute_query(self, since: Optional[datetime]) -> List[Any]:
+    async def _execute_query(self, since: datetime | None) -> List[Any]:
         """Run the configured query, optionally binding :since (Issue #1254)."""
         from sqlalchemy import text
 
@@ -218,7 +218,7 @@ def _row_to_dict(row: Any) -> Dict[str, Any]:
     return dict(row)
 
 
-def _extract_timestamp(row_dict: Dict[str, Any], timestamp_column: Optional[str]) -> Optional[datetime]:
+def _extract_timestamp(row_dict: Dict[str, Any], timestamp_column: str | None) -> datetime | None:
     """Extract a datetime from row_dict using timestamp_column (Issue #1254)."""
     if not timestamp_column:
         return None

@@ -8,7 +8,7 @@
       <div class="toolbar-inner">
         <!-- Selection summary -->
         <div class="selection-summary">
-          <i class="fas fa-check-square selection-icon"></i>
+          <Icon name="check-square" class="selection-icon" />
           <span class="selection-label">
             {{ t('knowledge.batchSelection.selected', { count: selectedCount }) }}
           </span>
@@ -25,8 +25,8 @@
             :title="vectorizeBtnTooltip"
             @click="handleVectorize"
           >
-            <i v-if="isVectorizing" class="fas fa-spinner fa-spin"></i>
-            <i v-else class="fas fa-cubes"></i>
+            <Icon name="spinner" class="animate-spin" v-if="isVectorizing" />
+            <Icon name="cubes" v-else />
             <span>{{ vectorizeBtnLabel }}</span>
           </button>
 
@@ -35,7 +35,7 @@
             :title="t('knowledge.batchSelection.clearSelectionTitle')"
             @click="emit('deselect-all')"
           >
-            <i class="fas fa-times"></i>
+            <Icon name="times" />
             <span>{{ t('knowledge.batchSelection.clearSelection') }}</span>
           </button>
         </div>
@@ -57,6 +57,7 @@
  * the vectorization-specific selection bar for general KB views.
  */
 
+import Icon from '@/components/ui/Icon.vue'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils'

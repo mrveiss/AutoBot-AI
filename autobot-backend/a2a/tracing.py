@@ -18,13 +18,14 @@ Trace ID format: 32 hex chars (UUID4 without dashes) — compatible with
 OpenTelemetry W3C Trace Context trace-id format.
 """
 
-import logging
 import time
 import uuid
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -33,7 +34,7 @@ class TraceEvent:
 
     event: str
     timestamp: float = field(default_factory=time.time)
-    data: Optional[Dict[str, Any]] = None
+    data: Dict[str, Any] | None = None
 
     def to_dict(self) -> Dict[str, Any]:
         d: Dict[str, Any] = {
@@ -58,7 +59,7 @@ class TraceContext:
     caller_id: str
     events: List[TraceEvent] = field(default_factory=list)
 
-    def record(self, event: str, data: Optional[Dict[str, Any]] = None) -> None:
+    def record(self, event: str, data: Dict[str, Any] | None = None) -> None:
         """Append a timestamped event to the trace."""
         self.events.append(TraceEvent(event=event, data=data))
         logger.debug("A2A trace %s: %s", self.trace_id[:8], event)
@@ -77,9 +78,9 @@ def new_trace_id() -> str:
 
 
 def extract_caller_id(
-    a2a_agent_id: Optional[str],
-    jwt_subject: Optional[str],
-    remote_addr: Optional[str],
+    a2a_agent_id: str | None,
+    jwt_subject: str | None,
+    remote_addr: str | None,
 ) -> str:
     """
     Determine the caller identity from available request signals.

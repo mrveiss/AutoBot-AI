@@ -51,10 +51,10 @@ interface QueuedNotification {
 // Default configuration
 const DEFAULT_CONFIG: NotificationConfig = {
   durations: {
-    error: 8000,     // Errors stay longer
-    warning: 5000,   // Warnings moderate duration
-    info: 3000,      // Info brief
-    success: 3000    // Success brief
+    error: 0,        // persistent — errors require explicit dismissal
+    warning: 6000,   // canonical: extra reading time for warnings
+    info: 4000,      // canonical
+    success: 4000    // canonical
   },
   rateLimit: {
     maxNotifications: 5,  // Max 5 notifications

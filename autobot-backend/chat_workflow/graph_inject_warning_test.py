@@ -102,7 +102,7 @@ if not hasattr(sys.modules["typing_extensions"], "TypedDict"):
 
 # ---------------------------------------------------------------------------
 # Load graph.py as an isolated module (bypassing chat_workflow/__init__.py).
-# This avoids the full manager/dependency_container/llm_interface_pkg chain.
+# This avoids the full manager/dependency_container/llm_shared chain.
 # ---------------------------------------------------------------------------
 
 _GRAPH_PATH = Path(__file__).parent / "graph.py"

@@ -9,20 +9,21 @@ workflows and providing configurable overflow handling (reject/queue/drop-oldest
 """
 
 import asyncio
-import logging
-import os
 import time
 from collections import deque
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Awaitable, Callable, Deque, Dict, Optional
+from typing import Awaitable, Callable, Deque, Dict
 
-_ACQUIRE_TIMEOUT_SECONDS = float(os.environ.get("AUTOBOT_CONCURRENT_LIMITER_TIMEOUT", "300"))
+from autobot_shared.ssot_config import config
+
+_ACQUIRE_TIMEOUT_SECONDS = float(config.concurrent_limiter_timeout)
 _EVICTION_POLL_SECONDS = 5.0  # max time to wait for oldest entry to vacate before dropping it
 
+from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import TimingConstants
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -88,13 +89,13 @@ class ConcurrentWorkflowLimiter:
         self,
         max_concurrent: int = 3,
         overflow_policy: OverflowPolicy = OverflowPolicy.REJECT,
-        cancel_callback: Optional[Callable[[str], Awaitable[None]]] = None,
+        cancel_callback: Callable[[str], Awaitable[None]] | None = None,
     ) -> None:
         if max_concurrent < 1:
             raise ValueError("max_concurrent must be >= 1")
         self._max_concurrent = max_concurrent
         self._overflow_policy = overflow_policy
-        self._cancel_callback: Optional[Callable[[str], Awaitable[None]]] = cancel_callback
+        self._cancel_callback: Callable[[str], Awaitable[None]] | None = cancel_callback
         self._running: Dict[str, float] = {}  # workflow_id → start timestamp
         self._queue: Deque[_QueuedEntry] = deque()
 
@@ -275,7 +276,7 @@ class ConcurrentWorkflowLimiter:
             self._max_concurrent,
         )
 
-    def _find_oldest_workflow_id(self) -> Optional[str]:
+    def _find_oldest_workflow_id(self) -> str | None:
         """Return the workflow_id with the earliest start timestamp, or None."""
         if not self._running:
             return None
@@ -314,13 +315,13 @@ class ConcurrencyLimitError(Exception):
 # Module-level singleton (shared across all routes in one process)
 # ---------------------------------------------------------------------------
 
-_limiter: Optional[ConcurrentWorkflowLimiter] = None
+_limiter: ConcurrentWorkflowLimiter | None = None
 
 
 def get_concurrent_limiter(
     max_concurrent: int = 3,
     overflow_policy: OverflowPolicy = OverflowPolicy.REJECT,
-    cancel_callback: Optional[Callable[[str], Awaitable[None]]] = None,
+    cancel_callback: Callable[[str], Awaitable[None]] | None = None,
 ) -> ConcurrentWorkflowLimiter:
     """
     Return the process-level ConcurrentWorkflowLimiter, creating it on first call.

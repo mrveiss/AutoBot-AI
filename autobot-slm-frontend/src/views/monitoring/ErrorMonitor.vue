@@ -31,6 +31,7 @@ const stats = ref<ErrorStatistics>({
   total_errors: 0,
   errors_24h: 0,
   errors_7d: 0,
+  errors_30d: 0,
   resolved_count: 0,
   unresolved_count: 0,
   error_rate_per_hour: 0,
@@ -230,19 +231,19 @@ onUnmounted(() => {
   <div class="p-6">
     <!-- Header -->
     <div class="flex items-center justify-between mb-6">
-      <h2 class="text-xl font-bold text-gray-900">Error Monitoring</h2>
+      <h2 class="text-xl font-bold text-gray-900">{{ $t('monitoring.errorMonitor.errorMonitoring') }}</h2>
       <div class="flex items-center gap-2">
         <button
           @click="clearOldErrors"
           class="px-3 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
         >
-          Clear Old
+          {{ $t('monitoring.errorMonitor.clearOld') }}
         </button>
         <button
           @click="createTestError"
           class="px-3 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
         >
-          Test Error
+          {{ $t('monitoring.errorMonitor.testError') }}
         </button>
         <button
           @click="fetchData"
@@ -263,7 +264,7 @@ onUnmounted(() => {
               d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
             />
           </svg>
-          Refresh
+          {{ $t('monitoring.errorMonitor.refresh') }}
         </button>
       </div>
     </div>
@@ -271,27 +272,27 @@ onUnmounted(() => {
     <!-- Stats Cards -->
     <div class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
       <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-4">
-        <p class="text-sm text-gray-500">Total Errors</p>
+        <p class="text-sm text-gray-500">{{ $t('monitoring.errorMonitor.totalErrors') }}</p>
         <p class="text-2xl font-bold text-gray-900">{{ stats.total_errors }}</p>
       </div>
       <div class="bg-white rounded-lg shadow-xs border border-red-200 p-4">
-        <p class="text-sm text-red-600">Last 24 Hours</p>
+        <p class="text-sm text-red-600">{{ $t('monitoring.errorMonitor.last24Hours') }}</p>
         <p class="text-2xl font-bold text-red-700">{{ stats.errors_24h }}</p>
       </div>
       <div class="bg-white rounded-lg shadow-xs border border-orange-200 p-4">
-        <p class="text-sm text-orange-600">Unresolved</p>
+        <p class="text-sm text-orange-600">{{ $t('monitoring.errorMonitor.unresolved') }}</p>
         <p class="text-2xl font-bold text-orange-700">
           {{ stats.unresolved_count }}
         </p>
       </div>
       <div class="bg-white rounded-lg shadow-xs border border-green-200 p-4">
-        <p class="text-sm text-green-600">Resolved</p>
+        <p class="text-sm text-green-600">{{ $t('monitoring.errorMonitor.resolved') }}</p>
         <p class="text-2xl font-bold text-green-700">
           {{ stats.resolved_count }}
         </p>
       </div>
       <div class="bg-white rounded-lg shadow-xs border border-blue-200 p-4">
-        <p class="text-sm text-blue-600">Trend</p>
+        <p class="text-sm text-blue-600">{{ $t('monitoring.errorMonitor.trend') }}</p>
         <p class="text-2xl font-bold" :class="getTrendColor(stats.trend)">
           {{ getTrendIcon(stats.trend) }}
           {{ stats.error_rate_per_hour.toFixed(1) }}/hr
@@ -318,18 +319,18 @@ onUnmounted(() => {
               @change="onFilterChange"
               class="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
             >
-              <option value="all">All Severities</option>
-              <option value="critical">Critical</option>
-              <option value="error">Error</option>
+              <option value="all">{{ $t('monitoring.errorMonitor.allSeverities') }}</option>
+              <option value="critical">{{ $t('monitoring.errorMonitor.critical') }}</option>
+              <option value="error">{{ $t('monitoring.errorMonitor.error') }}</option>
             </select>
             <select
               v-model="filterResolved"
               @change="onFilterChange"
               class="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
             >
-              <option value="all">All Status</option>
-              <option value="unresolved">Unresolved</option>
-              <option value="resolved">Resolved</option>
+              <option value="all">{{ $t('monitoring.errorMonitor.allStatus') }}</option>
+              <option value="unresolved">{{ $t('monitoring.errorMonitor.unresolved') }}</option>
+              <option value="resolved">{{ $t('monitoring.errorMonitor.resolved') }}</option>
             </select>
           </div>
         </div>
@@ -396,7 +397,7 @@ onUnmounted(() => {
                   d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
                 />
               </svg>
-              <p>No errors found</p>
+              <p>{{ $t('monitoring.errorMonitor.noErrorsFound') }}</p>
             </div>
           </div>
 
@@ -414,14 +415,14 @@ onUnmounted(() => {
                 :disabled="currentPage === 1"
                 class="px-3 py-1 text-sm border rounded-sm hover:bg-gray-50 disabled:opacity-50"
               >
-                Previous
+                {{ $t('monitoring.errorMonitor.previous') }}
               </button>
               <button
                 @click="nextPage"
                 :disabled="currentPage * perPage >= totalErrors"
                 class="px-3 py-1 text-sm border rounded-sm hover:bg-gray-50 disabled:opacity-50"
               >
-                Next
+                {{ $t('monitoring.errorMonitor.next') }}
               </button>
             </div>
           </div>
@@ -433,7 +434,7 @@ onUnmounted(() => {
         <!-- Top Errors -->
         <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-4">
           <h3 class="text-sm font-semibold text-gray-900 mb-3">
-            Recent Unresolved
+            {{ $t('monitoring.errorMonitor.recentUnresolved') }}
           </h3>
           <div class="space-y-3">
             <div
@@ -460,14 +461,14 @@ onUnmounted(() => {
               v-if="topErrors.length === 0"
               class="text-sm text-gray-500 text-center py-2"
             >
-              No unresolved errors
+              {{ $t('monitoring.errorMonitor.noUnresolvedErrors') }}
             </div>
           </div>
         </div>
 
         <!-- Errors by Category -->
         <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-4">
-          <h3 class="text-sm font-semibold text-gray-900 mb-3">By Category</h3>
+          <h3 class="text-sm font-semibold text-gray-900 mb-3">{{ $t('monitoring.errorMonitor.byCategory') }}</h3>
           <div class="space-y-2">
             <div
               v-for="cat in categories"
@@ -483,14 +484,14 @@ onUnmounted(() => {
               v-if="categories.length === 0"
               class="text-sm text-gray-500 text-center py-2"
             >
-              No categories
+              {{ $t('monitoring.errorMonitor.noCategories') }}
             </div>
           </div>
         </div>
 
         <!-- Errors by Component -->
         <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-4">
-          <h3 class="text-sm font-semibold text-gray-900 mb-3">By Node</h3>
+          <h3 class="text-sm font-semibold text-gray-900 mb-3">{{ $t('monitoring.errorMonitor.byNode') }}</h3>
           <div class="space-y-2">
             <div
               v-for="comp in components"
@@ -506,7 +507,7 @@ onUnmounted(() => {
               v-if="components.length === 0"
               class="text-sm text-gray-500 text-center py-2"
             >
-              No components
+              {{ $t('monitoring.errorMonitor.noComponents') }}
             </div>
           </div>
         </div>
@@ -525,8 +526,8 @@ onUnmounted(() => {
         <div
           class="p-4 border-b border-gray-200 flex items-center justify-between"
         >
-          <h3 class="text-lg font-semibold text-gray-900">Error Details</h3>
-          <button @click="closeDetail" class="text-gray-400 hover:text-gray-600">
+          <h3 class="text-lg font-semibold text-gray-900">{{ $t('monitoring.errorMonitor.errorDetails') }}</h3>
+          <button @click="closeDetail" class="text-gray-400 hover:text-gray-600" aria-label="Close">
             <svg
               class="w-5 h-5"
               fill="none"
@@ -565,7 +566,7 @@ onUnmounted(() => {
 
             <div>
               <label class="text-xs font-medium text-gray-500 uppercase"
-                >Event ID</label
+                >{{ $t('monitoring.errorMonitor.eventID') }}</label
               >
               <p class="text-sm text-gray-900 font-mono">
                 {{ selectedError.event_id }}
@@ -574,7 +575,7 @@ onUnmounted(() => {
 
             <div>
               <label class="text-xs font-medium text-gray-500 uppercase"
-                >Node</label
+                >{{ $t('monitoring.errorMonitor.node') }}</label
               >
               <p class="text-sm text-gray-900">
                 {{ selectedError.hostname }} ({{ selectedError.node_id }})
@@ -583,21 +584,21 @@ onUnmounted(() => {
 
             <div>
               <label class="text-xs font-medium text-gray-500 uppercase"
-                >Type</label
+                >{{ $t('monitoring.errorMonitor.type') }}</label
               >
               <p class="text-sm text-gray-900">{{ selectedError.event_type }}</p>
             </div>
 
             <div>
               <label class="text-xs font-medium text-gray-500 uppercase"
-                >Message</label
+                >{{ $t('monitoring.errorMonitor.message') }}</label
               >
               <p class="text-sm text-gray-900">{{ selectedError.message }}</p>
             </div>
 
             <div>
               <label class="text-xs font-medium text-gray-500 uppercase"
-                >Timestamp</label
+                >{{ $t('monitoring.errorMonitor.timestamp') }}</label
               >
               <p class="text-sm text-gray-900">
                 {{ formatTimestamp(selectedError.timestamp) }}
@@ -606,7 +607,7 @@ onUnmounted(() => {
 
             <div v-if="selectedError.resolved">
               <label class="text-xs font-medium text-gray-500 uppercase"
-                >Resolved</label
+                >{{ $t('monitoring.errorMonitor.resolved') }}</label
               >
               <p class="text-sm text-gray-900">
                 By {{ selectedError.resolved_by }} at
@@ -621,13 +622,13 @@ onUnmounted(() => {
             @click="resolveError(selectedError.event_id)"
             class="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700"
           >
-            Mark Resolved
+            {{ $t('monitoring.errorMonitor.markResolved') }}
           </button>
           <button
             @click="closeDetail"
             class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
           >
-            Close
+            {{ $t('monitoring.errorMonitor.close') }}
           </button>
         </div>
       </div>

@@ -9,14 +9,14 @@ Classifies incoming queries into complexity tiers so that hybrid search
 fusion weights can be adapted per query rather than using static globals.
 """
 
-import logging
 import re
 from enum import Enum
 from typing import List, Tuple
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # Complexity tier

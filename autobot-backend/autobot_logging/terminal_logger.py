@@ -12,17 +12,18 @@ Provides detailed logging of terminal commands with:
 """
 
 import asyncio
-import logging
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, FrozenSet, List, Optional
+from typing import Any, Dict, FrozenSet, List
 
 import aiofiles
+
+from autobot_shared.logging_manager import get_logger
 
 # Issue #765: Use centralized strip_ansi_codes from encoding_utils
 from utils.encoding_utils import strip_ansi_codes
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level frozenset for command statuses requiring command display
 _COMMAND_DISPLAY_STATUSES: FrozenSet[str] = frozenset({"EXECUTING", "PENDING_APPROVAL", "SUCCESS", "ERROR"})
@@ -102,8 +103,8 @@ class TerminalLogger:
         command: str,
         run_type: str,
         status: str,
-        result: Optional[Dict[str, Any]],
-        user_id: Optional[str],
+        result: Dict[str, Any] | None,
+        user_id: str | None,
     ) -> Dict[str, Any]:
         """Create a structured log entry dictionary. Issue #620."""
         timestamp = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
@@ -135,8 +136,8 @@ class TerminalLogger:
         command: str,
         run_type: str,
         status: str = "executing",
-        result: Optional[Dict[str, Any]] = None,
-        user_id: Optional[str] = None,
+        result: Dict[str, Any] | None = None,
+        user_id: str | None = None,
     ) -> Dict[str, Any]:
         """Log a terminal command execution. Issue #620."""
         # Ensure chat.json exists BEFORE creating/appending to terminal.log
@@ -284,7 +285,7 @@ class TerminalLogger:
             logger.error("Failed to parse terminal log %s: %s", log_file, e)
             return []
 
-    def _parse_log_line(self, line: str) -> Optional[Dict[str, Any]]:
+    def _parse_log_line(self, line: str) -> Dict[str, Any] | None:
         """Parse a log line back into structured data."""
         try:
             # Simple parsing - extract key components

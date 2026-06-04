@@ -2,7 +2,7 @@
   <div class="session-orphan-manager">
     <div class="section-header">
       <div class="header-content">
-        <h4><i class="fas fa-broom"></i> {{ $t('knowledge.sessionOrphan.title') }}</h4>
+        <h4><Icon name="broom" /> {{ $t('knowledge.sessionOrphan.title') }}</h4>
         <p class="header-description">
           {{ $t('knowledge.sessionOrphan.description') }}
         </p>
@@ -43,7 +43,7 @@
               <div class="orphan-meta">
                 <span class="orphan-category">{{ fact.category }}</span>
                 <span v-if="fact.important" class="orphan-important">
-                  <i class="fas fa-star"></i> {{ $t('knowledge.sessionOrphan.important') }}
+                  <Icon name="star" /> {{ $t('knowledge.sessionOrphan.important') }}
                 </span>
               </div>
               <p class="orphan-content-text">{{ fact.content_preview }}</p>
@@ -61,7 +61,7 @@
         <div class="action-card">
           <div class="action-content">
             <div class="action-icon scan">
-              <i class="fas fa-search"></i>
+              <Icon name="search" />
             </div>
             <h5>{{ $t('knowledge.sessionOrphan.scanTitle') }}</h5>
             <p>{{ $t('knowledge.sessionOrphan.scanDescription') }}</p>
@@ -74,7 +74,7 @@
             :loading="isScanning"
             class="action-btn"
           >
-            <i v-if="!isScanning" class="fas fa-search"></i>
+            <Icon name="search" v-if="!isScanning" />
             {{ isScanning ? $t('knowledge.sessionOrphan.scanning') : $t('knowledge.sessionOrphan.scanNow') }}
           </BaseButton>
         </div>
@@ -82,7 +82,7 @@
         <div class="action-card warning">
           <div class="action-content">
             <div class="action-icon cleanup">
-              <i class="fas fa-broom"></i>
+              <Icon name="broom" />
             </div>
             <h5>{{ $t('knowledge.sessionOrphan.cleanupTitle') }}</h5>
             <p>{{ $t('knowledge.sessionOrphan.cleanupDescription') }}</p>
@@ -97,7 +97,7 @@
             :loading="isCleaningOrphans"
             class="action-btn"
           >
-            <i v-if="!isCleaningOrphans" class="fas fa-broom"></i>
+            <Icon name="broom" v-if="!isCleaningOrphans" />
             {{ isCleaningOrphans ? $t('knowledge.sessionOrphan.cleaning') : $t('knowledge.sessionOrphan.cleanUp') }}
           </BaseButton>
         </div>
@@ -105,10 +105,10 @@
 
       <!-- Status Messages -->
       <div v-if="statusMessage" :class="['status-message', statusMessage.type]">
-        <i :class="statusMessage.icon"></i>
+        <Icon :name="statusMessage.icon" />
         <span>{{ statusMessage.text }}</span>
         <button @click="statusMessage = null" class="dismiss-btn">
-          <i class="fas fa-times"></i>
+          <Icon name="times" />
         </button>
       </div>
     </div>
@@ -116,6 +116,7 @@
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseButton from '@/components/base/BaseButton.vue'
@@ -142,10 +143,10 @@ const statusMessage = ref<StatusMessage | null>(null)
 // Methods
 const showStatus = (type: StatusMessage['type'], text: string) => {
   const icons = {
-    success: 'fas fa-check-circle',
-    error: 'fas fa-exclamation-circle',
-    warning: 'fas fa-exclamation-triangle',
-    info: 'fas fa-info-circle'
+    success: 'check-circle',
+    error: 'exclamation-circle',
+    warning: 'exclamation-triangle',
+    info: 'info-circle'
   }
   statusMessage.value = { type, text, icon: icons[type] }
 

@@ -10,9 +10,9 @@ SSOT Migration (Issue #639):
     with fallback to NetworkConstants for backward compatibility.
 """
 
-import os
 from typing import Any, Dict
 
+from autobot_shared.ssot_config import config
 from config.registry import ConfigRegistry
 
 
@@ -41,10 +41,7 @@ def _get_backend_config(llm_host: str, llm_port: int, bind_host: str, backend_po
                         "endpoint": f"{llm_base_url}/api/generate",
                         "host": llm_base_url,
                         "models": [],
-                        "selected_model": os.getenv(
-                            "AUTOBOT_DEFAULT_LLM_MODEL",
-                            ModelConstants.DEFAULT_OLLAMA_MODEL,
-                        ),
+                        "selected_model": config.llm.default_model or ModelConstants.DEFAULT_OLLAMA_MODEL,
                     }
                 },
             },
@@ -55,13 +52,13 @@ def _get_backend_config(llm_host: str, llm_port: int, bind_host: str, backend_po
                         "endpoint": f"{llm_base_url}/api/embeddings",
                         "host": llm_base_url,
                         "models": [],
-                        "selected_model": os.getenv("AUTOBOT_EMBEDDING_MODEL", "nomic-embed-text"),
+                        "selected_model": config.llm.embedding_model or "nomic-embed-text",
                     }
                 },
             },
         },
         "server_host": bind_host,
-        "server_port": int(os.getenv("AUTOBOT_BACKEND_PORT", str(backend_port))),
+        "server_port": config.port.backend,
         "timeout": 60,
         "max_retries": 3,
         "streaming": False,
@@ -75,17 +72,17 @@ def _get_memory_config(redis_host: str, redis_port: int) -> Dict[str, Any]:
             "enabled": True,
             "host": redis_host,
             "port": redis_port,
-            "db": int(os.getenv("AUTOBOT_REDIS_MEMORY_DB", "1")),
-            "password": os.getenv("AUTOBOT_REDIS_PASSWORD"),
+            "db": config.redis.db_knowledge,
+            "password": config.redis.password,
         },
         "chromadb": {
-            "path": os.getenv("AUTOBOT_CHROMADB_PATH", "data/chromadb"),
-            "collection_name": os.getenv("AUTOBOT_CHROMADB_COLLECTION", "autobot_memory"),
+            "path": config.misc.chromadb_path or "data/chromadb",
+            "collection_name": config.misc.chromadb_collection or "autobot_memory",
             "hnsw": {
-                "space": os.getenv("AUTOBOT_HNSW_SPACE", "cosine"),
-                "construction_ef": int(os.getenv("AUTOBOT_HNSW_CONSTRUCTION_EF", "300")),
-                "search_ef": int(os.getenv("AUTOBOT_HNSW_SEARCH_EF", "100")),
-                "M": int(os.getenv("AUTOBOT_HNSW_M", "32")),
+                "space": config.misc.hnsw_space or "cosine",
+                "construction_ef": int(config.misc.hnsw_construction_ef or "300"),
+                "search_ef": int(config.misc.hnsw_search_ef or "100"),
+                "M": int(config.misc.hnsw_m or "32"),
             },
         },
     }
@@ -139,9 +136,9 @@ def _get_system_config() -> Dict[str, Any]:
     return {
         "environment": {"DISPLAY": ":0", "USER": "unknown", "SHELL": "unknown"},
         "desktop_streaming": {
-            "default_resolution": os.getenv("AUTOBOT_DESKTOP_RESOLUTION", "1024x768"),
-            "default_depth": int(os.getenv("AUTOBOT_DESKTOP_DEPTH", "24")),
-            "max_sessions": int(os.getenv("AUTOBOT_DESKTOP_MAX_SESSIONS", "10")),
+            "default_resolution": config.misc.desktop_resolution or "1024x768",
+            "default_depth": int(config.misc.desktop_depth or "24"),
+            "max_sessions": int(config.misc.desktop_max_sessions or "10"),
         },
     }
 
@@ -152,9 +149,9 @@ def _get_prompt_compression_config() -> Dict[str, Any]:
     Issue #620.
     """
     return {
-        "enabled": os.getenv("AUTOBOT_PROMPT_COMPRESSION_ENABLED", "true").lower() == "true",
-        "target_ratio": float(os.getenv("AUTOBOT_PROMPT_COMPRESSION_RATIO", "0.7")),
-        "min_length": int(os.getenv("AUTOBOT_PROMPT_COMPRESSION_MIN_LENGTH", "100")),
+        "enabled": config.misc.prompt_compression_enabled if config.misc.prompt_compression_enabled else True,
+        "target_ratio": float(config.misc.prompt_compression_ratio or "0.7"),
+        "min_length": int(config.misc.prompt_compression_min_length or "100"),
         "preserve_code_blocks": True,
         "aggressive_mode": False,
     }
@@ -166,12 +163,12 @@ def _get_cloud_optimization_config() -> Dict[str, Any]:
     Issue #620.
     """
     return {
-        "connection_pool_size": int(os.getenv("AUTOBOT_CLOUD_CONNECTION_POOL_SIZE", "100")),
-        "batch_window_ms": int(os.getenv("AUTOBOT_CLOUD_BATCH_WINDOW_MS", "50")),
-        "max_batch_size": int(os.getenv("AUTOBOT_CLOUD_MAX_BATCH_SIZE", "10")),
-        "retry_max_attempts": int(os.getenv("AUTOBOT_CLOUD_RETRY_MAX_ATTEMPTS", "3")),
-        "retry_base_delay": float(os.getenv("AUTOBOT_CLOUD_RETRY_BASE_DELAY", "1.0")),
-        "retry_max_delay": float(os.getenv("AUTOBOT_CLOUD_RETRY_MAX_DELAY", "60.0")),
+        "connection_pool_size": config.misc.cloud_connection_pool_size or 100,
+        "batch_window_ms": config.misc.cloud_batch_window_ms or 50,
+        "max_batch_size": config.misc.cloud_max_batch_size or 10,
+        "retry_max_attempts": config.misc.cloud_retry_max_attempts or 3,
+        "retry_base_delay": float(config.misc.cloud_retry_base_delay or "1.0"),
+        "retry_max_delay": float(config.misc.cloud_retry_max_delay or "60.0"),
     }
 
 
@@ -181,14 +178,18 @@ def _get_local_optimization_config() -> Dict[str, Any]:
     Issue #620.
     """
     return {
-        "speculation_enabled": os.getenv("AUTOBOT_SPECULATION_ENABLED", "false").lower() == "true",
-        "speculation_draft_model": os.getenv("AUTOBOT_SPECULATION_DRAFT_MODEL", ""),
-        "speculation_num_tokens": int(os.getenv("AUTOBOT_SPECULATION_NUM_TOKENS", "5")),
-        "speculation_use_ngram": os.getenv("AUTOBOT_SPECULATION_USE_NGRAM", "false").lower() == "true",
-        "quantization_type": os.getenv("AUTOBOT_QUANTIZATION_TYPE", "none"),
-        "vllm_multi_step": int(os.getenv("AUTOBOT_VLLM_MULTI_STEP", "8")),
-        "vllm_prefix_caching": os.getenv("AUTOBOT_VLLM_PREFIX_CACHING", "true").lower() == "true",
-        "vllm_async_output": os.getenv("AUTOBOT_VLLM_ASYNC_OUTPUT", "true").lower() == "true",
+        "speculation_enabled": (
+            config.misc.speculation_enabled if config.misc.speculation_enabled is not None else False
+        ),
+        "speculation_draft_model": config.misc.speculation_draft_model or "",
+        "speculation_num_tokens": config.misc.speculation_num_tokens or 5,
+        "speculation_use_ngram": (
+            config.misc.speculation_use_ngram if config.misc.speculation_use_ngram is not None else False
+        ),
+        "quantization_type": config.misc.quantization_type or "none",
+        "vllm_multi_step": config.misc.vllm_multi_step or 8,
+        "vllm_prefix_caching": config.misc.vllm_prefix_caching if config.misc.vllm_prefix_caching is not None else True,
+        "vllm_async_output": config.misc.vllm_async_output if config.misc.vllm_async_output is not None else True,
     }
 
 
@@ -201,9 +202,9 @@ def _get_llm_optimization_config() -> Dict[str, Any]:
         "optimization": {
             "prompt_compression": _get_prompt_compression_config(),
             "cache": {
-                "enabled": os.getenv("AUTOBOT_CACHE_ENABLED", "true").lower() == "true",
-                "l1_size": int(os.getenv("AUTOBOT_CACHE_L1_SIZE", "100")),
-                "l2_ttl": int(os.getenv("AUTOBOT_CACHE_L2_TTL", "300")),
+                "enabled": config.misc.cache_enabled if config.misc.cache_enabled is not None else True,
+                "l1_size": config.misc.cache_l1_size or 100,
+                "l2_ttl": config.misc.cache_l2_ttl or 300,
             },
             "cloud": _get_cloud_optimization_config(),
             "local": _get_local_optimization_config(),
@@ -265,7 +266,7 @@ def _get_deployment_config(redis_host: str, backend_port: int) -> Dict[str, Any]
     return {
         "mode": "local",
         "host": redis_host,
-        "port": int(os.getenv("AUTOBOT_BACKEND_PORT", str(backend_port))),
+        "port": config.port.backend,
     }
 
 
@@ -281,8 +282,8 @@ def _get_redis_config(redis_host: str, redis_port: int) -> Dict[str, Any]:
     return {
         "host": redis_host,
         "port": redis_port,
-        "db": int(os.getenv("AUTOBOT_REDIS_DB_MAIN", "0")),
-        "password": os.getenv("AUTOBOT_REDIS_PASSWORD"),
+        "db": config.redis.db_main,
+        "password": config.redis.password,
     }
 
 
@@ -292,8 +293,8 @@ def _get_celery_config() -> Dict[str, Any]:
     Issue #620.
     """
     return {
-        "visibility_timeout": int(os.getenv("AUTOBOT_CELERY_VISIBILITY_TIMEOUT", "43200")),
-        "result_expires": int(os.getenv("AUTOBOT_CELERY_RESULT_EXPIRES", "86400")),
+        "visibility_timeout": config.misc.celery_visibility_timeout or 43200,
+        "result_expires": config.misc.celery_result_expires or 86400,
         "worker_prefetch_multiplier": 1,
         "worker_max_tasks_per_child": 100,
     }
@@ -313,8 +314,8 @@ def _get_task_transport_config(redis_host: str, redis_port: int) -> Dict[str, An
         "redis": {
             "host": redis_host,
             "port": redis_port,
-            "password": os.getenv("AUTOBOT_REDIS_PASSWORD"),
-            "db": int(os.getenv("AUTOBOT_REDIS_TASK_DB", "0")),
+            "password": config.redis.password,
+            "db": config.redis.db_tasks,
         },
     }
 
@@ -337,7 +338,7 @@ def get_default_config() -> Dict[str, Any]:
     bind_host = NetworkConstants.BIND_ALL_INTERFACES
     backend_port = NetworkConstants.BACKEND_PORT
 
-    config = {
+    config_dict = {
         "backend": _get_backend_config(llm_host, llm_port, bind_host, backend_port),
         "deployment": _get_deployment_config(redis_host, backend_port),
         "redis": _get_redis_config(redis_host, redis_port),
@@ -348,6 +349,6 @@ def get_default_config() -> Dict[str, Any]:
         "system": _get_system_config(),
         "task_transport": _get_task_transport_config(redis_host, redis_port),
     }
-    config.update(_get_simple_configs())
-    config.update(_get_llm_optimization_config())  # Issue #717
-    return config
+    config_dict.update(_get_simple_configs())
+    config_dict.update(_get_llm_optimization_config())  # Issue #717
+    return config_dict

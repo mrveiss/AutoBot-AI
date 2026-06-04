@@ -24,6 +24,7 @@ FEATURES:
 USAGE:
 ======
 from utils.performance_monitor import (
+from autobot_shared.logging_manager import get_logger
     PerformanceMonitor,
     GPUMetrics, NPUMetrics, SystemPerformanceMetrics,
     start_monitoring, stop_monitoring,
@@ -47,10 +48,10 @@ dashboard = await get_performance_dashboard()
 await stop_monitoring()
 """
 
-import logging
 from typing import Any, Dict, List
 
 from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.logging_manager import get_logger
 from utils.performance_monitoring.analyzers import (
     AlertAnalyzer,
     RecommendationGenerator,
@@ -82,7 +83,7 @@ from utils.performance_monitoring.types import (
     DEFAULT_RETENTION_HOURS,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Re-export for backward compatibility
 __all__ = [

@@ -15,32 +15,46 @@ the rename removes that aliasing smell (#6817).  The orphan status of the canoni
 is tracked separately in #6820.
 """
 
-import logging
 import re
 import uuid
 from typing import Any, Dict, List, Optional, Set
 
+from autobot_shared.logging_manager import get_logger
+
 from .types import AgentCapability, AgentTask, ExecutionStrategy, WorkflowPlan
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class StrategyPlanner:
     """Handles workflow plan creation and task management."""
 
-    def __init__(self, agent_capabilities: Dict[str, Set[AgentCapability]]):
-        """
-        Initialize workflow planner.
+    def __init__(
+        self,
+        agent_capabilities: Dict[str, Set[AgentCapability]],
+        *,
+        strict_gap_fill: bool = False,
+    ):
+        """Initialize workflow planner.
 
         Args:
-            agent_capabilities: Mapping of agent types to their capabilities
+            agent_capabilities: Mapping of agent types to their capabilities.
+            strict_gap_fill: ADR-006 strict mode (#7431). When ``True``, a
+                no-skill-match at plan time fires the async Phase 3 gap-fill
+                loop (skill-researcher → autonomous-skill-development →
+                governance → register) and flips the plan to
+                ``BLOCKED_ON_SKILL_GENERATION`` until a skill is promoted.
+                When ``False`` (default, lenient), a no-match leaves
+                ``task.skill_name=None`` and legacy capability-based routing
+                handles the task unchanged.
         """
         self.agent_capabilities = agent_capabilities
+        self.strict_gap_fill = strict_gap_fill
         # #7268 Phase 1: lazily-instantiated skill_router for plan-time binding.
         # Created on first ``build_workflow_plan`` call and cached for the
         # planner's lifetime. Each lookup is ``dry_run=True`` so no skill is
         # auto-enabled and no Phase 3 gap-fill runs at plan time.
-        self._skill_router_skill: Optional[Any] = None
+        self._skill_router_skill: Any | None = None
 
     async def build_workflow_plan(self, goal: str, plan_data: Dict[str, Any]) -> WorkflowPlan:
         """Build workflow plan from parsed data.
@@ -121,7 +135,7 @@ class StrategyPlanner:
             status=plan_status,
         )
 
-    def _get_skill_router(self) -> Optional[Any]:
+    def _get_skill_router(self) -> Any | None:
         """Lazily instantiate ``SkillRouterSkill`` for plan-time lookups (#7268).
 
         Returns ``None`` if instantiation fails (skills package import error,
@@ -172,12 +186,15 @@ class StrategyPlanner:
 
         skill_name = result.get("enabled_skill")
         if not skill_name:
-            # #7431 Phase 3: no skill matched — fire async gap-fill in the
-            # background and attach a pending_skill_id so the plan can flip
-            # to BLOCKED. The forthcoming resume path re-binds the task
-            # when the generated skill is promoted (skill_promoted Redis
-            # pub-sub event from registry.register).
-            await self._trigger_async_gap_fill(task, task_desc)
+            # #7431 Phase 3: no skill matched.
+            # strict_gap_fill=True (ADR-006 strict mode): fire async gap-fill
+            # in the background, attach a pending_skill_id, and let the plan
+            # flip to BLOCKED_ON_SKILL_GENERATION. The resume path re-binds
+            # the task once a skill is promoted via skill_promoted Redis pub-sub.
+            # strict_gap_fill=False (default, lenient): leave skill_name=None
+            # and fall back to legacy capability-based routing — no gap-fill.
+            if self.strict_gap_fill:
+                await self._trigger_async_gap_fill(task, task_desc)
             return
 
         # Action defaults to ``"execute"`` — Phase 2 (WorkflowExecutor
@@ -431,3 +448,58 @@ class StrategyPlanner:
             "failed": failed,
             "success_rate": completed / max(len(results), 1),
         }
+
+    # ------------------------------------------------------------------
+    # GH#7354 — GOAP plan builder
+    # ------------------------------------------------------------------
+
+    def build_goap_workflow_plan(
+        self,
+        goal: str,
+        goal_facts: Set[str],
+        initial_state: Set[str] | None = None,
+        strategy: ExecutionStrategy = ExecutionStrategy.SEQUENTIAL,
+        success_criteria: List[str] | None = None,
+        plan_id: str | None = None,
+    ) -> WorkflowPlan:
+        """Build a WorkflowPlan using GOAP A* search (GH#7354).
+
+        Unlike ``build_workflow_plan`` (which relies on LLM-generated
+        ``plan_data``), this method uses ``GOAPPlanner`` to search the
+        discrete fact-space for the cheapest action sequence that satisfies
+        ``goal_facts`` from ``initial_state``.
+
+        Raises ``ValueError`` when the goal is unreachable with the default
+        action library.
+
+        The returned plan carries ``is_goap_plan=True`` and ``goap_goal`` so
+        that ``WorkflowRunner`` can invoke adaptive replanning on step failure.
+        """
+        from orchestration.goap_planner import GOAPPlanner
+
+        planner = GOAPPlanner()
+        effective_plan_id = plan_id or str(uuid.uuid4())
+        task_dicts = planner.build_workflow_tasks(
+            goal_facts=frozenset(goal_facts),
+            initial_state=frozenset(initial_state or set()),
+            plan_id=effective_plan_id,
+        )
+        if task_dicts is None:
+            raise ValueError(
+                f"GOAP planner: goal {goal_facts!r} is unreachable from "
+                f"initial_state {initial_state!r} with the default action library."
+            )
+
+        tasks = [AgentTask.from_dict(d) for d in task_dicts]
+        dependencies_graph: Dict[str, List[str]] = {t["task_id"]: t["dependencies"] for t in task_dicts}
+
+        return WorkflowPlan(
+            plan_id=effective_plan_id,
+            goal=goal,
+            tasks=tasks,
+            strategy=strategy,
+            dependencies_graph=dependencies_graph,
+            success_criteria=success_criteria or ["All tasks completed"],
+            is_goap_plan=True,
+            goap_goal=sorted(goal_facts),
+        )

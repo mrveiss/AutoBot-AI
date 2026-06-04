@@ -18,6 +18,8 @@ already failed.
 import sys
 from pathlib import Path
 
+from autobot_shared.logging_manager import get_logger
+
 _HERE = Path(__file__).resolve()
 _BACKEND = _HERE.parent.parent.parent  # autobot-backend/
 _REPO_ROOT = _BACKEND.parent  # AutoBot-AI/  (for autobot_shared)
@@ -39,7 +41,7 @@ from tests.fixtures.mocks import (  # noqa: E402
     MockWorkerNode,
 )
 
-logger = logging.getLogger("intelligence.demos.run_intelligent_agent")
+logger = get_logger("intelligence.demos.run_intelligent_agent")
 
 
 async def _demo() -> None:

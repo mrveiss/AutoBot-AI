@@ -11,15 +11,15 @@ GPT-4V, Claude-3, Gemini for enhanced capabilities.
 import asyncio
 import base64
 import json
-import logging
-import os
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
+from autobot_shared.ssot_config import config
 from constants.model_constants import (
     ANTHROPIC_CLAUDE3_OPUS_DATED,
     GOOGLE_GEMINI_PRO,
@@ -33,7 +33,7 @@ from task_execution_tracker import get_task_tracker as _get_task_tracker
 task_tracker = _get_task_tracker()
 from utils.service_registry import get_service_url
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level frozenset for error filtering
 _ERROR_FINISH_REASONS = frozenset({"error", "timeout"})
@@ -69,7 +69,7 @@ class AIModelConfig:
     model_name: str
     capabilities: List[ModelCapability]
     api_endpoint: str
-    api_key: Optional[str]
+    api_key: str | None
     max_tokens: int
     temperature: float
     supports_streaming: bool
@@ -87,10 +87,10 @@ class AIRequest:
     model_name: str
     prompt: str
     images: List[str] = None  # Base64 encoded images
-    system_message: Optional[str] = None
-    max_tokens: Optional[int] = None
-    temperature: Optional[float] = None
-    tools: Optional[List[Dict[str, Any]]] = None
+    system_message: str | None = None
+    max_tokens: int | None = None
+    temperature: float | None = None
+    tools: List[Dict[str, Any]] | None = None
     stream: bool = False
     metadata: Dict[str, Any] = None
 
@@ -105,7 +105,7 @@ class AIResponse:
     content: str
     usage: Dict[str, int]
     finish_reason: str
-    tool_calls: Optional[List[Dict[str, Any]]]
+    tool_calls: List[Dict[str, Any]] | None
     confidence: float
     processing_time: float
     metadata: Dict[str, Any]
@@ -603,7 +603,7 @@ class LocalModelProvider(BaseAIProvider):
     def _initialize_client(self):
         """Initialize LLMInterface for OllamaProvider delegation."""
         try:
-            from llm_interface_pkg import LLMInterface
+            from llm_shared import LLMInterface
 
             self._llm_interface = LLMInterface()
             logger.info("LocalModelProvider initialized via OllamaProvider delegation")
@@ -619,7 +619,7 @@ class LocalModelProvider(BaseAIProvider):
             return self._create_error_response(request, "LLMInterface not available")
 
         try:
-            from llm_interface_pkg.models import LLMRequest
+            from llm_shared.models import LLMRequest
 
             messages = []
             if request.system_message:
@@ -670,7 +670,7 @@ class LocalModelProvider(BaseAIProvider):
 class ModernAIIntegration:
     """Main integration system for modern AI models"""
 
-    def __init__(self, memory_manager: Optional[EnhancedMemoryManager] = None):
+    def __init__(self, memory_manager: EnhancedMemoryManager | None = None):
         """Initialize modern AI integration with memory and providers."""
         self.memory_manager = memory_manager or EnhancedMemoryManager()
         self.providers: Dict[AIProvider, BaseAIProvider] = {}
@@ -699,7 +699,7 @@ class ModernAIIntegration:
                 ModelCapability.FUNCTION_CALLING,
                 ModelCapability.VISION,
             ],
-            api_endpoint=os.getenv("OPENAI_API_BASE_URL", "https://api.openai.com/v1") + "/chat/completions",
+            api_endpoint=config.openai_api_base_url + "/chat/completions",
             api_key=None,
             max_tokens=4000,
             temperature=0.7,
@@ -722,7 +722,7 @@ class ModernAIIntegration:
                 ModelCapability.MULTIMODAL,
                 ModelCapability.VISION,
             ],
-            api_endpoint=os.getenv("ANTHROPIC_API_BASE_URL", "https://api.anthropic.com/v1") + "/messages",
+            api_endpoint=config.anthropic_api_base_url + "/messages",
             api_key=None,
             max_tokens=4000,
             temperature=0.7,
@@ -802,14 +802,14 @@ class ModernAIIntegration:
 
         Issue #315: Refactored to use dispatch pattern for reduced nesting.
         """
-        for provider_enum, config in self.model_configs.items():
+        for provider_enum, model_cfg in self.model_configs.items():
             try:
                 provider_class = self._get_provider_class(provider_enum)
                 if provider_class is None:
                     logger.warning("Unknown provider type: %s", provider_enum.value)
                     continue
 
-                self.providers[provider_enum] = provider_class(config)
+                self.providers[provider_enum] = provider_class(model_cfg)
                 logger.info("Initialized provider: %s", provider_enum.value)
 
             except Exception as e:
@@ -819,8 +819,8 @@ class ModernAIIntegration:
         self,
         provider: AIProvider,
         prompt: str,
-        images: Optional[List[str]],
-        system_message: Optional[str],
+        images: List[str] | None,
+        system_message: str | None,
         task_type: str,
         **kwargs,
     ) -> AIRequest:
@@ -849,7 +849,7 @@ class ModernAIIntegration:
         self,
         provider: AIProvider,
         task_type: str,
-        images: Optional[List[str]],
+        images: List[str] | None,
         prompt: str,
     ) -> Dict[str, Any]:
         """Build inputs dict for task tracking context. Issue #620."""
@@ -864,8 +864,8 @@ class ModernAIIntegration:
         self,
         provider: AIProvider,
         prompt: str,
-        images: Optional[List[str]] = None,
-        system_message: Optional[str] = None,
+        images: List[str] | None = None,
+        system_message: str | None = None,
         task_type: str = "general",
         **kwargs,
     ) -> AIResponse:
@@ -911,7 +911,7 @@ class ModernAIIntegration:
                 logger.error("AI processing failed: %s", e)
                 raise
 
-    def _select_vision_provider(self, preferred_provider: Optional[AIProvider]) -> AIProvider:
+    def _select_vision_provider(self, preferred_provider: AIProvider | None) -> AIProvider:
         """Select an available vision-capable AI provider (Issue #665: extracted helper)."""
         vision_providers = [
             AIProvider.OPENAI_GPT4V,
@@ -999,7 +999,7 @@ class ModernAIIntegration:
         self,
         screenshot_base64: str,
         analysis_goal: str,
-        preferred_provider: Optional[AIProvider] = None,
+        preferred_provider: AIProvider | None = None,
     ) -> Dict[str, Any]:
         """Analyze screenshot using AI vision models (Issue #620: uses extracted helpers)."""
         provider = self._select_vision_provider(preferred_provider)
@@ -1024,8 +1024,8 @@ class ModernAIIntegration:
     async def generate_automation_code(
         self,
         task_description: str,
-        screen_context: Optional[Dict[str, Any]] = None,
-        preferred_provider: Optional[AIProvider] = None,
+        screen_context: Dict[str, Any] | None = None,
+        preferred_provider: AIProvider | None = None,
     ) -> str:
         """Generate automation code using AI"""
 
@@ -1063,7 +1063,7 @@ class ModernAIIntegration:
         return response.content
 
     async def natural_language_to_actions(
-        self, user_command: str, context: Optional[Dict[str, Any]] = None
+        self, user_command: str, context: Dict[str, Any] | None = None
     ) -> Dict[str, Any]:
         """Convert natural language command to structured actions"""
 

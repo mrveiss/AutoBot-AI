@@ -4,8 +4,9 @@
 """
 Unified Multi-Platform Message Gateway
 
-Central gateway that normalizes messages from 5+ platforms (Web, Slack, Discord,
-WhatsApp, Teams) into a unified schema. Enables single agent serving all channels.
+Central gateway that normalizes messages from 9+ platforms (Web, Slack, Discord,
+WhatsApp, Teams, Telegram, Signal, Matrix, iMessage) into a unified schema.
+Enables a single agent to serve all channels.
 
 Features:
 - Unified message schema: {user_id, platform, channel_id, message, metadata}
@@ -13,25 +14,32 @@ Features:
 - Rate limiting per platform (Slack 1 req/s, Discord 10 req/s, etc.)
 - Message queue with async processing
 - Performance target: normalize + route <50ms
+- Optional adapters gated by env flags: Signal (AUTOBOT_SIGNAL_ENABLED),
+  iMessage (AUTOBOT_IMESSAGE_ENABLED, macOS-only)
 """
 
-import logging
 import time
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List
+
+from autobot_shared.logging_manager import get_logger
 
 from .adapters import (
     BaseAdapter,
     DiscordAdapter,
+    IMessageAdapter,
+    MatrixAdapter,
     NormalizedResponse,
+    SignalAdapter,
     SlackAdapter,
     TeamsAdapter,
+    TelegramAdapter,
     UnifiedMessage,
     WebAdapter,
     WhatsAppAdapter,
 )
 from .message_queue import MessageQueue
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class GatewayManager:
@@ -42,12 +50,12 @@ class GatewayManager:
     unified interface for agent to serve all channels.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize gateway with all platform adapters."""
         self.adapters: Dict[str, BaseAdapter] = {}
         self.queue = MessageQueue()
         self.response_handlers: Dict[str, Callable] = {}
-        self.logger = logging.getLogger(__name__)
+        self.logger = get_logger(__name__)
 
         # Register all platform adapters
         self._register_adapters()
@@ -60,6 +68,10 @@ class GatewayManager:
             DiscordAdapter(),
             WhatsAppAdapter(),
             TeamsAdapter(),
+            TelegramAdapter(),
+            SignalAdapter(),
+            MatrixAdapter(),
+            IMessageAdapter(),
         ]
 
         for adapter in adapters:
@@ -223,7 +235,7 @@ class GatewayManager:
         self.logger.info("Shutting down gateway")
         await self.queue.shutdown()
 
-    def get_adapter(self, platform: str) -> Optional[BaseAdapter]:
+    def get_adapter(self, platform: str) -> BaseAdapter | None:
         """Get adapter for platform."""
         return self.adapters.get(platform)
 

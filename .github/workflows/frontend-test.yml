@@ -30,16 +30,18 @@ jobs:
   # Job 1: Unit and Integration Tests
   unit-tests:
     name: Unit & Integration Tests
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64]
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.0.2
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v6.4.0
         with:
           node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: autobot-frontend/package-lock.json
 
       - name: Install dependencies
         working-directory: autobot-frontend
@@ -91,7 +93,7 @@ jobs:
         run: npm run test:coverage
 
       - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@57e3a136b779b570ffcdbf80b3bdc90e7fab3de2  # v6
+        uses: codecov/codecov-action@e79a6962e0d4c0c17b229090214935d2e33f8354  # v6
         with:
           files: ./autobot-frontend/coverage/lcov.info
           directory: ./autobot-frontend/coverage
@@ -117,16 +119,18 @@ jobs:
   # Job 2: Security Scanning
   security-scan:
     name: Security Scan
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64]
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.0.2
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v6.4.0
         with:
           node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: autobot-frontend/package-lock.json
 
       - name: Install dependencies
         working-directory: autobot-frontend
@@ -159,17 +163,19 @@ jobs:
   # Job 3: Build Test
   build-test:
     name: Build Test
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64]
     needs: unit-tests
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.0.2
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v6.4.0
         with:
           node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: autobot-frontend/package-lock.json
 
       - name: Install dependencies
         working-directory: autobot-frontend
@@ -195,7 +201,7 @@ jobs:
   # Job 4: Test Summary and Reporting
   test-summary:
     name: Test Summary
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64]
     needs: [unit-tests, security-scan, build-test]
     if: always()
 
@@ -207,28 +213,36 @@ jobs:
 
       - name: Generate test summary
         run: |
-          echo "# 🧪 Frontend Test Results" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "## Test Jobs Status:" >> $GITHUB_STEP_SUMMARY
-          echo "- Unit Tests: ${{ needs.unit-tests.result }}" >> $GITHUB_STEP_SUMMARY
-          echo "- Security Scan: ${{ needs.security-scan.result }}" >> $GITHUB_STEP_SUMMARY
-          echo "- Build Test: ${{ needs.build-test.result }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
+          {
+            echo "# 🧪 Frontend Test Results"
+            echo ""
+            echo "## Test Jobs Status:"
+            echo "- Unit Tests: ${{ needs.unit-tests.result }}"
+            echo "- Security Scan: ${{ needs.security-scan.result }}"
+            echo "- Build Test: ${{ needs.build-test.result }}"
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
 
           if [ -d "test-artifacts/test-results-unit/coverage" ]; then
-            echo "## Coverage Report Available" >> $GITHUB_STEP_SUMMARY
-            echo "Coverage reports have been uploaded to Codecov." >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
+            {
+              echo "## Coverage Report Available"
+              echo "Coverage reports have been uploaded to Codecov."
+              echo ""
+            } >> "$GITHUB_STEP_SUMMARY"
           fi
 
           if [ -d "test-artifacts" ]; then
-            echo "## Available Artifacts:" >> $GITHUB_STEP_SUMMARY
-            find test-artifacts -type d -name "*results*" | while read dir; do
-              echo "- $(basename "$dir")" >> $GITHUB_STEP_SUMMARY
-            done
-            echo "" >> $GITHUB_STEP_SUMMARY
+            {
+              echo "## Available Artifacts:"
+              find test-artifacts -type d -name "*results*" | while read -r dir; do
+                echo "- $(basename "$dir")"
+              done
+              echo ""
+            } >> "$GITHUB_STEP_SUMMARY"
           fi
 
-          echo "## Quick Links:" >> $GITHUB_STEP_SUMMARY
-          echo "- [View Coverage Report](https://app.codecov.io/gh/${{ github.repository }})" >> $GITHUB_STEP_SUMMARY
-          echo "- [Download Test Artifacts](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $GITHUB_STEP_SUMMARY
+          {
+            echo "## Quick Links:"
+            echo "- [View Coverage Report](https://app.codecov.io/gh/${{ github.repository }})"
+            echo "- [Download Test Artifacts](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})"
+          } >> "$GITHUB_STEP_SUMMARY"

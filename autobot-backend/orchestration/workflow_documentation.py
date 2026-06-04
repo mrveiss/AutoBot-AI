@@ -9,13 +9,14 @@ Contains workflow documentation generation and knowledge extraction.
 """
 
 import asyncio
-import logging
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
+
+from autobot_shared.logging_manager import get_logger
 
 from .types import AgentProfile, DocumentationType, WorkflowDocumentation
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class WorkflowDocumenter:
@@ -28,8 +29,8 @@ class WorkflowDocumenter:
 
     def __init__(
         self,
-        knowledge_base: Optional[Any] = None,
-        llm_service: Optional[Any] = None,
+        knowledge_base: Any | None = None,
+        llm_service: Any | None = None,
     ):
         """
         Initialize the workflow documenter.
@@ -81,7 +82,7 @@ class WorkflowDocumenter:
         self._documentation[workflow_id] = doc
         return doc
 
-    def get_doc(self, workflow_id: str) -> Optional[WorkflowDocumentation]:
+    def get_doc(self, workflow_id: str) -> WorkflowDocumentation | None:
         """Get documentation by workflow ID."""
         return self._documentation.get(workflow_id)
 
@@ -208,7 +209,7 @@ class WorkflowDocumenter:
         self,
         user_request: str,
         execution_result: Dict[str, Any],
-    ) -> Optional[Dict[str, Any]]:
+    ) -> Dict[str, Any] | None:
         """
         Extract success pattern if workflow had high success rate.
 
@@ -339,7 +340,7 @@ class WorkflowDocumenter:
     def search_documentation(
         self,
         query: str,
-        doc_type: Optional[DocumentationType] = None,
+        doc_type: DocumentationType | None = None,
         limit: int = 10,
     ) -> List[WorkflowDocumentation]:
         """

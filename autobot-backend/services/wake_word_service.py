@@ -9,21 +9,21 @@ Issue #54 - Advanced Wake Word Detection Optimization
 """
 
 import asyncio
-import logging
 import threading
 import time
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Callable, Dict, List, Optional
+from typing import Callable, Dict, List
 
 try:
     import psutil as _psutil
 except ImportError:
     _psutil = None  # psutil optional – CPU monitoring disabled without it
 
+from autobot_shared.logging_manager import get_logger
 from type_defs.common import Metadata
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level tuple for noise indicators in false positive detection
 _NOISE_INDICATORS = ("said", "mentioned", "talking about", "the word", "called")
@@ -62,7 +62,7 @@ class WakeWordEvent:
     wake_word: str
     confidence: float
     timestamp: float
-    audio_context: Optional[bytes] = None
+    audio_context: bytes | None = None
     metadata: Metadata = field(default_factory=dict)
 
 
@@ -76,7 +76,7 @@ class DetectionStats:
     total_listening_time: float = 0.0
     average_confidence: float = 0.0
     cpu_usage_percent: float = 0.0
-    last_detection_time: Optional[float] = None
+    last_detection_time: float | None = None
 
 
 @dataclass
@@ -90,7 +90,7 @@ class ListeningStatus:
     throttle_events: int = 0  # Count of times CPU limit triggered a sleep
 
 
-def _get_psutil_process() -> Optional[object]:
+def _get_psutil_process() -> object | None:
     """Return psutil.Process for the current process, or None if unavailable."""
     if _psutil is None:
         return None
@@ -112,20 +112,20 @@ class WakeWordDetector:
     - Background listening with duty cycling
     """
 
-    def __init__(self, config: Optional[WakeWordConfig] = None):
+    def __init__(self, config: WakeWordConfig | None = None) -> None:
         """Initialize wake word detector with configuration and adaptive thresholds."""
         self.config = config or WakeWordConfig()
         self.state = WakeWordState.IDLE
         self.stats = DetectionStats()
 
         # Internal state
-        self._listening_task: Optional[asyncio.Task] = None
+        self._listening_task: asyncio.Task | None = None
         self._callbacks: List[Callable[[WakeWordEvent], None]] = []
         self._recent_detections: List[WakeWordEvent] = []
         self._adaptive_thresholds: Dict[str, float] = {}
         self._false_positive_buffer: List[float] = []
-        self._start_time: Optional[float] = None
-        self._cooldown_end_time: Optional[float] = None  # For sync context cooldown
+        self._start_time: float | None = None
+        self._cooldown_end_time: float | None = None  # For sync context cooldown
 
         # CPU optimization state (issue #927)
         self._listening_status = ListeningStatus()
@@ -169,7 +169,7 @@ class WakeWordDetector:
         """Get list of current wake words"""
         return self.config.wake_words.copy()
 
-    def check_text_for_wake_word(self, text: str, confidence: float = 1.0) -> Optional[WakeWordEvent]:
+    def check_text_for_wake_word(self, text: str, confidence: float = 1.0) -> WakeWordEvent | None:
         """
         Check if text contains a wake word.
 
@@ -357,7 +357,7 @@ class WakeWordDetector:
         # Set cooldown end time for sync context checking
         self._cooldown_end_time = time.time() + self.config.cooldown_seconds
 
-        def exit_cooldown():
+        def exit_cooldown() -> None:
             """Exit cooldown and resume listening state."""
             if self.state == WakeWordState.COOLDOWN:
                 self.state = WakeWordState.LISTENING
@@ -517,7 +517,7 @@ class WakeWordDetector:
 
     async def start_listening(
         self,
-        audio_callback: Optional[Callable[[], Optional[bytes]]] = None,
+        audio_callback: Callable[[], bytes | None] | None = None,
     ) -> None:
         """
         Start the always-on background listening loop (issue #927).
@@ -548,7 +548,7 @@ class WakeWordDetector:
 
     async def _listening_loop(
         self,
-        audio_callback: Optional[Callable[[], Optional[bytes]]],
+        audio_callback: Callable[[], bytes | None] | None,
     ) -> None:
         """
         Core duty-cycling listening loop with CPU throttle.
@@ -578,7 +578,7 @@ class WakeWordDetector:
 
     async def _process_audio_chunk(
         self,
-        audio_callback: Optional[Callable[[], Optional[bytes]]],
+        audio_callback: Callable[[], bytes | None] | None,
     ) -> None:
         """Process one audio chunk; tracks listening time even when no callback."""
         self.stats.total_listening_time += self.config.chunk_duration_ms / 1000.0
@@ -604,7 +604,7 @@ class WakeWordDetector:
 
 
 # Singleton instance for global access (thread-safe)
-_wake_word_detector: Optional[WakeWordDetector] = None
+_wake_word_detector: WakeWordDetector | None = None
 _wake_word_detector_lock = threading.Lock()
 
 

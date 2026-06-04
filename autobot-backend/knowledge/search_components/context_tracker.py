@@ -1,8 +1,8 @@
 """Per-query context tracker preventing redundant chunk reads (#1994, #2005)."""
 
-import logging
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ContextTracker:

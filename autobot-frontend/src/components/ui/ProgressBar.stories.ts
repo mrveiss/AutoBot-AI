@@ -4,7 +4,6 @@ import ProgressBar from './ProgressBar.vue';
 const meta = {
   title: 'Components/UI/ProgressBar',
   component: ProgressBar,
-  tags: ['autodocs'],
   argTypes: {
     progress: {
       control: { type: 'range', min: 0, max: 100, step: 1 },

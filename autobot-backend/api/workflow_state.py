@@ -19,15 +19,15 @@ Usage::
     state = await sm.complete("wf-1")
 """
 
-import logging
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from api.schemas_workflows import WorkflowState
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.time_utils import now_utc
 from constants.ttl_constants import TTL_7_DAYS
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # ------------------------------------------------------------------ #
 # Constants
@@ -121,7 +121,7 @@ class WorkflowStateMachine:
         )
         return state
 
-    async def get(self, workflow_id: str) -> Optional[WorkflowState]:
+    async def get(self, workflow_id: str) -> WorkflowState | None:
         """Retrieve a workflow from Redis, or *None*."""
         redis = await self._redis()
         raw = await redis.get(self._key(workflow_id))
@@ -211,7 +211,7 @@ class WorkflowStateMachine:
 # Singleton factory
 # ------------------------------------------------------------------ #
 
-_instance: Optional[WorkflowStateMachine] = None
+_instance: WorkflowStateMachine | None = None
 
 
 def get_workflow_state_machine() -> WorkflowStateMachine:

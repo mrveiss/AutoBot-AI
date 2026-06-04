@@ -8,7 +8,6 @@ Provides centralized error message retrieval from config/error_messages.yaml
 with caching, validation, and integration with error_boundaries.py
 """
 
-import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Optional
@@ -16,9 +15,11 @@ from typing import Dict, Optional
 import yaml
 
 from autobot_shared.error_boundaries import ErrorCategory
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.singleton_factory import lazy_singleton
 from constants.path_constants import PATH
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level frozenset for metadata field filtering
 _METADATA_FIELDS = frozenset({"version", "last_updated"})
@@ -398,8 +399,8 @@ class ErrorDefinition:
     message: str
     status_code: int
     retry: bool
-    retry_after: Optional[int] = None
-    details: Optional[str] = None
+    retry_after: int | None = None
+    details: str | None = None
 
     def to_dict(self) -> dict:
         """Convert to dictionary for API responses"""
@@ -419,29 +420,21 @@ class ErrorCatalog:
     Singleton error catalog loader with caching and validation
 
     Usage:
-        catalog = ErrorCatalog.get_instance()
+        catalog = get_error_catalog_instance()
         error = catalog.get_error("KB_0001")
         if error:
             logger.info("%s - Retry: %s", error.message, error.retry)
     """
 
-    _instance: Optional["ErrorCatalog"] = None
     _initialized: bool = False
 
     def __init__(self):
-        """Initialize error catalog (use get_instance() instead)"""
+        """Initialize error catalog (use get_error_catalog_instance() instead)"""
         self._catalog: Dict[str, ErrorDefinition] = {}
-        self._raw_data: Optional[dict] = None
-        self._catalog_path: Optional[Path] = None
+        self._raw_data: dict | None = None
+        self._catalog_path: Path | None = None
 
-    @classmethod
-    def get_instance(cls) -> "ErrorCatalog":
-        """Get singleton instance of error catalog"""
-        if cls._instance is None:
-            cls._instance = cls()
-        return cls._instance
-
-    def _resolve_catalog_path(self) -> Optional[Path]:
+    def _resolve_catalog_path(self) -> Path | None:
         """Find error_messages.yaml searching backend static dir then infrastructure.
 
         Helper for load_catalog (Issue #912).
@@ -481,7 +474,7 @@ class ErrorCatalog:
             len(self._catalog),
         )
 
-    def load_catalog(self, catalog_path: Optional[Path] = None) -> bool:
+    def load_catalog(self, catalog_path: Path | None = None) -> bool:
         """
         Load error catalog from YAML file
 
@@ -545,7 +538,7 @@ class ErrorCatalog:
                 if error_def:
                     self._catalog[error_code] = error_def
 
-    def get_error(self, error_code: str) -> Optional[ErrorDefinition]:
+    def get_error(self, error_code: str) -> ErrorDefinition | None:
         """
         Retrieve error definition by code
 
@@ -647,8 +640,12 @@ class ErrorCatalog:
         return self.load_catalog(self._catalog_path)
 
 
+get_error_catalog_instance = lazy_singleton(ErrorCatalog)
+"""Get the singleton ErrorCatalog instance (thread-safe)."""
+
+
 # Convenience functions for direct access
-def get_error(error_code: str) -> Optional[ErrorDefinition]:
+def get_error(error_code: str) -> ErrorDefinition | None:
     """
     Get error definition by code (convenience function)
 
@@ -663,7 +660,7 @@ def get_error(error_code: str) -> Optional[ErrorDefinition]:
         if error:
             logger.info("%s - Status: %s", error.message, error.status_code)
     """
-    catalog = ErrorCatalog.get_instance()
+    catalog = get_error_catalog_instance()
     return catalog.get_error(error_code)
 
 
@@ -681,7 +678,7 @@ def get_error_message(error_code: str, default: str = "Unknown error") -> str:
     Example:
         message = get_error_message("LLM_0001", "LLM service unavailable")
     """
-    catalog = ErrorCatalog.get_instance()
+    catalog = get_error_catalog_instance()
     return catalog.get_error_message(error_code, default)
 
 
@@ -699,10 +696,10 @@ def validate_error_code(error_code: str) -> bool:
         if validate_error_code("AUTH_0001"):
             logger.info("Valid error code")
     """
-    catalog = ErrorCatalog.get_instance()
+    catalog = get_error_catalog_instance()
     return catalog.validate_code(error_code)
 
 
 # Pre-load catalog on module import
-_catalog_instance = ErrorCatalog.get_instance()
+_catalog_instance = get_error_catalog_instance()
 _catalog_instance.load_catalog()

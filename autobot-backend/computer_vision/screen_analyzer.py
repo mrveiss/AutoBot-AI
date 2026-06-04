@@ -13,12 +13,12 @@ from __future__ import annotations
 import asyncio
 import base64
 import io
-import logging
 import time
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Tuple
 
 import numpy as np
 
+from autobot_shared.logging_manager import get_logger
 from desktop_streaming_manager import get_desktop_streaming
 from memory import TaskPriority
 from multimodal_processor import (
@@ -37,7 +37,7 @@ if TYPE_CHECKING:
     import cv2 as _cv2_type  # noqa: F401
     from PIL import Image as _pil_type  # noqa: F401
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #3016: lazy module-level imports for cv2 and PIL to avoid startup cost
 _cv2 = None
@@ -97,7 +97,7 @@ class ScreenAnalyzer:
         }
 
     async def _perform_screen_analysis(
-        self, session_id: Optional[str], context_audio: Optional[bytes]
+        self, session_id: str | None, context_audio: bytes | None
     ) -> Tuple[ScreenState, List[UIElement]]:
         """
         Execute the core screen analysis pipeline stages.
@@ -137,7 +137,7 @@ class ScreenAnalyzer:
         return screen_state, ui_elements
 
     async def analyze_current_screen(
-        self, session_id: Optional[str] = None, context_audio: Optional[bytes] = None
+        self, session_id: str | None = None, context_audio: bytes | None = None
     ) -> ScreenState:
         """
         Analyze the current screen state comprehensively.
@@ -171,8 +171,8 @@ class ScreenAnalyzer:
     async def _process_multimodal_inputs(
         self,
         screenshot: np.ndarray,
-        session_id: Optional[str],
-        context_audio: Optional[bytes],
+        session_id: str | None,
+        context_audio: bytes | None,
     ) -> Tuple[List[Any], Any]:
         """Process screenshot and optional audio inputs. Issue #281: Extracted helper."""
         modal_inputs = [self._create_image_input(screenshot, session_id)]
@@ -193,7 +193,7 @@ class ScreenAnalyzer:
 
         return processing_results, primary_result
 
-    def _create_image_input(self, screenshot: np.ndarray, session_id: Optional[str]) -> MultiModalInput:
+    def _create_image_input(self, screenshot: np.ndarray, session_id: str | None) -> MultiModalInput:
         """Create image input for multimodal processing. Issue #281: Extracted helper."""
         return MultiModalInput(
             input_id=f"screen_vision_{int(time.time())}",
@@ -203,7 +203,7 @@ class ScreenAnalyzer:
             metadata={"session_id": session_id},
         )
 
-    def _create_audio_input(self, context_audio: bytes, session_id: Optional[str]) -> MultiModalInput:
+    def _create_audio_input(self, context_audio: bytes, session_id: str | None) -> MultiModalInput:
         """Create audio input for multimodal processing. Issue #281: Extracted helper."""
         return MultiModalInput(
             input_id=f"screen_audio_{int(time.time())}",
@@ -213,9 +213,7 @@ class ScreenAnalyzer:
             metadata={"session_id": session_id, "context": "screen_analysis"},
         )
 
-    async def _combine_multimodal_results(
-        self, processing_results: List[Any], session_id: Optional[str]
-    ) -> Optional[Any]:
+    async def _combine_multimodal_results(self, processing_results: List[Any], session_id: str | None) -> Any | None:
         """Combine multimodal results if available. Issue #281: Extracted helper."""
         combined_input = MultiModalInput(
             input_id=f"screen_combined_{int(time.time())}",
@@ -275,7 +273,7 @@ class ScreenAnalyzer:
             multimodal_analysis=extractor.to_multimodal_analysis(processing_results),
         )
 
-    async def _capture_from_session(self, session_id: str) -> Optional[np.ndarray]:
+    async def _capture_from_session(self, session_id: str) -> np.ndarray | None:
         """Capture screenshot from VNC session. Issue #620."""
         cv2 = _get_cv2()
         PILImage = _get_pil_image()
@@ -290,7 +288,7 @@ class ScreenAnalyzer:
         image = PILImage.open(io.BytesIO(screenshot_bytes))
         return cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
 
-    async def _capture_from_x11(self) -> Optional[np.ndarray]:
+    async def _capture_from_x11(self) -> np.ndarray | None:
         """Capture screenshot using X11 import command. Issue #620."""
         cv2 = _get_cv2()
         PILImage = _get_pil_image()
@@ -334,7 +332,7 @@ class ScreenAnalyzer:
         )
         return test_image
 
-    async def _capture_screenshot(self, session_id: Optional[str] = None) -> Optional[np.ndarray]:
+    async def _capture_screenshot(self, session_id: str | None = None) -> np.ndarray | None:
         """Capture screenshot from desktop streaming or system"""
         try:
             # Try session-based capture first
@@ -384,7 +382,7 @@ class ScreenAnalyzer:
 
     async def _classify_single_element(
         self, screenshot: np.ndarray, element: Dict[str, Any], index: int
-    ) -> Optional[UIElement]:
+    ) -> UIElement | None:
         """Classify a single detected element (Issue #665: extracted helper)."""
         bbox = element.get("bbox", {})
         if not bbox:
@@ -445,7 +443,7 @@ class ScreenAnalyzer:
         return template_elements
 
     def _determine_interactions(
-        self, element_type: ElementType, element_region: Optional[np.ndarray]
+        self, element_type: ElementType, element_region: np.ndarray | None
     ) -> List[InteractionType]:
         """Determine possible interactions based on element type"""
         interaction_map = {
@@ -471,7 +469,7 @@ class ScreenAnalyzer:
 
         return interaction_map.get(element_type, [InteractionType.CLICK])
 
-    async def _extract_element_text(self, element_region: Optional[np.ndarray]) -> str:
+    async def _extract_element_text(self, element_region: np.ndarray | None) -> str:
         """Extract text from element region using OCR"""
         if element_region is None or element_region.size == 0:
             return ""

@@ -4,8 +4,15 @@ Connection Info Widget - Display network connection information with copy functi
 
 import logging
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QGroupBox,
-    QLabel, QPushButton, QTextEdit, QMessageBox, QGridLayout
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QGroupBox,
+    QLabel,
+    QPushButton,
+    QTextEdit,
+    QMessageBox,
+    QGridLayout,
 )
 from PySide6.QtCore import Qt, Slot, QTimer
 
@@ -17,17 +24,21 @@ try:
         get_network_interfaces,
         get_platform_info,
         get_primary_ip,
-        get_registration_config
+        get_registration_config,
     )
 except Exception as e:
     logger.error("Failed to import network_info: %s", e, exc_info=True)
+
     # Provide fallback functions
     def get_network_interfaces():
         return []
+
     def get_platform_info():
         return {"system": "Unknown", "release": "", "npu_detected": False, "npu_devices": []}
+
     def get_primary_ip():
         return None
+
     def get_registration_config(port):
         return "# Network info unavailable"
 
@@ -182,22 +193,20 @@ class ConnectionInfoWidget(QWidget):
         except Exception as e:
             # Handle errors gracefully
             QMessageBox.warning(
-                self,
-                "Network Info Error",
-                f"Failed to retrieve network information:\n{str(e)}\n\nUsing fallback mode."
+                self, "Network Info Error", f"Failed to retrieve network information:\n{str(e)}\n\nUsing fallback mode."
             )
             interfaces = []
             platform_info = {"system": "Unknown", "npu_detected": False}
             primary_ip = "Unknown"
 
         # Update worker ID if available
-        if hasattr(self, 'worker_id') and self.worker_id != "N/A":
+        if hasattr(self, "worker_id") and self.worker_id != "N/A":
             self.worker_id_label.setText(self.worker_id)
 
         # Update platform info
-        system = platform_info.get('system', 'Unknown')
-        release = platform_info.get('release', '')
-        npu_detected = platform_info.get('npu_detected', False)
+        system = platform_info.get("system", "Unknown")
+        release = platform_info.get("release", "")
+        npu_detected = platform_info.get("npu_detected", False)
 
         self.system_label.setText(f"{system} {release}")
 
@@ -212,10 +221,10 @@ class ConnectionInfoWidget(QWidget):
         network_text = ""
         if interfaces:
             for iface in interfaces:
-                iface_type = iface['type']
-                iface_name = iface['interface']
-                iface_ip = iface['ip']
-                primary_mark = " ★" if iface.get('is_primary') else ""
+                iface_type = iface["type"]
+                iface_name = iface["interface"]
+                iface_ip = iface["ip"]
+                primary_mark = " ★" if iface.get("is_primary") else ""
                 network_text += f"• {iface_type:15} ({iface_name}): {iface_ip}{primary_mark}\n"
         else:
             network_text = "No network interfaces detected"
@@ -253,21 +262,12 @@ class ConnectionInfoWidget(QWidget):
         """Copy text to clipboard"""
         try:
             from PySide6.QtGui import QGuiApplication
+
             clipboard = QGuiApplication.clipboard()
             clipboard.setText(text)
-            QMessageBox.information(
-                self,
-                "Copied",
-                "Text copied to clipboard!",
-                QMessageBox.StandardButton.Ok
-            )
+            QMessageBox.information(self, "Copied", "Text copied to clipboard!", QMessageBox.StandardButton.Ok)
         except Exception as e:
-            QMessageBox.warning(
-                self,
-                "Copy Failed",
-                f"Failed to copy to clipboard: {e}",
-                QMessageBox.StandardButton.Ok
-            )
+            QMessageBox.warning(self, "Copy Failed", f"Failed to copy to clipboard: {e}", QMessageBox.StandardButton.Ok)
 
     @Slot()
     def _copy_endpoint(self):

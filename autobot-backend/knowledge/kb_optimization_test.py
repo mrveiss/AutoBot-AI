@@ -9,8 +9,10 @@ import os
 import sys
 import time
 
+from autobot_shared.ssot_config import config
+
 # Add AutoBot to path
-sys.path.insert(0, os.environ.get("AUTOBOT_PROJECT_ROOT", "/opt/autobot/code_source"))
+sys.path.insert(0, config.project_root)
 
 from knowledge_base import get_knowledge_base
 

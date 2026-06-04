@@ -15,7 +15,7 @@
     system: true
     shell: /usr/sbin/nologin
     create_home: false
-  become: yes
+  become: true
   tags: ['slm_agent', 'node_exporter']
 
 - name: "Node Exporter | Check if binary exists"
@@ -31,7 +31,7 @@
     owner: node_exporter
     group: node_exporter
     mode: "0755"
-  become: yes
+  become: true
   tags: ['slm_agent', 'node_exporter']
 
 - name: "Node Exporter | Download archive"
@@ -40,7 +40,7 @@
     dest: "/tmp/node_exporter-{{ node_exporter_version }}.tar.gz"
     mode: "0644"
   when: not _node_exporter_binary.stat.exists
-  become: yes
+  become: true
   tags: ['slm_agent', 'node_exporter']
 
 - name: "Node Exporter | Extract binary"
@@ -53,7 +53,7 @@
     owner: node_exporter
     group: node_exporter
   when: not _node_exporter_binary.stat.exists
-  become: yes
+  become: true
   tags: ['slm_agent', 'node_exporter']
 
 - name: "Node Exporter | Deploy systemd service"
@@ -63,7 +63,7 @@
     owner: root
     group: root
     mode: "0644"
-  become: yes
+  become: true
   notify:
     - Reload systemd
     - Restart node_exporter
@@ -75,7 +75,7 @@
     state: started
     enabled: true
     daemon_reload: true
-  become: yes
+  become: true
   tags: ['slm_agent', 'node_exporter']
 
 # ── Hardware-specific textfile collector remediation (#1147) ──────────────────
@@ -123,7 +123,7 @@
     name: prometheus-node-exporter-ipmitool-sensor
     masked: true
     daemon_reload: true
-  become: yes
+  become: true
   when: not _ne_ipmi_device.stat.exists
   # (#2872) Intentional: collector unit may not exist (binary install)
   failed_when: false
@@ -134,7 +134,7 @@
     name: prometheus-node-exporter-mellanox-hca-temp
     masked: true
     daemon_reload: true
-  become: yes
+  become: true
   when: _ne_infiniband_devices.files | default([]) | length == 0
   # (#2872) Intentional: collector unit may not exist (binary install)
   failed_when: false
@@ -145,7 +145,7 @@
     name: prometheus-node-exporter-nvme
     masked: true
     daemon_reload: true
-  become: yes
+  become: true
   when: _ne_nvme_devices.files | length == 0
   # (#2872) Intentional: collector unit may not exist (binary install)
   failed_when: false
@@ -156,7 +156,7 @@
     name: prometheus-node-exporter-smartmon
     masked: true
     daemon_reload: true
-  become: yes
+  become: true
   when: _ne_smartctl.rc != 0
   # (#2872) Intentional: collector unit may not exist (binary install)
   failed_when: false
@@ -179,6 +179,6 @@
     port: "{{ node_exporter_port | string }}"
     proto: tcp
     comment: "Node Exporter (Prometheus scrape from SLM)"
-  become: yes
+  become: true
   when: _ufw_check.rc == 0
   tags: ['slm_agent', 'node_exporter', 'firewall']

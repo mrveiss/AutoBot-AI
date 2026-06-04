@@ -2,7 +2,6 @@ import type { Meta, StoryObj } from '@storybook/vue3';
 
 const meta = {
   title: 'Introduction/Welcome',
-  tags: ['autodocs'],
   parameters: {
     layout: 'centered',
   },

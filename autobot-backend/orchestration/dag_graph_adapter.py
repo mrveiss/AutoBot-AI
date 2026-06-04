@@ -7,6 +7,10 @@ DAG-to-AutoBotGraph adapter.
 Issue #3228: migrate the DAG workflow executor to use the unified
 ``AutoBotGraph`` / ``GraphRunner`` engine so checkpoint and step-event
 logic is shared rather than duplicated.
+Issue #6826: #3228 was closed prematurely; the migration is ongoing.
+Executor fragmentation scope: this adapter is the bridge layer intended
+to replace direct ``DAGExecutor`` usage in production once parallel
+fan-out support is complete (tracked in #6826).
 
 This module provides ``build_dag_graph`` which converts a ``WorkflowDAG``
 into an ``AutoBotGraph``.  Each DAG node becomes a graph node whose
@@ -35,8 +39,9 @@ state and converts it back to the legacy execution_context dict shape.
 
 from __future__ import annotations
 
-import logging
-from typing import Any, Dict, Optional, Set
+from typing import Any, Dict, Set
+
+from autobot_shared.logging_manager import get_logger
 
 from .dag_executor import (
     DAGExecutionContext,
@@ -56,7 +61,7 @@ from .graph_runner import (
     StepEventEmitter,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # Node wrappers
@@ -163,7 +168,7 @@ def _mark_descendants_skipped(
 def build_dag_graph(
     dag: WorkflowDAG,
     step_executor: StepExecutorCallback,
-    retry_config: Optional[NodeRetryConfig] = None,
+    retry_config: NodeRetryConfig | None = None,
 ) -> CompiledGraph:
     """Convert *dag* into a ``CompiledGraph`` executable by ``GraphRunner``.
 
@@ -296,14 +301,14 @@ class DAGGraphExecutor:
     - True parallel fan-out (multiple successors executed concurrently) is
       linearised in this implementation.  The original ``DAGExecutor`` uses
       ``asyncio.gather`` for independent branches.  Full parallel fan-out
-      support is tracked as a follow-up enhancement in issue #3228.
+      support is tracked as a follow-up enhancement in issue #6826.
     """
 
     def __init__(
         self,
         step_executor_callback: StepExecutorCallback,
-        emitter: Optional[StepEventEmitter] = None,
-        retry_config: Optional[NodeRetryConfig] = None,
+        emitter: StepEventEmitter | None = None,
+        retry_config: NodeRetryConfig | None = None,
         enable_checkpoints: bool = True,
     ) -> None:
         self._step_executor = step_executor_callback
@@ -315,7 +320,7 @@ class DAGGraphExecutor:
         self,
         dag: WorkflowDAG,
         workflow_id: str,
-        context: Optional[Dict[str, Any]] = None,
+        context: Dict[str, Any] | None = None,
     ) -> DAGExecutionContext:
         """Execute *dag* using ``GraphRunner``.
 

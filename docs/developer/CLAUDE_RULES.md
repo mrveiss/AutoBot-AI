@@ -98,6 +98,54 @@ Use **Extract Method** pattern: create `_helper_function()` with docstring refer
 
 **UTF-8 Encoding:** Always use `encoding='utf-8'` explicitly.
 
+**Cache TTL Overrides — never hard-code Redis TTLs (#6743):**
+
+Hard-coded Redis TTLs are bugs. For any surface where operators may need to tune
+memory pressure, declare a module-level constant resolved from an env var with a
+logged-fallback default.
+
+Known tunable TTL env vars:
+
+| Env var | Default | Controls | Code location |
+|---------|---------|----------|---------------|
+| `AUTOBOT_CHAT_SESSION_CACHE_TTL` | `86400` (24 h) | TTL (seconds) for `chat:session:*` Redis keys | `autobot-backend/chat_history/cache.py` — `_resolve_chat_session_cache_ttl()` |
+
+Canonical resolver pattern (copy for every new tunable TTL surface):
+
+```python
+# module-level constant — resolved once at import time
+_CHAT_SESSION_CACHE_TTL = _resolve_chat_session_cache_ttl()
+
+def _resolve_chat_session_cache_ttl() -> int:
+    """Return TTL seconds for chat:session:* Redis keys."""
+    raw = config.chat_session_cache_ttl  # reads AUTOBOT_CHAT_SESSION_CACHE_TTL
+    if raw is None:
+        return TTL_24_HOURS  # from constants/ttl_constants.py
+    try:
+        value = int(raw)
+    except ValueError:
+        logger.warning(
+            "AUTOBOT_CHAT_SESSION_CACHE_TTL=%r is not an integer; falling back to %ds (24h)",
+            raw, TTL_24_HOURS,
+        )
+        return TTL_24_HOURS
+    if value <= 0:
+        logger.warning(
+            "AUTOBOT_CHAT_SESSION_CACHE_TTL=%d must be positive; falling back to %ds (24h)",
+            value, TTL_24_HOURS,
+        )
+        return TTL_24_HOURS
+    return value
+```
+
+Rules:
+- Env var name: `AUTOBOT_<AREA>_<RESOURCE>_TTL` (screaming-snake, `AUTOBOT_` prefix)
+- Always log a warning with the invalid value and the fallback when env var is absent or invalid
+- Constant must be positive; reject zero or negative with warning + fallback to default
+- Never call `int(os.getenv(...))` inline at call sites — use a named `_resolve_*` function
+
+> Violation: Hard-coding `expire(key, 3600)` or reading the env var inline at call sites.
+
 **Logging:**
 
 ```python
@@ -288,3 +336,94 @@ Perf impact on [memory wake-up / KB search / entity lookup / tool dispatch / hoo
 **Prometheus histogram verification** — ensuring each target above has a corresponding histogram — is tracked as a separate follow-up. Do not block PRs on missing histograms; file a discovery issue if a histogram is absent.
 
 > Violation: Merging a change to KB hybrid search without reporting measured p95 latency when the code path is on the hot-path list above.
+
+---
+
+## Decorator Order Fix Tool
+
+`tools/lint/check_decorator_order.py` enforces the `@router.*` / `@with_error_handling` decorator order (see #6558, #6633, #6638).
+
+**Check-only (default, used by pre-commit):**
+
+```bash
+python3 tools/lint/check_decorator_order.py <file-or-dir> ...
+```
+
+**Auto-fix mode (opt-in):**
+
+```bash
+pip install libcst   # one-time
+python3 tools/lint/check_decorator_order.py --fix <file-or-dir> ...
+```
+
+`--fix` uses libcst to correct violations in place while preserving formatting, comments, and docstrings.
+It fixes both patterns in a single pass:
+
+- **Pattern A** — `@with_error_handling` above `@router.*`: swapped so `@router.*` is outermost.
+- **Pattern B** — two adjacent `@with_error_handling` decorators: outer duplicate removed.
+
+The pre-commit hook entry in `.pre-commit-config.yaml` does **not** include `--fix` — CI always runs check-only so it never silently mutates files.  `--fix` is a developer convenience for bulk remediation.
+
+`libcst` is a soft dependency: if not installed, `--fix` prints an error and exits 1.
+
+---
+
+## AUTOBOT_* Environment Variables
+
+All `AUTOBOT_*` environment variables must be registered in
+`autobot_shared/env_registry.py` before use. The pre-commit hook
+`env-vars-documented` enforces this and keeps this table up to date.
+
+To add a new variable:
+1. Add a `register_env_var(EnvVarSpec(...))` call to `autobot_shared/env_registry.py`.
+2. Run `python3 pipeline-scripts/generate_env_docs.py` to regenerate this table.
+3. Stage both files.
+
+<!-- BEGIN_AUTOGEN_ENV_DOCS -->
+| Name | Component | Type | Default | Description |
+|---|---|---|---|---|
+| `AUTOBOT_BACKEND_HOST` | backend | str | `'10.0.0.1'` | Hostname or IP address of the AutoBot backend service. |
+| `AUTOBOT_BACKEND_PORT` | backend | str | `'8001'` | TCP port of the AutoBot backend service. |
+| `AUTOBOT_BACKEND_URL` | backend | str | `'http://10.255.255.254:8001'` | Full base URL of the AutoBot backend service (overrides HOST+PORT). |
+| `AUTOBOT_CHATS_DIRECTORY` | chat | str | `'data/chats'` | Filesystem path where chat session files are stored. |
+| `AUTOBOT_CLASSIFICATION_MODEL` | ai | str | `'gemma2:2b'` | Ollama model name used for intent classification. |
+| `AUTOBOT_DEPLOYMENT_MODE` | system | str | `'distributed'` | Deployment topology: 'distributed' or 'standalone'. |
+| `AUTOBOT_ENV` | system | str | `'production'` | Short environment label used in logs and traces (e.g. 'development', 'production'). |
+| `AUTOBOT_ENVIRONMENT` | system | str | `'development'` | Full environment name for OTel deployment.environment attribute. Prefer AUTOBOT_ENV for new code. |
+| `AUTOBOT_GIT_BRANCH` | system | str | `'Dev_new_gui'` | Git branch that the running instance was built from. |
+| `AUTOBOT_INTERNAL_API_KEY` | auth | str | `""` | Shared secret used to authenticate internal service-to-service calls. |
+| `AUTOBOT_KB_TIMEOUT` | kb | int | `30` | Timeout in seconds for knowledge-base HTTP requests. Range: 1–300. |
+| `AUTOBOT_LOGS_BACKUP_DIR` | logging | str | `'backup'` | Directory where rotated log archives are written. |
+| `AUTOBOT_LOGS_DIR` | logging | str | `'logs'` | Primary directory for application log files. |
+| `AUTOBOT_LOG_VIEWER_URL` | logging | str | `'http://localhost:5341'` | Base URL of the Seq (or compatible) structured-log viewer. |
+| `AUTOBOT_OLLAMA_BASE_URL` | ai | str | *(none)* | Base URL of the local Ollama API (e.g. http://localhost:11434). |
+| `AUTOBOT_ORCHESTRATOR_MODEL` | ai | str | `'llama3.2:1b'` | Ollama model name used for the main orchestrator/routing loop. |
+| `AUTOBOT_OTEL_ENABLED` | otel | bool | false | Enable OpenTelemetry tracing when truthy. |
+| `AUTOBOT_OTEL_ENDPOINT` | otel | str | *(none)* | OTLP collector endpoint URL (e.g. http://otel-collector:4317). |
+| `AUTOBOT_OTEL_PROTOCOL` | otel | str | `'grpc'` | OTLP export protocol: 'grpc' or 'http/protobuf'. |
+| `AUTOBOT_OTEL_SAMPLE_RATE` | otel | float | `0.1` | Fraction of traces to sample (0.0–1.0). Range: 0.0–1.0. |
+| `AUTOBOT_OTEL_SERVICE_VERSION` | otel | str | `'1.5.0'` | Service version tag attached to all OTel spans. |
+| `AUTOBOT_POSTGRES_DB` | postgres | str | `'autobot_users'` | PostgreSQL database name. |
+| `AUTOBOT_POSTGRES_HOST` | postgres | str | `'127.0.0.1'` | PostgreSQL server hostname or IP. |
+| `AUTOBOT_POSTGRES_PASSWORD` | postgres | str | `""` | PostgreSQL user password. |
+| `AUTOBOT_POSTGRES_PORT` | postgres | str | `'5432'` | PostgreSQL server port. |
+| `AUTOBOT_POSTGRES_USER` | postgres | str | `'slm_app'` | PostgreSQL login role. |
+| `AUTOBOT_PROMETHEUS_URL` | monitoring | str | `'http://10.0.0.4:9090'` | Base URL of the Prometheus metrics server. |
+| `AUTOBOT_REDIS_DB_ANALYTICS` | redis | int | `11` | Redis logical database number for analytics data. Range: 0–15. |
+| `AUTOBOT_REDIS_DB_KNOWLEDGE` | redis | int | `1` | Redis logical database number for knowledge-base vectors. Range: 0–15. |
+| `AUTOBOT_REDIS_DB_MAIN` | redis | int | `0` | Redis logical database number for primary application data. Range: 0–15. |
+| `AUTOBOT_REDIS_HOST` | redis | str | `'localhost'` | Redis server hostname or IP address. |
+| `AUTOBOT_REDIS_PASSWORD` | redis | str | *(none)* | Redis AUTH password (omit or leave blank for unauthenticated servers). |
+| `AUTOBOT_REDIS_PORT` | redis | int | `6379` | Redis server TCP port (plain connection). Range: 1–65535. |
+| `AUTOBOT_REDIS_TLS_ENABLED` | redis | bool | false | Enable TLS for Redis connections when truthy. |
+| `AUTOBOT_REDIS_TLS_PORT` | redis | int | `6380` | Redis server TCP port for TLS connections. Range: 1–65535. |
+| `AUTOBOT_SHOW_DEPRECATION_WARNINGS` | system | bool | false | Emit Python DeprecationWarnings for deprecated AutoBot APIs when truthy. |
+| `AUTOBOT_TLS_CA_PATH` | tls | str | *(none)* | Path to the CA certificate file for TLS verification. |
+| `AUTOBOT_TLS_CERT_DIR` | tls | str | `'/etc/autobot/certs'` | Directory containing TLS certificate and key files. |
+| `AUTOBOT_TLS_CERT_PATH` | tls | str | *(none)* | Path to the TLS client/server certificate file. |
+| `AUTOBOT_TLS_KEY_PATH` | tls | str | *(none)* | Path to the TLS private key file. |
+| `AUTOBOT_TRUSTED_PROXIES` | network | str | `""` | Comma-separated list of trusted reverse-proxy IP addresses or CIDR ranges for X-Forwarded-For header trust. |
+| `AUTOBOT_USERS_DATABASE_URL` | postgres | str | *(none)* | Full SQLAlchemy connection URL for the users database. Overrides AUTOBOT_POSTGRES_* individual vars when set. |
+
+*42 variables registered as of last generation.*
+<!-- END_AUTOGEN_ENV_DOCS -->

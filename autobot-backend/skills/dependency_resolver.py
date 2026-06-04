@@ -8,10 +8,11 @@ Resolves skill dependencies using topological sort to determine
 correct loading order and detect circular dependencies.
 """
 
-import logging
 from typing import Dict, List, Set, Tuple
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 
 
 class DependencyCycleError(Exception):

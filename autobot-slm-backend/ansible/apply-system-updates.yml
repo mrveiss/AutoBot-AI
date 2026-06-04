@@ -116,6 +116,7 @@
       ansible.builtin.apt:
         upgrade: safe
         update_cache: true
+        cache_valid_time: 3600
         force_apt_get: true
         dpkg_options: 'force-confold,force-confdef'
       register: security_update_result
@@ -128,6 +129,7 @@
       ansible.builtin.apt:
         upgrade: dist
         update_cache: true
+        cache_valid_time: 3600
         force_apt_get: true
         dpkg_options: 'force-confold,force-confdef'
         autoremove: true
@@ -143,6 +145,7 @@
         name: "{{ specific_packages.split(',') if specific_packages is string else specific_packages }}"
         state: latest
         update_cache: true
+        cache_valid_time: 3600
         force_apt_get: true
       register: specific_update_result
       when:

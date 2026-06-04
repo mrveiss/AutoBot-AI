@@ -22,27 +22,26 @@ Related to Issue #760 Phase 2.
 """
 
 import asyncio
-import logging
 import os
-import ssl
 import time
 from dataclasses import dataclass
-from typing import Callable, Dict, Optional
+from typing import Callable, Dict
 
 import aiohttp
 import websockets
 from websockets.exceptions import ConnectionClosed, WebSocketException
 
-from autobot_shared.ssot_config import DEFAULT_LLM_MODEL
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 from constants.ttl_constants import TTL_5_MINUTES
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # SLM server URL from environment.  On co-located deployments (backend and SLM
 # share the same host) the env var is often not set, so default to localhost.
 # An explicit env var always wins.
 _COLOCATED_DEFAULT = "http://127.0.0.1:8000"
-DEFAULT_SLM_URL: str = os.getenv("SLM_URL") or _COLOCATED_DEFAULT
+DEFAULT_SLM_URL: str = config.slm_url or _COLOCATED_DEFAULT
 
 # Warn at most once per process — the module is imported by several packages
 # simultaneously, which previously caused the same warning to fire 3×.
@@ -55,7 +54,7 @@ def _warn_slm_url_once(url: str) -> None:
     if _slm_url_warned:
         return
     _slm_url_warned = True
-    if not os.getenv("SLM_URL"):
+    if not config.slm_url:
         logger.warning(
             "SLM_URL not set — defaulting to co-located address %s. "
             "Set SLM_URL explicitly for non-co-located deployments.",
@@ -65,11 +64,11 @@ def _warn_slm_url_once(url: str) -> None:
 
 # Ultimate fallback configuration (uses env vars where available)
 ULTIMATE_FALLBACK_CONFIG = {
-    "llm_provider": os.getenv("AUTOBOT_LLM_PROVIDER", "ollama"),
-    "llm_endpoint": os.getenv("OLLAMA_URL", os.getenv("OLLAMA_HOST", "http://localhost:11434")),
-    "llm_model": os.getenv("AUTOBOT_DEFAULT_LLM_MODEL", DEFAULT_LLM_MODEL),
-    "llm_timeout": int(os.getenv("AUTOBOT_LLM_TIMEOUT", "30")),
-    "llm_temperature": float(os.getenv("AUTOBOT_LLM_TEMPERATURE", "0.7")),
+    "llm_provider": config.llm_provider,
+    "llm_endpoint": config.ollama_url,
+    "llm_model": config.default_llm_model,
+    "llm_timeout": int(config.llm_timeout),
+    "llm_temperature": float(config.llm_temperature),
     "llm_max_tokens": None,
     "llm_api_key": None,
 }
@@ -90,7 +89,7 @@ class CacheEntry:
 class ServiceDiscoveryCache:
     """Cache for discovered service URLs with TTL."""
 
-    def __init__(self, ttl_seconds: int = 60):
+    def __init__(self, ttl_seconds: int = 60) -> None:
         """
         Initialize service discovery cache.
 
@@ -100,7 +99,7 @@ class ServiceDiscoveryCache:
         self._cache: Dict[str, CacheEntry] = {}
         self._ttl = ttl_seconds
 
-    def get(self, service_name: str) -> Optional[str]:
+    def get(self, service_name: str) -> str | None:
         """
         Get cached URL for service.
 
@@ -137,83 +136,10 @@ class ServiceDiscoveryCache:
         logger.debug("Cleared service discovery cache")
 
 
-_LOOPBACK_HOSTS: frozenset = frozenset({"127.0.0.1", "localhost", "::1", "ip6-localhost"})
-
-# Emit the loopback-permissive warning once per process to avoid log spam.
-_loopback_permissive_warned: bool = False
-
-
-def _is_loopback_target(target_url: Optional[str]) -> bool:
-    """Return True iff target_url's host resolves to a loopback address.
-
-    Loopback targets cannot be MITM'd (no off-host network path), so trusting
-    a self-signed cert here is safe even when no project CA is bundled.
-    """
-    if not target_url:
-        return False
-    try:
-        from urllib.parse import urlparse
-
-        host = (urlparse(target_url).hostname or "").lower()
-    except Exception:
-        return False
-    return host in _LOOPBACK_HOSTS
-
-
-def _create_permissive_ssl_context(target_url: Optional[str] = None):
-    """Create SSL context for internal SLM communication (#1048, #2852, #4664, #6654).
-
-    Trust hierarchy (first match wins):
-    1. AUTOBOT_TLS_CA_PATH env var → load that CA cert (production mTLS)
-    2. AUTOBOT_SKIP_TLS_VERIFY=true → disable verification (dev/test only)
-    3. AutoBot project CA fallback (certs/ca/ca-cert.pem) → load if present
-    4. Loopback target with no CA configured → CERT_NONE (single-host self-signed
-       installs, #6654: no MITM possible when SLM is on the same host)
-    5. System trust store → default Python SSL behaviour (strict)
-
-    Set AUTOBOT_SKIP_TLS_VERIFY=true ONLY in dev/test environments — never in
-    production. For non-loopback production deploys, configure AUTOBOT_TLS_CA_PATH.
-    """
-    ctx = ssl.create_default_context()
-
-    # 1. Explicit CA path from env (production deployment)
-    ca_path = os.environ.get("AUTOBOT_TLS_CA_PATH")
-    if ca_path and os.path.isfile(ca_path):
-        ctx.load_verify_locations(ca_path)
-        return ctx
-
-    # 2. Dev/test override — skip verification entirely
-    if os.environ.get("AUTOBOT_SKIP_TLS_VERIFY", "").lower() == "true":
-        ctx.check_hostname = False
-        ctx.verify_mode = ssl.CERT_NONE
-        return ctx
-
-    # 3. AutoBot project CA fallback (covers single-host installs with self-signed certs)
-    _project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    _cert_dir = os.environ.get("AUTOBOT_TLS_CERT_DIR", "certs")
-    _fallback_ca = os.path.join(_project_root, _cert_dir, "ca", "ca-cert.pem")
-    if os.path.isfile(_fallback_ca):
-        ctx.load_verify_locations(_fallback_ca)
-        return ctx
-
-    # 4. Loopback target — accept self-signed certs. No MITM is possible because
-    #    the connection never leaves the host. Single-host installs typically have
-    #    no project CA bundled and would otherwise crash on every connect (#6654).
-    if _is_loopback_target(target_url):
-        global _loopback_permissive_warned
-        if not _loopback_permissive_warned:
-            logger.warning(
-                "TLS verification disabled for loopback target %s — no CA configured "
-                "(set AUTOBOT_TLS_CA_PATH for strict verification, #6654)",
-                target_url,
-            )
-            _loopback_permissive_warned = True
-        ctx.check_hostname = False
-        ctx.verify_mode = ssl.CERT_NONE
-        return ctx
-
-    # 5. Strict by default (system trust store).
-    return ctx
+# #6702: SSL context creation moved to autobot_shared/tls.py — single canonical
+# implementation shared across slm_client, dag_executor, celery_app, and
+# notification_service. Re-exported here for one-cycle backward compatibility.
+from autobot_shared.tls import get_internal_tls_context as _create_permissive_ssl_context
 
 
 class ServiceNotConfiguredError(Exception):
@@ -235,7 +161,7 @@ ENV_VAR_MAP = {
 class AgentConfigCache:
     """In-memory cache for agent configurations with TTL."""
 
-    def __init__(self, ttl_seconds: int = TTL_5_MINUTES):
+    def __init__(self, ttl_seconds: int = TTL_5_MINUTES) -> None:
         """
         Initialize cache with specified TTL.
 
@@ -244,10 +170,10 @@ class AgentConfigCache:
         """
         self._cache: Dict[str, CacheEntry] = {}
         self._ttl = ttl_seconds
-        self._default_config: Optional[dict] = None
+        self._default_config: dict | None = None
         self._lock = asyncio.Lock()
 
-    def get(self, agent_id: str) -> Optional[dict]:
+    def get(self, agent_id: str) -> dict | None:
         """
         Get cached config for agent.
 
@@ -309,7 +235,7 @@ class AgentConfigCache:
         self._default_config = config
         logger.debug("Set default agent config")
 
-    def get_default(self) -> Optional[dict]:
+    def get_default(self) -> dict | None:
         """
         Get default agent configuration.
 
@@ -331,9 +257,9 @@ class SLMClient:
     def __init__(
         self,
         slm_url: str = DEFAULT_SLM_URL,
-        auth_token: Optional[str] = None,
+        auth_token: str | None = None,
         cache_ttl: int = TTL_5_MINUTES,
-    ):
+    ) -> None:
         """
         Initialize SLM client.
 
@@ -347,7 +273,7 @@ class SLMClient:
         self.cache = AgentConfigCache(ttl_seconds=cache_ttl)
 
         # WebSocket state
-        self._ws_task: Optional[asyncio.Task] = None
+        self._ws_task: asyncio.Task | None = None
         self._ws_connected = False
         self._reconnect_delay = 1.0  # Start with 1 second
         self._max_reconnect_delay = 60.0  # Max 60 seconds
@@ -355,7 +281,7 @@ class SLMClient:
         self._shutdown = False
 
         # HTTP session
-        self._http_session: Optional[aiohttp.ClientSession] = None
+        self._http_session: aiohttp.ClientSession | None = None
 
     async def _get_session(self) -> aiohttp.ClientSession:
         """Get or create HTTP session."""
@@ -444,7 +370,7 @@ class SLMClient:
             logger.error("Error fetching agents: %s", e)
             raise
 
-    async def _fetch_agent_llm_config(self, agent_id: str) -> Optional[dict]:
+    async def _fetch_agent_llm_config(self, agent_id: str) -> dict | None:
         """
         Fetch LLM config for specific agent via HTTP.
 
@@ -561,8 +487,14 @@ class SLMClient:
         """Connect to WebSocket and listen for events."""
         ws_url = self.slm_url.replace("http://", "ws://").replace("https://", "wss://")
         ws_url = f"{ws_url}/api/ws/events"
+        # SLM backend authenticates via ?token= query param, not Authorization header (#6839)
+        if self.auth_token:
+            ws_url = f"{ws_url}?token={self.auth_token}"
+        else:
+            logger.debug("No auth token configured; skipping WebSocket connection to SLM")
+            return
 
-        logger.info("Connecting to WebSocket at %s", ws_url)
+        logger.info("Connecting to WebSocket at %s", ws_url.split("?")[0])  # don't log token
 
         try:
             # Accept self-signed certs for wss:// connections (#1048, #6654)
@@ -570,7 +502,6 @@ class SLMClient:
             async with websockets.connect(
                 ws_url,
                 ssl=ws_ssl,
-                additional_headers=({"Authorization": f"Bearer {self.auth_token}"} if self.auth_token else {}),
             ) as websocket:
                 self._ws_connected = True
                 self._reconnect_delay = 1.0  # Reset backoff on successful connect
@@ -706,7 +637,7 @@ class SLMClient:
             response.raise_for_status()
             return await response.json()
 
-    async def list_deployments(self, node_id: Optional[str] = None) -> dict:
+    async def list_deployments(self, node_id: str | None = None) -> dict:
         """
         List deployments via GET /api/deployments, optionally filtered by node.
 
@@ -730,13 +661,13 @@ class SLMClient:
 
 
 # Module-level singleton instance
-_slm_client: Optional[SLMClient] = None
+_slm_client: SLMClient | None = None
 
 # Module-level service discovery cache
 _discovery_cache = ServiceDiscoveryCache(ttl_seconds=60)
 
 
-def get_slm_client() -> Optional[SLMClient]:
+def get_slm_client() -> SLMClient | None:
     """
     Get the global SLM client instance.
 
@@ -748,7 +679,7 @@ def get_slm_client() -> Optional[SLMClient]:
 
 async def init_slm_client(
     slm_url: str = DEFAULT_SLM_URL,
-    auth_token: Optional[str] = None,
+    auth_token: str | None = None,
     cache_ttl: int = TTL_5_MINUTES,
 ) -> SLMClient:
     """
@@ -792,7 +723,7 @@ async def shutdown_slm_client() -> None:
 # =============================================================================
 
 
-async def _fetch_from_slm(service_name: str) -> Optional[str]:
+async def _fetch_from_slm(service_name: str) -> str | None:
     """
     Fetch service URL from SLM discovery API.
 
@@ -829,7 +760,7 @@ async def _fetch_from_slm(service_name: str) -> Optional[str]:
     return None
 
 
-def _get_env_fallback(service_name: str) -> Optional[str]:
+def _get_env_fallback(service_name: str) -> str | None:
     """
     Get service URL from environment variable.
 
@@ -841,7 +772,7 @@ def _get_env_fallback(service_name: str) -> Optional[str]:
     """
     env_var = ENV_VAR_MAP.get(service_name)
     if env_var:
-        return os.environ.get(env_var)
+        return os.environ.get(env_var)  # ssot-config-exempt: dynamic env var name
     return None
 
 

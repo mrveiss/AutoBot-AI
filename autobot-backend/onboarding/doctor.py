@@ -15,13 +15,14 @@ Public API:
 
 from __future__ import annotations
 
-import logging
-import os
 from typing import Any
 
 import psutil
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
+
+logger = get_logger(__name__)
 
 # LLM tier constants
 TIER_POWERFUL = "powerful"
@@ -96,9 +97,9 @@ async def run_doctor() -> dict[str, Any]:
     hardware = _hardware_scan()
 
     # Build service probe targets from env / defaults (no hardcoded IPs)
-    ollama_base = os.getenv("AUTOBOT_OLLAMA_URL", "http://localhost:11434")
-    chromadb_host = os.getenv("AUTOBOT_CHROMADB_HOST", "localhost")
-    chromadb_port = int(os.getenv("AUTOBOT_CHROMADB_PORT", "8100"))
+    ollama_base = config.ollama_url
+    chromadb_host = config.vm.chromadb
+    chromadb_port = config.port.chromadb
 
     ollama_reachable, ollama_detail = await _probe_http(f"{ollama_base}/api/tags")
     chromadb_reachable, chromadb_detail = await _probe_http(f"http://{chromadb_host}:{chromadb_port}/api/v1/heartbeat")

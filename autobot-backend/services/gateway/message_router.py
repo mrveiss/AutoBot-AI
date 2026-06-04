@@ -8,12 +8,13 @@ Issue #732: Unified Gateway for multi-channel communication.
 Routes messages to appropriate agents based on content and context.
 """
 
-import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict
+
+from autobot_shared.logging_manager import get_logger
 
 from .types import MessageType, RoutingDecision, UnifiedMessage
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class MessageRouter:
@@ -24,7 +25,7 @@ class MessageRouter:
     while providing a simplified Gateway-specific interface.
     """
 
-    def __init__(self, agent_router: Optional[Any] = None):
+    def __init__(self, agent_router: Any | None = None) -> None:
         """
         Initialize the message router.
 
@@ -43,7 +44,7 @@ class MessageRouter:
         """
         self._agent_router = agent_router
 
-    async def _route_non_text_message(self, message: UnifiedMessage) -> Optional[RoutingDecision]:
+    async def _route_non_text_message(self, message: UnifiedMessage) -> RoutingDecision | None:
         """Helper for route_message. Ref: #1088."""
         if self._is_system_message(message):
             return RoutingDecision(
@@ -66,7 +67,7 @@ class MessageRouter:
         return None
 
     async def _delegate_to_agent_router(
-        self, message: UnifiedMessage, context: Optional[Dict[str, Any]]
+        self, message: UnifiedMessage, context: Dict[str, Any] | None
     ) -> RoutingDecision:
         """Helper for route_message. Ref: #1088."""
         try:
@@ -91,7 +92,7 @@ class MessageRouter:
     async def route_message(
         self,
         message: UnifiedMessage,
-        context: Optional[Dict[str, Any]] = None,
+        context: Dict[str, Any] | None = None,
     ) -> RoutingDecision:
         """
         Route a message to the appropriate agent.

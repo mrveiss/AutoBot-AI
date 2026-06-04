@@ -22,9 +22,9 @@ Usage::
 
 from __future__ import annotations
 
-import logging
-from typing import Any, List, Optional, Sequence
+from typing import Any, List, Sequence
 
+from autobot_shared.logging_manager import get_logger
 from knowledge.backends.base import (
     BaseClient,
     BaseCollection,
@@ -34,7 +34,7 @@ from knowledge.backends.base import (
     WhereDocument,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ChromaDBCollection(BaseCollection):
@@ -53,9 +53,9 @@ class ChromaDBCollection(BaseCollection):
         self,
         *,
         ids: Sequence[str],
-        documents: Optional[Sequence[str]] = None,
-        metadatas: Optional[Sequence[Metadata]] = None,
-        embeddings: Optional[Sequence[Embedding]] = None,
+        documents: Sequence[str] | None = None,
+        metadatas: Sequence[Metadata] | None = None,
+        embeddings: Sequence[Embedding] | None = None,
     ) -> None:
         self._raw.add(
             ids=list(ids),
@@ -68,9 +68,9 @@ class ChromaDBCollection(BaseCollection):
         self,
         *,
         ids: Sequence[str],
-        documents: Optional[Sequence[str]] = None,
-        metadatas: Optional[Sequence[Metadata]] = None,
-        embeddings: Optional[Sequence[Embedding]] = None,
+        documents: Sequence[str] | None = None,
+        metadatas: Sequence[Metadata] | None = None,
+        embeddings: Sequence[Embedding] | None = None,
     ) -> None:
         self._raw.upsert(
             ids=list(ids),
@@ -83,9 +83,9 @@ class ChromaDBCollection(BaseCollection):
         self,
         *,
         ids: Sequence[str],
-        documents: Optional[Sequence[str]] = None,
-        metadatas: Optional[Sequence[Metadata]] = None,
-        embeddings: Optional[Sequence[Embedding]] = None,
+        documents: Sequence[str] | None = None,
+        metadatas: Sequence[Metadata] | None = None,
+        embeddings: Sequence[Embedding] | None = None,
     ) -> None:
         self._raw.update(
             ids=list(ids),
@@ -97,12 +97,12 @@ class ChromaDBCollection(BaseCollection):
     def get(
         self,
         *,
-        ids: Optional[Sequence[str]] = None,
-        where: Optional[Where] = None,
-        where_document: Optional[WhereDocument] = None,
-        limit: Optional[int] = None,
-        offset: Optional[int] = None,
-        include: Optional[Sequence[str]] = None,
+        ids: Sequence[str] | None = None,
+        where: Where | None = None,
+        where_document: WhereDocument | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
+        include: Sequence[str] | None = None,
     ) -> dict:
         kwargs: dict = {}
         if ids is not None:
@@ -122,12 +122,12 @@ class ChromaDBCollection(BaseCollection):
     def query(
         self,
         *,
-        query_embeddings: Optional[Sequence[Embedding]] = None,
-        query_texts: Optional[Sequence[str]] = None,
+        query_embeddings: Sequence[Embedding] | None = None,
+        query_texts: Sequence[str] | None = None,
         n_results: int = 10,
-        where: Optional[Where] = None,
-        where_document: Optional[WhereDocument] = None,
-        include: Optional[Sequence[str]] = None,
+        where: Where | None = None,
+        where_document: WhereDocument | None = None,
+        include: Sequence[str] | None = None,
     ) -> dict:
         kwargs: dict = {"n_results": n_results}
         if query_embeddings is not None:
@@ -145,9 +145,9 @@ class ChromaDBCollection(BaseCollection):
     def delete(
         self,
         *,
-        ids: Optional[Sequence[str]] = None,
-        where: Optional[Where] = None,
-        where_document: Optional[WhereDocument] = None,
+        ids: Sequence[str] | None = None,
+        where: Where | None = None,
+        where_document: WhereDocument | None = None,
     ) -> None:
         kwargs: dict = {}
         if ids is not None:
@@ -183,12 +183,15 @@ class ChromaDBClient(BaseClient):
         self,
         name: str,
         *,
-        metadata: Optional[Metadata] = None,
-        embedding_function: Optional[Any] = None,
+        metadata: Metadata | None = None,
+        embedding_function: Any | None = None,
     ) -> BaseCollection:
-        kwargs: dict = {"name": name}
-        if metadata is not None:
-            kwargs["metadata"] = metadata
+        from datetime import datetime, timezone
+
+        provenance: dict = {"created_at": datetime.now(timezone.utc).isoformat()}
+        if metadata:
+            provenance.update(metadata)
+        kwargs: dict = {"name": name, "metadata": provenance}
         if embedding_function is not None:
             kwargs["embedding_function"] = embedding_function
         return ChromaDBCollection(self._raw.get_or_create_collection(**kwargs))
@@ -203,12 +206,15 @@ class ChromaDBClient(BaseClient):
         self,
         name: str,
         *,
-        metadata: Optional[Metadata] = None,
-        embedding_function: Optional[Any] = None,
+        metadata: Metadata | None = None,
+        embedding_function: Any | None = None,
     ) -> BaseCollection:
-        kwargs: dict = {"name": name}
-        if metadata is not None:
-            kwargs["metadata"] = metadata
+        from datetime import datetime, timezone
+
+        provenance: dict = {"created_at": datetime.now(timezone.utc).isoformat()}
+        if metadata:
+            provenance.update(metadata)
+        kwargs: dict = {"name": name, "metadata": provenance}
         if embedding_function is not None:
             kwargs["embedding_function"] = embedding_function
         try:

@@ -10,13 +10,13 @@ Provides read-only operations for listing resources and getting account info.
 
 import hashlib
 import hmac
-import logging
 import time
 from typing import Any, Dict, List
 from urllib.parse import quote
 
 import aiohttp
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
 from integrations.base import (
     BaseIntegration,
@@ -26,7 +26,7 @@ from integrations.base import (
     IntegrationStatus,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class AWSIntegration(BaseIntegration):

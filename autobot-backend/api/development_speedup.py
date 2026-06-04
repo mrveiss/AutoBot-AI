@@ -7,8 +7,7 @@ Development Speedup API
 Advanced code analysis endpoints for development acceleration using NPU and Redis.
 """
 
-import logging
-from typing import Any, Awaitable, Callable, Dict, Optional
+from typing import Any, Awaitable, Callable, Dict
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse
@@ -18,13 +17,26 @@ from agents.development_speedup_agent import (
     find_duplicates,
     get_development_speedup_agent,
 )
-from api.schemas_code import DevelopmentSpeedupAnalysisRequest
+from api.schemas_code import (
+    DevelopmentSpeedupAnalysisRequest,
+    DevSpeedupAnalysisResultResponse,
+    DevSpeedupDeadCodeResultResponse,
+    DevSpeedupDuplicatesResultResponse,
+    DevSpeedupExamplesResultResponse,
+    DevSpeedupImportsResultResponse,
+    DevSpeedupPatternsResultResponse,
+    DevSpeedupQualityResultResponse,
+    DevSpeedupRecommendationsResultResponse,
+    DevSpeedupRefactoringResultResponse,
+    DevSpeedupStatusResultResponse,
+)
 from api.schemas_common import DataResponse
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 
 router = APIRouter()
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level frozenset for valid severity levels
 _VALID_SEVERITIES = frozenset({"low", "medium", "high", "critical"})
@@ -86,7 +98,7 @@ ANALYSIS_TYPE_HANDLERS: Dict[str, AnalysisHandler] = {
 VALID_ANALYSIS_TYPES = ", ".join(ANALYSIS_TYPE_HANDLERS.keys())
 
 
-@router.post("/analyze", response_model=DataResponse)
+@router.post("/analyze", response_model=DataResponse[DevSpeedupAnalysisResultResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="analyze_codebase_endpoint",
@@ -133,7 +145,7 @@ async def analyze_codebase_endpoint(request: DevelopmentSpeedupAnalysisRequest):
         raise HTTPException(status_code=500, detail="Analysis failed")
 
 
-@router.get("/analyze", response_model=DataResponse)
+@router.get("/analyze", response_model=DataResponse[DevSpeedupAnalysisResultResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="analyze_codebase_get",
@@ -154,7 +166,7 @@ async def analyze_codebase_get(
     return await analyze_codebase_endpoint(request)
 
 
-@router.get("/duplicates", response_model=DataResponse)
+@router.get("/duplicates", response_model=DataResponse[DevSpeedupDuplicatesResultResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="find_duplicates_endpoint",
@@ -200,7 +212,7 @@ async def find_duplicates_endpoint(
         raise HTTPException(status_code=500, detail="Duplicate detection failed")
 
 
-@router.get("/patterns", response_model=DataResponse)
+@router.get("/patterns", response_model=DataResponse[DevSpeedupPatternsResultResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="analyze_patterns_endpoint",
@@ -208,7 +220,7 @@ async def find_duplicates_endpoint(
 )
 async def analyze_patterns_endpoint(
     path: str = Query(..., description="Root path to analyze"),
-    pattern_type: Optional[str] = Query(None, description="Specific pattern type to search for"),
+    pattern_type: str | None = Query(None, description="Specific pattern type to search for"),
 ):
     """
     Analyze code patterns and anti-patterns.
@@ -244,7 +256,7 @@ async def analyze_patterns_endpoint(
         raise HTTPException(status_code=500, detail="Pattern analysis failed")
 
 
-@router.get("/imports", response_model=DataResponse)
+@router.get("/imports", response_model=DataResponse[DevSpeedupImportsResultResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="analyze_imports_endpoint",
@@ -284,7 +296,7 @@ async def analyze_imports_endpoint(
         raise HTTPException(status_code=500, detail="Import analysis failed")
 
 
-@router.get("/dead-code", response_model=DataResponse)
+@router.get("/dead-code", response_model=DataResponse[DevSpeedupDeadCodeResultResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="detect_dead_code_endpoint",
@@ -316,7 +328,7 @@ async def detect_dead_code_endpoint(path: str = Query(..., description="Root pat
         raise HTTPException(status_code=500, detail="Dead code detection failed")
 
 
-@router.get("/refactoring", response_model=DataResponse)
+@router.get("/refactoring", response_model=DataResponse[DevSpeedupRefactoringResultResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="find_refactoring_opportunities_endpoint",
@@ -363,7 +375,7 @@ async def find_refactoring_opportunities_endpoint(
         raise HTTPException(status_code=500, detail="Refactoring analysis failed")
 
 
-@router.get("/quality", response_model=DataResponse)
+@router.get("/quality", response_model=DataResponse[DevSpeedupQualityResultResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="analyze_quality_endpoint",
@@ -371,7 +383,7 @@ async def find_refactoring_opportunities_endpoint(
 )
 async def analyze_quality_endpoint(
     path: str = Query(..., description="Root path to analyze"),
-    severity: Optional[str] = Query(None, description="Filter by severity: low, medium, high, critical"),
+    severity: str | None = Query(None, description="Filter by severity: low, medium, high, critical"),
 ):
     """
     Analyze code quality and consistency.
@@ -436,7 +448,7 @@ def _calculate_health_score(result: dict, metrics: dict) -> int:
     return max(0, 100 - (total_issues * 2))  # Simple scoring
 
 
-@router.get("/recommendations", response_model=DataResponse)
+@router.get("/recommendations", response_model=DataResponse[DevSpeedupRecommendationsResultResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_recommendations_endpoint",
@@ -476,7 +488,7 @@ async def get_recommendations_endpoint(path: str = Query(..., description="Root 
         raise HTTPException(status_code=500, detail="Recommendations failed")
 
 
-@router.get("/status", response_model=DataResponse)
+@router.get("/status", response_model=DataResponse[DevSpeedupStatusResultResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_development_speedup_status",
@@ -539,7 +551,7 @@ async def get_development_speedup_status():
         raise HTTPException(status_code=500, detail="Status check failed")
 
 
-@router.get("/examples", response_model=DataResponse)
+@router.get("/examples", response_model=DataResponse[DevSpeedupExamplesResultResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_analysis_examples",

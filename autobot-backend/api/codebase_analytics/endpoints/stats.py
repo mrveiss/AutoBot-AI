@@ -7,15 +7,14 @@ Codebase statistics endpoints
 
 import asyncio
 import json
-import logging
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
 
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import parse_utc_iso
 from utils.chromadb_client import get_all_paginated
 
@@ -29,7 +28,7 @@ from .shared import (
     resolve_source_root,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter()
 
@@ -118,7 +117,7 @@ def _is_task_stale(task_info: dict) -> bool:
         return False
 
 
-def _get_active_indexing_task(source_id: Optional[str] = None) -> Optional[dict]:
+def _get_active_indexing_task(source_id: str | None = None) -> dict | None:
     """
     Check if there's an active indexing task and return its info.
 
@@ -164,7 +163,7 @@ def _get_active_indexing_task(source_id: Optional[str] = None) -> Optional[dict]
 def _build_indexing_response(
     message: str,
     active_task: dict,
-    stats: Optional[dict] = None,
+    stats: dict | None = None,
 ) -> JSONResponse:
     """
     Build standardized indexing-in-progress response.
@@ -196,7 +195,7 @@ def _build_indexing_response(
     operation="get_codebase_stats",
     error_code_prefix="CODEBASE",
 )
-async def get_codebase_stats(source_id: Optional[str] = None):
+async def get_codebase_stats(source_id: str | None = None):
     """
     Get real codebase statistics from storage.
 
@@ -261,8 +260,8 @@ async def get_codebase_stats(source_id: Optional[str] = None):
 
 def _fetch_hardcodes_from_redis(
     redis_client,
-    hardcode_type: Optional[str],
-    source_id: Optional[str] = None,
+    hardcode_type: str | None,
+    source_id: str | None = None,
 ) -> list:
     """
     Fetch hardcoded values from Redis with pipeline batching.
@@ -298,7 +297,7 @@ def _fetch_hardcodes_from_redis(
     return results
 
 
-def _fetch_hardcodes_from_memory(storage, hardcode_type: Optional[str]) -> list:
+def _fetch_hardcodes_from_memory(storage, hardcode_type: str | None) -> list:
     """
     Fetch hardcoded values from in-memory storage.
 
@@ -336,8 +335,8 @@ _normalize_hardcode_record = normalize_hardcode_record
     error_code_prefix="CODEBASE",
 )
 async def get_hardcoded_values(
-    hardcode_type: Optional[str] = None,
-    source_id: Optional[str] = None,
+    hardcode_type: str | None = None,
+    source_id: str | None = None,
 ):
     """
     Get real hardcoded values found in the codebase.
@@ -407,9 +406,9 @@ def _parse_problem_metadata(metadata: dict) -> dict:
 
 def _fetch_problems_from_chromadb(
     code_collection,
-    problem_type: Optional[str],
-    source_id: Optional[str] = None,
-    source_root: Optional[Path] = None,
+    problem_type: str | None,
+    source_id: str | None = None,
+    source_root: Path | None = None,
 ) -> list:
     """Fetch problems from ChromaDB. (Issue #315, #1710: per-source filter)
 
@@ -446,7 +445,7 @@ def _fetch_problems_from_chromadb(
     return filter_problems_by_file_existence(problems, root)
 
 
-async def _fetch_problems_from_redis(problem_type: Optional[str], source_id: Optional[str] = None) -> tuple:
+async def _fetch_problems_from_redis(problem_type: str | None, source_id: str | None = None) -> tuple:
     """Fetch problems from Redis. Returns (problems, success).
 
     Issue #315: Extracted helper.
@@ -595,8 +594,8 @@ async def reset_embedding_stats_endpoint() -> JSONResponse:
     error_code_prefix="CODEBASE",
 )
 async def get_codebase_problems(
-    problem_type: Optional[str] = None,
-    source_id: Optional[str] = None,
+    problem_type: str | None = None,
+    source_id: str | None = None,
 ):
     """Get real code problems detected during analysis (#1710: per-source)."""
     # Default to most recent source to prevent cross-project data mixing (#2653)

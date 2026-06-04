@@ -10,14 +10,15 @@ and file operations.
 
 import asyncio
 import json
-import logging
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List
+
+from autobot_shared.logging_manager import get_logger
 
 if TYPE_CHECKING:
     pass
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class DocumentsMixin:
@@ -41,7 +42,7 @@ class DocumentsMixin:
         self,
         content: str,
         metadata: Dict[str, Any] = None,
-        doc_id: Optional[str] = None,
+        doc_id: str | None = None,
     ) -> Dict[str, Any]:
         """
         Add a document to the knowledge base with async processing.
@@ -76,7 +77,7 @@ class DocumentsMixin:
         self,
         content: str,
         metadata: Dict[str, Any] = None,
-        doc_id: Optional[str] = None,
+        doc_id: str | None = None,
     ) -> Dict[str, Any]:
         """Internal document addition implementation.
 
@@ -171,7 +172,7 @@ class DocumentsMixin:
             logger.error("Failed to add document from file %s: %s", file_path, e)
             return {"status": "error", "message": "Document operation failed"}
 
-    async def _validate_directory(self, dir_path: str) -> Optional[Path]:
+    async def _validate_directory(self, dir_path: str) -> Path | None:
         """Validate directory exists and is accessible (Issue #398: extracted)."""
         dir_path_obj = Path(dir_path)
         exists = await asyncio.to_thread(dir_path_obj.exists)

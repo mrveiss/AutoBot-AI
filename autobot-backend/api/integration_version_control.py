@@ -4,8 +4,7 @@
 
 """FastAPI router for Version Control System integrations."""
 
-import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
@@ -18,13 +17,14 @@ from api.schemas_code import (
 from api.schemas_workflows import VCSConnectionTestRequest, VCSProviderInfo
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from integrations.base import IntegrationConfig, IntegrationHealth
 from integrations.version_control_integration import (
     BitbucketIntegration,
     GitLabIntegration,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 router = APIRouter(
     tags=["integrations-version-control"],
     dependencies=[Depends(check_admin_permission)],
@@ -163,10 +163,10 @@ async def get_providers() -> List[VCSProviderInfo]:
 async def list_repositories(
     provider: str,
     api_key: str = Query(..., description="API key or access token"),
-    workspace: Optional[str] = Query(None, description="Workspace (Bitbucket)"),
-    base_url: Optional[str] = Query(None, description="Custom API base URL"),
-    search: Optional[str] = Query(None, description="Search filter"),
-    visibility: Optional[str] = Query(None, description="Visibility filter"),
+    workspace: str | None = Query(None, description="Workspace (Bitbucket)"),
+    base_url: str | None = Query(None, description="Custom API base URL"),
+    search: str | None = Query(None, description="Search filter"),
+    visibility: str | None = Query(None, description="Visibility filter"),
 ) -> Dict[str, Any]:
     """List repositories or projects.
 
@@ -210,9 +210,9 @@ async def list_branches(
     provider: str,
     repo_id: str,
     api_key: str = Query(..., description="API key or access token"),
-    workspace: Optional[str] = Query(None, description="Workspace (Bitbucket)"),
-    base_url: Optional[str] = Query(None, description="Custom API base URL"),
-    search: Optional[str] = Query(None, description="Search filter"),
+    workspace: str | None = Query(None, description="Workspace (Bitbucket)"),
+    base_url: str | None = Query(None, description="Custom API base URL"),
+    search: str | None = Query(None, description="Search filter"),
 ) -> Dict[str, Any]:
     """List branches for a repository.
 
@@ -282,10 +282,10 @@ async def list_pull_requests(
     provider: str,
     repo_id: str,
     api_key: str = Query(..., description="API key or access token"),
-    workspace: Optional[str] = Query(None, description="Workspace (Bitbucket)"),
-    base_url: Optional[str] = Query(None, description="Custom API base URL"),
-    state: Optional[str] = Query(None, description="State filter"),
-    scope: Optional[str] = Query(None, description="Scope filter (GitLab)"),
+    workspace: str | None = Query(None, description="Workspace (Bitbucket)"),
+    base_url: str | None = Query(None, description="Custom API base URL"),
+    state: str | None = Query(None, description="State filter"),
+    scope: str | None = Query(None, description="Scope filter (GitLab)"),
 ) -> Dict[str, Any]:
     """List pull requests or merge requests."""
     try:
@@ -311,8 +311,8 @@ async def get_commit_info(
     repo_id: str,
     commit_hash: str = Query(..., description="Commit hash or SHA"),
     api_key: str = Query(..., description="API key or access token"),
-    workspace: Optional[str] = Query(None, description="Workspace (Bitbucket)"),
-    base_url: Optional[str] = Query(None, description="Custom API base URL"),
+    workspace: str | None = Query(None, description="Workspace (Bitbucket)"),
+    base_url: str | None = Query(None, description="Custom API base URL"),
 ) -> Dict[str, Any]:
     """Get commit information."""
     try:

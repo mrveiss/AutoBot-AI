@@ -12,14 +12,15 @@ OnboardingWizard.vue — First-run UX wizard (Issue #5061)
 -->
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { useApi } from '@/composables/useApi'
+import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('OnboardingWizard')
 const router = useRouter()
-const api = useApi()
+const api = useApiClient()
 
 // ---------------------------------------------------------------------------
 // State
@@ -28,6 +29,12 @@ const api = useApi()
 const step = ref(1)
 const loading = ref(false)
 const error = ref<string | null>(null)
+const errorSoft = ref(false)
+
+function dismissError() {
+  error.value = null
+  errorSoft.value = false
+}
 
 interface HardwareInfo {
   ram_gb: number
@@ -77,6 +84,12 @@ const selectedPresetData = computed<Preset | null>(
   () => presets.value.find(p => p.name === selectedPreset.value) ?? null
 )
 
+const STEPS = [
+  { n: 1, label: 'System Check' },
+  { n: 2, label: 'Choose Preset' },
+  { n: 3, label: 'Review & Apply' },
+]
+
 const stepTitle = computed(() => {
   switch (step.value) {
     case 1: return 'System Health Check'
@@ -91,6 +104,14 @@ const canGoNext = computed(() => {
   if (step.value === 2) return !!selectedPreset.value
   return false
 })
+
+function navigatePreset(currentIndex: number, direction: number) {
+  const next = currentIndex + direction
+  if (next < 0 || next >= presets.value.length) return
+  selectedPreset.value = presets.value[next].name
+  const cards = document.querySelectorAll<HTMLElement>('[role="listbox"] [role="option"]')
+  cards[next]?.focus()
+}
 
 const tierBadgeClass = (tier: string) => {
   switch (tier) {
@@ -116,6 +137,7 @@ async function loadDoctor() {
   } catch (err) {
     logger.error('Doctor report failed', err)
     error.value = 'Could not load system health report. You can still continue.'
+    errorSoft.value = true
   } finally {
     loading.value = false
   }
@@ -158,10 +180,14 @@ async function applyPreset() {
 // ---------------------------------------------------------------------------
 
 function nextStep() {
+  error.value = null
+  errorSoft.value = false
   if (step.value < 3) step.value++
 }
 
 function prevStep() {
+  error.value = null
+  errorSoft.value = false
   if (step.value > 1) step.value--
 }
 
@@ -190,30 +216,35 @@ onMounted(async () => {
     <!-- Header -->
     <div class="wizard-header">
       <div class="wizard-brand">
-        <i class="fas fa-robot text-autobot-accent"></i>
+        <Icon name="robot" class="text-autobot-accent" />
         <span class="ml-2 text-lg font-semibold text-autobot-text">AutoBot Setup</span>
       </div>
-      <div class="wizard-steps" aria-label="Setup progress">
-        <div
-          v-for="n in 3"
-          :key="n"
-          :class="['step-dot', { active: step === n, done: step > n }]"
-          :aria-current="step === n ? 'step' : undefined"
-        >
-          <span class="sr-only">Step {{ n }}</span>
-        </div>
-      </div>
+      <nav class="wizard-steps" aria-label="Setup progress">
+        <template v-for="(s, idx) in STEPS" :key="s.n">
+          <div
+            :class="['step-item', { active: step === s.n, done: step > s.n }]"
+            :aria-current="step === s.n ? 'step' : undefined"
+          >
+            <div class="step-circle" aria-hidden="true">
+              <i v-if="step > s.n" class="fas fa-check"></i>
+              <span v-else>{{ s.n }}</span>
+            </div>
+            <span class="step-label">{{ s.label }}</span>
+          </div>
+          <div v-if="idx < STEPS.length - 1" class="step-connector" aria-hidden="true"></div>
+        </template>
+      </nav>
     </div>
 
     <!-- Success state -->
     <div v-if="step === 4" class="wizard-card success-card">
-      <i class="fas fa-check-circle text-green-400 text-5xl mb-4"></i>
+      <Icon name="check-circle" class="text-green-400 text-5xl mb-4" />
       <h2 class="text-xl font-semibold text-autobot-text mb-2">You're all set!</h2>
       <p class="text-autobot-text-muted mb-6">
         Your preset has been applied. Head to Chat to start using AutoBot.
       </p>
       <button class="btn-primary" @click="goToChat">
-        <i class="fas fa-comments mr-2"></i>Open Chat
+        <Icon name="comments" class="mr-2" />Open Chat
       </button>
     </div>
 
@@ -223,8 +254,10 @@ onMounted(async () => {
         <h2 class="wizard-step-title">{{ stepTitle }}</h2>
 
         <!-- Error banner -->
-        <div v-if="error" class="error-banner" role="alert">
-          <i class="fas fa-exclamation-triangle mr-2"></i>{{ error }}
+        <div v-if="error" :class="['error-banner', { 'error-banner--soft': errorSoft }]" role="alert">
+          <Icon name="exclamation-triangle" class="mr-2" />
+          <span class="error-banner__message">{{ error }}</span>
+          <button class="error-banner__dismiss" @click="dismissError" aria-label="Dismiss error">×</button>
         </div>
 
         <!-- ----------------------------------------------------------------
@@ -232,14 +265,14 @@ onMounted(async () => {
              ---------------------------------------------------------------- -->
         <div v-if="step === 1" class="step-content">
           <div v-if="loading" class="loading-state">
-            <i class="fas fa-spinner fa-spin text-2xl text-autobot-accent"></i>
+            <Icon name="spinner" class="animate-spin text-2xl text-autobot-accent" />
             <p class="mt-2 text-autobot-text-muted">Scanning system…</p>
           </div>
 
           <template v-else-if="doctorReport">
             <!-- Hardware -->
             <section class="doctor-section">
-              <h3 class="section-title"><i class="fas fa-microchip mr-2"></i>Hardware</h3>
+              <h3 class="section-title"><Icon name="cube" class="mr-2" />Hardware</h3>
               <div class="metrics-grid">
                 <div class="metric-card">
                   <span class="metric-label">RAM</span>
@@ -260,7 +293,7 @@ onMounted(async () => {
 
             <!-- Services -->
             <section class="doctor-section">
-              <h3 class="section-title"><i class="fas fa-server mr-2"></i>Services</h3>
+              <h3 class="section-title"><Icon name="server" class="mr-2" />Services</h3>
               <div class="services-list">
                 <div
                   v-for="(info, name) in doctorReport.services"
@@ -278,7 +311,7 @@ onMounted(async () => {
 
             <!-- Recommendation -->
             <section class="doctor-section recommendation-box">
-              <h3 class="section-title"><i class="fas fa-lightbulb mr-2"></i>Recommendation</h3>
+              <h3 class="section-title"><Icon name="lightbulb" class="mr-2" />Recommendation</h3>
               <div class="flex items-center gap-3 mb-2">
                 <span class="text-autobot-text-muted text-sm">Suggested tier:</span>
                 <span :class="['tier-badge', tierBadgeClass(doctorReport.recommendation.llm_tier)]">
@@ -302,17 +335,24 @@ onMounted(async () => {
             Choose a starter configuration that best matches your primary use-case.
             You can adjust everything later in Settings.
           </p>
-          <div class="presets-grid">
+          <div
+            class="presets-grid"
+            role="listbox"
+            aria-label="Choose a starter preset"
+            aria-required="true"
+          >
             <div
-              v-for="preset in presets"
+              v-for="(preset, index) in presets"
               :key="preset.name"
               :class="['preset-card', { selected: selectedPreset === preset.name }]"
               @click="selectedPreset = preset.name"
               :aria-selected="selectedPreset === preset.name"
               role="option"
-              tabindex="0"
+              :tabindex="selectedPreset === preset.name || (!selectedPreset && index === 0) ? 0 : -1"
               @keydown.enter="selectedPreset = preset.name"
               @keydown.space.prevent="selectedPreset = preset.name"
+              @keydown.up.prevent="navigatePreset(index, -1)"
+              @keydown.down.prevent="navigatePreset(index, 1)"
             >
               <div class="preset-card-header">
                 <span class="preset-title">{{ preset.title }}</span>
@@ -330,7 +370,7 @@ onMounted(async () => {
                 </span>
               </div>
               <div v-if="selectedPreset === preset.name" class="preset-check-mark">
-                <i class="fas fa-check-circle text-autobot-accent"></i>
+                <Icon name="check-circle" class="text-autobot-accent" />
               </div>
             </div>
           </div>
@@ -375,7 +415,7 @@ onMounted(async () => {
             :disabled="loading"
             @click="prevStep"
           >
-            <i class="fas fa-chevron-left mr-1"></i>Back
+            <Icon name="chevron-left" class="mr-1" />Back
           </button>
           <div class="flex-1"></div>
           <button
@@ -384,7 +424,7 @@ onMounted(async () => {
             :disabled="!canGoNext"
             @click="nextStep"
           >
-            Next<i class="fas fa-chevron-right ml-1"></i>
+            Next<Icon name="chevron-right" class="ml-1" />
           </button>
           <button
             v-if="step === 3"
@@ -392,7 +432,7 @@ onMounted(async () => {
             :disabled="loading || !selectedPreset"
             @click="handleApply"
           >
-            <i v-if="loading" class="fas fa-spinner fa-spin mr-2"></i>
+            <Icon v-if="loading" name="spinner" class="animate-spin mr-2" />
             <span>{{ loading ? 'Applying…' : 'Apply Preset' }}</span>
           </button>
         </div>
@@ -427,23 +467,75 @@ onMounted(async () => {
 
 .wizard-steps {
   display: flex;
-  gap: 0.5rem;
+  align-items: center;
+  gap: 0;
 }
 
-.step-dot {
-  width: 10px;
-  height: 10px;
+.step-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.step-circle {
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
-  background: var(--color-bg-elevated, #2a2d3a);
-  transition: background 0.2s;
+  border: 2px solid var(--color-border, #2a2d3a);
+  background: transparent;
+  color: var(--color-text-muted, #94a3b8);
+  font-size: 0.75rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.2s, background 0.2s, color 0.2s;
 }
 
-.step-dot.active {
+.step-label {
+  font-size: 0.65rem;
+  font-weight: 500;
+  color: var(--color-text-muted, #94a3b8);
+  white-space: nowrap;
+  transition: color 0.2s;
+}
+
+.step-item.active .step-circle {
+  border-color: var(--color-accent, #6366f1);
   background: var(--color-accent, #6366f1);
+  color: #fff;
 }
 
-.step-dot.done {
+.step-item.active .step-label {
+  color: var(--color-text, #e2e8f0);
+}
+
+.step-item.done .step-circle {
+  border-color: var(--color-success, #22c55e);
   background: var(--color-success, #22c55e);
+  color: #fff;
+}
+
+.step-item.done .step-label {
+  color: var(--color-success, #22c55e);
+}
+
+.step-connector {
+  width: 2rem;
+  height: 2px;
+  background: var(--color-border, #2a2d3a);
+  margin-bottom: 1.1rem;
+  flex-shrink: 0;
+}
+
+@media (max-width: 480px) {
+  .step-label {
+    display: none;
+  }
+  .step-connector {
+    width: 1rem;
+  }
 }
 
 .wizard-card {
@@ -471,6 +563,8 @@ onMounted(async () => {
 }
 
 .error-banner {
+  display: flex;
+  align-items: center;
   background: rgba(239, 68, 68, 0.15);
   border: 1px solid rgba(239, 68, 68, 0.4);
   color: #fca5a5;
@@ -478,6 +572,33 @@ onMounted(async () => {
   padding: 0.75rem 1rem;
   margin-bottom: 1rem;
   font-size: 0.875rem;
+}
+
+.error-banner--soft {
+  background: rgba(234, 179, 8, 0.12);
+  border-color: rgba(234, 179, 8, 0.35);
+  color: #fde68a;
+}
+
+.error-banner__message {
+  flex: 1;
+}
+
+.error-banner__dismiss {
+  background: transparent;
+  border: none;
+  color: inherit;
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 0 0 0.75rem;
+  opacity: 0.7;
+  transition: opacity 0.15s;
+  flex-shrink: 0;
+}
+
+.error-banner__dismiss:hover {
+  opacity: 1;
 }
 
 .step-content {

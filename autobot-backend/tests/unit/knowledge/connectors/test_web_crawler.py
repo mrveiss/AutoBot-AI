@@ -11,8 +11,8 @@ All external I/O (_fetch_bs4, RobotsCache, KB ingest) is mocked so
 tests run without network access or ChromaDB.
 """
 
-from typing import List, Optional, Tuple
-from unittest.mock import AsyncMock, MagicMock, patch
+from typing import List, Tuple
+from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -71,7 +71,7 @@ _FIXTURE_PAGES: dict = {
 }
 
 
-def _fixture_bs4(url: str, timeout: float = 30.0) -> Tuple[Optional[str], Optional[int]]:
+def _fixture_bs4(url: str, timeout: float = 30.0) -> Tuple[str | None, int | None]:
     """Synchronous helper — used as coroutine side_effect via AsyncMock."""
     entry = _FIXTURE_PAGES.get(url)
     if entry is None:
@@ -109,7 +109,7 @@ def _make_fetch_result(
     url: str,
     markdown: str = "",
     success: bool = True,
-    error_code: Optional[str] = None,
+    error_code: str | None = None,
 ) -> FetchResult:
     return FetchResult(
         url=url,
@@ -167,12 +167,12 @@ class TestHelpers:
 
 @pytest.fixture()
 def mock_bs4():
-    """Patch _fetch_bs4 to return fixture site pages (coroutine-compatible)."""
+    """Patch WebFetcher.fetch_raw_html to return fixture site pages (coroutine-compatible)."""
 
     async def _side_effect(url, timeout=30.0):
         return _fixture_bs4(url, timeout)
 
-    with patch("knowledge.connectors.web_crawler._fetch_bs4", side_effect=_side_effect):
+    with patch("knowledge.connectors.web_crawler.WebFetcher.fetch_raw_html", side_effect=_side_effect):
         yield
 
 
@@ -354,8 +354,9 @@ class TestSyncSchedulerPath:
             max_depth=3,
             max_pages=50,
             respect_robots=True,
-            ingest=True,
+            ingest=False,
             same_origin=True,
+            on_seed_complete=ANY,
         )
         assert result.status == "success"
 
@@ -418,3 +419,41 @@ class TestBackwardCompat:
         connector = WebCrawlerConnector(_make_config(["https://example.com"]))
         result = await connector.fetch_content("deadbeef" * 4)
         assert result is None
+
+
+# ---------------------------------------------------------------------------
+# Error propagation and checkpoint correctness tests (#8296, #8297)
+# ---------------------------------------------------------------------------
+
+
+class TestSync:
+    async def test_sync_result_errors_propagated(self) -> None:
+        """GH#8296: errors from _ingest_content must appear in SyncResult.errors."""
+        cfg = _make_config(["https://example.com"])
+        connector = WebCrawlerConnector(cfg)
+        fetch_result = _make_fetch_result("https://example.com", markdown="# Some content here for ingest.")
+        with patch.object(WebCrawlerConnector, "crawl", new=AsyncMock(return_value=[fetch_result])):
+            with patch.object(connector, "_ingest_content", new=AsyncMock(side_effect=RuntimeError("ingest boom"))):
+                result = await connector.sync(incremental=True)
+        assert any("ingest boom" in e for e in result.errors)
+        assert result.status == "partial"
+
+    async def test_sync_only_checkpoints_crawled_seeds(self) -> None:
+        """GH#8297: only seeds that actually started crawling are checkpointed."""
+        urls = ["https://a.com", "https://b.com", "https://c.com"]
+        cfg = _make_config(urls, max_pages=1)
+        connector = WebCrawlerConnector(cfg)
+
+        written: list = []
+
+        def _capture(source_id: str) -> None:
+            written.append(source_id)
+
+        fetch_a = _make_fetch_result("https://a.com", markdown="content a")
+
+        with patch.object(connector, "_crawl_seed", new=AsyncMock(return_value=[fetch_a])):
+            with patch.object(connector, "_write_checkpoint", new=AsyncMock(side_effect=_capture)):
+                with patch("knowledge.connectors.web_crawler._ingest_results_to_kb", new=AsyncMock()):
+                    await connector.sync(incremental=True)
+
+        assert _url_to_source_id("https://c.com") not in written

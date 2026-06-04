@@ -5,18 +5,30 @@
 Knowledge Audit Logging
 
 Issue #679: Comprehensive audit trail for knowledge access, modifications, and permission changes.
+
+.. deprecated::
+    Use ``services.audit.unified_audit`` directly (GH#8290 Phase 2).
+    This module will be removed in Phase 3 once all callers are migrated.
 """
+
+import warnings
+
+warnings.warn(
+    "knowledge.audit_log is deprecated (GH#8290). " "Import from services.audit.unified_audit instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 import asyncio
 import json
-import logging
 from datetime import datetime
 from enum import Enum
-from typing import Dict, List, Optional
+from typing import Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc, utc_timestamp
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class AuditEventType(str, Enum):
@@ -83,10 +95,10 @@ class KnowledgeAuditLog:
         self,
         event_type: AuditEventType,
         user_id: str,
-        fact_id: Optional[str] = None,
-        organization_id: Optional[str] = None,
-        details: Optional[Dict] = None,
-        ip_address: Optional[str] = None,
+        fact_id: str | None = None,
+        organization_id: str | None = None,
+        details: Dict | None = None,
+        ip_address: str | None = None,
     ) -> str:
         """Log an audit event.
 
@@ -229,8 +241,8 @@ class KnowledgeAuditLog:
 
     async def get_permission_changes(
         self,
-        fact_id: Optional[str] = None,
-        user_id: Optional[str] = None,
+        fact_id: str | None = None,
+        user_id: str | None = None,
         limit: int = 100,
     ) -> List[Dict]:
         """Get permission change events.

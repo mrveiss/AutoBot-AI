@@ -5,9 +5,18 @@ Main Window - NPU Worker Dashboard
 import logging
 
 from PySide6.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QPushButton, QLabel, QTabWidget, QStatusBar,
-    QMessageBox, QSystemTrayIcon, QMenu
+    QApplication,
+    QMainWindow,
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QPushButton,
+    QLabel,
+    QTabWidget,
+    QStatusBar,
+    QMessageBox,
+    QSystemTrayIcon,
+    QMenu,
 )
 from PySide6.QtCore import QTimer, Slot
 from PySide6.QtGui import QIcon, QAction
@@ -274,9 +283,7 @@ class MainWindow(QMainWindow):
         if icon_path and icon_path.exists():
             self.tray_icon.setIcon(QIcon(str(icon_path)))
         else:
-            self.tray_icon.setIcon(self.style().standardIcon(
-                self.style().StandardPixmap.SP_ComputerIcon
-            ))
+            self.tray_icon.setIcon(self.style().standardIcon(self.style().StandardPixmap.SP_ComputerIcon))
 
         # Tray menu
         tray_menu = QMenu()
@@ -359,18 +366,10 @@ class MainWindow(QMainWindow):
         # Show tray notification
         if status == "running":
             self.tray_icon.showMessage(
-                "NPU Worker",
-                "Service started successfully",
-                QSystemTrayIcon.MessageIcon.Information,
-                2000
+                "NPU Worker", "Service started successfully", QSystemTrayIcon.MessageIcon.Information, 2000
             )
         elif status == "stopped":
-            self.tray_icon.showMessage(
-                "NPU Worker",
-                "Service stopped",
-                QSystemTrayIcon.MessageIcon.Warning,
-                2000
-            )
+            self.tray_icon.showMessage("NPU Worker", "Service stopped", QSystemTrayIcon.MessageIcon.Warning, 2000)
 
     @Slot(str)
     def on_error(self, error_msg: str):
@@ -385,8 +384,8 @@ class MainWindow(QMainWindow):
         self.metrics_display.update_metrics(metrics)
 
         # Update connection info with worker ID and port
-        worker_id = metrics.get('worker_id', 'N/A')
-        port = metrics.get('port', 8082)
+        worker_id = metrics.get("worker_id", "N/A")
+        port = metrics.get("port", 8082)
         self.connection_info.set_worker_id(worker_id)
         self.connection_info.set_port(port)
 
@@ -398,18 +397,14 @@ class MainWindow(QMainWindow):
         """Update UI elements based on service status"""
         if status == "running":
             self.service_status.setText("🟢 Service Running")
-            self.service_status.setStyleSheet(
-                "color: green; font-size: 14px; font-weight: bold;"
-            )
+            self.service_status.setStyleSheet("color: green; font-size: 14px; font-weight: bold;")
             self.start_btn.setEnabled(False)
             self.stop_btn.setEnabled(True)
             self.restart_btn.setEnabled(True)
             self.status_label.setText("Service is running")
         else:
             self.service_status.setText("⚫ Service Stopped")
-            self.service_status.setStyleSheet(
-                "color: gray; font-size: 14px; font-weight: bold;"
-            )
+            self.service_status.setStyleSheet("color: gray; font-size: 14px; font-weight: bold;")
             self.start_btn.setEnabled(True)
             self.stop_btn.setEnabled(False)
             self.restart_btn.setEnabled(False)
@@ -426,7 +421,7 @@ class MainWindow(QMainWindow):
                     self,
                     "Restart Required",
                     "Settings have been changed. Restart the service to apply?",
-                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 )
                 if reply == QMessageBox.StandardButton.Yes:
                     self.restart_service()
@@ -444,7 +439,7 @@ class MainWindow(QMainWindow):
         if interfaces:
             network_info_html = "<p><strong>Network Interfaces:</strong></p><ul>"
             for iface in interfaces[:3]:  # Show max 3 interfaces
-                primary_mark = " ★" if iface.get('is_primary') else ""
+                primary_mark = " ★" if iface.get("is_primary") else ""
                 network_info_html += f"<li>{iface['type']}: {iface['ip']}{primary_mark}</li>"
             network_info_html += "</ul>"
 
@@ -464,7 +459,7 @@ class MainWindow(QMainWindow):
             "</ul>"
             f"{network_info_html}"
             f"<p><strong>Primary IP:</strong> {primary_ip}</p>"
-            "<p>© 2025 AutoBot Development Team</p>"
+            "<p>© 2025 AutoBot Development Team</p>",
         )
 
     @Slot()
@@ -477,19 +472,19 @@ class MainWindow(QMainWindow):
         # Get current pairing status
         status = self.config_manager.get_pairing_status()
 
-        if not status['paired']:
+        if not status["paired"]:
             QMessageBox.information(
                 self,
                 "Not Paired",
                 "This worker is not currently paired with a master.\n\n"
                 "Start the service to initiate pairing with a master backend.",
-                QMessageBox.StandardButton.Ok
+                QMessageBox.StandardButton.Ok,
             )
             return
 
         # Show confirmation dialog with current pairing info
-        worker_id = status.get('worker_id', 'Unknown')
-        backend_host = status.get('backend_host', 'Unknown')
+        worker_id = status.get("worker_id", "Unknown")
+        backend_host = status.get("backend_host", "Unknown")
 
         reply = QMessageBox.warning(
             self,
@@ -504,7 +499,7 @@ class MainWindow(QMainWindow):
             f"The worker will need to re-pair with a master on next start.<br><br>"
             f"<b>Continue?</b>",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No
+            QMessageBox.StandardButton.No,
         )
 
         if reply != QMessageBox.StandardButton.Yes:
@@ -525,22 +520,19 @@ class MainWindow(QMainWindow):
         # Clear pairing data
         result = self.config_manager.clear_pairing()
 
-        if result['success']:
-            cleared_items = "\n• ".join(result['cleared']) if result['cleared'] else "No items to clear"
+        if result["success"]:
+            cleared_items = "\n• ".join(result["cleared"]) if result["cleared"] else "No items to clear"
 
             msg = QMessageBox(self)
             msg.setIcon(QMessageBox.Icon.Information)
             msg.setWindowTitle("Re-pair Complete")
             msg.setText("Pairing data has been cleared successfully.")
             msg.setInformativeText(
-                f"<b>Cleared:</b><br>• {cleared_items}<br><br>"
-                "The worker will re-pair with the master on next start."
+                f"<b>Cleared:</b><br>• {cleared_items}<br><br>" "The worker will re-pair with the master on next start."
             )
 
             if was_running:
-                msg.setStandardButtons(
-                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
-                )
+                msg.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
                 msg.button(QMessageBox.StandardButton.Yes).setText("Start Service Now")
                 msg.button(QMessageBox.StandardButton.No).setText("Start Later")
                 msg.setDefaultButton(QMessageBox.StandardButton.Yes)
@@ -555,12 +547,9 @@ class MainWindow(QMainWindow):
             # Update connection info to show unpaired status
             self.connection_info.set_worker_id("Not paired")
         else:
-            errors = "\n• ".join(result['errors']) if result['errors'] else "Unknown error"
+            errors = "\n• ".join(result["errors"]) if result["errors"] else "Unknown error"
             QMessageBox.critical(
-                self,
-                "Re-pair Failed",
-                f"Failed to clear pairing data:\n\n• {errors}",
-                QMessageBox.StandardButton.Ok
+                self, "Re-pair Failed", f"Failed to clear pairing data:\n\n• {errors}", QMessageBox.StandardButton.Ok
             )
 
         self.status_label.setText("Ready")
@@ -582,10 +571,7 @@ class MainWindow(QMainWindow):
             self.hide()
             event.ignore()
             self.tray_icon.showMessage(
-                "AutoBot NPU Worker",
-                "Application minimized to tray",
-                QSystemTrayIcon.MessageIcon.Information,
-                1000
+                "AutoBot NPU Worker", "Application minimized to tray", QSystemTrayIcon.MessageIcon.Information, 1000
             )
 
     def quit_application(self):
@@ -596,7 +582,7 @@ class MainWindow(QMainWindow):
                 self,
                 "Service Running",
                 "The NPU worker service is still running. Stop it before exiting?",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No | QMessageBox.StandardButton.Cancel
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No | QMessageBox.StandardButton.Cancel,
             )
 
             if reply == QMessageBox.StandardButton.Cancel:

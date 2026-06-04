@@ -19,7 +19,7 @@ import sys
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Set, Union
 
 import yaml
 
@@ -31,6 +31,16 @@ _project_root = Path(__file__).parent.parent.parent.parent
 _backend_path = _project_root / "autobot-backend"
 if str(_backend_path) not in sys.path:
     sys.path.insert(0, str(_backend_path))
+
+# Workers path for openvino_dispatch (GH#8690)
+_workers_path = Path(__file__).parent.parent / "workers"
+if str(_workers_path) not in sys.path:
+    sys.path.insert(0, str(_workers_path))
+
+try:
+    from workers.openvino_dispatch import UnsupportedArchitectureError, get_inference_config
+except ImportError:
+    from openvino_dispatch import UnsupportedArchitectureError, get_inference_config  # type: ignore[no-redef]
 
 try:
     from autobot_shared.http_client import HTTPClientManager, get_http_client
@@ -203,7 +213,7 @@ class NPUWorkerClient:
         """
         self.npu_endpoint = npu_endpoint or get_service_url("npu-worker")
         self._use_auth = use_auth if use_auth is not None else USE_AUTHENTICATED_CLIENT
-        self._http_client: Optional[Union[HTTPClientManager, "ServiceHTTPClient"]] = None
+        self._http_client: HTTPClientManager | "ServiceHTTPClient" | None = None
         self._auth_client_initialized = False
         self.available = False
         self._check_availability_task = None
@@ -271,11 +281,41 @@ class NPUWorkerClient:
             logger.error("Failed to get NPU models: %s", e)
             return {"loaded_models": {}, "error": "Failed to retrieve NPU models"}
 
-    async def load_model(self, model_id: str, device: str = "CPU") -> Dict[str, Any]:
-        """Load a model on the NPU worker"""
+    async def load_model(
+        self,
+        model_id: str,
+        device: str = "CPU",
+        architecture_family: str | None = None,
+    ) -> Dict[str, Any]:
+        """Load a model on the NPU worker.
+
+        Args:
+            model_id: Opaque model identifier.
+            device: Target OpenVINO device (e.g. "CPU", "NPU").
+            architecture_family: Architecture family for dispatch (GH#7352).
+                One of "transformer", "state_space", "linear_attention", "hybrid".
+                Defaults to "transformer" on the worker side when omitted.
+        """
+        if architecture_family is not None:
+            try:
+                get_inference_config(model_id, architecture_family, device)
+            except UnsupportedArchitectureError as exc:
+                logger.warning(
+                    "load_model rejected unsupported architecture_family=%s for model=%s: %s",
+                    architecture_family,
+                    model_id,
+                    exc,
+                )
+                return {
+                    "success": False,
+                    "error": str(exc),
+                    "error_code": "unsupported_architecture",
+                }
         try:
             http_client = await self._get_http_client()
-            payload = {"model_id": model_id, "device": device}
+            payload: Dict[str, Any] = {"model_id": model_id, "device": device}
+            if architecture_family is not None:
+                payload["architecture_family"] = architecture_family
             async with await http_client.post(f"{self.npu_endpoint}/models/load", json=payload) as response:
                 return await response.json()
         except Exception as e:
@@ -390,7 +430,7 @@ class NPUWorkerPool:
         self.workers: Dict[str, WorkerState] = {}
         self._worker_configs: Dict[str, Dict] = {}
         self._lock = asyncio.Lock()
-        self._health_monitor_task: Optional[asyncio.Task] = None
+        self._health_monitor_task: asyncio.Task | None = None
         self._running = False
 
         # Load initial configuration
@@ -422,7 +462,7 @@ class NPUWorkerPool:
 
         logger.info("NPUWorkerPool initialized with %d workers", len(self.workers))
 
-    async def _select_worker(self, excluded_workers: Set[str]) -> Optional[WorkerState]:
+    async def _select_worker(self, excluded_workers: Set[str]) -> WorkerState | None:
         """
         Select best available worker using priority-first + least-connections.
 
@@ -648,7 +688,7 @@ class NPUWorkerPool:
         data: Dict[str, Any],
         attempt: int,
         excluded_workers: Set[str],
-    ) -> Optional[Dict[str, Any]]:
+    ) -> Dict[str, Any] | None:
         """
         Run a single task attempt on one worker, updating circuit state. Ref: #1088.
 

@@ -9,22 +9,22 @@
                text-white transition-colors"
         @click="showAddModal = true"
       >
-        + Add Repo
+        {{ $t('skills.reposTab.addRepo') }}
       </button>
     </div>
 
     <div v-if="repos.length === 0" class="text-center py-12 text-gray-400">
-      No repositories registered. Add a skill repo to install community skills.
+      {{ $t('skills.reposTab.noRepositoriesRegisteredAdd') }}
     </div>
 
     <table v-else class="w-full text-sm text-left">
       <thead>
         <tr class="text-gray-400 border-b border-gray-700">
-          <th class="pb-2 pr-4">Name</th>
-          <th class="pb-2 pr-4">Type</th>
+          <th class="pb-2 pr-4">{{ $t('skills.reposTab.name') }}</th>
+          <th class="pb-2 pr-4">{{ $t('skills.reposTab.type') }}</th>
           <th class="pb-2 pr-4">URL</th>
-          <th class="pb-2 pr-4">Skills</th>
-          <th class="pb-2 pr-4">Last Sync</th>
+          <th class="pb-2 pr-4">{{ $t('skills.reposTab.skills') }}</th>
+          <th class="pb-2 pr-4">{{ $t('skills.reposTab.lastSync') }}</th>
           <th class="pb-2"></th>
         </tr>
       </thead>
@@ -56,7 +56,7 @@
                      text-gray-300 transition-colors"
               @click="$emit('sync', repo.id)"
             >
-              Sync
+              {{ $t('skills.reposTab.sync') }}
             </button>
           </td>
         </tr>
@@ -70,10 +70,10 @@
       @click.self="showAddModal = false"
     >
       <div class="bg-gray-800 rounded-xl border border-gray-700 w-full max-w-md p-6">
-        <h3 class="text-lg font-bold text-white mb-4">Add Skill Repository</h3>
+        <h3 class="text-lg font-bold text-white mb-4">{{ $t('skills.reposTab.addSkillRepository') }}</h3>
         <div class="space-y-3">
           <label class="block">
-            <span class="text-sm text-gray-400">Name</span>
+            <span class="text-sm text-gray-400">{{ $t('skills.reposTab.name') }}</span>
             <input
               v-model="newRepo.name"
               type="text"
@@ -93,14 +93,14 @@
             />
           </label>
           <label class="block">
-            <span class="text-sm text-gray-400">Type</span>
+            <span class="text-sm text-gray-400">{{ $t('skills.reposTab.type') }}</span>
             <select
               v-model="newRepo.repo_type"
               class="mt-1 w-full bg-gray-900 border border-gray-700 rounded px-3 py-2
                      text-white text-sm focus:outline-hidden focus:border-blue-500"
             >
-              <option value="git">Git</option>
-              <option value="local">Local</option>
+              <option value="git">{{ $t('skills.reposTab.git') }}</option>
+              <option value="local">{{ $t('skills.reposTab.local') }}</option>
               <option value="http">HTTP</option>
               <option value="mcp">MCP</option>
             </select>
@@ -112,14 +112,14 @@
                    text-white transition-colors"
             @click="submitAdd"
           >
-            Add
+            {{ $t('skills.reposTab.add') }}
           </button>
           <button
             class="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded text-sm
                    text-gray-300 transition-colors"
             @click="showAddModal = false"
           >
-            Cancel
+            {{ $t('skills.reposTab.cancel') }}
           </button>
         </div>
       </div>

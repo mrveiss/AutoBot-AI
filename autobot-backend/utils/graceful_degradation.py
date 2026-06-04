@@ -9,20 +9,20 @@ Implements comprehensive fallback mechanisms to maintain AutoBot functionality d
 import asyncio
 import hashlib
 import json
-import logging
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import aiofiles
 
 from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import TimingConstants
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class DegradationLevel(Enum):
@@ -64,8 +64,8 @@ class ServiceStatus:
 
     health: ServiceHealth
     degradation_level: DegradationLevel
-    last_success: Optional[float] = None
-    last_failure: Optional[float] = None
+    last_success: float | None = None
+    last_failure: float | None = None
     consecutive_failures: int = 0
     error_rate: float = 0.0
     response_time: float = 0.0
@@ -152,7 +152,7 @@ class CachedResponseStrategy(FallbackStrategy):
         except Exception as e:
             logger.warning("Failed to serialize cache response: %s", e)
 
-    async def _find_cached_response(self, request: str) -> Optional[Dict[str, Any]]:
+    async def _find_cached_response(self, request: str) -> Dict[str, Any] | None:
         """Find a cached response for the request"""
         cache_key = self._generate_cache_key(request)
         cache_file = self.cache_dir / f"{cache_key}.json"
@@ -177,7 +177,7 @@ class CachedResponseStrategy(FallbackStrategy):
         # Try similarity-based matching
         return await self._find_similar_cached_response(request)
 
-    async def _find_similar_cached_response(self, request: str) -> Optional[Dict[str, Any]]:
+    async def _find_similar_cached_response(self, request: str) -> Dict[str, Any] | None:
         """Find a cached response for similar request"""
         request_words = set(request.lower().split())
         best_match = None
@@ -381,7 +381,7 @@ class GracefulDegradationManager:
         }
 
         # Background monitoring
-        self._monitoring_task: Optional[asyncio.Task] = None
+        self._monitoring_task: asyncio.Task | None = None
         self._shutdown = False
 
     async def start_monitoring(self):

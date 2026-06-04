@@ -13,7 +13,7 @@ import json
 import uuid
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 from autobot_shared.logging_manager import get_llm_logger
 from config.manager import get_config_manager as _get_config_manager
@@ -46,13 +46,13 @@ class InvalidationRule:
         rule_id: str,
         name: str,
         temporal_types: List[TemporalType],
-        max_age_days: Optional[int] = None,
-        min_confidence: Optional[float] = None,
-        source_patterns: Optional[List[str]] = None,
-        fact_types: Optional[List[FactType]] = None,
+        max_age_days: int | None = None,
+        min_confidence: float | None = None,
+        source_patterns: List[str] | None = None,
+        fact_types: List[FactType] | None = None,
         enabled: bool = True,
-        predicate_filters: Optional[List[Dict[str, str]]] = None,
-    ):
+        predicate_filters: List[Dict[str, str]] | None = None,
+    ) -> None:
         """Initialize invalidation rule with criteria for matching facts.
 
         Issue #1378: Added predicate_filters for scoped invalidation.
@@ -68,7 +68,7 @@ class InvalidationRule:
         self.predicate_filters = predicate_filters or []
         self.created_at = datetime.now(tz=timezone.utc)
 
-    def matches_fact(self, fact: AtomicFact) -> Tuple[bool, Optional[InvalidationReason]]:
+    def matches_fact(self, fact: AtomicFact) -> Tuple[bool, InvalidationReason | None]:
         """Check if this rule applies to the given fact."""
         if not self.enabled:
             return False, None
@@ -138,7 +138,7 @@ class TemporalInvalidationService:
     contradictory facts based on temporal characteristics and business rules.
     """
 
-    def __init__(self, fact_extraction_service: Optional[FactExtractionService] = None):
+    def __init__(self, fact_extraction_service: FactExtractionService | None = None) -> None:
         """
         Initialize the temporal invalidation service.
 
@@ -164,7 +164,7 @@ class TemporalInvalidationService:
 
         logger.info("Temporal Invalidation Service initialized")
 
-    async def _ensure_redis(self):
+    async def _ensure_redis(self) -> None:
         """Lazy-init async Redis client on first use (#2725)."""
         if self.redis_client is None:
             from autobot_shared.redis_client import get_async_redis_client
@@ -285,7 +285,7 @@ class TemporalInvalidationService:
             logger.error("Error loading invalidation rules: %s", e)
             return {}
 
-    async def _store_invalidation_rules(self, rules: Dict[str, InvalidationRule]):
+    async def _store_invalidation_rules(self, rules: Dict[str, InvalidationRule]) -> None:
         """Store invalidation rules to Redis."""
         await self._ensure_redis()
         try:
@@ -386,7 +386,7 @@ class TemporalInvalidationService:
         processing_time: float,
         enabled_rules: Dict[str, "InvalidationRule"],
         rule_statistics: Dict[str, int],
-        source_filter: Optional[str],
+        source_filter: str | None,
         invalidation_reasons: Dict[str, Dict[str, Any]],
     ) -> Dict[str, Any]:
         """
@@ -426,7 +426,7 @@ class TemporalInvalidationService:
         return result
 
     async def _load_rules_and_facts(
-        self, source_filter: Optional[str]
+        self, source_filter: str | None
     ) -> Tuple[Dict[str, InvalidationRule], List[AtomicFact]]:
         """
         Load invalidation rules and facts concurrently.
@@ -477,7 +477,7 @@ class TemporalInvalidationService:
     async def _execute_sweep_core(
         self,
         start_time: datetime,
-        source_filter: Optional[str],
+        source_filter: str | None,
         dry_run: bool,
         rules: Dict[str, InvalidationRule],
         all_facts: List[AtomicFact],
@@ -519,7 +519,7 @@ class TemporalInvalidationService:
     async def _process_and_invalidate_facts(
         self,
         start_time: datetime,
-        source_filter: Optional[str],
+        source_filter: str | None,
         dry_run: bool,
         enabled_rules: Dict[str, InvalidationRule],
         all_facts: List[AtomicFact],
@@ -560,7 +560,7 @@ class TemporalInvalidationService:
             "result": result,
         }
 
-    def _build_sweep_error_response(self, message: str, processing_time: Optional[float] = None) -> Dict[str, Any]:
+    def _build_sweep_error_response(self, message: str, processing_time: float | None = None) -> Dict[str, Any]:
         """
         Build error response for invalidation sweep.
 
@@ -594,9 +594,7 @@ class TemporalInvalidationService:
             "facts_invalidated": 0,
         }
 
-    async def run_invalidation_sweep(
-        self, source_filter: Optional[str] = None, dry_run: bool = False
-    ) -> Dict[str, Any]:
+    async def run_invalidation_sweep(self, source_filter: str | None = None, dry_run: bool = False) -> Dict[str, Any]:
         """
         Run a comprehensive invalidation sweep.
 
@@ -706,7 +704,7 @@ class TemporalInvalidationService:
             logger.error("Error in fact invalidation: %s", e)
             return invalidated_count
 
-    async def _record_invalidation_sweep(self, **kwargs):
+    async def _record_invalidation_sweep(self, **kwargs) -> None:
         """Record invalidation sweep history."""
         await self._ensure_redis()
         try:
@@ -954,7 +952,7 @@ class TemporalInvalidationService:
                 "message": "Temporal invalidation operation failed",
             }
 
-    async def schedule_periodic_invalidation(self):
+    async def schedule_periodic_invalidation(self) -> None:
         """Schedule periodic invalidation sweeps."""
         if not self.enable_auto_invalidation:
             logger.info("Auto invalidation disabled")

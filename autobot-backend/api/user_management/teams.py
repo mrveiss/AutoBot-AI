@@ -7,9 +7,8 @@ Teams API Endpoints
 REST API for team management operations.
 """
 
-import logging
 import uuid
-from typing import List, Optional
+from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
@@ -30,6 +29,7 @@ from api.user_management.dependencies import (
     require_org_context,
     require_user_management_enabled,
 )
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.models.pagination import PaginationParams
 from user_management.services import TeamService, TenantContext
 from user_management.services.team_service import (
@@ -39,7 +39,7 @@ from user_management.services.team_service import (
 )
 
 router = APIRouter(prefix="/teams", tags=["Teams"])
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # -------------------------------------------------------------------------
@@ -59,7 +59,7 @@ logger = logging.getLogger(__name__)
 )
 async def list_teams(
     pagination: PaginationParams = Depends(),
-    search: Optional[str] = Query(None, description="Search by name or description"),
+    search: str | None = Query(None, description="Search by name or description"),
     team_service: TeamService = Depends(get_team_service),
 ):
     """List teams with pagination."""
@@ -210,7 +210,7 @@ async def delete_team(
 )
 async def list_team_members(
     team_id: uuid.UUID,
-    role: Optional[str] = Query(None, description="Filter by role"),
+    role: str | None = Query(None, description="Filter by role"),
     team_service: TeamService = Depends(get_team_service),
 ):
     """List team members."""

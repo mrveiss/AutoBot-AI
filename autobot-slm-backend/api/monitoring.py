@@ -11,7 +11,7 @@ Related to Issue #729.
 import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -54,7 +54,7 @@ class NodeMetrics(BaseModel):
     cpu_percent: float
     memory_percent: float
     disk_percent: float
-    last_heartbeat: Optional[datetime] = None
+    last_heartbeat: datetime | None = None
     services_running: int = 0
     services_failed: int = 0
 
@@ -83,8 +83,8 @@ class AlertItem(BaseModel):
     severity: str
     category: str
     message: str
-    node_id: Optional[str] = None
-    hostname: Optional[str] = None
+    node_id: str | None = None
+    hostname: str | None = None
     timestamp: datetime
     acknowledged: bool = False
 
@@ -181,7 +181,7 @@ def _extract_prom_by_ip(results: list) -> Dict[str, float]:
 
 async def _fetch_prometheus_node_metrics(
     node_ips: List[str],
-) -> Dict[str, Dict[str, Optional[float]]]:
+) -> Dict[str, Dict[str, float | None]]:
     """Fetch CPU/memory/disk from Prometheus for nodes missing heartbeat data.
 
     Returns ip_address -> {cpu, memory, disk}. Values may be None if
@@ -272,7 +272,7 @@ def _calculate_node_status_counts(nodes: List[Node]) -> tuple:
     return online, degraded, offline
 
 
-def _calculate_resource_averages(nodes: List[Node], prom_data: Optional[Dict[str, Any]] = None) -> tuple:
+def _calculate_resource_averages(nodes: List[Node], prom_data: Dict[str, Any] | None = None) -> tuple:
     """Calculate average CPU, memory, disk percentages. Related to Issue #729.
 
     Falls back to Prometheus data for nodes missing heartbeat metrics (Issue #997).
@@ -297,7 +297,7 @@ def _calculate_resource_averages(nodes: List[Node], prom_data: Optional[Dict[str
 def _build_node_metrics(
     nodes: List[Node],
     services_by_node: Dict[str, Dict[str, int]],
-    prom_data: Optional[Dict[str, Any]] = None,
+    prom_data: Dict[str, Any] | None = None,
 ) -> List[NodeMetrics]:
     """Build NodeMetrics list from nodes and service data. Related to Issue #729.
 
@@ -456,7 +456,7 @@ def _events_to_alerts(events: List[Any], nodes: Dict[str, Any]) -> List[AlertIte
 async def get_alerts(
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(get_current_user)],
-    severity: Optional[str] = Query(None),
+    severity: str | None = Query(None),
     hours: int = Query(24, ge=1, le=168),
 ) -> AlertsResponse:
     """Get alerts from node events within the specified time window."""
@@ -715,7 +715,7 @@ async def get_dashboard_overview(
     )
 
 
-def _apply_log_filters(query, node_id: Optional[str], event_type: Optional[str], severity: Optional[str]):
+def _apply_log_filters(query, node_id: str | None, event_type: str | None, severity: str | None):
     """Apply optional filters to log query. Related to Issue #729."""
     if node_id:
         query = query.where(NodeEvent.node_id == node_id)
@@ -746,9 +746,9 @@ def _events_to_log_entries(events: List[Any], nodes: Dict[str, Any]) -> List[Log
 async def get_logs(
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(get_current_user)],
-    node_id: Optional[str] = Query(None),
-    event_type: Optional[str] = Query(None),
-    severity: Optional[str] = Query(None),
+    node_id: str | None = Query(None),
+    event_type: str | None = Query(None),
+    severity: str | None = Query(None),
     hours: int = Query(24, ge=1, le=168),
     page: int = Query(1, ge=1),
     per_page: int = Query(50, ge=1, le=200),

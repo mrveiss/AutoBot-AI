@@ -11,7 +11,6 @@ Part of Issue #872 - Session Collaboration API (#608 Phase 3).
 import uuid
 from datetime import datetime
 from enum import Enum
-from typing import Optional
 
 from sqlalchemy import ForeignKey, String
 from sqlalchemy.dialects.postgresql import JSONB
@@ -91,7 +90,7 @@ class SessionCollaboration(Base):
             f"collaborators={len(self.collaborators)})>"
         )
 
-    def get_permission(self, user_id: uuid.UUID) -> Optional[str]:
+    def get_permission(self, user_id: uuid.UUID) -> str | None:
         """
         Get user's permission level for this session.
 
@@ -184,7 +183,7 @@ class SessionCollaboration(Base):
         self,
         user_id: uuid.UUID,
         permission: PermissionLevel,
-        expires_at: Optional[datetime] = None,
+        expires_at: datetime | None = None,
     ) -> None:
         """
         Add pending invitation.

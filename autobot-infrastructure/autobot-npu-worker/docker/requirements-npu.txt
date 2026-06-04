@@ -3,23 +3,23 @@
 
 # Core Framework
 fastapi>=0.136.1
-uvicorn[standard]>=0.42.0
-pydantic>=2.12.5
+uvicorn[standard]>=0.48.0
+pydantic>=2.13.4
 
 # Intel OpenVINO for NPU acceleration
-openvino>=2026.0.0
+openvino>=2026.1.0
 openvino-dev>=2024.6.0
 
 # Model and Tokenization (lightweight)
 tokenizers>=0.23.1
-transformers>=5.4.0
-huggingface-hub>=1.8.0
+transformers>=5.9.0
+huggingface-hub>=1.16.1
 
 # Tensor Operations (NPU optimized)
 numpy>=2.4.4,<3.0.0
 
 # HTTP and API
-aiohttp>=3.13.3
+aiohttp>=3.13.4  # GH#8323: zip bomb, request smuggling CVEs
 httpx>=0.28.1
 requests>=2.33.0
 
@@ -33,5 +33,5 @@ async-timeout>=5.0.1
 redis>=7.4.0
 
 # Development and Testing
-pytest>=9.0.2
+pytest>=9.0.3
 pytest-asyncio>=1.3.0

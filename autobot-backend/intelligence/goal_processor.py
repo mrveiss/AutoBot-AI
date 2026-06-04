@@ -8,14 +8,15 @@ This module processes natural language goals and converts them into
 structured intents for the intelligent agent system.
 """
 
-import logging
 import re
 from dataclasses import dataclass, field
 from difflib import SequenceMatcher
 from enum import Enum
 from typing import Dict, List
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 
 # Issue #380: Pre-compiled regex patterns for warning generation
 _SUDO_ROOT_RE = re.compile(r"sudo|root")

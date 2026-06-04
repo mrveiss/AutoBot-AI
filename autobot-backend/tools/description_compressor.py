@@ -11,15 +11,15 @@ compression LLM call is paid once per unique tool spec.
 
 import hashlib
 import json
-import logging
 
 import aiohttp
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_mixin import AsyncRedisClientLockedMixin
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import config
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 CACHE_TTL = 2592000  # 30 days
 

@@ -9,16 +9,16 @@ and compliance checking throughout the AutoBot system.
 """
 
 import json
-import logging
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from constants import SecurityThresholds
 from constants.network_constants import NetworkConstants
 
 from . import BaseLLMJudge, JudgmentDimension, JudgmentResult
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Performance optimization: O(1) lookup for security checks (Issue #326)
 FILE_DELETE_OPS = {"delete", "remove", "rm"}
@@ -421,7 +421,7 @@ class SecurityRiskJudge(BaseLLMJudge):
         subject: Any,
         criteria: List[JudgmentDimension],
         context: Dict[str, Any],
-        alternatives: Optional[List[Any]] = None,
+        alternatives: List[Any] | None = None,
         **kwargs,
     ) -> str:
         """Prepare the prompt for security risk evaluation"""

@@ -12,7 +12,7 @@ import ast
 from services.semantic_analyzer import SemanticAnalyzer
 
 
-def test_semantic_analyzer_initialization():
+def test_semantic_analyzer_initialization() -> None:
     """Test SemanticAnalyzer initialization."""
     analyzer = SemanticAnalyzer()
 
@@ -21,7 +21,7 @@ def test_semantic_analyzer_initialization():
     assert analyzer.coding_style == "pep8"
 
 
-def test_detect_fastapi_framework():
+def test_detect_fastapi_framework() -> None:
     """Test FastAPI framework detection."""
     analyzer = SemanticAnalyzer()
 
@@ -31,7 +31,7 @@ def test_detect_fastapi_framework():
     assert "fastapi" in frameworks
 
 
-def test_detect_sqlalchemy_framework():
+def test_detect_sqlalchemy_framework() -> None:
     """Test SQLAlchemy framework detection."""
     analyzer = SemanticAnalyzer()
 
@@ -44,7 +44,7 @@ def test_detect_sqlalchemy_framework():
     assert "sqlalchemy" in frameworks
 
 
-def test_detect_redis_framework():
+def test_detect_redis_framework() -> None:
     """Test Redis framework detection."""
     analyzer = SemanticAnalyzer()
 
@@ -54,7 +54,7 @@ def test_detect_redis_framework():
     assert "redis" in frameworks
 
 
-def test_detect_pydantic_framework():
+def test_detect_pydantic_framework() -> None:
     """Test Pydantic framework detection."""
     analyzer = SemanticAnalyzer()
 
@@ -64,7 +64,7 @@ def test_detect_pydantic_framework():
     assert "pydantic" in frameworks
 
 
-def test_detect_multiple_frameworks():
+def test_detect_multiple_frameworks() -> None:
     """Test detection of multiple frameworks."""
     analyzer = SemanticAnalyzer()
 
@@ -81,7 +81,7 @@ def test_detect_multiple_frameworks():
     assert "pydantic" in frameworks
 
 
-def test_detect_autobot_ssot_config():
+def test_detect_autobot_ssot_config() -> None:
     """Test AutoBot SSOT config pattern detection."""
     analyzer = SemanticAnalyzer()
 
@@ -91,7 +91,7 @@ def test_detect_autobot_ssot_config():
     assert "ssot_config" in patterns
 
 
-def test_detect_autobot_redis_client():
+def test_detect_autobot_redis_client() -> None:
     """Test AutoBot Redis client pattern detection."""
     analyzer = SemanticAnalyzer()
 
@@ -101,20 +101,19 @@ def test_detect_autobot_redis_client():
     assert "redis_client" in patterns
 
 
-def test_detect_autobot_logger():
+def test_detect_autobot_logger() -> None:
     """Test AutoBot logger pattern detection."""
     analyzer = SemanticAnalyzer()
 
     code = """
-import logging
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 """
     patterns = analyzer.detect_autobot_patterns(code)
 
     assert "logger" in patterns
 
 
-def test_detect_autobot_router():
+def test_detect_autobot_router() -> None:
     """Test AutoBot router pattern detection."""
     analyzer = SemanticAnalyzer()
 
@@ -124,7 +123,7 @@ def test_detect_autobot_router():
     assert "router" in patterns
 
 
-def test_detect_vue_composable():
+def test_detect_vue_composable() -> None:
     """Test Vue composable pattern detection."""
     analyzer = SemanticAnalyzer()
 
@@ -134,12 +133,12 @@ def test_detect_vue_composable():
     assert "vue_composable" in patterns
 
 
-def test_detect_google_docstring_style():
+def test_detect_google_docstring_style() -> None:
     """Test Google docstring style detection."""
     analyzer = SemanticAnalyzer()
 
     code = '''
-def test():
+def test() -> None:
     """Test function.
 
     Args:
@@ -155,12 +154,12 @@ def test():
     assert style == "google"
 
 
-def test_detect_numpy_docstring_style():
+def test_detect_numpy_docstring_style() -> None:
     """Test NumPy docstring style detection."""
     analyzer = SemanticAnalyzer()
 
     code = '''
-def test():
+def test() -> None:
     """Test function.
 
     Parameters
@@ -175,7 +174,7 @@ def test():
     assert style == "numpy"
 
 
-def test_detect_pep8_style_default():
+def test_detect_pep8_style_default() -> None:
     """Test PEP8 style as default."""
     analyzer = SemanticAnalyzer()
 
@@ -185,14 +184,14 @@ def test_detect_pep8_style_default():
     assert style == "pep8"
 
 
-def test_analyze_decorators():
+def test_analyze_decorators() -> None:
     """Test decorator extraction."""
     analyzer = SemanticAnalyzer()
 
     code = """
 @router.get("/test")
 @cache
-async def test():
+async def test() -> None:
     pass
 """
     tree = ast.parse(code)
@@ -202,7 +201,7 @@ async def test():
     assert "cache" in decorators
 
 
-def test_analyze_class_decorators():
+def test_analyze_class_decorators() -> None:
     """Test class decorator extraction."""
     analyzer = SemanticAnalyzer()
 
@@ -220,7 +219,7 @@ class Test:
     assert "property" in decorators or len(decorators) >= 0
 
 
-def test_suggest_imports_for_router():
+def test_suggest_imports_for_router() -> None:
     """Test import suggestions for router pattern."""
     analyzer = SemanticAnalyzer()
 
@@ -230,7 +229,7 @@ def test_suggest_imports_for_router():
     assert any("APIRouter" in s for s in suggestions)
 
 
-def test_suggest_imports_for_logger():
+def test_suggest_imports_for_logger() -> None:
     """Test import suggestions for logger pattern."""
     analyzer = SemanticAnalyzer()
 
@@ -240,7 +239,7 @@ def test_suggest_imports_for_logger():
     assert any("logging" in s for s in suggestions)
 
 
-def test_suggest_imports_for_fastapi():
+def test_suggest_imports_for_fastapi() -> None:
     """Test import suggestions for FastAPI."""
     analyzer = SemanticAnalyzer()
     analyzer.detected_frameworks = {"fastapi"}
@@ -251,7 +250,7 @@ def test_suggest_imports_for_fastapi():
     assert any("pydantic" in s for s in suggestions)
 
 
-def test_comprehensive_semantic_analysis():
+def test_comprehensive_semantic_analysis() -> None:
     """Test full semantic analysis."""
     analyzer = SemanticAnalyzer()
 
@@ -260,10 +259,10 @@ from fastapi import FastAPI
 from autobot_shared.ssot_config import config
 import logging
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 @router.get("/test")
-def test():
+def test() -> None:
     pass
 """
     imports = [

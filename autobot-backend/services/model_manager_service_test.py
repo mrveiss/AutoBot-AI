@@ -20,24 +20,24 @@ from services.model_manager_service import (
 # ---------------------------------------------------------------------------
 
 
-def test_hints_for_known_family():
+def test_hints_for_known_family() -> None:
     hints = _hints_for_model("llama3.2:3b")
     assert "chat" in hints["capabilities"]
     assert hints["context_window"] == 8192
 
 
-def test_hints_for_openai_gpt4o():
+def test_hints_for_openai_gpt4o() -> None:
     hints = _hints_for_model("gpt-4o-mini")
     assert "vision" in hints["capabilities"]
     assert hints["context_window"] == 128000
 
 
-def test_hints_for_anthropic_claude():
+def test_hints_for_anthropic_claude() -> None:
     hints = _hints_for_model("claude-sonnet-4-6")
     assert hints["context_window"] == 200000
 
 
-def test_hints_unknown_model_uses_defaults():
+def test_hints_unknown_model_uses_defaults() -> None:
     hints = _hints_for_model("totally-unknown-model:latest")
     assert hints["capabilities"] == ["chat"]
     assert hints["context_window"] == 4096
@@ -48,7 +48,7 @@ def test_hints_unknown_model_uses_defaults():
 # ---------------------------------------------------------------------------
 
 
-def test_build_model_entry_fields():
+def test_build_model_entry_fields() -> None:
     entry = _build_model_entry("mistral:7b", "ollama", available=True)
     assert entry["name"] == "mistral:7b"
     assert entry["provider"] == "ollama"
@@ -57,7 +57,7 @@ def test_build_model_entry_fields():
     assert "context_window" in entry
 
 
-def test_build_model_entry_merges_extra():
+def test_build_model_entry_merges_extra() -> None:
     entry = _build_model_entry("gpt-4o", "openai", available=True, extra={"size": 42})
     assert entry["size"] == 42
 
@@ -68,7 +68,7 @@ def test_build_model_entry_merges_extra():
 
 
 @pytest.mark.asyncio
-async def test_get_available_models_cache_hit():
+async def test_get_available_models_cache_hit() -> None:
     cached_payload = {
         "models": [
             {
@@ -103,7 +103,7 @@ async def test_get_available_models_cache_hit():
 
 
 @pytest.mark.asyncio
-async def test_get_available_models_cache_miss_fetches_providers():
+async def test_get_available_models_cache_miss_fetches_providers() -> None:
     mock_redis = AsyncMock()
     mock_redis.get = AsyncMock(return_value=None)
     mock_redis.setex = AsyncMock()
@@ -162,7 +162,7 @@ async def test_get_available_models_cache_miss_fetches_providers():
 
 
 @pytest.mark.asyncio
-async def test_get_model_names_filters_unavailable():
+async def test_get_model_names_filters_unavailable() -> None:
     cached_payload = {
         "models": [
             {

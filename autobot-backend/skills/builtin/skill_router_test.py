@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from skills.base_skill import SkillManifest
-from skills.builtin.skill_router import SkillRouterSkill, _score_skill, _tokenize
+from skills.builtin.skill_router import SkillRouterSkill, _score_skill, _tokenize  # nosemgrep: skill-no-sibling-import
 
 
 def _make_manifest(name, description, tags, tools):
@@ -159,6 +159,7 @@ async def test_find_skill_enables_best_match_via_llm():
     mock_llm_response.error = None
 
     mock_registry = MagicMock()
+    mock_registry.get_routing_index.return_value = None
     mock_registry.list_skills.return_value = [
         _make_skill_dict(
             "document-analysis",
@@ -195,6 +196,7 @@ async def test_find_skill_enables_best_match_via_llm():
 async def test_find_skill_falls_back_to_keyword_on_llm_error():
     """If LLM fails, use the top keyword-scored skill."""
     mock_registry = MagicMock()
+    mock_registry.get_routing_index.return_value = None
     mock_registry.list_skills.return_value = [
         _make_skill_dict(
             "document-analysis",
@@ -232,6 +234,7 @@ async def test_find_skill_dry_run_does_not_enable():
     mock_llm_response.error = None
 
     mock_registry = MagicMock()
+    mock_registry.get_routing_index.return_value = None
     mock_registry.list_skills.return_value = [
         _make_skill_dict(
             "document-analysis",
@@ -271,6 +274,7 @@ async def test_find_skill_requires_task_param():
 async def test_find_skill_no_skills_registered():
     """find_skill returns error when registry is empty and no build-skill available."""
     mock_registry = MagicMock()
+    mock_registry.get_routing_index.return_value = None
     mock_registry.list_skills.return_value = []
     mock_registry.get.return_value = None  # autonomous-skill-development not found
 
@@ -295,6 +299,7 @@ async def test_find_skill_no_match_delegates_to_autonomous():
         }
     )
     mock_registry = MagicMock()
+    mock_registry.get_routing_index.return_value = None
     mock_registry.list_skills.return_value = [
         _make_skill_dict(
             "calendar-integration",
@@ -342,6 +347,7 @@ async def test_find_skill_no_match_uses_research_context():
     mock_build_skill = MagicMock()
     mock_build_skill.execute = AsyncMock(return_value={"success": True, "state": "pending_approval"})
     mock_registry = MagicMock()
+    mock_registry.get_routing_index.return_value = None
     mock_registry.list_skills.return_value = []
     mock_registry.get.side_effect = lambda name: (mock_researcher if name == "skill-researcher" else mock_build_skill)
 
@@ -362,6 +368,7 @@ async def test_find_skill_no_match_uses_research_context():
 async def test_find_skill_no_match_dry_run_skips_build():
     """dry_run=True with no matching skill returns info without triggering build."""
     mock_registry = MagicMock()
+    mock_registry.get_routing_index.return_value = None
     mock_registry.list_skills.return_value = []
 
     with patch("skills.builtin.skill_router.get_skill_registry", return_value=mock_registry):

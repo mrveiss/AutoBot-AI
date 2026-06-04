@@ -8,30 +8,31 @@ The plugin-per-provider architecture now lives in ``llm_providers/``.
 This module re-exports everything that external callers relied on so that
 no import sites need to change.
 
-New code should import directly from ``llm_providers``:
+New code should import directly from ``llm_shared.providers``:
 
-    from llm_providers import get_provider_registry, OllamaProvider, ...
-    from llm_interface_pkg.models import LLMRequest, LLMResponse
-    from llm_interface_pkg.types import ProviderType, LLMType
+    from llm_shared.providers import OllamaProvider, ...
+    from llm_shared import get_provider_registry
+    from llm_shared.models import LLMRequest, LLMResponse
+    from llm_shared.types import ProviderType, LLMType
 """
 
 from __future__ import annotations
 
-import logging
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List
+
+from autobot_shared.logging_manager import get_logger
+
+# ---------------------------------------------------------------------------
+# Re-export the plugin registry and base classes from canonical location
+# ---------------------------------------------------------------------------
+from llm_shared import BaseProvider, ProviderRegistry, get_provider_registry
 
 # ---------------------------------------------------------------------------
 # Re-export canonical types from their authoritative modules
 # ---------------------------------------------------------------------------
-from llm_interface_pkg.models import LLMRequest, LLMResponse
-from llm_interface_pkg.types import LLMType, ProviderType
-
-# ---------------------------------------------------------------------------
-# Re-export the plugin registry
-# ---------------------------------------------------------------------------
-from llm_providers import (
+from llm_shared.models import LLMRequest, LLMResponse
+from llm_shared.providers import (
     AnthropicProvider,
-    BaseProvider,
     CustomOpenAIProvider,
     GroqProvider,
     HuggingFaceProvider,
@@ -39,12 +40,11 @@ from llm_providers import (
     OllamaProvider,
     OpenAIProvider,
     OpenRouterProvider,
-    ProviderRegistry,
     VLLMProvider,
-    get_provider_registry,
 )
+from llm_shared.types import LLMType, ProviderType
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -59,8 +59,8 @@ class ProviderConfig:
 
     provider_type: ProviderType
     enabled: bool = True
-    base_url: Optional[str] = None
-    api_key: Optional[str] = None
+    base_url: str | None = None
+    api_key: str | None = None
     default_model: str = ""
     available_models: List[str] = field(default_factory=list)
     max_concurrent_requests: int = 10
@@ -80,7 +80,7 @@ from abc import ABC, abstractmethod
 class LLMProvider(ABC):
     """Abstract base class for LLM providers (legacy shim).
 
-    New providers should subclass ``llm_providers.base_provider.BaseProvider``
+    New providers should subclass ``llm_shared.providers.base_provider.BaseProvider``
     instead.
     """
 
@@ -172,9 +172,9 @@ class MockProvider(LLMProvider):
 
 
 async def get_provider(
-    provider_name: Optional[str] = None,
-    conversation_id: Optional[str] = None,
-) -> Optional[BaseProvider]:
+    provider_name: str | None = None,
+    conversation_id: str | None = None,
+) -> BaseProvider | None:
     """
     Return a provider instance from the registry.
 
@@ -202,13 +202,15 @@ class UnifiedLLMInterface:
     """
     Backward-compatible facade over the plugin-per-provider registry.
 
-    New code should call ``get_provider_registry()`` directly.  This class
-    exists solely to avoid breaking call sites that still instantiate
-    ``UnifiedLLMInterface()``.
+    **Deprecated** — new code should use ``LLMService`` from
+    ``services.llm_service`` (the canonical post-#3185 entry point).
+    This class exists solely to avoid breaking call sites that still
+    instantiate ``UnifiedLLMInterface()``; it is not the canonical
+    interface and should not be imported in new code.
     """
 
     def __init__(self) -> None:
-        self._registry: Optional[ProviderRegistry] = None
+        self._registry: ProviderRegistry | None = None
 
     async def initialize(self) -> None:
         """Initialise the underlying provider registry (idempotent)."""
@@ -222,13 +224,13 @@ class UnifiedLLMInterface:
     async def chat_completion(
         self,
         messages: List[Dict[str, str]],
-        llm_type: Union[str, LLMType] = LLMType.GENERAL,
-        provider: Optional[Union[str, ProviderType]] = None,
-        model_name: Optional[str] = None,
+        llm_type: str | LLMType = LLMType.GENERAL,
+        provider: str | ProviderType | None = None,
+        model_name: str | None = None,
         **kwargs: Any,
     ) -> LLMResponse:
         """Execute a chat completion using the best available provider."""
-        provider_name: Optional[str] = None
+        provider_name: str | None = None
         if isinstance(provider, ProviderType):
             provider_name = provider.value
         elif isinstance(provider, str):
@@ -241,6 +243,15 @@ class UnifiedLLMInterface:
             model_name=model_name,
             metadata=kwargs,
         )
+
+        # Claude escalation (#8171): attempt top-tier routing before local providers.
+        # Returns None when disabled, score too low, or Claude errors — safe fallthrough.
+        from llm_shared.tiered_routing.tier_router import get_tiered_router
+
+        _escalation_result = await get_tiered_router().route_with_escalation(request)
+        if _escalation_result is not None:
+            return _escalation_result
+
         selected = await registry.get_provider_for_request(
             provider_name=provider_name,
             request=request,
@@ -274,7 +285,7 @@ class UnifiedLLMInterface:
         """Return registry stats."""
         return self._get_registry().get_stats()
 
-    async def get_available_models(self, provider: Optional[ProviderType] = None) -> Dict[str, List[str]]:
+    async def get_available_models(self, provider: ProviderType | None = None) -> Dict[str, List[str]]:
         """Return available models per provider."""
         registry = self._get_registry()
         name_filter = provider.value if provider else None

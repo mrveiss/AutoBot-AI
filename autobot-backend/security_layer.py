@@ -1,19 +1,46 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
+"""
+Security validation and configuration enforcement layer.
+
+Validates YAML-based security rules, manages authentication tokens, and
+enforces platform-level access policies for all AutoBot services.
+"""
+
 import datetime
 import json
-import logging
 import os
 from datetime import timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import yaml
 
-from config import config as global_config_manager
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
+from config import get_config_manager
 from constants.network_constants import NetworkConstants
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
+
+# Audit log file path resolved from AUTOBOT_AUDIT_LOG_FILE env var at import time.
+# Set AUTOBOT_AUDIT_LOG_FILE to override the default path.
+_AUDIT_LOG_FILE_DEFAULT = "/opt/autobot/logs/audit.log"
+
+
+def _resolve_audit_log_file() -> str:
+    """Return audit log file path from AUTOBOT_AUDIT_LOG_FILE env var with logged fallback."""
+    value = config.audit_log_file
+    if not value:
+        logger.warning(
+            "AUTOBOT_AUDIT_LOG_FILE is not set or empty; falling back to %s",
+            _AUDIT_LOG_FILE_DEFAULT,
+        )
+        return _AUDIT_LOG_FILE_DEFAULT
+    return value
+
+
+_AUDIT_LOG_FILE = _resolve_audit_log_file()
 
 # Performance optimization: O(1) lookup for boolean string values (Issue #326)
 BOOLEAN_TRUE_VALUES = {"true", "1", "yes"}
@@ -26,10 +53,10 @@ class SecurityLayer:
     def __init__(self):
         """Initialize security layer with config, role permissions, and audit logging."""
         # Use centralized config manager instead of direct file loading
-        self.security_config = global_config_manager.get("security_config", {})
+        self.security_config = get_config_manager().get("security_config", {})
 
         # Check for single-user mode (development/personal use)
-        self.single_user_mode = os.getenv("AUTOBOT_SINGLE_USER_MODE", "true").lower() in BOOLEAN_TRUE_VALUES
+        self.single_user_mode = str(config.single_user_mode).lower() in BOOLEAN_TRUE_VALUES
 
         # If single-user mode is enabled, disable all authentication
         # Issue #745: Added security warning for production awareness
@@ -45,17 +72,18 @@ class SecurityLayer:
             self.enable_auth = self.security_config.get("enable_auth", True)
             logger.info("Multi-user mode - authentication enabled by default")
 
-        self.audit_log_file = self.security_config.get(
-            "audit_log_file", os.getenv("AUTOBOT_AUDIT_LOG_FILE", "data/audit.log")
-        )
+        self.audit_log_file = self.security_config.get("audit_log_file") or _AUDIT_LOG_FILE
         self.roles = self.security_config.get("roles", {})
         self.allowed_users = self.security_config.get("allowed_users", {})  # For simple demo auth
 
-        os.makedirs(os.path.dirname(self.audit_log_file), exist_ok=True)
+        if self.audit_log_file:
+            log_dir = os.path.dirname(self.audit_log_file)
+            if log_dir:
+                os.makedirs(log_dir, exist_ok=True)
         logger.info(f"SecurityLayer initialized. Authentication enabled: {self.enable_auth}")
         logger.debug("Audit log file: %s", self.audit_log_file)
 
-    def _handle_deprecated_role(self, user_role: str, action_type: str, resource: Optional[str]) -> str:
+    def _handle_deprecated_role(self, user_role: str, action_type: str, resource: str | None) -> str:
         """
         Handle deprecated privileged roles by logging and downgrading to admin.
 
@@ -127,7 +155,7 @@ class SecurityLayer:
             return True
         return self._check_wildcard_permissions(action_type, permissions)
 
-    def check_permission(self, user_role: str, action_type: str, resource: Optional[str] = None) -> bool:
+    def check_permission(self, user_role: str, action_type: str, resource: str | None = None) -> bool:
         """
         Checks if a given role has permission for a specific action.
 
@@ -241,7 +269,7 @@ class SecurityLayer:
             logger.error(f"Failed to write to audit log file {self.audit_log_file}: {e}")
 
     # Basic user authentication (for demo purposes)
-    def authenticate_user(self, username, password) -> Optional[str]:
+    def authenticate_user(self, username, password) -> str | None:
         """
         Authenticates a user and returns their role if successful.
         For demo purposes, uses a simple dictionary lookup.

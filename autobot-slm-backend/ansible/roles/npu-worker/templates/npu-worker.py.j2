@@ -87,7 +87,7 @@ async def health_check() -> JSONResponse:
 
 
 @app.get("/")
-async def root() -> Dict[str, str]:
+async def root() -> Dict[str, Any]:
     """Root endpoint."""
     return {
         "service": "AutoBot NPU Worker",

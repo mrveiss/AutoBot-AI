@@ -10,14 +10,14 @@
     <div class="card-header">
       <div class="header-left">
         <span class="category-badge" :class="`category-${category}`">
-          <i :class="categoryIcon" aria-hidden="true"></i>
+          <Icon :name="categoryIcon" />
           {{ categoryLabel }}
         </span>
         <span v-if="section" class="section-label">{{ section }}</span>
       </div>
       <div class="header-right">
         <span v-if="score !== undefined" class="relevance-score" :class="scoreClass">
-          <i class="fas fa-chart-line" aria-hidden="true"></i>
+          <Icon name="chart-line" />
           {{ formatScore(score) }}%
         </span>
         <button
@@ -25,7 +25,7 @@
           @click.stop="toggleExpand"
           :aria-label="isExpanded ? $t('chat.docResult.collapse') : $t('chat.docResult.expand')"
         >
-          <i :class="isExpanded ? 'fas fa-chevron-up' : 'fas fa-chevron-down'" aria-hidden="true"></i>
+          <Icon :name="isExpanded ? 'chevron-up' : 'chevron-down'" />
         </button>
       </div>
     </div>
@@ -42,7 +42,7 @@
     <div class="card-footer">
       <div class="footer-left">
         <span class="file-path" :title="filePath">
-          <i class="fas fa-file-alt" aria-hidden="true"></i>
+          <Icon name="file-alt" />
           {{ displayFilePath }}
         </span>
       </div>
@@ -53,7 +53,7 @@
           :title="$t('chat.docResult.copyContent')"
           :aria-label="$t('chat.docResult.copyContent')"
         >
-          <i :class="isCopied ? 'fas fa-check' : 'fas fa-copy'" aria-hidden="true"></i>
+          <Icon :name="isCopied ? 'check' : 'copy'" />
         </button>
         <button
           class="action-btn insert-btn"
@@ -61,7 +61,7 @@
           :title="$t('chat.docResult.insertIntoChat')"
           :aria-label="$t('chat.docResult.insertIntoChat')"
         >
-          <i class="fas fa-quote-right" aria-hidden="true"></i>
+          <Icon name="comment" />
         </button>
         <button
           v-if="filePath"
@@ -70,7 +70,7 @@
           :title="$t('chat.docResult.openDocument')"
           :aria-label="$t('chat.docResult.openDocument')"
         >
-          <i class="fas fa-external-link-alt" aria-hidden="true"></i>
+          <Icon name="external-link-alt" />
         </button>
       </div>
     </div>
@@ -90,6 +90,7 @@
  * Issue #165: Chat Documentation UI Integration
  */
 
+import Icon from '@/components/ui/Icon.vue'
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils'
@@ -130,19 +131,19 @@ const isCopied = ref(false)
 
 // Category configuration
 const categoryIconMap: Record<string, string> = {
-  architecture: 'fas fa-project-diagram',
-  developer: 'fas fa-code',
-  api: 'fas fa-plug',
-  troubleshooting: 'fas fa-wrench',
-  deployment: 'fas fa-rocket',
-  security: 'fas fa-shield-alt',
-  features: 'fas fa-star',
-  testing: 'fas fa-vial',
-  workflow: 'fas fa-sitemap',
-  guides: 'fas fa-book',
-  implementation: 'fas fa-cogs',
-  agents: 'fas fa-robot',
-  general: 'fas fa-file-alt'
+  architecture: 'project-diagram',
+  developer: 'code',
+  api: 'plug',
+  troubleshooting: 'wrench',
+  deployment: 'rocket',
+  security: 'shield-alt',
+  features: 'star',
+  testing: 'vial',
+  workflow: 'sitemap',
+  guides: 'book',
+  implementation: 'cogs',
+  agents: 'robot',
+  general: 'file-alt'
 }
 
 const categoryIcon = computed(() => {

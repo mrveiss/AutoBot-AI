@@ -6,7 +6,6 @@ AutoBot Services API
 Provides service status, health checks, and system information endpoints.
 """
 
-import logging
 import time
 from datetime import datetime, timezone
 
@@ -14,7 +13,6 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from api.schemas_system import (
     ServicesHealthAggregateResponse,
-    ServicesHealthDeprecatedResponse,
     ServicesResponse,
     ServiceStatus,
     ServicesVMsStatusResponse,
@@ -23,8 +21,13 @@ from api.schemas_system import (
 )
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 
 # Import existing monitoring functionality
+# #7007: single-symbol import kept verbose (not migrated to optional_import)
+# Rationale: explicit try/except provides clearer type hints and error context
+# for single symbols where optional_import savings are minimal. Marked for
+# potential future consolidation if additional symbols are added (#7007 follow-up).
 try:
     from api.monitoring import get_services_health as monitoring_services_health
 except ImportError as _e:
@@ -32,7 +35,7 @@ except ImportError as _e:
 
     monitoring_services_health = _MissingDep("monitoring_services_health", _e)  # type: ignore[assignment]
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 router = APIRouter(tags=["Services"])
 
 
@@ -184,31 +187,6 @@ async def get_services(admin_check: bool = Depends(check_admin_permission)):
     except Exception as e:
         logger.error("Failed to get services: %s", e)
         raise HTTPException(status_code=500, detail="Failed to get services")
-
-
-@router.get("/health", response_model=ServicesHealthDeprecatedResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_health",
-    error_code_prefix="SERVICES",
-)
-async def get_health(admin_check: bool = Depends(check_admin_permission)):
-    """Simple health check endpoint.
-
-    Deprecated: Use /api/system/health for system-wide health checks.
-    This per-module endpoint will be removed in a future release. (#3333)
-
-    Issue #744: Requires admin authentication.
-    """
-    logger.warning(
-        "Deprecated health endpoint called: /api/services/health — " "use /api/system/health instead (#3333)"
-    )
-    return {
-        "status": "healthy",
-        "timestamp": datetime.now(tz=timezone.utc),
-        "deprecated": True,
-        "use_instead": "/api/system/health",
-    }
 
 
 @router.get("/services/health", response_model=ServicesHealthAggregateResponse)

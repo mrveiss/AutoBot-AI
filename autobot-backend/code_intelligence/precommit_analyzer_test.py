@@ -585,7 +585,7 @@ class TestEdgeCases:
 
             def get_password():
                 """Get password from environment."""
-                return os.getenv("PASSWORD")
+                return config.password
         ''')
 
         analyzer = PrecommitAnalyzer()

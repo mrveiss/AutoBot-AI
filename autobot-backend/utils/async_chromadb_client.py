@@ -13,6 +13,7 @@ all blocking operations with asyncio.to_thread() for proper async handling.
 
 Usage:
     from utils.async_chromadb_client import (
+from autobot_shared.logging_manager import get_logger
         get_async_chromadb_client,
         AsyncChromaCollection
     )
@@ -31,11 +32,10 @@ Usage:
 from __future__ import annotations
 
 import asyncio
-import logging
-import os
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config as _ssot_config
 
 if TYPE_CHECKING:
@@ -43,10 +43,10 @@ if TYPE_CHECKING:
 
 # Issue #3094: Use SSOT config port so the default (8100) matches Ansible deployment.
 # Host remains os.getenv-based: empty string = use local PersistentClient (dev mode).
-_CHROMADB_HOST = os.getenv("AUTOBOT_CHROMADB_HOST", "")
+_CHROMADB_HOST = _ssot_config.vm.chromadb
 _CHROMADB_PORT = _ssot_config.port.chromadb
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level tuples for ChromaDB default includes
 _DEFAULT_QUERY_INCLUDE = ["documents", "metadatas", "distances"]
@@ -73,7 +73,7 @@ class AsyncChromaCollection:
         return self._collection.name
 
     @property
-    def metadata(self) -> Optional[Dict[str, Any]]:
+    def metadata(self) -> Dict[str, Any] | None:
         """Get collection metadata."""
         return self._collection.metadata
 
@@ -84,9 +84,9 @@ class AsyncChromaCollection:
     async def add(
         self,
         ids: List[str],
-        embeddings: Optional[List[List[float]]] = None,
-        metadatas: Optional[List[Dict[str, Any]]] = None,
-        documents: Optional[List[str]] = None,
+        embeddings: List[List[float]] | None = None,
+        metadatas: List[Dict[str, Any]] | None = None,
+        documents: List[str] | None = None,
     ) -> None:
         """
         Add items to the collection (async).
@@ -129,12 +129,12 @@ class AsyncChromaCollection:
 
     async def query(
         self,
-        query_embeddings: Optional[List[List[float]]] = None,
-        query_texts: Optional[List[str]] = None,
+        query_embeddings: List[List[float]] | None = None,
+        query_texts: List[str] | None = None,
         n_results: int = 10,
-        where: Optional[Dict[str, Any]] = None,
-        where_document: Optional[Dict[str, Any]] = None,
-        include: Optional[List[str]] = None,
+        where: Dict[str, Any] | None = None,
+        where_document: Dict[str, Any] | None = None,
+        include: List[str] | None = None,
     ) -> Dict[str, Any]:
         """
         Query the collection for similar items (async).
@@ -163,14 +163,49 @@ class AsyncChromaCollection:
             include=include,
         )
 
+    async def query_batch(
+        self,
+        query_embeddings: List[List[float]],
+        n_results: int = 10,
+        where: Dict[str, Any] | None = None,
+        where_document: Dict[str, Any] | None = None,
+        include: List[str] | None = None,
+    ) -> Dict[str, Any]:
+        """Batch vector search — all embeddings in a single ChromaDB call.
+
+        Issue #8153: eliminates per-query thread dispatch overhead. ChromaDB
+        returns nested-list results: results["ids"][i] is the hit-list for
+        query i. Callers must slice the returned dict by query index.
+
+        Args:
+            query_embeddings: N query vectors; each is a list[float].
+            n_results: Number of results per query.
+            where: Optional metadata filter applied to every query.
+            where_document: Optional document content filter.
+            include: Fields to include (default: documents, metadatas, distances).
+
+        Returns:
+            Dict with nested lists, one inner list per query vector.
+        """
+        if include is None:
+            include = _DEFAULT_QUERY_INCLUDE
+        return await asyncio.to_thread(
+            self._collection.query,
+            query_embeddings=query_embeddings,
+            n_results=n_results,
+            where=where,
+            where_document=where_document,
+            include=include,
+        )
+
     async def get(
         self,
-        ids: Optional[List[str]] = None,
-        where: Optional[Dict[str, Any]] = None,
-        where_document: Optional[Dict[str, Any]] = None,
-        include: Optional[List[str]] = None,
-        limit: Optional[int] = None,
-        offset: Optional[int] = None,
+        ids: List[str] | None = None,
+        where: Dict[str, Any] | None = None,
+        where_document: Dict[str, Any] | None = None,
+        include: List[str] | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
     ) -> Dict[str, Any]:
         """
         Get items from the collection by ID or filter (async).
@@ -202,9 +237,9 @@ class AsyncChromaCollection:
     async def update(
         self,
         ids: List[str],
-        embeddings: Optional[List[List[float]]] = None,
-        metadatas: Optional[List[Dict[str, Any]]] = None,
-        documents: Optional[List[str]] = None,
+        embeddings: List[List[float]] | None = None,
+        metadatas: List[Dict[str, Any]] | None = None,
+        documents: List[str] | None = None,
     ) -> None:
         """
         Update items in the collection (async).
@@ -226,9 +261,9 @@ class AsyncChromaCollection:
     async def upsert(
         self,
         ids: List[str],
-        embeddings: Optional[List[List[float]]] = None,
-        metadatas: Optional[List[Dict[str, Any]]] = None,
-        documents: Optional[List[str]] = None,
+        embeddings: List[List[float]] | None = None,
+        metadatas: List[Dict[str, Any]] | None = None,
+        documents: List[str] | None = None,
     ) -> None:
         """
         Upsert (insert or update) items in the collection (async).
@@ -249,9 +284,9 @@ class AsyncChromaCollection:
 
     async def delete(
         self,
-        ids: Optional[List[str]] = None,
-        where: Optional[Dict[str, Any]] = None,
-        where_document: Optional[Dict[str, Any]] = None,
+        ids: List[str] | None = None,
+        where: Dict[str, Any] | None = None,
+        where_document: Dict[str, Any] | None = None,
     ) -> None:
         """
         Delete items from the collection (async).
@@ -274,8 +309,8 @@ class AsyncChromaCollection:
 
     async def modify(
         self,
-        name: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        name: str | None = None,
+        metadata: Dict[str, Any] | None = None,
     ) -> None:
         """Modify collection name or metadata (async)."""
         await asyncio.to_thread(
@@ -305,7 +340,7 @@ class AsyncChromaClient:
     async def get_collection(
         self,
         name: str,
-        embedding_function: Optional[Any] = None,
+        embedding_function: Any | None = None,
     ) -> AsyncChromaCollection:
         """
         Get an existing collection by name (async).
@@ -332,8 +367,8 @@ class AsyncChromaClient:
     async def get_or_create_collection(
         self,
         name: str,
-        metadata: Optional[Dict[str, Any]] = None,
-        embedding_function: Optional[Any] = None,
+        metadata: Dict[str, Any] | None = None,
+        embedding_function: Any | None = None,
     ) -> AsyncChromaCollection:
         """
         Get or create a collection (async).
@@ -362,8 +397,8 @@ class AsyncChromaClient:
     async def create_collection(
         self,
         name: str,
-        metadata: Optional[Dict[str, Any]] = None,
-        embedding_function: Optional[Any] = None,
+        metadata: Dict[str, Any] | None = None,
+        embedding_function: Any | None = None,
     ) -> AsyncChromaCollection:
         """
         Create a new collection (async).

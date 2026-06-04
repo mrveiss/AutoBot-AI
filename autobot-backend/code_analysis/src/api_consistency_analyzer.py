@@ -5,17 +5,17 @@ Analyzes API endpoints for consistency, patterns, and best practices
 
 import ast
 import json
-import logging
 import re
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.logging_manager import get_logger
 from constants.ttl_constants import TTL_1_HOUR
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -28,7 +28,7 @@ class APIEndpoint:
     path: str
     function_name: str
     parameters: List[str]
-    return_type: Optional[str]
+    return_type: str | None
     has_auth: bool
     has_validation: bool
     has_error_handling: bool
@@ -247,7 +247,7 @@ class APIConsistencyAnalyzer:
         func_node: ast.FunctionDef,
         file_path: str,
         lines: List[str],
-    ) -> Optional[APIEndpoint]:
+    ) -> APIEndpoint | None:
         """Analyze decorator to extract endpoint information"""
 
         # Handle different decorator patterns
@@ -330,7 +330,7 @@ class APIConsistencyAnalyzer:
                 parameters.append(arg.arg)
         return parameters
 
-    def _extract_return_type(self, func_node: ast.FunctionDef) -> Optional[str]:
+    def _extract_return_type(self, func_node: ast.FunctionDef) -> str | None:
         """Extract return type annotation"""
         if func_node.returns:
             return ast.unparse(func_node.returns) if hasattr(ast, "unparse") else str(func_node.returns)
@@ -388,7 +388,7 @@ class APIConsistencyAnalyzer:
         else:
             return "unknown"
 
-    def _find_associated_function(self, lines: List[str], line_num: int) -> Optional[str]:
+    def _find_associated_function(self, lines: List[str], line_num: int) -> str | None:
         """Find function associated with a decorator"""
         # Look for function definition after the decorator
         for i in range(line_num, min(len(lines), line_num + 5)):

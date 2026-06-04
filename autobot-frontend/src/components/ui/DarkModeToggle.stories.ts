@@ -4,7 +4,6 @@ import DarkModeToggle from './DarkModeToggle.vue';
 const meta = {
   title: 'Components/UI/DarkModeToggle',
   component: DarkModeToggle,
-  tags: ['autodocs'],
   argTypes: {},
 } as Meta<typeof DarkModeToggle>;
 

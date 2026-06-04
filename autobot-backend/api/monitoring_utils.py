@@ -9,12 +9,12 @@ This module contains helper functions extracted from monitoring.py (Issue #185).
 
 import csv
 import io
-import logging
 from typing import Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from type_defs.common import Metadata
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Performance optimization: O(1) lookup for critical service statuses (Issue #326)
 CRITICAL_SERVICE_STATUSES = {"critical", "offline"}

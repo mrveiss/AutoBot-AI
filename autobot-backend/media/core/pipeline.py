@@ -7,11 +7,11 @@
 
 """Base abstract class for media processing pipelines."""
 
-import logging
 import time
 from abc import ABC, abstractmethod
-from typing import ClassVar, List, Optional
+from typing import ClassVar, List
 
+from autobot_shared.logging_manager import get_logger
 from media.core.types import MediaInput, MediaType, PipelineMetrics, ProcessingResult
 
 
@@ -31,7 +31,7 @@ class MediaPipeline(ABC):
             pipeline_name: Name identifier for this pipeline
         """
         self.pipeline_name = pipeline_name
-        self.logger = logging.getLogger(f"{__name__}.{pipeline_name}")
+        self.logger = get_logger(f"{__name__}.{pipeline_name}")
         self.metrics = PipelineMetrics()
         self._enabled = True
 
@@ -119,13 +119,13 @@ class BasePipeline(MediaPipeline):
     # Subclasses override these. ``None`` here means "no default" — passing
     # ``None`` to ``__init__`` then raises so we never silently construct
     # a misconfigured pipeline.
-    PIPELINE_NAME: ClassVar[Optional[str]] = None
-    SUPPORTED_TYPES: ClassVar[Optional[List[MediaType]]] = None
+    PIPELINE_NAME: ClassVar[str | None] = None
+    SUPPORTED_TYPES: ClassVar[List[MediaType] | None] = None
 
     def __init__(
         self,
-        pipeline_name: Optional[str] = None,
-        supported_types: Optional[List[MediaType]] = None,
+        pipeline_name: str | None = None,
+        supported_types: List[MediaType] | None = None,
     ):
         """
         Initialize base pipeline.

@@ -8,13 +8,13 @@ Issue #381: Extracted from search.py god class refactoring.
 Contains search analytics tracking functionality.
 """
 
-import logging
-from typing import List, Optional
+from typing import List
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from models.task_context import SearchAnalyticsContext
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class SearchAnalytics:
@@ -29,10 +29,10 @@ class SearchAnalytics:
         query: str,
         result_count: int,
         duration_ms: int,
-        session_id: Optional[str],
+        session_id: str | None,
         mode: str,
-        tags: Optional[List[str]],
-        category: Optional[str],
+        tags: List[str] | None,
+        category: str | None,
         query_expansion: bool,
         relevance_scoring: bool,
         track_analytics: bool,

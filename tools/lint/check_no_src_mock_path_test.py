@@ -203,3 +203,70 @@ def test_test_file_predicate_for_test_underscore_prefix() -> None:
 def test_test_file_predicate_rejects_non_test_files() -> None:
     assert hook._is_test_file("autobot-backend/api/marketplace.py") is False
     assert hook._is_test_file("autobot-backend/utils/testing_helpers.py") is False
+
+
+# ---------------------------------------------------------------------------
+# Runtime resolution checks
+# ---------------------------------------------------------------------------
+
+
+def test_resolve_module_with_builtin() -> None:
+    """Builtin modules like ``sys`` should resolve."""
+    resolves, error = hook._resolve_module("sys")
+    assert resolves is True
+    assert error is None
+
+
+def test_resolve_module_with_nonexistent() -> None:
+    """Non-existent modules should fail resolution."""
+    resolves, error = hook._resolve_module("this_module_definitely_does_not_exist_xyz123")
+    assert resolves is False
+    assert error is not None
+    assert "not found" in error.lower() or "resolution error" in error.lower()
+
+
+def test_resolve_module_caches_results() -> None:
+    """Module resolution results should be cached."""
+    # Clear cache first
+    hook._RESOLUTION_CACHE.clear()
+
+    target = "sys.nonexistent"
+    # First call populates cache
+    resolves1, error1 = hook._resolve_module(target)
+    # Second call hits cache
+    resolves2, error2 = hook._resolve_module(target)
+
+    assert resolves1 == resolves2
+    assert error1 == error2
+    # Verify it was cached
+    assert target in hook._RESOLUTION_CACHE
+
+
+def test_resolve_module_handles_empty_string() -> None:
+    """Empty module strings should return unresolvable."""
+    resolves, error = hook._resolve_module("")
+    assert resolves is False
+    assert error is not None
+
+
+def test_resolution_works_with_builtins() -> None:
+    """Verify resolution check can detect builtin modules."""
+    resolves, error = hook._resolve_module("sys")
+    assert resolves is True
+    assert error is None
+
+
+def test_src_prefix_takes_precedence_over_resolution() -> None:
+    """Even if src.* target resolved, it should be flagged for #6987."""
+    src = """
+from unittest.mock import patch
+
+def test_foo():
+    # If 'src' were a valid package, this would resolve, but we still flag it.
+    with patch("src.something"):
+        pass
+"""
+    findings = _scan(src)
+    assert len(findings) == 1
+    assert "src.something" in findings[0][1]
+    assert "#6987" in findings[0][1]  # Should reference the original issue

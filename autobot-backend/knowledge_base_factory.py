@@ -16,6 +16,7 @@ Key Features:
 
 Usage:
     from knowledge_base_factory import get_knowledge_base
+from autobot_shared.logging_manager import get_logger
 
     # Async context
     kb = await get_knowledge_base()
@@ -24,30 +25,32 @@ Usage:
     kb = await asyncio.to_thread(get_knowledge_base_sync)
 """
 
-import asyncio
-import logging
-from contextlib import asynccontextmanager
-from typing import TYPE_CHECKING, Any, Dict, Optional
+from __future__ import annotations
 
+import asyncio
+from contextlib import asynccontextmanager
+from typing import TYPE_CHECKING, Any, Dict
+
+from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import TimingConstants
 
 if TYPE_CHECKING:
     from knowledge_base import KnowledgeBase
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class KnowledgeBaseInitializer:
     """Thread-safe knowledge base initializer with async factory pattern"""
 
-    _instance: Optional["KnowledgeBase"] = None
+    _instance: "KnowledgeBase" | None = None
     _initialization_lock = asyncio.Lock()
     _initialization_complete = asyncio.Event()
     _initialization_failed = False
-    _initialization_error: Optional[Exception] = None
+    _initialization_error: Exception | None = None
 
     @classmethod
-    async def get_instance(cls, force_reinit: bool = False) -> Optional["KnowledgeBase"]:
+    async def get_instance(cls, force_reinit: bool = False) -> "KnowledgeBase" | None:
         """Get or create knowledge base instance with proper async initialization"""
 
         # If we already have an instance and don't need to reinitialize
@@ -96,7 +99,7 @@ class KnowledgeBaseInitializer:
                 return None
 
     @classmethod
-    async def wait_for_initialization(cls, timeout: float = TimingConstants.SHORT_TIMEOUT) -> Optional["KnowledgeBase"]:
+    async def wait_for_initialization(cls, timeout: float = TimingConstants.SHORT_TIMEOUT) -> "KnowledgeBase" | None:
         """Wait for initialization to complete with timeout"""
         try:
             await asyncio.wait_for(cls._initialization_complete.wait(), timeout=timeout)
@@ -124,7 +127,7 @@ class KnowledgeBaseInitializer:
 # Convenience functions for easy access
 async def get_knowledge_base(
     force_reinit: bool = False, timeout: float = TimingConstants.SHORT_TIMEOUT
-) -> Optional["KnowledgeBase"]:
+) -> "KnowledgeBase" | None:
     """Get knowledge base instance with async initialization"""
     try:
         # Try to get existing instance first
@@ -141,7 +144,7 @@ async def get_knowledge_base(
         return None
 
 
-def get_knowledge_base_sync() -> Optional["KnowledgeBase"]:
+def get_knowledge_base_sync() -> "KnowledgeBase" | None:
     """Synchronous wrapper for getting knowledge base (uses existing instance only)"""
     if KnowledgeBaseInitializer.is_initialized():
         return KnowledgeBaseInitializer._instance

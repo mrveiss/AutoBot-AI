@@ -8,7 +8,6 @@ Base classes and data structures for provider health checking
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
 
 
 class ProviderStatus(str, Enum):
@@ -40,7 +39,7 @@ class ProviderHealthResult:
     message: str
     response_time: float
     provider: str
-    details: Optional[dict] = None
+    details: dict | None = None
 
     def to_dict(self) -> dict:
         """Convert to dictionary for API responses"""
@@ -62,7 +61,7 @@ class BaseProviderHealth(ABC):
     the check_health() method.
     """
 
-    def __init__(self, provider_name: str):
+    def __init__(self, provider_name: str) -> None:
         """
         Initialize provider health checker
 
@@ -89,7 +88,7 @@ class BaseProviderHealth(ABC):
         available: bool,
         message: str,
         response_time: float,
-        details: Optional[dict] = None,
+        details: dict | None = None,
     ) -> ProviderHealthResult:
         """
         Helper to create standardized health result

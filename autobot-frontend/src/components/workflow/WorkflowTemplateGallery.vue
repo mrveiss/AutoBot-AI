@@ -2,7 +2,7 @@
   <div class="template-gallery">
     <div class="gallery-header">
       <div class="search-box">
-        <i class="fas fa-search"></i>
+        <Icon name="search" />
         <input v-model="searchQuery" :placeholder="$t('workflow.templates.searchPlaceholder')" />
       </div>
       <div class="category-filters">
@@ -15,18 +15,18 @@
 
     <!-- Error State -->
     <div v-if="apiError" class="error-state">
-      <i class="fas fa-exclamation-triangle"></i>
+      <Icon name="exclamation-triangle" />
       <p>{{ apiError }}</p>
-      <button class="btn-secondary" @click="retryLoad"><i class="fas fa-redo"></i> {{ $t('workflow.templates.retry') }}</button>
+      <button class="btn-secondary" @click="retryLoad"><Icon name="redo" /> {{ $t('workflow.templates.retry') }}</button>
     </div>
 
     <div v-else-if="effectiveLoading" class="loading-state">
-      <i class="fas fa-spinner fa-spin"></i>
+      <Icon name="spinner" :spin="true" />
       <span>{{ $t('workflow.templates.loading') }}</span>
     </div>
 
     <div v-else-if="filteredTemplates.length === 0" class="empty-state">
-      <i class="fas fa-clone"></i>
+      <Icon name="clone" />
       <p>{{ $t('workflow.templates.noMatch') }}</p>
     </div>
 
@@ -40,13 +40,13 @@
           <p>{{ template.description }}</p>
           <div class="template-meta">
             <span class="category-badge">{{ template.category }}</span>
-            <span v-if="getStepsCount(template)" class="steps-count"><i class="fas fa-list-ol"></i> {{ $t('workflow.templates.stepsCount', { count: getStepsCount(template) }) }}</span>
-            <span v-if="template.estimated_duration_minutes" class="duration"><i class="fas fa-clock"></i> {{ template.estimated_duration_minutes }}m</span>
+            <span v-if="getStepsCount(template)" class="steps-count"><Icon name="list-ol" /> {{ $t('workflow.templates.stepsCount', { count: getStepsCount(template) }) }}</span>
+            <span v-if="template.estimated_duration_minutes" class="duration"><Icon name="clock" /> {{ template.estimated_duration_minutes }}m</span>
           </div>
         </div>
         <div class="template-actions">
-          <button class="btn-icon" @click.stop="openPreview(template)" :title="$t('workflow.templates.preview')"><i class="fas fa-eye"></i></button>
-          <button class="btn-run" @click.stop="$emit('run-template', template)" :title="$t('workflow.templates.runNow')"><i class="fas fa-play"></i></button>
+          <button class="btn-icon" @click.stop="openPreview(template)" :title="$t('workflow.templates.preview')" :aria-label="$t('workflow.templates.preview')"><Icon name="eye" /></button>
+          <button class="btn-run" @click.stop="$emit('run-template', template)" :title="$t('workflow.templates.runNow')" :aria-label="$t('workflow.templates.runNow')"><Icon name="play" /></button>
         </div>
       </div>
     </div>
@@ -56,7 +56,7 @@
       <div v-if="previewTemplate" class="preview-panel">
         <div class="preview-header">
           <h3>{{ previewTemplate.name }}</h3>
-          <button @click="previewTemplate = null"><i class="fas fa-times"></i></button>
+          <button @click="previewTemplate = null" :aria-label="$t('common.close')"><Icon name="times" /></button>
         </div>
         <div class="preview-body">
           <p class="preview-desc">{{ previewTemplate.description }}</p>
@@ -74,7 +74,7 @@
             <h4>Required Credentials</h4>
             <div class="secret-items">
               <div v-for="(meta, key) in (previewTemplate as any).required_secrets" :key="key" class="secret-item">
-                <i class="fas fa-key"></i>
+                <Icon name="key" />
                 <div class="secret-info">
                   <span class="secret-name">{{ key }}</span>
                   <span class="secret-desc">{{ meta.description }}</span>
@@ -94,15 +94,15 @@
                 <code v-else-if="step.action">{{ step.action }}</code>
                 <div class="step-meta">
                   <span v-if="step.agent_type" class="agent">{{ step.agent_type }}</span>
-                  <span v-if="step.requires_approval"><i class="fas fa-shield-alt"></i> {{ $t('workflow.templates.requiresConfirmation') }}</span>
+                  <span v-if="step.requires_approval"><Icon name="shield-alt" /> {{ $t('workflow.templates.requiresConfirmation') }}</span>
                 </div>
               </div>
             </div>
           </div>
         </div>
         <div class="preview-actions">
-          <button class="btn-secondary" @click="$emit('select-template', previewTemplate)"><i class="fas fa-edit"></i> {{ $t('workflow.templates.editInCanvas') }}</button>
-          <button class="btn-primary" @click="$emit('run-template', previewTemplate)"><i class="fas fa-play"></i> {{ $t('workflow.templates.runWorkflow') }}</button>
+          <button class="btn-secondary" @click="$emit('select-template', previewTemplate)"><Icon name="edit" /> {{ $t('workflow.templates.editInCanvas') }}</button>
+          <button class="btn-primary" @click="$emit('run-template', previewTemplate)"><Icon name="play" /> {{ $t('workflow.templates.runWorkflow') }}</button>
         </div>
       </div>
     </Transition>
@@ -119,6 +119,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import type { WorkflowTemplate } from '@/composables/useWorkflowBuilder'
 import { useWorkflowTemplates } from '@/composables/useWorkflowTemplates'
 import type { WorkflowTemplateSummary, TemplateCategory, TemplateStep } from '@/types/workflowTemplates'
+import Icon from '@/components/ui/Icon.vue'
 
 // Combined template type for flexibility
 type AnyTemplate = WorkflowTemplate | WorkflowTemplateSummary

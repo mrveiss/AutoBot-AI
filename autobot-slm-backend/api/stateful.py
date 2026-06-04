@@ -11,7 +11,6 @@ import asyncio
 import logging
 import uuid
 from datetime import datetime, timezone
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
@@ -48,9 +47,9 @@ router = APIRouter(prefix="/stateful", tags=["stateful"])
 async def list_backups(
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(get_current_user)],
-    node_id: Optional[str] = Query(None),
-    service_type: Optional[str] = Query(None),
-    status_filter: Optional[str] = Query(None, alias="status"),
+    node_id: str | None = Query(None),
+    service_type: str | None = Query(None),
+    status_filter: str | None = Query(None, alias="status"),
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
 ) -> BackupListResponse:
@@ -177,9 +176,9 @@ async def restore_backup(
 async def list_replications(
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(get_current_user)],
-    source_node_id: Optional[str] = Query(None),
-    target_node_id: Optional[str] = Query(None),
-    status_filter: Optional[str] = Query(None, alias="status"),
+    source_node_id: str | None = Query(None),
+    target_node_id: str | None = Query(None),
+    status_filter: str | None = Query(None, alias="status"),
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
 ) -> ReplicationListResponse:

@@ -10,10 +10,10 @@ Implements Issue #71 - O(1) atomic counter operations for fact/document/vector c
 
 import asyncio
 import json
-import logging
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import parse_utc_iso
 
 if TYPE_CHECKING:
@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     import redis
     from llama_index.vector_stores.chroma import ChromaVectorStore
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class StatsMixin:
@@ -390,6 +390,18 @@ class StatsMixin:
             await self._get_chromadb_stats(stats)
             stats["embedding_cache"] = get_embedding_cache().get_stats()
 
+            # Issue #8391: VectorWriteBuffer pending count.
+            write_buffer = getattr(self, "_write_buffer", None)
+            stats["vector_write_buffer_pending"] = write_buffer.pending_count if write_buffer is not None else 0
+
+            # Issue #8392: CollectionTierManager tier distribution.
+            try:
+                from knowledge.tiering import get_tier_manager
+
+                stats["collection_tiers"] = get_tier_manager().stats()
+            except Exception as e:
+                logger.warning("Failed to get tier stats: %s", e)
+
             return stats
 
         except Exception as e:
@@ -740,7 +752,7 @@ class StatsMixin:
             return "last_year"
         return "older"
 
-    def _parse_fact_timestamp(self, fact: Dict[str, Any]) -> Optional[datetime]:
+    def _parse_fact_timestamp(self, fact: Dict[str, Any]) -> datetime | None:
         """Parse timestamp from a fact (Issue #398: extracted)."""
         timestamp_str = fact.get("timestamp") or fact.get("metadata", {}).get("created_at")
         if not timestamp_str or not isinstance(timestamp_str, str):

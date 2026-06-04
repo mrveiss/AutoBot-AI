@@ -13,8 +13,7 @@ Provides connection testing, resource listing, and CRUD operations
 for issues, cards, and tasks.
 """
 
-import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
@@ -33,6 +32,7 @@ from api.schemas_workflows import (
 )
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from integrations.base import IntegrationConfig, IntegrationHealth
 from integrations.project_management_integration import (
     AsanaIntegration,
@@ -40,7 +40,7 @@ from integrations.project_management_integration import (
     TrelloIntegration,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(
     tags=["integrations-project-management"],
@@ -176,11 +176,11 @@ async def list_providers() -> List[ProviderInfo]:
 )
 async def list_projects(
     provider: str,
-    base_url: Optional[str] = Query(None),
-    api_key: Optional[str] = Query(None),
-    token: Optional[str] = Query(None),
-    username: Optional[str] = Query(None),
-    workspace_gid: Optional[str] = Query(None),
+    base_url: str | None = Query(None),
+    api_key: str | None = Query(None),
+    token: str | None = Query(None),
+    username: str | None = Query(None),
+    workspace_gid: str | None = Query(None),
 ) -> Dict[str, Any]:
     """List projects, boards, or workspaces.
 
@@ -219,14 +219,14 @@ async def list_projects(
 )
 async def list_issues(
     provider: str,
-    base_url: Optional[str] = Query(None),
-    api_key: Optional[str] = Query(None),
-    token: Optional[str] = Query(None),
-    username: Optional[str] = Query(None),
-    project_key: Optional[str] = Query(None),
-    list_id: Optional[str] = Query(None),
-    project_gid: Optional[str] = Query(None),
-    board_id: Optional[str] = Query(None),
+    base_url: str | None = Query(None),
+    api_key: str | None = Query(None),
+    token: str | None = Query(None),
+    username: str | None = Query(None),
+    project_key: str | None = Query(None),
+    list_id: str | None = Query(None),
+    project_gid: str | None = Query(None),
+    board_id: str | None = Query(None),
 ) -> Dict[str, Any]:
     """List issues, cards, or tasks.
 
@@ -314,10 +314,10 @@ def _build_create_params(provider: str, request: IssueCreateRequest) -> tuple:
 async def create_issue(
     provider: str,
     request: IssueCreateRequest,
-    base_url: Optional[str] = Query(None),
-    api_key: Optional[str] = Query(None),
-    token: Optional[str] = Query(None),
-    username: Optional[str] = Query(None),
+    base_url: str | None = Query(None),
+    api_key: str | None = Query(None),
+    token: str | None = Query(None),
+    username: str | None = Query(None),
 ) -> Dict[str, Any]:
     """Create a new issue, card, or task."""
     _validate_provider(provider)
@@ -378,10 +378,10 @@ async def update_issue(
     provider: str,
     issue_id: str,
     request: IssueUpdateRequest,
-    base_url: Optional[str] = Query(None),
-    api_key: Optional[str] = Query(None),
-    token: Optional[str] = Query(None),
-    username: Optional[str] = Query(None),
+    base_url: str | None = Query(None),
+    api_key: str | None = Query(None),
+    token: str | None = Query(None),
+    username: str | None = Query(None),
 ) -> Dict[str, Any]:
     """Update an issue, card, or task."""
     _validate_provider(provider)
@@ -410,10 +410,10 @@ async def search_issues(
     provider: str,
     query: str = Query(..., description="Search query or JQL"),
     max_results: int = Query(50, description="Maximum results"),
-    base_url: Optional[str] = Query(None),
-    api_key: Optional[str] = Query(None),
-    token: Optional[str] = Query(None),
-    username: Optional[str] = Query(None),
+    base_url: str | None = Query(None),
+    api_key: str | None = Query(None),
+    token: str | None = Query(None),
+    username: str | None = Query(None),
 ) -> Dict[str, Any]:
     """Search for issues, cards, or tasks.
 

@@ -13,9 +13,6 @@ enabling a unified knowledge system that combines:
 This eliminates the need for a separate AutoBotMemoryGraph system.
 """
 
-import logging
-from typing import Optional
-
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from api.schemas_knowledge import (
@@ -28,9 +25,10 @@ from api.schemas_knowledge import (
 )
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from knowledge_factory import get_or_create_knowledge_base
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level frozenset for valid relation directions
 _VALID_DIRECTIONS = frozenset({"outgoing", "incoming", "both"})
@@ -140,7 +138,7 @@ async def get_fact_relations(
     req: Request,
     fact_id: str,
     direction: str = Query("both", description="Direction: 'outgoing', 'incoming', or 'both'"),
-    relation_type: Optional[str] = Query(None, description="Filter by relation type"),
+    relation_type: str | None = Query(None, description="Filter by relation type"),
     include_details: bool = Query(False, description="Include full fact content for related facts"),
 ):
     """

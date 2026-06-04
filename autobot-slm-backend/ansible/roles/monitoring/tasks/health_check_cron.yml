@@ -1,0 +1,74 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Ansible Monitoring Role - Daily Health Check Cron Tasks
+# Fixes MVA-291: replaces setup_daily_health_check.sh crontab/tmp approach
+---
+
+- name: "Health Check Cron | Ensure log directory exists"
+  ansible.builtin.file:
+    path: "{{ autobot_log_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  tags: ["monitoring", "health_check"]
+
+- name: "Health Check Cron | Deploy wrapper script to stable path"
+  ansible.builtin.template:
+    src: autobot-health-check-cron.sh.j2
+    dest: "{{ health_check_cron_wrapper }}"
+    owner: root
+    group: root
+    mode: "0755"
+  tags: ["monitoring", "health_check"]
+
+- name: "Health Check Cron | Ensure scripts directory exists"
+  ansible.builtin.file:
+    path: "{{ autobot_repo_dir }}/scripts"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  tags: ["monitoring", "health_check"]
+
+- name: "Health Check Cron | Deploy health check scripts from code_source (MVA-1038)"
+  ansible.builtin.copy:
+    src: "{{ code_source_dir | default('/opt/autobot/code_source') }}/scripts/{{ item }}"
+    dest: "{{ autobot_repo_dir }}/scripts/{{ item }}"
+    owner: root
+    group: root
+    mode: "0755"
+    remote_src: true
+  loop:
+    - daily_health_check.py
+    - post_health_check.py
+  tags: ["monitoring", "health_check"]
+
+- name: "Health Check Cron | Stat health check scripts"
+  ansible.builtin.stat:
+    path: "{{ autobot_repo_dir }}/scripts/{{ item }}"
+  loop:
+    - daily_health_check.py
+    - post_health_check.py
+  register: _health_check_script_stat
+  tags: ["monitoring", "health_check"]
+
+- name: "Health Check Cron | Ensure health check scripts are executable"
+  ansible.builtin.file:
+    path: "{{ autobot_repo_dir }}/scripts/{{ item.item }}"
+    mode: "0755"
+  loop: "{{ _health_check_script_stat.results }}"
+  when: item.stat.exists
+  tags: ["monitoring", "health_check"]
+
+- name: "Health Check Cron | Install cron job via Ansible cron module"
+  ansible.builtin.cron:
+    name: "autobot-daily-health-check"
+    minute: "0"
+    hour: "3"
+    job: "{{ health_check_cron_wrapper }}"
+    user: root
+    state: present
+  tags: ["monitoring", "health_check"]

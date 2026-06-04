@@ -3,14 +3,15 @@
 # Author: mrveiss
 """Async PostgreSQL client for Neural Mesh RAG graph operations (#2055)."""
 
-import logging
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 
 
 class MeshDB:
@@ -26,7 +27,7 @@ class MeshDB:
     async def create_node(
         self,
         chunk_id: str,
-        source_file: Optional[str],
+        source_file: str | None,
         node_type: str,
         raptor_level: int = 0,
     ) -> str:
@@ -107,8 +108,8 @@ class MeshDB:
         self,
         from_node: str,
         to_node: str,
-        edge_type: Optional[str] = None,
-    ) -> Optional[dict]:
+        edge_type: str | None = None,
+    ) -> dict | None:
         """Return the first matching edge as a dict, or None if absent (#2055)."""
         if edge_type is not None:
             sql = text("""
@@ -144,10 +145,10 @@ class MeshDB:
     async def update_edge(
         self,
         edge_id: str,
-        weight: Optional[float] = None,
-        co_access_count: Optional[int] = None,
-        edge_type: Optional[str] = None,
-        origin: Optional[str] = None,
+        weight: float | None = None,
+        co_access_count: int | None = None,
+        edge_type: str | None = None,
+        origin: str | None = None,
     ) -> None:
         """Partially update an edge's mutable fields (#2055, #2117).
 
@@ -458,9 +459,9 @@ class MeshDB:
     async def log_evolution(
         self,
         event_type: str,
-        entity_id: Optional[str],
-        old_value: Optional[dict],
-        new_value: Optional[dict],
+        entity_id: str | None,
+        old_value: dict | None,
+        new_value: dict | None,
         actor: str,
     ) -> None:
         """Append an audit entry to mesh_evolution_log (#2055)."""

@@ -54,8 +54,8 @@
       ansible.builtin.file:
         path: "{{ git_repo_root }}"
         state: directory
-        owner: "{{ ansible_user_id | default('autobot') }}"
-        group: "{{ ansible_user_id | default('autobot') }}"
+        owner: "{{ lookup('env', 'USER') | default('autobot') }}"
+        group: "{{ lookup('env', 'USER') | default('autobot') }}"
         recurse: true
       become: true
       failed_when: false
@@ -67,9 +67,9 @@
         repo: "{{ github_repo }}"
         dest: "{{ git_repo_root }}"
         version: "{{ deploy_ref }}"
-        update: yes
-        force: yes
-      ignore_errors: yes
+        update: true
+        force: true
+      ignore_errors: true
       register: github_sync
       tags: [always]
 

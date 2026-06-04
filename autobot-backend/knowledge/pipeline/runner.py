@@ -7,15 +7,15 @@ Pipeline Runner - Orchestrator for ECL pipeline execution.
 Issue #759: Knowledge Pipeline Foundation - Extract, Cognify, Load (ECL).
 """
 
-import logging
 from typing import Any, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
 
 from .base import PipelineContext, PipelineResult
 from .registry import TaskRegistry
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class PipelineRunner:

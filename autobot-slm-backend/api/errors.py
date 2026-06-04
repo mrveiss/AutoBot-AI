@@ -12,7 +12,7 @@ Provides comprehensive error tracking, resolution, and analytics endpoints.
 import logging
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
@@ -57,8 +57,8 @@ class RecentError(BaseModel):
     message: str
     timestamp: datetime
     resolved: bool = False
-    resolved_at: Optional[datetime] = None
-    resolved_by: Optional[str] = None
+    resolved_at: datetime | None = None
+    resolved_by: str | None = None
 
 
 class RecentErrorsResponse(BaseModel):
@@ -119,9 +119,9 @@ class MetricsSummary(BaseModel):
     unresolved_errors: int
     critical_errors: int
     error_rate_per_hour: float
-    mean_time_to_resolve_hours: Optional[float] = None
-    top_error_type: Optional[str] = None
-    most_affected_node: Optional[str] = None
+    mean_time_to_resolve_hours: float | None = None
+    top_error_type: str | None = None
+    most_affected_node: str | None = None
 
 
 class TimelinePoint(BaseModel):
@@ -344,7 +344,7 @@ async def get_error_statistics(
     )
 
 
-def _build_recent_error_queries(severity: Optional[str], resolved: Optional[bool]):
+def _build_recent_error_queries(severity: str | None, resolved: bool | None):
     """Helper for get_recent_errors. Ref: #1088."""
     query = select(NodeEvent).where(NodeEvent.severity.in_([EventSeverity.ERROR.value, EventSeverity.CRITICAL.value]))
     count_query = select(func.count(NodeEvent.id)).where(
@@ -384,8 +384,8 @@ async def get_recent_errors(
     _: Annotated[dict, Depends(get_current_user)],
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
-    severity: Optional[str] = Query(None),
-    resolved: Optional[bool] = Query(None),
+    severity: str | None = Query(None),
+    resolved: bool | None = Query(None),
 ) -> RecentErrorsResponse:
     """Get recent error list with pagination."""
     query, count_query = _build_recent_error_queries(severity, resolved)
@@ -530,8 +530,8 @@ async def get_error_health(
 async def clear_errors(
     db: Annotated[AsyncSession, Depends(get_db)],
     user: Annotated[dict, Depends(get_current_user)],
-    severity: Optional[str] = Query(None),
-    older_than_hours: Optional[int] = Query(None, ge=1),
+    severity: str | None = Query(None),
+    older_than_hours: int | None = Query(None, ge=1),
 ) -> ClearResponse:
     """Clear error history."""
     query = delete(NodeEvent).where(NodeEvent.severity.in_([EventSeverity.ERROR.value, EventSeverity.CRITICAL.value]))
@@ -833,7 +833,7 @@ async def configure_alert_threshold(
 async def cleanup_old_errors(
     db: Annotated[AsyncSession, Depends(get_db)],
     user: Annotated[dict, Depends(get_current_user)],
-    days: Optional[int] = Query(None, ge=1, le=365),
+    days: int | None = Query(None, ge=1, le=365),
 ) -> CleanupResponse:
     """Cleanup old errors based on retention policy."""
     # Get retention days from settings or use provided value

@@ -10,13 +10,16 @@ Handles application startup and shutdown with 2-phase initialization:
 """
 
 import asyncio
+import json
 import logging
-import os
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 
 from fastapi import FastAPI
 
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_constants import STARTUP_ERROR_FILE
 from autobot_shared.tracing import (
     instrument_aiohttp,
     instrument_redis,
@@ -39,7 +42,7 @@ from utils.io_executor import shutdown_executors as shutdown_io_executors
 MAX_WORKER_THREADS = 16
 _executor: ThreadPoolExecutor | None = None
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level tuple for backend logger names
 _BACKEND_LOGGER_NAMES = ("api", "api.codebase_analytics")
@@ -56,6 +59,7 @@ app_state: Metadata = {
     "config": None,
     "initialization_status": "starting",  # starting, phase1, phase2, ready, error
     "initialization_message": "Backend starting...",
+    "startup_error": None,  # GH#8947: capture startup errors for health visibility
 }
 
 
@@ -73,13 +77,15 @@ async def update_app_state_multi(**kwargs) -> None:
 
 def configure_logging():
     """Configure logging level from environment variable"""
-    LOG_LEVEL = os.getenv("AUTOBOT_LOG_LEVEL", "INFO").upper()
+    from autobot_shared.ssot_config import config as _ssot_cfg
+
+    LOG_LEVEL = _ssot_cfg.log_level.upper()
     LOG_LEVEL_VALUE = getattr(logging, LOG_LEVEL, logging.INFO)
     logging.root.setLevel(LOG_LEVEL_VALUE)
 
     # Set level for all backend loggers
     for logger_name in _BACKEND_LOGGER_NAMES:
-        logging.getLogger(logger_name).setLevel(LOG_LEVEL_VALUE)
+        get_logger(logger_name).setLevel(LOG_LEVEL_VALUE)
 
     logger.info("📊 Logging level set to: %s (%s)", LOG_LEVEL, LOG_LEVEL_VALUE)
 
@@ -356,12 +362,12 @@ async def _init_builtin_extensions(app: FastAPI) -> None:
     Non-critical: a failure logs a warning but does not block startup.
     """
     try:
-        from extensions.builtin import (
+        from middleware.builtin import (
             LoggingExtension,
             PermissionEnforcementExtension,
             SecretMaskingExtension,
         )
-        from extensions.manager import ExtensionManager
+        from middleware.manager import ExtensionManager
 
         manager = getattr(app.state, "extension_manager", None)
         if manager is None:
@@ -447,6 +453,30 @@ async def initialize_critical_services(app: FastAPI):
     except Exception as critical_error:
         logger.error("❌ CRITICAL INITIALIZATION FAILED: %s", critical_error)
         logger.error("Backend startup ABORTED - critical services must be operational")
+        error_type = type(critical_error).__name__
+        logger.error("Startup error detail: %s: %s", error_type, str(critical_error))
+        await update_app_state_multi(
+            initialization_status="error",
+            initialization_message="Startup failed — check server logs for details",
+            startup_error=error_type,
+        )
+        # GH#8947: Persist error type to disk before re-raising — the process will
+        # exit before binding to port, so the in-memory app_state update above is
+        # unreachable. The file survives process exit and lets /api/health report
+        # the failure when the next (probe) process reads it.
+        try:
+            STARTUP_ERROR_FILE.parent.mkdir(parents=True, exist_ok=True)
+            STARTUP_ERROR_FILE.write_text(
+                json.dumps(
+                    {
+                        "error_type": error_type,
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                    }
+                ),
+                encoding="utf-8",
+            )
+        except Exception:
+            pass  # File write failure must not mask the original startup error
         raise  # Re-raise to prevent app from starting
 
 
@@ -472,6 +502,23 @@ async def _init_knowledge_base(app: FastAPI):
         mgr = getattr(app.state, "chat_workflow_manager", None)
         if mgr is not None and knowledge_base is not None and mgr.knowledge_service is None:
             await mgr.set_knowledge_base(knowledge_base)
+
+        # Issue #8391: Start VectorWriteBuffer background flush task.
+        write_buffer = getattr(knowledge_base, "_write_buffer", None)
+        if write_buffer is not None:
+            await write_buffer.start()
+
+        # Issue #8392: Start CollectionTierManager background reaper.
+        # Issue #8408: Pass the sync Redis client so all uvicorn workers share tier state.
+        try:
+            from autobot_shared.redis_client import get_redis_client as _get_sync_redis
+            from knowledge.tiering import get_tier_manager
+
+            _tier_redis = _get_sync_redis(database="knowledge")
+            await get_tier_manager(redis_client=_tier_redis).start()
+            app.state.tier_manager = get_tier_manager()
+        except Exception as _tm_err:
+            logger.warning("CollectionTierManager startup failed: %s", _tm_err)
     except Exception as kb_error:
         logger.warning("Knowledge base initialization failed: %s", kb_error)
         app.state.knowledge_base = None
@@ -493,21 +540,26 @@ async def _init_npu_worker_websocket():
         logger.warning("NPU worker WebSocket initialization failed: %s", npu_ws_error)
 
 
-async def _warmup_npu_connection():
+async def _warmup_npu_connection(app: FastAPI) -> None:
     """
     Warm up NPU worker connection for fast first-request embedding (NON-CRITICAL).
 
     Issue #165: Pre-initializes the NPU connection pool and performs a test
     embedding to ensure the NPU worker's model is ready. This eliminates
     cold-start latency on the first real embedding request.
+
+    Sets app.state.npu_worker_ready so /api/health can report accurate
+    npu_acceleration capability status (#6768).
     """
     logger.info("✅ [ 82%] NPU Warmup: Warming up NPU connection...")
+    npu_ready = False
     try:
         from knowledge.facts import warmup_npu_connection
 
         result = await warmup_npu_connection()
 
         if result["status"] == "success":
+            npu_ready = True
             logger.info(
                 "✅ [ 82%] NPU Warmup: Connection ready (%.1fms, %d dimensions)",
                 result.get("warmup_time_ms", 0),
@@ -520,6 +572,8 @@ async def _warmup_npu_connection():
 
     except Exception as warmup_error:
         logger.warning("NPU warmup failed: %s", warmup_error)
+    finally:
+        app.state.npu_worker_ready = npu_ready
 
 
 async def _start_doc_sync_queue_worker(app: FastAPI) -> None:
@@ -661,26 +715,102 @@ async def _init_log_forwarding():
         logger.warning("Log forwarding initialization failed: %s", log_fwd_error)
 
 
+async def _init_llc_outbound_sync(app: FastAPI) -> None:
+    """Start the LLC outbound PM sync subscriber (GH#8257)."""
+    logger.info("LLC Outbound Sync: Starting...")
+    try:
+        from llc.sync.outbound_sync import get_outbound_sync_service
+
+        svc = get_outbound_sync_service()
+        await svc.start()
+        app.state.llc_outbound_sync = svc
+        logger.info("LLC Outbound Sync: Started")
+    except Exception as exc:
+        logger.warning("LLC outbound sync startup failed (non-fatal): %s", exc)
+        app.state.llc_outbound_sync = None
+
+
+async def _init_llc_routine_scheduler(app: FastAPI) -> None:
+    """Start the LLC RoutineScheduler that fires cron-based routines (GH#8229)."""
+    logger.info("LLC Routine Scheduler: Starting...")
+    try:
+        from llc.scheduler.routine_scheduler import RoutineScheduler
+
+        scheduler = RoutineScheduler()
+        await scheduler.startup()
+        app.state.llc_routine_scheduler = scheduler
+        logger.info("LLC Routine Scheduler: Started")
+    except Exception as exc:
+        logger.warning("LLC routine scheduler startup failed (non-fatal): %s", exc)
+        app.state.llc_routine_scheduler = None
+
+
 async def _init_heartbeat_scheduler(app: FastAPI) -> None:
     """
     Start heartbeat scheduler for scheduled agent wakeups (NON-CRITICAL).
 
     Issue #1407: Loads enabled agents from DB and spawns their asyncio loops.
+    GH#8225: Prefers the LLC HeartbeatScheduler; falls back to legacy when
+    the LLC package is unavailable, preventing duplicate sorted-set writes.
     """
-    logger.info("Heartbeat: Starting heartbeat scheduler...")
+    # GH#8225: Try LLC scheduler first; it owns llc:heartbeat:schedule.
+    # Use get_heartbeat_scheduler() — same lazy_singleton instance used by API routes —
+    # so cleanup_services.stop() drains tasks from both startup-fired and API-triggered runs.
+    try:
+        from llc.scheduler.heartbeat_scheduler import get_heartbeat_scheduler
+
+        llc_scheduler = get_heartbeat_scheduler()
+        await llc_scheduler.start()
+        app.state.heartbeat_scheduler = llc_scheduler
+        logger.info("Heartbeat: LLC HeartbeatScheduler started")
+        return
+    except Exception as llc_error:
+        logger.warning("LLC heartbeat scheduler unavailable, falling back to legacy: %s", llc_error)
+
+    logger.info("Heartbeat: Starting legacy heartbeat scheduler...")
     try:
         from api.heartbeat import configure_scheduler
         from services.heartbeat_scheduler import HeartbeatScheduler
         from user_management.database import get_async_session_factory
 
-        scheduler = HeartbeatScheduler(get_async_session_factory())
+        session_factory = get_async_session_factory()
+        scheduler = HeartbeatScheduler(session_factory)
         await scheduler.start()
         app.state.heartbeat_scheduler = scheduler
         configure_scheduler(scheduler)
-        logger.info("Heartbeat: Scheduler started")
+
+        # Wire budget policy enforcement — must run after session factory is ready (GH#6470)
+        from services.budget_policy import configure_session_factory as _cfg_bp
+        from services.budget_policy import seed_default_policies
+
+        _cfg_bp(session_factory)
+        try:
+            await seed_default_policies()
+        except Exception as bp_seed_err:
+            logger.warning("Budget policy seed failed (non-critical): %s", bp_seed_err)
+
+        logger.info("Heartbeat: Legacy scheduler started")
     except Exception as hb_error:
         logger.warning("Heartbeat scheduler initialization failed: %s", hb_error)
         app.state.heartbeat_scheduler = None
+
+
+async def _start_connector_scheduler() -> None:
+    """Start the Redis-backed connector scheduler leader-election loop (NON-CRITICAL).
+
+    Issue #6556: Kicks off the per-worker background task that competes for the
+    connector-scheduler leader lock.  Whichever worker wins runs the asyncio sync
+    tasks; all workers answer is_running() consistently via Redis.
+    """
+    logger.info("Connector scheduler: starting leader-election loop...")
+    try:
+        from knowledge.connectors.scheduler import get_connector_scheduler
+
+        scheduler = get_connector_scheduler()
+        await scheduler.begin_leader_election()
+        logger.info("Connector scheduler: leader-election loop started")
+    except Exception as cs_error:
+        logger.warning("Connector scheduler initialization failed: %s", cs_error)
 
 
 async def _init_trigger_service(app: FastAPI) -> None:
@@ -905,8 +1035,13 @@ async def _init_slm_client():
         # Issue #768: Get SLM URL from SSOT config, fallback to env var
         from autobot_shared.ssot_config import get_config
 
-        slm_url = os.getenv("SLM_URL") or get_config().slm_url
-        slm_token = os.getenv("SLM_AUTH_TOKEN")
+        slm_url = get_config().slm_url
+        slm_token = get_config().slm_auth_token
+        if not slm_token:
+            logger.warning(
+                "SLM_AUTH_TOKEN is unset — SLM WebSocket will connect without auth header. "
+                "Set SERVICE_AUTH_ENFORCEMENT_MODE=false or configure the token to avoid 403 errors."
+            )
 
         await init_slm_client(slm_url, slm_token)
         logger.info("✅ [ 89%] SLM Client: Connected to SLM server at %s", slm_url)
@@ -977,6 +1112,17 @@ async def _init_background_llm_sync(app: FastAPI):
             ai_stack_health = await ai_stack_client.health_check()
             if ai_stack_health.get("status") == "healthy":
                 logger.info("✅ [ 90%] AI Stack: AI Stack fully available")
+                try:
+                    agents_info = await ai_stack_client.list_available_agents()
+                    if agents_info.get("agents"):
+                        app.state.ai_stack_agents = agents_info
+                        logger.info(
+                            "✅ [ 90%] AI Stack: %d agents registered from %s",
+                            len(agents_info["agents"]),
+                            agents_info.get("source", "ai_stack"),
+                        )
+                except Exception as agents_exc:
+                    logger.warning("AI Stack agent listing failed: %s", agents_exc)
             else:
                 logger.warning(
                     "AI Stack API unreachable at %s — agent routing disabled",
@@ -1143,6 +1289,24 @@ async def _init_voice_interface(app: FastAPI) -> None:
         app.state.voice_interface = None
 
 
+async def _init_llm_key_rotation_scheduler(app: FastAPI) -> None:
+    """Start LLM API key expiry rotation scheduler (issue #6590).
+
+    NON-CRITICAL: key expiry rotation not required for request handling.
+    """
+    logger.info("[100%%] LLM Key Rotation: Initializing...")
+    try:
+        from services.llm_key_rotation_scheduler import get_llm_key_rotation_scheduler
+
+        scheduler = get_llm_key_rotation_scheduler()
+        await scheduler.start()
+        app.state.llm_key_rotation_scheduler = scheduler
+        logger.info("[100%%] LLM Key Rotation: Scheduler started")
+    except Exception as e:
+        logger.warning("LLM key rotation scheduler initialization failed (non-critical): %s", e)
+        app.state.llm_key_rotation_scheduler = None
+
+
 async def _init_backup_scheduler(app: FastAPI) -> None:
     """Start the knowledge-base backup scheduler (issue #3294).
 
@@ -1277,6 +1441,82 @@ async def _start_community_clustering_loop(app: FastAPI) -> None:
     )
 
 
+async def _init_liveness_monitor(app: FastAPI) -> None:
+    """Start LLC LivenessMonitor to recover stuck heartbeat runs (GH#9028)."""
+    logger.info("LLC LivenessMonitor: Starting...")
+    try:
+        from llc.scheduler.liveness_monitor import LivenessMonitor
+
+        monitor = LivenessMonitor()
+        monitor.start()
+        app.state.llc_liveness_monitor = monitor
+        logger.info("LLC LivenessMonitor: Started")
+    except Exception as exc:
+        logger.warning("LLC liveness monitor startup failed (non-fatal): %s", exc)
+        app.state.llc_liveness_monitor = None
+
+
+async def _init_budget_watchdog(app: FastAPI) -> None:
+    """Start LLC BudgetWatchdog for per-agent budget enforcement (GH#9029)."""
+    logger.info("LLC BudgetWatchdog: Starting...")
+    try:
+        from llc.scheduler.budget_watchdog import BudgetWatchdog
+
+        watchdog = BudgetWatchdog()
+        watchdog.start()
+        app.state.llc_budget_watchdog = watchdog
+        logger.info("LLC BudgetWatchdog: Started")
+    except Exception as exc:
+        logger.warning("LLC budget watchdog startup failed (non-fatal): %s", exc)
+        app.state.llc_budget_watchdog = None
+
+
+async def _recover_agent_sessions(app: FastAPI) -> None:
+    """Re-queue runs that were interrupted by a previous server crash (GH#9026)."""
+    logger.info("LLC SessionCheckpointer: recovering incomplete runs...")
+    try:
+        from llc.scheduler.session_checkpointer import recover_incomplete_runs
+
+        await recover_incomplete_runs()
+        logger.info("LLC SessionCheckpointer: recovery complete")
+    except Exception as exc:
+        logger.warning("LLC session recovery failed (non-fatal): %s", exc)
+
+
+async def _init_session_checkpointer(app: FastAPI) -> None:
+    """Start LLC SessionCheckpointer for periodic session state persistence (GH#9026)."""
+    logger.info("LLC SessionCheckpointer: Starting...")
+    try:
+        from llc.scheduler.session_checkpointer import SessionCheckpointer
+
+        checkpointer = SessionCheckpointer()
+        checkpointer.start()
+        app.state.llc_session_checkpointer = checkpointer
+        logger.info("LLC SessionCheckpointer: Started")
+    except Exception as exc:
+        logger.warning("LLC session checkpointer startup failed (non-fatal): %s", exc)
+        app.state.llc_session_checkpointer = None
+
+
+async def _start_llc_notification_router(app: FastAPI) -> None:
+    """Start the LLC notification router background task (GH#8255).
+
+    Subscribes to llc:* Redis pub/sub patterns and fans out events to WebSocket
+    clients filtered by company_id. NON-CRITICAL: failure logs a warning but
+    does not block startup.
+    """
+    try:
+        from llc.notifications.router import get_llc_notification_router
+
+        router = get_llc_notification_router()
+        await router.start()
+        app.state.llc_notification_router = router
+        logger.info("✅ LLC notification router started")
+    except Exception as exc:
+        logger.warning("LLC notification router failed to start (non-critical): %s", exc)
+        app.state.llc_notification_router = None
+
+
 async def _init_web_researcher(app: FastAPI) -> None:
     """Initialize the WebResearcher singleton so web browsing is available in chat.
 
@@ -1314,8 +1554,8 @@ async def _init_plugin_manager(app: FastAPI) -> None:
     try:
         from pathlib import Path
 
+        from autobot_shared.plugin_sdk import PluginManager
         from autobot_shared.ssot_config import config as ssot_config
-        from plugin_sdk.plugin_manager import PluginManager
 
         plugins_root = ssot_config.path.plugins_path
         plugin_dirs = [
@@ -1357,7 +1597,7 @@ async def initialize_background_services(app: FastAPI):
         # self-health endpoint (circular deadlock). Phase 2 re-enabled (#970).
         await _init_knowledge_base(app)
         await _init_npu_worker_websocket()
-        await _warmup_npu_connection()
+        await _warmup_npu_connection(app)
         await _init_memory_graph(app)
         await _init_slm_client()
         await _init_background_llm_sync(app)
@@ -1365,7 +1605,14 @@ async def initialize_background_services(app: FastAPI):
         await _start_doc_sync_queue_worker(app)
         await _auto_index_documentation()
         await _init_log_forwarding()
+        await _recover_agent_sessions(app)
         await _init_heartbeat_scheduler(app)
+        await _init_llc_routine_scheduler(app)
+        await _init_liveness_monitor(app)
+        await _init_budget_watchdog(app)
+        await _init_session_checkpointer(app)
+        await _init_llc_outbound_sync(app)
+        await _start_connector_scheduler()
         await _init_trigger_service(app)
         await _init_slm_reconciler(app)
         await _init_metrics_collection()
@@ -1380,13 +1627,21 @@ async def initialize_background_services(app: FastAPI):
         await _init_web_researcher(app)
         await _init_plugin_manager(app)
         await _init_backup_scheduler(app)
+        await _init_llm_key_rotation_scheduler(app)
         await _start_autonomous_loop(app)
         await _start_community_clustering_loop(app)
+        await _start_llc_notification_router(app)
 
         await update_app_state_multi(
             initialization_status="ready",
             initialization_message="All services initialized",
         )
+        # GH#8947: Successful startup — remove the Phase 1 error file if it exists
+        # from a previous failed boot attempt.
+        try:
+            STARTUP_ERROR_FILE.unlink(missing_ok=True)
+        except Exception:
+            pass
         logger.info("✅ [100%] PHASE 2 COMPLETE: All background services initialized")
 
     except Exception as e:
@@ -1412,6 +1667,27 @@ async def cleanup_services(app: FastAPI):
         if hasattr(app.state, "trigger_service") and app.state.trigger_service:
             await app.state.trigger_service.stop()
             logger.info("Trigger service stopped")
+
+        # Issue #6556: Stop connector scheduler local tasks
+        try:
+            from knowledge.connectors.scheduler import get_connector_scheduler
+
+            await get_connector_scheduler().stop_all()
+            logger.info("Connector scheduler stopped")
+        except Exception as _cs_err:
+            logger.warning("Connector scheduler shutdown failed: %s", _cs_err)
+
+        # Issue #8391: Stop VectorWriteBuffer (flushes pending writes).
+        kb = getattr(app.state, "knowledge_base", None)
+        if kb is not None:
+            write_buffer = getattr(kb, "_write_buffer", None)
+            if write_buffer is not None:
+                await write_buffer.stop()
+
+        # Issue #8392: Stop CollectionTierManager reaper.
+        tier_manager = getattr(app.state, "tier_manager", None)
+        if tier_manager is not None:
+            await tier_manager.stop()
 
         # Issue #165: Stop documentation watcher
         try:
@@ -1453,10 +1729,57 @@ async def cleanup_services(app: FastAPI):
         # SLM server manages its own reconciler lifecycle
         pass  # SLM reconciler now in slm-server
 
+        # GH#9028: Stop LLC liveness monitor
+        if hasattr(app.state, "llc_liveness_monitor") and app.state.llc_liveness_monitor:
+            app.state.llc_liveness_monitor.stop()
+            logger.info("✅ LLC liveness monitor stopped")
+        # GH#9029: Stop LLC budget watchdog
+        if hasattr(app.state, "llc_budget_watchdog") and app.state.llc_budget_watchdog:
+            app.state.llc_budget_watchdog.stop()
+            logger.info("✅ LLC budget watchdog stopped")
+        # GH#9026: Stop LLC session checkpointer
+        if hasattr(app.state, "llc_session_checkpointer") and app.state.llc_session_checkpointer:
+            app.state.llc_session_checkpointer.stop()
+            logger.info("✅ LLC session checkpointer stopped")
+
+        # GH#8257: Stop LLC outbound sync service
+        if hasattr(app.state, "llc_outbound_sync") and app.state.llc_outbound_sync:
+            await app.state.llc_outbound_sync.stop()
+            logger.info("✅ LLC outbound sync service stopped")
+        # GH#8255: Stop LLC notification router
+        if hasattr(app.state, "llc_notification_router") and app.state.llc_notification_router:
+            await app.state.llc_notification_router.stop()
+            logger.info("✅ LLC notification router stopped")
+
+        # GH#8651: Drain HandoffService background brief-generation tasks
+        try:
+            from llc.api.work_items import _get_handoff_service
+
+            handoff_svc = _get_handoff_service()
+            await handoff_svc.shutdown()
+            logger.info("✅ LLC HandoffService background tasks drained")
+        except Exception as _hs_err:
+            logger.warning("HandoffService drain failed: %s", _hs_err)
+
+        # GH#8229: Stop LLC routine scheduler
+        if hasattr(app.state, "llc_routine_scheduler") and app.state.llc_routine_scheduler:
+            await app.state.llc_routine_scheduler.shutdown()
+            logger.info("✅ LLC routine scheduler stopped")
+
+        # GH#8225: Stop LLC heartbeat scheduler before other schedulers
+        if hasattr(app.state, "heartbeat_scheduler") and app.state.heartbeat_scheduler:
+            await app.state.heartbeat_scheduler.stop()
+            logger.info("✅ LLC heartbeat scheduler stopped")
+
         # Issue #3294: Stop backup scheduler
         if hasattr(app.state, "backup_scheduler") and app.state.backup_scheduler:
             await app.state.backup_scheduler.stop()
             logger.info("✅ Backup scheduler stopped")
+
+        # Issue #6590: Stop LLM key rotation scheduler
+        if hasattr(app.state, "llm_key_rotation_scheduler") and app.state.llm_key_rotation_scheduler:
+            await app.state.llm_key_rotation_scheduler.stop()
+            logger.info("✅ LLM key rotation scheduler stopped")
 
         # Issue #4946: Cancel community clustering background task
         task = getattr(app.state, "community_cluster_task", None)
@@ -1492,6 +1815,17 @@ async def cleanup_services(app: FastAPI):
             logger.info("✅ Isolated MCP bridge workers shutdown")
         except Exception as mcp_err:
             logger.warning("Isolated MCP bridge shutdown failed: %s", mcp_err)
+
+        # GH#9012: Flush LangFuse / LangSmith observer buffers before exit
+        try:
+            from llm_shared.observability.registry import _registry
+
+            for _obs in _registry:
+                if callable(getattr(_obs, "flush", None)):
+                    _obs.flush()
+            logger.info("✅ LLM observer buffers flushed")
+        except Exception as obs_err:
+            logger.warning("LLM observer flush failed: %s", obs_err)
 
         # Redis connections automatically managed by get_redis_client()
         logger.info("✅ Cleanup completed successfully")

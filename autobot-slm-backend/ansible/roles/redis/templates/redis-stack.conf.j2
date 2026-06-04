@@ -37,6 +37,30 @@ tcp-backlog 511
 timeout {{ redis_timeout }}
 tcp-keepalive {{ redis_tcp_keepalive }}
 
+# TLS Configuration (Issue #725: mTLS support, #6955: wire TLS vars into template)
+# Mirrors the #6677 (roles/backend) / #6701 (roles/redis/redis.conf.j2) stat-and-
+# conditional pattern. TLS directives only emit when redis_tls_enabled is true
+# AND all three certs exist on the target host (registered by
+# _shared/tasks/stat_tls_certs.yml in roles/redis/tasks/main.yml). Without the
+# stat guard, deployments where distribute-tls-certs.yml hasn't run crash
+# redis-stack-server at boot with "Cannot read CA certificate". When TLS is
+# disabled (default), this block emits nothing -- no regression vs. pre-#6955.
+{% if redis_tls_enabled | default(false) | bool
+      and (tls_server_cert.stat.exists | default(false))
+      and (tls_server_key.stat.exists | default(false))
+      and (tls_ca_cert.stat.exists | default(false)) %}
+tls-port {{ redis_tls_port }}
+tls-cert-file {{ redis_tls_cert_dir }}/server-cert.pem
+tls-key-file {{ redis_tls_cert_dir }}/server-key.pem
+tls-ca-cert-file {{ redis_tls_cert_dir }}/ca-cert.pem
+tls-auth-clients {{ redis_tls_auth_clients | default('optional') }}
+{% elif redis_tls_enabled | default(false) | bool %}
+# TLS intentionally unset (#6955): one or more of server-cert.pem,
+# server-key.pem, ca-cert.pem is missing at deploy time. Run
+# distribute-tls-certs.yml to provision and re-deploy this role to
+# pick them up. Plain-port redis-stack remains available for non-TLS clients.
+{% endif %}
+
 # General
 daemonize no
 pidfile /var/run/redis/redis-stack-server.pid

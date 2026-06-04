@@ -11,11 +11,10 @@ when the main asyncio thread pool is saturated by indexing operations.
 
 import asyncio
 import json
-import logging
 import os
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Set
 
 import aiofiles
 from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket
@@ -33,13 +32,14 @@ from api.schemas_code import (
 from api.schemas_common import AgentMessageResponse
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.path_validator import validate_relative_path
 from constants.path_constants import PATH
 from constants.threshold_constants import TimingConstants
 from type_defs.common import Metadata
 from utils.io_executor import run_in_log_executor
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(tags=["logs"])
 
@@ -110,7 +110,7 @@ def _parse_docker_log_line_for_unified(line: str, service: str) -> Metadata:
     pass  # Replaced at module load
 
 
-def _parse_file_content_lines(content: str, file_name: str, level: Optional[str]) -> List[Metadata]:
+def _parse_file_content_lines(content: str, file_name: str, level: str | None) -> List[Metadata]:
     """Parse file log content lines with optional level filter (Issue #315: extracted).
 
     Args:
@@ -184,7 +184,7 @@ async def _read_log_lines_from_file(file_path: Path, lines: int, offset: int, ta
             return all_lines[start_idx:end_idx], len(all_lines)
 
 
-async def _collect_file_logs(source_filter: Set[str], level: Optional[str]) -> List[Metadata]:
+async def _collect_file_logs(source_filter: Set[str], level: str | None) -> List[Metadata]:
     """Collect logs from file sources (Issue #336 - extracted helper).
 
     Issue #370: Optimized to read files in parallel using asyncio.gather().
@@ -230,7 +230,7 @@ async def _collect_file_logs(source_filter: Set[str], level: Optional[str]) -> L
     return logs
 
 
-async def _get_container_output(container_name: str, service: str) -> Optional[bytes]:
+async def _get_container_output(container_name: str, service: str) -> bytes | None:
     """Get stdout from a Docker container (Issue #315 - extracted helper)."""
     try:
         process = await asyncio.create_subprocess_exec(
@@ -252,7 +252,7 @@ async def _get_container_output(container_name: str, service: str) -> Optional[b
         return None
 
 
-def _parse_container_log_lines(stdout: bytes, service: str, level: Optional[str]) -> List[Metadata]:
+def _parse_container_log_lines(stdout: bytes, service: str, level: str | None) -> List[Metadata]:
     """Parse Docker container log lines (Issue #315 - extracted helper)."""
     logs = []
     for line in stdout.decode().split("\n"):
@@ -266,7 +266,7 @@ def _parse_container_log_lines(stdout: bytes, service: str, level: Optional[str]
     return logs
 
 
-async def _collect_container_logs(source_filter: Set[str], level: Optional[str]) -> List[Metadata]:
+async def _collect_container_logs(source_filter: Set[str], level: str | None) -> List[Metadata]:
     """Collect logs from Docker containers (Issue #315 - refactored).
 
     Issue #370: Optimized to fetch container logs in parallel using asyncio.gather().
@@ -340,7 +340,7 @@ async def _get_file_log_sources() -> List[Metadata]:
     return [r for r in results if isinstance(r, dict)]
 
 
-async def _check_container_status(service: str, container_name: str) -> Optional[Metadata]:
+async def _check_container_status(service: str, container_name: str) -> Metadata | None:
     """Check status of a single Docker container (Issue #315 - extracted helper)."""
     try:
         process = await asyncio.create_subprocess_exec(
@@ -413,7 +413,7 @@ async def get_log_sources(admin_check: bool = Depends(check_admin_permission)):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-async def _get_most_recent_log_file(log_dir: str) -> Optional[str]:
+async def _get_most_recent_log_file(log_dir: str) -> str | None:
     """Get the most recently modified log file (Issue #315 - extracted helper)."""
     log_dir_exists = await run_in_log_executor(os.path.exists, log_dir)
     if not log_dir_exists:
@@ -555,7 +555,7 @@ async def read_log(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-async def _execute_docker_logs_command(container_name: str, lines: int, tail: bool, since: Optional[str]) -> bytes:
+async def _execute_docker_logs_command(container_name: str, lines: int, tail: bool, since: str | None) -> bytes:
     """Helper for read_container_logs. Ref: #1088.
 
     Builds and runs the docker logs command, returning raw stdout bytes.
@@ -630,7 +630,7 @@ async def read_container_logs(
     service: str,
     admin_check: bool = Depends(check_admin_permission),
     lines: int = Query(100, ge=1, le=10000, description="Number of lines to read"),
-    since: Optional[str] = Query(None, description="Duration like '1h', '30m', '1d'"),
+    since: str | None = Query(None, description="Duration like '1h', '30m', '1d'"),
     tail: bool = Query(True, description="Read from end of logs"),
 ):
     """Read logs from a Docker container.
@@ -732,8 +732,8 @@ def parse_docker_log_line(line: str, service: str) -> Metadata:
 async def get_unified_logs(
     admin_check: bool = Depends(check_admin_permission),
     lines: int = Query(100, ge=1, le=1000, description="Total number of lines to return"),
-    level: Optional[str] = Query(None, description="Filter by log level"),
-    sources: Optional[str] = Query(None, description="Comma-separated list of sources"),
+    level: str | None = Query(None, description="Filter by log level"),
+    sources: str | None = Query(None, description="Comma-separated list of sources"),
 ):
     """Get unified logs from all sources, merged by timestamp.
 
@@ -767,7 +767,7 @@ async def get_unified_logs(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-def _parse_file_timestamp(line: str) -> Optional[str]:
+def _parse_file_timestamp(line: str) -> str | None:
     """Extract timestamp from file log line (Issue #315 - extracted helper)."""
     # Format: 2024-01-01 12:00:00,000 [logger] LEVEL: message
     parts = line.split(" ", 3)
@@ -937,7 +937,7 @@ async def _search_single_log_file(
 async def search_logs(
     admin_check: bool = Depends(check_admin_permission),
     query: str = Query(..., description="Search query"),
-    filename: Optional[str] = Query(None, description="Specific file to search"),
+    filename: str | None = Query(None, description="Specific file to search"),
     case_sensitive: bool = Query(False, description="Case sensitive search"),
     max_results: int = Query(100, description="Maximum results"),
 ):

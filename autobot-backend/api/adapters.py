@@ -8,24 +8,31 @@ Issue #1403: Provides environment test, model listing, and adapter
 status endpoints for the formal adapter registry.
 """
 
-import logging
-from typing import Optional
+import json
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
+from api.schemas_agent import (
+    AdapterListResponse,
+    AdapterModelsResponse,
+    AdapterOverrideClearResponse,
+    AdapterOverrideSetResponse,
+    AdapterTestResponse,
+)
 from api.schemas_common import DataResponse
 from api.system_health import ComponentHealth, register_health_probe
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from llm_interface_pkg.adapters.registry import get_adapter_registry
+from autobot_shared.logging_manager import get_logger
+from llm_shared.adapters.registry import get_adapter_registry
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter()
 
 
-@router.get("/", response_model=DataResponse)
+@router.get("/", response_model=DataResponse[AdapterListResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_adapters",
@@ -43,7 +50,7 @@ async def list_adapters(
     )
 
 
-@router.get("/{adapter_type}/test", response_model=DataResponse)
+@router.get("/{adapter_type}/test", response_model=DataResponse[AdapterTestResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="test_adapter_environment",
@@ -67,7 +74,7 @@ async def test_adapter_environment(
     return JSONResponse(status_code=200, content=result.to_dict())
 
 
-@router.get("/{adapter_type}/models", response_model=DataResponse)
+@router.get("/{adapter_type}/models", response_model=DataResponse[AdapterModelsResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_adapter_models",
@@ -98,9 +105,40 @@ async def list_adapter_models(
     )
 
 
+@router.post("/ollama/pull")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="ollama_pull_model",
+    error_code_prefix="ADAPTERS",
+)
+async def ollama_pull_model(
+    body: dict,
+    current_user: dict = Depends(get_current_user),
+):
+    """Pull an Ollama model with streaming progress events (#8344).
+
+    Request body: {"model": "llama3.2"}
+    Response: newline-delimited JSON stream of Ollama progress events.
+    """
+    model = body.get("model")
+    if not model:
+        raise HTTPException(status_code=400, detail="model is required")
+
+    registry = get_adapter_registry()
+    adapter = registry.get("ollama")
+    if not adapter:
+        raise HTTPException(status_code=404, detail="Ollama adapter not registered")
+
+    async def _stream():
+        async for event in adapter.pull_model(model):
+            yield json.dumps(event) + "\n"
+
+    return StreamingResponse(_stream(), media_type="application/x-ndjson")
+
+
 @register_health_probe("adapters")
 async def probe_adapters(
-    request: Optional[Request] = None,
+    request: Request | None = None,
 ) -> ComponentHealth:
     """Issue #3333: probe registration for adapters module."""
     try:
@@ -121,25 +159,7 @@ async def probe_adapters(
         )
 
 
-@router.get("/health", response_model=DataResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="test_all_adapters",
-    error_code_prefix="ADAPTERS",
-)
-async def test_all_adapters(
-    current_user: dict = Depends(get_current_user),
-):
-    """Test all registered adapters in parallel (#1403)."""
-    registry = get_adapter_registry()
-    results = await registry.test_all()
-    return JSONResponse(
-        status_code=200,
-        content={name: result.to_dict() for name, result in results.items()},
-    )
-
-
-@router.post("/agent/{agent_id}/override", response_model=DataResponse)
+@router.post("/agent/{agent_id}/override", response_model=DataResponse[AdapterOverrideSetResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="set_agent_adapter_override",
@@ -172,7 +192,7 @@ async def set_agent_adapter_override(
     )
 
 
-@router.delete("/agent/{agent_id}/override", response_model=DataResponse)
+@router.delete("/agent/{agent_id}/override", response_model=DataResponse[AdapterOverrideClearResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="clear_agent_adapter_override",

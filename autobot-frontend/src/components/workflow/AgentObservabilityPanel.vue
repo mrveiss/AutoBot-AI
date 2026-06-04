@@ -2,23 +2,30 @@
   <div class="agent-observability-panel">
     <div class="panel-header">
       <h3>
-        <i class="fas fa-users-cog"></i>
+        <Icon name="users-cog" />
         {{ $t('workflow.agentObservability.title') }}
       </h3>
-      <button class="btn-refresh-sm" @click="$emit('refresh')" :disabled="loading">
-        <i class="fas fa-sync-alt" :class="{ 'fa-spin': loading }"></i>
+      <button
+        class="btn-refresh-sm"
+        @click="$emit('refresh')"
+        :disabled="loading"
+        :aria-label="$t('common.refresh')"
+        :title="$t('common.refresh')"
+        type="button"
+      >
+        <Icon name="sync-alt" :spin="loading" />
       </button>
     </div>
 
     <!-- Loading -->
     <div v-if="loading && agentList.length === 0" class="loading-state">
-      <i class="fas fa-spinner fa-spin"></i>
+      <Icon name="spinner" :spin="true" />
       <span>{{ $t('workflow.agentObservability.loading') }}</span>
     </div>
 
     <!-- Empty -->
     <div v-else-if="agentList.length === 0" class="empty-state">
-      <i class="fas fa-robot"></i>
+      <Icon name="robot" />
       <h4>{{ $t('workflow.agentObservability.noAgents') }}</h4>
       <p>{{ $t('workflow.agentObservability.noAgentsDescription') }}</p>
     </div>
@@ -33,7 +40,7 @@
         <div class="agent-header">
           <div class="agent-identity">
             <div class="agent-avatar" :class="getReliabilityClass(agent.reliabilityScore)">
-              <i class="fas fa-robot"></i>
+              <Icon name="robot" />
             </div>
             <div class="agent-name-block">
               <span class="agent-name">{{ agent.name }}</span>
@@ -95,6 +102,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import type { AgentPerformance, AgentCapability } from '@/composables/useWorkflowBuilder';
+import Icon from '@/components/ui/Icon.vue'
 
 const props = defineProps<{
   agentPerformance: Record<string, AgentPerformance>;

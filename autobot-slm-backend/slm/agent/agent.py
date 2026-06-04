@@ -15,13 +15,13 @@ import asyncio
 import json
 import logging
 import os
+import platform
 import signal
 import socket
 import sqlite3
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
 
 import aiohttp
 from aiohttp import web
@@ -109,8 +109,8 @@ class SLMAgent:
         admin_url: str = DEFAULT_ADMIN_URL,
         heartbeat_interval: int = DEFAULT_HEARTBEAT_INTERVAL,
         buffer_db: str = DEFAULT_BUFFER_DB,
-        services: Optional[list] = None,
-        node_id: Optional[str] = None,
+        services: list | None = None,
+        node_id: str | None = None,
     ):
         """Initialize agent."""
         self.admin_url = admin_url.rstrip("/")
@@ -122,7 +122,7 @@ class SLMAgent:
         # Issue #741: Initialize version manager
         self.version_manager = get_agent_version()
         self._pending_update = False
-        self._latest_version: Optional[str] = None
+        self._latest_version: str | None = None
 
         self.collector = HealthCollector(services=services or [])
         self._init_buffer_db()
@@ -130,6 +130,10 @@ class SLMAgent:
         # Role detection (Issue #779)
         self.role_detector = RoleDetector()
         self._role_definitions_loaded = False
+
+        # Single session reused across all requests — avoids per-request
+        # connection pool + SSL context allocation (#9086)
+        self._session: aiohttp.ClientSession | None = None
 
     def _init_buffer_db(self):
         """Initialize SQLite buffer database."""
@@ -180,20 +184,20 @@ class SLMAgent:
 
     async def _fetch_role_definitions(self) -> bool:
         """Fetch role definitions from SLM server (Issue #779)."""
+        assert self._session is not None
         try:
-            async with aiohttp.ClientSession() as session:
-                url = f"{self.admin_url}/api/roles/definitions"
-                async with session.get(
-                    url,
-                    timeout=aiohttp.ClientTimeout(total=10),
-                    ssl=False,
-                ) as response:
-                    if response.status == 200:
-                        definitions = await response.json()
-                        self.role_detector.load_definitions(definitions)
-                        self._role_definitions_loaded = True
-                        logger.info("Loaded %d role definitions", len(definitions))
-                        return True
+            url = f"{self.admin_url}/api/roles/definitions"
+            async with self._session.get(
+                url,
+                timeout=aiohttp.ClientTimeout(total=10),
+                ssl=False,
+            ) as response:
+                if response.status == 200:
+                    definitions = await response.json()
+                    self.role_detector.load_definitions(definitions)
+                    self._role_definitions_loaded = True
+                    logger.info("Loaded %d role definitions", len(definitions))
+                    return True
         except Exception as e:
             logger.debug("Failed to fetch role definitions: %s", e)
         return False
@@ -231,7 +235,7 @@ class SLMAgent:
         """
         return [{"port": p.port, "process": p.process, "pid": p.pid} for p in get_listening_ports()]
 
-    def _build_heartbeat_payload(self, health: dict, os_info: str, code_version: Optional[str]) -> dict:
+    def _build_heartbeat_payload(self, health: dict, os_info: str, code_version: str | None) -> dict:
         """
         Build the complete heartbeat payload.
 
@@ -273,28 +277,28 @@ class SLMAgent:
             True if heartbeat was accepted, False otherwise.
         Issue #620.
         """
+        assert self._session is not None
         try:
-            async with aiohttp.ClientSession() as session:
-                url = f"{self.admin_url}/api/nodes/{self.node_id}/heartbeat"
-                async with session.post(
-                    url,
-                    json=payload,
-                    timeout=aiohttp.ClientTimeout(total=10),
-                    ssl=False,  # mTLS pending PKI setup (Issue #725)
-                ) as response:
-                    if response.status == 200:
-                        # Issue #741: Process heartbeat response
-                        response_data = await response.json()
-                        self._process_heartbeat_response(response_data)
-                        logger.debug("Heartbeat sent successfully")
-                        return True
-                    else:
-                        logger.warning(
-                            "Heartbeat rejected: %s %s",
-                            response.status,
-                            await response.text(),
-                        )
-                        return False
+            url = f"{self.admin_url}/api/nodes/{self.node_id}/heartbeat"
+            async with self._session.post(
+                url,
+                json=payload,
+                timeout=aiohttp.ClientTimeout(total=10),
+                ssl=False,  # mTLS pending PKI setup (Issue #725)
+            ) as response:
+                if response.status == 200:
+                    # Issue #741: Process heartbeat response
+                    response_data = await response.json()
+                    self._process_heartbeat_response(response_data)
+                    logger.debug("Heartbeat sent successfully")
+                    return True
+                else:
+                    logger.warning(
+                        "Heartbeat rejected: %s %s",
+                        response.status,
+                        await response.text(),
+                    )
+                    return False
         except aiohttp.ClientError as e:
             logger.warning("Failed to send heartbeat: %s", e)
             self.buffer_event("heartbeat", payload)
@@ -302,8 +306,6 @@ class SLMAgent:
 
     async def send_heartbeat(self) -> bool:
         """Send heartbeat with health data to admin."""
-        import platform
-
         # Fetch role definitions if not loaded (Issue #779)
         if not self._role_definitions_loaded:
             await self._fetch_role_definitions()
@@ -317,11 +319,12 @@ class SLMAgent:
 
     async def sync_buffered_events(self):
         """Sync buffered events to admin (#1106)."""
+        assert self._session is not None
         self._prune_old_events()
         conn = sqlite3.connect(self.buffer_db)
         try:
             cursor = conn.execute(
-                "SELECT id, event_type, data FROM event_buffer " "WHERE synced = 0 ORDER BY id LIMIT 100"
+                "SELECT id, event_type, data FROM event_buffer" " WHERE synced = 0 ORDER BY id LIMIT 100"
             )
             events = cursor.fetchall()
 
@@ -330,37 +333,36 @@ class SLMAgent:
 
             logger.info("Syncing %d buffered events", len(events))
 
-            async with aiohttp.ClientSession() as session:
-                url = f"{self.admin_url}/api/events/sync"
-                payload = [
-                    {
-                        "id": e[0],
-                        "type": e[1],
-                        "data": json.loads(e[2]),
-                        "node_id": self.node_id,
-                    }
-                    for e in events
-                ]
-                async with session.post(
-                    url,
-                    json=payload,
-                    timeout=aiohttp.ClientTimeout(total=30),
-                    ssl=False,
-                ) as response:
-                    if response.status == 200:
-                        ids = [e[0] for e in events]
-                        placeholders = ",".join("?" * len(ids))
-                        query = "UPDATE event_buffer SET synced = 1 " f"WHERE id IN ({placeholders})"
-                        conn.execute(query, ids)
-                        conn.commit()
-                        logger.info("Synced %d events", len(events))
-                    else:
-                        body = await response.text()
-                        logger.warning(
-                            "Event sync rejected: %s %s",
-                            response.status,
-                            body[:200],
-                        )
+            url = f"{self.admin_url}/api/events/sync"
+            payload = [
+                {
+                    "id": e[0],
+                    "type": e[1],
+                    "data": json.loads(e[2]),
+                    "node_id": self.node_id,
+                }
+                for e in events
+            ]
+            async with self._session.post(
+                url,
+                json=payload,
+                timeout=aiohttp.ClientTimeout(total=30),
+                ssl=False,
+            ) as response:
+                if response.status == 200:
+                    ids = [e[0] for e in events]
+                    placeholders = ",".join("?" * len(ids))
+                    query = "UPDATE event_buffer SET synced = 1 " f"WHERE id IN ({placeholders})"
+                    conn.execute(query, ids)
+                    conn.commit()
+                    logger.info("Synced %d events", len(events))
+                else:
+                    body = await response.text()
+                    logger.warning(
+                        "Event sync rejected: %s %s",
+                        response.status,
+                        body[:200],
+                    )
         except aiohttp.ClientError as e:
             logger.warning("Failed to sync events: %s", e)
         finally:
@@ -400,23 +402,29 @@ class SLMAgent:
         # Notify systemd that we're ready
         sd_notify("READY=1")
 
-        # Issue #741: Start notification server if enabled (code-source nodes)
-        if enable_notify_server:
-            await self.start_notify_server(notify_port)
+        # Single session for the lifetime of the agent (#9086)
+        async with aiohttp.ClientSession() as session:
+            self._session = session
 
-        while self.running:
-            # Send systemd watchdog notification (prevents timeout restart)
-            sd_notify("WATCHDOG=1")
+            # Issue #741: Start notification server if enabled (code-source nodes)
+            if enable_notify_server:
+                await self.start_notify_server(notify_port)
 
-            # Send heartbeat
-            success = await self.send_heartbeat()
+            while self.running:
+                # Send systemd watchdog notification (prevents timeout restart)
+                sd_notify("WATCHDOG=1")
 
-            # If connected, try to sync buffered events
-            if success:
-                await self.sync_buffered_events()
+                # Send heartbeat
+                success = await self.send_heartbeat()
 
-            # Wait for next heartbeat
-            await asyncio.sleep(self.heartbeat_interval)
+                # If connected, try to sync buffered events
+                if success:
+                    await self.sync_buffered_events()
+
+                # Wait for next heartbeat
+                await asyncio.sleep(self.heartbeat_interval)
+
+            self._session = None
 
         # Notify systemd we're stopping
         sd_notify("STOPPING=1")
@@ -499,31 +507,31 @@ class SLMAgent:
 
     async def _notify_code_change(self, commit: str) -> None:
         """Send immediate notification to SLM server about code change."""
+        assert self._session is not None
         try:
-            async with aiohttp.ClientSession() as session:
-                url = f"{self.admin_url}/api/code-sync/notify"
-                payload = {
-                    "node_id": self.node_id,
-                    "commit": commit,
-                    "is_code_source": True,
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
-                }
-                async with session.post(
-                    url,
-                    json=payload,
-                    timeout=aiohttp.ClientTimeout(total=10),
-                    ssl=False,
-                ) as response:
-                    if response.status == 200:
-                        logger.info(
-                            "SLM server notified of new code version: %s",
-                            commit[:12],
-                        )
-                    else:
-                        logger.warning(
-                            "Failed to notify SLM server: %s",
-                            response.status,
-                        )
+            url = f"{self.admin_url}/api/code-sync/notify"
+            payload = {
+                "node_id": self.node_id,
+                "commit": commit,
+                "is_code_source": True,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+            async with self._session.post(
+                url,
+                json=payload,
+                timeout=aiohttp.ClientTimeout(total=10),
+                ssl=False,
+            ) as response:
+                if response.status == 200:
+                    logger.info(
+                        "SLM server notified of new code version: %s",
+                        commit[:12],
+                    )
+                else:
+                    logger.warning(
+                        "Failed to notify SLM server: %s",
+                        response.status,
+                    )
         except Exception as e:
             logger.warning("Failed to notify SLM server: %s", e)
             # Event is already buffered, will sync on next heartbeat

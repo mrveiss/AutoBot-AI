@@ -7,10 +7,10 @@ Statistics and result aggregation functions for codebase analytics.
 Issue #2013: Decomposed from scanner.py god module.
 """
 
-import logging
 from datetime import datetime, timezone
 from typing import Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from utils.file_categorization import (
     FILE_CATEGORY_ARCHIVE,
     FILE_CATEGORY_ASSETS,
@@ -25,7 +25,7 @@ from utils.file_categorization import (
 
 from .types import FileAnalysisResult
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def _aggregate_stats_for_countable(stats: Dict, file_analysis: Dict, file_line_count: int) -> None:

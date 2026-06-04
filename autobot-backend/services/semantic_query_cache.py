@@ -25,17 +25,17 @@ Architecture:
 import asyncio
 import hashlib
 import json
-import logging
 import time
 import uuid
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.ssot_config import config
 from utils.async_initializable import AsyncInitializable
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -95,8 +95,8 @@ class SemanticQueryCache(AsyncInitializable):
 
     def __init__(
         self,
-        cache_config: Optional[SemanticCacheConfig] = None,
-    ):
+        cache_config: SemanticCacheConfig | None = None,
+    ) -> None:
         super().__init__(component_name="semantic_query_cache")
         self._config = cache_config or SemanticCacheConfig()
         self._collection = None
@@ -144,7 +144,7 @@ class SemanticQueryCache(AsyncInitializable):
     # Lookup
     # ------------------------------------------------------------------
 
-    def _evaluate_similarity(self, results: Dict, query: str) -> Optional[tuple]:
+    def _evaluate_similarity(self, results: Dict, query: str) -> tuple | None:
         """Evaluate ChromaDB query result for similarity match. Ref: #1372.
 
         Returns:
@@ -173,7 +173,7 @@ class SemanticQueryCache(AsyncInitializable):
 
     async def _resolve_cache_hit(
         self, similarity: float, meta: Dict, entry_id: str, query: str
-    ) -> Optional[SemanticCacheEntry]:
+    ) -> SemanticCacheEntry | None:
         """Fetch Redis payload and build cache entry. Ref: #1372."""
         response_key = meta.get("response_key", "")
         if not response_key:
@@ -204,8 +204,8 @@ class SemanticQueryCache(AsyncInitializable):
     async def lookup(
         self,
         query: str,
-        embedding: Optional[List[float]] = None,
-    ) -> Optional[SemanticCacheEntry]:
+        embedding: List[float] | None = None,
+    ) -> SemanticCacheEntry | None:
         """Search for a semantically similar cached query.
 
         Args:
@@ -251,7 +251,7 @@ class SemanticQueryCache(AsyncInitializable):
         response_text: str,
         model: str,
         embedding: List[float],
-        metadata: Optional[Dict[str, Any]],
+        metadata: Dict[str, Any] | None,
     ) -> bool:
         """Write entry to Redis + ChromaDB. Ref: #1372."""
         entry_id = str(uuid.uuid4())
@@ -289,8 +289,8 @@ class SemanticQueryCache(AsyncInitializable):
         query: str,
         response_text: str,
         model: str,
-        embedding: Optional[List[float]] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        embedding: List[float] | None = None,
+        metadata: Dict[str, Any] | None = None,
     ) -> bool:
         """Cache a query-response pair for future semantic matching.
 
@@ -328,7 +328,7 @@ class SemanticQueryCache(AsyncInitializable):
     # Redis helpers
     # ------------------------------------------------------------------
 
-    async def _fetch_response(self, key: str) -> Optional[Dict]:
+    async def _fetch_response(self, key: str) -> Dict | None:
         """Fetch cached response payload from Redis."""
         try:
             client = await get_async_redis_client(database=_REDIS_DATABASE)
@@ -411,7 +411,7 @@ class SemanticQueryCache(AsyncInitializable):
     # ------------------------------------------------------------------
 
     @staticmethod
-    async def _embed(text: str) -> Optional[List[float]]:
+    async def _embed(text: str) -> List[float] | None:
         """Generate embedding for a query string."""
         try:
             from knowledge.facts import _generate_embedding_with_npu_fallback
@@ -483,10 +483,10 @@ class SemanticQueryCache(AsyncInitializable):
 
     def update_config(
         self,
-        similarity_threshold: Optional[float] = None,
-        max_collection_size: Optional[int] = None,
-        response_ttl: Optional[int] = None,
-        enabled: Optional[bool] = None,
+        similarity_threshold: float | None = None,
+        max_collection_size: int | None = None,
+        response_ttl: int | None = None,
+        enabled: bool | None = None,
     ) -> Dict[str, Any]:
         """Update cache configuration at runtime."""
         if similarity_threshold is not None:
@@ -508,7 +508,7 @@ class SemanticQueryCache(AsyncInitializable):
 # Global singleton
 # ---------------------------------------------------------------------------
 
-_instance: Optional[SemanticQueryCache] = None
+_instance: SemanticQueryCache | None = None
 _instance_lock = asyncio.Lock()
 
 

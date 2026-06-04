@@ -123,7 +123,7 @@
             dest: "{{ decommission_backup_path }}/manifest.yml"
             content: |
               hostname: {{ ansible_facts['hostname'] }}
-              ip_address: {{ ansible_facts['default_ipv4'].address }}
+              ip_address: {{ ansible_facts['default_ipv4'].address | default(ansible_host) }}
               timestamp: {{ ansible_facts['date_time'].iso8601 }}
               directories: {{ _existing_dirs | to_json }}
             mode: '0640'
@@ -404,7 +404,7 @@
           ========================================
           Node decommission COMPLETE: {{ ansible_facts['hostname'] }}
           ========================================
-          - IP: {{ ansible_facts['default_ipv4'].address }}
+          - IP: {{ ansible_facts['default_ipv4'].address | default(ansible_host) }}
           - Services: stopped and removed
           - Systemd units: removed
           - Application code: /opt/autobot removed

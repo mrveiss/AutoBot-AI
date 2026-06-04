@@ -9,7 +9,7 @@ Core user model with authentication, profile, and tenant association.
 
 import uuid
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -53,7 +53,7 @@ class User(Base, TimestampMixin):
     )
 
     # Organization association (nullable for platform admins in provider mode)
-    org_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    org_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=True,
@@ -75,23 +75,23 @@ class User(Base, TimestampMixin):
         index=True,
     )
 
-    password_hash: Mapped[Optional[str]] = mapped_column(
+    password_hash: Mapped[str | None] = mapped_column(
         String(255),
         nullable=True,  # Nullable for SSO-only users
     )
 
     # Profile
-    display_name: Mapped[Optional[str]] = mapped_column(
+    display_name: Mapped[str | None] = mapped_column(
         String(255),
         nullable=True,
     )
 
-    avatar_url: Mapped[Optional[str]] = mapped_column(
+    avatar_url: Mapped[str | None] = mapped_column(
         String(500),
         nullable=True,
     )
 
-    bio: Mapped[Optional[str]] = mapped_column(
+    bio: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
@@ -130,24 +130,24 @@ class User(Base, TimestampMixin):
     )
 
     # Timestamps
-    last_login_at: Mapped[Optional[datetime]] = mapped_column(
+    last_login_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
 
-    email_verified_at: Mapped[Optional[datetime]] = mapped_column(
+    email_verified_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
 
     # Soft delete
-    deleted_at: Mapped[Optional[datetime]] = mapped_column(
+    deleted_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
 
     # Relationships
-    organization: Mapped[Optional["Organization"]] = relationship(
+    organization: Mapped["Organization | None"] = relationship(
         "Organization",
         back_populates="users",
     )
@@ -178,7 +178,7 @@ class User(Base, TimestampMixin):
         cascade="all, delete-orphan",
     )
 
-    mfa: Mapped[Optional["UserMFA"]] = relationship(
+    mfa: Mapped["UserMFA | None"] = relationship(
         "UserMFA",
         back_populates="user",
         uselist=False,

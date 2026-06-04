@@ -11,12 +11,13 @@ store, retrieve, update, delete, and vectorization.
 import asyncio
 import hashlib
 import json
-import logging
 import uuid
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List
 
 from llama_index.core import Document
+
+from autobot_shared.logging_manager import get_logger
 
 if TYPE_CHECKING:
     import aioredis
@@ -24,7 +25,7 @@ if TYPE_CHECKING:
     from llama_index.core import VectorStoreIndex
     from llama_index.vector_stores.chroma import ChromaVectorStore
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # =============================================================================
@@ -35,8 +36,8 @@ logger = logging.getLogger(__name__)
 # delegates all embedding generation to services.npu_client which is the
 # canonical NPU-first / Ollama-fallback path. The warmup helpers below are
 # retained because lifespan.py calls them at startup (Issue #165).
-_npu_client_cache: Optional[Any] = None
-_npu_available_cache: Optional[bool] = None
+_npu_client_cache: Any | None = None
+_npu_available_cache: bool | None = None
 _npu_cache_timestamp: float = 0.0
 
 # Warmup state tracking
@@ -195,7 +196,7 @@ async def _generate_embeddings_batch_with_npu_fallback(
     Issue #5105: Thin shim — delegates to
     ``services.npu_client.generate_embeddings_batch_with_fallback``.
     Filters ``None`` results out (canonical helper returns
-    ``List[Optional[List[float]]]`` to preserve index alignment; callers
+    ``List[List[float] | None]`` to preserve index alignment; callers
     of this batch helper expect concrete vectors only).
 
     Args:
@@ -347,7 +348,7 @@ class FactsMixin:
         except Exception as exc:
             logger.warning("BM25 stats refresh scheduling failed: %s", exc)
 
-    async def _find_fact_by_unique_key(self, unique_key: str) -> Optional[Dict[str, Any]]:
+    async def _find_fact_by_unique_key(self, unique_key: str) -> Dict[str, Any] | None:
         """
         Find an existing fact by unique key (fast Redis SET lookup).
         Issue #315: Refactored to use helper for reduced nesting.
@@ -391,7 +392,7 @@ class FactsMixin:
 
         return None
 
-    async def _find_existing_fact(self, content: str, metadata: Dict[str, Any]) -> Optional[str]:
+    async def _find_existing_fact(self, content: str, metadata: Dict[str, Any]) -> str | None:
         """
         Check if a fact with identical content and metadata already exists.
 
@@ -420,7 +421,7 @@ class FactsMixin:
 
         return None
 
-    async def _find_duplicate(self, content: str, threshold: float = 0.92) -> Optional[Dict[str, Any]]:
+    async def _find_duplicate(self, content: str, threshold: float = 0.92) -> Dict[str, Any] | None:
         """Check ChromaDB for near-duplicate content before inserting.
 
         Issue #3788: Semantic similarity guard for individual fact writes.
@@ -467,7 +468,7 @@ class FactsMixin:
             logger.debug("_find_duplicate: query failed, skipping check: %s", exc)
         return None
 
-    async def _check_for_duplicates(self, content: str, metadata: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    async def _check_for_duplicates(self, content: str, metadata: Dict[str, Any]) -> Dict[str, Any] | None:
         """
         Check for duplicate facts by unique_key, content hash, or semantic similarity.
 
@@ -596,17 +597,20 @@ class FactsMixin:
         # ChromaVectorStore.add() expects nodes with embeddings already set
         embedding = await _generate_embedding_with_npu_fallback(content)
 
-        # Create Document for LlamaIndex with embedding
-        doc = Document(text=content, doc_id=fact_id, metadata=sanitized_metadata)
-        doc.embedding = embedding
-
-        # Add to vector store
-        await asyncio.to_thread(self.vector_store.add, [doc])
+        # Issue #8391: Route through VectorWriteBuffer when available (LSM-style batching).
+        # Falls back to direct LlamaIndex add() when buffer is not yet started.
+        write_buffer = getattr(self, "_write_buffer", None)
+        if write_buffer is not None:
+            await write_buffer.write(fact_id, embedding, content, sanitized_metadata)
+        else:
+            doc = Document(text=content, doc_id=fact_id, metadata=sanitized_metadata)
+            doc.embedding = embedding
+            await asyncio.to_thread(self.vector_store.add, [doc])
 
         logger.info("Vectorized fact %s in ChromaDB", fact_id)
 
     def _prepare_fact_metadata(
-        self, fact_id: str, metadata: Optional[Dict[str, Any]], content: str = ""
+        self, fact_id: str, metadata: Dict[str, Any] | None, content: str = ""
     ) -> Dict[str, Any]:
         """Prepare metadata with system fields for new fact (Issue #398: extracted).
 
@@ -661,7 +665,7 @@ class FactsMixin:
             logger.error("Failed to store fact: %s", e)
             return {"status": "error", "message": "Knowledge operation failed"}
 
-    async def _get_fact_for_vectorization(self, fact_id: str) -> Optional[Dict[str, Any]]:
+    async def _get_fact_for_vectorization(self, fact_id: str) -> Dict[str, Any] | None:
         """Get and decode fact data for vectorization (Issue #398: extracted)."""
         fact_key = "fact:%s" % fact_id
         fact_data = await asyncio.to_thread(self.redis_client.hgetall, fact_key)
@@ -708,7 +712,7 @@ class FactsMixin:
             logger.error("Failed to vectorize fact %s: %s", fact_id, e)
             return {"status": "error", "message": "Knowledge operation failed"}
 
-    def get_fact(self, fact_id: str) -> Optional[Dict[str, Any]]:
+    def get_fact(self, fact_id: str) -> Dict[str, Any] | None:
         """
         Retrieve a single fact by ID (synchronous).
 
@@ -756,8 +760,8 @@ class FactsMixin:
         self,
         key: str,
         fact_data: Dict[bytes, bytes],
-        collection: Optional[str] = None,
-    ) -> Optional[Dict[str, Any]]:
+        collection: str | None = None,
+    ) -> Dict[str, Any] | None:
         """Process raw Redis fact data into structured dict (Issue #315: extracted helper).
 
         Args:
@@ -791,9 +795,9 @@ class FactsMixin:
 
     async def get_all_facts(
         self,
-        limit: Optional[int] = None,
+        limit: int | None = None,
         offset: int = 0,
-        collection: Optional[str] = None,
+        collection: str | None = None,
     ) -> List[Dict[str, Any]]:
         """
         Retrieve facts from Redis with optional pagination and filtering.
@@ -852,6 +856,7 @@ class FactsMixin:
         """Re-vectorize fact after content update (Issue #398: extracted).
 
         Issue #165: Uses NPU worker for hardware-accelerated embedding generation.
+        Issue #8405: Routes add through VectorWriteBuffer when available.
         """
         from knowledge.utils import sanitize_metadata_for_chromadb as _sanitize
 
@@ -861,10 +866,15 @@ class FactsMixin:
 
         # Issue #165: Generate embedding using NPU worker with fallback
         embedding = await _generate_embedding_with_npu_fallback(content)
-        doc = Document(text=content, doc_id=fact_id, metadata=sanitized_metadata)
-        doc.embedding = embedding
 
-        await asyncio.to_thread(self.vector_store.add, [doc])
+        # Issue #8405: Route through VectorWriteBuffer when available, like _vectorize_fact_in_chromadb.
+        write_buffer = getattr(self, "_write_buffer", None)
+        if write_buffer is not None:
+            await write_buffer.write(fact_id, embedding, content, sanitized_metadata)
+        else:
+            doc = Document(text=content, doc_id=fact_id, metadata=sanitized_metadata)
+            doc.embedding = embedding
+            await asyncio.to_thread(self.vector_store.add, [doc])
         logger.info("Re-vectorized updated fact %s", fact_id)
 
     async def _refresh_content_hash(self, fact_id: str, old_content: str, new_content: str) -> None:
@@ -1084,7 +1094,7 @@ class FactsMixin:
             logger.error("Failed to get facts by session %s: %s", session_id, e)
             return []
 
-    async def get_session_for_fact(self, fact_id: str) -> Optional[str]:
+    async def get_session_for_fact(self, fact_id: str) -> str | None:
         """
         Get the session ID that created a specific fact.
 

@@ -10,21 +10,29 @@ intelligent content analysis using the AI Stack VM.
 """
 
 import asyncio
-import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 
 from api.schemas_common import DataResponse
 from api.schemas_knowledge import (
+    AIStackDocumentAnalysisData,
+    AIStackEnhancedHealthData,
+    AIStackEnhancedSearchData,
     AIStackEnhancedSearchRequest,
+    AIStackEnhancedStatsData,
+    AIStackKnowledgeExtractData,
     AIStackKnowledgeExtractionRequest,
+    AIStackQueryReformulateData,
     AIStackRAGQueryRequest,
+    AIStackRagSearchData,
+    AIStackSystemInsightsData,
     DocumentAnalysisRequest,
 )
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import utc_timestamp
 from dependencies import get_knowledge_base
 from knowledge_factory import get_or_create_knowledge_base
@@ -35,7 +43,7 @@ from utils.response_helpers import (
     handle_ai_stack_error,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # ====================================================================
 # Router Configuration
@@ -106,7 +114,7 @@ async def _search_local_knowledge_base(
 async def _search_rag_enhanced(
     query: str,
     max_results: int,
-    local_docs: Optional[List[Dict[str, Any]]] = None,
+    local_docs: List[Dict[str, Any]] | None = None,
 ) -> Dict[str, Any]:
     """
     Search using AI Stack RAG capabilities.
@@ -251,7 +259,7 @@ async def _run_all_search_sources(
     return results
 
 
-@router.post("/search/enhanced", response_model=DataResponse)
+@router.post("/search/enhanced", response_model=DataResponse[AIStackEnhancedSearchData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="enhanced_search",
@@ -302,7 +310,7 @@ async def enhanced_search(
         )
 
 
-@router.post("/search/rag", response_model=DataResponse)
+@router.post("/search/rag", response_model=DataResponse[AIStackRagSearchData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="rag_search",
@@ -368,9 +376,9 @@ async def _store_single_fact_with_semaphore(
     kb,
     fact: Dict[str, Any],
     semaphore: asyncio.Semaphore,
-    title: Optional[str],
-    source: Optional[str],
-    category: Optional[str],
+    title: str | None,
+    source: str | None,
+    category: str | None,
 ) -> Dict[str, Any]:
     """Store a single fact with semaphore-bounded concurrency."""
     async with semaphore:
@@ -429,7 +437,7 @@ async def _store_extracted_facts(
     return stored_facts
 
 
-@router.post("/extract", response_model=DataResponse)
+@router.post("/extract", response_model=DataResponse[AIStackKnowledgeExtractData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="extract_knowledge",
@@ -479,7 +487,7 @@ async def extract_knowledge(
         await handle_ai_stack_error(e, "Knowledge extraction")
 
 
-@router.post("/analyze/documents", response_model=DataResponse)
+@router.post("/analyze/documents", response_model=DataResponse[AIStackDocumentAnalysisData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="analyze_documents",
@@ -522,7 +530,7 @@ async def analyze_documents(
 # ====================================================================
 
 
-@router.post("/query/reformulate", response_model=DataResponse)
+@router.post("/query/reformulate", response_model=DataResponse[AIStackQueryReformulateData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="reformulate_query",
@@ -530,7 +538,7 @@ async def analyze_documents(
 )
 async def reformulate_query(
     query: str,
-    context: Optional[str] = None,
+    context: str | None = None,
     current_user: dict = Depends(get_current_user),
 ):
     """
@@ -563,14 +571,14 @@ async def reformulate_query(
 # ====================================================================
 
 
-@router.get("/system/insights", response_model=DataResponse)
+@router.get("/system/insights", response_model=DataResponse[AIStackSystemInsightsData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_system_knowledge_insights",
     error_code_prefix="KNOWLEDGE_AI_STACK",
 )
 async def get_system_knowledge_insights(
-    knowledge_category: Optional[str] = None,
+    knowledge_category: str | None = None,
     current_user: dict = Depends(get_current_user),
 ):
     """
@@ -597,7 +605,7 @@ async def get_system_knowledge_insights(
 # ====================================================================
 
 
-@router.get("/stats/enhanced", response_model=DataResponse)
+@router.get("/stats/enhanced", response_model=DataResponse[AIStackEnhancedStatsData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_enhanced_stats",
@@ -651,7 +659,7 @@ async def get_enhanced_stats(
         )
 
 
-@router.get("/health/enhanced", response_model=DataResponse)
+@router.get("/health/enhanced", response_model=DataResponse[AIStackEnhancedHealthData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="enhanced_knowledge_health",

@@ -8,13 +8,14 @@ Uses the LLM to generate SKILL.md + skill.py for a detected capability gap.
 Structured output ensures valid manifests every time.
 """
 
-import logging
 import re
 from typing import Any, Dict
 
 import yaml
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 
 _SYSTEM_PROMPT = """\
 You are an expert at building AutoBot skill packages.
@@ -54,10 +55,6 @@ class SkillGenerator:
         """Generate a skill package for the described capability gap.
 
         Returns dict with keys: name, skill_md, skill_py, manifest, gap_description.
-
-        Note: generate_structured() does not exist on LLMService; this uses
-        chat() + json.loads as a stop-gap. A proper structured-output method
-        is tracked in the discovery issue filed during Phase 2D (#3185).
         """
         import json
 

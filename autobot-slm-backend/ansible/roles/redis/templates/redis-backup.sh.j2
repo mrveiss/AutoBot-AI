@@ -14,12 +14,12 @@ echo "[$(date)] Starting Redis Stack backup..."
 # Create backup directory if it doesn't exist
 mkdir -p "$BACKUP_DIR"
 
-# Trigger Redis save
-redis-cli -h {{ ansible_facts['default_ipv4'].address }} -p {{ redis_port }} BGSAVE
+# Trigger Redis save — connect to localhost since this script runs on the Redis host
+redis-cli -h 127.0.0.1 -p {{ redis_port }} BGSAVE
 
 # Wait for save to complete
 sleep 5
-while redis-cli -h {{ ansible_facts['default_ipv4'].address }} -p {{ redis_port }} LASTSAVE | grep -q "$(date +%s)"; do
+while redis-cli -h 127.0.0.1 -p {{ redis_port }} LASTSAVE | grep -q "$(date +%s)"; do
     echo "Waiting for BGSAVE to complete..."
     sleep 2
 done

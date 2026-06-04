@@ -8,8 +8,7 @@ Exposes GitHub API capabilities — PRs, issues, code reviews, repository
 context — as HTTP endpoints that agents can call via the integration layer.
 """
 
-import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
@@ -36,10 +35,11 @@ from api.schemas_workflows import (
 )
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from integrations.base import IntegrationConfig, IntegrationHealth
 from integrations.github_integration import GitHubIntegration
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(
     tags=["integrations-github"],
@@ -56,7 +56,7 @@ router = APIRouter(
 # ---------------------------------------------------------------------------
 
 
-def _make_integration(token: str, base_url: Optional[str] = None) -> GitHubIntegration:
+def _make_integration(token: str, base_url: str | None = None) -> GitHubIntegration:
     """Build a GitHubIntegration from a raw token.
 
     Helper for endpoint handlers (Issue #4097).
@@ -109,9 +109,9 @@ async def list_pull_requests(
     owner: str,
     repo: str,
     token: str = Query(..., description="GitHub Personal Access Token"),
-    state: Optional[str] = Query("open", description="PR state: open, closed, all"),
-    base: Optional[str] = Query(None, description="Filter by base branch"),
-    head: Optional[str] = Query(None, description="Filter by head branch"),
+    state: str | None = Query("open", description="PR state: open, closed, all"),
+    base: str | None = Query(None, description="Filter by base branch"),
+    head: str | None = Query(None, description="Filter by head branch"),
 ) -> Dict[str, Any]:
     """List pull requests for a repository.
 
@@ -302,9 +302,9 @@ async def list_issues(
     owner: str,
     repo: str,
     token: str = Query(..., description="GitHub Personal Access Token"),
-    state: Optional[str] = Query("open", description="Issue state: open, closed, all"),
-    labels: Optional[str] = Query(None, description="Comma-separated label names"),
-    assignee: Optional[str] = Query(None, description="Filter by assignee login"),
+    state: str | None = Query("open", description="Issue state: open, closed, all"),
+    labels: str | None = Query(None, description="Comma-separated label names"),
+    assignee: str | None = Query(None, description="Filter by assignee login"),
 ) -> Dict[str, Any]:
     """List issues in a repository (pull requests excluded).
 
@@ -390,7 +390,7 @@ async def list_commits(
     owner: str,
     repo: str,
     token: str = Query(..., description="GitHub Personal Access Token"),
-    sha: Optional[str] = Query(None, description="Branch, tag, or commit SHA"),
+    sha: str | None = Query(None, description="Branch, tag, or commit SHA"),
     per_page: int = Query(30, ge=1, le=100, description="Number of commits to return"),
 ) -> Dict[str, Any]:
     """List recent commits for a repository branch.
@@ -478,7 +478,7 @@ async def get_file_contents(
     repo: str,
     path: str,
     token: str = Query(..., description="GitHub Personal Access Token"),
-    ref: Optional[str] = Query(None, description="Branch, tag, or commit SHA"),
+    ref: str | None = Query(None, description="Branch, tag, or commit SHA"),
 ) -> Dict[str, Any]:
     """Fetch the contents of a single file.
 

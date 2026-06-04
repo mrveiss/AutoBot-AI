@@ -17,18 +17,18 @@ Architecture:
 from __future__ import annotations
 
 import asyncio
-import logging
 import math
 import re
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Sequence
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config as ssot_config
 
 from .core import ENTITY_TYPES as _ENTITY_TYPES  # noqa: F401 — re-exported via package
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # Entity-type intent patterns → UPPERCASE canonical names
@@ -81,8 +81,8 @@ class QueryIntent:
     """Structured intent extracted from a natural-language query."""
 
     entity_types: List[str] = field(default_factory=list)
-    time_range: Optional[Dict[str, date]] = None
-    status_filter: Optional[List[str]] = None
+    time_range: Dict[str, date] | None = None
+    status_filter: List[str] | None = None
     semantic_query: str = ""
     keywords: List[str] = field(default_factory=list)
 
@@ -201,7 +201,7 @@ class MemoryGraphQueryProcessor:
     no per-call Redis initialisation is performed.
     """
 
-    def __init__(self, redis_client: Any, embedding_model: Optional[str] = None):
+    def __init__(self, redis_client: Any, embedding_model: str | None = None):
         """
         Args:
             redis_client:    Async Redis client (already connected, knowledge DB).
@@ -224,7 +224,7 @@ class MemoryGraphQueryProcessor:
     async def process_query(
         self,
         query: str,
-        filters: Optional[Dict[str, Any]] = None,
+        filters: Dict[str, Any] | None = None,
         limit: int = 10,
     ) -> List[SearchResult]:
         """

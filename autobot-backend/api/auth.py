@@ -7,13 +7,10 @@ Provides login, logout, and session management functionality
 """
 
 import datetime
-import logging
-import os
 from collections import defaultdict
 from time import time
 from typing import Dict, List
 
-import jwt as pyjwt
 from fastapi import APIRouter, HTTPException, Request
 
 from api.schemas_agent import (
@@ -29,17 +26,20 @@ from api.schemas_agent import (
     SignupResponse,
 )
 from api.schemas_common import DataResponse
+from api.schemas_system import AuthLogoutData, AuthRefreshData
 from auth_middleware import get_auth_middleware
+from autobot_shared.auth.jwt_core import JWTDecodeError, decode_jwt_no_verify_exp
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config as ssot_config
 from constants.error_constants import ERR_INVALID_CREDENTIALS, ERR_INVALID_TOKEN
-from services.event_log import EventType
-from services.event_log import emit as _emit_event  # Issue #4461
+from services.audit.unified_audit import EventType  # GH#8290 Phase 2
+from services.audit.unified_audit import emit as _emit_event  # GH#8290 Phase 2
 from user_management.database import db_session_context
 from user_management.services.user_service import UserService
 
 router = APIRouter()
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # Rate limiting for password change endpoint (stricter limits for security)
@@ -58,7 +58,7 @@ def _dev_auth_bypass_enabled() -> bool:
     is opt-in. Without the flag, /login behaves like production modes and
     refuses to mint tokens without a real user store backing the request.
     """
-    return os.getenv("AUTOBOT_DEV_AUTH_BYPASS", "").strip().lower() in _DEV_AUTH_BYPASS_TRUTHY
+    return ssot_config.dev_auth_bypass.strip().lower() in _DEV_AUTH_BYPASS_TRUTHY
 
 
 async def _enrich_user_with_org_context(user_data: Dict) -> Dict:
@@ -188,7 +188,11 @@ async def login(request: Request, login_data: LoginRequest):
                 "last_login": None,
             }
             jwt_token = get_auth_middleware().create_jwt_token(
-                {"username": "admin", "role": "admin", "email": f"admin@{ssot_config.auth.domain}"}
+                {
+                    "username": "admin",
+                    "role": "admin",
+                    "email": f"admin@{ssot_config.auth.domain}",
+                }
             )
             session_id = get_auth_middleware().create_session({"username": "admin", "role": "admin"}, request)
             _emit_event(EventType.USER_LOGIN, user_id="admin", ip_address=ip_address)
@@ -234,7 +238,7 @@ async def login(request: Request, login_data: LoginRequest):
         raise HTTPException(status_code=500, detail="Authentication service temporarily unavailable")
 
 
-@router.post("/logout", response_model=DataResponse)
+@router.post("/logout", response_model=DataResponse[AuthLogoutData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="logout",
@@ -554,13 +558,8 @@ def _decode_refresh_token(token: str) -> Dict:
     Helper for refresh_token (#827).
     """
     try:
-        payload = pyjwt.decode(
-            token,
-            get_auth_middleware().jwt_secret,
-            algorithms=[get_auth_middleware().jwt_algorithm],
-            options={"verify_exp": False},
-        )
-    except pyjwt.InvalidTokenError as exc:
+        payload = decode_jwt_no_verify_exp(token, get_auth_middleware().jwt_secret)
+    except JWTDecodeError as exc:
         raise HTTPException(status_code=401, detail=ERR_INVALID_TOKEN) from exc
 
     exp = payload.get("exp")
@@ -575,7 +574,7 @@ def _decode_refresh_token(token: str) -> Dict:
     return payload
 
 
-@router.post("/refresh", response_model=DataResponse)
+@router.post("/refresh", response_model=DataResponse[AuthRefreshData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="refresh_token",

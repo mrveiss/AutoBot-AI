@@ -21,13 +21,13 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
 import time
 import uuid
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable, Coroutine, Dict, List, Optional
+from typing import Any, Callable, Coroutine, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
 from constants.ttl_constants import TTL_7_DAYS
 
@@ -36,7 +36,7 @@ from .config import AutoResearchConfig
 from .models import VariantArchiveEntry
 from .scorers import PromptScorer
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class OptimizationStatus(str, Enum):
@@ -99,19 +99,19 @@ class OptimizationSession:
     """Top-level record for a prompt optimization run."""
 
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
-    target: Optional[PromptOptTarget] = None
+    target: PromptOptTarget | None = None
     status: OptimizationStatus = OptimizationStatus.PENDING
     rounds_completed: int = 0
     max_rounds: int = 3
-    best_variant: Optional[PromptVariant] = None
+    best_variant: PromptVariant | None = None
     baseline_score: float = 0.0
     all_variants: List[PromptVariant] = field(default_factory=list)
-    started_at: Optional[float] = None
-    completed_at: Optional[float] = None
-    error_message: Optional[str] = None
+    started_at: float | None = None
+    completed_at: float | None = None
+    error_message: str | None = None
     # Issue #3222: quality-diversity archive (not serialised inline — persisted
     # separately under autoresearch:archive:{session_id})
-    archive: Optional["Archive"] = field(default=None, repr=False)
+    archive: "Archive" | None = field(default=None, repr=False)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -168,13 +168,13 @@ class PromptOptimizer(AsyncRedisClientMixin):
         self,
         scorers: Dict[str, PromptScorer],
         llm_service: Any,
-        config: Optional[AutoResearchConfig] = None,
+        config: AutoResearchConfig | None = None,
     ) -> None:
         self._scorers = scorers
         self._llm = llm_service
         self._config = config or AutoResearchConfig()
         self._cancel_event = asyncio.Event()
-        self._current_session: Optional[OptimizationSession] = None
+        self._current_session: OptimizationSession | None = None
         # Registry: agent_id -> (PromptOptTarget, BenchmarkFn)
         self._targets: Dict[str, tuple] = {}
 
@@ -198,7 +198,7 @@ class PromptOptimizer(AsyncRedisClientMixin):
         """Return a list of all registered agent_id strings."""
         return list(self._targets.keys())
 
-    def get_target(self, agent_id: str) -> Optional[tuple]:
+    def get_target(self, agent_id: str) -> tuple | None:
         """Return (PromptOptTarget, BenchmarkFn) for agent_id, or None."""
         return self._targets.get(agent_id)
 
@@ -237,7 +237,7 @@ class PromptOptimizer(AsyncRedisClientMixin):
             self._cancel_event.clear()
 
         current_best_prompt = target.current_prompt
-        parent_id: Optional[str] = None
+        parent_id: str | None = None
 
         try:
             for round_num in range(1, max_rounds + 1):
@@ -292,7 +292,7 @@ class PromptOptimizer(AsyncRedisClientMixin):
         archive: Archive,
         round_variants: List[PromptVariant],
         failed_ids: set,
-        parent_id: Optional[str],
+        parent_id: str | None,
         round_num: int,
         session: OptimizationSession,
     ) -> tuple:
@@ -429,7 +429,7 @@ class PromptOptimizer(AsyncRedisClientMixin):
         scorer_name: str,
         variants: List[PromptVariant],
         session: OptimizationSession,
-        subset_fraction: Optional[float],
+        subset_fraction: float | None,
     ) -> tuple:
         """Score all variants with one scorer and update final_score.
 
@@ -482,7 +482,7 @@ class PromptOptimizer(AsyncRedisClientMixin):
         self._cancel_event.set()
 
     @property
-    def current_session(self) -> Optional[OptimizationSession]:
+    def current_session(self) -> OptimizationSession | None:
         return self._current_session
 
     async def _save_session(self, session: OptimizationSession) -> None:
@@ -506,7 +506,7 @@ class PromptOptimizer(AsyncRedisClientMixin):
         except Exception:
             logger.exception("Failed to save archive for session %s", session_id)
 
-    async def load_archive(self, session_id: str) -> Optional["Archive"]:
+    async def load_archive(self, session_id: str) -> "Archive" | None:
         """Restore a previously persisted archive from Redis."""
         try:
             redis = await self._get_redis()

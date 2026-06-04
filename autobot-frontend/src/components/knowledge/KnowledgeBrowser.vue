@@ -26,14 +26,14 @@
         <!-- Active filter indicator -->
         <transition name="fade">
           <div v-if="selectedCategory" class="active-filter-badge">
-            <i class="fas fa-filter"></i>
+            <Icon name="filter" />
             <span>{{ $t('knowledge.browser.filteringBy', { category: formatCategoryName(selectedCategory) }) }}</span>
             <button
               @click="selectCategory(null)"
               class="clear-filter-btn"
               :aria-label="$t('knowledge.browser.clearCategoryFilter')"
             >
-              <i class="fas fa-times"></i>
+              <Icon name="times" />
             </button>
           </div>
         </transition>
@@ -49,7 +49,7 @@
         class="refresh-status-btn"
         :title="$t('knowledge.browser.refreshVectorizationStatus')"
       >
-        <i v-if="!isRefreshingStatus" class="fas fa-sync-alt"></i>
+        <Icon name="sync-alt" v-if="!isRefreshingStatus" />
         <span>{{ $t('knowledge.browser.status') }}</span>
       </BaseButton>
     </div>
@@ -59,7 +59,7 @@
       <div v-if="hasSelection" class="batch-toolbar">
         <div class="toolbar-content">
           <div class="toolbar-info">
-            <i class="fas fa-check-square"></i>
+            <Icon name="check-square" />
             <span>{{ $t('knowledge.browser.documentsSelected', { count: selectionCount }) }}</span>
           </div>
           <div class="toolbar-actions">
@@ -70,7 +70,7 @@
               :loading="isVectorizing"
               class="toolbar-btn vectorize"
             >
-              <i v-if="!isVectorizing" class="fas fa-cubes"></i>
+              <Icon name="cubes" v-if="!isVectorizing" />
               {{ $t('knowledge.browser.vectorizeSelected') }}
             </BaseButton>
             <BaseButton
@@ -78,7 +78,7 @@
               @click="deselectAll"
               class="toolbar-btn cancel"
             >
-              <i class="fas fa-times"></i>
+              <Icon name="times" />
               {{ $t('knowledge.browser.clearSelection') }}
             </BaseButton>
           </div>
@@ -104,12 +104,12 @@
         class="breadcrumb-item"
         :aria-label="$t('knowledge.browser.backToRoot')"
       >
-        <i class="fas fa-home"></i> {{ $t('knowledge.browser.root') }}
+        <Icon name="home" /> {{ $t('knowledge.browser.root') }}
       </BaseButton>
-      <i class="fas fa-chevron-right breadcrumb-sep"></i>
+      <Icon name="chevron-right" class="breadcrumb-sep" />
       <span v-for="(part, idx) in breadcrumbParts" :key="idx" class="breadcrumb-item active">
         {{ part }}
-        <i v-if="idx < breadcrumbParts.length - 1" class="fas fa-chevron-right breadcrumb-sep"></i>
+        <Icon name="chevron-right" class="breadcrumb-sep" v-if="idx < breadcrumbParts.length - 1" />
       </span>
     </div>
 
@@ -118,19 +118,19 @@
       <!-- Left: Tree Navigation (30%) -->
       <div class="tree-pane">
         <div v-if="isLoading" class="loading-state">
-          <i class="fas fa-spinner fa-spin"></i>
+          <Icon name="spinner" class="animate-spin" />
           <p>{{ $t('knowledge.browser.loadingFileTree') }}</p>
         </div>
 
         <div v-else-if="error" class="error-state">
-          <i class="fas fa-exclamation-triangle"></i>
+          <Icon name="exclamation-triangle" />
           <p>{{ error?.message }}</p>
           <BaseButton
             variant="primary"
             @click="retryLoadKnowledgeTree"
             class="retry-btn"
           >
-            <i class="fas fa-redo"></i> {{ $t('knowledge.browser.retryBtn') }}
+            <Icon name="redo" /> {{ $t('knowledge.browser.retryBtn') }}
           </BaseButton>
         </div>
 
@@ -162,13 +162,13 @@
               @click="loadMoreEntries"
               class="load-more-btn"
             >
-              <i class="fas fa-chevron-down"></i>
+              <Icon name="chevron-down" />
               {{ $t('knowledge.browser.loadMore') }}
             </BaseButton>
           </div>
 
           <div v-if="(props.mode === 'user' || props.mode === 'user-knowledge') && isLoadingMore" class="loading-more">
-            <i class="fas fa-spinner fa-spin"></i>
+            <Icon name="spinner" class="animate-spin" />
             <span>{{ $t('knowledge.browser.loadingMoreEntries') }}</span>
           </div>
         </div>
@@ -187,6 +187,7 @@
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useExpansion } from '@/composables/useExpansion'
 import { useRouter } from 'vue-router'
@@ -347,7 +348,7 @@ const availableCategories = computed((): CategoryOption[] => {
     {
       value: null,
       label: 'All',
-      icon: 'fas fa-th-large',
+      icon: 'th-large',
       count: Object.values(categoryCounts.value).reduce((sum, count) => sum + count, 0)
     }
   ]
@@ -571,7 +572,7 @@ const loadMainCategories = async () => {
         id: 'autobot-documentation',
         name: 'AutoBot Documentation',
         description: "AutoBot's initial knowledge - documentation and guides",
-        icon: 'fas fa-book',
+        icon: 'book',
         color: '#3b82f6',
         count: 0
       },
@@ -579,7 +580,7 @@ const loadMainCategories = async () => {
         id: 'system-knowledge',
         name: 'System Knowledge',
         description: "AutoBot's initial knowledge - system info, man pages, OS knowledge",
-        icon: 'fas fa-server',
+        icon: 'server',
         color: '#10b981',
         count: 0
       },
@@ -587,7 +588,7 @@ const loadMainCategories = async () => {
         id: 'user-knowledge',
         name: 'User Knowledge',
         description: 'What AutoBot is used for - user-provided domain knowledge',
-        icon: 'fas fa-user-circle',
+        icon: 'user-circle',
         color: '#f59e0b',
         count: 0
       }
@@ -1053,7 +1054,7 @@ const clearSearch = () => {
 // Utility functions (now using composable)
 const getFileIcon = (node: TreeNode): string => {
   if (node.type === 'folder') {
-    return nodeExpansion.isExpanded(node.id) ? 'fas fa-folder-open' : 'fas fa-folder'
+    return nodeExpansion.isExpanded(node.id) ? 'folder-open' : 'folder'
   }
 
   return getFileIconUtil(node.name, false)

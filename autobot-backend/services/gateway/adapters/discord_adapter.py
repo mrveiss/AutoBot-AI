@@ -3,18 +3,19 @@
 # Author: mrveiss
 """Discord Platform Adapter for Message Gateway"""
 
-import logging
 from typing import Any, Dict
+
+from autobot_shared.logging_manager import get_logger
 
 from .base_adapter import BaseAdapter, NormalizedResponse, UnifiedMessage
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class DiscordAdapter(BaseAdapter):
     """Discord platform adapter for unified message gateway."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__("discord")
 
     async def normalize_message(self, raw_message: Dict[str, Any]) -> UnifiedMessage:

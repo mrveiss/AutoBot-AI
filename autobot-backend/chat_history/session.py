@@ -13,18 +13,20 @@ Provides session management for chat history:
 """
 
 import json
-import logging
 import os
 import time
 import uuid
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import aiofiles
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.path_validator import validate_relative_path
+from chat_history.cache import _CHAT_RECENT_MAX_ENTRIES
 from chat_history.file_io import run_in_chat_io_executor
+from constants.redis_constants import REDIS_KEY
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class SessionMixin:
@@ -73,7 +75,7 @@ class SessionMixin:
                 "session_id must not contain path traversal characters " f"('..', '/', '\\'): {session_id!r}"
             )
 
-    def _try_get_from_cache(self, session_id: str) -> Optional[List[Dict[str, Any]]]:
+    def _try_get_from_cache(self, session_id: str) -> List[Dict[str, Any]] | None:
         """Try to get session from Redis cache. (Issue #315 - extracted)"""
         if not self.redis_client:
             return None
@@ -91,7 +93,7 @@ class SessionMixin:
             logger.error("Failed to read from Redis cache: %s", e)
             return None
 
-    async def _resolve_session_file_path(self, session_id: str, chats_directory: str) -> Optional[str]:
+    async def _resolve_session_file_path(self, session_id: str, chats_directory: str) -> str | None:
         """Resolve session file path with backward compatibility.
 
         Issue #315 - extracted.  Issue #1721 - uses shared path validator.
@@ -142,7 +144,7 @@ class SessionMixin:
         session_id: str,
         session_title: str,
         current_time: str,
-        metadata: Optional[Dict[str, Any]],
+        metadata: Dict[str, Any] | None,
     ) -> Dict[str, Any]:
         """
         Build the session data dictionary.
@@ -168,7 +170,7 @@ class SessionMixin:
         session_id: str,
         session_title: str,
         current_time: str,
-        metadata: Optional[Dict[str, Any]],
+        metadata: Dict[str, Any] | None,
     ) -> None:
         """
         Create conversation entity in Memory Graph.
@@ -199,10 +201,10 @@ class SessionMixin:
 
     async def create_session(
         self,
-        session_id: Optional[str] = None,
-        title: Optional[str] = None,
-        session_name: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        session_id: str | None = None,
+        title: str | None = None,
+        session_name: str | None = None,
+        metadata: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
         """
         Create a new chat session.
@@ -236,7 +238,7 @@ class SessionMixin:
         logger.info("Created new chat session: %s", session_id)
         return session_data
 
-    async def _load_session_from_file(self, session_id: str) -> Optional[Dict[str, Any]]:
+    async def _load_session_from_file(self, session_id: str) -> Dict[str, Any] | None:
         """Load and decrypt session data from file. Issue #620."""
         chats_directory = self._get_chats_directory()
         chat_file = await self._resolve_session_file_path(session_id, chats_directory)
@@ -328,7 +330,28 @@ class SessionMixin:
             await self._async_cache_session(cache_key, chat_data)
             # Update recent chats sorted set for fast listing
             # Issue #361 - avoid blocking
-            await run_in_chat_io_executor(self.redis_client.zadd, "chat:recent", {session_id: time.time()})
+            # #7570: trim after insert so the set stays bounded
+            await run_in_chat_io_executor(self.redis_client.zadd, REDIS_KEY.CHAT_RECENT, {session_id: time.time()})
+            await run_in_chat_io_executor(
+                self.redis_client.zremrangebyrank,
+                REDIS_KEY.CHAT_RECENT,
+                0,
+                -(_CHAT_RECENT_MAX_ENTRIES + 1),
+            )
+            # Phase 4 (#7590): emit cardinality gauge for SSOT observability.
+            # Structured JSON so Loki can parse: {"event": "chat_recent_cardinality", "value": N}
+            # Alert fires when value > AUTOBOT_CHAT_SSOT_CARDINALITY_THRESHOLD (default 200).
+            try:
+                cardinality = await run_in_chat_io_executor(self.redis_client.zcard, REDIS_KEY.CHAT_RECENT)
+                logger.info(json.dumps({"event": "chat_recent_cardinality", "value": cardinality}))
+                try:
+                    from monitoring.prometheus_metrics import get_metrics_manager
+
+                    get_metrics_manager().set_chat_recent_cardinality(cardinality)
+                except Exception as e:
+                    logger.warning("chat:recent Prometheus cardinality update failed: %s", e)
+            except Exception as card_err:
+                logger.warning("chat:recent cardinality read failed: %s", card_err)
             logger.debug("Cached session %s in Redis", session_id)
         except Exception as e:
             logger.error("Failed to cache session in Redis: %s", e)
@@ -336,7 +359,7 @@ class SessionMixin:
     def _prepare_session_messages(
         self,
         session_id: str,
-        messages: Optional[List[Dict[str, Any]]],
+        messages: List[Dict[str, Any]] | None,
     ) -> List[Dict[str, Any]]:
         """
         Prepare and validate session messages for saving.
@@ -455,7 +478,7 @@ class SessionMixin:
     async def save_session(
         self,
         session_id: str,
-        messages: Optional[List[Dict[str, Any]]] = None,
+        messages: List[Dict[str, Any]] | None = None,
         name: str = "",
     ):
         """
@@ -657,7 +680,7 @@ class SessionMixin:
             cache_key = f"chat:session:{session_id}"
             # Issue #361 - avoid blocking
             await run_in_chat_io_executor(self.redis_client.delete, cache_key)
-            await run_in_chat_io_executor(self.redis_client.zrem, "chat:recent", session_id)
+            await run_in_chat_io_executor(self.redis_client.zrem, REDIS_KEY.CHAT_RECENT, session_id)
             logger.debug("Cleared Redis cache for session %s", session_id)
         except Exception as e:
             logger.error("Failed to clear Redis cache: %s", e)
@@ -831,7 +854,7 @@ class SessionMixin:
 
         logger.info("Chat session '%s' name updated to '%s'", session_id, name)
 
-    async def load_full_session(self, session_id: str) -> Optional[Dict[str, Any]]:
+    async def load_full_session(self, session_id: str) -> Dict[str, Any] | None:
         """
         Load the complete session data dictionary for a given session.
 
@@ -850,7 +873,7 @@ class SessionMixin:
         self._sanitize_session_id(session_id)
         return await self._load_session_from_file(session_id)
 
-    async def get_session_owner(self, session_id: str) -> Optional[str]:
+    async def get_session_owner(self, session_id: str) -> str | None:
         """
         Get the owner/creator of a specific session.
 

@@ -14,6 +14,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Tuple
 
+from autobot_shared.ssot_config import config
+
 
 class ConsoleLogCleaner:
     """Removes console.log statements from JavaScript/TypeScript/Vue files."""
@@ -103,7 +105,7 @@ class ConsoleLogCleaner:
 
     def _resolve_console_log_match(
         self, content: str, line: str, line_start_pos: int, match: "re.Match"
-    ) -> Optional[Tuple[int, int, str]]:
+    ) -> Tuple[int, int, str] | None:
         """Resolve a single console.log match to its full (start, end, text) span. Issue #1183."""
         start_pos = line_start_pos + match.start()
         paren_count = 1
@@ -457,7 +459,7 @@ if __name__ == "__main__":
 
     if len(sys.argv) == 1:
         # Default to AutoBot frontend directory
-        project_root = os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot")  # noqa: ssot-path
+        project_root = config.base_dir  # noqa: ssot-path
         target_dir = "autobot-frontend/src"
 
         print("🚀 AutoBot Console.log Performance Fix Agent")  # noqa: print

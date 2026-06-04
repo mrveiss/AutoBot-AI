@@ -12,13 +12,13 @@ Uses the 'knowledge' Redis database (DATABASE_MAPPING["knowledge"]).
 """
 
 import json
-import logging
-from typing import Any, List, Optional
+from typing import Any, List
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
 from constants.ttl_constants import TTL_WORKING_MEMORY_DEFAULT
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _KEY_PREFIX = "autobot:session:{session_id}:memory:{key}"
 _SESSION_PATTERN = "autobot:session:{session_id}:memory:*"
@@ -38,7 +38,7 @@ class WorkingMemoryService(AsyncRedisClientMixin):
         session_id: str,
         key: str,
         value: Any,
-        ttl: Optional[int] = None,
+        ttl: int | None = None,
     ) -> None:
         """Serialise *value* to JSON and store it with an expiry.
 
@@ -59,7 +59,7 @@ class WorkingMemoryService(AsyncRedisClientMixin):
             logger.warning("working_memory.store failed: %s", exc)
             raise
 
-    async def get(self, session_id: str, key: str) -> Optional[Any]:
+    async def get(self, session_id: str, key: str) -> Any | None:
         """Retrieve and deserialise a stored value.
 
         Returns:

@@ -8,7 +8,7 @@ import {
   createMockChatMessage,
   waitForUpdate,
 } from '../../test/utils/test-utils'
-import { webSocketTestUtil, WebSocketMessageType } from '../../test/mocks/websocket-mock'
+import { webSocketTestUtil } from '../../test/mocks/websocket-mock'
 import { ServiceURLs } from '@/constants/network'
 
 // ---- Module mocks ----
@@ -88,8 +88,6 @@ const mockController = {
   // Message handling
   sendMessage: vi.fn().mockResolvedValue(undefined),
   // Settings
-  enableAutoSave: vi.fn(),
-  disableAutoSave: vi.fn(),
   updateChatSettings: vi.fn(),
   // UI
   toggleSidebar: vi.fn(),

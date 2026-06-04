@@ -7,22 +7,31 @@ Web Research Settings API
 Provides endpoints for managing web research configuration and preferences.
 """
 
-import logging
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 
 from api.schemas_common import DataResponse
-from api.schemas_workflows import WebResearchSettings
+from api.schemas_workflows import (
+    WebResearchCacheClearData,
+    WebResearchSettings,
+    WebResearchSettingsData,
+    WebResearchSettingsUpdateData,
+    WebResearchStatusData,
+    WebResearchTestData,
+    WebResearchToggleData,
+    WebResearchUsageStatsData,
+)
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/web-research", tags=["web-research"])
 
 
-@router.get("/status", response_model=DataResponse)
+@router.get("/status", response_model=DataResponse[WebResearchStatusData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_research_status",
@@ -71,7 +80,7 @@ async def get_research_status():
         )
 
 
-@router.post("/enable", response_model=DataResponse)
+@router.post("/enable", response_model=DataResponse[WebResearchToggleData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="enable_web_research",
@@ -123,7 +132,7 @@ async def enable_web_research():
         raise HTTPException(status_code=500, detail="Failed to enable web research")
 
 
-@router.post("/disable", response_model=DataResponse)
+@router.post("/disable", response_model=DataResponse[WebResearchToggleData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="disable_web_research",
@@ -175,7 +184,7 @@ async def disable_web_research():
         raise HTTPException(status_code=500, detail="Failed to disable web research")
 
 
-@router.get("/settings", response_model=DataResponse)
+@router.get("/settings", response_model=DataResponse[WebResearchSettingsData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_research_settings",
@@ -221,7 +230,7 @@ async def get_research_settings():
         raise HTTPException(status_code=500, detail="Failed to get research settings")
 
 
-@router.put("/settings", response_model=DataResponse)
+@router.put("/settings", response_model=DataResponse[WebResearchSettingsUpdateData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="update_research_settings",
@@ -267,7 +276,7 @@ async def update_research_settings(settings: WebResearchSettings):
         raise HTTPException(status_code=500, detail="Failed to update research settings")
 
 
-@router.post("/test", response_model=DataResponse)
+@router.post("/test", response_model=DataResponse[WebResearchTestData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="test_web_research",
@@ -310,7 +319,7 @@ async def test_web_research(query: str = "test query"):
         )
 
 
-@router.post("/clear-cache", response_model=DataResponse)
+@router.post("/clear-cache", response_model=DataResponse[WebResearchCacheClearData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="clear_research_cache",
@@ -342,7 +351,7 @@ async def clear_research_cache():
         raise HTTPException(status_code=500, detail="Failed to clear research cache")
 
 
-@router.post("/reset-circuit-breakers", response_model=DataResponse)
+@router.post("/reset-circuit-breakers", response_model=DataResponse[WebResearchCacheClearData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="reset_circuit_breakers",
@@ -374,7 +383,7 @@ async def reset_circuit_breakers():
         raise HTTPException(status_code=500, detail="Failed to reset circuit breakers")
 
 
-@router.get("/usage-stats", response_model=DataResponse)
+@router.get("/usage-stats", response_model=DataResponse[WebResearchUsageStatsData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_usage_stats",

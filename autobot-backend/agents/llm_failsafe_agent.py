@@ -9,14 +9,16 @@ of LLM, even when primary systems fail. Implements multiple fallback strategies
 and degraded operation modes.
 """
 
+from __future__ import annotations
+
 import asyncio
 import json
-import logging
 import time
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import (
     get_agent_endpoint_explicit,
     get_agent_model_explicit,
@@ -26,7 +28,7 @@ from autobot_shared.ssot_config import (
 from .base_agent import DeploymentMode
 from .standardized_agent import ActionHandler, StandardizedAgent
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class LLMTier(Enum):
@@ -39,7 +41,7 @@ class LLMTier(Enum):
 
 
 @dataclass
-class LLMResponse:
+class FailsafeLLMResponse:
     """Standardized LLM response format"""
 
     content: str
@@ -65,7 +67,7 @@ class LLMFailsafeAgent(StandardizedAgent):
 
     def __init__(
         self,
-        agent_type: Optional[str] = None,
+        agent_type: str | None = None,
         deployment_mode: DeploymentMode = DeploymentMode.LOCAL,
     ):
         """Initialize the failsafe LLM agent (#3387: migrated to StandardizedAgent).
@@ -77,7 +79,7 @@ class LLMFailsafeAgent(StandardizedAgent):
         """
         super().__init__(agent_type or self.AGENT_ID, deployment_mode)
         # Override self.logger to preserve existing naming convention
-        self.logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
+        self.logger = get_logger(f"{__name__}.{self.__class__.__name__}")
 
         # Use explicit SSOT config - raises AgentConfigurationError if not set
         self.llm_provider = get_agent_provider_explicit(self.AGENT_ID)
@@ -288,7 +290,7 @@ class LLMFailsafeAgent(StandardizedAgent):
             ),
         }
 
-    def _build_base_system_content(self, context: Optional[Dict[str, Any]] = None) -> dict:
+    def _build_base_system_content(self, context: Dict[str, Any] | None = None) -> dict:
         """
         Build the base system content structure for LLM messages.
 
@@ -363,7 +365,7 @@ class LLMFailsafeAgent(StandardizedAgent):
         if context.get("instructions"):
             system_content["context_info"]["special_instructions"] = context["instructions"]
 
-    def _create_structured_messages(self, prompt: str, context: Optional[Dict[str, Any]] = None) -> list:
+    def _create_structured_messages(self, prompt: str, context: Dict[str, Any] | None = None) -> list:
         """
         Create structured JSON messages for better LLM understanding.
 
@@ -406,7 +408,7 @@ class LLMFailsafeAgent(StandardizedAgent):
 
         return messages
 
-    async def get_response(self, prompt: str, context: Optional[Dict[str, Any]] = None) -> LLMResponse:
+    async def get_response(self, prompt: str, context: Dict[str, Any] | None = None) -> FailsafeLLMResponse:
         """
         Get a response using the most appropriate available tier.
 
@@ -415,7 +417,7 @@ class LLMFailsafeAgent(StandardizedAgent):
             context: Optional context information
 
         Returns:
-            LLMResponse with content and metadata
+            FailsafeLLMResponse with content and metadata
         """
         start_time = time.time()
 
@@ -461,14 +463,14 @@ class LLMFailsafeAgent(StandardizedAgent):
         confidence: float = 0.9,
         warnings: list = None,
         extra_metadata: dict = None,
-    ) -> LLMResponse:
-        """Build LLMResponse object (Issue #398: extracted)."""
+    ) -> FailsafeLLMResponse:
+        """Build FailsafeLLMResponse object (Issue #398: extracted)."""
         response_time = time.time() - start_time
         self._update_tier_stats(tier, response_time, success=True)
         metadata = {"context": context}
         if extra_metadata:
             metadata.update(extra_metadata)
-        return LLMResponse(
+        return FailsafeLLMResponse(
             content=response,
             tier_used=tier,
             model_used=model,
@@ -479,7 +481,9 @@ class LLMFailsafeAgent(StandardizedAgent):
             metadata=metadata,
         )
 
-    async def _try_primary_llm(self, prompt: str, context: Optional[Dict[str, Any]], start_time: float) -> LLMResponse:
+    async def _try_primary_llm(
+        self, prompt: str, context: Dict[str, Any] | None, start_time: float
+    ) -> FailsafeLLMResponse:
         """Try primary LLM communication (Issue #398: refactored)."""
         self.tier_stats[LLMTier.PRIMARY]["requests"] += 1
         try:
@@ -508,8 +512,8 @@ class LLMFailsafeAgent(StandardizedAgent):
             return await self._try_secondary_llm(prompt, context, start_time)
 
     async def _try_secondary_llm(
-        self, prompt: str, context: Optional[Dict[str, Any]], start_time: float
-    ) -> LLMResponse:
+        self, prompt: str, context: Dict[str, Any] | None, start_time: float
+    ) -> FailsafeLLMResponse:
         """Try secondary LLM communication (Issue #398: refactored)."""
         self.tier_stats[LLMTier.SECONDARY]["requests"] += 1
         try:
@@ -550,7 +554,7 @@ class LLMFailsafeAgent(StandardizedAgent):
             # Fall back to basic
             return await self._try_basic_response(prompt, context, start_time)
 
-    def _match_pattern_response(self, prompt: str, context: Any, start_time: float) -> Optional[LLMResponse]:
+    def _match_pattern_response(self, prompt: str, context: Any, start_time: float) -> FailsafeLLMResponse | None:
         """Match pattern and return response (Issue #398: extracted)."""
         import re
 
@@ -571,8 +575,8 @@ class LLMFailsafeAgent(StandardizedAgent):
         return None
 
     async def _try_basic_response(
-        self, prompt: str, context: Optional[Dict[str, Any]], start_time: float
-    ) -> LLMResponse:
+        self, prompt: str, context: Dict[str, Any] | None, start_time: float
+    ) -> FailsafeLLMResponse:
         """Generate rule-based response (Issue #398: refactored)."""
         self.tier_stats[LLMTier.BASIC]["requests"] += 1
         try:
@@ -614,8 +618,8 @@ class LLMFailsafeAgent(StandardizedAgent):
         return "default"
 
     async def _try_emergency_response(
-        self, prompt: str, context: Optional[Dict[str, Any]], start_time: float
-    ) -> LLMResponse:
+        self, prompt: str, context: Dict[str, Any] | None, start_time: float
+    ) -> FailsafeLLMResponse:
         """Generate emergency static response"""
         self.tier_stats[LLMTier.EMERGENCY]["requests"] += 1
 
@@ -627,7 +631,7 @@ class LLMFailsafeAgent(StandardizedAgent):
             response_time = time.time() - start_time
             self._update_tier_stats(LLMTier.EMERGENCY, response_time, success=True)
 
-            return LLMResponse(
+            return FailsafeLLMResponse(
                 content=response,
                 tier_used=LLMTier.EMERGENCY,
                 model_used="emergency_static_responses",
@@ -642,7 +646,7 @@ class LLMFailsafeAgent(StandardizedAgent):
             self.logger.critical("Emergency response tier failed: %s", e)
             return self._create_emergency_response(prompt, start_time, f"Emergency tier failure: {e}")
 
-    def _create_emergency_response(self, prompt: str, start_time: float, error_msg: str) -> LLMResponse:
+    def _create_emergency_response(self, prompt: str, start_time: float, error_msg: str) -> FailsafeLLMResponse:
         """Create absolute last resort response"""
         # Create a more user-friendly emergency response
         user_message = (
@@ -657,7 +661,7 @@ class LLMFailsafeAgent(StandardizedAgent):
                 "My AI models are currently unavailable. I'm working to restore service. " "Please try again shortly."
             )
 
-        return LLMResponse(
+        return FailsafeLLMResponse(
             content=user_message,
             tier_used=LLMTier.EMERGENCY,
             model_used="emergency_fallback",
@@ -735,7 +739,7 @@ class LLMFailsafeAgent(StandardizedAgent):
             },
         }
 
-    async def _test_tier(self, tier: LLMTier, test_prompt: str) -> LLMResponse:
+    async def _test_tier(self, tier: LLMTier, test_prompt: str) -> FailsafeLLMResponse:
         """Test a specific tier (Issue #334 - extracted helper)."""
         tier_handlers = {
             LLMTier.PRIMARY: self._try_primary_llm,
@@ -768,7 +772,7 @@ class LLMFailsafeAgent(StandardizedAgent):
 
 
 # Module-level singleton — created on first use to avoid import-time side effects.
-_llm_failsafe: Optional["LLMFailsafeAgent"] = None
+_llm_failsafe: "LLMFailsafeAgent" | None = None
 
 
 def get_llm_failsafe() -> "LLMFailsafeAgent":
@@ -785,7 +789,7 @@ def get_llm_failsafe() -> "LLMFailsafeAgent":
     return _llm_failsafe
 
 
-async def get_robust_llm_response(prompt: str, context: Optional[Dict[str, Any]] = None) -> LLMResponse:
+async def get_robust_llm_response(prompt: str, context: Dict[str, Any] | None = None) -> FailsafeLLMResponse:
     """
     Convenience function to get a robust LLM response with automatic failover.
 
@@ -794,7 +798,7 @@ async def get_robust_llm_response(prompt: str, context: Optional[Dict[str, Any]]
         context: Optional context information
 
     Returns:
-        LLMResponse with guaranteed content (even if degraded)
+        FailsafeLLMResponse with guaranteed content (even if degraded)
     """
     return await get_llm_failsafe().get_response(prompt, context)
 

@@ -18,13 +18,14 @@ Parent Epic: #217 - Advanced Code Intelligence
 """
 
 import ast
-import logging
 import re
 import time
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, FrozenSet, List, Optional, Set
+from typing import Any, Dict, FrozenSet, List, Set
+
+from autobot_shared.logging_manager import get_logger
 
 # Issue #554: Import analytics infrastructure for semantic analysis
 try:
@@ -46,7 +47,7 @@ try:
 except ImportError:
     HAS_SHARED_CACHE = False
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Performance optimization: O(1) lookup for placeholder patterns (Issue #326)
 PLACEHOLDER_PATTERNS = {"example", "placeholder", "your_", "xxx", "changeme", "todo"}
@@ -191,7 +192,7 @@ class SecurityFinding:
     description: str
     recommendation: str
     owasp_category: str
-    cwe_id: Optional[str] = None
+    cwe_id: str | None = None
     current_code: str = ""
     secure_alternative: str = ""
     confidence: float = 1.0  # 0.0-1.0, how confident we are in this finding
@@ -324,8 +325,8 @@ class SecurityASTVisitor(ast.NodeVisitor):
         self.source_lines = source_lines
         self.findings: List[SecurityFinding] = []
         self.imports: Set[str] = set()
-        self.function_context: Optional[str] = None
-        self.class_context: Optional[str] = None
+        self.function_context: str | None = None
+        self.class_context: str | None = None
         self.has_input_validation: Dict[str, bool] = {}
 
     def visit_Import(self, node: ast.Import) -> None:
@@ -666,7 +667,7 @@ class SecurityASTVisitor(ast.NodeVisitor):
                     )
                 )
 
-    def _get_module_name(self, node: ast.Attribute) -> Optional[str]:
+    def _get_module_name(self, node: ast.Attribute) -> str | None:
         """Get module name from attribute access."""
         if isinstance(node.value, ast.Name):
             return node.value.id
@@ -705,8 +706,8 @@ class SecurityAnalyzer(SemanticAnalysisMixin):
 
     def __init__(
         self,
-        project_root: Optional[str] = None,
-        exclude_patterns: Optional[List[str]] = None,
+        project_root: str | None = None,
+        exclude_patterns: List[str] | None = None,
         use_semantic_analysis: bool = False,
         use_cache: bool = True,
         use_shared_cache: bool = True,
@@ -908,7 +909,7 @@ class SecurityAnalyzer(SemanticAnalysisMixin):
 
         return findings
 
-    def analyze_directory(self, directory: Optional[str] = None) -> List[SecurityFinding]:
+    def analyze_directory(self, directory: str | None = None) -> List[SecurityFinding]:
         """Analyze all Python files in a directory."""
         target = Path(directory) if directory else self.project_root
         self.results = []
@@ -1084,7 +1085,7 @@ class SecurityAnalyzer(SemanticAnalysisMixin):
 
     async def analyze_directory_async(
         self,
-        directory: Optional[str] = None,
+        directory: str | None = None,
         find_semantic_duplicates: bool = True,
     ) -> Dict[str, Any]:
         """
@@ -1190,7 +1191,7 @@ class SecurityAnalyzer(SemanticAnalysisMixin):
     async def get_cached_analysis(
         self,
         directory: str,
-    ) -> Optional[Dict[str, Any]]:
+    ) -> Dict[str, Any] | None:
         """
         Get cached analysis results from Redis.
 
@@ -1212,7 +1213,7 @@ class SecurityAnalyzer(SemanticAnalysisMixin):
         )
 
 
-def analyze_security(directory: Optional[str] = None, exclude_patterns: Optional[List[str]] = None) -> Dict[str, Any]:
+def analyze_security(directory: str | None = None, exclude_patterns: List[str] | None = None) -> Dict[str, Any]:
     """
     Convenience function to analyze security of a directory.
 
@@ -1246,8 +1247,8 @@ def get_vulnerability_types() -> List[Dict[str, str]]:
 
 
 async def analyze_security_async(
-    directory: Optional[str] = None,
-    exclude_patterns: Optional[List[str]] = None,
+    directory: str | None = None,
+    exclude_patterns: List[str] | None = None,
     use_semantic_analysis: bool = True,
     find_semantic_duplicates: bool = True,
 ) -> Dict[str, Any]:

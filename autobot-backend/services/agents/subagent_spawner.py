@@ -14,9 +14,9 @@ Core functionality:
 """
 
 import asyncio
-import logging
-from typing import Any, Coroutine, Dict, List, Optional
+from typing import Any, Coroutine, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from constants.ttl_constants import TTL_1_HOUR
 
 from .subagent_task import (
@@ -27,7 +27,7 @@ from .subagent_task import (
     TaskStatus,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Constants
 MAX_SUBAGENTS_PER_PARENT = 5
@@ -38,7 +38,7 @@ DEFAULT_TIMEOUT_SECONDS = 300
 class SubagentSpawner:
     """Spawns and coordinates parallel subagents for independent tasks."""
 
-    def __init__(self, redis_client=None):
+    def __init__(self, redis_client=None) -> None:
         """Initialize spawner with optional Redis client for state persistence."""
         self.redis = redis_client
         self.pending_tasks: Dict[str, List[SubagentTask]] = {}
@@ -50,7 +50,7 @@ class SubagentSpawner:
         tasks: List[Dict[str, Any]],
         parent_depth: int = 0,
         wait_for_all: bool = True,
-        timeout_seconds: Optional[int] = None,
+        timeout_seconds: int | None = None,
     ) -> Dict[str, Any]:
         """
         Spawn subagents for independent tasks and optionally wait for completion.
@@ -303,7 +303,7 @@ class SubagentSpawner:
         self,
         results: List[TaskResult],
         strategy: str = "consensus",
-    ) -> Optional[ConflictResolution]:
+    ) -> ConflictResolution | None:
         """
         Detect and resolve conflicts between subagent outputs.
 

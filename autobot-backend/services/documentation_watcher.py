@@ -16,16 +16,18 @@ Features:
 """
 
 import asyncio
-import logging
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Dict, Optional, Set
+from typing import Any, Callable, Dict, Set
 
 from watchdog.events import FileSystemEvent, FileSystemEventHandler
 from watchdog.observers import Observer
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.singleton_factory import lazy_singleton
+
+logger = get_logger(__name__)
 
 # Project paths
 PROJECT_ROOT = Path(__file__).parent.parent.parent
@@ -39,7 +41,7 @@ BATCH_WINDOW_SECONDS = 5.0  # Batch multiple changes within this window
 class DocumentationChangeHandler(FileSystemEventHandler):
     """Handles file system events for documentation files."""
 
-    def __init__(self, watcher: "DocumentationWatcherService"):
+    def __init__(self, watcher: "DocumentationWatcherService") -> None:
         """Initialize handler with reference to watcher service."""
         self.watcher = watcher
         self._last_event_time: Dict[str, float] = {}
@@ -93,16 +95,14 @@ class DocumentationWatcherService:
     Issue #165: Provides real-time sync between docs/ changes and the knowledge base.
     """
 
-    _instance: Optional["DocumentationWatcherService"] = None
-
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the documentation watcher service."""
-        self._observer: Optional[Observer] = None
-        self._handler: Optional[DocumentationChangeHandler] = None
+        self._observer: Observer | None = None
+        self._handler: DocumentationChangeHandler | None = None
         self._is_running = False
         self._pending_changes: Dict[Path, str] = {}  # path -> change_type
         self._change_lock = asyncio.Lock()
-        self._processing_task: Optional[asyncio.Task] = None
+        self._processing_task: asyncio.Task | None = None
         self._last_batch_time = 0.0
         self._event_callbacks: Set[Callable] = set()
         self._stats = {
@@ -110,13 +110,6 @@ class DocumentationWatcherService:
             "last_change": None,
             "errors": 0,
         }
-
-    @classmethod
-    def get_instance(cls) -> "DocumentationWatcherService":
-        """Get or create singleton instance."""
-        if cls._instance is None:
-            cls._instance = cls()
-        return cls._instance
 
     async def start(self) -> bool:
         """
@@ -402,9 +395,8 @@ class DocumentationWatcherService:
 
 
 # Convenience functions
-def get_documentation_watcher() -> DocumentationWatcherService:
-    """Get the documentation watcher singleton instance."""
-    return DocumentationWatcherService.get_instance()
+get_documentation_watcher = lazy_singleton(DocumentationWatcherService)
+"""Get the documentation watcher singleton instance."""
 
 
 async def start_documentation_watcher() -> bool:

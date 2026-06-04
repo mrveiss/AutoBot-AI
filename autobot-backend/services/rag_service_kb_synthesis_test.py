@@ -61,7 +61,7 @@ def _mock_client(*collection_docs_pairs):
 
 class TestGetKbSynthesisContext:
     @pytest.mark.asyncio
-    async def test_returns_empty_string_when_chromadb_unavailable(self):
+    async def test_returns_empty_string_when_chromadb_unavailable(self) -> None:
         """ChromaDB client raises → returns empty string without propagating."""
         svc = _make_service()
 
@@ -75,7 +75,7 @@ class TestGetKbSynthesisContext:
         assert result == ""
 
     @pytest.mark.asyncio
-    async def test_single_collection_query_returns_results(self):
+    async def test_single_collection_query_returns_results(self) -> None:
         """Default kb_synthesis collection with 2 docs → prefixed joined string."""
         svc = _make_service()
         docs = ["Summary A", "Summary B"]
@@ -99,7 +99,7 @@ class TestGetKbSynthesisContext:
         assert "Summary B" in result
 
     @pytest.mark.asyncio
-    async def test_multi_collection_from_schema(self):
+    async def test_multi_collection_from_schema(self) -> None:
         """Schema with 2 synthesis_targets → both collections queried, results merged."""
         from services.knowledge.synthesis_schema_loader import (
             CollectionConfig,
@@ -150,7 +150,7 @@ class TestGetKbSynthesisContext:
         assert client.get_or_create_collection.call_count == 3
 
     @pytest.mark.asyncio
-    async def test_per_collection_failure_swallowed(self):
+    async def test_per_collection_failure_swallowed(self) -> None:
         """First collection raises, second succeeds → partial result returned."""
         svc = _make_service()
 
@@ -196,7 +196,7 @@ class TestGetKbSynthesisContext:
         assert result != ""
 
     @pytest.mark.asyncio
-    async def test_empty_results_returns_empty_string(self):
+    async def test_empty_results_returns_empty_string(self) -> None:
         """All collections return empty results → returns empty string."""
         svc = _make_service()
 

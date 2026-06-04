@@ -104,7 +104,7 @@ function goToCodeSync(): void {
             @click="goToCodeSync"
             class="px-3 py-1.5 text-sm font-medium text-amber-800 bg-amber-200 hover:bg-amber-300 rounded-md transition-colors"
           >
-            View Updates
+            {{ $t('updateNotification.viewUpdates') }}
           </button>
           <!-- Dismiss button -->
           <button
@@ -124,7 +124,7 @@ function goToCodeSync(): void {
 
 <style scoped>
 .update-notification {
-  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  background: #fef3c7;
   border-bottom: 1px solid #f59e0b;
   padding: 0.75rem 1.5rem;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);

@@ -10,35 +10,39 @@ Issue #255: Updated to use ServiceHTTPClient for authenticated service-to-servic
 communication with HMAC-SHA256 signatures.
 """
 
+from __future__ import annotations
+
 import asyncio
 import json
-import logging
 from dataclasses import dataclass
-from enum import Enum
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Set
 
 import yaml
 
 if TYPE_CHECKING:
     from utils.service_client import ServiceHTTPClient
 
+# #6755 round 3: CircuitState was duplicated here (Jaccard 1.0 vs
+# circuit_breaker.CircuitState — same CLOSED/OPEN/HALF_OPEN values).
+# Re-export the canonical type instead of redefining locally so callers
+# keep working unchanged and worker-health code shares one source of truth.
 from autobot_shared.http_client import HTTPClientManager, get_http_client
+from autobot_shared.logging_manager import get_logger
+from circuit_breaker import CircuitState
 from constants.threshold_constants import LLMDefaults, TimingConstants
 from utils.service_registry import get_service_url
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #255: Enable authenticated client for service-to-service communication
 # Set to False to fall back to unauthenticated mode (for development/testing)
 USE_AUTHENTICATED_CLIENT = True
 
 
-class CircuitState(Enum):
-    """Circuit breaker states for worker health management"""
-
-    CLOSED = "closed"  # Normal operation
-    OPEN = "open"  # Worker failed, blocking requests
-    HALF_OPEN = "half_open"  # Testing recovery
+# #6755 round 3: ``CircuitState`` is now re-exported from
+# ``circuit_breaker`` at module top — same enum values (closed / open /
+# half_open), used here for worker health management. The local
+# redefinition was flagged Jaccard 1.0 by the cross-file analyzer.
 
 
 @dataclass
@@ -149,7 +153,7 @@ class NPUWorkerClient:
         """
         self.npu_endpoint = npu_endpoint or get_service_url("npu-worker")
         self._use_auth = use_auth if use_auth is not None else USE_AUTHENTICATED_CLIENT
-        self._http_client: Optional[Union[HTTPClientManager, "ServiceHTTPClient"]] = None
+        self._http_client: HTTPClientManager | "ServiceHTTPClient" | None = None
         self._auth_client_initialized = False
         self.available = False
         self._check_availability_task = None
@@ -335,7 +339,7 @@ class NPUWorkerPool:
         self.workers: Dict[str, WorkerState] = {}
         self._worker_configs: Dict[str, Dict] = {}
         self._lock = asyncio.Lock()
-        self._health_monitor_task: Optional[asyncio.Task] = None
+        self._health_monitor_task: asyncio.Task | None = None
         self._running = False
 
         # Load initial configuration
@@ -367,7 +371,7 @@ class NPUWorkerPool:
 
         logger.info("NPUWorkerPool initialized with %d workers", len(self.workers))
 
-    async def _select_worker(self, excluded_workers: Set[str]) -> Optional[WorkerState]:
+    async def _select_worker(self, excluded_workers: Set[str]) -> WorkerState | None:
         """
         Select best available worker using priority-first + least-connections.
 
@@ -593,7 +597,7 @@ class NPUWorkerPool:
         data: Dict[str, Any],
         attempt: int,
         excluded_workers: Set[str],
-    ) -> Optional[Dict[str, Any]]:
+    ) -> Dict[str, Any] | None:
         """
         Run a single task attempt on one worker, updating circuit state. Ref: #1088.
 

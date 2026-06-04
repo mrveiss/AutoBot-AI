@@ -8,20 +8,20 @@ Tracks completion feedback and updates pattern statistics.
 """
 
 import json
-import logging
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from sqlalchemy import create_engine, func
 from sqlalchemy.orm import sessionmaker
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.ssot_config import config
 from autobot_shared.time_utils import now_utc, parse_utc_iso, utc_timestamp
 from models.code_pattern import CodePattern
 from models.completion_feedback import CompletionFeedback
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class FeedbackTracker:
@@ -32,7 +32,7 @@ class FeedbackTracker:
     and adjusting pattern frequencies accordingly.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         # Database setup
         DATABASE_URL = (
             f"postgresql://{config.database.user}:{config.database.password}"
@@ -54,12 +54,12 @@ class FeedbackTracker:
         context: str,
         suggestion: str,
         action: str,
-        user_id: Optional[str] = None,
-        language: Optional[str] = None,
-        file_path: Optional[str] = None,
-        pattern_id: Optional[int] = None,
-        confidence_score: Optional[float] = None,
-        completion_rank: Optional[int] = None,
+        user_id: str | None = None,
+        language: str | None = None,
+        file_path: str | None = None,
+        pattern_id: int | None = None,
+        confidence_score: float | None = None,
+        completion_rank: int | None = None,
     ) -> CompletionFeedback:
         """Record completion feedback event. Ref: #1088."""
         with self.SessionLocal() as db:
@@ -105,7 +105,7 @@ class FeedbackTracker:
                 logger.error("Failed to record feedback: %s", e, exc_info=True)
                 raise
 
-    def _update_pattern_statistics(self, db, pattern_id: int, action: str):
+    def _update_pattern_statistics(self, db, pattern_id: int, action: str) -> None:
         """Update pattern usage statistics."""
         pattern = db.query(CodePattern).filter(CodePattern.id == pattern_id).first()
 
@@ -131,7 +131,7 @@ class FeedbackTracker:
             f"= {pattern.acceptance_rate:.2%}"
         )
 
-    def _cache_feedback_event(self, feedback: CompletionFeedback):
+    def _cache_feedback_event(self, feedback: CompletionFeedback) -> None:
         """Cache feedback event in Redis for fast metrics."""
         # Store in time-series sorted set
         redis_key = f"feedback:events:{feedback.language or 'all'}"
@@ -150,7 +150,7 @@ class FeedbackTracker:
         cutoff = (now_utc() - timedelta(days=30)).timestamp()
         self.redis_client.zremrangebyscore(redis_key, 0, cutoff)
 
-    def _check_retrain_threshold(self):
+    def _check_retrain_threshold(self) -> None:
         """Check if retraining threshold reached."""
         with self.SessionLocal() as db:
             # Get feedback count since last retrain
@@ -227,8 +227,8 @@ class FeedbackTracker:
 
     def get_acceptance_metrics(
         self,
-        language: Optional[str] = None,
-        pattern_type: Optional[str] = None,
+        language: str | None = None,
+        pattern_type: str | None = None,
         time_window_days: int = 7,
     ) -> Dict:
         """
@@ -269,7 +269,7 @@ class FeedbackTracker:
                 "top_patterns": self._get_top_patterns(db),
             }
 
-    def get_recent_feedback(self, limit: int = 50, action: Optional[str] = None) -> List[Dict]:
+    def get_recent_feedback(self, limit: int = 50, action: str | None = None) -> List[Dict]:
         """
         Get recent feedback events.
 
@@ -290,7 +290,7 @@ class FeedbackTracker:
 
             return [fb.to_dict() for fb in feedback_events]
 
-    def mark_retrain_completed(self):
+    def mark_retrain_completed(self) -> None:
         """Mark that retraining has completed."""
         self.redis_client.set(self.last_retrain_key, utc_timestamp().encode())
         logger.info("Marked retraining as completed")

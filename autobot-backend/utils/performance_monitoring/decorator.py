@@ -11,11 +11,13 @@ Extracted from performance_monitor.py as part of Issue #381 refactoring.
 
 import asyncio
 import json
-import logging
 import time
 from functools import wraps
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_constants import TTL_1_HOUR
+
+logger = get_logger(__name__)
 
 # Module-level redis client reference (set by monitor)
 _redis_client = None
@@ -52,7 +54,7 @@ def _store_performance_in_redis(
                 ): time.time()
             },
         )
-        _redis_client.expire(key, 3600)  # 1 hour retention
+        _redis_client.expire(key, TTL_1_HOUR)  # 1 hour retention
     except Exception:
         logger.debug("Suppressed exception in try block", exc_info=True)
 

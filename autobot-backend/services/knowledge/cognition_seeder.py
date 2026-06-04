@@ -12,23 +12,25 @@ flags ``seeded: true`` and ``seed_priority: high/medium/low`` so that
 AdvancedRAGOptimizer can apply a retrieval score boost.
 """
 
+from __future__ import annotations
+
 import asyncio
 import hashlib
-import logging
 import os
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List
 
 import yaml
 
+from autobot_shared.logging_manager import get_logger
 from constants.path_constants import PATH
 
 if TYPE_CHECKING:
     from knowledge.backends import BaseClient
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Priority label → numeric boost applied by AdvancedRAGOptimizer
 SEED_PRIORITY_BOOST: Dict[str, float] = {
@@ -75,7 +77,7 @@ class SeedStatus:
     """Status of a seeded collection returned by get_seed_status()."""
 
     collection: str
-    seeded_at: Optional[str]
+    seeded_at: str | None
     document_count: int
     sources: List[str]
 
@@ -128,7 +130,7 @@ def _chunk_text(content: str, max_chars: int = 1500) -> List[str]:
 def _chunk_id(collection: str, rel_path: str, chunk_index: int) -> str:
     """Stable deterministic ID for a seed chunk."""
     key = f"seed:{collection}:{rel_path}:{chunk_index}"
-    return hashlib.md5(key.encode()).hexdigest()[:16]
+    return hashlib.md5(key.encode(), usedforsecurity=False).hexdigest()[:16]
 
 
 # ---------------------------------------------------------------------------
@@ -147,7 +149,7 @@ class CognitionSeeder:
         # Backend-agnostic handles (#5062, #5194). Resolved in
         # ``_ensure_initialized()`` to a ``BaseClient``; the concrete
         # production backend is ChromaDB today.
-        self._client: Optional["BaseClient"] = None
+        self._client: "BaseClient" | None = None
         self._embed_model = None
         self._initialized = False
         self._root_dir: Path = PATH.PROJECT_ROOT
@@ -388,7 +390,7 @@ class CognitionSeeder:
 # Module-level singleton
 # ---------------------------------------------------------------------------
 
-_seeder: Optional[CognitionSeeder] = None
+_seeder: CognitionSeeder | None = None
 _seeder_lock = asyncio.Lock()
 
 

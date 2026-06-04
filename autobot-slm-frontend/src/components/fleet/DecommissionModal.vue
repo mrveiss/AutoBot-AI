@@ -132,7 +132,7 @@ function handleMigrateClick() {
           @click="emit('close')"
           aria-label="Close decommission modal"
         >
-          <span aria-hidden="true">&times;</span>
+          <span aria-hidden="true">{{ $t('fleet.decommissionModal.times') }}</span>
         </button>
       </div>
 
@@ -141,7 +141,7 @@ function handleMigrateClick() {
         <!-- Loading -->
         <div v-if="state === 'loading'" class="loading" role="status">
           <span class="spinner" aria-hidden="true"></span>
-          Checking role dependencies...
+          {{ $t('fleet.decommissionModal.checkingRoleDependencies') }}
         </div>
 
         <!-- Preflight results (blocked or ready) -->
@@ -151,11 +151,10 @@ function handleMigrateClick() {
           <!-- Warning banner -->
           <div class="warning-banner">
             <p class="warning-text">
-              This will permanently remove all AutoBot software
-              and data from this node.
+              {{ $t('fleet.decommissionModal.thisWillPermanentlyRemove') }}
             </p>
             <p class="warning-ip">
-              IP: <code>{{ node.ip_address }}</code>
+              {{ $t('fleet.decommissionModal.iP') }} <code>{{ node.ip_address }}</code>
             </p>
           </div>
 
@@ -168,7 +167,7 @@ function handleMigrateClick() {
             class="role-section role-section--danger"
           >
             <h4 class="section-title section-title--danger">
-              Must migrate first
+              {{ $t('fleet.decommissionModal.mustMigrateFirst') }}
             </h4>
             <div
               v-for="role in preflight.must_migrate"
@@ -188,7 +187,7 @@ function handleMigrateClick() {
                 title="Close this modal and use Role Management to migrate this role"
                 @click="handleMigrateClick"
               >
-                Migrate
+                {{ $t('fleet.decommissionModal.migrate') }}
               </button>
             </div>
           </div>
@@ -204,7 +203,7 @@ function handleMigrateClick() {
             <h4
               class="section-title section-title--warning"
             >
-              Recommended to migrate
+              {{ $t('fleet.decommissionModal.recommendedToMigrate') }}
             </h4>
             <div
               v-for="role in preflight.should_migrate"
@@ -231,7 +230,7 @@ function handleMigrateClick() {
             class="role-section role-section--safe"
           >
             <h4 class="section-title section-title--safe">
-              Safe to remove
+              {{ $t('fleet.decommissionModal.safeToRemove') }}
             </h4>
             <div
               v-for="role in preflight.safe_to_remove"
@@ -256,7 +255,7 @@ function handleMigrateClick() {
                 type="checkbox"
                 v-model="backupEnabled"
               />
-              Backup data before removal
+              {{ $t('fleet.decommissionModal.backupDataBeforeRemoval') }}
             </label>
           </div>
 
@@ -266,9 +265,9 @@ function handleMigrateClick() {
               for="confirm-node-id"
               class="confirm-label"
             >
-              Type
+              {{ $t('fleet.decommissionModal.type') }}
               <code>{{ node.node_id }}</code>
-              to confirm
+              {{ $t('fleet.decommissionModal.toConfirm') }}
             </label>
             <input
               id="confirm-node-id"

@@ -5,12 +5,11 @@ Integrates all analyzers: duplicates, environment variables, performance, securi
 
 import asyncio
 import json
-import logging
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from api_consistency_analyzer import APIConsistencyAnalyzer
 from architectural_pattern_analyzer import ArchitecturalPatternAnalyzer
@@ -21,9 +20,11 @@ from security_analyzer import SecurityAnalyzer
 from testing_coverage_analyzer import TestingCoverageAnalyzer
 
 from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_constants import TTL_1_HOUR
 from constants.ttl_constants import TTL_30_DAYS
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -199,7 +200,7 @@ class CodeQualityDashboard:
         logger.info(f"Comprehensive code quality analysis complete in {analysis_time:.2f}s")
         return comprehensive_report
 
-    async def _run_duplication_analysis(self, root_path: str, patterns: List[str]) -> Optional[Dict[str, Any]]:
+    async def _run_duplication_analysis(self, root_path: str, patterns: List[str]) -> Dict[str, Any] | None:
         """Run code duplication analysis"""
         try:
             logger.info("Running duplication analysis...")
@@ -208,7 +209,7 @@ class CodeQualityDashboard:
             logger.error(f"Duplication analysis failed: {e}")
             return None
 
-    async def _run_environment_analysis(self, root_path: str, patterns: List[str]) -> Optional[Dict[str, Any]]:
+    async def _run_environment_analysis(self, root_path: str, patterns: List[str]) -> Dict[str, Any] | None:
         """Run environment variable analysis"""
         try:
             logger.info("Running environment variable analysis...")
@@ -217,7 +218,7 @@ class CodeQualityDashboard:
             logger.error(f"Environment analysis failed: {e}")
             return None
 
-    async def _run_performance_analysis(self, root_path: str, patterns: List[str]) -> Optional[Dict[str, Any]]:
+    async def _run_performance_analysis(self, root_path: str, patterns: List[str]) -> Dict[str, Any] | None:
         """Run performance analysis"""
         try:
             logger.info("Running performance analysis...")
@@ -226,7 +227,7 @@ class CodeQualityDashboard:
             logger.error(f"Performance analysis failed: {e}")
             return None
 
-    async def _run_security_analysis(self, root_path: str, patterns: List[str]) -> Optional[Dict[str, Any]]:
+    async def _run_security_analysis(self, root_path: str, patterns: List[str]) -> Dict[str, Any] | None:
         """Run security analysis"""
         try:
             logger.info("Running security analysis...")
@@ -235,7 +236,7 @@ class CodeQualityDashboard:
             logger.error(f"Security analysis failed: {e}")
             return None
 
-    async def _run_api_analysis(self, root_path: str, patterns: List[str]) -> Optional[Dict[str, Any]]:
+    async def _run_api_analysis(self, root_path: str, patterns: List[str]) -> Dict[str, Any] | None:
         """Run API consistency analysis"""
         try:
             logger.info("Running API consistency analysis...")
@@ -244,7 +245,7 @@ class CodeQualityDashboard:
             logger.error(f"API analysis failed: {e}")
             return None
 
-    async def _run_testing_analysis(self, root_path: str, patterns: List[str]) -> Optional[Dict[str, Any]]:
+    async def _run_testing_analysis(self, root_path: str, patterns: List[str]) -> Dict[str, Any] | None:
         """Run testing coverage analysis"""
         try:
             logger.info("Running testing coverage analysis...")
@@ -253,7 +254,7 @@ class CodeQualityDashboard:
             logger.error(f"Testing analysis failed: {e}")
             return None
 
-    async def _run_architecture_analysis(self, root_path: str, patterns: List[str]) -> Optional[Dict[str, Any]]:
+    async def _run_architecture_analysis(self, root_path: str, patterns: List[str]) -> Dict[str, Any] | None:
         """Run architectural pattern analysis"""
         try:
             logger.info("Running architectural pattern analysis...")
@@ -262,21 +263,21 @@ class CodeQualityDashboard:
             logger.error(f"Architecture analysis failed: {e}")
             return None
 
-    def _get_duplication_score(self, duplication_data: Optional[Dict]) -> float:
+    def _get_duplication_score(self, duplication_data: Dict | None) -> float:
         """Calculate duplication score (Issue #340: extracted helper)."""
         if not duplication_data:
             return 100.0
         total_groups = duplication_data.get("total_duplicate_groups", 0)
         return max(0, 100 - (total_groups * 2))
 
-    def _get_environment_score(self, env_data: Optional[Dict]) -> float:
+    def _get_environment_score(self, env_data: Dict | None) -> float:
         """Calculate environment config score (Issue #340: extracted helper)."""
         if not env_data:
             return 100.0
         critical_values = env_data.get("critical_hardcoded_values", 0)
         return max(0, 100 - (critical_values * 0.5))
 
-    def _get_performance_score(self, perf_data: Optional[Dict]) -> float:
+    def _get_performance_score(self, perf_data: Dict | None) -> float:
         """Calculate performance score (Issue #340: extracted helper)."""
         if not perf_data:
             return 100.0
@@ -284,25 +285,25 @@ class CodeQualityDashboard:
         high_issues = perf_data.get("high_priority_issues", 0)
         return max(0, 100 - (critical_issues * 10 + high_issues * 5))
 
-    def _get_security_score(self, security_data: Optional[Dict]) -> float:
+    def _get_security_score(self, security_data: Dict | None) -> float:
         """Calculate security score (Issue #340: extracted helper)."""
         if not security_data or "metrics" not in security_data:
             return 100.0
         return security_data["metrics"].get("security_score", 50)
 
-    def _get_api_score(self, api_data: Optional[Dict]) -> float:
+    def _get_api_score(self, api_data: Dict | None) -> float:
         """Calculate API consistency score (Issue #340: extracted helper)."""
         if not api_data:
             return 100.0
         return api_data.get("consistency_score", 50)
 
-    def _get_testing_score(self, testing_data: Optional[Dict]) -> float:
+    def _get_testing_score(self, testing_data: Dict | None) -> float:
         """Calculate test coverage score (Issue #340: extracted helper)."""
         if not testing_data:
             return 0.0
         return testing_data.get("test_coverage_percentage", 0)
 
-    def _get_architecture_score(self, arch_data: Optional[Dict]) -> float:
+    def _get_architecture_score(self, arch_data: Dict | None) -> float:
         """Calculate architecture score (Issue #340: extracted helper)."""
         if not arch_data:
             return 50.0
@@ -372,7 +373,7 @@ class CodeQualityDashboard:
             technical_debt_ratio=round(technical_debt_ratio, 2),
         )
 
-    def _extract_duplication_issues(self, duplication_data: Optional[Dict]) -> List[QualityIssue]:
+    def _extract_duplication_issues(self, duplication_data: Dict | None) -> List[QualityIssue]:
         """Extract issues from duplication analysis (Issue #340: extracted helper)."""
         if not duplication_data or "duplicate_groups" not in duplication_data:
             return []
@@ -394,7 +395,7 @@ class CodeQualityDashboard:
             )
         return issues
 
-    def _extract_environment_issues(self, env_data: Optional[Dict]) -> List[QualityIssue]:
+    def _extract_environment_issues(self, env_data: Dict | None) -> List[QualityIssue]:
         """Extract issues from environment analysis (Issue #340: extracted helper)."""
         if not env_data or "critical_hardcoded_values" not in env_data:
             return []
@@ -419,7 +420,7 @@ class CodeQualityDashboard:
             )
         return issues
 
-    def _extract_security_issues(self, security_data: Optional[Dict]) -> List[QualityIssue]:
+    def _extract_security_issues(self, security_data: Dict | None) -> List[QualityIssue]:
         """Extract issues from security analysis (Issue #340: extracted helper)."""
         if not security_data or "vulnerability_details" not in security_data:
             return []
@@ -443,7 +444,7 @@ class CodeQualityDashboard:
             )
         return issues
 
-    def _extract_performance_issues(self, perf_data: Optional[Dict]) -> List[QualityIssue]:
+    def _extract_performance_issues(self, perf_data: Dict | None) -> List[QualityIssue]:
         """Extract issues from performance analysis (Issue #340: extracted helper)."""
         if not perf_data or "performance_details" not in perf_data:
             return []
@@ -467,7 +468,7 @@ class CodeQualityDashboard:
             )
         return issues
 
-    def _extract_api_issues(self, api_data: Optional[Dict]) -> List[QualityIssue]:
+    def _extract_api_issues(self, api_data: Dict | None) -> List[QualityIssue]:
         """Extract issues from API consistency analysis (Issue #340: extracted helper)."""
         if not api_data or "inconsistencies" not in api_data:
             return []
@@ -491,7 +492,7 @@ class CodeQualityDashboard:
             )
         return issues
 
-    def _extract_testing_issues(self, testing_data: Optional[Dict]) -> List[QualityIssue]:
+    def _extract_testing_issues(self, testing_data: Dict | None) -> List[QualityIssue]:
         """Extract issues from testing coverage analysis (Issue #340: extracted helper)."""
         if not testing_data or "coverage_gaps" not in testing_data:
             return []
@@ -516,7 +517,7 @@ class CodeQualityDashboard:
             )
         return issues
 
-    def _extract_architecture_issues(self, arch_data: Optional[Dict]) -> List[QualityIssue]:
+    def _extract_architecture_issues(self, arch_data: Dict | None) -> List[QualityIssue]:
         """Extract issues from architectural analysis (Issue #340: extracted helper)."""
         if not arch_data or "architectural_issues" not in arch_data:
             return []
@@ -725,7 +726,7 @@ class CodeQualityDashboard:
         await self._ensure_redis()
         if self.redis_client:
             try:
-                await self.redis_client.setex(self.DASHBOARD_KEY, 3600, json.dumps(report, default=str))  # 1 hour
+                await self.redis_client.setex(self.DASHBOARD_KEY, TTL_1_HOUR, json.dumps(report, default=str))  # 1 hour
             except Exception as e:
                 logger.warning(f"Failed to cache dashboard report: {e}")
 

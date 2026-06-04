@@ -18,17 +18,25 @@ external monitors should be migrating *to*.
 After the sunset date elapses, the route-deletion PR can run with the
 audit playbook in ``docs/api/health.md`` knowing every consumer was given
 prior notice.
+
+Issue #6919: Logging and Prometheus metering added so external audits can
+identify which scrapers are still calling deprecated endpoints.  Each hit
+is logged at INFO level and increments
+``autobot_legacy_health_hits_total{path, user_agent}`` so operators can
+query ``sum by (path, user_agent) (autobot_legacy_health_hits_total)``
+to identify the caller and the targeted endpoint.
 """
 
 from __future__ import annotations
-
-import logging
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.proxy_utils import get_client_ip
+
+logger = get_logger(__name__)
 
 # RFC 8594 ``Sunset`` header value — HTTP-date format (RFC 7231 §7.1.1.1).
 # Picked ~4 months out from the consolidation merge (#6870 on 2026-05-04)
@@ -43,6 +51,31 @@ _CANONICAL_PATHS = frozenset(
         "/api/health",  # legacy alias on api/system.py
     }
 )
+
+
+class _NoopCounter:
+    """Fallback counter used when prometheus_client is unavailable."""
+
+    def labels(self, **_kwargs: object) -> "_NoopCounter":
+        return self
+
+    def inc(self, _amount: int = 1) -> None:
+        return None
+
+
+try:  # pragma: no cover - exercised in environments with the dep
+    from prometheus_client import Counter as _PromCounter
+
+    autobot_legacy_health_hits_total: _NoopCounter | _PromCounter = _PromCounter(
+        "autobot_legacy_health_hits_total",
+        (
+            "Count of requests to deprecated /api/<module>/health endpoints "
+            "during grace period (#6919). Query over 14 days before deletion."
+        ),
+        ("path", "user_agent"),
+    )
+except Exception:  # pragma: no cover - defensive fallback
+    autobot_legacy_health_hits_total = _NoopCounter()
 
 
 def _is_legacy_module_health(path: str) -> bool:
@@ -68,4 +101,8 @@ class SunsetLegacyHealthMiddleware(BaseHTTPMiddleware):
             response.headers["Sunset"] = SUNSET_DATE_HTTP
             response.headers["Deprecation"] = "true"
             response.headers["Link"] = '</api/system/health>; rel="successor-version"'
+            client_ip = get_client_ip(request) or "unknown"
+            ua = request.headers.get("user-agent", "unknown")[:120]
+            logger.info("Legacy health hit: %s from %s (%s)", path, client_ip, ua)
+            autobot_legacy_health_hits_total.labels(path=path, user_agent=ua).inc()
         return response

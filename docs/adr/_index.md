@@ -18,3 +18,4 @@ aliases:
 | [003-npu-integration-strategy](003-npu-integration-strategy.md) | NPU integration strategy |
 | [004-chat-workflow-architecture](004-chat-workflow-architecture.md) | Chat workflow architecture |
 | [005-single-frontend-mandate](005-single-frontend-mandate.md) | Single frontend mandate |
+| [006-skill-bound-planning](006-skill-bound-planning.md) | Skill-bound planning via skill_router at plan time |

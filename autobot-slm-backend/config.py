@@ -275,7 +275,7 @@ class Settings(BaseSettings):
 
     # Monitoring
     monitoring_mode: str = "local"  # local or remote
-    monitoring_host: Optional[str] = None
+    monitoring_host: str | None = None
     grafana_url: str = "http://127.0.0.1:3000"
     prometheus_url: str = "http://127.0.0.1:9090"
 

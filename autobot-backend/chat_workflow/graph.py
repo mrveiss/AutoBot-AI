@@ -24,11 +24,12 @@ Architecture:
 
 import hashlib
 import json
-import logging
-import os
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 from langchain_core.runnables import RunnableConfig
+
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 
 try:
     from langgraph.checkpoint.redis.aio import AsyncRedisSaver
@@ -41,7 +42,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.types import interrupt
 from typing_extensions import TypedDict
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # Tool-call loop detection constants (#3254)
@@ -106,8 +107,8 @@ class ChatState(TypedDict, total=False):
     agentic_search_queries: List[str]
 
     # Command approval (interrupt-based)
-    pending_approval: Optional[Dict[str, Any]]
-    approval_decision: Optional[Dict[str, Any]]
+    pending_approval: Dict[str, Any] | None
+    approval_decision: Dict[str, Any] | None
 
     # Output messages streamed to frontend
     workflow_messages: List[Dict[str, Any]]
@@ -124,7 +125,7 @@ class ChatState(TypedDict, total=False):
     tool_loop_warning: str
 
     # Error tracking
-    error: Optional[str]
+    error: str | None
 
 
 # ---------------------------------------------------------------------------
@@ -221,7 +222,7 @@ async def initialize_session(state: ChatState, config: RunnableConfig) -> dict:
 
         # Issue #3278: fire ON_MESSAGE_RECEIVED hook so plugins can observe chat input.
         try:
-            from plugin_sdk.hooks import Hook, HookRegistry
+            from autobot_shared.plugin_sdk import Hook, HookRegistry
 
             await HookRegistry().call_hook(
                 Hook.ON_MESSAGE_RECEIVED.value,
@@ -477,7 +478,7 @@ async def generate_response(state: ChatState, config: RunnableConfig) -> dict:
 
     # Issue #3278: notify plugins before LLM execution.
     try:
-        from plugin_sdk.hooks import Hook, HookRegistry
+        from autobot_shared.plugin_sdk import Hook, HookRegistry
 
         await HookRegistry().call_hook(
             Hook.ON_AGENT_EXECUTE.value,
@@ -504,7 +505,7 @@ async def generate_response(state: ChatState, config: RunnableConfig) -> dict:
         )
         # Issue #3278: notify plugins on agent error.
         try:
-            from plugin_sdk.hooks import Hook, HookRegistry
+            from autobot_shared.plugin_sdk import Hook, HookRegistry
 
             await HookRegistry().call_hook(
                 Hook.ON_AGENT_ERROR.value,
@@ -518,7 +519,7 @@ async def generate_response(state: ChatState, config: RunnableConfig) -> dict:
 
     # Issue #3278: notify plugins after successful LLM execution.
     try:
-        from plugin_sdk.hooks import Hook, HookRegistry
+        from autobot_shared.plugin_sdk import Hook, HookRegistry
 
         await HookRegistry().call_hook(
             Hook.ON_AGENT_COMPLETE.value,
@@ -724,7 +725,7 @@ async def execute_tools(state: ChatState, config: RunnableConfig) -> dict:
 
     # Issue #3278: notify plugins before tool execution.
     try:
-        from plugin_sdk.hooks import Hook, HookRegistry
+        from autobot_shared.plugin_sdk import Hook, HookRegistry
 
         await HookRegistry().call_hook(
             Hook.ON_TOOL_CALL.value,
@@ -777,7 +778,7 @@ async def execute_tools(state: ChatState, config: RunnableConfig) -> dict:
 
     # Issue #3278: notify plugins after tool execution.
     try:
-        from plugin_sdk.hooks import Hook, HookRegistry
+        from autobot_shared.plugin_sdk import Hook, HookRegistry
 
         await HookRegistry().call_hook(
             Hook.ON_TOOL_COMPLETE.value,
@@ -905,7 +906,7 @@ async def perform_knowledge_search(state: ChatState, config: RunnableConfig) -> 
 
         # Issue #3278: notify plugins after knowledge base search.
         try:
-            from plugin_sdk.hooks import Hook, HookRegistry
+            from autobot_shared.plugin_sdk import Hook, HookRegistry
 
             await HookRegistry().call_hook(
                 Hook.ON_KB_SEARCH.value,
@@ -1167,8 +1168,8 @@ async def get_redis_checkpointer() -> "AsyncRedisSaver":  # type: ignore[return]
         _REDIS_URI = f"redis://{redis_host}:{redis_port}"
         ttl_minutes = ssot.redis.checkpoint_ttl_minutes
     except Exception:
-        redis_host = os.environ.get("AUTOBOT_REDIS_HOST", "localhost")
-        redis_port = os.environ.get("AUTOBOT_REDIS_PORT", "6379")
+        redis_host = config.redis_host
+        redis_port = config.redis_port
         _REDIS_URI = f"redis://{redis_host}:{redis_port}"
         logger.warning(
             "SSOT config unavailable, using fallback Redis URI: %s",

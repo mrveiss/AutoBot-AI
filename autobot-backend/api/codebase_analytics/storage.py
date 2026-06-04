@@ -7,13 +7,13 @@ Storage utilities for codebase analytics (Redis and ChromaDB)
 Issue #369: Added async ChromaDB operations to prevent event loop blocking.
 """
 
-import logging
 import re
 from pathlib import Path
 
+from autobot_shared.logging_manager import get_logger
 from knowledge.backends import get_async_default_client, get_default_client
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Module-level project root constant (Issue #380 - avoid repeated Path computation)
 _PROJECT_ROOT = Path(__file__).parent.parent.parent.parent

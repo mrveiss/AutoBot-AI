@@ -7,6 +7,7 @@ A2A Protocol API Router
 Issue #961: Exposes AutoBot as an A2A-compliant agent server.
 Issue #968: Adds signed agent card, trace context, caller_id, rate limiting,
             audit log endpoint, and capability verification endpoint.
+Issue #7358: Phase 2 — trust score observability endpoints.
 
 Endpoints:
   GET  /api/a2a/agent-card              Agent Card (capabilities + skills)
@@ -21,12 +22,14 @@ Endpoints:
   GET  /api/a2a/stats                   Task statistics
   GET  /api/a2a/capabilities            Verify local capability claims
   POST /api/a2a/capabilities/verify     Verify a remote agent's capabilities
+  GET  /api/a2a/trust                   List all peer trust records
+  GET  /api/a2a/trust/{peer_id}         Trust record for a specific peer
+  GET  /api/a2a/trust/{peer_id}/audit   Audit log (level-change history) for a peer
 """
 
 import asyncio
 import json
-import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Request
 from fastapi.responses import StreamingResponse
@@ -37,6 +40,7 @@ from a2a.security import SecurityCardSigner
 from a2a.task_executor import execute_a2a_task
 from a2a.task_manager import get_task_manager
 from a2a.tracing import extract_caller_id, new_trace_id
+from a2a.trust_score import Capability, TrustAccessDenied, get_trust_manager
 from a2a.types import Task
 from api.schemas_agent import (
     A2AAgentCardResponse,
@@ -52,8 +56,9 @@ from api.schemas_agent import (
 )
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(
     dependencies=[Depends(check_admin_permission)],
@@ -186,8 +191,8 @@ async def submit_task(
     body: TaskSendRequest,
     background_tasks: BackgroundTasks,
     request: Request,
-    x_a2a_agent_id: Optional[str] = Header(None, alias="X-A2A-Agent-Id"),
-    authorization: Optional[str] = Header(None),
+    x_a2a_agent_id: str | None = Header(None, alias="X-A2A-Agent-Id"),
+    authorization: str | None = Header(None),
 ) -> Dict[str, Any]:
     """
     Accept a task and begin execution asynchronously.
@@ -207,6 +212,24 @@ async def submit_task(
     caller_id = extract_caller_id(x_a2a_agent_id, jwt_sub, addr)
     trace_id = new_trace_id()
 
+    # Issue #7358 + GH#8743: gate task submission by behavioural trust level.
+    # X-A2A-Agent-Id is required — callers without it are anonymous and
+    # cannot earn/have a trust record, so they are default-denied (no implicit
+    # trust for unauthenticated callers).  Identified peers must hold at least
+    # LIMITED trust (score > 0.30) to submit tasks.
+    if not x_a2a_agent_id:
+        raise HTTPException(
+            status_code=401,
+            detail="X-A2A-Agent-Id header is required for task submission",
+        )
+    try:
+        get_trust_manager().require_capability(x_a2a_agent_id, Capability.SUBMIT_TASKS)
+    except TrustAccessDenied as exc:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Peer trust level insufficient for task submission: {exc.level.value}",
+        ) from exc
+
     manager = get_task_manager()
     task = manager.create_task(
         body.message,
@@ -220,6 +243,7 @@ async def submit_task(
         task.id,
         body.message,
         body.context,
+        peer_id=x_a2a_agent_id,
     )
 
     logger.info(
@@ -520,11 +544,81 @@ async def verify_remote_capabilities(body: RemoteVerifyRequest) -> Dict[str, Any
 
 
 # ---------------------------------------------------------------------------
+# Trust score observability (Issue #7358 phase 2)
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/trust",
+    summary="List all peer trust records",
+    tags=["a2a"],
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_trust_records",
+    error_code_prefix="A2A",
+)
+async def list_trust_records() -> List[Dict[str, Any]]:
+    """
+    Return trust records for all known federated peers.
+
+    Issue #7358 phase 2: Provides operator visibility into federation health.
+    Records are sourced from Redis and include the current score, level,
+    and counters accumulated from live task outcomes.
+    """
+    records = get_trust_manager().list_peers()
+    return [r.to_dict() for r in records]
+
+
+@router.get(
+    "/trust/{peer_id:path}",
+    summary="Get trust record for a specific peer",
+    tags=["a2a"],
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_trust_record",
+    error_code_prefix="A2A",
+)
+async def get_trust_record(peer_id: str) -> Dict[str, Any]:
+    """
+    Return the full trust record for a specific federated peer.
+
+    Issue #7358 phase 2: If the peer has no prior interaction history,
+    returns a default UNTRUSTED record (score 0.0, zero counters).
+    """
+    record = get_trust_manager().get_record(peer_id)
+    return record.to_dict()
+
+
+@router.get(
+    "/trust/{peer_id:path}/audit",
+    summary="Get trust level audit log for a peer",
+    tags=["a2a"],
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_trust_audit",
+    error_code_prefix="A2A",
+)
+async def get_trust_audit(peer_id: str) -> Dict[str, Any]:
+    """
+    Return the level-change audit trail for a federated peer.
+
+    Issue #7358 phase 2: Each entry records the old/new trust level, the
+    score at the time of the change, and the reason (score_update,
+    threat_event, integrity_violation).  Returns the 100 most recent entries.
+    """
+    audit = get_trust_manager().get_audit_log(peer_id)
+    return {"peer_id": peer_id, "audit": audit}
+
+
+# ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
 
 
-def _extract_jwt_sub(authorization: Optional[str]) -> Optional[str]:
+def _extract_jwt_sub(authorization: str | None) -> str | None:
     """Extract the JWT subject claim without full validation."""
     if not authorization or not authorization.startswith("Bearer "):
         return None
@@ -532,7 +626,7 @@ def _extract_jwt_sub(authorization: Optional[str]) -> Optional[str]:
     return _decode_jwt_sub(token)
 
 
-def _decode_jwt_sub(token: str) -> Optional[str]:
+def _decode_jwt_sub(token: str) -> str | None:
     """
     Decode the JWT sub claim without signature verification.
 

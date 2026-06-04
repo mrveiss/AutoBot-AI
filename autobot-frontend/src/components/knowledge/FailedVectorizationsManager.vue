@@ -2,7 +2,7 @@
   <div class="failed-vectorizations-manager">
     <div class="manager-header">
       <h3>
-        <i class="fas fa-exclamation-triangle"></i>
+        <Icon name="exclamation-triangle" />
         {{ $t('knowledge.failedVectorizations.title') }}
       </h3>
       <div class="header-actions">
@@ -14,18 +14,18 @@
           :loading="loading"
           class="btn-refresh"
         >
-          <i v-if="!loading" class="fas fa-sync-alt"></i>
+          <Icon name="sync-alt" v-if="!loading" />
           {{ $t('knowledge.failedVectorizations.refresh') }}
         </BaseButton>
         <BaseButton
           v-if="failedJobs.length > 0"
-          variant="danger"
+          variant="error"
           size="sm"
           @click="clearAllFailed"
           :disabled="loading"
           class="btn-clear-all"
         >
-          <i class="fas fa-trash-alt"></i>
+          <Icon name="trash-alt" />
           {{ $t('knowledge.failedVectorizations.clearAll') }}
         </BaseButton>
       </div>
@@ -33,13 +33,13 @@
 
     <!-- Loading State -->
     <div v-if="loading && failedJobs.length === 0" class="loading-state">
-      <i class="fas fa-spinner fa-spin"></i>
+      <Icon name="spinner" class="animate-spin" />
       {{ $t('knowledge.failedVectorizations.loadingJobs') }}
     </div>
 
     <!-- Error State -->
     <div v-else-if="error" class="error-state">
-      <i class="fas fa-exclamation-circle"></i>
+      <Icon name="exclamation-circle" />
       {{ error }}
     </div>
 
@@ -56,7 +56,7 @@
       <div v-for="job in failedJobs" :key="job.job_id" class="failed-job-card">
         <div class="job-header">
           <div class="job-id">
-            <i class="fas fa-file-alt"></i>
+            <Icon name="file-alt" />
             <span class="fact-id">{{ job.fact_id.substring(0, 8) }}...</span>
           </div>
           <div class="job-time">
@@ -65,7 +65,7 @@
         </div>
 
         <div class="job-error">
-          <i class="fas fa-times-circle"></i>
+          <Icon name="times-circle" />
           {{ job.error || $t('knowledge.failedVectorizations.unknownError') }}
         </div>
 
@@ -78,7 +78,7 @@
             :loading="retryingJobs.has(job.job_id)"
             class="btn-retry"
           >
-            <i v-if="!retryingJobs.has(job.job_id)" class="fas fa-redo"></i>
+            <Icon name="redo" v-if="!retryingJobs.has(job.job_id)" />
             {{ retryingJobs.has(job.job_id) ? $t('knowledge.failedVectorizations.retrying') : $t('knowledge.failedVectorizations.retryBtn') }}
           </BaseButton>
           <BaseButton
@@ -88,7 +88,7 @@
             :disabled="loading"
             class="btn-delete"
           >
-            <i class="fas fa-trash"></i>
+            <Icon name="trash" />
             {{ $t('knowledge.failedVectorizations.deleteBtn') }}
           </BaseButton>
         </div>
@@ -98,6 +98,7 @@
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { formatDateTime } from '@/utils/formatHelpers'

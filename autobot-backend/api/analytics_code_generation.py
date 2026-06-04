@@ -19,18 +19,17 @@ import ast
 import difflib
 import hashlib
 import json
-import logging
 import re
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from api.analytics_shared import resolve_source_or_404 as _resolve_source_or_404
 from api.schemas_analytics import (
-    CodeGenerationHealthResponse,
+    AnalyticsCodeGenRollbackData,
     CodeGenerationRefactoringTypesResponse,
     CodeGenerationRequest,
     CodeGenerationResponse,
@@ -47,8 +46,10 @@ from api.schemas_analytics import (
 from api.schemas_common import DataResponse
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import RedisDatabase, get_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
+from autobot_shared.ssot_constants import TTL_30_DAYS
 
 # LLM Service for real code generation
 from services.llm_service import get_llm_service
@@ -57,7 +58,7 @@ LLM_INTERFACE_AVAILABLE = True
 
 # Issue #552: Prefix set in router_registry to match frontend calls at /api/code-generation/*
 router = APIRouter(tags=["code-generation", "analytics"])
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Pre-compiled regex patterns for code analysis and extraction
 _FUNC_DEF_RE = re.compile(r"def\s+(\w+)")  # Extract function name
@@ -496,7 +497,7 @@ class CodeGenerationEngine:
 
         return changes
 
-    async def _call_llm(self, prompt: str, system_prompt: Optional[str] = None) -> Tuple[str, int]:
+    async def _call_llm(self, prompt: str, system_prompt: str | None = None) -> Tuple[str, int]:
         """
         Call LLM for code generation/refactoring.
         Returns (response, tokens_used)
@@ -707,7 +708,7 @@ class CodeGenerationEngine:
             logger.error("Failed to get versions: %s", e)
             return []
 
-    async def rollback(self, file_path: str, version_id: Optional[str] = None) -> Optional[str]:
+    async def rollback(self, file_path: str, version_id: str | None = None) -> str | None:
         """Rollback to a specific version or the last saved version"""
         try:
             versions = await self.get_versions(file_path)
@@ -745,12 +746,12 @@ class CodeGenerationEngine:
                 await redis.hincrby(stats_key, f"{operation}:success", 1)
 
             # Set expiry (30 days)
-            await redis.expire(stats_key, 30 * 24 * 60 * 60)
+            await redis.expire(stats_key, TTL_30_DAYS)
 
         except Exception as e:
             logger.error("Failed to track stats: %s", e)
 
-    async def get_stats(self, source_id: Optional[str] = None) -> Dict[str, Any]:
+    async def get_stats(self, source_id: str | None = None) -> Dict[str, Any]:
         """Get code generation statistics.
 
         Issue #3441: When source_id is supplied, the Redis stats key is
@@ -811,39 +812,6 @@ get_code_generation_engine = lazy_singleton(CodeGenerationEngine)
 # =============================================================================
 # API Endpoints
 # =============================================================================
-
-
-@router.get("/health", response_model=CodeGenerationHealthResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_health",
-    error_code_prefix="ANALYTICS_CODE_GENERATION",
-)
-async def get_health(admin_check: bool = Depends(check_admin_permission)):
-    """Get code generation service health status.
-
-    Deprecated: Use /api/system/health for system-wide health checks.
-    This per-module endpoint will be removed in a future release. (#3333)
-
-    Issue #744: Requires admin authentication.
-    """
-    logger.warning(
-        "Deprecated health endpoint called: /api/code-generation/health — " "use /api/system/health instead (#3333)"
-    )
-    return {
-        "status": "healthy",
-        "service": "code_generation",
-        "deprecated": True,
-        "use_instead": "/api/system/health",
-        "features": [
-            "code_generation",
-            "refactoring",
-            "validation",
-            "rollback",
-        ],
-        "supported_languages": [lang.value for lang in CodeLanguage],
-        "refactoring_types": [rt.value for rt in RefactoringType],
-    }
 
 
 @router.post("/generate", response_model=CodeGenerationResponse)
@@ -942,7 +910,7 @@ async def get_versions(admin_check: bool = Depends(check_admin_permission), file
     }
 
 
-@router.post("/rollback", response_model=DataResponse)
+@router.post("/rollback", response_model=DataResponse[AnalyticsCodeGenRollbackData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="rollback_code",
@@ -978,7 +946,7 @@ async def rollback_code(admin_check: bool = Depends(check_admin_permission), req
 )
 async def get_stats(
     admin_check: bool = Depends(check_admin_permission),
-    source_id: Optional[str] = Query(None, description="Project source ID to scope analysis"),
+    source_id: str | None = Query(None, description="Project source ID to scope analysis"),
 ):
     """
     Get code generation statistics.

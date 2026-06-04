@@ -44,7 +44,7 @@ client wrapper(s) — one chokepoint per collection.add() path.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, Iterable, Optional, Sequence
+from typing import Any, Dict, Iterable, Sequence
 
 __all__ = [
     "EmbeddingMismatchError",
@@ -108,7 +108,7 @@ def provenance_to_metadata(provenance: EmbeddingProvenance) -> Dict[str, Any]:
     }
 
 
-def provenance_from_metadata(metadata: Optional[Dict[str, Any]]) -> Optional[EmbeddingProvenance]:
+def provenance_from_metadata(metadata: Dict[str, Any] | None) -> EmbeddingProvenance | None:
     """Recover provenance from a collection's metadata dict.
 
     Returns ``None`` if the metadata is missing both provenance keys —
@@ -126,7 +126,7 @@ def provenance_from_metadata(metadata: Optional[Dict[str, Any]]) -> Optional[Emb
     if not isinstance(model_name, str) or not model_name:
         return None
     try:
-        dim = int(dim_raw)
+        dim = int(dim_raw)  # type: ignore[arg-type]  # GH#7105: dim_raw from metadata dict is Any at runtime
     except (TypeError, ValueError):
         return None
     if dim <= 0:

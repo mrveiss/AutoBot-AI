@@ -4,11 +4,11 @@
 
 """CI/CD integration for Jenkins, GitLab CI, and CircleCI."""
 
-import logging
 from typing import Any, Dict, List
 
 import aiohttp
 
+from autobot_shared.logging_manager import get_logger
 from integrations.base import (
     BaseIntegration,
     IntegrationAction,
@@ -17,7 +17,7 @@ from integrations.base import (
     IntegrationStatus,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class JenkinsIntegration(BaseIntegration):

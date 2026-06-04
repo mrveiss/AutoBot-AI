@@ -103,7 +103,7 @@ class TestTerminalInputHandler:
             ("Do you want to continue? (y/n)", "y"),
             ("Enter your choice (1-3):", "1"),
             ("Please enter a command:", "help"),
-            ("Enter file path:", "/tmp/test_file"),
+            ("Enter file path:", "/tmp/test_file"),  # nosec B108 - test/controlled code uses tmpdir intentionally
             ("What is your name?", "test_user"),
             ("Enter port number:", "8080"),
             ("Enter hostname:", "localhost"),

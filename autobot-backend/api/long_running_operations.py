@@ -21,7 +21,7 @@ Boundary with ProcessAdapterService (#1751):
 import asyncio
 import logging
 import sys
-from typing import Dict, Optional
+from typing import Dict
 
 from fastapi import (
     APIRouter,
@@ -32,13 +32,11 @@ from fastapi import (
     WebSocket,
     WebSocketDisconnect,
 )
-from fastapi.responses import JSONResponse
 
 from api.schemas_workflows import (
     CodebaseIndexingRequest,
     KnowledgeBaseRequest,
     LongRunningOperationCancelResponse,
-    LongRunningOperationHealthResponse,
     LongRunningOperationListResponse,
     LongRunningOperationMigrateResponse,
     LongRunningOperationResumeResponse,
@@ -46,8 +44,9 @@ from api.schemas_workflows import (
     SecurityScanRequest,
     TestSuiteRequest,
 )
-from api.system_health import ComponentHealth, register_health_probe
+from api.system_health import ComponentHealth, KnownProbes, register_health_probe
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.path_validator import validate_path
 from constants.path_constants import PATH
 from constants.threshold_constants import TimingConstants
@@ -56,33 +55,29 @@ from constants.threshold_constants import TimingConstants
 sys.path.append(str(PATH.PROJECT_ROOT))
 
 # Import our long-running operations framework
-try:
-    from utils.long_running_operations_framework import OperationStatus, OperationType
-    from utils.operation_timeout_integration import (
-        CreateOperationRequest,
-        OperationMigrator,
-        operation_integration_manager,
-    )
+from autobot_shared.missing_dep import optional_import
 
-    _OPERATIONS_AVAILABLE = True
-except ImportError as _e:
-    from autobot_shared.missing_dep import MissingDep as _MissingDep
+_lro = optional_import("utils.long_running_operations_framework", ["OperationStatus", "OperationType"])
+_lro_int = optional_import(
+    "utils.operation_timeout_integration",
+    ["CreateOperationRequest", "OperationMigrator", "operation_integration_manager"],
+)
+OperationStatus = _lro["OperationStatus"]  # type: ignore[assignment]
+OperationType = _lro["OperationType"]  # type: ignore[assignment]
+CreateOperationRequest = _lro_int["CreateOperationRequest"]  # type: ignore[assignment]
+OperationMigrator = _lro_int["OperationMigrator"]  # type: ignore[assignment]
+operation_integration_manager = _lro_int["operation_integration_manager"]  # type: ignore[assignment]
+_OPERATIONS_AVAILABLE = bool(OperationStatus)
+if not _OPERATIONS_AVAILABLE:
+    logging.warning("Long-running operations framework not available: %s", OperationStatus)
 
-    logging.warning(f"Long-running operations framework not available: {_e}")
-    OperationStatus = _MissingDep("OperationStatus", _e)  # type: ignore[assignment]
-    OperationType = _MissingDep("OperationType", _e)  # type: ignore[assignment]
-    CreateOperationRequest = _MissingDep("CreateOperationRequest", _e)  # type: ignore[assignment]
-    OperationMigrator = _MissingDep("OperationMigrator", _e)  # type: ignore[assignment]
-    operation_integration_manager = _MissingDep("operation_integration_manager", _e)  # type: ignore[assignment]
-    _OPERATIONS_AVAILABLE = False
-
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 router = APIRouter(tags=["long-running-operations"])
 
 # Performance optimization: O(1) lookup for failed operation statuses (Issue #326)
-try:
+if _OPERATIONS_AVAILABLE:
     FAILED_OPERATION_STATUSES = {OperationStatus.FAILED, OperationStatus.TIMEOUT}
-except ImportError:
+else:
     FAILED_OPERATION_STATUSES = set()
 
 
@@ -407,8 +402,8 @@ async def get_operation_status(operation_id: str, manager=Depends(get_operation_
     error_code_prefix="LONG_RUNNING_OPERATIONS",
 )
 async def list_operations(
-    status: Optional[str] = None,
-    operation_type: Optional[str] = None,
+    status: str | None = None,
+    operation_type: str | None = None,
     limit: int = 50,
     manager=Depends(get_operation_manager),
 ):
@@ -543,9 +538,9 @@ async def websocket_progress_updates(websocket: WebSocket, operation_id: str):
             operation_integration_manager.websocket_connections[operation_id].remove(websocket)
 
 
-@register_health_probe("long_running")
+@register_health_probe(KnownProbes.LONG_RUNNING)
 async def probe_long_running(
-    request: Optional[Request] = None,
+    request: Request | None = None,
 ) -> ComponentHealth:
     """Issue #3333 / #6902: probe with rich data so the frontend can read
     ``probes[name=long_running].data.{active_operations,total_operations,...}``
@@ -588,47 +583,6 @@ async def probe_long_running(
 
 
 # Health check endpoint
-@router.get("/health", response_model=LongRunningOperationHealthResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="operations_health",
-    error_code_prefix="LONG_RUNNING_OPERATIONS",
-)
-async def operations_health():
-    """Health check for long-running operations service"""
-    if not _OPERATIONS_AVAILABLE:
-        return JSONResponse(
-            status_code=503,
-            content={
-                "status": "unavailable",
-                "message": "Long-running operations service not initialized",
-            },
-        )
-
-    try:
-        # Issue #321: Use helper method to reduce message chains
-        all_operations = operation_integration_manager.get_all_operations()
-        active_operations = len([op for op in all_operations if op.status == OperationStatus.RUNNING])
-
-        return {
-            "status": "healthy",
-            "active_operations": active_operations,
-            "total_operations": len(all_operations),
-            "redis_connected": operation_integration_manager.redis_client is not None,
-            "background_processor_running": (operation_integration_manager.is_background_processor_running()),
-        }
-
-    except Exception:
-        logger.exception("Unexpected error")
-        return JSONResponse(
-            status_code=500,
-            content={
-                "status": "error",
-                "message": "Internal server error",
-            },
-        )
-
-
 # Initialize the operation integration manager when this module is imported
 async def initialize_operations_service():
     """Initialize the operations service"""

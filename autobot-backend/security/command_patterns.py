@@ -31,7 +31,7 @@ Usage:
 
 import re
 from dataclasses import dataclass
-from typing import FrozenSet, List, Optional, Tuple
+from typing import FrozenSet, List, Tuple
 
 # =============================================================================
 # DANGEROUS COMMAND PATTERNS - STRING-BASED (Simple Matching)
@@ -390,7 +390,7 @@ DANGEROUS_RECURSIVE_PATHS: FrozenSet[str] = frozenset(
 # =============================================================================
 
 
-def is_dangerous_substring(command: str) -> Tuple[bool, Optional[str]]:
+def is_dangerous_substring(command: str) -> Tuple[bool, str | None]:
     """
     Check if command contains any dangerous substrings (fast check).
 
@@ -426,7 +426,7 @@ def check_dangerous_patterns(command: str) -> List[Tuple[str, str, str]]:
     return matches
 
 
-def is_dangerous_command(command: str) -> Tuple[bool, Optional[str]]:
+def is_dangerous_command(command: str) -> Tuple[bool, str | None]:
     """
     Check if a command is dangerous using both substring and regex checks.
 

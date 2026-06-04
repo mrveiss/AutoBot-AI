@@ -106,18 +106,18 @@ def _contradiction_json(pairs=1, gaps=None) -> str:
 
 
 class TestKeywords:
-    def test_removes_stopwords(self):
+    def test_removes_stopwords(self) -> None:
         kws = _keywords("the cat is on the mat")
         assert "the" not in kws
         assert "is" not in kws
         assert "cat" in kws
         assert "mat" in kws
 
-    def test_short_tokens_excluded(self):
+    def test_short_tokens_excluded(self) -> None:
         kws = _keywords("a be do go")
         assert kws == frozenset()
 
-    def test_lowercases(self):
+    def test_lowercases(self) -> None:
         kws = _keywords("Python Is Great")
         assert "python" in kws
         assert "great" in kws
@@ -129,12 +129,12 @@ class TestKeywords:
 
 
 class TestGroupChunks:
-    def test_single_chunk_grouped(self):
+    def test_single_chunk_grouped(self) -> None:
         chunks = [{"text": "python programming language"}]
         groups = _group_chunks(chunks)
         assert sum(len(v) for v in groups.values()) == 1
 
-    def test_similar_chunks_may_share_group(self):
+    def test_similar_chunks_may_share_group(self) -> None:
         chunks = [
             {"text": "python programming language"},
             {"text": "python scripting language"},
@@ -144,12 +144,12 @@ class TestGroupChunks:
         # At least two groups expected (python group + other)
         assert len(groups) >= 1
 
-    def test_empty_chunks_go_to_ungrouped(self):
+    def test_empty_chunks_go_to_ungrouped(self) -> None:
         chunks = [{"text": ""}, {"text": ""}]
         groups = _group_chunks(chunks)
         assert "__ungrouped__" in groups
 
-    def test_returns_all_chunks(self):
+    def test_returns_all_chunks(self) -> None:
         chunks = [{"text": f"word{i} content"} for i in range(5)]
         groups = _group_chunks(chunks)
         total = sum(len(v) for v in groups.values())
@@ -162,24 +162,24 @@ class TestGroupChunks:
 
 
 class TestParseLlmResponse:
-    def test_valid_json_parsed(self):
+    def test_valid_json_parsed(self) -> None:
         raw = _contradiction_json(pairs=2, gaps=["missing topic"])
         conflicts, gaps = _parse_llm_response(raw)
         assert len(conflicts) == 2
         assert gaps == ["missing topic"]
 
-    def test_invalid_json_returns_empty(self):
+    def test_invalid_json_returns_empty(self) -> None:
         conflicts, gaps = _parse_llm_response("not json at all")
         assert conflicts == []
         assert gaps == []
 
-    def test_empty_contradictions_list(self):
+    def test_empty_contradictions_list(self) -> None:
         raw = json.dumps({"contradictions": [], "gaps": []})
         conflicts, gaps = _parse_llm_response(raw)
         assert conflicts == []
         assert gaps == []
 
-    def test_confidence_coerced_to_float(self):
+    def test_confidence_coerced_to_float(self) -> None:
         raw = json.dumps(
             {
                 "contradictions": [
@@ -210,7 +210,7 @@ class TestContradictionDetectorScan:
         return llm
 
     @pytest.mark.asyncio
-    async def test_scan_finds_contradictions(self, mock_llm):
+    async def test_scan_finds_contradictions(self, mock_llm) -> None:
         mock_llm.chat_completion.return_value = _llm_response(_contradiction_json(pairs=1, gaps=["gap1"]))
         detector = ContradictionDetector(llm_interface=mock_llm)
         # Both chunks share the rare keyword "redis" so they land in the same group
@@ -224,7 +224,7 @@ class TestContradictionDetectorScan:
         assert "gap1" in report.gaps
 
     @pytest.mark.asyncio
-    async def test_scan_empty_chunks_returns_empty_report(self, mock_llm):
+    async def test_scan_empty_chunks_returns_empty_report(self, mock_llm) -> None:
         detector = ContradictionDetector(llm_interface=mock_llm)
         report = await detector.scan([])
         assert report.contradictions == []
@@ -232,7 +232,7 @@ class TestContradictionDetectorScan:
         mock_llm.chat_completion.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_scan_single_chunk_skips_group(self, mock_llm):
+    async def test_scan_single_chunk_skips_group(self, mock_llm) -> None:
         """Groups with < 2 chunks should not trigger LLM call."""
         detector = ContradictionDetector(llm_interface=mock_llm)
         # Force a unique keyword so it gets its own 1-member group
@@ -242,7 +242,7 @@ class TestContradictionDetectorScan:
         mock_llm.chat_completion.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_scan_llm_error_skips_group(self, mock_llm):
+    async def test_scan_llm_error_skips_group(self, mock_llm) -> None:
         mock_llm.chat_completion.return_value = _llm_response("", error="timeout")
         detector = ContradictionDetector(llm_interface=mock_llm)
         chunks = [
@@ -253,7 +253,7 @@ class TestContradictionDetectorScan:
         assert report.contradictions == []
 
     @pytest.mark.asyncio
-    async def test_scan_llm_returns_none_skips_group(self, mock_llm):
+    async def test_scan_llm_returns_none_skips_group(self, mock_llm) -> None:
         mock_llm.chat_completion.return_value = None
         detector = ContradictionDetector(llm_interface=mock_llm)
         chunks = [
@@ -264,7 +264,7 @@ class TestContradictionDetectorScan:
         assert report.contradictions == []
 
     @pytest.mark.asyncio
-    async def test_scan_deduplicated_gaps(self, mock_llm):
+    async def test_scan_deduplicated_gaps(self, mock_llm) -> None:
         """Gaps returned from multiple groups should be deduplicated."""
         mock_llm.chat_completion.return_value = _llm_response(
             json.dumps({"contradictions": [], "gaps": ["missing auth docs"]})
@@ -282,7 +282,7 @@ class TestContradictionDetectorScan:
         assert report.gaps.count("missing auth docs") == 1
 
     @pytest.mark.asyncio
-    async def test_scan_checked_at_is_utc(self, mock_llm):
+    async def test_scan_checked_at_is_utc(self, mock_llm) -> None:
         mock_llm.chat_completion.return_value = _llm_response(json.dumps({"contradictions": [], "gaps": []}))
         detector = ContradictionDetector(llm_interface=mock_llm)
         report = await detector.scan([])
@@ -296,7 +296,7 @@ class TestContradictionDetectorScan:
 
 class TestStoreAndLoadReport:
     @pytest.mark.asyncio
-    async def test_store_serialises_report(self):
+    async def test_store_serialises_report(self) -> None:
         mock_redis = AsyncMock()
         with patch(
             "services.knowledge.contradiction_detector.get_async_redis_client",
@@ -316,7 +316,7 @@ class TestStoreAndLoadReport:
             assert payload["gaps"] == ["gap"]
 
     @pytest.mark.asyncio
-    async def test_load_report_returns_none_when_missing(self):
+    async def test_load_report_returns_none_when_missing(self) -> None:
         mock_redis = AsyncMock()
         mock_redis.get = AsyncMock(return_value=None)
         with patch(
@@ -327,7 +327,7 @@ class TestStoreAndLoadReport:
             assert result is None
 
     @pytest.mark.asyncio
-    async def test_load_report_deserialises_stored_json(self):
+    async def test_load_report_deserialises_stored_json(self) -> None:
         stored = json.dumps(
             {
                 "contradictions": [],
@@ -352,9 +352,9 @@ class TestStoreAndLoadReport:
 
 
 class TestGenerateJobId:
-    def test_returns_unique_ids(self):
+    def test_returns_unique_ids(self) -> None:
         ids = {generate_job_id() for _ in range(10)}
         assert len(ids) == 10
 
-    def test_returns_string(self):
+    def test_returns_string(self) -> None:
         assert isinstance(generate_job_id(), str)

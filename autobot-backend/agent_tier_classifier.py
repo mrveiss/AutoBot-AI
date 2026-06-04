@@ -13,12 +13,13 @@ Tier 3 (Specialized Agents): 40-60% cache hit rate
 Tier 4 (Orchestrator): 50-70% cache hit rate
 """
 
-import logging
 from enum import Enum
 from functools import lru_cache
 from typing import Dict
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 
 
 class AgentTier(Enum):

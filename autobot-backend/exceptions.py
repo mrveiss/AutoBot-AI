@@ -8,13 +8,17 @@ This module defines specific exception types for better error handling
 and debugging across the AutoBot platform.
 """
 
-from typing import Any, Dict, Optional
+from typing import Any, Callable, Dict, Tuple
+
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 
 
 class AutoBotError(Exception):
     """Base exception class for all AutoBot-specific errors."""
 
-    def __init__(self, message: str, details: Optional[Dict[str, Any]] = None):
+    def __init__(self, message: str, details: Dict[str, Any] | None = None):
         """Initialize AutoBotError with message and optional details dictionary."""
         super().__init__(message)
         self.message = message
@@ -29,7 +33,7 @@ class AutoBotError(Exception):
 class ConfigurationError(AutoBotError):
     """Raised when configuration is invalid or missing."""
 
-    def __init__(self, message: str, config_key: Optional[str] = None):
+    def __init__(self, message: str, config_key: str | None = None):
         """Initialize ConfigurationError with message and optional config key."""
         super().__init__(message)
         self.config_key = config_key
@@ -40,7 +44,7 @@ class ConfigurationError(AutoBotError):
 class LLMError(AutoBotError):
     """Base class for LLM-related errors."""
 
-    def __init__(self, message: str, model: Optional[str] = None):
+    def __init__(self, message: str, model: str | None = None):
         """Initialize LLMError with message and optional model name."""
         super().__init__(message)
         self.model = model
@@ -59,7 +63,7 @@ class LLMTimeoutError(LLMError):
 class LLMResponseError(LLMError):
     """Raised when LLM returns invalid or unexpected response."""
 
-    def __init__(self, message: str, status_code: Optional[int] = None, **kwargs):
+    def __init__(self, message: str, status_code: int | None = None, **kwargs):
         """Initialize LLMResponseError with message and optional HTTP status code."""
         super().__init__(message, **kwargs)
         self.status_code = status_code
@@ -73,8 +77,8 @@ class WorkflowError(AutoBotError):
     def __init__(
         self,
         message: str,
-        workflow_id: Optional[str] = None,
-        step_id: Optional[str] = None,
+        workflow_id: str | None = None,
+        step_id: str | None = None,
     ):
         """Initialize WorkflowError with message and optional workflow/step identifiers."""
         super().__init__(message)
@@ -97,7 +101,7 @@ class WorkflowValidationError(WorkflowError):
 class ValidationError(AutoBotError):
     """Raised when input validation fails."""
 
-    def __init__(self, message: str, field: Optional[str] = None, value: Optional[Any] = None):
+    def __init__(self, message: str, field: str | None = None, value: Any | None = None):
         """Initialize ValidationError with message and optional field/value info."""
         super().__init__(message)
         self.field = field
@@ -121,7 +125,7 @@ class KnowledgeBaseError(AutoBotError):
 class DatabaseError(KnowledgeBaseError):
     """Raised when database operations fail."""
 
-    def __init__(self, message: str, operation: Optional[str] = None):
+    def __init__(self, message: str, operation: str | None = None):
         """Initialize DatabaseError with message and optional operation name."""
         super().__init__(message)
         self.operation = operation
@@ -136,7 +140,7 @@ class VectorStoreError(KnowledgeBaseError):
 class AgentError(AutoBotError):
     """Base class for agent-related errors."""
 
-    def __init__(self, message: str, agent_name: Optional[str] = None):
+    def __init__(self, message: str, agent_name: str | None = None):
         """Initialize AgentError with message and optional agent name."""
         super().__init__(message)
         self.agent_name = agent_name
@@ -183,8 +187,8 @@ class ResourceNotFoundError(ResourceError):
     def __init__(
         self,
         message: str,
-        resource_type: Optional[str] = None,
-        resource_id: Optional[str] = None,
+        resource_type: str | None = None,
+        resource_id: str | None = None,
     ):
         """Initialize ResourceNotFoundError with message and resource identifiers."""
         super().__init__(message)
@@ -199,7 +203,7 @@ class ResourceNotFoundError(ResourceError):
 class ResourceLimitError(ResourceError):
     """Raised when resource limits are exceeded."""
 
-    def __init__(self, message: str, limit: Optional[int] = None, current: Optional[int] = None):
+    def __init__(self, message: str, limit: int | None = None, current: int | None = None):
         """Initialize ResourceLimitError with message and limit/current values."""
         super().__init__(message)
         self.limit = limit
@@ -213,7 +217,7 @@ class ResourceLimitError(ResourceError):
 class IntegrationError(AutoBotError):
     """Base class for external integration errors."""
 
-    def __init__(self, message: str, service: Optional[str] = None):
+    def __init__(self, message: str, service: str | None = None):
         """Initialize IntegrationError with message and optional service name."""
         super().__init__(message)
         self.service = service
@@ -232,6 +236,111 @@ class InternalError(AutoBotError):
     def safe_message(self) -> str:
         """Never expose internal error details to users."""
         return "An internal error occurred"
+
+
+class NetworkError(AutoBotError):
+    """Base class for network-related errors."""
+
+    def __init__(
+        self,
+        message: str,
+        service: str | None = None,
+        url: str | None = None,
+        details: Dict[str, Any] | None = None,
+    ):
+        """Initialize network error with message, service name, URL, and details."""
+        super().__init__(message, details)
+        self.service = service
+        self.url = url
+        if service:
+            self.details["service"] = service
+        if url:
+            self.details["url"] = url
+
+
+class ServiceUnavailableError(NetworkError):
+    """Raised when an upstream service is unavailable or unreachable."""
+
+
+class ServiceTimeoutError(NetworkError):
+    """Raised when a service request times out."""
+
+
+class HTTPClientError(NetworkError):
+    """Raised for HTTP 4xx client errors from backend services."""
+
+    def __init__(
+        self,
+        message: str,
+        status_code: int,
+        service: str | None = None,
+        url: str | None = None,
+        details: Dict[str, Any] | None = None,
+    ):
+        """Initialize HTTP client error with status code and network details."""
+        super().__init__(message, service, url, details)
+        self.status_code = status_code
+        self.details["status_code"] = status_code
+
+
+class HTTPServerError(NetworkError):
+    """Raised for HTTP 5xx server errors from backend services."""
+
+    def __init__(
+        self,
+        message: str,
+        status_code: int,
+        service: str | None = None,
+        url: str | None = None,
+        details: Dict[str, Any] | None = None,
+    ):
+        """Initialize HTTP server error with status code and network details."""
+        super().__init__(message, service, url, details)
+        self.status_code = status_code
+        self.details["status_code"] = status_code
+
+
+class SubprocessError(AutoBotError):
+    """Raised when a subprocess operation fails."""
+
+    def __init__(
+        self,
+        message: str,
+        command: str | None = None,
+        return_code: int | None = None,
+        stdout: str | None = None,
+        stderr: str | None = None,
+    ):
+        """Initialize subprocess error with command details and output."""
+        super().__init__(message)
+        self.command = command
+        self.return_code = return_code
+        self.stdout = stdout
+        self.stderr = stderr
+        if command:
+            self.details["command"] = command
+        if return_code is not None:
+            self.details["return_code"] = return_code
+
+
+class FileOperationError(AutoBotError):
+    """Raised when a file I/O operation fails."""
+
+    def __init__(
+        self,
+        message: str,
+        file_path: str | None = None,
+        operation: str | None = None,
+        details: Dict[str, Any] | None = None,
+    ):
+        """Initialize file operation error with path, operation type, and details."""
+        super().__init__(message, details)
+        self.file_path = file_path
+        self.operation = operation
+        if file_path:
+            self.details["file_path"] = file_path
+        if operation:
+            self.details["operation"] = operation
 
 
 # Error code mapping for API responses
@@ -254,3 +363,28 @@ def get_error_code(error: AutoBotError) -> int:
         if isinstance(error, error_class):
             return code
     return 500  # Default to internal server error
+
+
+def get_exceptions_lazy() -> Tuple[type, type, type, type, Callable[[str], str]]:
+    """
+    Return the canonical exception classes as a tuple.
+
+    Maintained for backward compatibility with callers that use tuple unpacking.
+    New code should import exception classes directly.
+
+    Returns:
+        Tuple of (AutoBotError, InternalError, ResourceNotFoundError,
+                  ValidationError, get_error_code)
+    """
+    return (
+        AutoBotError,
+        InternalError,
+        ResourceNotFoundError,
+        ValidationError,
+        get_error_code,
+    )
+
+
+def log_exception(error: Exception, context: str = "chat") -> None:
+    """Log an exception with context label."""
+    logger.error("[%s] Exception: %s", context, str(error))

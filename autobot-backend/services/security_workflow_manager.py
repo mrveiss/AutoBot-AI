@@ -15,18 +15,18 @@ Issue: #260
 
 import asyncio
 import json
-import logging
 import uuid
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, List, Optional
+from typing import Any, List
 
 from redis.exceptions import RedisError
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
 from autobot_shared.time_utils import now_utc
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Lazy import for memory integration to avoid circular imports (Issue #662: thread-safe)
 _memory_integration = None
@@ -154,7 +154,7 @@ class TargetHost:
     """Represents a target host in the assessment."""
 
     ip: str
-    hostname: Optional[str] = None
+    hostname: str | None = None
     status: str = "unknown"  # unknown, up, down
     ports: list[dict[str, Any]] = field(default_factory=list)
     services: list[dict[str, Any]] = field(default_factory=list)
@@ -203,7 +203,7 @@ class SecurityAssessment:
     hosts: list[TargetHost] = field(default_factory=list)
     findings: list[dict[str, Any]] = field(default_factory=list)
     actions_taken: list[dict[str, Any]] = field(default_factory=list)
-    error_message: Optional[str] = None
+    error_message: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
@@ -268,7 +268,7 @@ class SecurityWorkflowManager(AsyncRedisClientMixin):
         from constants.network_constants import NetworkConstants
 
         manager = SecurityWorkflowManager()
-        target_network = os.environ.get("NETWORK_SUBNET", NetworkConstants.DEFAULT_SCAN_NETWORK)
+        target_network = config.network_subnet
 
         # Create assessment
         assessment = await manager.create_assessment(
@@ -309,7 +309,7 @@ class SecurityWorkflowManager(AsyncRedisClientMixin):
         target: str,
         scope: list[str],
         training_mode: bool,
-        metadata: Optional[dict[str, Any]],
+        metadata: dict[str, Any] | None,
     ) -> None:
         """
         Create Memory MCP entity for assessment. Issue #620.
@@ -340,9 +340,9 @@ class SecurityWorkflowManager(AsyncRedisClientMixin):
         self,
         name: str,
         target: str,
-        scope: Optional[list[str]] = None,
+        scope: list[str] | None = None,
         training_mode: bool = False,
-        metadata: Optional[dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
     ) -> SecurityAssessment:
         """
         Create a new security assessment. Issue #620.
@@ -411,7 +411,7 @@ class SecurityWorkflowManager(AsyncRedisClientMixin):
             logger.error("Failed to save assessment %s: %s", assessment.id, e)
             raise RuntimeError(f"Failed to save assessment: {e}")
 
-    async def get_assessment(self, assessment_id: str) -> Optional[SecurityAssessment]:
+    async def get_assessment(self, assessment_id: str) -> SecurityAssessment | None:
         """
         Retrieve an assessment by ID.
 
@@ -474,8 +474,8 @@ class SecurityWorkflowManager(AsyncRedisClientMixin):
         self,
         current_phase: str,
         valid_next: List[str],
-        target_phase: Optional[str],
-    ) -> Optional[str]:
+        target_phase: str | None,
+    ) -> str | None:
         """
         Determine the next phase for workflow transition.
 
@@ -527,8 +527,8 @@ class SecurityWorkflowManager(AsyncRedisClientMixin):
         self,
         assessment_id: str,
         reason: str = "",
-        target_phase: Optional[str] = None,
-    ) -> Optional[SecurityAssessment]:
+        target_phase: str | None = None,
+    ) -> SecurityAssessment | None:
         """
         Advance to the next workflow phase.
 
@@ -573,10 +573,10 @@ class SecurityWorkflowManager(AsyncRedisClientMixin):
         self,
         assessment_id: str,
         ip: str,
-        hostname: Optional[str] = None,
+        hostname: str | None = None,
         status: str = "unknown",
-        metadata: Optional[dict[str, Any]] = None,
-    ) -> Optional[SecurityAssessment]:
+        metadata: dict[str, Any] | None = None,
+    ) -> SecurityAssessment | None:
         """
         Add a discovered host to the assessment. Issue #620: Refactored.
 
@@ -608,9 +608,9 @@ class SecurityWorkflowManager(AsyncRedisClientMixin):
         self,
         assessment: SecurityAssessment,
         ip: str,
-        hostname: Optional[str],
+        hostname: str | None,
         status: str,
-        metadata: Optional[dict[str, Any]],
+        metadata: dict[str, Any] | None,
     ) -> bool:
         """
         Update existing host or create new one in assessment. Issue #620.
@@ -645,9 +645,9 @@ class SecurityWorkflowManager(AsyncRedisClientMixin):
         self,
         assessment_id: str,
         ip: str,
-        hostname: Optional[str],
+        hostname: str | None,
         status: str,
-        metadata: Optional[dict[str, Any]],
+        metadata: dict[str, Any] | None,
     ) -> None:
         """
         Create Memory MCP entity for a newly discovered host. Issue #620.
@@ -678,9 +678,9 @@ class SecurityWorkflowManager(AsyncRedisClientMixin):
         port: int,
         protocol: str,
         state: str,
-        service: Optional[str],
-        version: Optional[str],
-        product: Optional[str],
+        service: str | None,
+        version: str | None,
+        product: str | None,
     ) -> dict[str, Any]:
         """
         Build port information dictionary. Issue #620.
@@ -711,9 +711,9 @@ class SecurityWorkflowManager(AsyncRedisClientMixin):
         host: TargetHost,
         port: int,
         protocol: str,
-        service: Optional[str],
-        version: Optional[str],
-        product: Optional[str],
+        service: str | None,
+        version: str | None,
+        product: str | None,
     ) -> None:
         """
         Add service information to host if service is identified. Issue #620.
@@ -743,10 +743,10 @@ class SecurityWorkflowManager(AsyncRedisClientMixin):
         port: int,
         protocol: str = "tcp",
         state: str = "open",
-        service: Optional[str] = None,
-        version: Optional[str] = None,
-        product: Optional[str] = None,
-    ) -> Optional[SecurityAssessment]:
+        service: str | None = None,
+        version: str | None = None,
+        product: str | None = None,
+    ) -> SecurityAssessment | None:
         """
         Add a discovered port to a host. Issue #620: Refactored with extracted helpers.
 
@@ -784,7 +784,7 @@ class SecurityWorkflowManager(AsyncRedisClientMixin):
         host_ip: str,
         is_new_host: bool,
         port_info: dict[str, Any],
-        service: Optional[str],
+        service: str | None,
         state: str,
     ) -> None:
         """
@@ -843,14 +843,14 @@ class SecurityWorkflowManager(AsyncRedisClientMixin):
 
     def _build_vulnerability_record(
         self,
-        cve_id: Optional[str],
+        cve_id: str | None,
         title: str,
         severity: str,
         description: str,
-        affected_service: Optional[str],
-        affected_port: Optional[int],
-        references: Optional[list[str]],
-        metadata: Optional[dict[str, Any]],
+        affected_service: str | None,
+        affected_port: int | None,
+        references: list[str] | None,
+        metadata: dict[str, Any] | None,
     ) -> dict[str, Any]:
         """
         Build vulnerability record dictionary. Issue #620.
@@ -939,15 +939,15 @@ class SecurityWorkflowManager(AsyncRedisClientMixin):
         self,
         assessment_id: str,
         host_ip: str,
-        cve_id: Optional[str] = None,
+        cve_id: str | None = None,
         title: str = "",
         severity: str = "unknown",
         description: str = "",
-        affected_service: Optional[str] = None,
-        affected_port: Optional[int] = None,
-        references: Optional[list[str]] = None,
-        metadata: Optional[dict[str, Any]] = None,
-    ) -> Optional[SecurityAssessment]:
+        affected_service: str | None = None,
+        affected_port: int | None = None,
+        references: list[str] | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> SecurityAssessment | None:
         """Add a discovered vulnerability to an assessment. Issue #620."""
         assessment = await self.get_assessment(assessment_id)
         if not assessment:
@@ -974,14 +974,14 @@ class SecurityWorkflowManager(AsyncRedisClientMixin):
         assessment_id: str,
         host_ip: str,
         is_new_host: bool,
-        cve_id: Optional[str],
+        cve_id: str | None,
         title: str,
         severity: str,
         description: str,
-        affected_port: Optional[int],
-        affected_service: Optional[str],
-        references: Optional[list[str]],
-        metadata: Optional[dict[str, Any]],
+        affected_port: int | None,
+        affected_service: str | None,
+        references: list[str] | None,
+        metadata: dict[str, Any] | None,
     ) -> None:
         """Create Memory MCP entities for vulnerability (Issue #398: extracted)."""
         try:
@@ -1020,7 +1020,7 @@ class SecurityWorkflowManager(AsyncRedisClientMixin):
         self,
         assessment_id: str,
         finding: dict[str, Any],
-    ) -> Optional[SecurityAssessment]:
+    ) -> SecurityAssessment | None:
         """
         Add a general finding to the assessment.
 
@@ -1047,11 +1047,11 @@ class SecurityWorkflowManager(AsyncRedisClientMixin):
         self,
         assessment_id: str,
         action: str,
-        tool: Optional[str] = None,
-        command: Optional[str] = None,
-        result: Optional[str] = None,
-        metadata: Optional[dict[str, Any]] = None,
-    ) -> Optional[SecurityAssessment]:
+        tool: str | None = None,
+        command: str | None = None,
+        result: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> SecurityAssessment | None:
         """
         Record an action taken during the assessment.
 
@@ -1090,7 +1090,7 @@ class SecurityWorkflowManager(AsyncRedisClientMixin):
         self,
         assessment_id: str,
         error_message: str,
-    ) -> Optional[SecurityAssessment]:
+    ) -> SecurityAssessment | None:
         """
         Set assessment to error state.
 
@@ -1129,7 +1129,7 @@ class SecurityWorkflowManager(AsyncRedisClientMixin):
         assessment_id: str,
         target_phase: str,
         reason: str = "Manual recovery",
-    ) -> Optional[SecurityAssessment]:
+    ) -> SecurityAssessment | None:
         """
         Recover from error state to a specific phase.
 
@@ -1240,7 +1240,7 @@ class SecurityWorkflowManager(AsyncRedisClientMixin):
     async def get_assessment_summary(
         self,
         assessment_id: str,
-    ) -> Optional[dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """
         Get a summary of an assessment for context.
 
@@ -1278,7 +1278,7 @@ class SecurityWorkflowManager(AsyncRedisClientMixin):
 # Singleton instance (thread-safe)
 import threading
 
-_workflow_manager: Optional[SecurityWorkflowManager] = None
+_workflow_manager: SecurityWorkflowManager | None = None
 _workflow_manager_lock = threading.Lock()
 
 

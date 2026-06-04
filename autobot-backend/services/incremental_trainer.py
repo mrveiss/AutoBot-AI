@@ -7,19 +7,18 @@ Incremental Trainer Service (Issue #905)
 Lightweight model updates based on feedback without full retraining.
 """
 
-import logging
 from datetime import timedelta
-from typing import Optional
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
 from autobot_shared.time_utils import now_utc, utc_timestamp
 from models.completion_feedback import CompletionFeedback
 from training.completion_trainer import CompletionTrainer
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #3016: lazy module-level import for torch
 _torch = None
@@ -43,7 +42,7 @@ class IncrementalTrainer:
     without requiring full retraining.
     """
 
-    def __init__(self, model_version: str = "best"):
+    def __init__(self, model_version: str = "best") -> None:
         """
         Initialize incremental trainer.
 
@@ -208,7 +207,7 @@ class IncrementalTrainer:
                     "timestamp": utc_timestamp(),
                 }
 
-    def trigger_full_retrain(self, language: Optional[str] = None, num_epochs: int = 5) -> dict:
+    def trigger_full_retrain(self, language: str | None = None, num_epochs: int = 5) -> dict:
         """
         Trigger full model retraining.
 

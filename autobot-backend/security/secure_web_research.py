@@ -8,17 +8,18 @@ Provides secure web research functionality with comprehensive safety checks,
 input validation, domain security, and content filtering.
 """
 
-import logging
 import time
 from datetime import datetime, timezone
-from typing import Any, Dict, FrozenSet, Optional
+from typing import Any, Dict, FrozenSet
+
+from autobot_shared.logging_manager import get_logger
 
 from ..agents.web_researcher import ResearchType
 from ..agents.web_researcher import WebResearcher as WebResearchIntegration
 from .domain_security import DomainSecurityConfig, DomainSecurityManager
 from .input_validator import WebResearchInputValidator
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level frozenset for risk levels requiring confirmation
 _CONFIRMATION_REQUIRED_RISK_LEVELS: FrozenSet[str] = frozenset({"medium", "high"})
@@ -31,7 +32,7 @@ class SecureWebResearch:
 
     def __init__(
         self,
-        domain_config: Optional[DomainSecurityConfig] = None,
+        domain_config: DomainSecurityConfig | None = None,
         enable_content_filtering: bool = True,
         enable_query_validation: bool = True,
         enable_domain_validation: bool = True,
@@ -124,7 +125,7 @@ class SecureWebResearch:
 
     async def _validate_result_security(
         self, result: Dict[str, Any], research_result: Dict[str, Any]
-    ) -> Optional[Dict[str, Any]]:
+    ) -> Dict[str, Any] | None:
         """Validate security of a single research result (Issue #298 - extracted helper).
 
         Returns the result with security metadata if safe, None if blocked.
@@ -323,9 +324,9 @@ class SecureWebResearch:
     async def conduct_secure_research(
         self,
         query: str,
-        research_type: Optional[ResearchType] = None,
-        max_results: Optional[int] = None,
-        timeout: Optional[int] = None,
+        research_type: ResearchType | None = None,
+        max_results: int | None = None,
+        timeout: int | None = None,
         require_user_confirmation: bool = True,
     ) -> Dict[str, Any]:
         """Conduct secure web research with comprehensive safety checks."""
@@ -489,9 +490,9 @@ class SecureWebResearch:
 # Convenience functions
 async def conduct_secure_research(
     query: str,
-    research_type: Optional[ResearchType] = None,
-    max_results: Optional[int] = None,
-    timeout: Optional[int] = None,
+    research_type: ResearchType | None = None,
+    max_results: int | None = None,
+    timeout: int | None = None,
     require_user_confirmation: bool = True,
 ) -> Dict[str, Any]:
     """Standalone function for secure research"""
@@ -505,7 +506,7 @@ async def conduct_secure_research(
         )
 
 
-async def validate_research_safety(query: str, url: Optional[str] = None) -> Dict[str, Any]:
+async def validate_research_safety(query: str, url: str | None = None) -> Dict[str, Any]:
     """Validate research query and optional URL for safety"""
     async with SecureWebResearch() as secure_research:
         results: Dict[str, Any] = {"query_validation": await secure_research.validate_research_query(query)}

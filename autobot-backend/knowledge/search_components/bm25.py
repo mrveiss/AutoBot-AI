@@ -8,11 +8,12 @@ Issue #1720: Upgrade keyword search from TF-only to BM25 Okapi scoring.
 Provides IDF with Laplace smoothing and document length normalization.
 """
 
-import logging
 import math
 from typing import Dict, List
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 
 
 class BM25Scorer:

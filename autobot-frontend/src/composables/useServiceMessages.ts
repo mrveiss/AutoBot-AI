@@ -8,8 +8,9 @@
  */
 
 import { ref } from 'vue'
-import { useApiWithState } from './useApi'
+import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
+import { showSubtleErrorNotification } from '@/utils/cacheManagement'
 import { getApiBase } from '@/config/ssot-config'
 import { usePollingJob } from '@/composables/usePollingJob'
 import { useLoadingState } from '@/composables/useLoadingState'
@@ -54,7 +55,7 @@ export interface CorrelationChainResponse {
 // ------------------------------------------------------------------
 
 export function useServiceMessages() {
-  const { api, withErrorHandling } = useApiWithState()
+  const api = useApiClient()
 
   const messages = ref<ServiceMessageEntry[]>([])
   const chainMessages = ref<ServiceMessageEntry[]>([])
@@ -72,23 +73,14 @@ export function useServiceMessages() {
     error.value = null
     return wrap(async () => {
       try {
-        const result = await withErrorHandling(
-          async () => {
-            const sp = new URLSearchParams()
-            if (params?.count) sp.append('count', String(params.count))
-            if (params?.sender) sp.append('sender', params.sender)
-            if (params?.receiver) sp.append('receiver', params.receiver)
-            if (params?.msg_type) sp.append('msg_type', params.msg_type)
-            const qs = sp.toString()
-            const url = `${getApiBase()}/service-messages/latest${qs ? `?${qs}` : ''}`
-            const resp = await api.get<any>(url)
-            return (await resp.json()) as LatestMessagesResponse
-          },
-          {
-            errorMessage: 'Failed to fetch service messages',
-            fallbackValue: { success: false, count: 0, messages: [] }
-          }
-        )
+        const sp = new URLSearchParams()
+        if (params?.count) sp.append('count', String(params.count))
+        if (params?.sender) sp.append('sender', params.sender)
+        if (params?.receiver) sp.append('receiver', params.receiver)
+        if (params?.msg_type) sp.append('msg_type', params.msg_type)
+        const qs = sp.toString()
+        const url = `${getApiBase()}/service-messages/latest${qs ? `?${qs}` : ''}`
+        const result = await api.get<LatestMessagesResponse>(url)
         if (result && result.success) {
           messages.value = result.messages
         }
@@ -96,7 +88,8 @@ export function useServiceMessages() {
       } catch (e) {
         error.value = e instanceof Error ? e.message : 'Unknown error'
         logger.error('fetchLatest failed:', e)
-        return null
+        showSubtleErrorNotification('Error', 'Failed to fetch service messages', 'error')
+        return { success: false, count: 0, messages: [] }
       }
     })
   }
@@ -104,13 +97,13 @@ export function useServiceMessages() {
   async function fetchMessage(
     msgId: string
   ): Promise<SingleMessageResponse | null> {
-    return withErrorHandling(
-      async () => {
-        const resp = await api.get<any>(`${getApiBase()}/service-messages/${msgId}`)
-        return (await resp.json()) as SingleMessageResponse
-      },
-      { errorMessage: 'Failed to fetch service message', fallbackValue: null }
-    )
+    try {
+      return await api.get<SingleMessageResponse>(`${getApiBase()}/service-messages/${msgId}`)
+    } catch (e: unknown) {
+      logger.error('Failed to fetch service message', e)
+      showSubtleErrorNotification('Error', 'Failed to fetch service message', 'error')
+      return null
+    }
   }
 
   async function fetchChain(
@@ -119,17 +112,8 @@ export function useServiceMessages() {
     error.value = null
     return wrap(async () => {
       try {
-        const result = await withErrorHandling(
-          async () => {
-            const resp = await api.get<any>(
-              `${getApiBase()}/service-messages/chain/${correlationId}`
-            )
-            return (await resp.json()) as CorrelationChainResponse
-          },
-          {
-            errorMessage: 'Failed to fetch correlation chain',
-            fallbackValue: null
-          }
+        const result = await api.get<CorrelationChainResponse>(
+          `${getApiBase()}/service-messages/chain/${correlationId}`
         )
         if (result && result.success) {
           chainMessages.value = result.messages
@@ -138,6 +122,7 @@ export function useServiceMessages() {
       } catch (e) {
         error.value = e instanceof Error ? e.message : 'Unknown error'
         logger.error('fetchChain failed:', e)
+        showSubtleErrorNotification('Error', 'Failed to fetch correlation chain', 'error')
         return null
       }
     })

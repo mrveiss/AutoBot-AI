@@ -14,15 +14,17 @@ This module provides comprehensive cost tracking for all LLM API calls:
 Related Issues: #59 (Advanced Analytics & Business Intelligence)
 """
 
+from __future__ import annotations
+
 import asyncio
 import json
-import logging
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
-from autobot_shared.redis_client import RedisDatabase
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.redis_client import RedisDatabase, get_redis_client
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
 from autobot_shared.time_utils import now_utc, utc_timestamp
 from constants.model_constants import (
@@ -47,10 +49,12 @@ from constants.model_constants import (
 )
 from constants.ttl_constants import TTL_30_DAYS, TTL_90_DAYS
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Pricing was last verified on this date. A WARNING is emitted at import time
 # if this is older than PRICING_STALENESS_DAYS days. (#1961)
+# GH#6480: This hardcoded version is a fallback. The actual refresh timestamp
+# is populated by the pricing_refresh_daily Celery Beat task into Redis.
 PRICING_VERSION: str = "2026-03-22"
 PRICING_STALENESS_DAYS: int = 90
 
@@ -72,19 +76,59 @@ class LLMProvider(str, Enum):
 MODEL_PRICING: Dict[str, Dict[str, float]] = MODEL_PRICING_PER_1M_TOKENS
 
 
-def _check_pricing_staleness() -> None:
+def _get_last_refresh_from_redis() -> str | None:
     """
-    Emit a WARNING if PRICING_VERSION is older than PRICING_STALENESS_DAYS.
+    Fetch the latest refresh timestamp from Redis refresh_status (GH#6480).
 
-    Called once at module import time. Helps operators discover when the
-    pricing table needs a refresh. Issue #1961.
+    The pricing_refresh_daily task stores {provider: {last_refresh_at, ...}} in Redis.
+    This function returns the most recent last_refresh_at across all providers.
+    Returns None if Redis is unavailable or no refresh status exists.
     """
     try:
-        version_date = date.fromisoformat(PRICING_VERSION)
+        redis = get_redis_client(database="analytics")
+        if redis is None:
+            return None
+
+        raw = redis.get("model_pricing:refresh_status")
+        if raw is None:
+            return None
+
+        status = json.loads(raw)
+        refresh_dates = [
+            info.get("last_refresh_at")
+            for info in status.values()
+            if isinstance(info, dict) and info.get("last_refresh_at")
+        ]
+
+        if refresh_dates:
+            # Extract just the date part (YYYY-MM-DD) from the ISO timestamp
+            latest = max(refresh_dates)
+            return latest.split("T")[0] if latest else None
+        return None
+    except Exception as exc:
+        logger.debug("Failed to fetch pricing refresh status from Redis: %s", exc)
+        return None
+
+
+def _check_pricing_staleness() -> None:
+    """
+    Emit a WARNING if pricing is older than PRICING_STALENESS_DAYS.
+
+    Checks Redis first for the actual last refresh timestamp from the
+    pricing_refresh_daily task (GH#6480). Falls back to hardcoded PRICING_VERSION
+    if Redis is unavailable. Called once at module import time. Issue #1961.
+    """
+    last_refresh_date = _get_last_refresh_from_redis()
+
+    # Use Redis refresh date if available; otherwise fall back to hardcoded version
+    version_to_check = last_refresh_date if last_refresh_date else PRICING_VERSION
+
+    try:
+        version_date = date.fromisoformat(version_to_check)
     except ValueError:
         logger.warning(
-            "PRICING_VERSION %r is not a valid ISO date; cannot check staleness.",
-            PRICING_VERSION,
+            "Pricing version %r is not a valid ISO date; cannot check staleness.",
+            version_to_check,
         )
         return
 
@@ -92,10 +136,10 @@ def _check_pricing_staleness() -> None:
     if age_days > PRICING_STALENESS_DAYS:
         logger.warning(
             "LLM pricing table is %d days old (last verified %s, threshold %d days). "
-            "Review MODEL_PRICING in llm_cost_tracker.py and update PRICING_VERSION. "
+            "Review the pricing_refresh_daily Celery Beat task or update PRICING_VERSION. "
             "Issue #1961.",
             age_days,
-            PRICING_VERSION,
+            version_to_check,
             PRICING_STALENESS_DAYS,
         )
 
@@ -113,13 +157,13 @@ class LLMUsageRecord:
     output_tokens: int
     cost_usd: float
     timestamp: str
-    session_id: Optional[str] = None
-    user_id: Optional[str] = None
-    agent_id: Optional[str] = None
-    endpoint: Optional[str] = None
-    latency_ms: Optional[float] = None
+    session_id: str | None = None
+    user_id: str | None = None
+    agent_id: str | None = None
+    endpoint: str | None = None
+    latency_ms: float | None = None
     success: bool = True
-    error_message: Optional[str] = None
+    error_message: str | None = None
     metadata: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
@@ -175,14 +219,14 @@ class TrackUsageRequest:
     model: str
     input_tokens: int
     output_tokens: int
-    session_id: Optional[str] = None
-    user_id: Optional[str] = None
-    agent_id: Optional[str] = None
-    endpoint: Optional[str] = None
-    latency_ms: Optional[float] = None
+    session_id: str | None = None
+    user_id: str | None = None
+    agent_id: str | None = None
+    endpoint: str | None = None
+    latency_ms: float | None = None
     success: bool = True
-    error_message: Optional[str] = None
-    metadata: Optional[Dict[str, Any]] = None
+    error_message: str | None = None
+    metadata: Dict[str, Any] | None = None
 
 
 @dataclass
@@ -220,7 +264,7 @@ class LLMCostTracker(AsyncRedisClientMixin):
     AGENT_BUDGET_KEY = f"{REDIS_KEY_PREFIX}agent_budget"
     BUDGET_ALERTS_KEY = f"{REDIS_KEY_PREFIX}budget_alerts"
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize cost tracker with empty alerts."""
         self._budget_alerts: List[BudgetAlert] = []
         self._current_period_costs: Dict[str, float] = {}
@@ -253,7 +297,7 @@ class LLMCostTracker(AsyncRedisClientMixin):
         ("deepseek-r1", DEEPSEEK_R1_API),
     ]
 
-    def _estimate_pricing_by_pattern(self, model_lower: str) -> Optional[Dict[str, float]]:
+    def _estimate_pricing_by_pattern(self, model_lower: str) -> Dict[str, float] | None:
         """
         Return pricing estimate for an unknown model using name-pattern heuristics.
 
@@ -344,18 +388,18 @@ class LLMCostTracker(AsyncRedisClientMixin):
 
     def _extract_params_from_kwargs(
         self,
-        provider: Optional[str],
-        model: Optional[str],
-        input_tokens: Optional[int],
-        output_tokens: Optional[int],
-        session_id: Optional[str],
-        user_id: Optional[str],
-        agent_id: Optional[str],
-        endpoint: Optional[str],
-        latency_ms: Optional[float],
+        provider: str | None,
+        model: str | None,
+        input_tokens: int | None,
+        output_tokens: int | None,
+        session_id: str | None,
+        user_id: str | None,
+        agent_id: str | None,
+        endpoint: str | None,
+        latency_ms: float | None,
         success: bool,
-        error_message: Optional[str],
-        metadata: Optional[Dict[str, Any]],
+        error_message: str | None,
+        metadata: Dict[str, Any] | None,
     ) -> tuple:
         """Helper for _extract_usage_params. Ref: #1088."""
         if provider is None or model is None or input_tokens is None or output_tokens is None:
@@ -379,19 +423,19 @@ class LLMCostTracker(AsyncRedisClientMixin):
 
     def _extract_usage_params(
         self,
-        request: Optional["TrackUsageRequest"],
-        provider: Optional[str],
-        model: Optional[str],
-        input_tokens: Optional[int],
-        output_tokens: Optional[int],
-        session_id: Optional[str],
-        user_id: Optional[str],
-        agent_id: Optional[str],
-        endpoint: Optional[str],
-        latency_ms: Optional[float],
+        request: "TrackUsageRequest" | None,
+        provider: str | None,
+        model: str | None,
+        input_tokens: int | None,
+        output_tokens: int | None,
+        session_id: str | None,
+        user_id: str | None,
+        agent_id: str | None,
+        endpoint: str | None,
+        latency_ms: float | None,
         success: bool,
-        error_message: Optional[str],
-        metadata: Optional[Dict[str, Any]],
+        error_message: str | None,
+        metadata: Dict[str, Any] | None,
     ) -> tuple:
         """
         Extract usage parameters from request object or individual args.
@@ -434,14 +478,14 @@ class LLMCostTracker(AsyncRedisClientMixin):
         input_tokens: int,
         output_tokens: int,
         cost: float,
-        session_id: Optional[str],
-        user_id: Optional[str],
-        agent_id: Optional[str],
-        endpoint: Optional[str],
-        latency_ms: Optional[float],
+        session_id: str | None,
+        user_id: str | None,
+        agent_id: str | None,
+        endpoint: str | None,
+        latency_ms: float | None,
         success: bool,
-        error_message: Optional[str],
-        metadata: Optional[Dict[str, Any]],
+        error_message: str | None,
+        metadata: Dict[str, Any] | None,
     ) -> "LLMUsageRecord":
         """
         Create LLMUsageRecord with all parameters.
@@ -473,19 +517,19 @@ class LLMCostTracker(AsyncRedisClientMixin):
 
     def _resolve_usage_params(
         self,
-        request: Optional[TrackUsageRequest],
-        provider: Optional[str],
-        model: Optional[str],
-        input_tokens: Optional[int],
-        output_tokens: Optional[int],
-        session_id: Optional[str],
-        user_id: Optional[str],
-        agent_id: Optional[str],
-        endpoint: Optional[str],
-        latency_ms: Optional[float],
+        request: TrackUsageRequest | None,
+        provider: str | None,
+        model: str | None,
+        input_tokens: int | None,
+        output_tokens: int | None,
+        session_id: str | None,
+        user_id: str | None,
+        agent_id: str | None,
+        endpoint: str | None,
+        latency_ms: float | None,
         success: bool,
-        error_message: Optional[str],
-        metadata: Optional[Dict[str, Any]],
+        error_message: str | None,
+        metadata: Dict[str, Any] | None,
     ) -> tuple:
         """Helper for track_usage. Ref: #1088."""
         return self._extract_usage_params(
@@ -504,23 +548,50 @@ class LLMCostTracker(AsyncRedisClientMixin):
             metadata,
         )
 
+    async def _redis_pricing_lookup(self, model_lower: str) -> Dict[str, float] | None:
+        """Check Redis cache for model pricing before falling back to hardcoded table (GH#6480).
+
+        Redis keys are written by services.pricing_refresh.refresh_pricing_daily.
+        Returns a legacy {input: float, output: float} dict or None on miss/error.
+        """
+        try:
+            from llm_shared.pricing.redis_store import PricingRedisStore
+
+            store = PricingRedisStore()
+            # Try known providers in order; first hit wins.
+            for provider in ("anthropic", "openai", "google", "deepseek"):
+                cached = await store.get(provider, model_lower)
+                if cached is not None:
+                    return cached.as_legacy_dict()
+        except Exception as exc:
+            logger.debug("_redis_pricing_lookup failed for %r: %s", model_lower, exc)
+        return None
+
     async def _build_and_persist_record(
         self,
         provider: str,
         model: str,
         input_tokens: int,
         output_tokens: int,
-        session_id: Optional[str],
-        user_id: Optional[str],
-        agent_id: Optional[str],
-        endpoint: Optional[str],
-        latency_ms: Optional[float],
+        session_id: str | None,
+        user_id: str | None,
+        agent_id: str | None,
+        endpoint: str | None,
+        latency_ms: float | None,
         success: bool,
-        error_message: Optional[str],
-        metadata: Optional[Dict[str, Any]],
+        error_message: str | None,
+        metadata: Dict[str, Any] | None,
     ) -> LLMUsageRecord:
         """Helper for track_usage. Ref: #1088."""
-        cost = self.calculate_cost(model, input_tokens, output_tokens)
+        # GH#6480: check Redis-cached pricing before falling back to hardcoded table.
+        model_lower = model.lower()
+        redis_pricing = await self._redis_pricing_lookup(model_lower)
+        if redis_pricing is not None:
+            input_cost = (input_tokens / 1_000_000) * redis_pricing["input"]
+            output_cost = (output_tokens / 1_000_000) * redis_pricing["output"]
+            cost = round(input_cost + output_cost, 6)
+        else:
+            cost = self.calculate_cost(model, input_tokens, output_tokens)
         record = self._create_usage_record(
             provider,
             model,
@@ -541,6 +612,14 @@ class LLMCostTracker(AsyncRedisClientMixin):
             self._store_usage_record(record),
             self._check_budget_alerts(cost),
         )
+        # Budget policy evaluation — fire-and-forget background task (GH#6470)
+        if record.agent_id:
+            try:
+                from services.budget_policy import trigger_budget_evaluation
+
+                trigger_budget_evaluation(agent_id=record.agent_id)
+            except Exception:
+                pass  # never let policy evaluation block cost tracking
         logger.debug(
             "Tracked LLM usage: %s/%s - %din/%dout = $%.6f",
             provider,
@@ -553,20 +632,20 @@ class LLMCostTracker(AsyncRedisClientMixin):
 
     async def track_usage(
         self,
-        request: Optional[TrackUsageRequest] = None,
+        request: TrackUsageRequest | None = None,
         *,  # Force keyword-only args for backwards compatibility
-        provider: Optional[str] = None,
-        model: Optional[str] = None,
-        input_tokens: Optional[int] = None,
-        output_tokens: Optional[int] = None,
-        session_id: Optional[str] = None,
-        user_id: Optional[str] = None,
-        agent_id: Optional[str] = None,
-        endpoint: Optional[str] = None,
-        latency_ms: Optional[float] = None,
+        provider: str | None = None,
+        model: str | None = None,
+        input_tokens: int | None = None,
+        output_tokens: int | None = None,
+        session_id: str | None = None,
+        user_id: str | None = None,
+        agent_id: str | None = None,
+        endpoint: str | None = None,
+        latency_ms: float | None = None,
         success: bool = True,
-        error_message: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        error_message: str | None = None,
+        metadata: Dict[str, Any] | None = None,
     ) -> LLMUsageRecord:
         """Track an LLM API usage event. Ref: #1088.
 
@@ -736,8 +815,8 @@ class LLMCostTracker(AsyncRedisClientMixin):
 
     async def get_cost_summary(
         self,
-        start_date: Optional[datetime] = None,
-        end_date: Optional[datetime] = None,
+        start_date: datetime | None = None,
+        end_date: datetime | None = None,
     ) -> Dict[str, Any]:
         """
         Get cost summary for a time period.
@@ -952,7 +1031,7 @@ class LLMCostTracker(AsyncRedisClientMixin):
             logger.error("Failed to set agent budget: %s", e)
             return {"agent_id": agent_id, "error": "Failed to set agent budget"}
 
-    async def get_agent_budget(self, agent_id: str) -> Optional[Dict[str, Any]]:
+    async def get_agent_budget(self, agent_id: str) -> Dict[str, Any] | None:
         """Get budget config for an agent (#1401)."""
         try:
             redis = await self.get_redis()
@@ -1123,7 +1202,7 @@ class LLMCostTracker(AsyncRedisClientMixin):
 # Singleton instance (thread-safe)
 import threading
 
-_cost_tracker: Optional[LLMCostTracker] = None
+_cost_tracker: LLMCostTracker | None = None
 _cost_tracker_lock = threading.Lock()
 
 

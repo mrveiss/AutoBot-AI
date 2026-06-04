@@ -10,19 +10,19 @@ across the AutoBot application, eliminating hardcoded prompts in Python code.
 
 import hashlib
 import json
-import logging
 import re
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import yaml
 from jinja2 import Environment, FileSystemLoader, Template
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from constants.ttl_constants import TTL_24_HOURS
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def _detect_structured_format(content: str) -> str:
@@ -302,7 +302,7 @@ def _truncate_large_file(content: str, max_chars: int = 20000) -> str:
     return truncated
 
 
-def _build_skill_context(skills: Optional[List[Dict]]) -> str:
+def _build_skill_context(skills: List[Dict] | None) -> str:
     """
     Build a skill context section from ranked skills.
 
@@ -628,7 +628,7 @@ class PromptManager:
     def get(
         self,
         prompt_key: str,
-        overrides: Optional[Dict[str, str]] = None,
+        overrides: Dict[str, str] | None = None,
         **kwargs,
     ) -> str:
         """
@@ -718,7 +718,7 @@ class PromptManager:
             assembled = self._assemble_yaml_sections({**self.yaml_sections[prompt_key], **overrides})
             return assembled
 
-    def _try_fallbacks(self, prompt_key: str) -> Optional[str]:
+    def _try_fallbacks(self, prompt_key: str) -> str | None:
         """
         Try various fallback strategies for missing prompts.
 
@@ -766,7 +766,7 @@ class PromptManager:
 
         return self.prompts[prompt_key]
 
-    def list_prompts(self, filter_pattern: Optional[str] = None) -> List[str]:
+    def list_prompts(self, filter_pattern: str | None = None) -> List[str]:
         """
         List all available prompt keys, optionally filtered by pattern.
 
@@ -897,7 +897,7 @@ class PromptManager:
                 "error": str(e),
             }
 
-    def load_and_scan_context_files(self, project_root: Optional[Path] = None) -> Dict[str, Any]:
+    def load_and_scan_context_files(self, project_root: Path | None = None) -> Dict[str, Any]:
         """
         Load and scan context files for prompt injection patterns.
 
@@ -1098,7 +1098,7 @@ class PromptManager:
 
         return file_states
 
-    def _load_prompt_change_cache(self) -> Optional[Dict[str, str]]:
+    def _load_prompt_change_cache(self) -> Dict[str, str] | None:
         """Load cached prompt file states from Redis"""
         try:
             from autobot_shared.redis_client import get_redis_client
@@ -1171,7 +1171,7 @@ class PromptManager:
             logger.warning("Failed to generate cache key: %s", e)
             return "autobot:prompts:cache:default"
 
-    def _load_from_redis_cache(self, cache_key: str) -> Optional[Dict]:
+    def _load_from_redis_cache(self, cache_key: str) -> Dict | None:
         """Load prompts from Redis cache using dedicated prompts database"""
         try:
             from autobot_shared.redis_client import get_redis_client
@@ -1222,13 +1222,13 @@ def get_prompt(prompt_key: str, **kwargs) -> str:
 
 
 def _build_dynamic_context(
-    session_id: Optional[str],
-    user_name: Optional[str],
-    user_role: Optional[str],
-    available_tools: Optional[List[str]],
-    recent_context: Optional[str],
-    additional_params: Optional[Dict],
-    tool_descriptions: Optional[Dict] = None,
+    session_id: str | None,
+    user_name: str | None,
+    user_role: str | None,
+    available_tools: List[str] | None,
+    recent_context: str | None,
+    additional_params: Dict | None,
+    tool_descriptions: Dict | None = None,
 ) -> str:
     """
     Build dynamic context section for optimized prompts.
@@ -1272,13 +1272,13 @@ def _build_dynamic_context(
 
 def get_optimized_prompt(
     base_prompt_key: str,
-    session_id: Optional[str] = None,
-    user_name: Optional[str] = None,
-    user_role: Optional[str] = None,
-    available_tools: Optional[List[str]] = None,
-    recent_context: Optional[str] = None,
-    additional_params: Optional[Dict] = None,
-    tool_descriptions: Optional[Dict] = None,
+    session_id: str | None = None,
+    user_name: str | None = None,
+    user_role: str | None = None,
+    available_tools: List[str] | None = None,
+    recent_context: str | None = None,
+    additional_params: Dict | None = None,
+    tool_descriptions: Dict | None = None,
 ) -> str:
     """
     Get a prompt optimized for vLLM prefix caching.
@@ -1318,7 +1318,7 @@ def get_optimized_prompt(
     return f"{base_prompt}\n\n{dynamic_context}"
 
 
-def list_available_prompts(filter_pattern: Optional[str] = None) -> List[str]:
+def list_available_prompts(filter_pattern: str | None = None) -> List[str]:
     """
     Convenience function to list available prompts.
 

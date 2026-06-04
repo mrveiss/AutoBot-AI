@@ -14,15 +14,15 @@ This is the main integration point for the comprehensive Claude API optimization
 
 import asyncio
 import json
-import logging
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import aiofiles
 
+from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import TimingConstants
 from constants.ttl_constants import TTL_5_MINUTES
 
@@ -36,7 +36,7 @@ from .request_batcher import BatchableRequest, IntelligentRequestBatcher
 from .todowrite_optimizer import get_todowrite_optimizer
 from .tool_pattern_analyzer import get_tool_pattern_analyzer
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level tuple for batchable request types
 _BATCHABLE_TYPES = ("read", "search", "analyze", "tool_call")
@@ -110,7 +110,7 @@ class ClaudeAPIOptimizationSuite:
     due to API rate limiting during development sessions.
     """
 
-    def __init__(self, config: Optional[OptimizationConfig] = None):
+    def __init__(self, config: OptimizationConfig | None = None):
         """Initialize the optimization suite with all components"""
         self.config = config or OptimizationConfig()
 
@@ -310,7 +310,7 @@ class ClaudeAPIOptimizationSuite:
         request_data: Dict[str, Any],
         request_type: str,
         optimization_applied: List[str],
-    ) -> Optional[Dict[str, Any]]:
+    ) -> Dict[str, Any] | None:
         """Try to batch the request if appropriate."""
         if not self.request_batcher or not self._should_batch_request(request_type):
             return None
@@ -461,7 +461,7 @@ class ClaudeAPIOptimizationSuite:
         except RateLimitExceededError:
             return False
 
-    async def _optimize_todowrite_request(self, request_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    async def _optimize_todowrite_request(self, request_data: Dict[str, Any]) -> Dict[str, Any] | None:
         """Handle TodoWrite optimization specifically (thread-safe)"""
         try:
             todos = request_data.get("todos", [])
@@ -499,9 +499,7 @@ class ClaudeAPIOptimizationSuite:
         """Determine if request type should be considered for batching"""
         return any(btype in request_type.lower() for btype in _BATCHABLE_TYPES)  # Issue #380
 
-    async def _attempt_request_batching(
-        self, request_data: Dict[str, Any], request_type: str
-    ) -> Optional[Dict[str, Any]]:
+    async def _attempt_request_batching(self, request_data: Dict[str, Any], request_type: str) -> Dict[str, Any] | None:
         """Attempt to batch the request with similar pending requests"""
         try:
             batchable_request = BatchableRequest(
@@ -848,12 +846,12 @@ import threading
 
 from autobot_shared.async_compat import run_or_schedule
 
-_global_optimization_suite: Optional[ClaudeAPIOptimizationSuite] = None
+_global_optimization_suite: ClaudeAPIOptimizationSuite | None = None
 _global_optimization_suite_lock = threading.Lock()
 
 
 def get_optimization_suite(
-    config: Optional[OptimizationConfig] = None,
+    config: OptimizationConfig | None = None,
 ) -> ClaudeAPIOptimizationSuite:
     """Get global optimization suite instance (thread-safe)"""
     global _global_optimization_suite
@@ -866,7 +864,7 @@ def get_optimization_suite(
 
 
 async def initialize_claude_api_optimization(
-    config: Optional[OptimizationConfig] = None,
+    config: OptimizationConfig | None = None,
 ) -> bool:
     """Initialize and start the Claude API optimization suite"""
     suite = get_optimization_suite(config)

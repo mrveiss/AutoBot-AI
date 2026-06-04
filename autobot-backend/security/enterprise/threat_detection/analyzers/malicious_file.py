@@ -9,7 +9,7 @@ Detects malicious file uploads and suspicious file operations.
 Part of Issue #381 - God Class Refactoring
 """
 
-from typing import List, Optional
+from typing import List
 
 from ..models import AnalysisContext, SecurityEvent, ThreatEvent
 from ..types import ThreatCategory, ThreatLevel
@@ -69,7 +69,7 @@ class MaliciousFileAnalyzer(ThreatAnalyzer):
         threats: List[str],
         filename: str,
         file_size: int,
-        file_content: Optional[str],
+        file_content: str | None,
     ) -> ThreatEvent:
         """
         Build a ThreatEvent from detected threats.
@@ -116,7 +116,7 @@ class MaliciousFileAnalyzer(ThreatAnalyzer):
         self,
         context: AnalysisContext,
         filename: str,
-        file_content: Optional[str],
+        file_content: str | None,
     ) -> List[str]:
         """
         Check all file signatures against filename and content.
@@ -163,7 +163,7 @@ class MaliciousFileAnalyzer(ThreatAnalyzer):
             )
         return threats
 
-    def _check_file_size_anomaly(self, context: AnalysisContext, file_size: int) -> Optional[str]:
+    def _check_file_size_anomaly(self, context: AnalysisContext, file_size: int) -> str | None:
         """
         Check if file size exceeds configured threshold.
 
@@ -181,7 +181,7 @@ class MaliciousFileAnalyzer(ThreatAnalyzer):
             return "unusually_large_file"
         return None
 
-    async def analyze(self, event: SecurityEvent, context: AnalysisContext) -> Optional[ThreatEvent]:
+    async def analyze(self, event: SecurityEvent, context: AnalysisContext) -> ThreatEvent | None:
         """Detect malicious file uploads"""
         if not event.is_file_operation():
             return None

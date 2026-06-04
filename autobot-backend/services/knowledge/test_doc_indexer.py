@@ -50,8 +50,8 @@ _path_constants = _make_stub("constants.path_constants")
 
 
 class _FakePATH:
-    DATA_DIR = Path("/tmp/test_autobot_data")
-    PROJECT_ROOT = Path("/tmp/test_autobot_root")
+    DATA_DIR = Path("/tmp/test_autobot_data")  # nosec B108 - test/controlled code uses tmpdir intentionally
+    PROJECT_ROOT = Path("/tmp/test_autobot_root")  # nosec B108 - test/controlled code uses tmpdir intentionally
 
 
 _path_constants.PATH = _FakePATH()  # type: ignore[attr-defined]
@@ -93,7 +93,7 @@ _MODULE = "services.knowledge.doc_indexer"
 def _make_service(
     initialized: bool = True,
     collection_count: int = 0,
-    root_dir: Path = Path("/tmp/test_autobot_root"),
+    root_dir: Path = Path("/tmp/test_autobot_root"),  # nosec B108 - test/controlled code uses tmpdir intentionally
 ) -> DocIndexerService:
     """Build a DocIndexerService with pre-wired mocks."""
     svc = DocIndexerService.__new__(DocIndexerService)
@@ -120,7 +120,7 @@ def _make_service(
 class TestFilterChangedFiles:
     """Tests for _filter_changed_files()."""
 
-    def test_all_new_files_returned_when_cache_empty(self, tmp_path):
+    def test_all_new_files_returned_when_cache_empty(self, tmp_path) -> None:
         """Empty cache → every file is treated as changed."""
         f1 = tmp_path / "a.md"
         f1.write_text("hello", encoding="utf-8")
@@ -135,7 +135,7 @@ class TestFilterChangedFiles:
         assert "a.md" in new_hashes
         assert "b.md" in new_hashes
 
-    def test_unchanged_file_excluded_from_result(self, tmp_path):
+    def test_unchanged_file_excluded_from_result(self, tmp_path) -> None:
         """File whose hash matches cache entry is excluded from changed list."""
         f = tmp_path / "unchanged.md"
         f.write_text("same content", encoding="utf-8")
@@ -146,7 +146,7 @@ class TestFilterChangedFiles:
         assert len(changed) == 0
         assert new_hashes.get("unchanged.md") == current_hash
 
-    def test_changed_file_included_in_result(self, tmp_path):
+    def test_changed_file_included_in_result(self, tmp_path) -> None:
         """File with stale cache hash is included in changed list."""
         f = tmp_path / "changed.md"
         f.write_text("new content", encoding="utf-8")
@@ -156,7 +156,7 @@ class TestFilterChangedFiles:
         assert len(changed) == 1
         assert changed[0][0] == str(f)
 
-    def test_mixed_changed_and_unchanged(self, tmp_path):
+    def test_mixed_changed_and_unchanged(self, tmp_path) -> None:
         """Only changed files appear in result; all hashes stored."""
         f_old = tmp_path / "old.md"
         f_old.write_text("old", encoding="utf-8")
@@ -173,7 +173,7 @@ class TestFilterChangedFiles:
         assert changed[0][0] == str(f_new)
         assert len(new_hashes) == 2
 
-    def test_hashes_use_relative_paths_as_keys(self, tmp_path):
+    def test_hashes_use_relative_paths_as_keys(self, tmp_path) -> None:
         """new_hashes keys must be relative to root_dir, not absolute."""
         sub = tmp_path / "docs"
         sub.mkdir()
@@ -188,7 +188,7 @@ class TestFilterChangedFiles:
 class TestHashCache:
     """Tests for _load_hash_cache() and _save_hash_cache()."""
 
-    def test_save_and_load_roundtrip(self, tmp_path):
+    def test_save_and_load_roundtrip(self, tmp_path) -> None:
         """Save then load returns identical dict."""
         hashes = {"file1.md": "abc", "file2.md": "def"}
 
@@ -198,13 +198,13 @@ class TestHashCache:
 
         assert loaded == hashes
 
-    def test_load_returns_empty_when_file_missing(self, tmp_path):
+    def test_load_returns_empty_when_file_missing(self, tmp_path) -> None:
         """Missing cache file returns empty dict."""
         with patch(f"{_MODULE}.HASH_CACHE_FILE", tmp_path / "nonexistent.json"):
             result = _load_hash_cache()
         assert result == {}
 
-    def test_load_returns_empty_on_corrupt_json(self, tmp_path):
+    def test_load_returns_empty_on_corrupt_json(self, tmp_path) -> None:
         """Corrupt JSON in cache file returns empty dict without raising."""
         bad_file = tmp_path / ".doc_index_hashes.json"
         bad_file.write_text("not valid json {{{{", encoding="utf-8")
@@ -214,7 +214,7 @@ class TestHashCache:
 
         assert result == {}
 
-    def test_save_creates_parent_dirs(self, tmp_path):
+    def test_save_creates_parent_dirs(self, tmp_path) -> None:
         """_save_hash_cache creates missing parent directories."""
         nested = tmp_path / "a" / "b" / "c" / "hashes.json"
         with patch(f"{_MODULE}.HASH_CACHE_FILE", nested):
@@ -225,19 +225,19 @@ class TestHashCache:
 class TestShouldExclude:
     """Tests for _should_exclude()."""
 
-    def test_excludes_backup_file(self):
+    def test_excludes_backup_file(self) -> None:
         assert _should_exclude("/docs/guide_backup.md")
 
-    def test_excludes_tmp_file(self):
+    def test_excludes_tmp_file(self) -> None:
         assert _should_exclude("/docs/guide.tmp")
 
-    def test_excludes_archives_path(self):
+    def test_excludes_archives_path(self) -> None:
         assert _should_exclude("/docs/archives/old.md")
 
-    def test_does_not_exclude_normal_md(self):
+    def test_does_not_exclude_normal_md(self) -> None:
         assert not _should_exclude("/docs/features/authentication.md")
 
-    def test_excludes_log_file(self):
+    def test_excludes_log_file(self) -> None:
         assert _should_exclude("/logs/debug.log")
 
 
@@ -249,16 +249,16 @@ class TestShouldExclude:
 class TestNeedsIndexing:
     """Tests for DocIndexerService.needs_indexing()."""
 
-    def test_returns_true_when_not_initialized(self):
+    def test_returns_true_when_not_initialized(self) -> None:
         svc = _make_service(initialized=False, collection_count=0)
         svc._collection = None
         assert svc.needs_indexing() is True
 
-    def test_returns_true_when_collection_empty(self):
+    def test_returns_true_when_collection_empty(self) -> None:
         svc = _make_service(initialized=True, collection_count=0)
         assert svc.needs_indexing() is True
 
-    def test_returns_false_when_collection_has_docs(self):
+    def test_returns_false_when_collection_has_docs(self) -> None:
         svc = _make_service(initialized=True, collection_count=42)
         assert svc.needs_indexing() is False
 
@@ -282,7 +282,7 @@ class TestIndexAll:
     # ------------------------------------------------------------------
 
     @pytest.mark.asyncio
-    async def test_empty_collection_forces_full_index(self, tmp_path):
+    async def test_empty_collection_forces_full_index(self, tmp_path) -> None:
         """index_all(force=False) with empty collection bypasses hash cache (#4350)."""
         self._make_md_files(tmp_path)
         svc = _make_service(initialized=True, collection_count=0, root_dir=tmp_path)
@@ -310,7 +310,7 @@ class TestIndexAll:
         )
 
     @pytest.mark.asyncio
-    async def test_force_true_reindexes_all_files(self, tmp_path):
+    async def test_force_true_reindexes_all_files(self, tmp_path) -> None:
         """index_all(force=True) re-indexes all files ignoring cache state."""
         self._make_md_files(tmp_path)
         svc = _make_service(initialized=True, collection_count=100, root_dir=tmp_path)
@@ -337,7 +337,7 @@ class TestIndexAll:
         assert mock_index.call_count == 2
 
     @pytest.mark.asyncio
-    async def test_incremental_mode_skips_unchanged_files(self, tmp_path):
+    async def test_incremental_mode_skips_unchanged_files(self, tmp_path) -> None:
         """index_all(force=False) skips files with matching hash cache."""
         self._make_md_files(tmp_path)
         svc = _make_service(initialized=True, collection_count=50, root_dir=tmp_path)
@@ -364,7 +364,7 @@ class TestIndexAll:
         assert result.skipped == 2
 
     @pytest.mark.asyncio
-    async def test_incremental_mode_indexes_only_changed_files(self, tmp_path):
+    async def test_incremental_mode_indexes_only_changed_files(self, tmp_path) -> None:
         """index_all(force=False) indexes only files with stale/missing hashes."""
         self._make_md_files(tmp_path)
         svc = _make_service(initialized=True, collection_count=50, root_dir=tmp_path)
@@ -394,7 +394,7 @@ class TestIndexAll:
         assert "feature_b" in indexed_path
 
     @pytest.mark.asyncio
-    async def test_hash_cache_updated_after_force_index(self, tmp_path):
+    async def test_hash_cache_updated_after_force_index(self, tmp_path) -> None:
         """After force=True index_all, hash cache must be updated for all files."""
         self._make_md_files(tmp_path)
         svc = _make_service(initialized=True, collection_count=0, root_dir=tmp_path)
@@ -418,7 +418,7 @@ class TestIndexAll:
         assert "docs/features/feature_b.md" in saved
 
     @pytest.mark.asyncio
-    async def test_returns_error_result_on_init_failure(self, tmp_path):
+    async def test_returns_error_result_on_init_failure(self, tmp_path) -> None:
         """index_all returns error IndexResult when initialization fails."""
         svc = _make_service(initialized=False, root_dir=tmp_path)
         svc._collection = None
@@ -430,7 +430,7 @@ class TestIndexAll:
         assert "Failed to initialize" in result.errors[0]
 
     @pytest.mark.asyncio
-    async def test_no_files_discovered_returns_empty_result(self, tmp_path):
+    async def test_no_files_discovered_returns_empty_result(self, tmp_path) -> None:
         """index_all returns empty result when no files are discovered."""
         svc = _make_service(initialized=True, collection_count=0, root_dir=tmp_path)
 
@@ -441,7 +441,7 @@ class TestIndexAll:
         assert result.success == 0
 
     @pytest.mark.asyncio
-    async def test_elapsed_seconds_populated(self, tmp_path):
+    async def test_elapsed_seconds_populated(self, tmp_path) -> None:
         """index_all always populates elapsed_seconds."""
         self._make_md_files(tmp_path)
         svc = _make_service(initialized=True, collection_count=100, root_dir=tmp_path)
@@ -465,7 +465,7 @@ class TestIndexFile:
     """Tests for DocIndexerService.index_file()."""
 
     @pytest.mark.asyncio
-    async def test_returns_failed_for_missing_file(self, tmp_path):
+    async def test_returns_failed_for_missing_file(self, tmp_path) -> None:
         """index_file returns failed result for nonexistent file."""
         svc = _make_service(initialized=True, collection_count=0, root_dir=tmp_path)
         result = await svc.index_file(tmp_path / "missing.md", tier=1, force=True)
@@ -474,7 +474,7 @@ class TestIndexFile:
         assert result.success == 0
 
     @pytest.mark.asyncio
-    async def test_skips_file_with_matching_hash(self, tmp_path):
+    async def test_skips_file_with_matching_hash(self, tmp_path) -> None:
         """index_file skips indexing when hash matches cache and force=False."""
         f = tmp_path / "guide.md"
         f.write_text("# Guide\n\nContent here.\n", encoding="utf-8")
@@ -492,7 +492,7 @@ class TestIndexFile:
         assert result.success == 0
 
     @pytest.mark.asyncio
-    async def test_force_true_bypasses_hash_check(self, tmp_path):
+    async def test_force_true_bypasses_hash_check(self, tmp_path) -> None:
         """index_file with force=True indexes even if hash matches cache."""
         f = tmp_path / "guide.md"
         f.write_text("# Guide\n\nSome section content here.\n\nMore text.\n", encoding="utf-8")
@@ -513,7 +513,7 @@ class TestIndexFile:
         assert result.success == 1
 
     @pytest.mark.asyncio
-    async def test_empty_file_is_skipped(self, tmp_path):
+    async def test_empty_file_is_skipped(self, tmp_path) -> None:
         """index_file skips files that contain only whitespace."""
         f = tmp_path / "empty.md"
         f.write_text("   \n\n  ", encoding="utf-8")
@@ -525,7 +525,7 @@ class TestIndexFile:
         assert result.skipped == 1
 
     @pytest.mark.asyncio
-    async def test_successful_index_returns_success_one(self, tmp_path):
+    async def test_successful_index_returns_success_one(self, tmp_path) -> None:
         """index_file returns success=1 when chunk is indexed."""
         f = tmp_path / "doc.md"
         f.write_text("# Doc\n\n## Section A\n\nSome useful content here.\n", encoding="utf-8")
@@ -545,7 +545,7 @@ class TestIndexAllEmpty4350Fix:
     """Regression tests specifically for #4350: empty collection forces full index."""
 
     @pytest.mark.asyncio
-    async def test_needs_indexing_true_overrides_cache_match(self, tmp_path):
+    async def test_needs_indexing_true_overrides_cache_match(self, tmp_path) -> None:
         """#4350: needs_indexing() == True must override matching hash cache."""
         docs = tmp_path / "docs" / "features"
         docs.mkdir(parents=True)
@@ -563,7 +563,7 @@ class TestIndexAllEmpty4350Fix:
 
         indexed_files = []
 
-        async def _track_index(file_path, tier, result):
+        async def _track_index(file_path, tier, result) -> None:
             indexed_files.append(file_path)
 
         with (
@@ -576,7 +576,7 @@ class TestIndexAllEmpty4350Fix:
         assert len(indexed_files) == 1, "Empty collection must trigger full index even when hash cache matches (#4350)"
 
     @pytest.mark.asyncio
-    async def test_non_empty_collection_uses_incremental(self, tmp_path):
+    async def test_non_empty_collection_uses_incremental(self, tmp_path) -> None:
         """#4350 fix does NOT apply when collection already has documents."""
         docs = tmp_path / "docs" / "features"
         docs.mkdir(parents=True)
@@ -593,7 +593,7 @@ class TestIndexAllEmpty4350Fix:
 
         indexed_files = []
 
-        async def _track_index(file_path, tier, result):
+        async def _track_index(file_path, tier, result) -> None:
             indexed_files.append(file_path)
 
         with (
@@ -610,12 +610,12 @@ class TestIndexAllEmpty4350Fix:
 class TestEdgeCases:
     """Edge case tests for hash cache and file handling."""
 
-    def test_compute_file_hash_returns_empty_string_on_error(self, tmp_path):
+    def test_compute_file_hash_returns_empty_string_on_error(self, tmp_path) -> None:
         """_compute_file_hash returns '' for unreadable files (no exception raised)."""
         result = _compute_file_hash("/nonexistent/path/file.md")
         assert result == ""
 
-    def test_compute_file_hash_consistent(self, tmp_path):
+    def test_compute_file_hash_consistent(self, tmp_path) -> None:
         """Same file content always produces same hash."""
         f = tmp_path / "test.md"
         f.write_text("consistent content", encoding="utf-8")
@@ -624,7 +624,7 @@ class TestEdgeCases:
         assert h1 == h2
         assert len(h1) == 64  # SHA-256 hex digest
 
-    def test_compute_file_hash_differs_for_different_content(self, tmp_path):
+    def test_compute_file_hash_differs_for_different_content(self, tmp_path) -> None:
         """Different content produces different hashes."""
         f1 = tmp_path / "a.md"
         f2 = tmp_path / "b.md"
@@ -633,7 +633,7 @@ class TestEdgeCases:
         assert _compute_file_hash(str(f1)) != _compute_file_hash(str(f2))
 
     @pytest.mark.asyncio
-    async def test_index_all_with_corrupted_hash_cache(self, tmp_path):
+    async def test_index_all_with_corrupted_hash_cache(self, tmp_path) -> None:
         """Corrupted hash cache falls back gracefully to full index."""
         docs = tmp_path / "docs" / "features"
         docs.mkdir(parents=True)
@@ -647,7 +647,7 @@ class TestEdgeCases:
 
         indexed_files = []
 
-        async def _track(fp, tier, result):
+        async def _track(fp, tier, result) -> None:
             indexed_files.append(fp)
 
         with (
@@ -660,7 +660,7 @@ class TestEdgeCases:
         # With empty collection + corrupted cache, file must be indexed
         assert len(indexed_files) == 1
 
-    def test_filter_changed_files_empty_file_list(self, tmp_path):
+    def test_filter_changed_files_empty_file_list(self, tmp_path) -> None:
         """_filter_changed_files with empty file list returns empty results."""
         changed, hashes = _filter_changed_files([], {"some.md": "hash"}, tmp_path)
         assert changed == []
@@ -674,7 +674,7 @@ class TestHashCacheEdgeCases4382:
     # Symlinks
     # ------------------------------------------------------------------
 
-    def test_compute_file_hash_follows_symlink(self, tmp_path):
+    def test_compute_file_hash_follows_symlink(self, tmp_path) -> None:
         """_compute_file_hash hashes the target content, not the symlink path."""
         target = tmp_path / "real.md"
         target.write_text("real content", encoding="utf-8")
@@ -685,7 +685,7 @@ class TestHashCacheEdgeCases4382:
         hash_via_link = _compute_file_hash(str(link))
         assert hash_via_target == hash_via_link
 
-    def test_filter_changed_files_symlink_matches_target_hash(self, tmp_path):
+    def test_filter_changed_files_symlink_matches_target_hash(self, tmp_path) -> None:
         """Symlink and target produce the same cache key hash (#4382)."""
         target = tmp_path / "real.md"
         target.write_text("content", encoding="utf-8")
@@ -704,7 +704,7 @@ class TestHashCacheEdgeCases4382:
     # Permissions
     # ------------------------------------------------------------------
 
-    def test_compute_file_hash_returns_empty_on_permission_error(self, tmp_path):
+    def test_compute_file_hash_returns_empty_on_permission_error(self, tmp_path) -> None:
         """_compute_file_hash returns '' on PermissionError without raising."""
         f = tmp_path / "secret.md"
         f.write_text("secret", encoding="utf-8")
@@ -719,7 +719,7 @@ class TestHashCacheEdgeCases4382:
         finally:
             f.chmod(0o644)
 
-    def test_filter_changed_files_preserves_cached_hash_on_permission_error(self, tmp_path):
+    def test_filter_changed_files_preserves_cached_hash_on_permission_error(self, tmp_path) -> None:
         """Unreadable file preserves cached hash and is NOT marked changed (#4382)."""
         f = tmp_path / "locked.md"
         f.write_text("data", encoding="utf-8")
@@ -743,7 +743,7 @@ class TestHashCacheEdgeCases4382:
     # Path normalization
     # ------------------------------------------------------------------
 
-    def test_normalize_path_returns_relative_key(self, tmp_path):
+    def test_normalize_path_returns_relative_key(self, tmp_path) -> None:
         """_normalize_path returns a relative path key under root_dir."""
         sub = tmp_path / "docs" / "api"
         sub.mkdir(parents=True)
@@ -753,7 +753,7 @@ class TestHashCacheEdgeCases4382:
         _, rel = _normalize_path(str(f), tmp_path)
         assert rel == str(Path("docs") / "api" / "ref.md")
 
-    def test_normalize_path_symlink_resolves_consistently(self, tmp_path):
+    def test_normalize_path_symlink_resolves_consistently(self, tmp_path) -> None:
         """Symlink and its target produce the same relative path after resolution."""
         real_dir = tmp_path / "real_docs"
         real_dir.mkdir()
@@ -769,7 +769,7 @@ class TestHashCacheEdgeCases4382:
         # Both point to same inode → same relative path
         assert rel_target == rel_link
 
-    def test_filter_changed_files_normalized_keys_match_cache(self, tmp_path):
+    def test_filter_changed_files_normalized_keys_match_cache(self, tmp_path) -> None:
         """_filter_changed_files uses normalized keys so relocation-safe lookup works."""
         sub = tmp_path / "docs"
         sub.mkdir()
@@ -785,7 +785,7 @@ class TestHashCacheEdgeCases4382:
     # Circular symlinks (#4433)
     # ------------------------------------------------------------------
 
-    def test_compute_file_hash_returns_empty_on_circular_symlink(self, tmp_path):
+    def test_compute_file_hash_returns_empty_on_circular_symlink(self, tmp_path) -> None:
         """_compute_file_hash returns '' for a circular symlink without raising (#4433)."""
         link_a = tmp_path / "a.md"
         link_b = tmp_path / "b.md"
@@ -795,7 +795,7 @@ class TestHashCacheEdgeCases4382:
         result = _compute_file_hash(str(link_a))
         assert result == "", "Circular symlink must return '' not raise OSError"
 
-    def test_filter_changed_files_preserves_cached_hash_on_circular_symlink(self, tmp_path):
+    def test_filter_changed_files_preserves_cached_hash_on_circular_symlink(self, tmp_path) -> None:
         """Circular symlink preserves cached hash and is NOT marked changed (#4433)."""
         link_a = tmp_path / "loop_a.md"
         link_b = tmp_path / "loop_b.md"
@@ -827,35 +827,35 @@ class TestIndexChunkOversized4665:
     # _is_oversized_error
     # ------------------------------------------------------------------
 
-    def test_is_oversized_error_too_large(self):
+    def test_is_oversized_error_too_large(self) -> None:
         """'too large' in error message → oversized."""
         assert DocIndexerService._is_oversized_error(ValueError("input too large"))
 
-    def test_is_oversized_error_token(self):
+    def test_is_oversized_error_token(self) -> None:
         """'token' in error message → oversized."""
         assert DocIndexerService._is_oversized_error(RuntimeError("token limit exceeded"))
 
-    def test_is_oversized_error_sequence_length(self):
+    def test_is_oversized_error_sequence_length(self) -> None:
         """'sequence length' in error message → oversized."""
         assert DocIndexerService._is_oversized_error(Exception("sequence length 600 > 512"))
 
-    def test_is_oversized_error_context_length(self):
+    def test_is_oversized_error_context_length(self) -> None:
         """'context length' in error message → oversized."""
         assert DocIndexerService._is_oversized_error(Exception("context length exceeded"))
 
-    def test_is_oversized_error_exceeds(self):
+    def test_is_oversized_error_exceeds(self) -> None:
         """'exceeds' in error message → oversized."""
         assert DocIndexerService._is_oversized_error(Exception("length exceeds maximum"))
 
-    def test_is_oversized_error_truncat(self):
+    def test_is_oversized_error_truncat(self) -> None:
         """'truncat' in error message → oversized (truncated/truncation)."""
         assert DocIndexerService._is_oversized_error(Exception("input truncated"))
 
-    def test_is_oversized_error_generic_error_not_oversized(self):
+    def test_is_oversized_error_generic_error_not_oversized(self) -> None:
         """Generic network error → not oversized."""
         assert not DocIndexerService._is_oversized_error(ConnectionError("connection refused"))
 
-    def test_is_oversized_error_key_error_not_oversized(self):
+    def test_is_oversized_error_key_error_not_oversized(self) -> None:
         """KeyError → not oversized."""
         assert not DocIndexerService._is_oversized_error(KeyError("missing_key"))
 
@@ -863,7 +863,7 @@ class TestIndexChunkOversized4665:
     # _index_chunk: normal success path
     # ------------------------------------------------------------------
 
-    def test_index_chunk_returns_true_on_success(self):
+    def test_index_chunk_returns_true_on_success(self) -> None:
         """_index_chunk returns True when embed+upsert succeed."""
         svc = _make_service()
         chunk = self._make_chunk("Short content for embedding.")
@@ -875,7 +875,7 @@ class TestIndexChunkOversized4665:
     # _index_chunk: non-oversized error → logged, returns False, no split
     # ------------------------------------------------------------------
 
-    def test_index_chunk_returns_false_on_non_oversized_error(self):
+    def test_index_chunk_returns_false_on_non_oversized_error(self) -> None:
         """Non-oversized error → returns False, no split attempted."""
         svc = _make_service()
         svc._embed_model.get_text_embedding.side_effect = ConnectionError("connection refused")
@@ -951,7 +951,7 @@ class TestIndexChunkOversized4665:
     # _index_chunk: oversized → split, BOTH halves fail → returns False
     # ------------------------------------------------------------------
 
-    def test_index_chunk_splits_on_oversized_both_halves_fail(self):
+    def test_index_chunk_splits_on_oversized_both_halves_fail(self) -> None:
         """Oversized: both halves fail → returns False (no silent drop — warning logged)."""
         svc = _make_service()
 
@@ -970,7 +970,7 @@ class TestIndexChunkOversized4665:
     # _split_and_embed: empty-string guard (#4921)
     # ------------------------------------------------------------------
 
-    def test_split_and_embed_returns_false_on_empty_string(self):
+    def test_split_and_embed_returns_false_on_empty_string(self) -> None:
         """_split_and_embed returns False immediately for empty content (#4921)."""
         svc = _make_service()
         ok = svc._split_and_embed("", "chunk_id", {}, "docs/test.md")
@@ -1105,7 +1105,7 @@ class TestIndexChunkMultiLevelSplit4702:
     # only if no sibling succeeded)
     # ------------------------------------------------------------------
 
-    def test_always_oversized_drops_at_max_depth(self):
+    def test_always_oversized_drops_at_max_depth(self) -> None:
         """If every embed call raises oversized, chunk is dropped at max_depth → False."""
         svc = _make_service()
         svc._embed_model.get_text_embedding.side_effect = ValueError("input too large for model context length")
@@ -1132,7 +1132,7 @@ class TestIndexChunkMultiLevelSplit4702:
                 raise ValueError("too large")
             return [0.1] * 128
 
-        def _fake_upsert(ids, embeddings, documents, metadatas):
+        def _fake_upsert(ids, embeddings, documents, metadatas) -> None:
             upserted_ids.extend(ids)
 
         svc._embed_model.get_text_embedding.side_effect = _fake_embed
@@ -1177,7 +1177,7 @@ class TestIndexChunkMultiLevelSplit4702:
 class TestGetDocIndexerService:
     """Tests for the singleton factory."""
 
-    def test_returns_same_instance(self):
+    def test_returns_same_instance(self) -> None:
         """get_doc_indexer_service() returns the same object on multiple calls."""
         import services.knowledge.doc_indexer as mod
 
@@ -1191,7 +1191,7 @@ class TestGetDocIndexerService:
         finally:
             mod._doc_indexer = original
 
-    def test_returns_doc_indexer_service_instance(self):
+    def test_returns_doc_indexer_service_instance(self) -> None:
         """Factory returns a DocIndexerService instance."""
         import services.knowledge.doc_indexer as mod
 
@@ -1203,7 +1203,7 @@ class TestGetDocIndexerService:
         finally:
             mod._doc_indexer = original
 
-    def test_factory_resolves_llm_service_lazily(self):
+    def test_factory_resolves_llm_service_lazily(self) -> None:
         """Factory calls get_llm_service() when llm_service arg is omitted (#4655)."""
         import services.knowledge.doc_indexer as mod
 
@@ -1220,7 +1220,7 @@ class TestGetDocIndexerService:
         finally:
             mod._doc_indexer = original
 
-    def test_factory_accepts_explicit_llm_service(self):
+    def test_factory_accepts_explicit_llm_service(self) -> None:
         """Explicit llm_service arg is forwarded to DocIndexerService (#4655)."""
         import services.knowledge.doc_indexer as mod
 
@@ -1238,7 +1238,7 @@ class TestRunKbSynthesis:
     """Tests for DocIndexerService._run_kb_synthesis → LLM call path (#4655)."""
 
     @pytest.mark.asyncio
-    async def test_run_kb_synthesis_calls_synthesize_docs_with_llm_service(self):
+    async def test_run_kb_synthesis_calls_synthesize_docs_with_llm_service(self) -> None:
         """_run_kb_synthesis passes self._llm_service to get_kb_synthesizer (#4655)."""
         mock_llm = MagicMock()
         svc = DocIndexerService.__new__(DocIndexerService)
@@ -1264,7 +1264,7 @@ class TestRunKbSynthesis:
         assert called_paths == ["/docs/readme.md"]
 
     @pytest.mark.asyncio
-    async def test_calls_synthesizer_with_correct_args(self):
+    async def test_calls_synthesizer_with_correct_args(self) -> None:
         """_run_kb_synthesis passes indexed_paths and collection_config to synthesize_docs (#4658)."""
         from services.knowledge.synthesis_schema_loader import CollectionConfig
 
@@ -1291,7 +1291,7 @@ class TestRunKbSynthesis:
         mock_synthesizer.synthesize_docs.assert_awaited_once_with(["docs/README.md"], collection_config=col_cfg)
 
     @pytest.mark.asyncio
-    async def test_swallows_exception_silently(self):
+    async def test_swallows_exception_silently(self) -> None:
         """_run_kb_synthesis catches and logs exceptions without propagating (#4658)."""
         mock_llm = MagicMock()
         svc = DocIndexerService.__new__(DocIndexerService)
@@ -1315,7 +1315,7 @@ class TestRunKbSynthesis:
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_passes_none_config_when_no_match(self):
+    async def test_passes_none_config_when_no_match(self) -> None:
         """_run_kb_synthesis passes collection_config=None when no collection matches (#4658)."""
         from services.knowledge.synthesis_schema_loader import CollectionConfig
 
@@ -1354,7 +1354,7 @@ class TestFindCollectionConfig:
         svc.synthesis_schema = schema
         return svc
 
-    def test_returns_matching_config_when_path_prefix_found(self):
+    def test_returns_matching_config_when_path_prefix_found(self) -> None:
         """Returns the collection whose path prefix is a substring of an indexed path (#4658)."""
         from services.knowledge.synthesis_schema_loader import CollectionConfig
 
@@ -1363,7 +1363,7 @@ class TestFindCollectionConfig:
         result = svc._find_collection_config(["docs/README.md"])
         assert result is col_cfg
 
-    def test_returns_none_when_no_path_matches(self):
+    def test_returns_none_when_no_path_matches(self) -> None:
         """Returns None when no collection path is a substring of indexed_paths (#4658)."""
         from services.knowledge.synthesis_schema_loader import CollectionConfig
 
@@ -1372,13 +1372,13 @@ class TestFindCollectionConfig:
         result = svc._find_collection_config(["tests/foo.py"])
         assert result is None
 
-    def test_returns_none_on_empty_schema(self):
+    def test_returns_none_on_empty_schema(self) -> None:
         """Returns None when synthesis_schema has no collections (#4658)."""
         svc = self._make_svc([])
         result = svc._find_collection_config(["docs/README.md"])
         assert result is None
 
-    def test_returns_first_match_when_multiple_collections(self):
+    def test_returns_first_match_when_multiple_collections(self) -> None:
         """Returns the first matching collection when multiple collections match (#4658)."""
         from services.knowledge.synthesis_schema_loader import CollectionConfig
 
@@ -1398,21 +1398,21 @@ class TestDocIndexerSearch:
     """search() exposes autobot_docs ChromaDB collection for RAGService merging."""
 
     @pytest.mark.asyncio
-    async def test_search_not_initialized_returns_empty(self):
+    async def test_search_not_initialized_returns_empty(self) -> None:
         """Returns [] when service is not initialised."""
         svc = _make_service(initialized=False, collection_count=0)
         result = await svc.search("what is autobot")
         assert result == []
 
     @pytest.mark.asyncio
-    async def test_search_empty_collection_returns_empty(self):
+    async def test_search_empty_collection_returns_empty(self) -> None:
         """Returns [] when collection has no documents."""
         svc = _make_service(initialized=True, collection_count=0)
         result = await svc.search("what is autobot")
         assert result == []
 
     @pytest.mark.asyncio
-    async def test_search_returns_search_results(self):
+    async def test_search_returns_search_results(self) -> None:
         """Happy path: wraps ChromaDB hits into SearchResult objects."""
         svc = _make_service(initialized=True, collection_count=3)
         svc._collection.query = MagicMock(
@@ -1442,7 +1442,7 @@ class TestDocIndexerSearch:
         assert first["metadata"]["source"] == "autobot_docs"
 
     @pytest.mark.asyncio
-    async def test_search_caps_n_results_to_collection_count(self):
+    async def test_search_caps_n_results_to_collection_count(self) -> None:
         """n_results is capped to avoid ChromaDB 'n_results > count' error."""
         svc = _make_service(initialized=True, collection_count=2)
         svc._collection.query = MagicMock(
@@ -1462,7 +1462,7 @@ class TestDocIndexerSearch:
         assert call_kwargs["n_results"] == 2  # capped to collection count
 
     @pytest.mark.asyncio
-    async def test_search_exception_returns_empty(self):
+    async def test_search_exception_returns_empty(self) -> None:
         """query() failure returns [] instead of raising."""
         svc = _make_service(initialized=True, collection_count=5)
         svc._collection.query = MagicMock(side_effect=RuntimeError("chromadb unavailable"))

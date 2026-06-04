@@ -10,12 +10,12 @@ Issue #5632: ``async_lazy_singleton`` added for async-context singletons.
 
 import asyncio
 from threading import Lock
-from typing import Any, Awaitable, Callable, Optional, TypeVar
+from typing import Any, Awaitable, Callable, TypeVar
 
 T = TypeVar("T")
 
 
-def lazy_optional_singleton(factory: Callable[[], Optional[T]]) -> Callable[[], Optional[T]]:
+def lazy_optional_singleton(factory: Callable[[], T | None]) -> Callable[[], T | None]:
     """Return a factory that creates and caches a thread-safe optional singleton.
 
     Like ``lazy_singleton`` but supports ``None`` as a valid cached value.
@@ -29,7 +29,7 @@ def lazy_optional_singleton(factory: Callable[[], Optional[T]]) -> Callable[[], 
     _UNSET: Any = object()
     _instance: Any = _UNSET
 
-    def _get() -> Optional[T]:
+    def _get() -> T | None:
         nonlocal _instance
         if _instance is _UNSET:
             with _lock:
@@ -49,10 +49,10 @@ def lazy_singleton(factory: Callable[..., T]) -> Callable[..., T]:
     Raises RuntimeError if called again with different args than the first
     call, to prevent silent mis-configuration.
     """
-    instance: Optional[T] = None
+    instance: T | None = None
     lock = Lock()
-    _first_args: Optional[tuple] = None
-    _first_kwargs: Optional[dict] = None
+    _first_args: tuple | None = None
+    _first_kwargs: dict | None = None
 
     def get(*args, **kwargs) -> T:
         nonlocal instance, _first_args, _first_kwargs
@@ -84,7 +84,7 @@ def async_lazy_singleton(factory: Callable[..., Any]) -> Callable[[], Awaitable[
 
     Issue #5632: extracted from ~7 repeated async double-checked locking patterns.
     """
-    instance: Optional[T] = None
+    instance: T | None = None  # type: ignore[valid-type]  # GH#7105: T unbound in closure; async singleton pattern  # noqa: E501
     lock = asyncio.Lock()
 
     async def get() -> T:

@@ -5,19 +5,19 @@
       <div class="step-indicator">
         <span class="step-badge">Step {{ step.step_number }} of {{ step.total_steps }}</span>
         <span class="step-status" :class="step.status">
-          <i :class="statusIcon" aria-hidden="true"></i>
+          <Icon :name="statusIcon" />
           {{ statusText }}
         </span>
       </div>
       <span v-if="step.execution_time" class="step-time">
-        <i class="fas fa-clock" aria-hidden="true"></i>
+        <Icon name="clock" />
         {{ formatDuration(step.execution_time) }}
       </span>
     </div>
 
     <!-- Step Description -->
     <div class="step-description">
-      <i class="fas fa-tasks" aria-hidden="true"></i>
+      <Icon name="tasks" />
       {{ step.description }}
     </div>
 
@@ -33,14 +33,14 @@
           :title="$t('chat.overseer.copyCommand')"
           :aria-label="$t('chat.overseer.copyCommand')"
         >
-          <i class="fas fa-copy" aria-hidden="true"></i>
+          <Icon name="copy" />
         </button>
       </div>
 
       <!-- Part 1: Command Explanation (always visible) -->
       <div v-if="step.command_explanation" class="command-explanation">
         <div class="explanation-header">
-          <i class="fas fa-info-circle" aria-hidden="true"></i>
+          <Icon name="info-circle" />
           <span>{{ $t('chat.overseer.whatCommandDoes') }}</span>
         </div>
         <p class="explanation-summary">{{ step.command_explanation.summary }}</p>
@@ -59,7 +59,7 @@
 
         <!-- Security Notes -->
         <div v-if="step.command_explanation.security_notes" class="security-notes">
-          <i class="fas fa-shield-alt" aria-hidden="true"></i>
+          <Icon name="shield-alt" />
           <span>{{ step.command_explanation.security_notes }}</span>
         </div>
       </div>
@@ -80,7 +80,7 @@
       <!-- Output Content -->
       <div class="output-content">
         <div class="output-header">
-          <i class="fas fa-terminal" aria-hidden="true"></i>
+          <Icon name="terminal" />
           <span>{{ $t('chat.overseer.output') }}</span>
           <span v-if="step.return_code !== undefined" class="return-code" :class="{ error: step.return_code !== 0 }">
             Exit: {{ step.return_code }}
@@ -92,7 +92,7 @@
       <!-- Part 2: Output Explanation (always visible when complete) -->
       <div v-if="step.output_explanation && step.stream_complete" class="output-explanation">
         <div class="explanation-header">
-          <i class="fas fa-chart-bar" aria-hidden="true"></i>
+          <Icon name="chart-bar" />
           <span>{{ $t('chat.overseer.whatLookingAt') }}</span>
         </div>
         <p class="explanation-summary">{{ step.output_explanation.summary }}</p>
@@ -100,7 +100,7 @@
         <!-- Key Findings -->
         <ul v-if="step.output_explanation.key_findings?.length" class="key-findings">
           <li v-for="(finding, idx) in step.output_explanation.key_findings" :key="idx">
-            <i class="fas fa-check-circle" aria-hidden="true"></i>
+            <Icon name="check-circle" />
             {{ finding }}
           </li>
         </ul>
@@ -113,7 +113,7 @@
         <!-- Next Steps -->
         <div v-if="step.output_explanation.next_steps?.length" class="next-steps">
           <div class="next-steps-header">
-            <i class="fas fa-arrow-right" aria-hidden="true"></i>
+            <Icon name="arrow-right" />
             <span>{{ $t('chat.overseer.suggestedNextSteps') }}</span>
           </div>
           <ul>
@@ -127,7 +127,7 @@
 
     <!-- Error Display -->
     <div v-if="step.error" class="step-error">
-      <i class="fas fa-exclamation-triangle" aria-hidden="true"></i>
+      <Icon name="exclamation-triangle" />
       <span>{{ step.error }}</span>
     </div>
   </div>
@@ -147,6 +147,7 @@
  * @copyright 2025 mrveiss
  */
 
+import Icon from '@/components/ui/Icon.vue'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useClipboard } from '@/composables/useClipboard'
@@ -171,14 +172,14 @@ const stepStatusClass = computed(() => ({
 
 const statusIcon = computed(() => {
   const icons: Record<string, string> = {
-    pending: 'fas fa-clock',
+    pending: 'clock',
     running: 'fas fa-spinner fa-spin',
-    streaming: 'fas fa-stream',
-    explaining: 'fas fa-brain',
-    completed: 'fas fa-check-circle',
-    failed: 'fas fa-times-circle'
+    streaming: 'stream',
+    explaining: 'brain',
+    completed: 'check-circle',
+    failed: 'times-circle'
   }
-  return icons[props.step.status] || 'fas fa-question'
+  return icons[props.step.status] || 'question'
 })
 
 const statusText = computed(() => {

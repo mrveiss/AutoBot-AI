@@ -91,7 +91,7 @@
     "analytics": "تحلیل",
     "profile": "پروفایل",
     "slmAdmin": "مدیریت SLM",
-    "slmAdminTitle": "باز کردن پنل مدیریت SLM",
+    "slmAdminTitle": "SLM Admin — در تب جدید باز می‌شود",
     "profileSettings": "تنظیمات پروفایل",
     "vision": "Vision",
     "preferences": "Preferences",
@@ -123,7 +123,11 @@
     "marketplace": "Marketplace",
     "usage": "Usage & Costs",
     "more": "More",
-    "moreItems": "More navigation items"
+    "moreItems": "More navigation items",
+    "llcPortability": "Portability",
+    "settingsAndTools": "Settings & Tools",
+    "adminPanel": "Admin Panel",
+    "documents": "AI Documents"
   },
   "agent": {
     "registry": {
@@ -4479,6 +4483,12 @@
     "progressBar": {
       "timeRemaining": "{time} remaining"
     },
+    "offlineBanner": {
+      "backendLost": "Backend connection lost — retrying. Cached data still available.",
+      "queuedForRetry": "{count} action queued for retry. | {count} actions queued for retry.",
+      "checking": "Checking…",
+      "retry": "Retry"
+    },
     "alert": {
       "dismissAlert": "Dismiss alert"
     },
@@ -7132,6 +7142,17 @@
     "novnc": {
       "selectHost": "Select a host to connect",
       "selectHostDesc": "Choose a VNC-capable host from the list to open a remote desktop session."
+    }
+  },
+  "mobile": {
+    "pairing": {
+      "title": "جفت کردن دستگاه تلفن همراه",
+      "instructions": "این کد QR را با دستگاه تلفن همراه خود اسکن کنید",
+      "instructionsDetail": "برنامه تلفن همراه AutoBot را باز کنید و این کد را اسکن کنید تا دستگاه خود را جفت کنید",
+      "generating": "در حال تولید کد QR...",
+      "expired": "منقضی شده",
+      "refresh": "دریافت کد جدید",
+      "retry": "تلاش مجدد"
     }
   }
 }

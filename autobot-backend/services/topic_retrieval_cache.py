@@ -23,18 +23,18 @@ Architecture:
 
 import asyncio
 import json
-import logging
 import time
 import uuid
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import numpy as np
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from utils.async_initializable import AsyncInitializable
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -108,7 +108,7 @@ class TopicRetrievalCache(AsyncInitializable):
             await cache.store(chunk_embeddings, chunks)
     """
 
-    def __init__(self, cache_config: Optional[TopicCacheConfig] = None):
+    def __init__(self, cache_config: TopicCacheConfig | None = None) -> None:
         super().__init__(component_name="topic_retrieval_cache")
         self._config = cache_config or TopicCacheConfig()
         self._collection = None
@@ -152,7 +152,7 @@ class TopicRetrievalCache(AsyncInitializable):
     # Lookup
     # ------------------------------------------------------------------
 
-    async def lookup(self, query_embedding: List[float]) -> Optional[List[CachedChunk]]:
+    async def lookup(self, query_embedding: List[float]) -> List[CachedChunk] | None:
         """Search for a cached topic cluster matching the query.
 
         Args:
@@ -175,7 +175,7 @@ class TopicRetrievalCache(AsyncInitializable):
             logger.warning("Topic cache lookup error: %s", exc)
             return None
 
-    async def _evaluate_topic_match(self, results: Dict) -> Optional[List[CachedChunk]]:
+    async def _evaluate_topic_match(self, results: Dict) -> List[CachedChunk] | None:
         """Evaluate ChromaDB result for topic match. Ref: #1376."""
         if not results or not results.get("ids") or not results["ids"][0]:
             self._misses += 1
@@ -270,7 +270,7 @@ class TopicRetrievalCache(AsyncInitializable):
     # Redis helpers
     # ------------------------------------------------------------------
 
-    async def _fetch_chunks(self, key: str) -> Optional[List[CachedChunk]]:
+    async def _fetch_chunks(self, key: str) -> List[CachedChunk] | None:
         """Fetch cached chunks from Redis."""
         try:
             client = await get_async_redis_client(database=_REDIS_DATABASE)
@@ -381,7 +381,7 @@ class TopicRetrievalCache(AsyncInitializable):
 # Global singleton
 # ---------------------------------------------------------------------------
 
-_instance: Optional[TopicRetrievalCache] = None
+_instance: TopicRetrievalCache | None = None
 _instance_lock = asyncio.Lock()
 
 

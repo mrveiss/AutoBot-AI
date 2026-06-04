@@ -16,5 +16,21 @@ RBAC Model:
 """
 
 from api.redis_mcp.router import router
+from services.mcp_bridge_manifest import MCPBridgeManifest
 
-__all__ = ["router"]
+MANIFEST = MCPBridgeManifest(
+    name="redis_mcp",
+    version="1.0.0",
+    description="Redis Data & Operations - Direct Redis access, vector search, server ops",
+    features=[
+        "data_access",
+        "vector_search",
+        "hybrid_search",
+        "ops_intelligence",
+        "stream_health",
+        "rbac_filtering",
+    ],
+    endpoint="/api/redis/mcp/tools",
+)
+
+__all__ = ["router", "MANIFEST"]

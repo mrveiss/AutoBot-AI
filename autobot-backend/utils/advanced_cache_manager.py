@@ -10,17 +10,18 @@ import asyncio
 import hashlib
 import inspect
 import json
-import logging
 import time
 from dataclasses import dataclass
 from enum import Enum
 from functools import wraps
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client, get_redis_client
+from autobot_shared.ssot_constants import TTL_24_HOURS
 from constants.ttl_constants import TTL_1_HOUR, TTL_5_MINUTES
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level tuple for user data types
 _USER_DATA_TYPES = ("user_preferences", "user_history")
@@ -57,7 +58,7 @@ def _extract_request_from_call(args: tuple, kwargs: dict) -> Any:
 _JSON_RESPONSE_ENVELOPE = "__json_response__"
 
 
-def _serialise_response(result: Any) -> Optional[Any]:
+def _serialise_response(result: Any) -> Any | None:
     """
     Convert a response value into a JSON-serialisable form for Redis storage.
 
@@ -134,7 +135,7 @@ def _record_cache_miss(key: str) -> None:
 
 
 def _generate_cache_key(
-    explicit_key: Optional[str],
+    explicit_key: str | None,
     request: Any,
     func: Callable,
     kwargs: dict,
@@ -183,7 +184,7 @@ class CacheConfig:
 
     strategy: CacheStrategy
     ttl: int  # Time to live in seconds
-    max_size: Optional[int] = None  # Max items before eviction
+    max_size: int | None = None  # Max items before eviction
     compress: bool = False  # Compress large data
     version: str = "1.0"  # Cache version for invalidation
 
@@ -251,7 +252,7 @@ class AdvancedCacheManager:
                 self.redis_client = None
                 self._redis_client_initialized = True  # Prevent retry loops
 
-    def _make_cache_key(self, data_type: str, key: str, user_id: Optional[str] = None) -> str:
+    def _make_cache_key(self, data_type: str, key: str, user_id: str | None = None) -> str:
         """Generate hierarchical cache key"""
         config = self.cache_configs.get(data_type, CacheConfig(CacheStrategy.DYNAMIC, TTL_5_MINUTES))
 
@@ -264,7 +265,7 @@ class AdvancedCacheManager:
         """Generate statistics key"""
         return f"{self.stats_prefix}{data_type}"
 
-    async def get(self, data_type: str, key: str, user_id: Optional[str] = None) -> Optional[Any]:
+    async def get(self, data_type: str, key: str, user_id: str | None = None) -> Any | None:
         """Get cached data with automatic deserialization"""
         await self._ensure_redis_client()
         if not self.redis_client:
@@ -296,9 +297,9 @@ class AdvancedCacheManager:
         data_type: str,
         key: str,
         data: Any,
-        user_id: Optional[str] = None,
-        custom_ttl: Optional[int] = None,
-        predicates: Optional[List[Dict[str, str]]] = None,
+        user_id: str | None = None,
+        custom_ttl: int | None = None,
+        predicates: List[Dict[str, str]] | None = None,
     ) -> bool:
         """Set cached data with automatic configuration.
 
@@ -339,7 +340,7 @@ class AdvancedCacheManager:
         data_type: str,
         key: str,
         compute_func: Callable[[], Any],
-        user_id: Optional[str] = None,
+        user_id: str | None = None,
         force_refresh: bool = False,
     ) -> Any:
         """Get from cache or compute and cache the result"""
@@ -369,7 +370,7 @@ class AdvancedCacheManager:
             logger.error("Error computing data for %s:%s: %s", data_type, key, e)
             raise
 
-    async def invalidate(self, data_type: str, key: str = "*", user_id: Optional[str] = None) -> int:
+    async def invalidate(self, data_type: str, key: str = "*", user_id: str | None = None) -> int:
         """Invalidate cache entries by pattern"""
         await self._ensure_redis_client()
         if not self.redis_client:
@@ -472,7 +473,7 @@ class AdvancedCacheManager:
                 pipe.hincrby(stats_key, "misses", 1)
 
             pipe.hset(stats_key, "last_access", current_time)
-            pipe.expire(stats_key, 86400)  # Stats expire after 24 hours
+            pipe.expire(stats_key, TTL_24_HOURS)  # Stats expire after 24 hours
 
             await pipe.execute()
 
@@ -567,7 +568,7 @@ class AdvancedCacheManager:
             "configured_data_types": list(self.cache_configs.keys()),
         }
 
-    async def get_stats(self, data_type: Optional[str] = None) -> Dict[str, Any]:
+    async def get_stats(self, data_type: str | None = None) -> Dict[str, Any]:
         """Get comprehensive cache statistics.
 
         Issue #315: Refactored to use helper methods for reduced nesting.
@@ -609,7 +610,7 @@ class AdvancedCacheManager:
     # KNOWLEDGE-SPECIFIC CACHING METHODS (from knowledge_cache.py)
     # =========================================================================
 
-    def _generate_knowledge_key(self, query: str, top_k: int, filters: Optional[Dict] = None) -> str:
+    def _generate_knowledge_key(self, query: str, top_k: int, filters: Dict | None = None) -> str:
         """Generate cache key for knowledge base queries"""
         cache_data = {
             "query": query.lower().strip(),
@@ -621,8 +622,8 @@ class AdvancedCacheManager:
         return f"kb_query:{cache_hash}"
 
     async def get_cached_knowledge_results(
-        self, query: str, top_k: int, filters: Optional[Dict] = None
-    ) -> Optional[List[Dict[str, Any]]]:
+        self, query: str, top_k: int, filters: Dict | None = None
+    ) -> List[Dict[str, Any]] | None:
         """
         Retrieve cached knowledge base search results.
         Compatible with knowledge_cache.py API.
@@ -642,7 +643,7 @@ class AdvancedCacheManager:
         query: str,
         top_k: int,
         results: List[Dict[str, Any]],
-        filters: Optional[Dict] = None,
+        filters: Dict | None = None,
     ) -> bool:
         """
         Cache knowledge base search results.
@@ -764,7 +765,7 @@ class AdvancedCacheManager:
     # BACKWARD COMPATIBILITY METHODS (from backend/utils/cache_manager.py)
     # =========================================================================
 
-    async def simple_get(self, key: str) -> Optional[Any]:
+    async def simple_get(self, key: str) -> Any | None:
         """
         Simple cache get (backward compatible with CacheManager).
         Uses DYNAMIC strategy with default TTL.
@@ -772,7 +773,7 @@ class AdvancedCacheManager:
         result = await self.get("session_data", key)
         return result.get("data") if result else None
 
-    async def simple_set(self, key: str, value: Any, ttl: Optional[int] = None) -> bool:
+    async def simple_set(self, key: str, value: Any, ttl: int | None = None) -> bool:
         """
         Simple cache set (backward compatible with CacheManager).
         Uses DYNAMIC strategy with custom or default TTL.
@@ -794,9 +795,9 @@ advanced_cache = AdvancedCacheManager()
 
 def smart_cache(
     data_type: str,
-    key_func: Optional[Callable] = None,
-    user_id_func: Optional[Callable] = None,
-    ttl: Optional[int] = None,
+    key_func: Callable | None = None,
+    user_id_func: Callable | None = None,
+    ttl: int | None = None,
 ):
     """
     Decorator for intelligent caching of function results
@@ -852,7 +853,7 @@ async def cache_template_data(template_id: str, data: Any) -> bool:
     return await advanced_cache.set("templates", template_id, data)
 
 
-async def get_cached_template(template_id: str) -> Optional[Any]:
+async def get_cached_template(template_id: str) -> Any | None:
     """Get cached workflow template"""
     result = await advanced_cache.get("templates", template_id)
     return result.get("data") if result else None
@@ -863,7 +864,7 @@ async def cache_system_status(status_data: Dict[str, Any]) -> bool:
     return await advanced_cache.set("system_status", "current", status_data)
 
 
-async def get_cached_system_status() -> Optional[Dict[str, Any]]:
+async def get_cached_system_status() -> Dict[str, Any] | None:
     """Get cached system status"""
     result = await advanced_cache.get("system_status", "current")
     return result.get("data") if result else None
@@ -884,8 +885,8 @@ async def invalidate_user_cache(user_id: str) -> int:
 
 
 async def get_cached_knowledge_results(
-    query: str, top_k: int, filters: Optional[Dict] = None
-) -> Optional[List[Dict[str, Any]]]:
+    query: str, top_k: int, filters: Dict | None = None
+) -> List[Dict[str, Any]] | None:
     """
     Get cached knowledge base search results.
     Drop-in replacement for knowledge_cache.KnowledgeCache.get_cached_results().
@@ -897,7 +898,7 @@ async def cache_knowledge_results(
     query: str,
     top_k: int,
     results: List[Dict[str, Any]],
-    filters: Optional[Dict] = None,
+    filters: Dict | None = None,
 ) -> bool:
     """
     Cache knowledge base search results.
@@ -906,7 +907,7 @@ async def cache_knowledge_results(
     return await advanced_cache.cache_knowledge_results(query, top_k, results, filters)
 
 
-async def clear_knowledge_cache(pattern: Optional[str] = None) -> int:
+async def clear_knowledge_cache(pattern: str | None = None) -> int:
     """Clear knowledge base cache (optionally by pattern)"""
     if pattern:
         # Pattern-based clearing
@@ -961,11 +962,11 @@ class SimpleCacheManager:
         # AdvancedCacheManager auto-initializes, so this is a no-op
         # But we keep it for API compatibility
 
-    async def get(self, key: str) -> Optional[Any]:
+    async def get(self, key: str) -> Any | None:
         """Get cached value"""
         return await self._cache.simple_get(key)
 
-    async def set(self, key: str, value: Any, ttl: Optional[int] = None) -> bool:
+    async def set(self, key: str, value: Any, ttl: int | None = None) -> bool:
         """Set cached value with TTL"""
         return await self._cache.simple_set(key, value, ttl or self.default_ttl)
 

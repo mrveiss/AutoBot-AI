@@ -12,14 +12,13 @@ Provides per-workflow permission enforcement via FastAPI Depends():
         session: AsyncSession = Depends(get_db_session),
         current_user: dict = Depends(get_current_user),
         _: bool = Depends(require_workflow_permission("view")),
-    ):
+    ) -> None:
         ...
 
 The dependency resolves *workflow_id* from the path parameter automatically.
 Admins bypass the per-workflow check (they hold all permissions).
 """
 
-import logging
 from typing import Callable
 
 from fastapi import Depends, HTTPException, Request, status
@@ -27,10 +26,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_db_session
 from auth_middleware import get_current_user
+from autobot_shared.logging_manager import get_logger
 from services.workflow_permission_service import WorkflowPermissionService
 from user_management.config import DeploymentMode, get_deployment_config
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _ADMIN_ROLES = {"admin"}
 

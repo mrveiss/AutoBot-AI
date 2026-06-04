@@ -11,21 +11,22 @@ Contains GPU availability checking and capability detection.
 
 import functools
 import json
-import logging
 import platform
 import subprocess
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict
+
+from autobot_shared.logging_manager import get_logger
 
 from .types import GPUCapabilities
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Stashed GPU name from initial nvidia-smi probe (#2222)
-_nvidia_gpu_name: Optional[str] = None
+_nvidia_gpu_name: str | None = None
 
 # Stashed Apple GPU info from initial system_profiler probe (#2014)
-_apple_gpu_info: Optional[Dict[str, Any]] = None
+_apple_gpu_info: Dict[str, Any] | None = None
 
 # NVIDIA GPU families known to have tensor cores
 _TENSOR_CORE_FAMILIES = {
@@ -44,7 +45,7 @@ _TENSOR_CORE_FAMILIES = {
 }
 
 
-def _check_nvidia_gpu() -> Optional[str]:
+def _check_nvidia_gpu() -> str | None:
     """Check for NVIDIA GPU via nvidia-smi, returning the GPU name or None.
 
     Issue #2222: Returns the name so callers can reuse it without
@@ -93,7 +94,7 @@ def _check_intel_gpu() -> bool:
     return _check_sysfs_vendor("0x8086")
 
 
-def _check_apple_gpu() -> Optional[Dict[str, Any]]:
+def _check_apple_gpu() -> Dict[str, Any] | None:
     """Check for Apple Silicon GPU via system_profiler on macOS.
 
     Issue #2014: Returns a dict with chip name, Metal support, and
@@ -158,7 +159,7 @@ def _has_tensor_cores(gpu_name: str) -> bool:
 
 
 @functools.lru_cache(maxsize=1)
-def _detect_vendor() -> Optional[str]:
+def _detect_vendor() -> str | None:
     """Detect GPU vendor, caching the result to avoid duplicate subprocess calls.
 
     Issue #1990: Both check_gpu_availability() and detect_gpu_capabilities()

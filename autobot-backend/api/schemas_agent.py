@@ -6,13 +6,13 @@ Agent config, memory, and LLM schemas.
 """
 
 import uuid
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from pydantic import BaseModel, Field, field_validator
 
 from models.session_collaboration import PermissionLevel
 from services.personality_service import SUPPORTED_LANGUAGES
-from skills.models import GovernanceMode, TrustLevel
+from skills.models import GovernanceMode, SkillActivationLevel
 from type_defs.common import Metadata
 from user_management.schemas import UserResponse as _UserResponse
 
@@ -36,9 +36,8 @@ class AgentCommandExecuteResponse(BaseModel):
     """Response for POST /execute_command — success path returns {"message", "output", "status"}."""
 
     message: str
-    output: Optional[str] = None
-    status: Optional[str] = None
-
+    output: str | None = None
+    status: str | None = None
 
 class AgentHealthResponse(BaseModel):
     """Response for GET /health/enhanced."""
@@ -48,7 +47,7 @@ class AgentHealthResponse(BaseModel):
     multi_agent_coordination: bool
     enhanced_capabilities: bool
     timestamp: str
-    error: Optional[str] = None
+    error: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -61,11 +60,10 @@ class MemoryStatisticsResponse(BaseModel):
 
     period_days: int
     timestamp: str
-    task_execution: Optional[Any] = None
-    markdown_system: Optional[Any] = None
-    active_tasks: Optional[Any] = None
-    performance_insights: Optional[Any] = None
-
+    task_execution: Any | None = None
+    markdown_system: Any | None = None
+    active_tasks: Any | None = None
+    performance_insights: Any | None = None
 
 class MemoryTaskHistoryResponse(BaseModel):
     """Response for GET /tasks/history."""
@@ -105,7 +103,7 @@ class MemoryMarkdownScanResponse(BaseModel):
     """Response for GET /markdown/scan."""
 
     status: str
-    scan_results: Optional[Any] = None
+    scan_results: Any | None = None
     timestamp: str
 
 
@@ -123,13 +121,12 @@ class MemoryDocumentReferencesResponse(BaseModel):
 
     file_path: str
     timestamp: str
-    references: Optional[Any] = None
-
+    references: Any | None = None
 
 class MemoryEmbeddingCacheStatsResponse(BaseModel):
     """Response for GET /embeddings/cache-stats."""
 
-    cache_size: Optional[Any] = None
+    cache_size: Any | None = None
     timestamp: str
     status: str
 
@@ -179,7 +176,7 @@ class AgentConfigHealthResponse(BaseModel):
     agent_name: str
     status: str
     enabled: bool
-    model: Optional[str] = None
+    model: str | None = None
     checks: Dict[str, Any]
     timestamp: str
     response_time: float
@@ -242,7 +239,7 @@ class A2ATaskTraceResponse(BaseModel):
     """Response for GET /a2a/tasks/{id}/trace."""
 
     task_id: str
-    trace: Optional[Dict[str, Any]] = None
+    trace: Dict[str, Any] | None = None
     events: List[Any]
 
 
@@ -278,7 +275,7 @@ class LLMConnectionTestResponse(BaseModel):
     """Response for POST /llm/test_connection."""
 
     status: str
-    message: Optional[str] = None
+    message: str | None = None
 
     model_config = {"extra": "allow"}
 
@@ -331,8 +328,8 @@ class LLMAvailableModelsResponse(BaseModel):
 class LLMSelectModelResponse(BaseModel):
     """Response for POST /llm-optimization/models/select."""
 
-    selected_model: Optional[str] = None
-    model_details: Optional[Dict[str, Any]] = None
+    selected_model: str | None = None
+    model_details: Dict[str, Any] | None = None
     task_complexity: str
     selection_reasoning: Dict[str, Any]
     timestamp: float
@@ -686,10 +683,10 @@ class AuthCheckResponse(BaseModel):
     """Response for GET /auth/check."""
 
     authenticated: bool
-    role: Optional[str] = None
+    role: str | None = None
     auth_enabled: bool
-    deployment_mode: Optional[str] = None
-    error: Optional[str] = None
+    deployment_mode: str | None = None
+    error: str | None = None
 
 
 class AuthPermissionResponse(BaseModel):
@@ -697,9 +694,9 @@ class AuthPermissionResponse(BaseModel):
 
     permitted: bool
     operation: str
-    user_role: Optional[str] = None
-    username: Optional[str] = None
-    error: Optional[str] = None
+    user_role: str | None = None
+    username: str | None = None
+    error: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -725,20 +722,20 @@ class AgentTerminalInterruptResponse(BaseModel):
     """Response for POST /agent-terminal/sessions/{session_id}/interrupt."""
 
     status: str
-    message: Optional[str] = None
-    previous_state: Optional[str] = None
-    current_state: Optional[str] = None
-    pending_approval: Optional[Any] = None
-    error: Optional[str] = None
+    message: str | None = None
+    previous_state: str | None = None
+    current_state: str | None = None
+    pending_approval: Any | None = None
+    error: str | None = None
 
 
 class AgentTerminalResumeResponse(BaseModel):
     """Response for POST /agent-terminal/sessions/{session_id}/resume."""
 
     status: str
-    message: Optional[str] = None
-    current_state: Optional[str] = None
-    error: Optional[str] = None
+    message: str | None = None
+    current_state: str | None = None
+    error: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -913,12 +910,63 @@ class AgentStatusData(BaseModel):
     development_tools: bool
 
 
+# ---------------------------------------------------------------------------
+# Typed inner result models for AgentTaskData subclasses (Issue #6407)
+# extra='allow' keeps the schema backward-compatible while the external
+# AI Stack service response is fully documented.
+# ---------------------------------------------------------------------------
+
+
+class GoalExecutionResult(BaseModel):
+    """Result payload for enhanced goal execution via multi-agent coordination."""
+
+    model_config = {"extra": "allow"}
+
+    final_answer: str | None = None
+    steps_taken: int | None = None
+    reasoning: str | None = None
+    agents_output: Dict[str, Any] | None = None
+
+
+class MultiAgentCoordinationResult(BaseModel):
+    """Result payload for multi-agent task coordination."""
+
+    model_config = {"extra": "allow"}
+
+    outcome: str | None = None
+    subtask_results: List[Any] | None = None
+    coordinated_response: str | None = None
+    agents_output: Dict[str, Any] | None = None
+
+
+class ResearchResult(BaseModel):
+    """Result payload for comprehensive research tasks."""
+
+    model_config = {"extra": "allow"}
+
+    summary: str | None = None
+    findings: List[Any] | None = None
+    sources_consulted: List[str] | None = None
+    confidence: float | None = None
+
+
+class DevelopmentAnalysisResult(BaseModel):
+    """Result payload for development codebase analysis."""
+
+    model_config = {"extra": "allow"}
+
+    recommendations: List[Any] | None = None
+    issues_found: int | None = None
+    speedup_opportunities: List[Any] | None = None
+    analysis_summary: str | None = None
+
+
 class AgentTaskData(BaseModel):
     """Base for agent execution payload models that invoke AI Stack multi-agent queries."""
 
     agents_used: List[str]
     execution_time: float
-    result: Optional[Dict[str, Any]] = None
+    result: Dict[str, Any] | None = None
 
 
 class EnhancedGoalData(AgentTaskData):
@@ -926,10 +974,11 @@ class EnhancedGoalData(AgentTaskData):
 
     goal: str
     coordination_mode: str
-    priority: Optional[str] = None
+    priority: str | None = None
     enhanced_context_used: bool
     knowledge_base_integrated: bool
     timestamp: str
+    result: GoalExecutionResult | None = None
 
 
 class MultiAgentCoordinationData(AgentTaskData):
@@ -940,16 +989,18 @@ class MultiAgentCoordinationData(AgentTaskData):
     subtasks_count: int
     dependencies_count: int
     timestamp: str
+    result: MultiAgentCoordinationResult | None = None
 
 
 class AgentResearchData(AgentTaskData):
     """data payload for POST /agent/research/comprehensive."""
 
     research_query: str
-    research_depth: Optional[str] = None
+    research_depth: str | None = None
     include_web: bool
     include_code_search: bool
-    sources: Optional[List[str]] = None
+    sources: List[str] | None = None
+    result: ResearchResult | None = None
 
 
 class DevelopmentAnalysisData(AgentTaskData):
@@ -959,6 +1010,7 @@ class DevelopmentAnalysisData(AgentTaskData):
     target_path: str
     include_performance: bool
     include_optimization: bool
+    result: DevelopmentAnalysisResult | None = None
 
 
 class MultiAgentQueryData(BaseModel):
@@ -981,7 +1033,7 @@ class ComprehensiveResearchData(BaseModel):
     """data payload for POST /ai-stack/research/comprehensive."""
 
     research: Dict[str, Any]
-    web_research: Optional[Dict[str, Any]] = None
+    web_research: Dict[str, Any] | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -995,8 +1047,8 @@ class OrgNodeResponse(BaseModel):
     agent_id: str
     name: str
     org_role: str
-    title: Optional[str] = None
-    capabilities: Optional[str] = None
+    title: str | None = None
+    capabilities: str | None = None
     direct_reports_count: int = 0
     children: List["OrgNodeResponse"] = Field(default_factory=list)
 
@@ -1010,7 +1062,7 @@ class AgentSummary(BaseModel):
     agent_id: str
     name: str
     org_role: str
-    title: Optional[str] = None
+    title: str | None = None
 
 
 class ChainOfCommandResponse(BaseModel):
@@ -1022,16 +1074,16 @@ class ChainOfCommandResponse(BaseModel):
 class UpdateOrgRequest(BaseModel):
     """Request body for PATCH /agents/{agent_id}/org (#1405)."""
 
-    reports_to: Optional[str] = Field(
+    reports_to: str | None = Field(
         default=None,
         description="agent_id of the new manager, or null to clear",
     )
-    org_role: Optional[str] = Field(
+    org_role: str | None = Field(
         default=None,
         description="One of: manager, coordinator, specialist, worker",
     )
-    title: Optional[str] = Field(default=None, description="Human-readable job title")
-    capabilities: Optional[str] = Field(default=None, description="Free-text capability description")
+    title: str | None = Field(default=None, description="Human-readable job title")
+    capabilities: str | None = Field(default=None, description="Free-text capability description")
 
 
 class UpsertOrgRequest(BaseModel):
@@ -1039,9 +1091,9 @@ class UpsertOrgRequest(BaseModel):
 
     name: str
     org_role: str = "worker"
-    reports_to: Optional[str] = None
-    title: Optional[str] = None
-    capabilities: Optional[str] = None
+    reports_to: str | None = None
+    title: str | None = None
+    capabilities: str | None = None
 
 
 class AgentDelegateRequest(BaseModel):
@@ -1049,7 +1101,7 @@ class AgentDelegateRequest(BaseModel):
 
     assignee_id: str = Field(..., description="Direct report to assign to")
     task_description: str = Field(..., description="What the assignee should do")
-    context: Optional[Dict[str, Any]] = Field(default=None, description="Extra context for the task")
+    context: Dict[str, Any] | None = Field(default=None, description="Extra context for the task")
 
 
 class DelegationResponse(BaseModel):
@@ -1060,15 +1112,15 @@ class DelegationResponse(BaseModel):
     assignee_id: str
     task_description: str
     status: str
-    escalated_to: Optional[str] = None
-    created_at: Optional[str] = None
+    escalated_to: str | None = None
+    created_at: str | None = None
 
 
 class DelegationStatusUpdate(BaseModel):
     """Request body for PATCH /delegations/{id}/status (#1753)."""
 
     status: str = Field(..., description="New status value")
-    result: Optional[Dict[str, Any]] = None
+    result: Dict[str, Any] | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -1093,7 +1145,7 @@ class CollabShareSecretRequest(BaseModel):
     """Request to share secret with session participants."""
 
     secret_id: str = Field(..., description="Secret ID to share")
-    participant_ids: Optional[List[str]] = Field(
+    participant_ids: List[str] | None = Field(
         None,
         description="Specific participants (None = all with editor+)",
     )
@@ -1139,15 +1191,15 @@ class CollabRemoveResponse(BaseModel):
 
 class TeamCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
-    description: Optional[str] = Field(None, max_length=500)
-    settings: Optional[dict] = Field(default_factory=dict)
+    description: str | None = Field(None, max_length=500)
+    settings: dict | None = Field(default_factory=dict)
     is_default: bool = Field(False)
 
 
 class TeamUpdate(BaseModel):
-    name: Optional[str] = Field(None, min_length=1, max_length=255)
-    description: Optional[str] = Field(None, max_length=500)
-    settings: Optional[dict] = Field(None)
+    name: str | None = Field(None, min_length=1, max_length=255)
+    description: str | None = Field(None, max_length=500)
+    settings: dict | None = Field(None)
 
 
 class MembershipUpdate(BaseModel):
@@ -1158,7 +1210,7 @@ class MemberResponse(BaseModel):
     user_id: uuid.UUID
     username: str
     email: str
-    display_name: Optional[str]
+    display_name: str | None
     role: str
     joined_at: str
 
@@ -1169,7 +1221,7 @@ class TeamResponse(BaseModel):
     id: uuid.UUID
     org_id: uuid.UUID
     name: str
-    description: Optional[str]
+    description: str | None
     settings: dict
     is_default: bool
     member_count: int = 0
@@ -1287,13 +1339,13 @@ class LoginRequest(BaseModel):
 class LoginResponse(BaseModel):
     success: bool
     message: str
-    user: Optional[dict] = None
-    token: Optional[str] = None
-    session_id: Optional[str] = None
+    user: dict | None = None
+    token: str | None = None
+    session_id: str | None = None
 
 
 class LogoutRequest(BaseModel):
-    session_id: Optional[str] = None
+    session_id: str | None = None
 
 
 class ChangePasswordRequest(BaseModel):
@@ -1373,26 +1425,26 @@ class SignupResponse(BaseModel):
 
 class OrganizationCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
-    slug: Optional[str] = Field(None, max_length=100)
-    description: Optional[str] = Field(None, max_length=500)
-    settings: Optional[dict] = Field(default_factory=dict)
+    slug: str | None = Field(None, max_length=100)
+    description: str | None = Field(None, max_length=500)
+    settings: dict | None = Field(default_factory=dict)
     subscription_tier: str = Field("free")
     max_users: int = Field(-1)
 
 
 class OrganizationUpdate(BaseModel):
-    name: Optional[str] = Field(None, min_length=1, max_length=255)
-    description: Optional[str] = Field(None, max_length=500)
-    settings: Optional[dict] = None
-    subscription_tier: Optional[str] = None
-    max_users: Optional[int] = None
+    name: str | None = Field(None, min_length=1, max_length=255)
+    description: str | None = Field(None, max_length=500)
+    settings: dict | None = None
+    subscription_tier: str | None = None
+    max_users: int | None = None
 
 
 class OrganizationResponse(BaseModel):
     id: uuid.UUID
     name: str
     slug: str
-    description: Optional[str]
+    description: str | None
     settings: dict
     subscription_tier: str
     max_users: int
@@ -1429,7 +1481,7 @@ class OrganizationStatsResponse(BaseModel):
     users: dict
     teams: dict
     is_active: bool
-    created_at: Optional[str]
+    created_at: str | None
 
 
 # ---------------------------------------------------------------------------
@@ -1453,10 +1505,10 @@ class EnhancedGoalPayload(BaseModel):
     """Enhanced goal payload with AI Stack integration."""
 
     goal: str = Field(..., min_length=1, max_length=10000, description="Goal description")
-    agents: Optional[List[str]] = Field(None, description="Specific agents to use")
+    agents: List[str] | None = Field(None, description="Specific agents to use")
     coordination_mode: str = Field("intelligent", description="Coordination mode (parallel, sequential, intelligent)")
     priority: str = Field("normal", description="Task priority (low, normal, high, urgent)")
-    context: Optional[str] = Field(None, description="Additional context")
+    context: str | None = Field(None, description="Additional context")
     use_knowledge_base: bool = Field(True, description="Use knowledge base for context")
     include_reasoning: bool = Field(False, description="Include reasoning steps")
     max_execution_time: int = Field(300, ge=30, le=1800, description="Max execution time in seconds")
@@ -1468,15 +1520,15 @@ class MultiAgentTaskPayload(BaseModel):
     task: str = Field(..., min_length=1, description="Task description")
     agents: List[str] = Field(..., min_length=1, description="Agents to coordinate")
     coordination_strategy: str = Field("adaptive", description="Coordination strategy")
-    subtasks: Optional[List[Metadata]] = Field(None, description="Predefined subtasks")
-    dependencies: Optional[List[Dict[str, str]]] = Field(None, description="Task dependencies")
+    subtasks: List[Metadata] | None = Field(None, description="Predefined subtasks")
+    dependencies: List[Dict[str, str]] | None = Field(None, description="Task dependencies")
 
 
 class AgentAnalysisRequest(BaseModel):
     """Agent analysis request for development and optimization."""
 
     analysis_type: str = Field("comprehensive", description="Analysis type")
-    target_path: Optional[str] = Field(None, description="Specific path to analyze")
+    target_path: str | None = Field(None, description="Specific path to analyze")
     include_performance: bool = Field(True, description="Include performance analysis")
     include_optimization: bool = Field(True, description="Include optimization suggestions")
 
@@ -1488,7 +1540,7 @@ class ResearchTaskRequest(BaseModel):
     research_depth: str = Field("comprehensive", description="Research depth")
     include_web: bool = Field(True, description="Include web research")
     include_code_search: bool = Field(False, description="Include code search")
-    sources: Optional[List[str]] = Field(None, description="Specific sources")
+    sources: List[str] | None = Field(None, description="Specific sources")
 
 
 class PersonalityProfileSummary(BaseModel):
@@ -1544,27 +1596,27 @@ class PersonalityProfileCreate(BaseModel):
 
 
 class PersonalityProfileUpdate(BaseModel):
-    name: Optional[str] = None
-    tagline: Optional[str] = None
-    tone: Optional[str] = None
-    character_traits: Optional[List[str]] = None
-    operating_style: Optional[List[str]] = None
-    off_limits: Optional[List[str]] = None
-    custom_notes: Optional[str] = None
-    voice_id: Optional[str] = None
-    voice_ids: Optional[Dict[str, str]] = None
-    language_code: Optional[str] = None
+    name: str | None = None
+    tagline: str | None = None
+    tone: str | None = None
+    character_traits: List[str] | None = None
+    operating_style: List[str] | None = None
+    off_limits: List[str] | None = None
+    custom_notes: str | None = None
+    voice_id: str | None = None
+    voice_ids: Dict[str, str] | None = None
+    language_code: str | None = None
 
     @field_validator("tone")
     @classmethod
-    def tone_must_be_valid(cls, v: Optional[str]) -> Optional[str]:
+    def tone_must_be_valid(cls, v: str | None) -> str | None:
         if v is not None and v not in _PERSONALITY_VALID_TONES:
             raise ValueError(f"tone must be one of {sorted(_PERSONALITY_VALID_TONES)}")
         return v
 
     @field_validator("language_code")
     @classmethod
-    def language_code_must_be_valid(cls, v: Optional[str]) -> Optional[str]:
+    def language_code_must_be_valid(cls, v: str | None) -> str | None:
         if v is not None and v not in SUPPORTED_LANGUAGES:
             raise ValueError(f"language_code must be one of {sorted(SUPPORTED_LANGUAGES)}")
         return v
@@ -1576,7 +1628,7 @@ class PersonalityToggleRequest(BaseModel):
 
 class PersonalityStatusResponse(BaseModel):
     enabled: bool
-    active_id: Optional[str]
+    active_id: str | None
 
 
 class SkillConfigUpdate(BaseModel):
@@ -1602,14 +1654,14 @@ class SkillFeedbackRequest(BaseModel):
     """Request body for submitting skill feedback."""
 
     rating: int = Field(..., description="User rating (1-5)", ge=1, le=5)
-    feedback: Optional[str] = Field(None, description="Feedback text")
+    feedback: str | None = Field(None, description="Feedback text")
 
 
 class SkillInstallRequest(BaseModel):
     """Request body for installing a skill from the catalog."""
 
     catalog_url: str = Field(..., description="HTTP URL of the catalog endpoint")
-    repo_id: Optional[str] = Field(None, description="SkillRepo.id to link the package to")
+    repo_id: str | None = Field(None, description="SkillRepo.id to link the package to")
 
 
 # ---------------------------------------------------------------------------
@@ -1628,7 +1680,7 @@ class ApprovalDecision(BaseModel):
     """Request body for approving or rejecting a skill approval record."""
 
     approved: bool
-    trust_level: TrustLevel = TrustLevel.MONITORED
+    trust_level: SkillActivationLevel = SkillActivationLevel.MONITORED
     notes: str = ""
 
 
@@ -1671,10 +1723,10 @@ class LLMOptimizationRequest(BaseModel):
 
     query: str
     task_type: str = "chat"
-    max_response_time: Optional[float] = None
-    min_quality: Optional[float] = None
+    max_response_time: float | None = None
+    min_quality: float | None = None
     context_length: int = 0
-    user_preference: Optional[str] = None
+    user_preference: str | None = None
 
 
 class ModelPerformanceData(BaseModel):
@@ -1684,7 +1736,7 @@ class ModelPerformanceData(BaseModel):
     response_time: float
     response_tokens: int
     success: bool
-    user_rating: Optional[float] = None
+    user_rating: float | None = None
 
 
 class InferenceOptimizationSettings(BaseModel):
@@ -1726,7 +1778,7 @@ class TaskSendRequest(BaseModel):
     """Body for POST /tasks — submit a new A2A task."""
 
     message: str = Field(..., description="The natural-language task to execute")
-    context: Optional[Dict[str, Any]] = Field(None, description="Optional key-value context passed to the orchestrator")
+    context: Dict[str, Any] | None = Field(None, description="Optional key-value context passed to the orchestrator")
 
 
 class TaskSendResponse(BaseModel):
@@ -1793,7 +1845,7 @@ class AgentConfig(BaseModel):
     model: str
     provider: str
     enabled: bool
-    priority: Optional[int] = 1
+    priority: int | None = 1
 
 
 class AgentConfigDetailHealthCheck(BaseModel):
@@ -1837,7 +1889,7 @@ class AgentModelUpdate(BaseModel):
 
     agent_id: str
     model: str
-    provider: Optional[str] = "ollama"
+    provider: str | None = "ollama"
 
 
 # ---------------------------------------------------------------------------
@@ -1871,3 +1923,225 @@ class ConversationImportRequest(BaseModel):
         default="skip",
         description=("Conflict resolution strategy when session_id already exists. " "One of: skip, replace, rename."),
     )
+
+
+# ---------------------------------------------------------------------------
+# enterprise_features.py schemas (GH #6509 Batch D)
+# ---------------------------------------------------------------------------
+
+
+class EnterpriseStatusResponse(BaseModel):
+    """Response for GET /status."""
+
+    status: str
+    enterprise_status: Dict[str, Any] = Field(default_factory=dict)
+    message: str = ""
+
+
+class EnterpriseFeatureEnableResponse(BaseModel):
+    """Response for POST /features/enable."""
+
+    status: str
+    feature: str = ""
+    result: Dict[str, Any] = Field(default_factory=dict)
+    message: str = ""
+
+
+class EnterpriseFeatureEnableAllResponse(BaseModel):
+    """Response for POST /features/enable-all."""
+
+    status: str
+    phase: str = ""
+    result: Dict[str, Any] = Field(default_factory=dict)
+    success_rate: str = ""
+    enterprise_capabilities: Dict[str, bool] = Field(default_factory=dict)
+    message: str = ""
+    warnings: List[str] = Field(default_factory=list)
+
+
+class EnterpriseFeatureListResponse(BaseModel):
+    """Response for GET /features."""
+
+    status: str
+    features: List[Dict[str, Any]] = Field(default_factory=list)
+    total_features: int = 0
+    categories: List[str] = Field(default_factory=list)
+    statuses: List[str] = Field(default_factory=list)
+
+
+class EnterpriseBulkEnableResponse(BaseModel):
+    """Response for POST /features/bulk-enable."""
+
+    status: str
+    results: Dict[str, Any] = Field(default_factory=dict)
+    summary: str = ""
+
+
+class EnterprisePerformanceOptimizeResponse(BaseModel):
+    """Response for POST /performance/optimize."""
+
+    status: str
+    optimization: Dict[str, Any] = Field(default_factory=dict)
+    message: str = ""
+
+
+class EnterpriseInfrastructureResponse(BaseModel):
+    """Response for GET /infrastructure."""
+
+    status: str
+    infrastructure: Dict[str, Any] = Field(default_factory=dict)
+    message: str = ""
+
+
+class EnterpriseDeploymentResponse(BaseModel):
+    """Response for POST /deployment/zero-downtime."""
+
+    status: str
+    deployment: Dict[str, Any] = Field(default_factory=dict)
+    message: str = ""
+
+
+class EnterprisePhase4ValidationResponse(BaseModel):
+    """Response for GET /phase4/validation."""
+
+    status: str
+    validation: Dict[str, Any] = Field(default_factory=dict)
+    message: str = ""
+
+
+# ---------------------------------------------------------------------------
+# agent_config.py schemas (GH #6509 Batch D)
+# ---------------------------------------------------------------------------
+
+
+class AgentConfigListAgentsResponse(BaseModel):
+    """Response for GET /agents."""
+
+    agents: List[Dict[str, Any]] = Field(default_factory=list)
+    total_count: int = 0
+    global_provider_type: str = ""
+    timestamp: str = ""
+
+
+class AgentConfigAllAgentsResponse(BaseModel):
+    """Response for GET /agents/all."""
+
+    agents: List[Dict[str, Any]] = Field(default_factory=list)
+    specialized_agents: List[Dict[str, Any]] = Field(default_factory=list)
+    summary: Dict[str, Any] = Field(default_factory=dict)
+    timestamp: str = ""
+
+
+class AgentConfigSpecializedListResponse(BaseModel):
+    """Response for GET /agents/specialized."""
+
+    agents: List[Dict[str, Any]] = Field(default_factory=list)
+    total_count: int = 0
+    categories: Dict[str, Any] = Field(default_factory=dict)
+    timestamp: str = ""
+
+
+class AgentConfigSpecializedDetailResponse(BaseModel):
+    """Response for GET /agents/specialized/{agent_id}."""
+
+    id: str = ""
+    name: str = ""
+    description: str = ""
+    tools: List[str] = Field(default_factory=list)
+    model: str | None = None
+    category: str | None = None
+
+
+class AgentConfigUsageResponse(BaseModel):
+    """Response for GET /agents/usage."""
+
+    agents: List[Dict[str, Any]] = Field(default_factory=list)
+    daily_trend: List[Dict[str, Any]] = Field(default_factory=list)
+    total_tasks: int = 0
+    timestamp: str = ""
+
+
+# ---------------------------------------------------------------------------
+# adapters.py schemas (GH #6509 Batch D)
+# ---------------------------------------------------------------------------
+
+
+class AdapterListResponse(BaseModel):
+    """Response for GET /."""
+
+    adapters: List[Any] = Field(default_factory=list)
+    total: int = 0
+
+
+class AdapterTestResponse(BaseModel):
+    """Response for GET /{adapter_type}/test."""
+
+    adapter_type: str = ""
+    healthy: bool = False
+    diagnostics: List[Any] = Field(default_factory=list)
+    models_available: List[Any] = Field(default_factory=list)
+    response_time: float = 0.0
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+class AdapterModelsResponse(BaseModel):
+    """Response for GET /{adapter_type}/models."""
+
+    adapter_type: str
+    models: List[Any] = Field(default_factory=list)
+    total: int = 0
+
+
+class AdapterOverrideSetResponse(BaseModel):
+    """Response for POST /agent/{agent_id}/override."""
+
+    agent_id: str
+    adapter_type: str
+
+
+class AdapterOverrideClearResponse(BaseModel):
+    """Response for DELETE /agent/{agent_id}/override."""
+
+    agent_id: str
+    cleared: bool
+
+
+# ---------------------------------------------------------------------------
+# skills.py / overseer_handlers.py schemas (GH #6509 Batch E)
+# ---------------------------------------------------------------------------
+
+
+class SkillCatalogInstallData(BaseModel):
+    """Response data for POST /skills/catalog/{name}/install."""
+
+    success: bool = True
+    id: str = ""
+    name: str = ""
+    version: str = ""
+    trust_level: str = ""
+
+
+class SkillFeedbackData(BaseModel):
+    """Response data for POST /skills/{name}/feedback."""
+
+    success: bool = True
+    message: str = ""
+
+
+class OverseerQueryStep(BaseModel):
+    """A single step in an overseer execution plan."""
+
+    step_number: int = 0
+    description: str = ""
+    command: str = ""
+
+
+class OverseerQueryData(BaseModel):
+    """Response data for POST /overseer/query/{session_id}."""
+
+    success: bool = True
+    plan_id: str = ""
+    analysis: str = ""
+    steps: List[OverseerQueryStep] = Field(default_factory=list)
+    message: str = ""
+    error: str | None = None

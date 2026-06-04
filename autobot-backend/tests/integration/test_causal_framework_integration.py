@@ -36,15 +36,16 @@ Each scenario verifies:
 """
 
 import asyncio
-import logging
 import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import pytest
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 
 
 # ============================================================================
@@ -59,9 +60,9 @@ class ScenarioResult:
     name: str
     passed: bool
     duration_ms: float
-    engine_duration_ms: Optional[float] = None
-    recovery_duration_ms: Optional[float] = None
-    prediction_duration_ms: Optional[float] = None
+    engine_duration_ms: float | None = None
+    recovery_duration_ms: float | None = None
+    prediction_duration_ms: float | None = None
     output_summary: str = ""
     issues: List[str] = None
 

@@ -5,16 +5,18 @@ Analyzes codebase for security vulnerabilities and defensive coding issues
 
 import ast
 import json
-import logging
 import re
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
+from autobot_shared.ssot_constants import TTL_1_HOUR
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level tuple for import AST types
 _IMPORT_TYPES = (ast.Import, ast.ImportFrom)
@@ -26,12 +28,12 @@ class SecurityVulnerability:
 
     file_path: str
     line_number: int
-    function_name: Optional[str]
+    function_name: str | None
     vulnerability_type: str  # injection, xss, auth, crypto, etc.
     severity: str  # critical, high, medium, low
     description: str
     code_snippet: str
-    cwe_id: Optional[str]  # Common Weakness Enumeration ID
+    cwe_id: str | None  # Common Weakness Enumeration ID
     fix_suggestion: str
     confidence: float  # 0.0 to 1.0
 
@@ -429,7 +431,7 @@ class SecurityAnalyzer:
 
     def _check_node_for_vulnerabilities(
         self, node: ast.AST, file_path: str, lines: List[str]
-    ) -> Optional[SecurityVulnerability]:
+    ) -> SecurityVulnerability | None:
         """Check a single AST node for vulnerabilities (Issue #315 - extracted)"""
 
         # Check for dangerous function calls
@@ -446,9 +448,7 @@ class SecurityAnalyzer:
 
         return None
 
-    def _analyze_dangerous_call(
-        self, node: ast.Call, file_path: str, lines: List[str]
-    ) -> Optional[SecurityVulnerability]:
+    def _analyze_dangerous_call(self, node: ast.Call, file_path: str, lines: List[str]) -> SecurityVulnerability | None:
         """Analyze function calls for security issues"""
 
         call_name = self._get_call_name(node)
@@ -480,7 +480,7 @@ class SecurityAnalyzer:
 
     def _analyze_insecure_assignment(
         self, node: ast.Assign, file_path: str, lines: List[str]
-    ) -> Optional[SecurityVulnerability]:
+    ) -> SecurityVulnerability | None:
         """Analyze assignments for security issues"""
 
         # Check for hardcoded secrets in assignments
@@ -510,7 +510,7 @@ class SecurityAnalyzer:
 
     def _analyze_dangerous_import(
         self, node: ast.AST, file_path: str, lines: List[str]
-    ) -> Optional[SecurityVulnerability]:
+    ) -> SecurityVulnerability | None:
         """Analyze imports for security concerns"""
 
         dangerous_modules = {
@@ -547,7 +547,7 @@ class SecurityAnalyzer:
         description: str,
         cwe_id: str,
         lines: List[str],
-    ) -> Optional[SecurityVulnerability]:
+    ) -> SecurityVulnerability | None:
         """Create a SecurityVulnerability object"""
 
         # Get context
@@ -648,7 +648,7 @@ class SecurityAnalyzer:
         else:
             return str(node.func)
 
-    def _get_containing_function(self, node: ast.AST) -> Optional[str]:
+    def _get_containing_function(self, node: ast.AST) -> str | None:
         """Get the name of the function containing this node"""
         # This would require maintaining parent references in AST
         return None
@@ -714,7 +714,7 @@ class SecurityAnalyzer:
             },
             "hardcoded_secrets": {
                 "before": 'API_KEY = "sk-1234567890abcdef"',
-                "after": 'API_KEY = os.getenv("API_KEY")',
+                "after": "API_KEY = config.api_key",
             },
             "insecure_crypto": {
                 "before": "hashlib.md5(password.encode()).hexdigest()",
@@ -804,7 +804,7 @@ class SecurityAnalyzer:
             try:
                 key = self.SECURITY_KEY
                 value = json.dumps(results, default=str)
-                await self.redis_client.setex(key, 3600, value)
+                await self.redis_client.setex(key, TTL_1_HOUR, value)
             except Exception as e:
                 logger.warning(f"Failed to cache results: {e}")
 

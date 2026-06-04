@@ -14,7 +14,6 @@ import logging
 import os
 import secrets
 import threading
-from typing import Optional, Union
 
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
@@ -32,7 +31,7 @@ class EncryptionService:
     NONCE_LENGTH = 12
     KEY_LENGTH = 32  # AES-256
 
-    def __init__(self, master_key: Optional[str] = None):
+    def __init__(self, master_key: str | None = None):
         """
         Initialize the encryption service.
 
@@ -46,7 +45,7 @@ class EncryptionService:
         if len(self.master_key) < 32:
             logger.warning("Encryption key shorter than recommended 32 characters. " "Consider using a stronger key.")
 
-    def _load_master_key(self) -> Optional[str]:
+    def _load_master_key(self) -> str | None:
         """Load master key from environment variables."""
         # Try SLM-specific key first, then fall back to secret_key
         key = os.getenv("SLM_ENCRYPTION_KEY")
@@ -69,7 +68,7 @@ class EncryptionService:
         )
         return kdf.derive(self.master_key.encode("utf-8"))
 
-    def encrypt(self, plaintext: Union[str, bytes]) -> str:
+    def encrypt(self, plaintext: str | bytes) -> str:
         """
         Encrypt data using AES-GCM authenticated encryption.
 
@@ -170,7 +169,7 @@ class EncryptionService:
 
 
 # Thread-safe singleton
-_encryption_service: Optional[EncryptionService] = None
+_encryption_service: EncryptionService | None = None
 _encryption_service_lock = threading.Lock()
 
 
@@ -184,7 +183,7 @@ def get_encryption_service() -> EncryptionService:
     return _encryption_service
 
 
-def encrypt_data(data: Union[str, bytes, dict]) -> str:
+def encrypt_data(data: str | bytes | dict) -> str:
     """Encrypt data using the global encryption service."""
     service = get_encryption_service()
     if isinstance(data, dict):
@@ -192,7 +191,7 @@ def encrypt_data(data: Union[str, bytes, dict]) -> str:
     return service.encrypt(data)
 
 
-def decrypt_data(encrypted_data: str, as_json: bool = False) -> Union[str, dict]:
+def decrypt_data(encrypted_data: str, as_json: bool = False) -> str | dict:
     """Decrypt data using the global encryption service."""
     service = get_encryption_service()
     if as_json:

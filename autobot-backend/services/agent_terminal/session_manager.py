@@ -9,23 +9,23 @@ Manages agent terminal session lifecycle: create, get, list, close, persist.
 
 import asyncio
 import json
-import logging
 import uuid
-from typing import Dict, List, Optional
+from typing import Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from constants.ttl_constants import TTL_1_HOUR
 from services.command_approval_manager import AgentRole
 from type_defs.common import Metadata
 
 from .models import AgentSessionState, AgentTerminalSession
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # O(1) lookup optimization constants (Issue #326)
 APPROVAL_RESPONSE_KEYWORDS = {"approved", "denied", "executed", "rejected"}
 
 
-def _find_latest_approval_request(messages: List[Dict]) -> Optional[Dict]:
+def _find_latest_approval_request(messages: List[Dict]) -> Dict | None:
     """
     Find the most recent command_approval_request message (Issue #665: extracted helper).
 
@@ -107,7 +107,7 @@ def _apply_restored_approval_state(
 class SessionManager:
     """Manages agent terminal session lifecycle"""
 
-    def __init__(self, redis_client=None, chat_history_manager=None):
+    def __init__(self, redis_client=None, chat_history_manager=None) -> None:
         """
         Initialize session manager.
 
@@ -120,7 +120,7 @@ class SessionManager:
         self.sessions: Dict[str, AgentTerminalSession] = {}
         self._sessions_lock = asyncio.Lock()  # Protect concurrent session access
 
-    def _create_or_reuse_pty_session(self, pty_session_id: str, session_id: str) -> Optional[str]:
+    def _create_or_reuse_pty_session(self, pty_session_id: str, session_id: str) -> str | None:
         """
         Create a new PTY session or reuse an existing alive one.
 
@@ -182,8 +182,8 @@ class SessionManager:
     async def _setup_pty_for_session(
         self,
         session_id: str,
-        conversation_id: Optional[str],
-    ) -> Optional[str]:
+        conversation_id: str | None,
+    ) -> str | None:
         """Helper for create_session. Ref: #1088.
 
         Creates or reuses a PTY session and registers it for WebSocket logging.
@@ -209,9 +209,9 @@ class SessionManager:
         self,
         agent_id: str,
         agent_role: AgentRole,
-        conversation_id: Optional[str] = None,
+        conversation_id: str | None = None,
         host: str = "main",
-        metadata: Optional[Metadata] = None,
+        metadata: Metadata | None = None,
     ) -> AgentTerminalSession:
         """
         Create a new agent terminal session with PTY integration.
@@ -259,7 +259,7 @@ class SessionManager:
 
         return session
 
-    async def get_session(self, session_id: str) -> Optional[AgentTerminalSession]:
+    async def get_session(self, session_id: str) -> AgentTerminalSession | None:
         """
         Get session by ID. Checks memory first, then loads from Redis if needed.
 
@@ -324,8 +324,8 @@ class SessionManager:
 
     async def list_sessions(
         self,
-        agent_id: Optional[str] = None,
-        conversation_id: Optional[str] = None,
+        agent_id: str | None = None,
+        conversation_id: str | None = None,
     ) -> List[AgentTerminalSession]:
         """
         List agent terminal sessions.
@@ -376,7 +376,7 @@ class SessionManager:
 
         return True
 
-    async def _persist_session(self, session: AgentTerminalSession):
+    async def _persist_session(self, session: AgentTerminalSession) -> None:
         """Persist session to Redis"""
         try:
             key = f"agent_terminal:session:{session.session_id}"
@@ -390,7 +390,7 @@ class SessionManager:
         except Exception as e:
             logger.error("Failed to persist session to Redis: %s", e)
 
-    async def _restore_pending_approval(self, session: AgentTerminalSession, conversation_id: str):
+    async def _restore_pending_approval(self, session: AgentTerminalSession, conversation_id: str) -> None:
         """
         Restore pending approval from chat history (survives backend restarts).
 

@@ -17,12 +17,12 @@ import pytest
 spacy = pytest.importorskip("spacy")
 
 # ---------------------------------------------------------------------------
-# Stub out llm_interface_pkg so EntityExtractor can be imported without the
+# Stub out llm_shared so EntityExtractor can be imported without the
 # real LLM stack being installed.
 # ---------------------------------------------------------------------------
-_mock_llm_mod = ModuleType("llm_interface_pkg")
+_mock_llm_mod = ModuleType("llm_shared")
 _mock_llm_mod.LLMInterface = type("LLMInterface", (), {})  # type: ignore[attr-defined]
-sys.modules.setdefault("llm_interface_pkg", _mock_llm_mod)
+sys.modules.setdefault("llm_shared", _mock_llm_mod)
 
 # Stub autobot_shared to satisfy any transitive imports.
 _mock_shared = ModuleType("autobot_shared")

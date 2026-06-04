@@ -3,20 +3,23 @@ import type { AutoBotSettings, DiagnosticsReport } from '@/types/models'
 import { getApiBase } from '@/config/ssot-config'
 
 /**
- * Backend `/api/system/health` response shape (#5212).
+ * Backend `/api/system/health` response shape (#5212, updated #6909).
  *
- * Previously declared a fabricated `{version, uptime, services: {status, latency, message}}`
- * envelope that the backend never returned. Rewritten to match the actual payload —
- * `components` are string values (`"healthy"`, `"unhealthy"`, ...), not status objects.
+ * Issue #6909: status and component values use probe vocabulary
+ * ("ok" | "degraded" | "down") — the legacy "healthy"/"unhealthy" mapping
+ * was retired on the backend. Frontend callers that previously checked
+ * `status === 'healthy'` must now check `status === 'ok'`.
  */
+export type HealthStatus = 'ok' | 'degraded' | 'down'
+
 export interface HealthCheckResponse {
-  status: string
+  status: HealthStatus
   timestamp?: string
   initialization?: {
     status: string
     message?: string
   }
-  components?: Record<string, string>
+  components?: Record<string, HealthStatus>
 }
 
 /**

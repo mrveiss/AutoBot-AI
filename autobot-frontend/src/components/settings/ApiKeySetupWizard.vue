@@ -3,7 +3,7 @@
     :modelValue="modelValue"
     @update:modelValue="$emit('update:modelValue', $event)"
     :title="t('settings.apiKeys.wizardTitle')"
-    size="large"
+    size="lg"
   >
     <!-- Step Indicators -->
     <div class="wizard-steps">
@@ -34,7 +34,7 @@
             v-model="selectedRoles"
             class="role-checkbox"
           />
-          <i :class="role.icon"></i>
+          <Icon :name="role.icon" />
           <div class="role-info">
             <span class="role-name">{{ role.name }}</span>
             <span class="role-desc">{{ role.description }}</span>
@@ -47,7 +47,7 @@
     <div v-if="currentStep === 2" class="step-content">
       <p class="step-description">{{ t('settings.apiKeys.configureKeysDescription') }}</p>
       <div v-if="requiredKeys.length === 0" class="empty-state">
-        <i class="fas fa-check-circle"></i>
+        <Icon name="check-circle" />
         <p>{{ t('settings.apiKeys.noKeysRequired') }}</p>
       </div>
       <div v-else class="key-list">
@@ -58,9 +58,7 @@
         >
           <div class="key-header">
             <div class="key-status">
-              <i
-                :class="key.configured ? 'fas fa-check-circle status-ok' : 'fas fa-times-circle status-missing'"
-              ></i>
+              <Icon :name="key.configured ? 'check-circle' : 'times-circle'" :class="key.configured ? 'status-ok' : 'status-missing'" />
               <span class="key-name">{{ key.envVar }}</span>
               <span class="key-badge" :class="key.required ? 'required' : 'optional'">
                 {{ key.required ? t('settings.apiKeys.required') : t('settings.apiKeys.optional') }}
@@ -71,7 +69,7 @@
           <div class="key-body">
             <p class="key-desc">{{ key.description }}</p>
             <div v-if="key.licenseUrl" class="license-link">
-              <i class="fas fa-external-link-alt"></i>
+              <Icon name="external-link-alt" />
               <a :href="key.licenseUrl" target="_blank" rel="noopener noreferrer">
                 {{ t('settings.apiKeys.acceptLicense') }}
               </a>
@@ -84,7 +82,7 @@
                 class="key-input"
               />
               <button class="toggle-visibility" @click="key.visible = !key.visible">
-                <i :class="key.visible ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
+                <Icon :name="key.visible ? 'eye-slash' : 'eye'" />
               </button>
             </div>
           </div>
@@ -101,13 +99,13 @@
           :key="key.envVar"
           class="summary-item"
         >
-          <i :class="keyStatus(key) === 'ready' ? 'fas fa-check-circle status-ok' : 'fas fa-exclamation-circle status-warning'"></i>
+          <Icon :name="keyStatus(key) === 'ready' ? 'check-circle' : 'exclamation-circle'" :class="keyStatus(key) === 'ready' ? 'status-ok' : 'status-warning'" />
           <span class="summary-name">{{ key.envVar }}</span>
           <span class="summary-status">{{ keyStatusLabel(key) }}</span>
         </div>
       </div>
       <div class="secrets-link">
-        <i class="fas fa-cog"></i>
+        <Icon name="cog" />
         <router-link to="/settings/secrets">
           {{ t('settings.apiKeys.manageInSecrets') }}
         </router-link>
@@ -121,7 +119,7 @@
         class="btn-secondary"
         @click="prevStep"
       >
-        <i class="fas fa-arrow-left"></i> {{ t('settings.apiKeys.back') }}
+        <Icon name="arrow-left" /> {{ t('settings.apiKeys.back') }}
       </button>
       <div class="spacer"></div>
       <button
@@ -130,7 +128,7 @@
         :disabled="!canProceed"
         @click="nextStep"
       >
-        {{ t('settings.apiKeys.next') }} <i class="fas fa-arrow-right"></i>
+        {{ t('settings.apiKeys.next') }} <Icon name="arrow-right" />
       </button>
       <button
         v-if="currentStep === totalSteps"
@@ -138,7 +136,7 @@
         @click="saveAndClose"
         :disabled="isSaving"
       >
-        <i :class="isSaving ? 'fas fa-spinner fa-spin' : 'fas fa-save'"></i>
+        <i :class="isSaving ? 'fas fa-spinner fa-spin' : 'save'"></i>
         {{ t('settings.apiKeys.save') }}
       </button>
     </template>
@@ -146,6 +144,7 @@
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils'
@@ -186,8 +185,8 @@ const steps = [
 ]
 
 const availableRoles = [
-  { id: 'tts-worker', name: 'TTS Worker', description: 'Text-to-speech with Pocket TTS', icon: 'fas fa-microphone' },
-  { id: 'ai-stack', name: 'AI Stack', description: 'Cloud LLM providers (OpenAI, Anthropic)', icon: 'fas fa-brain' },
+  { id: 'tts-worker', name: 'TTS Worker', description: 'Text-to-speech with Pocket TTS', icon: 'microphone' },
+  { id: 'ai-stack', name: 'AI Stack', description: 'Cloud LLM providers (OpenAI, Anthropic)', icon: 'brain' },
 ]
 
 const roleKeyMapping: Record<string, Omit<KeyEntry, 'configured' | 'value' | 'visible'>[]> = {

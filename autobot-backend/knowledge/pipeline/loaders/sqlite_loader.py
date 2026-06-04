@@ -8,17 +8,17 @@ Issue #759: Knowledge Pipeline Foundation - Extract, Cognify, Load (ECL).
 """
 
 import json
-import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import aiosqlite
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import utc_timestamp
 from knowledge.pipeline.base import BaseLoader, PipelineContext
 from knowledge.pipeline.registry import TaskRegistry
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 CREATE_TABLES_SQL = """
@@ -61,7 +61,7 @@ ON pipeline_runs(document_id);
 class SQLiteLoader(BaseLoader):
     """Load facts, metadata, and pipeline run stats to SQLite."""
 
-    def __init__(self, db_path: str = "data/knowledge/pipeline.db", run_id: Optional[str] = None) -> None:
+    def __init__(self, db_path: str = "data/knowledge/pipeline.db", run_id: str | None = None) -> None:
         """
         Initialize SQLite loader.
 
@@ -71,7 +71,7 @@ class SQLiteLoader(BaseLoader):
         """
         self.db_path = db_path
         self.run_id = run_id
-        self.db: Optional[aiosqlite.Connection] = None
+        self.db: aiosqlite.Connection | None = None
 
     async def load(self, context: PipelineContext) -> None:
         """

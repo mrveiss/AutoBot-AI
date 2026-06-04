@@ -7,3 +7,28 @@ profile = "black"
 line_length = 120
 src_paths = ["autobot-backend", "autobot_shared", "autobot-slm-backend"]
 known_first_party = ["autobot_shared"]
+
+[tool.mypy]
+python_version = "3.12"
+ignore_missing_imports = true
+# Exclude test files — loose typing in tests is expected; this baseline
+# mirrors the pre-existing state tracked in GH#7105.
+exclude = [
+    ".*_test\\.py$",
+    ".*/tests/.*",
+    ".*conftest\\.py$",
+    # code_analysis/ is a standalone analysis tool with its own setup.py;
+    # its src/ layout conflicts with the mypy module resolver. GH#7105.
+    "autobot-backend/code_analysis/.*",
+]
+
+# redis_client / workflow_memory / message_bus use a dual async/sync
+# dispatch pattern whose overloads aren't modeled in type stubs.
+# Fix tracked in GH#7105.
+[[tool.mypy.overrides]]
+module = [
+    "autobot_shared.redis_client",
+    "autobot_shared.workflow_memory",
+    "autobot_shared.message_bus",
+]
+ignore_errors = true

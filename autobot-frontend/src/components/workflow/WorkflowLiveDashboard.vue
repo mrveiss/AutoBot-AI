@@ -2,7 +2,7 @@
   <div class="workflow-live-dashboard">
     <!-- Connection Status -->
     <div class="connection-bar" :class="connectionStatusClass">
-      <i :class="connectionIcon"></i>
+      <Icon :name="connectionIcon" />
       <span>{{ connectionLabel }}</span>
       <button
         v-if="!liveConnected"
@@ -10,29 +10,29 @@
         @click="reconnectLiveEvents"
         :disabled="isReconnecting"
       >
-        <i class="fas fa-plug"></i> {{ $t('workflow.liveDashboard.reconnect') }}
+        <Icon name="plug" /> {{ $t('workflow.liveDashboard.reconnect') }}
       </button>
     </div>
 
     <!-- Summary Stats -->
     <div class="stats-bar">
       <div class="stat-chip">
-        <i class="fas fa-play-circle"></i>
+        <Icon name="play-circle" />
         <span class="stat-value">{{ runningCount }}</span>
         <span class="stat-label">{{ $t('workflow.liveDashboard.running') }}</span>
       </div>
       <div class="stat-chip">
-        <i class="fas fa-pause-circle"></i>
+        <Icon name="pause-circle" />
         <span class="stat-value">{{ pausedCount }}</span>
         <span class="stat-label">{{ $t('workflow.liveDashboard.paused') }}</span>
       </div>
       <div class="stat-chip">
-        <i class="fas fa-check-circle"></i>
+        <Icon name="check-circle" />
         <span class="stat-value">{{ completedCount }}</span>
         <span class="stat-label">{{ $t('workflow.liveDashboard.completedRecent') }}</span>
       </div>
       <div class="stat-chip">
-        <i class="fas fa-exclamation-circle"></i>
+        <Icon name="exclamation-circle" />
         <span class="stat-value">{{ failedCount }}</span>
         <span class="stat-label">{{ $t('workflow.liveDashboard.failed') }}</span>
       </div>
@@ -42,24 +42,24 @@
     <div class="executions-section">
       <div class="section-header">
         <h3>
-          <i class="fas fa-bolt"></i>
+          <Icon name="bolt" />
           {{ $t('workflow.liveDashboard.activeExecutions') }}
         </h3>
         <button class="btn-refresh-sm" @click="$emit('refresh')" :disabled="loading">
-          <i class="fas fa-sync-alt" :class="{ 'fa-spin': loading }"></i>
+          <Icon name="sync-alt" />
         </button>
       </div>
 
       <!-- Empty State -->
       <div v-if="!loading && activeWorkflows.length === 0" class="empty-state">
-        <i class="fas fa-wind"></i>
+        <Icon name="bolt" />
         <h4>{{ $t('workflow.liveDashboard.noActiveWorkflows') }}</h4>
         <p>{{ $t('workflow.liveDashboard.noActiveDescription') }}</p>
       </div>
 
       <!-- Loading -->
       <div v-else-if="loading && activeWorkflows.length === 0" class="loading-state">
-        <i class="fas fa-spinner fa-spin"></i>
+        <Icon name="spinner" class="animate-spin" />
         <span>{{ $t('workflow.liveDashboard.loading') }}</span>
       </div>
 
@@ -76,7 +76,7 @@
             <div class="card-title-row">
               <span class="card-name">{{ wf.name }}</span>
               <span class="status-badge" :class="getStatusBadgeClass(wf)">
-                <i :class="getStatusIcon(wf)"></i>
+                <Icon :name="getStatusIcon(wf)" />
                 {{ getStatusLabel(wf) }}
               </span>
             </div>
@@ -112,11 +112,11 @@
               :class="step.status"
               :title="step.description || $t('workflow.liveDashboard.stepN', { n: i + 1 })"
             >
-              <i v-if="step.status === 'completed'" class="fas fa-check"></i>
-              <i v-else-if="step.status === 'failed'" class="fas fa-times"></i>
-              <i v-else-if="step.status === 'executing'" class="fas fa-spinner fa-spin"></i>
-              <i v-else-if="step.status === 'waiting_approval'" class="fas fa-hand-paper"></i>
-              <i v-else-if="step.status === 'paused'" class="fas fa-pause"></i>
+              <Icon name="check" v-if="step.status === 'completed'" />
+              <Icon name="times" v-else-if="step.status === 'failed'" />
+              <Icon name="spinner" class="animate-spin" v-else-if="step.status === 'executing'" />
+              <Icon name="hand-paper" v-else-if="step.status === 'waiting_approval'" />
+              <Icon name="pause" v-else-if="step.status === 'paused'" />
               <span v-else class="dot-number">{{ i + 1 }}</span>
             </div>
             <span v-if="wf.steps.length > maxVisibleSteps" class="timeline-overflow">
@@ -128,14 +128,14 @@
           <div class="card-footer">
             <div class="footer-meta">
               <span v-if="wf.automation_mode" class="mode-tag">
-                <i class="fas fa-cog"></i> {{ wf.automation_mode }}
+                <Icon name="cog" /> {{ wf.automation_mode }}
               </span>
               <span v-if="wf.phase" class="phase-tag">
-                <i class="fas fa-layer-group"></i> {{ wf.phase }}
+                <Icon name="layer-group" /> {{ wf.phase }}
               </span>
             </div>
             <div class="footer-time">
-              <i class="fas fa-clock"></i>
+              <Icon name="clock" />
               <span>{{ formatElapsed(wf) }}</span>
             </div>
           </div>
@@ -154,10 +154,12 @@
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { computed, ref, onMounted, onUnmounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { createLogger } from '@/utils/debugUtils';
-import { useLiveEvents, type LiveEvent } from '@/composables/useLiveEvents';
+import { useEventBus } from '@/composables/useEventBus'
+import type { LiveEvent } from '@/services/LiveEventService'
 import AgentObservabilityPanel from './AgentObservabilityPanel.vue';
 import type {
   ActiveWorkflow,
@@ -186,7 +188,7 @@ const emit = defineEmits<{
 const maxVisibleSteps = 10;
 
 // Live event connection
-const { subscribe, isConnected: liveConnected, connectionState, connect } = useLiveEvents();
+const { subscribe, isConnected: liveConnected, connectionState, connect } = useEventBus()
 const isReconnecting = ref(false);
 
 const connectionStatusClass = computed(() => {
@@ -196,9 +198,9 @@ const connectionStatusClass = computed(() => {
 });
 
 const connectionIcon = computed(() => {
-  if (liveConnected.value) return 'fas fa-circle connected-dot';
-  if (connectionState.value === 'connecting') return 'fas fa-spinner fa-spin';
-  return 'fas fa-circle disconnected-dot';
+  if (liveConnected.value) return 'circle';
+  if (connectionState.value === 'connecting') return 'spinner';
+  return 'circle';
 });
 
 const connectionLabel = computed(() => {
@@ -256,12 +258,12 @@ function getStatusBadgeClass(wf: ActiveWorkflow): string {
 }
 
 function getStatusIcon(wf: ActiveWorkflow): string {
-  if (wf.is_cancelled) return 'fas fa-ban';
-  if (wf.is_paused) return 'fas fa-pause';
-  if (wf.completed_at) return 'fas fa-check';
-  if (wf.steps.some(s => s.status === 'failed')) return 'fas fa-exclamation-triangle';
-  if (wf.steps.some(s => s.status === 'executing')) return 'fas fa-spinner fa-spin';
-  return 'fas fa-hourglass-half';
+  if (wf.is_cancelled) return 'ban';
+  if (wf.is_paused) return 'pause';
+  if (wf.completed_at) return 'check';
+  if (wf.steps.some(s => s.status === 'failed')) return 'exclamation-triangle';
+  if (wf.steps.some(s => s.status === 'executing')) return 'spinner';
+  return 'hourglass-half';
 }
 
 function getStatusLabel(wf: ActiveWorkflow): string {

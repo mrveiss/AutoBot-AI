@@ -12,8 +12,8 @@
 
 - name: Fix Backend Symlink Configuration
   hosts: autobot-backend
-  become: yes
-  gather_facts: yes
+  become: true
+  gather_facts: true
 
   vars:
     backend_code_dir: /opt/autobot/autobot-user-backend

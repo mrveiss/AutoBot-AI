@@ -63,7 +63,7 @@
     owner: "{{ frontend_user }}"
     group: "{{ frontend_group }}"
     mode: '0755'
-  become: yes
+  become: true
   tags: ['frontend', 'directories']
 
 - name: "Frontend | Sync frontend code from code_source"
@@ -93,7 +93,7 @@
     owner: root
     group: root
     mode: '0755'
-  become: yes
+  become: true
   tags: ['frontend', 'tls']
 
 - name: "Frontend | Check existing TLS certificate"
@@ -110,7 +110,7 @@
     -keyout {{ frontend_tls_key }}
     -out {{ frontend_tls_cert }}
     -subj "/CN={{ ansible_host | default('127.0.0.1') }}/O=AutoBot/C=US"
-  become: yes
+  become: true
   when: not _tls_cert.stat.exists
   notify: restart nginx
   tags: ['frontend', 'tls']
@@ -121,7 +121,7 @@
     owner: root
     group: root
     mode: '0644'
-  become: yes
+  become: true
   when: not _tls_cert.stat.exists
   tags: ['frontend', 'tls']
 
@@ -135,7 +135,7 @@
   ansible.builtin.command:
     cmd: npm install --legacy-peer-deps
     chdir: "{{ frontend_install_dir }}/autobot-frontend"
-  become: yes
+  become: true
   become_user: "{{ frontend_user }}"
   environment:
     CYPRESS_INSTALL_BINARY: "0"
@@ -148,7 +148,7 @@
   ansible.builtin.command:
     cmd: npm install esbuild --legacy-peer-deps
     chdir: "{{ frontend_install_dir }}/autobot-frontend"
-  become: yes
+  become: true
   become_user: "{{ frontend_user }}"
   when: package_json_path.stat.exists
   changed_when: true
@@ -158,7 +158,7 @@
   command: npx vite build
   args:
     chdir: "{{ frontend_install_dir }}/autobot-frontend"
-  become: yes
+  become: true
   become_user: "{{ frontend_user }}"
   when: package_json_path.stat.exists
   tags: ['frontend', 'build']
@@ -169,8 +169,8 @@
     src: nginx-frontend.conf.j2
     dest: /etc/nginx/sites-available/autobot-frontend
     mode: '0644'
-    backup: yes
-  become: yes
+    backup: true
+  become: true
   notify:
     - test nginx config
     - restart nginx
@@ -182,7 +182,7 @@
     src: /etc/nginx/sites-available/autobot-frontend
     dest: /etc/nginx/sites-enabled/autobot-frontend
     state: link
-  become: yes
+  become: true
   notify: restart nginx
   when: not (slm_colocated_frontend | default(false) | bool)
   tags: ['frontend', 'nginx']
@@ -191,7 +191,7 @@
   file:
     path: /etc/nginx/sites-enabled/autobot-frontend
     state: absent
-  become: yes
+  become: true
   notify: restart nginx
   when: slm_colocated_frontend | default(false) | bool
   tags: ['frontend', 'nginx']
@@ -200,7 +200,7 @@
   file:
     path: /etc/nginx/sites-enabled/default
     state: absent
-  become: yes
+  become: true
   notify: restart nginx
   tags: ['frontend', 'nginx']
 
@@ -210,7 +210,7 @@
     port: "{{ nginx_http_port }}"
     proto: tcp
     comment: "HTTP (redirects to HTTPS)"
-  become: yes
+  become: true
   notify: reload firewall
   tags: ['frontend', 'firewall']
 
@@ -220,17 +220,17 @@
     port: "{{ frontend_port }}"
     proto: tcp
     comment: "HTTPS"
-  become: yes
+  become: true
   notify: reload firewall
   tags: ['frontend', 'firewall']
 
 - name: "Frontend | Enable and start nginx"
   systemd:
     name: nginx
-    enabled: yes
+    enabled: true
     state: started
-    daemon_reload: yes
-  become: yes
+    daemon_reload: true
+  become: true
   tags: ['frontend', 'service']
 
 - name: "Frontend | Check if legacy Vite dev server service exists"
@@ -243,8 +243,8 @@
   systemd:
     name: autobot-frontend
     state: stopped
-    enabled: no
-  become: yes
+    enabled: false
+  become: true
   when: _legacy_frontend_service.stat.exists
   tags: ['frontend', 'cleanup']
 
@@ -253,7 +253,7 @@
     msg:
       - "=== Frontend Configuration Complete ==="
       - "Node.js: {{ node_version.stdout }}"
-      - "Frontend URL: https://{{ ansible_facts['default_ipv4'].address }}"
+      - "Frontend URL: https://{{ ansible_facts['default_ipv4'].address | default(ansible_host) }}"
       - "TLS: Enabled ({{ frontend_tls_cert }})"
       - "API Proxy: {{ backend_host | default(ansible_host) }}:{{ backend_port | default(8443) }}"
       - "Nginx: Enabled (production build)"

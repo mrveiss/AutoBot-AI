@@ -2,11 +2,13 @@
 
 > Tracks the consolidation effort under umbrella issue [#6495](https://github.com/mrveiss/AutoBot-AI/issues/6495). This document is updated as each phase lands.
 >
-> - **Phase 1 — Task queues** ([#6505](https://github.com/mrveiss/AutoBot-AI/issues/6505)): _pending_
+> - **Phase 1 — Task queues** ([#6505](https://github.com/mrveiss/AutoBot-AI/issues/6505)): ✅ **COMPLETE** — all 7 `BackgroundTaskManager` callers migrated to Celery; `background_task_manager.py` deleted; `task_queue.py` retained as [#6468](https://github.com/mrveiss/AutoBot-AI/issues/6468) carve-out
 > - **Phase 2 — Progress trackers** ([#6506](https://github.com/mrveiss/AutoBot-AI/issues/6506)): **landed**
-> - **Phase 3 — Periodic schedulers** ([#6507](https://github.com/mrveiss/AutoBot-AI/issues/6507)): partially landed
->   - Beat deployment ([#6555](https://github.com/mrveiss/AutoBot-AI/issues/6555)): **landed (this PR)**
->   - ConnectorScheduler multi-worker fix ([#6556](https://github.com/mrveiss/AutoBot-AI/issues/6556)): _pending design call_
+> - **Phase 3 — Periodic schedulers** ([#6507](https://github.com/mrveiss/AutoBot-AI/issues/6507)): **landed**
+>   - Beat deployment ([#6555](https://github.com/mrveiss/AutoBot-AI/issues/6555)): landed
+>   - ConnectorScheduler multi-worker fix ([#6556](https://github.com/mrveiss/AutoBot-AI/issues/6556)): landed
+>   - cron_scheduler.py dead stub: deleted
+> - **Wakeup coalescing** ([#6472](https://github.com/mrveiss/AutoBot-AI/issues/6472)): **landed** — dedup by (agent_id, task_id), merged_count observability column
 
 The async-work stack covers three sub-domains: **queue work → execute → report progress → schedule next**. Historically each had two or three parallel implementations; #6495 consolidates them onto one canonical primitive per sub-domain.
 
@@ -83,15 +85,73 @@ long-running-operations framework).
   stability but always returns `None`. Use `get_progress()` (async, reads
   from Redis) instead.
 
-## Task queues (Phase 1 — pending)
+## Unified facade — `async_work/` ([#6495](https://github.com/mrveiss/AutoBot-AI/issues/6495))
 
-See [#6505](https://github.com/mrveiss/AutoBot-AI/issues/6505). Until that
-phase lands, three task-queue implementations coexist:
+`autobot-backend/async_work/__init__.py` is the single public entry point for
+all async-work operations.  New code should use this facade instead of the
+legacy implementations directly.
 
-- `celery_app.py` — canonical going forward
-- `utils/task_queue.py` — Redis Streams + Sorted Sets, may stay as a #6468
-  carve-out for atomic claim semantics
-- `utils/background_task_manager.py` — to be deleted in Phase 1
+```python
+from async_work import get_task_queue, get_progress_tracker, get_periodic_scheduler
+
+# Enqueue a Celery task
+handle = await get_task_queue().enqueue("knowledge_tasks.rebuild_index", priority=5)
+
+# Report progress inside a task
+await get_progress_tracker().report(task_id, percent=50, current_step="Embedding")
+
+# Schedule a periodic job
+get_periodic_scheduler().schedule("nightly_cleanup", "0 2 * * *", cleanup_callback)
+```
+
+### Decision tree
+
+```
+Need async work?
+├── One-off background task     → get_task_queue().enqueue()
+├── Track progress of a task    → get_progress_tracker().report()
+├── Run on a schedule (cron)    → get_periodic_scheduler().schedule()
+│   └── Static schedule?        → prefer celery_app.conf.beat_schedule entry
+├── Atomic-claim across workers → utils/task_queue.py  [carve-out, doc why]
+└── Event-driven wakeup         → services/heartbeat_scheduler.py
+```
+
+## Task queues (Phase 1 — COMPLETE as of GH#6505)
+
+See [#6505](https://github.com/mrveiss/AutoBot-AI/issues/6505). The
+three-implementation era is over. **Celery is the sole task queue.**
+
+### Canonical pattern
+
+```python
+from tasks.analytics_tasks import run_import_tree_analysis
+from utils.celery_task_status import celery_result_to_status, store_latest_task_id
+from celery.result import AsyncResult
+
+# Enqueue
+result = run_import_tree_analysis.delay()
+await store_latest_task_id("import_task:", result.id)
+
+# Poll status (returns BackgroundTaskManager-compatible dict)
+status = celery_result_to_status(AsyncResult(result.id))
+```
+
+Progress is reported via `self.update_state(state="PROGRESS", meta={...})` in
+`tasks/analytics_tasks.py`. The `celery_result_to_status()` helper in
+`utils/celery_task_status.py` converts Celery state → the legacy response shape
+the frontend already understands (`status`, `progress`, `current_step`, etc.).
+
+### Carve-out: `utils/task_queue.py`
+
+`utils/task_queue.py` (Redis Streams + SETNX) is **explicitly retained** as a
+`#6468` carve-out. The NPU worker manager (`initialization/lifespan.py`)
+requires atomic-claim semantics that Celery does not expose. Do **not** migrate
+or delete this file until GH#6468 is resolved.
+
+### Deleted
+
+- `utils/background_task_manager.py` — deleted in GH#6505. All 7 callers
+  migrated to `tasks/analytics_tasks.py` Celery tasks.
 
 ## Periodic schedulers
 
@@ -101,7 +161,7 @@ landscape has **three patterns**, not two:
 | Pattern | When to use | Implementation | Status |
 |---|---|---|---|
 | **Static cron** | Fixed schedules known at deploy time (knowledge cleanup, sync queue prune) | Celery Beat — `celery_app.conf.beat_schedule` | Deployed via `autobot-celery-beat.service` ([#6555](https://github.com/mrveiss/AutoBot-AI/issues/6555)) |
-| **Dynamic per-entity recurring** | Schedules created/edited/deleted at runtime via API (per-connector sync intervals) | `knowledge/connectors/scheduler.py` (`ConnectorScheduler`) | Has multi-worker bug ([#6556](https://github.com/mrveiss/AutoBot-AI/issues/6556)) — needs design call before migration |
+| **Dynamic per-entity recurring** | Schedules created/edited/deleted at runtime via API (per-connector sync intervals) | `knowledge/connectors/scheduler.py` (`ConnectorScheduler`) — Redis-backed + leader election (Option A, [#6556](https://github.com/mrveiss/AutoBot-AI/issues/6556)) | Stable: schedules survive worker restart, status consistent across workers |
 | **Event-driven wakeup** | "Wake me when X happens" not "wake me every N minutes" (per-agent heartbeat with explicit wakeup events) | `services/heartbeat_scheduler.py` | Stable as-is, do not migrate |
 
 ### Why three, not two
@@ -112,9 +172,29 @@ config — they aren't. Connectors are CRUD'd at runtime via `POST/DELETE
 /knowledge_base/connectors/...`, each with its own interval. Beat reads
 schedules from a static dict at startup; supporting dynamic schedules
 requires either `celery-redbeat` (extra dependency) or coordinating Beat
-restarts on every connector edit (terrible UX). Until that decision lands
-([#6556](https://github.com/mrveiss/AutoBot-AI/issues/6556)) the dynamic
-pattern stays separate.
+restarts on every connector edit (terrible UX). The chosen approach ([#6556](https://github.com/mrveiss/AutoBot-AI/issues/6556)) is
+Option A: Redis-backed schedule persistence + leader election so any worker
+can answer status queries and the elected leader runs the asyncio tasks.
+
+
+### ConnectorScheduler — multi-worker design ([#6556](https://github.com/mrveiss/AutoBot-AI/issues/6556))
+
+**Problem:** with 4 uvicorn workers, each `POST /knowledge_base/connectors` call
+could land on a different worker. That worker's in-process singleton held the
+schedule; the other three workers did not. After a worker restart the schedule
+was silently lost.
+
+**Solution (Option A):** Redis-backed schedules + leader election.
+
+| Concern | Mechanism |
+|---|---|
+| Persist schedules | `connector:schedule:{id}` key in the `knowledge` Redis DB. `start()` writes; `stop()` deletes. |
+| Consistent `scheduled` status | `is_running()` reads Redis — not the local asyncio task dict. Any worker answers correctly. |
+| Single-flight execution | Leader key `connector:scheduler:leader` with 30 s TTL. One worker wins via `SET NX`; refreshes every 10 s via `GET`+`PEXPIRE`. |
+| Restart recovery | When a leader dies its key expires. Within 15 s a non-leader wins election, calls `_reconcile_schedules()`, and rehydrates all `connector:schedule:*` keys into local asyncio tasks. |
+
+All four workers call `begin_leader_election()` at startup
+(wired in `initialization/lifespan.py:_start_connector_scheduler`).
 
 ### Celery Beat ([#6555](https://github.com/mrveiss/AutoBot-AI/issues/6555))
 
@@ -131,6 +211,37 @@ pattern stays separate.
 
 - `services/scheduling/cron_scheduler.py` — 44 LOC stub with no execution loop,
   zero callers. Deleted in [#6507](https://github.com/mrveiss/AutoBot-AI/issues/6507).
+
+## Wakeup coalescing ([#6472](https://github.com/mrveiss/AutoBot-AI/issues/6472))
+
+### Problem
+
+Without deduplication, N simultaneous wakeup signals for the same
+`(agent_id, task_id)` — e.g., `@-mention + assignment + cron` firing within
+the same second — insert N rows and trigger N redundant agent runs, burning N×
+tokens for the same effective work.
+
+### Solution
+
+`HeartbeatScheduler.wakeup()` checks for an existing un-consumed row with the
+same `(agent_id, task_id)` before inserting. When found:
+
+1. Context is merged (incoming keys win on conflict).
+2. Priority is updated to `max(existing, incoming)`.
+3. `merged_count` is incremented (observability column; default 0 on clean rows).
+4. The existing row id is returned — no new row is inserted.
+
+Coalescing is skipped when `context` is absent or does not contain `task_id`,
+so non-task wakeups (interval ticks, manual triggers) are unaffected.
+
+The `FOR UPDATE` lock on the existing row prevents a TOCTOU race where two
+concurrent calls both see "no existing row" and both insert.
+
+### Schema
+
+`agent_wakeup_requests.merged_count INTEGER NOT NULL DEFAULT 0` — migration
+`20260522_021`. Read this column in Grafana or the `/heartbeat/{agent_id}/wakeup`
+API response to tune coalescing thresholds.
 
 ## Cross-cutting
 

@@ -11,8 +11,8 @@
 ---
 - name: Deploy SLM Agent to Managed Nodes
   hosts: slm_nodes
-  become: yes
-  gather_facts: yes
+  become: true
+  gather_facts: true
 
   pre_tasks:
     - name: "Pre-check | Verify connectivity"
@@ -23,8 +23,8 @@
       user:
         name: autobot
         state: present
-        system: yes
-        create_home: yes
+        system: true
+        create_home: true
         shell: /bin/bash
       tags: ['setup']
 

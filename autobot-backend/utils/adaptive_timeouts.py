@@ -7,14 +7,14 @@ Intelligent timeout management with adaptive behavior and fallback strategies
 """
 
 import asyncio
-import logging
 import time
 from enum import Enum
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict
 
 from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class TimeoutCategory(Enum):
@@ -133,7 +133,7 @@ class AdaptiveTimeout:
     def _log_operation_start(
         self,
         timeout_duration: float,
-        context: Optional[Dict[str, Any]],
+        context: Dict[str, Any] | None,
     ) -> str:
         """
         Log the start of an operation and return the context string.
@@ -192,7 +192,7 @@ class AdaptiveTimeout:
         self,
         operation: Callable,
         operation_type: str = "default",
-        context: Optional[Dict[str, Any]] = None,
+        context: Dict[str, Any] | None = None,
         fallback_result: Any = None,
         background_allowed: bool = False,
     ) -> Any:
@@ -349,7 +349,7 @@ class AdaptiveTimeout:
 async def execute_installation_with_timeout(
     operation: Callable,
     package_type: str = "default",
-    context: Optional[Dict[str, Any]] = None,
+    context: Dict[str, Any] | None = None,
 ) -> Any:
     """Execute package installation with adaptive timeout handling"""
     timeout_handler = AdaptiveTimeout(TimeoutCategory.SYSTEM_INSTALLATION)
@@ -362,7 +362,7 @@ async def execute_installation_with_timeout(
     )
 
 
-async def execute_user_permission_with_timeout(operation: Callable, context: Optional[Dict[str, Any]] = None) -> Any:
+async def execute_user_permission_with_timeout(operation: Callable, context: Dict[str, Any] | None = None) -> Any:
     """Execute user permission request with adaptive timeout"""
     timeout_handler = AdaptiveTimeout(TimeoutCategory.USER_INTERACTION)
     return await timeout_handler.execute_with_intelligent_timeout(
@@ -376,7 +376,7 @@ async def execute_user_permission_with_timeout(operation: Callable, context: Opt
 async def execute_command_with_timeout(
     operation: Callable,
     command_type: str = "default",
-    context: Optional[Dict[str, Any]] = None,
+    context: Dict[str, Any] | None = None,
     background_allowed: bool = True,
 ) -> Any:
     """Execute command with adaptive timeout handling"""

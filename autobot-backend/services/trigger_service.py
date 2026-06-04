@@ -31,20 +31,20 @@ import asyncio
 import hashlib
 import hmac
 import json
-import logging
 import secrets
 import uuid
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Callable, Coroutine, Dict, List, Optional
+from typing import Any, Callable, Coroutine, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.time_utils import now_utc
 from constants.threshold_constants import TimingConstants
 from constants.ttl_constants import TTL_90_DAYS
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Lazy-initialised encryption service for webhook HMAC secrets at rest.
 # Populated on first call to _get_encryption_service() to avoid import-time
@@ -136,7 +136,7 @@ class TriggerDefinition:
     conditions: List[Dict[str, Any]]
     enabled: bool
     created_at: str  # ISO-8601
-    last_fired: Optional[str] = None  # ISO-8601 or None
+    last_fired: str | None = None  # ISO-8601 or None
     fire_count: int = 0
 
     # ------------------------------------------------------------------
@@ -307,7 +307,7 @@ def validate_cron_expression(expression: str) -> bool:
         return False
 
 
-def next_cron_run(expression: str, after: Optional[datetime] = None) -> datetime:
+def next_cron_run(expression: str, after: datetime | None = None) -> datetime:
     """
     Return the next UTC datetime when *expression* fires after *after*.
 
@@ -403,7 +403,7 @@ class TriggerService:
 
     def __init__(self) -> None:
         self._tasks: Dict[str, asyncio.Task] = {}
-        self._launcher: Optional[WorkflowLauncher] = None
+        self._launcher: WorkflowLauncher | None = None
         self._running = False
         # Keyed by trigger_id; values are HMAC secrets for webhook validation
         self._webhook_secrets: Dict[str, str] = {}
@@ -516,7 +516,7 @@ class TriggerService:
         self._webhook_secrets.pop(trigger_id, None)
         logger.info("Trigger unregistered: %s", trigger_id)
 
-    async def list_triggers(self, workflow_id: Optional[str] = None) -> List[TriggerDefinition]:
+    async def list_triggers(self, workflow_id: str | None = None) -> List[TriggerDefinition]:
         """
         Return persisted trigger definitions, optionally filtered by workflow_id.
 
@@ -727,7 +727,7 @@ class TriggerService:
             poll_interval,
         )
 
-        last_value: Optional[str] = None
+        last_value: str | None = None
 
         while True:
             try:
@@ -856,7 +856,7 @@ class TriggerService:
         except Exception as exc:
             logger.warning("_update_fire_metadata failed for %s: %s", trigger_id, exc)
 
-    async def _load_trigger(self, trigger_id: str) -> Optional[TriggerDefinition]:
+    async def _load_trigger(self, trigger_id: str) -> TriggerDefinition | None:
         """Load and deserialise a single TriggerDefinition from Redis."""
         try:
             redis = get_redis_client(database="workflows")
@@ -914,7 +914,7 @@ class TriggerService:
         except Exception as exc:
             logger.warning("_store_webhook_secret failed for %s: %s", trigger_id, exc)
 
-    async def _get_webhook_secret(self, trigger_id: str) -> Optional[str]:
+    async def _get_webhook_secret(self, trigger_id: str) -> str | None:
         """Retrieve HMAC secret; prefer in-memory cache, fall back to Redis."""
         if trigger_id in self._webhook_secrets:
             return self._webhook_secrets[trigger_id]

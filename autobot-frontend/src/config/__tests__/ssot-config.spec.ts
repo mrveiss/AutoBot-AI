@@ -17,7 +17,8 @@
  * Author: mrveiss
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { reloadConfig, runtimeHttpProto } from '../ssot-config';
 
 // Note: In a real test environment, we would need to mock import.meta.env
 // For now, these tests validate the TypeScript structure and default values
@@ -338,6 +339,192 @@ describe('SSOT Config URL Computation', () => {
     const wsProtocol = httpProtocol === 'https' ? 'wss' : 'ws';
     const websocketUrl = `${wsProtocol}://${vm.main}:${port.backend}/ws`;
     expect(websocketUrl).toBe('wss://10.0.0.1:8001/ws');
+  });
+});
+
+// =============================================================================
+// Issue #6837: runtimeHttpProto() protocol detection tests
+// =============================================================================
+
+describe('SSOT Config runtimeHttpProto() — protocol detection', () => {
+  // Getters read window.location.protocol on every access, so we override it
+  // before reloadConfig() forces a fresh buildConfig() call.
+  let originalLocation: Location;
+
+  beforeEach(() => {
+    originalLocation = window.location;
+  });
+
+  afterEach(() => {
+    // Restore original location so other tests are not affected
+    Object.defineProperty(window, 'location', {
+      value: originalLocation,
+      writable: true,
+      configurable: true,
+    });
+  });
+
+  const setProtocol = (protocol: 'https:' | 'http:') => {
+    Object.defineProperty(window, 'location', {
+      value: { ...window.location, protocol, hostname: 'test-host.example.com', host: 'test-host.example.com' },
+      writable: true,
+      configurable: true,
+    });
+  };
+
+  describe('when window.location.protocol === "https:"', () => {
+    it('backendUrl starts with https://', () => {
+      setProtocol('https:');
+      const cfg = reloadConfig();
+      expect(cfg.backendUrl).toMatch(/^https:\/\//);
+    });
+
+    it('frontendUrl starts with https://', () => {
+      setProtocol('https:');
+      const cfg = reloadConfig();
+      expect(cfg.frontendUrl).toMatch(/^https:\/\//);
+    });
+
+    it('ollamaUrl starts with https://', () => {
+      setProtocol('https:');
+      const cfg = reloadConfig();
+      expect(cfg.ollamaUrl).toMatch(/^https:\/\//);
+    });
+
+    it('aistackUrl starts with https://', () => {
+      setProtocol('https:');
+      const cfg = reloadConfig();
+      expect(cfg.aistackUrl).toMatch(/^https:\/\//);
+    });
+
+    it('npuWorkerUrl starts with https://', () => {
+      setProtocol('https:');
+      const cfg = reloadConfig();
+      expect(cfg.npuWorkerUrl).toMatch(/^https:\/\//);
+    });
+
+    it('browserServiceUrl starts with https://', () => {
+      setProtocol('https:');
+      const cfg = reloadConfig();
+      expect(cfg.browserServiceUrl).toMatch(/^https:\/\//);
+    });
+
+    it('vncUrl starts with https://', () => {
+      setProtocol('https:');
+      const cfg = reloadConfig();
+      expect(cfg.vncUrl).toMatch(/^https:\/\//);
+    });
+
+    it('slmUrl starts with https:// when vm.slm is set', () => {
+      setProtocol('https:');
+      // Provide a non-empty VITE_SLM_HOST so the getter does not return '/slm'
+      const originalEnv = import.meta.env.VITE_SLM_HOST;
+      import.meta.env.VITE_SLM_HOST = 'slm.example.com';
+      const cfg = reloadConfig();
+      const result = cfg.slmUrl;
+      import.meta.env.VITE_SLM_HOST = originalEnv;
+      // When vm.slm is empty the getter falls back to '/slm'; only assert
+      // the protocol when the URL is absolute.
+      if (result.startsWith('/')) return;
+      expect(result).toMatch(/^https:\/\//);
+    });
+
+    it('slmAdminUrl starts with https:// when vm.slm is set', () => {
+      setProtocol('https:');
+      const originalEnv = import.meta.env.VITE_SLM_HOST;
+      import.meta.env.VITE_SLM_HOST = 'slm-admin.example.com';
+      const cfg = reloadConfig();
+      const result = cfg.slmAdminUrl;
+      import.meta.env.VITE_SLM_HOST = originalEnv;
+      if (result.startsWith('/')) return;
+      expect(result).toMatch(/^https:\/\//);
+    });
+
+    it('redisUrl still uses redis:// (not affected by protocol detection)', () => {
+      setProtocol('https:');
+      const cfg = reloadConfig();
+      expect(cfg.redisUrl).toMatch(/^redis:\/\//);
+    });
+  });
+
+  describe('when window.location.protocol === "http:"', () => {
+    it('backendUrl starts with http://', () => {
+      setProtocol('http:');
+      const cfg = reloadConfig();
+      expect(cfg.backendUrl).toMatch(/^http:\/\//);
+    });
+
+    it('frontendUrl starts with http://', () => {
+      setProtocol('http:');
+      const cfg = reloadConfig();
+      expect(cfg.frontendUrl).toMatch(/^http:\/\//);
+    });
+
+    it('ollamaUrl starts with http://', () => {
+      setProtocol('http:');
+      const cfg = reloadConfig();
+      expect(cfg.ollamaUrl).toMatch(/^http:\/\//);
+    });
+
+    it('aistackUrl starts with http://', () => {
+      setProtocol('http:');
+      const cfg = reloadConfig();
+      expect(cfg.aistackUrl).toMatch(/^http:\/\//);
+    });
+
+    it('npuWorkerUrl starts with http://', () => {
+      setProtocol('http:');
+      const cfg = reloadConfig();
+      expect(cfg.npuWorkerUrl).toMatch(/^http:\/\//);
+    });
+
+    it('browserServiceUrl starts with http://', () => {
+      setProtocol('http:');
+      const cfg = reloadConfig();
+      expect(cfg.browserServiceUrl).toMatch(/^http:\/\//);
+    });
+
+    it('vncUrl starts with http://', () => {
+      setProtocol('http:');
+      const cfg = reloadConfig();
+      expect(cfg.vncUrl).toMatch(/^http:\/\//);
+    });
+
+    it('slmAdminUrl starts with http:// when vm.slm is set (fix GH #6837)', () => {
+      setProtocol('http:');
+      const originalEnv = import.meta.env.VITE_SLM_HOST;
+      import.meta.env.VITE_SLM_HOST = 'slm-admin.example.com';
+      const cfg = reloadConfig();
+      const result = cfg.slmAdminUrl;
+      import.meta.env.VITE_SLM_HOST = originalEnv;
+      if (result.startsWith('/')) return;
+      expect(result).toMatch(/^http:\/\//);
+    });
+  });
+});
+
+// =============================================================================
+// Issue #6809: runtimeHttpProto() direct unit tests
+// =============================================================================
+
+describe('runtimeHttpProto', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('returns "https" when window.location.protocol is "https:"', () => {
+    vi.stubGlobal('window', { location: { protocol: 'https:', host: 'example.com' } });
+    expect(runtimeHttpProto()).toBe('https');
+  });
+
+  it('returns "http" when window.location.protocol is "http:"', () => {
+    vi.stubGlobal('window', { location: { protocol: 'http:', host: 'example.com' } });
+    expect(runtimeHttpProto()).toBe('http');
+  });
+
+  it('falls back to VITE_HTTP_PROTOCOL env var in SSR (no window)', () => {
+    vi.stubGlobal('window', undefined);
+    expect(runtimeHttpProto()).toBe('http'); // default from getEnv fallback
   });
 });
 

@@ -29,7 +29,7 @@ Any new adapter must honour this shape so existing callers keep working.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Sequence
 
 # Type aliases kept loose on purpose: callers already use plain lists/dicts
 # against ChromaDB, so tightening these would break the migration seam.
@@ -65,9 +65,9 @@ class BaseCollection(ABC):
         self,
         *,
         ids: Sequence[str],
-        documents: Optional[Sequence[str]] = None,
-        metadatas: Optional[Sequence[Metadata]] = None,
-        embeddings: Optional[Sequence[Embedding]] = None,
+        documents: Sequence[str] | None = None,
+        metadatas: Sequence[Metadata] | None = None,
+        embeddings: Sequence[Embedding] | None = None,
     ) -> None:
         """Insert new items. Duplicate ids are a no-op (original retained);
         use ``upsert`` for replace semantics."""
@@ -77,9 +77,9 @@ class BaseCollection(ABC):
         self,
         *,
         ids: Sequence[str],
-        documents: Optional[Sequence[str]] = None,
-        metadatas: Optional[Sequence[Metadata]] = None,
-        embeddings: Optional[Sequence[Embedding]] = None,
+        documents: Sequence[str] | None = None,
+        metadatas: Sequence[Metadata] | None = None,
+        embeddings: Sequence[Embedding] | None = None,
     ) -> None:
         """Insert-or-replace items by id. No error on duplicate."""
 
@@ -88,9 +88,9 @@ class BaseCollection(ABC):
         self,
         *,
         ids: Sequence[str],
-        documents: Optional[Sequence[str]] = None,
-        metadatas: Optional[Sequence[Metadata]] = None,
-        embeddings: Optional[Sequence[Embedding]] = None,
+        documents: Sequence[str] | None = None,
+        metadatas: Sequence[Metadata] | None = None,
+        embeddings: Sequence[Embedding] | None = None,
     ) -> None:
         """Modify existing items by id. Missing ids are silently skipped."""
 
@@ -98,12 +98,12 @@ class BaseCollection(ABC):
     def get(
         self,
         *,
-        ids: Optional[Sequence[str]] = None,
-        where: Optional[Where] = None,
-        where_document: Optional[WhereDocument] = None,
-        limit: Optional[int] = None,
-        offset: Optional[int] = None,
-        include: Optional[Sequence[str]] = None,
+        ids: Sequence[str] | None = None,
+        where: Where | None = None,
+        where_document: WhereDocument | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
+        include: Sequence[str] | None = None,
     ) -> Dict[str, Any]:
         """Fetch items by id / filter. Returns flat-list dict."""
 
@@ -111,12 +111,12 @@ class BaseCollection(ABC):
     def query(
         self,
         *,
-        query_embeddings: Optional[Sequence[Embedding]] = None,
-        query_texts: Optional[Sequence[str]] = None,
+        query_embeddings: Sequence[Embedding] | None = None,
+        query_texts: Sequence[str] | None = None,
         n_results: int = 10,
-        where: Optional[Where] = None,
-        where_document: Optional[WhereDocument] = None,
-        include: Optional[Sequence[str]] = None,
+        where: Where | None = None,
+        where_document: WhereDocument | None = None,
+        include: Sequence[str] | None = None,
     ) -> Dict[str, Any]:
         """Vector search. Returns nested-list dict, one inner list per query.
 
@@ -129,9 +129,9 @@ class BaseCollection(ABC):
     def delete(
         self,
         *,
-        ids: Optional[Sequence[str]] = None,
-        where: Optional[Where] = None,
-        where_document: Optional[WhereDocument] = None,
+        ids: Sequence[str] | None = None,
+        where: Where | None = None,
+        where_document: WhereDocument | None = None,
     ) -> None:
         """Delete items by id or filter. At least one filter required."""
 
@@ -156,8 +156,8 @@ class BaseClient(ABC):
         self,
         name: str,
         *,
-        metadata: Optional[Metadata] = None,
-        embedding_function: Optional[Any] = None,
+        metadata: Metadata | None = None,
+        embedding_function: Any | None = None,
     ) -> BaseCollection:
         """Return existing collection or create a new one."""
 
@@ -170,8 +170,8 @@ class BaseClient(ABC):
         self,
         name: str,
         *,
-        metadata: Optional[Metadata] = None,
-        embedding_function: Optional[Any] = None,
+        metadata: Metadata | None = None,
+        embedding_function: Any | None = None,
     ) -> BaseCollection:
         """Create collection. Raise ``ValueError`` if name already exists."""
 

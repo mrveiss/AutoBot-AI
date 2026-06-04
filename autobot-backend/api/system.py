@@ -1,9 +1,16 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
+"""
+System-level diagnostic and module-inspection endpoints.
+
+Exposes health, uptime, loaded-router enumeration, and dynamic module
+inspection to aid observability and debugging.
+"""
+
 import asyncio
 import importlib
-import logging
+import json
 import sys
 from datetime import datetime, timezone
 
@@ -27,7 +34,9 @@ from api.schemas_system import (
 )
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config as ssot_config
+from autobot_shared.ssot_constants import STARTUP_ERROR_FILE
 from config.manager import get_config_manager
 from constants.model_constants import ModelConstants as ModelConsts
 
@@ -38,7 +47,7 @@ config = get_config_manager()
 
 router = APIRouter()
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level tuple for allowed dynamic import modules
 _ALLOWED_IMPORT_MODULES = (
@@ -110,7 +119,7 @@ async def _probe_feature_routers(request=None) -> ComponentHealth:
 async def _check_conversation_files_db(request: Request, health_status: dict) -> None:
     """Check conversation files database health (Issue #315 - extracted)."""
     if not hasattr(request.app.state, "conversation_file_manager"):
-        health_status["components"]["conversation_files_db"] = "not_configured"
+        health_status["components"]["conversation_files_db"] = "degraded"
         health_status["status"] = "degraded"
         return
 
@@ -118,13 +127,13 @@ async def _check_conversation_files_db(request: Request, health_status: dict) ->
     try:
         version = await conversation_file_manager.get_schema_version()
         if version == "unknown":
-            health_status["components"]["conversation_files_db"] = "not_initialized"
+            health_status["components"]["conversation_files_db"] = "degraded"
             health_status["status"] = "degraded"
         else:
-            health_status["components"]["conversation_files_db"] = "healthy"
+            health_status["components"]["conversation_files_db"] = "ok"
     except Exception as db_e:
         logger.warning("Conversation files DB health check failed: %s", db_e)
-        health_status["components"]["conversation_files_db"] = "unhealthy"
+        health_status["components"]["conversation_files_db"] = "down"
         health_status["status"] = "degraded"
 
 
@@ -282,25 +291,48 @@ async def get_system_health(
         from initialization.lifespan import app_state
 
         health_status = {
-            "status": "healthy",
+            "status": "ok",
             "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             "initialization": {
                 "status": app_state.get("initialization_status", "unknown"),
                 "message": app_state.get("initialization_message", "Status unavailable"),
             },
             "components": {
-                "backend": "healthy",
-                "config": "healthy",
-                "logging": "healthy",
+                "backend": "ok",
+                "config": "ok",
+                "logging": "ok",
             },
         }
+
+        # GH#8947: Surface startup errors for provisioning visibility.
+        # Only expose the exception type name — never the message, which may
+        # contain credentials (connection strings, Redis URLs, etc.).
+        startup_error = app_state.get("startup_error")
+        if startup_error:
+            # In-memory value may be "TypeName: message" — strip to type only.
+            startup_error = startup_error.split(":")[0].strip()
+        if not startup_error:
+            # Phase 1 failures kill the process before it can serve requests, so
+            # app_state is unreachable. Fall back to the disk file written by
+            # lifespan.py before re-raising.
+            try:
+                if await asyncio.to_thread(STARTUP_ERROR_FILE.exists):
+                    text = await asyncio.to_thread(STARTUP_ERROR_FILE.read_text, encoding="utf-8")
+                    data = json.loads(text)
+                    startup_error = data.get("error_type")
+            except Exception:
+                pass
+        if startup_error:
+            health_status["startup_error"] = startup_error  # type name only
+            health_status["status"] = "down"
+            health_status["components"]["backend"] = "down"
 
         # Test configuration access
         try:
             ssot_config.ollama_url
-            health_status["components"]["config"] = "healthy"
+            health_status["components"]["config"] = "ok"
         except Exception:
-            health_status["components"]["config"] = "error"
+            health_status["components"]["config"] = "down"
             health_status["status"] = "degraded"
 
         # Check conversation files database if request is available (Issue #315 - use helper)
@@ -308,24 +340,15 @@ async def get_system_health(
             await _check_conversation_files_db(request, health_status)
 
         # Issue #3333: merge registered probe results into components dict.
-        # ``components`` stays Record<string,string> for frontend compat;
-        # rich per-probe data (latency, detail, structured payload) is exposed
+        # components uses probe vocabulary ("ok"/"degraded"/"down") directly — Issue #6909.
+        # Rich per-probe data (latency, detail, structured payload) is exposed
         # under ``probes`` for callers that want it.
         aggregated = await collect_system_health(request)
-        # Map probe vocabulary to the legacy frontend vocabulary
-        # (``HealthCheckResponse`` documented as Record<string,"healthy"|"unhealthy"|...>).
-        _PROBE_TO_LEGACY = {
-            "ok": "healthy",
-            "degraded": "degraded",
-            "down": "unhealthy",
-        }
         for component in aggregated.components:
-            health_status["components"][component.name] = _PROBE_TO_LEGACY.get(component.status, component.status)
-        # Preserve the worst-of severity from the aggregator so a probe reporting
-        # "down" surfaces as "unhealthy" at the top level rather than being
-        # silently downgraded to "degraded".
-        if aggregated.status != "ok" and health_status["status"] == "healthy":
-            health_status["status"] = _PROBE_TO_LEGACY[aggregated.status]
+            health_status["components"][component.name] = component.status
+        # Preserve the worst-of severity from the aggregator.
+        if aggregated.status != "ok" and health_status["status"] == "ok":
+            health_status["status"] = aggregated.status
         health_status["probes"] = [component.model_dump(exclude_none=True) for component in aggregated.components]
 
         return health_status
@@ -333,7 +356,7 @@ async def get_system_health(
     except Exception:
         logger.error("Health check failed: %s", "Internal server error")
         return {
-            "status": "unhealthy",
+            "status": "down",
             "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             "error": "Internal server error",
         }
@@ -473,7 +496,7 @@ async def admin_check(admin_check: bool = Depends(check_admin_permission)):
     import os
 
     admin_status = {
-        "user": os.getenv("USER", "unknown"),
+        "user": config.user,
         "admin": os.getuid() == 0 if hasattr(os, "getuid") else False,
         "timestamp": datetime.now(tz=timezone.utc).isoformat(),
     }
@@ -970,7 +993,7 @@ async def clear_cache(cache_name: str, admin_check: bool = Depends(check_admin_p
 
         coordinator = await get_cache_coordinator()
         if cache_name in coordinator._caches:
-            coordinator._caches[cache_name].clear()
+            await coordinator._caches[cache_name].clear()
             return {
                 "status": "cleared",
                 "cache": cache_name,

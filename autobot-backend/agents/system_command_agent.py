@@ -8,14 +8,14 @@ terminal streaming
 """
 
 import asyncio
-import logging
-import os
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from agents.interactive_terminal_agent import InteractiveTerminalAgent
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 from constants.threshold_constants import TimingConstants
-from event_manager import get_event_manager
+from events.bus import PersistStrategy, publish_event
 from security.command_patterns import (
     SENSITIVE_REDIRECT_PATHS,
     UNRESTRICTED_ROOT_COMMANDS,
@@ -27,7 +27,7 @@ from security_layer import SecurityLayer
 from .base_agent import AgentRequest
 from .standardized_agent import ActionHandler, StandardizedAgent
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class SystemCommandAgent(StandardizedAgent):
@@ -261,7 +261,7 @@ class SystemCommandAgent(StandardizedAgent):
 
         return {"installed": False, "message": f"{tool_name} is not installed"}
 
-    async def detect_package_manager(self) -> Optional[str]:
+    async def detect_package_manager(self) -> str | None:
         """Detect which package manager is available on the system"""
         for pm_name, pm_info in self.PACKAGE_MANAGERS.items():
             check_cmd = pm_info["check"]
@@ -370,7 +370,7 @@ class SystemCommandAgent(StandardizedAgent):
         elif result:
             event_data["exit_code"] = result["exit_code"]
             event_data["duration"] = result["duration"]
-        await get_event_manager().publish("command_execution", event_data)
+        await publish_event("global", "command_execution", event_data, persist=PersistStrategy.NONE)
 
     def _build_execution_result(self, result: dict) -> Dict[str, Any]:
         """Build execution result dict (Issue #398: extracted)."""
@@ -402,7 +402,7 @@ class SystemCommandAgent(StandardizedAgent):
         require_confirmation: bool = True,
         env: Dict[str, str] = None,
         cwd: str = None,
-        timeout: Optional[float] = None,
+        timeout: float | None = None,
     ) -> Dict[str, Any]:
         """Execute command with terminal interaction (Issue #398: refactored)."""
         if require_confirmation and self._is_dangerous_command(command):
@@ -458,7 +458,8 @@ class SystemCommandAgent(StandardizedAgent):
 
     async def _request_user_confirmation(self, command: str, chat_id: str) -> bool:
         """Request user confirmation for dangerous commands"""
-        await get_event_manager().publish(
+        await publish_event(
+            "global",
             "command_confirmation",
             {
                 "chat_id": chat_id,
@@ -466,6 +467,7 @@ class SystemCommandAgent(StandardizedAgent):
                 "warning": "⚠️ This command may be dangerous. Please confirm execution.",
                 "requires_confirmation": True,
             },
+            persist=PersistStrategy.NONE,
         )
 
         # Wait for user response (this would be handled by the frontend)
@@ -488,7 +490,7 @@ class SystemCommandAgent(StandardizedAgent):
             "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             "chat_id": chat_id,
             "command": command,
-            "user": os.getenv("USER", "unknown"),
+            "user": config.user,
         }
         self.command_history.append(log_entry)
 

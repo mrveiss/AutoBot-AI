@@ -18,7 +18,7 @@
 
 import { ref, type Ref, onUnmounted, getCurrentInstance } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
-import liveEventService from '@/services/LiveEventService'
+import { useEventBus } from '@/composables/useEventBus'
 import apiClient from '@/utils/ApiClient'
 import { getApiBase } from '@/config/ssot-config'
 
@@ -61,11 +61,12 @@ export interface UseToolApprovalReturn {
 export function useToolApproval(): UseToolApprovalReturn {
   const pendingToolApproval = ref<PendingToolApproval | null>(null)
   const submittingApproval = ref(false)
+  const { subscribe } = useEventBus()
 
   // Subscribe to the global channel for APPROVAL_REQUIRED events (#4952).
   // The agent loop publishes on the global channel with EventType.APPROVAL_REQUIRED
   // which serialises to the string "APPROVAL_REQUIRED" in the live_event payload.
-  const unsub = liveEventService.subscribe('global', (event) => {
+  const unsub = subscribe('global', (event) => {
     if (event.event_type !== 'APPROVAL_REQUIRED') return
     const p = event.payload as Record<string, unknown>
     const approval: PendingToolApproval = {

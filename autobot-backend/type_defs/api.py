@@ -7,7 +7,7 @@ API Response Type Definitions for AutoBot
 Provides strongly-typed API response structures to replace Dict[str, Any] patterns.
 """
 
-from typing import Generic, List, Optional, TypeVar, Union
+from typing import Generic, List, TypeVar
 
 from pydantic import BaseModel, Field
 
@@ -22,8 +22,8 @@ class APISuccessResponse(BaseModel, Generic[T]):
 
     success: bool = True
     data: T
-    message: Optional[str] = None
-    timestamp: Optional[TimestampStr] = None
+    message: str | None = None
+    timestamp: TimestampStr | None = None
 
 
 class APIErrorResponse(BaseModel):
@@ -31,13 +31,13 @@ class APIErrorResponse(BaseModel):
 
     success: bool = False
     error: str
-    error_code: Optional[str] = None
-    details: Optional[Metadata] = None
-    timestamp: Optional[TimestampStr] = None
+    error_code: str | None = None
+    details: Metadata | None = None
+    timestamp: TimestampStr | None = None
 
 
 # Union type for any API response
-APIResponse = Union[APISuccessResponse, APIErrorResponse]
+APIResponse = APISuccessResponse | APIErrorResponse
 
 
 class PaginatedResponse(BaseModel, Generic[T]):
@@ -48,16 +48,16 @@ class PaginatedResponse(BaseModel, Generic[T]):
     page: int
     page_size: int
     has_more: bool = False
-    next_cursor: Optional[str] = None
+    next_cursor: str | None = None
 
 
 class HealthCheckResponse(BaseModel):
     """Health check response structure."""
 
     status: str = Field(..., description="Service status: healthy, degraded, unhealthy")
-    version: Optional[str] = None
-    uptime_seconds: Optional[float] = None
-    checks: Optional[Metadata] = None
+    version: str | None = None
+    uptime_seconds: float | None = None
+    checks: Metadata | None = None
 
 
 class ServiceStatusResponse(BaseModel):
@@ -66,9 +66,9 @@ class ServiceStatusResponse(BaseModel):
     service_name: str
     status: str
     healthy: bool
-    latency_ms: Optional[float] = None
-    last_check: Optional[TimestampStr] = None
-    details: Optional[Metadata] = None
+    latency_ms: float | None = None
+    last_check: TimestampStr | None = None
+    details: Metadata | None = None
 
 
 class BatchOperationResponse(BaseModel):
@@ -78,7 +78,7 @@ class BatchOperationResponse(BaseModel):
     successful: int
     failed: int
     results: List[Metadata]
-    errors: Optional[List[Metadata]] = None
+    errors: List[Metadata] | None = None
 
 
 class SearchResponse(BaseModel, Generic[T]):
@@ -87,9 +87,9 @@ class SearchResponse(BaseModel, Generic[T]):
     results: List[T]
     total_matches: int
     query: str
-    filters_applied: Optional[Metadata] = None
-    search_time_ms: Optional[float] = None
-    metrics: Optional[MetricsDict] = None
+    filters_applied: Metadata | None = None
+    search_time_ms: float | None = None
+    metrics: MetricsDict | None = None
 
 
 class ValidationErrorResponse(BaseModel):
@@ -98,7 +98,7 @@ class ValidationErrorResponse(BaseModel):
     success: bool = False
     error: str = "Validation failed"
     validation_errors: List[Metadata]
-    field_errors: Optional[Metadata] = None
+    field_errors: Metadata | None = None
 
 
 class FileOperationResponse(BaseModel):
@@ -107,10 +107,10 @@ class FileOperationResponse(BaseModel):
     success: bool
     path: str
     operation: str  # read, write, delete, move, etc.
-    size_bytes: Optional[int] = None
-    content: Optional[str] = None
-    metadata: Optional[Metadata] = None
-    error: Optional[str] = None
+    size_bytes: int | None = None
+    content: str | None = None
+    metadata: Metadata | None = None
+    error: str | None = None
 
 
 class ProcessingResponse(BaseModel):
@@ -120,8 +120,8 @@ class ProcessingResponse(BaseModel):
     processed_items: int
     processing_time_ms: float
     results: List[Metadata]
-    metrics: Optional[MetricsDict] = None
-    warnings: Optional[List[str]] = None
+    metrics: MetricsDict | None = None
+    warnings: List[str] | None = None
 
 
 class ConfigResponse(BaseModel):
@@ -129,6 +129,6 @@ class ConfigResponse(BaseModel):
 
     config_name: str
     values: Metadata
-    source: Optional[str] = None
-    last_modified: Optional[TimestampStr] = None
+    source: str | None = None
+    last_modified: TimestampStr | None = None
     is_default: bool = False

@@ -12,19 +12,24 @@ Provides a single endpoint that aggregates all analytics data from:
 - Bug predictions
 """
 
-import logging
 from typing import Any, Dict
 
 import aiohttp
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
+from api.schemas_analytics import (
+    AnalyticsReportingReportResponse,
+    AnalyticsReportingSummaryResponse,
+    AnalyticsReportingTrendsResponse,
+)
 from api.schemas_common import DataResponse
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_client import get_http_client
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import utc_timestamp
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 # Issue #3355: prefix moved to router registry (analytics_routers.py)
 router = APIRouter(tags=["unified-analytics"])
 
@@ -283,7 +288,7 @@ def _build_unified_report_response(
     }
 
 
-@router.get("/report", response_model=DataResponse)
+@router.get("/report", response_model=DataResponse[AnalyticsReportingReportResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_unified_report",
@@ -319,7 +324,7 @@ async def get_unified_report():
     return JSONResponse(content=response)
 
 
-@router.get("/summary", response_model=DataResponse)
+@router.get("/summary", response_model=DataResponse[AnalyticsReportingSummaryResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_quick_summary",
@@ -355,7 +360,7 @@ async def get_quick_summary():
     )
 
 
-@router.get("/trends", response_model=DataResponse)
+@router.get("/trends", response_model=DataResponse[AnalyticsReportingTrendsResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_trends",

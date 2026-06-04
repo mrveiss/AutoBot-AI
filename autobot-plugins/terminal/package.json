@@ -1,0 +1,28 @@
+{
+  "name": "@autobot/terminal",
+  "version": "0.1.0",
+  "description": "AutoBot SSH terminal plugin — xterm.js + WebSocket SSH for both frontends",
+  "type": "module",
+  "main": "./index.ts",
+  "types": "./index.ts",
+  "scripts": {
+    "build": "vite build"
+  },
+  "peerDependencies": {
+    "@xterm/addon-fit": ">=0.11.0",
+    "@xterm/addon-web-links": ">=0.12.0",
+    "@xterm/xterm": ">=6.0.0",
+    "pinia": ">=2.0.0",
+    "vue": ">=3.5.0"
+  },
+  "devDependencies": {
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/addon-web-links": "^0.12.0",
+    "@xterm/xterm": "^6.0.0",
+    "@vitejs/plugin-vue": "^6.0.0",
+    "pinia": "^2.0.0",
+    "typescript": "~5.8.0",
+    "vite": "^6.0.0",
+    "vue": "^3.5.0"
+  }
+}

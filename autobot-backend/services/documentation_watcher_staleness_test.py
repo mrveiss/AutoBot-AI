@@ -26,7 +26,7 @@ class TestPropagateStalnessForDoc:
     """Unit tests for _propagate_staleness_for_doc."""
 
     @pytest.mark.asyncio
-    async def test_propagation_calls_all_three_steps(self):
+    async def test_propagation_calls_all_three_steps(self) -> None:
         """On success: propagate, store, and enqueue are all called."""
         watcher = DocumentationWatcherService()
 
@@ -61,7 +61,7 @@ class TestPropagateStalnessForDoc:
         mock_enqueue.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_propagation_swallows_exceptions(self):
+    async def test_propagation_swallows_exceptions(self) -> None:
         """Errors in staleness propagation do not propagate to the caller."""
         watcher = DocumentationWatcherService()
 
@@ -90,7 +90,7 @@ class TestHandleUpdateCallsStaleness:
         return result
 
     @pytest.mark.asyncio
-    async def test_staleness_called_on_success(self):
+    async def test_staleness_called_on_success(self) -> None:
         """Staleness propagation is triggered when index_file returns success > 0."""
         watcher = DocumentationWatcherService()
         file_path = Path("/fake/docs/guide.md")
@@ -115,7 +115,7 @@ class TestHandleUpdateCallsStaleness:
         mock_propagate.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_staleness_not_called_on_skip(self):
+    async def test_staleness_not_called_on_skip(self) -> None:
         """Staleness propagation is NOT triggered when file is skipped."""
         watcher = DocumentationWatcherService()
         file_path = Path("/fake/docs/guide.md")
@@ -140,7 +140,7 @@ class TestHandleUpdateCallsStaleness:
         mock_propagate.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_staleness_not_called_on_failure(self):
+    async def test_staleness_not_called_on_failure(self) -> None:
         """Staleness propagation is NOT triggered when indexing fails."""
         watcher = DocumentationWatcherService()
         file_path = Path("/fake/docs/guide.md")

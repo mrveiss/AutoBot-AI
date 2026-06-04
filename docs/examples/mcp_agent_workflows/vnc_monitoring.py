@@ -23,9 +23,7 @@ from base import (
 )
 
 
-async def monitor_browser_activity(
-    monitoring_duration_seconds: int = 30, check_interval: int = 10
-) -> Dict[str, Any]:
+async def monitor_browser_activity(monitoring_duration_seconds: int = 30, check_interval: int = 10) -> Dict[str, Any]:
     """
     Multi-step VNC monitoring workflow:
     1. Check VNC status
@@ -209,16 +207,8 @@ This monitoring session captured desktop and browser activity using AutoBot's VN
 """
 
     total_checks = len(observations)
-    successful_activity = sum(
-        1
-        for obs in observations
-        if "error" not in obs.get("activity", {})
-    )
-    successful_browser = sum(
-        1
-        for obs in observations
-        if "error" not in obs.get("browser_context", {})
-    )
+    successful_activity = sum(1 for obs in observations if "error" not in obs.get("activity", {}))
+    successful_browser = sum(1 for obs in observations if "error" not in obs.get("browser_context", {}))
 
     log += f"""- Total Checks: {total_checks}
 - Successful Activity Captures: {successful_activity}/{total_checks}
@@ -237,9 +227,7 @@ async def main():
     """Main entry point for VNC monitoring workflow example"""
 
     # Monitor for 30 seconds, checking every 10 seconds
-    results = await monitor_browser_activity(
-        monitoring_duration_seconds=30, check_interval=10
-    )
+    results = await monitor_browser_activity(monitoring_duration_seconds=30, check_interval=10)
 
     # Print summary
     print("\nMonitoring Summary:")

@@ -45,7 +45,7 @@ function formatTimestamp(timestamp: string): string {
   <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
     <!-- Header -->
     <div class="flex items-center justify-between mb-6">
-      <h3 class="text-lg font-semibold text-gray-900">Fleet Metrics Summary</h3>
+      <h3 class="text-lg font-semibold text-gray-900">{{ $t('monitoring.fleetMetricsCard.fleetMetricsSummary') }}</h3>
       <div v-if="metrics" class="text-sm text-gray-500">
         Updated: {{ formatTimestamp(metrics.timestamp) }}
       </div>
@@ -56,13 +56,13 @@ function formatTimestamp(timestamp: string): string {
     </div>
 
     <div v-else-if="!metrics" class="text-center py-8 text-gray-500">
-      No fleet metrics available
+      {{ $t('monitoring.fleetMetricsCard.noFleetMetricsAvailable') }}
     </div>
 
     <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
       <!-- Fleet Health -->
       <div class="space-y-2">
-        <div class="text-sm font-medium text-gray-500">Fleet Health</div>
+        <div class="text-sm font-medium text-gray-500">{{ $t('monitoring.fleetMetricsCard.fleetHealth') }}</div>
         <div :class="['text-3xl font-bold', healthColor]">
           {{ healthPercentage }}%
         </div>
@@ -73,7 +73,7 @@ function formatTimestamp(timestamp: string): string {
 
       <!-- CPU Usage -->
       <div class="space-y-2">
-        <div class="text-sm font-medium text-gray-500">Avg CPU Usage</div>
+        <div class="text-sm font-medium text-gray-500">{{ $t('monitoring.fleetMetricsCard.avgCPUUsage') }}</div>
         <div :class="['text-3xl font-bold', getMetricColor(metrics.avg_cpu_percent)]">
           {{ metrics.avg_cpu_percent.toFixed(1) }}%
         </div>
@@ -84,7 +84,7 @@ function formatTimestamp(timestamp: string): string {
 
       <!-- Memory Usage -->
       <div class="space-y-2">
-        <div class="text-sm font-medium text-gray-500">Avg Memory Usage</div>
+        <div class="text-sm font-medium text-gray-500">{{ $t('monitoring.fleetMetricsCard.avgMemoryUsage') }}</div>
         <div :class="['text-3xl font-bold', getMetricColor(metrics.avg_memory_percent)]">
           {{ metrics.avg_memory_percent.toFixed(1) }}%
         </div>
@@ -95,7 +95,7 @@ function formatTimestamp(timestamp: string): string {
 
       <!-- Services -->
       <div class="space-y-2">
-        <div class="text-sm font-medium text-gray-500">Services</div>
+        <div class="text-sm font-medium text-gray-500">{{ $t('monitoring.fleetMetricsCard.services') }}</div>
         <div class="text-3xl font-bold text-gray-900">
           {{ metrics.running_services }}/{{ metrics.total_services }}
         </div>
@@ -103,7 +103,7 @@ function formatTimestamp(timestamp: string): string {
           <span v-if="metrics.failed_services > 0" class="text-danger-600">
             {{ metrics.failed_services }} failed
           </span>
-          <span v-else class="text-success-600">All healthy</span>
+          <span v-else class="text-success-600">{{ $t('monitoring.fleetMetricsCard.allHealthy') }}</span>
         </div>
       </div>
     </div>
@@ -113,15 +113,15 @@ function formatTimestamp(timestamp: string): string {
       <div class="grid grid-cols-3 gap-4 text-center">
         <div>
           <div class="text-2xl font-bold text-success-600">{{ metrics.online_nodes }}</div>
-          <div class="text-xs text-gray-500">Online</div>
+          <div class="text-xs text-gray-500">{{ $t('monitoring.fleetMetricsCard.online') }}</div>
         </div>
         <div>
           <div class="text-2xl font-bold text-warning-600">{{ metrics.degraded_nodes }}</div>
-          <div class="text-xs text-gray-500">Degraded</div>
+          <div class="text-xs text-gray-500">{{ $t('monitoring.fleetMetricsCard.degraded') }}</div>
         </div>
         <div>
           <div class="text-2xl font-bold text-gray-400">{{ metrics.offline_nodes }}</div>
-          <div class="text-xs text-gray-500">Offline</div>
+          <div class="text-xs text-gray-500">{{ $t('monitoring.fleetMetricsCard.offline') }}</div>
         </div>
       </div>
     </div>

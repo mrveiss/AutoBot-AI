@@ -29,7 +29,7 @@ def mock_redis():
 @pytest.mark.asyncio
 async def test_hash_token_creates_sha256():
     """Token hashing produces consistent SHA256 hashes."""
-    token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test"
+    token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test"  # nosemgrep: autobot-hardcoded-secret-key  # nosemgrep
 
     hash1 = SessionService.hash_token(token)
     hash2 = SessionService.hash_token(token)
@@ -43,7 +43,7 @@ async def test_hash_token_creates_sha256():
 async def test_add_token_to_blacklist(mock_redis):
     """Adding token to blacklist stores hash in Redis set."""
     user_id = uuid.uuid4()
-    token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test"
+    token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test"  # nosemgrep: autobot-hardcoded-secret-key  # nosemgrep
 
     with patch(
         "user_management.services.session_service.get_async_redis_client",
@@ -63,7 +63,7 @@ async def test_add_token_to_blacklist(mock_redis):
 async def test_is_token_blacklisted(mock_redis):
     """Checking blacklisted token returns True when token exists in set."""
     user_id = uuid.uuid4()
-    token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test"
+    token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test"  # nosemgrep: autobot-hardcoded-secret-key  # nosemgrep
 
     # Mock sismember to return True (token is blacklisted)
     mock_redis.sismember = AsyncMock(return_value=True)

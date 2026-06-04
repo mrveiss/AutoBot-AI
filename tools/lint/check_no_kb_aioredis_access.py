@@ -30,6 +30,7 @@ Exit code:
   1 — banned patterns found (PR/commit blocked)
   2 — usage error
 """
+
 from __future__ import annotations
 
 import re

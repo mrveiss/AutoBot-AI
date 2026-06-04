@@ -1,8 +1,8 @@
 # Tiered Model Routing
 
-> **Status**: Fully Implemented (Issue #696, updated by #2553)
-> **Version**: 2.0.0 (6-tier architecture)
-> **Last Updated**: 2026-03-29
+> **Status**: Fully Implemented (Issue #696, updated by #2553, trivial tier added by #9050)
+> **Version**: 2.1.0 (7-tier architecture with trivial tier)
+> **Last Updated**: 2026-06-01
 
 ## Overview
 
@@ -15,16 +15,19 @@ Tiered Model Routing automatically selects the most appropriate LLM model based 
 
 ## Architecture
 
-### Six-Tier System
+### Seven-Tier System
 
 | Tier | Model | Purpose | Use Cases |
 |------|-------|---------|-----------|
+| **Trivial** | `llama3.2:1b` | Lightweight inference | Simplest queries with no tools/RAG/memory (GH#9050) |
 | **Routing** | `llama3.2:1b` | Orchestrator | Request classification, routing decisions |
 | **Classification** | `gemma2:2b` | Classification | Intent detection, category assignment |
 | **Light Processing** | `phi3:mini` | Extraction, formatting | Simple extraction, text formatting, templates |
 | **Instruction** | `mistral:7b-instruct` | RAG, step execution | Multi-step reasoning, document synthesis, RAG |
 | **System** | `dolphin-llama3:8b` | Commands, security | System commands, security analysis, validation |
 | **Quality** | `qwen3.5:9b` | Chat, research, code | Complex chat, research, code generation |
+
+**New in v2.1.0:** The **Trivial** tier (GH#9050) is the fastest tier for the simplest queries that don't require tool use, RAG, or memory context. It uses the same lightweight model as the Routing tier but is optimized for direct question-answer scenarios with minimal overhead.
 
 ### Complexity Scoring
 
@@ -41,8 +44,11 @@ Requests are scored on a **0-10 scale** using weighted heuristics:
 **Scoring Examples:**
 
 ```python
-# Score: 0.8 -> Routing tier (llama3.2:1b)
+# Score: 0.5 -> Trivial tier (llama3.2:1b) - NEW in v2.1.0
 "What is Python?"
+
+# Score: 1.5 -> Routing tier (llama3.2:1b)
+"Should I use sync or async here?"
 
 # Score: 2.1 -> Classification tier (gemma2:2b)
 "List the benefits of async programming"
@@ -79,18 +85,24 @@ graph TD
     E -->|Yes| G[TaskComplexityScorer.score]
     G --> H[Calculate weighted score]
     H --> I{Select Tier}
-    I -->|Score < 1.5| J[Routing: llama3.2:1b]
-    I -->|Score < 3.0| K[Classification: gemma2:2b]
-    I -->|Score < 4.5| L[Light Processing: phi3:mini]
-    I -->|Score < 6.0| M[Instruction: mistral:7b-instruct]
-    I -->|Score < 7.5| N[System: dolphin-llama3:8b]
-    I -->|Score >= 7.5| O[Quality: qwen3.5:9b]
-    J --> P[Execute Request]
-    K --> P
-    L --> P
-    M --> P
-    N --> P
-    O --> P
+    I -->|Score < 1.0| J[Trivial: llama3.2:1b]
+    I -->|Score < 1.5| K[Routing: llama3.2:1b]
+    I -->|Score < 3.0| L[Classification: gemma2:2b]
+    I -->|Score < 4.5| M[Light Processing: phi3:mini]
+    I -->|Score < 6.0| N[Instruction: mistral:7b-instruct]
+    I -->|Score < 7.5| O[System: dolphin-llama3:8b]
+    I -->|Score >= 7.5| P[Quality: qwen3.5:9b]
+    J --> Q[Execute Request]
+    K --> Q
+    L --> Q
+    M --> Q
+    N --> Q
+    O --> Q
+    P --> Q
+    Q --> R{Error?}
+    R -->|Yes, Lower Tier| S[Fallback to Higher Tier]
+    R -->|No| T[Return Response]
+    S --> T
     P --> Q{Error?}
     Q -->|Yes, Lower Tier| R[Fallback to Higher Tier]
     Q -->|No| S[Return Response]
@@ -107,7 +119,8 @@ Add to `.env` or `config/llm_config.yaml`:
 # Enable/disable tiered routing (default: true)
 AUTOBOT_TIERED_ROUTING_ENABLED=true
 
-# Model assignments per tier
+# Model assignments per tier (v2.1.0 includes trivial tier)
+AUTOBOT_MODEL_TIER_TRIVIAL=llama3.2:1b       # NEW in v2.1.0 (GH#9050)
 AUTOBOT_MODEL_TIER_ROUTING=llama3.2:1b
 AUTOBOT_MODEL_TIER_CLASSIFICATION=gemma2:2b
 AUTOBOT_MODEL_TIER_LIGHT=phi3:mini
@@ -139,6 +152,7 @@ enabled = tier_config.get("enabled", True)
 
 # Get models per tier
 models = tier_config.get("models", {})
+trivial_model = models.get("trivial", "llama3.2:1b")        # NEW in v2.1.0
 routing_model = models.get("routing", "llama3.2:1b")
 classification_model = models.get("classification", "gemma2:2b")
 light_model = models.get("light", "phi3:mini")
@@ -162,6 +176,7 @@ curl -X POST http://localhost:8001/api/llm/tiered-routing/config \
   -H "Content-Type: application/json" \
   -d '{
     "models": {
+      "trivial": "llama3.2:1b",
       "routing": "llama3.2:1b",
       "classification": "gemma2:2b",
       "light": "phi3:mini",
@@ -191,13 +206,14 @@ Get routing statistics for monitoring and optimization.
 {
   "enabled": true,
   "metrics": {
+    "trivial_tier_requests": 450,
     "routing_tier_requests": 500,
     "classification_tier_requests": 350,
     "light_tier_requests": 280,
     "instruction_tier_requests": 300,
     "system_tier_requests": 120,
     "quality_tier_requests": 130,
-    "total_requests": 1680,
+    "total_requests": 2130,
     "fallback_count": 12
   }
 }
@@ -214,6 +230,7 @@ Get current tiered routing configuration.
 {
   "enabled": true,
   "models": {
+    "trivial": "llama3.2:1b",
     "routing": "llama3.2:1b",
     "classification": "gemma2:2b",
     "light": "phi3:mini",
@@ -259,6 +276,7 @@ Update tiered routing configuration at runtime.
   "config": {
     "enabled": true,
     "models": {
+      "trivial": "llama3.2:1b",
       "routing": "llama3.2:1b",
       "classification": "gemma2:2b",
       "light": "phi3:mini",
@@ -283,6 +301,7 @@ Reset routing metrics to zero (useful after config changes).
   "success": true,
   "message": "Tiered routing metrics reset successfully",
   "metrics": {
+    "trivial_tier_requests": 0,
     "routing_tier_requests": 0,
     "classification_tier_requests": 0,
     "light_tier_requests": 0,
@@ -302,7 +321,7 @@ Reset routing metrics to zero (useful after config changes).
 Monitor these metrics to optimize tiered routing:
 
 1. **Tier Distribution** (target: majority in lower tiers)
-   - Routing + Classification should handle 40-60% of requests
+   - Trivial + Routing + Classification should handle 50-70% of requests
    - Quality tier should handle <15% of requests
 
 2. **Fallback Rate** (target: <5% of lower tier requests)
@@ -403,6 +422,7 @@ print(f"Selected: {model} (score={result.score}, tier={result.tier})")
 config = TierConfig(
     enabled=True,
     models=TierModels(
+        trivial="llama3.2:1b",          # NEW in v2.1.0
         routing="llama3.2:1b",
         classification="gemma2:2b",
         light="phi3:mini",
@@ -462,5 +482,7 @@ Indicates lower-tier models struggling with requests:
 - #696 - Tiered Model Distribution Strategy (original implementation)
 - #2553 - 6-tier model architecture migration
 - #748 - Initial tiered routing framework
+- #9050 - Trivial complexity tier for lightweight inference
+- MVA-1991 - Configure lightweight model in LLM gateway for trivial tier
 - #551 - L1/L2 caching system
 - #697 - OpenTelemetry tracing integration

@@ -8,15 +8,15 @@ Intelligent streaming with simplified error handling
 """
 
 import json
-import logging
 import time
 from typing import Tuple
 
 import aiohttp
 
 from autobot_shared.http_client import get_http_client
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class LLMStreamProcessor:

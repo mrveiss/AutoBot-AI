@@ -8,11 +8,12 @@ Detects frameworks, coding patterns, and AutoBot conventions.
 """
 
 import ast
-import logging
 import re
 from typing import List, Set
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 
 
 class SemanticAnalyzer:
@@ -58,7 +59,7 @@ class SemanticAnalyzer:
         },
     }
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.detected_frameworks: Set[str] = set()
         self.detected_patterns: List[str] = []
         self.coding_style = "pep8"  # Default

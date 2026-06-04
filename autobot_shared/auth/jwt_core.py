@@ -37,7 +37,7 @@ Usage (slm-backend)::
 
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 import bcrypt
 import jwt
@@ -59,8 +59,8 @@ class JWTExpiredError(JWTDecodeError):
 def encode_jwt(
     payload: Dict[str, Any],
     secret: str,
-    expires_delta: Optional[timedelta] = None,
-    expiry_hours: Optional[float] = None,
+    expires_delta: timedelta | None = None,
+    expiry_hours: float | None = None,
 ) -> str:
     """Encode *payload* as a signed HS256 JWT.
 
@@ -90,12 +90,17 @@ def encode_jwt(
     return jwt.encode(to_encode, secret, algorithm=_ALGORITHM)
 
 
-def decode_jwt(token: str, secret: str) -> Dict[str, Any]:
+def decode_jwt(token: str, secret: str, audience: str | None = None) -> Dict[str, Any]:
     """Decode and verify a signed HS256 JWT.
 
     Args:
         token: JWT string.
         secret: HMAC signing secret.
+        audience: Expected ``aud`` claim value.  When provided, PyJWT enforces
+            that the token's ``aud`` matches; a missing or mismatched audience
+            raises ``JWTDecodeError``.  When ``None`` (default), audience
+            verification is skipped for backward compatibility with tokens that
+            do not carry an ``aud`` claim.
 
     Returns:
         Decoded claims dict.
@@ -103,17 +108,48 @@ def decode_jwt(token: str, secret: str) -> Dict[str, Any]:
     Raises:
         JWTExpiredError: The token signature is valid but the token has expired.
         JWTDecodeError: The token is invalid for any other reason (bad signature,
-            malformed header/payload, unknown algorithm, etc.).
+            malformed header/payload, unknown algorithm, audience mismatch, etc.).
     """
     try:
-        return jwt.decode(token, secret, algorithms=[_ALGORITHM])
+        if audience is not None:
+            return jwt.decode(token, secret, algorithms=[_ALGORITHM], audience=audience)
+        return jwt.decode(token, secret, algorithms=[_ALGORITHM], options={"verify_aud": False})
     except ExpiredSignatureError as exc:
         raise JWTExpiredError("JWT token has expired") from exc
     except InvalidTokenError as exc:
         raise JWTDecodeError(f"JWT token is invalid: {exc}") from exc
 
 
-def decode_jwt_or_none(token: str, secret: str) -> Optional[Dict[str, Any]]:
+def decode_jwt_no_verify_exp(token: str, secret: str) -> Dict[str, Any]:
+    """Decode a JWT without verifying expiry — for use in refresh-token flows only.
+
+    Callers MUST perform their own grace-period check on the ``exp`` claim.
+    This function still validates the signature and algorithm so a tampered
+    token is rejected.
+
+    Args:
+        token: JWT string.
+        secret: HMAC signing secret.
+
+    Returns:
+        Decoded claims dict (expiry not enforced).
+
+    Raises:
+        JWTDecodeError: The token is structurally invalid or the signature does
+            not match.
+    """
+    try:
+        return jwt.decode(
+            token,
+            secret,
+            algorithms=[_ALGORITHM],
+            options={"verify_exp": False},
+        )
+    except InvalidTokenError as exc:
+        raise JWTDecodeError(f"JWT token is invalid: {exc}") from exc
+
+
+def decode_jwt_or_none(token: str, secret: str) -> Dict[str, Any] | None:
     """Decode a JWT, returning ``None`` on any failure instead of raising.
 
     Convenience wrapper for call sites that prefer ``None``-on-failure

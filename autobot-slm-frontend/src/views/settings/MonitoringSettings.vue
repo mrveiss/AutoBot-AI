@@ -136,33 +136,33 @@ onMounted(fetchSettings)
 
       <!-- Settings Card -->
       <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6 mb-6">
-        <h2 class="text-lg font-semibold mb-6">Monitoring Configuration</h2>
+        <h2 class="text-lg font-semibold mb-6">{{ $t('settings.monitoringSettings.monitoringConfiguration') }}</h2>
         <p class="text-sm text-gray-500 mb-6">
-          Configure where Prometheus and Grafana monitoring services are hosted.
+          {{ $t('settings.monitoringSettings.configureWherePrometheusAnd') }}
         </p>
 
         <div class="space-y-6">
           <!-- Monitoring Location -->
           <div class="flex items-center justify-between pb-4 border-b border-gray-100">
             <div>
-              <label class="block text-sm font-medium text-gray-900">Monitoring Location</label>
-              <p class="text-xs text-gray-500 mt-1">Choose where monitoring services are running</p>
+              <label class="block text-sm font-medium text-gray-900">{{ $t('settings.monitoringSettings.monitoringLocation') }}</label>
+              <p class="text-xs text-gray-500 mt-1">{{ $t('settings.monitoringSettings.chooseWhereMonitoringServices') }}</p>
             </div>
             <select
               v-model="settings.monitoring_location"
               @change="saveSetting('monitoring_location', settings.monitoring_location)"
               class="w-64 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
             >
-              <option value="local">Local (on SLM host)</option>
-              <option value="external">External (separate host)</option>
+              <option value="local">{{ $t('settings.monitoringSettings.localOnSLMHost') }}</option>
+              <option value="external">{{ $t('settings.monitoringSettings.externalSeparateHost') }}</option>
             </select>
           </div>
 
           <!-- Prometheus URL -->
           <div class="flex items-center justify-between pb-4 border-b border-gray-100">
             <div>
-              <label class="block text-sm font-medium text-gray-900">Prometheus URL</label>
-              <p class="text-xs text-gray-500 mt-1">URL to access Prometheus</p>
+              <label class="block text-sm font-medium text-gray-900">{{ $t('settings.monitoringSettings.prometheusURL') }}</label>
+              <p class="text-xs text-gray-500 mt-1">{{ $t('settings.monitoringSettings.uRLToAccessPrometheus') }}</p>
             </div>
             <div class="flex gap-2">
               <input
@@ -184,7 +184,7 @@ onMounted(fetchSettings)
                 :disabled="saving"
                 class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50"
               >
-                Save
+                {{ $t('settings.monitoringSettings.save') }}
               </button>
             </div>
           </div>
@@ -192,8 +192,8 @@ onMounted(fetchSettings)
           <!-- Grafana URL -->
           <div class="flex items-center justify-between pb-4 border-b border-gray-100">
             <div>
-              <label class="block text-sm font-medium text-gray-900">Grafana URL</label>
-              <p class="text-xs text-gray-500 mt-1">URL to access Grafana</p>
+              <label class="block text-sm font-medium text-gray-900">{{ $t('settings.monitoringSettings.grafanaURL') }}</label>
+              <p class="text-xs text-gray-500 mt-1">{{ $t('settings.monitoringSettings.uRLToAccessGrafana') }}</p>
             </div>
             <div class="flex gap-2">
               <input
@@ -215,7 +215,7 @@ onMounted(fetchSettings)
                 :disabled="saving"
                 class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50"
               >
-                Save
+                {{ $t('settings.monitoringSettings.save') }}
               </button>
             </div>
           </div>
@@ -223,43 +223,43 @@ onMounted(fetchSettings)
           <!-- Scrape Interval -->
           <div class="flex items-center justify-between pb-4 border-b border-gray-100">
             <div>
-              <label class="block text-sm font-medium text-gray-900">Scrape Interval</label>
-              <p class="text-xs text-gray-500 mt-1">How often Prometheus collects metrics</p>
+              <label class="block text-sm font-medium text-gray-900">{{ $t('settings.monitoringSettings.scrapeInterval') }}</label>
+              <p class="text-xs text-gray-500 mt-1">{{ $t('settings.monitoringSettings.howOftenPrometheusCollects') }}</p>
             </div>
             <select
               v-model="settings.scrape_interval"
               class="w-64 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
             >
-              <option value="10">10 seconds</option>
-              <option value="15">15 seconds</option>
-              <option value="30">30 seconds</option>
-              <option value="60">1 minute</option>
+              <option value="10">{{ $t('settings.monitoringSettings.10Seconds') }}</option>
+              <option value="15">{{ $t('settings.monitoringSettings.15Seconds') }}</option>
+              <option value="30">{{ $t('settings.monitoringSettings.30Seconds') }}</option>
+              <option value="60">{{ $t('settings.monitoringSettings.1Minute') }}</option>
             </select>
           </div>
 
           <!-- Retention -->
           <div class="flex items-center justify-between pb-4 border-b border-gray-100">
             <div>
-              <label class="block text-sm font-medium text-gray-900">Data Retention</label>
-              <p class="text-xs text-gray-500 mt-1">How long to keep metrics data</p>
+              <label class="block text-sm font-medium text-gray-900">{{ $t('settings.monitoringSettings.dataRetention') }}</label>
+              <p class="text-xs text-gray-500 mt-1">{{ $t('settings.monitoringSettings.howLongToKeep') }}</p>
             </div>
             <select
               v-model="settings.retention_days"
               class="w-64 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
             >
-              <option value="7">7 days</option>
-              <option value="15">15 days</option>
-              <option value="30">30 days</option>
-              <option value="60">60 days</option>
-              <option value="90">90 days</option>
+              <option value="7">{{ $t('settings.monitoringSettings.7Days') }}</option>
+              <option value="15">{{ $t('settings.monitoringSettings.15Days') }}</option>
+              <option value="30">{{ $t('settings.monitoringSettings.30Days') }}</option>
+              <option value="60">{{ $t('settings.monitoringSettings.60Days') }}</option>
+              <option value="90">{{ $t('settings.monitoringSettings.90Days') }}</option>
             </select>
           </div>
 
           <!-- Alerting -->
           <div class="flex items-center justify-between">
             <div>
-              <label class="block text-sm font-medium text-gray-900">Alerting</label>
-              <p class="text-xs text-gray-500 mt-1">Enable alert notifications</p>
+              <label class="block text-sm font-medium text-gray-900">{{ $t('settings.monitoringSettings.alerting') }}</label>
+              <p class="text-xs text-gray-500 mt-1">{{ $t('settings.monitoringSettings.enableAlertNotifications') }}</p>
             </div>
             <label class="relative inline-flex items-center cursor-pointer">
               <input
@@ -275,9 +275,9 @@ onMounted(fetchSettings)
 
       <!-- Deploy Card -->
       <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
-        <h3 class="font-semibold text-gray-900 mb-2">Deploy Monitoring Stack</h3>
+        <h3 class="font-semibold text-gray-900 mb-2">{{ $t('settings.monitoringSettings.deployMonitoringStack') }}</h3>
         <p class="text-sm text-gray-500 mb-4">
-          Use Ansible to deploy or migrate the monitoring stack to a different node.
+          {{ $t('settings.monitoringSettings.useAnsibleToDeploy') }}
         </p>
         <button
           @click="deployMonitoringRole"
@@ -286,7 +286,7 @@ onMounted(fetchSettings)
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
           </svg>
-          Deploy Monitoring Role
+          {{ $t('settings.monitoringSettings.deployMonitoringRole') }}
         </button>
       </div>
     </template>

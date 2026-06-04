@@ -10,7 +10,7 @@ passed together, improving code maintainability and type safety.
 """
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List
 
 if TYPE_CHECKING:
     from worker_node import WorkerNode
@@ -26,6 +26,7 @@ class TaskExecutionContext:
     user_role, and task_id were passed separately to multiple methods.
 
     Issue #322: Replaces 4-parameter signatures across 21+ task handler methods.
+    GH#6469: Added goal_chain field for structured goal ancestry in prompts.
 
     Attributes:
         worker: The WorkerNode instance providing access to modules and security
@@ -33,6 +34,10 @@ class TaskExecutionContext:
         user_role: The user role for permission checks and audit logging
         task_id: The unique task identifier for tracking and audit
         metadata: Optional additional metadata for the task execution
+        goal_chain: Ordered list of ancestor goals (root-first) for this task.
+                    Each entry is a dict with at minimum ``id``, ``title``,
+                    ``level`` keys (mirrors LLCGoal fields).  Populated by the
+                    orchestration layer; empty list means no goal linkage.
     """
 
     worker: "WorkerNode"
@@ -40,6 +45,7 @@ class TaskExecutionContext:
     user_role: str
     task_id: str
     metadata: Dict[str, Any] = field(default_factory=dict)
+    goal_chain: List[Dict[str, Any]] = field(default_factory=list)
 
     @property
     def security_layer(self):
@@ -50,7 +56,7 @@ class TaskExecutionContext:
         self,
         action: str,
         status: str,
-        details: Optional[Dict[str, Any]] = None,
+        details: Dict[str, Any] | None = None,
     ) -> None:
         """
         Log an audit event using the context's security layer.
@@ -92,6 +98,23 @@ class TaskExecutionContext:
         if key not in self.task_payload:
             raise KeyError(f"Required key '{key}' not found in task_payload")
         return self.task_payload[key]
+
+    def has_goal_context(self) -> bool:
+        """Return True when a non-empty goal ancestry chain is present (GH#6469)."""
+        return bool(self.goal_chain)
+
+    def goal_ancestry_for_prompt(self) -> List[Dict[str, Any]]:
+        """Return the goal_chain list ready for Layer4GoalAncestry (GH#6469).
+
+        Falls back to a single-entry chain synthesised from task_payload["goal"]
+        when goal_chain was not pre-populated by the orchestration layer.
+        """
+        if self.goal_chain:
+            return self.goal_chain
+        raw_goal = self.task_payload.get("goal")
+        if raw_goal:
+            return [{"title": str(raw_goal), "level": "goal"}]
+        return []
 
 
 @dataclass
@@ -175,7 +198,7 @@ class FactContentContext:
     fact_id: str
     content: str
     metadata: Dict[str, Any]
-    embedding: Optional[list] = None
+    embedding: list | None = None
 
 
 @dataclass
@@ -239,7 +262,7 @@ class ConnectionCredentials:
     port: int = 22
     username: str = "autobot"
     key_path: str = "~/.ssh/autobot_key"
-    passphrase: Optional[str] = None
+    passphrase: str | None = None
 
     def get_pool_key(self) -> str:
         """Generate a unique key for connection pooling."""
@@ -264,7 +287,7 @@ class SearchQueryContext:
     query: str
     max_results: int = 10
     enable_reranking: bool = True
-    timeout: Optional[float] = None
+    timeout: float | None = None
     score_threshold: float = 0.0
 
 
@@ -291,10 +314,10 @@ class EnhancedSearchQuery:
     query: str
     limit: int = 10
     offset: int = 0
-    tags: Optional[List[str]] = None
+    tags: List[str] | None = None
     tags_match_any: bool = False
-    exclude_terms: Optional[List[str]] = None
-    require_terms: Optional[List[str]] = None
+    exclude_terms: List[str] | None = None
+    require_terms: List[str] | None = None
 
 
 @dataclass
@@ -312,10 +335,10 @@ class EnhancedSearchFilters:
         verified_only: Only return verified results
     """
 
-    category: Optional[str] = None
-    created_after: Optional[str] = None
-    created_before: Optional[str] = None
-    exclude_sources: Optional[List[str]] = None
+    category: str | None = None
+    created_after: str | None = None
+    created_before: str | None = None
+    exclude_sources: List[str] | None = None
     verified_only: bool = False
 
 
@@ -363,7 +386,7 @@ class EnhancedSearchContext:
     query_params: EnhancedSearchQuery
     filters: EnhancedSearchFilters = field(default_factory=EnhancedSearchFilters)
     options: EnhancedSearchOptions = field(default_factory=EnhancedSearchOptions)
-    session_id: Optional[str] = None
+    session_id: str | None = None
 
     @classmethod
     def from_params(
@@ -371,8 +394,8 @@ class EnhancedSearchContext:
         query: str,
         limit: int = 10,
         offset: int = 0,
-        category: Optional[str] = None,
-        tags: Optional[List[str]] = None,
+        category: str | None = None,
+        tags: List[str] | None = None,
         tags_match_any: bool = False,
         mode: str = "hybrid",
         enable_reranking: bool = False,
@@ -381,13 +404,13 @@ class EnhancedSearchContext:
         enable_relevance_scoring: bool = False,
         enable_clustering: bool = False,
         track_analytics: bool = True,
-        created_after: Optional[str] = None,
-        created_before: Optional[str] = None,
-        exclude_terms: Optional[List[str]] = None,
-        require_terms: Optional[List[str]] = None,
-        exclude_sources: Optional[List[str]] = None,
+        created_after: str | None = None,
+        created_before: str | None = None,
+        exclude_terms: List[str] | None = None,
+        require_terms: List[str] | None = None,
+        exclude_sources: List[str] | None = None,
         verified_only: bool = False,
-        session_id: Optional[str] = None,
+        session_id: str | None = None,
     ) -> "EnhancedSearchContext":
         """
         Create an EnhancedSearchContext from individual parameters.
@@ -453,10 +476,10 @@ class SearchResponseContext:
 
     results: List[Dict[str, Any]]
     unclustered: List[Dict[str, Any]]
-    clusters: Optional[List[Dict[str, Any]]]
+    clusters: List[Dict[str, Any]] | None
     query_processed: str
     mode: str
-    tags: Optional[List[str]]
+    tags: List[str] | None
     min_score: float
     enable_reranking: bool
     enable_query_expansion: bool
@@ -491,10 +514,10 @@ class SearchAnalyticsContext:
     query: str
     result_count: int
     duration_ms: int
-    session_id: Optional[str]
+    session_id: str | None
     mode: str
-    tags: Optional[List[str]]
-    category: Optional[str]
+    tags: List[str] | None
+    category: str | None
     query_expansion: bool
     relevance_scoring: bool
     track_analytics: bool = True

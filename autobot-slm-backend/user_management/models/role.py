@@ -8,12 +8,13 @@ Implements database-driven RBAC (Role-Based Access Control).
 """
 
 import uuid
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from sqlalchemy import Boolean, ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from autobot_shared.auth.permissions import SYSTEM_PERMISSIONS, SYSTEM_ROLES
 from user_management.models.base import Base, TimestampMixin
 
 if TYPE_CHECKING:
@@ -50,7 +51,7 @@ class Permission(Base, TimestampMixin):
         index=True,
     )
 
-    description: Mapped[Optional[str]] = mapped_column(
+    description: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
@@ -101,7 +102,7 @@ class Role(Base, TimestampMixin):
     )
 
     # Nullable org_id means system role
-    org_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    org_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=True,
@@ -113,7 +114,7 @@ class Role(Base, TimestampMixin):
         nullable=False,
     )
 
-    description: Mapped[Optional[str]] = mapped_column(
+    description: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
@@ -132,7 +133,7 @@ class Role(Base, TimestampMixin):
     )
 
     # Relationships
-    organization: Mapped[Optional["Organization"]] = relationship(
+    organization: Mapped["Organization | None"] = relationship(
         "Organization",
         back_populates="roles",
     )
@@ -225,7 +226,7 @@ class UserRole(Base, TimestampMixin):
     )
 
     # Who assigned this role
-    assigned_by: Mapped[Optional[uuid.UUID]] = mapped_column(
+    assigned_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
@@ -247,191 +248,9 @@ class UserRole(Base, TimestampMixin):
         return f"<UserRole(user_id={self.user_id}, role_id={self.role_id})>"
 
 
-# Default system permissions — names use the canonical dot-notation from
-# autobot_shared.auth.permissions.Permission (GH #6511).
-# Old colon-notation aliases are kept for backward compatibility so that
-# existing DB rows remain valid; new code must use the dot-notation values.
-SYSTEM_PERMISSIONS = [
-    # User / admin management
-    ("admin.users.read", "admin.users", "read", "View users"),
-    ("admin.users.write", "admin.users", "write", "Create/update/delete users"),
-    ("admin.config.read", "admin.config", "read", "View configuration"),
-    ("admin.config.write", "admin.config", "write", "Modify configuration"),
-    ("admin.system", "admin", "system", "Full system administration"),
-    # Team management
-    ("teams.read", "teams", "read", "View teams"),
-    ("teams.create", "teams", "create", "Create teams"),
-    ("teams.manage", "teams", "manage", "Manage team members"),
-    ("teams.delete", "teams", "delete", "Delete teams"),
-    # Knowledge base
-    ("knowledge.read", "knowledge", "read", "View knowledge base"),
-    ("knowledge.write", "knowledge", "write", "Add/edit knowledge"),
-    ("knowledge.delete", "knowledge", "delete", "Delete knowledge entries"),
-    ("knowledge.manage", "knowledge", "manage", "Manage knowledge base"),
-    # Analytics
-    ("analytics.view", "analytics", "view", "View analytics"),
-    ("analytics.export", "analytics", "export", "Export analytics data"),
-    ("analytics.manage", "analytics", "manage", "Manage analytics"),
-    ("analytics.logs", "analytics", "logs", "View analytics logs"),
-    # Agents
-    ("agent.view", "agent", "view", "View agents"),
-    ("agent.execute", "agent", "execute", "Execute agents"),
-    ("agent.manage", "agent", "manage", "Manage agents"),
-    ("agent.terminal", "agent", "terminal", "Agent terminal access"),
-    # Workflows
-    ("workflow.view", "workflow", "view", "View workflows"),
-    ("workflow.create", "workflow", "create", "Create workflows"),
-    ("workflow.execute", "workflow", "execute", "Execute workflows"),
-    ("workflow.manage", "workflow", "manage", "Manage workflows"),
-    # Chat
-    ("chat.use", "chat", "use", "Use chat functionality"),
-    ("chat.history", "chat", "history", "View chat history"),
-    # Files
-    ("files.view", "files", "view", "View files"),
-    ("files.upload", "files", "upload", "Upload files"),
-    ("files.download", "files", "download", "Download files"),
-    ("files.delete", "files", "delete", "Delete files"),
-    ("files.manage", "files", "manage", "Manage files"),
-    # Settings
-    ("settings.read", "settings", "read", "View settings"),
-    ("settings.write", "settings", "write", "Modify settings"),
-    # Security
-    ("security.view", "security", "view", "View security information"),
-    ("security.audit", "security", "audit", "View security audit"),
-    ("security.manage", "security", "manage", "Manage security"),
-    # API
-    ("api.read", "api", "read", "API read access"),
-    ("api.write", "api", "write", "API write access"),
-    ("api.admin", "api", "admin", "API admin access"),
-    # MCP
-    ("mcp.read", "mcp", "read", "MCP read access"),
-    ("mcp.execute", "mcp", "execute", "MCP execute access"),
-    ("mcp.manage", "mcp", "manage", "Manage MCP"),
-    # Batch
-    ("batch.view", "batch", "view", "View batch jobs"),
-    ("batch.create", "batch", "create", "Create batch jobs"),
-    ("batch.execute", "batch", "execute", "Execute batch jobs"),
-    ("batch.manage", "batch", "manage", "Manage batch jobs"),
-    # Sandbox
-    ("sandbox.view", "sandbox", "view", "View sandbox"),
-    ("sandbox.execute", "sandbox", "execute", "Execute in sandbox"),
-    ("sandbox.manage", "sandbox", "manage", "Manage sandbox"),
-    # Audit logs
-    ("audit.read", "audit", "read", "View audit logs"),
-    ("audit.write", "audit", "write", "Manage audit logs (cleanup)"),
-    # Shell (dangerous)
-    ("allow_shell_execute", "shell", "execute", "Execute shell commands"),
+# Re-exported from autobot_shared for backward compatibility.
+# Single source of truth lives in autobot_shared.auth.permissions.
+__all__ = [
+    "SYSTEM_PERMISSIONS",
+    "SYSTEM_ROLES",
 ]
-
-# Default system roles with their permissions (GH #6511: aligned with
-# autobot_shared.auth.permissions.ROLE_PERMISSIONS).
-SYSTEM_ROLES = {
-    "admin": {
-        "description": "Full administrative access",
-        "priority": 100,
-        "permissions": [
-            "api.read", "api.write", "api.admin",
-            "knowledge.read", "knowledge.write", "knowledge.delete", "knowledge.manage",
-            "analytics.view", "analytics.export", "analytics.manage", "analytics.logs",
-            "agent.view", "agent.execute", "agent.manage", "agent.terminal",
-            "workflow.view", "workflow.create", "workflow.execute", "workflow.manage",
-            "files.view", "files.download", "files.upload", "files.delete", "files.manage",
-            "security.view", "security.audit", "security.manage",
-            "admin.users.read", "admin.users.write", "admin.config.read", "admin.config.write", "admin.system",
-            "mcp.read", "mcp.execute", "mcp.manage",
-            "batch.view", "batch.create", "batch.execute", "batch.manage",
-            "sandbox.view", "sandbox.execute", "sandbox.manage",
-            "chat.use", "chat.history",
-            "teams.read", "teams.create", "teams.manage", "teams.delete",
-            "audit.read", "audit.write",
-            "settings.read", "settings.write",
-            "allow_shell_execute",
-        ],
-    },
-    "operator": {
-        "description": "Operator — can execute but not manage",
-        "priority": 75,
-        "permissions": [
-            "api.read", "api.write",
-            "knowledge.read", "knowledge.write",
-            "analytics.view", "analytics.export",
-            "agent.view", "agent.execute",
-            "workflow.view", "workflow.create", "workflow.execute",
-            "files.view", "files.download", "files.upload",
-            "mcp.read", "mcp.execute",
-            "batch.view", "batch.create", "batch.execute",
-            "sandbox.view", "sandbox.execute",
-            "chat.use", "chat.history",
-            "teams.read",
-            "settings.read",
-        ],
-    },
-    "analyst": {
-        "description": "Analyst — read/view + analytics export",
-        "priority": 60,
-        "permissions": [
-            "api.read",
-            "knowledge.read",
-            "analytics.view", "analytics.export", "analytics.logs",
-            "agent.view",
-            "workflow.view",
-            "files.view", "files.download",
-            "security.view",
-            "mcp.read",
-            "batch.view",
-            "chat.history",
-            "audit.read",
-            "settings.read",
-        ],
-    },
-    "editor": {
-        "description": "Editor — create and modify content",
-        "priority": 65,
-        "permissions": [
-            "api.read", "api.write",
-            "knowledge.read", "knowledge.write",
-            "analytics.view",
-            "agent.view",
-            "workflow.view", "workflow.create",
-            "files.view", "files.download", "files.upload",
-            "mcp.read",
-            "batch.view", "batch.create",
-            "chat.use", "chat.history",
-            "settings.read",
-        ],
-    },
-    "user": {
-        "description": "Standard user access",
-        "priority": 50,
-        "permissions": [
-            "api.read",
-            "knowledge.read", "knowledge.write",
-            "analytics.view",
-            "agent.view",
-            "workflow.view",
-            "files.view", "files.download", "files.upload",
-            "mcp.read",
-            "batch.view",
-            "chat.use", "chat.history",
-            "teams.read",
-            "settings.read",
-        ],
-    },
-    "readonly": {
-        "description": "Read-only access",
-        "priority": 10,
-        "permissions": [
-            "api.read",
-            "knowledge.read",
-            "analytics.view",
-            "agent.view",
-            "workflow.view",
-            "files.view", "files.download",
-            "chat.history",
-            "teams.read",
-            "settings.read",
-        ],
-    },
-    # Issue #744: Guest role REMOVED - security vulnerability
-    # Unauthenticated requests must be rejected, not assigned guest permissions
-}

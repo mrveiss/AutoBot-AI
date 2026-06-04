@@ -8,19 +8,19 @@ Manages all async services with proper lifecycle and dependency resolution
 """
 
 import asyncio
-import logging
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
-from typing import Any, AsyncGenerator, Callable, Dict, Optional, Type, TypeVar
+from typing import Any, AsyncGenerator, Callable, Dict, Type, TypeVar
 
 import redis.asyncio as async_redis
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
 from config.manager import ConfigManager, get_config_manager
 from services.llm_service import LLMService, get_llm_service  # Phase 2D #3185
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 T = TypeVar("T")
 
@@ -33,7 +33,7 @@ class ServiceDescriptor:
     """Describes a service registration"""
 
     service_type: Type[T]
-    factory: Optional[Callable] = None
+    factory: Callable | None = None
     singleton: bool = True
     initialized: bool = False
     instance: Any = None
@@ -98,9 +98,9 @@ class AsyncServiceContainer:
         self,
         name: str,
         service_type: Type[T],
-        factory: Optional[Callable] = None,
+        factory: Callable | None = None,
         singleton: bool = True,
-        dependencies: Optional[list] = None,
+        dependencies: list | None = None,
     ) -> None:
         """Register a service with the container"""
         self._services[name] = ServiceDescriptor(

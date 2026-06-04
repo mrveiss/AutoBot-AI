@@ -18,8 +18,7 @@ SSE event shapes:
 
 import asyncio
 import json
-import logging
-from typing import AsyncIterator, Dict, List, Optional
+from typing import AsyncIterator, Dict, List
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
@@ -27,8 +26,9 @@ from fastapi.responses import StreamingResponse
 from api.schemas_chat import CompareRequest
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(tags=["chat"])
 
@@ -37,7 +37,7 @@ router = APIRouter(tags=["chat"])
 # ---------------------------------------------------------------------------
 
 _init_lock: asyncio.Lock = asyncio.Lock()
-_compare_interface: Optional[object] = None
+_compare_interface: object | None = None
 
 
 async def _get_compare_interface() -> object:
@@ -76,8 +76,8 @@ async def _stream_single_model(
     Resolves the provider via ProviderRegistry and calls stream_completion() so
     chunks arrive from the LLM as they are generated, not as a post-hoc slice.
     """
-    from llm_interface_pkg.models import LLMRequest
-    from llm_providers.provider_registry import get_provider_registry
+    from llm_shared import get_provider_registry
+    from llm_shared.models import LLMRequest
 
     provider_name, model_name = _parse_provider_model(model_spec)
     try:

@@ -36,15 +36,15 @@ from __future__ import annotations
 import asyncio
 import dataclasses
 import json
-import logging
 import time
 import uuid
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import httpx
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
 from constants.ttl_constants import TTL_7_DAYS, TTL_24_HOURS
 
@@ -53,7 +53,7 @@ from .models import Experiment, ExperimentResult, HyperParams
 from .runner import ExperimentRunner
 from .store import ExperimentStore
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -116,10 +116,10 @@ class ImprovementMetrics:
     """Metrics describing improvement of one iteration over the baseline."""
 
     experiment_id: str
-    baseline_val_bpb: Optional[float]
-    result_val_bpb: Optional[float]
-    improvement: Optional[float]  # positive = better (lower bpb)
-    improvement_pct: Optional[float]
+    baseline_val_bpb: float | None
+    result_val_bpb: float | None
+    improvement: float | None  # positive = better (lower bpb)
+    improvement_pct: float | None
     state: str
 
     @property
@@ -142,9 +142,9 @@ class ExperimentSession:
     results: List[ImprovementMetrics] = field(default_factory=list)
     hypotheses: List[ResearchHypothesis] = field(default_factory=list)
     search_results: List[List[SearchResult]] = field(default_factory=list)
-    started_at: Optional[float] = None
-    completed_at: Optional[float] = None
-    error_message: Optional[str] = None
+    started_at: float | None = None
+    completed_at: float | None = None
+    error_message: str | None = None
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -188,7 +188,7 @@ class CheckpointResult:
     """The outcome of a checkpoint pause."""
 
     decision: CheckpointDecision
-    redirect_instructions: Optional[str] = None
+    redirect_instructions: str | None = None
 
 
 class ResearchCheckpointGate(AsyncRedisClientMixin):
@@ -212,7 +212,7 @@ class ResearchCheckpointGate(AsyncRedisClientMixin):
     _DECISION_KEY = "autoresearch:checkpoint:{session_id}:{cp_type}:decision"
     _TTL = TTL_24_HOURS
 
-    def __init__(self, config: Optional["AutoResearchConfig"] = None):
+    def __init__(self, config: "AutoResearchConfig" | None = None) -> None:
         from .config import AutoResearchConfig as _Cfg
 
         self.config = config or _Cfg()
@@ -333,11 +333,11 @@ class ApprovalGate(AsyncRedisClientMixin):
     _STATUS_KEY_TEMPLATE = "autoresearch:approval:status:{session_id}:{exp_id}"
     _TTL_SECONDS = TTL_24_HOURS
 
-    def __init__(self, config: Optional[AutoResearchConfig] = None):
+    def __init__(self, config: AutoResearchConfig | None = None) -> None:
         self.config = config or AutoResearchConfig()
         self._redis_database = self.config.redis_database
 
-    def check_approval_needed(self, improvement_pct: Optional[float], threshold: float) -> bool:
+    def check_approval_needed(self, improvement_pct: float | None, threshold: float) -> bool:
         """Return True when improvement_pct meets or exceeds threshold.
 
         Args:
@@ -563,13 +563,13 @@ class AutoResearchAgent(AsyncRedisClientMixin):
 
     def __init__(
         self,
-        config: Optional[AutoResearchConfig] = None,
-        store: Optional[ExperimentStore] = None,
-        runner: Optional[ExperimentRunner] = None,
-        approval_gate: Optional[ApprovalGate] = None,
-        checkpoint_gate: Optional[ResearchCheckpointGate] = None,
-        http_client: Optional[httpx.AsyncClient] = None,
-    ):
+        config: AutoResearchConfig | None = None,
+        store: ExperimentStore | None = None,
+        runner: ExperimentRunner | None = None,
+        approval_gate: ApprovalGate | None = None,
+        checkpoint_gate: ResearchCheckpointGate | None = None,
+        http_client: httpx.AsyncClient | None = None,
+    ) -> None:
         self.config = config or AutoResearchConfig()
         self._redis_database = self.config.redis_database
         self.store = store or ExperimentStore(self.config)
@@ -941,7 +941,7 @@ class AutoResearchAgent(AsyncRedisClientMixin):
         Returns:
             ImprovementMetrics comparing the experiment to baseline.
         """
-        result: Optional[ExperimentResult] = experiment.result
+        result: ExperimentResult | None = experiment.result
         return ImprovementMetrics(
             experiment_id=experiment.id,
             baseline_val_bpb=experiment.baseline_val_bpb,
@@ -1094,9 +1094,10 @@ class AutoResearchAgent(AsyncRedisClientMixin):
         )
 
         try:
-            from event_manager import get_event_manager
+            from events.bus import PersistStrategy, publish_event
 
-            await get_event_manager().publish(
+            await publish_event(
+                "global",
                 event_type="research_checkpoint_pending",
                 payload={
                     "session_id": session.id,
@@ -1105,6 +1106,7 @@ class AutoResearchAgent(AsyncRedisClientMixin):
                     "context": context,
                     "timeout_seconds": self.config.checkpoint_timeout_seconds,
                 },
+                persist=PersistStrategy.NONE,
             )
         except Exception:
             logger.warning(
@@ -1178,7 +1180,7 @@ class _NullContextClient:
     """Wraps an existing httpx.AsyncClient so it can be used as an async context manager
     without closing it — the injecting caller retains ownership."""
 
-    def __init__(self, client: httpx.AsyncClient):
+    def __init__(self, client: httpx.AsyncClient) -> None:
         self._client = client
 
     async def __aenter__(self) -> httpx.AsyncClient:

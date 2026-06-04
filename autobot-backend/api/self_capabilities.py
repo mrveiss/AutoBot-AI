@@ -15,18 +15,18 @@ Issue #3295: replace the hardcoded endpoint list in llm_self_awareness.py.
 
 import asyncio
 import hashlib
-import logging
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from fastapi import APIRouter, Request
 from fastapi.openapi.utils import get_openapi
 
 from api.schemas_agent import SelfCapabilitiesResponse
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from constants.ttl_constants import TTL_5_MINUTES
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter()
 
@@ -35,7 +35,7 @@ router = APIRouter()
 # ---------------------------------------------------------------------------
 _CACHE_TTL: int = TTL_5_MINUTES  # seconds
 
-_cache: Optional[Dict[str, Any]] = None
+_cache: Dict[str, Any] | None = None
 _cache_ts: float = 0.0
 _cache_schema_hash: str = ""
 _cache_lock = asyncio.Lock()

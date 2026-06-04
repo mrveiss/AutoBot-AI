@@ -7,9 +7,8 @@ Approval Gates API (#1402)
 CRUD and lifecycle endpoints for human-in-the-loop approval gates.
 """
 
-import logging
 import uuid
-from typing import List, Optional
+from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -27,11 +26,12 @@ from api.schemas_workflows import (
 from api.user_management.dependencies import get_db_session
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.models.pagination import PaginationParams
 from models.approval import ApprovalStatus, ApprovalType
 from services.approval_gate_service import ApprovalGateService
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 router = APIRouter()
 
 
@@ -134,10 +134,10 @@ async def create_approval(
     error_code_prefix="APPROVAL_GATES",
 )
 async def list_approvals(
-    status_filter: Optional[ApprovalStatus] = None,
-    approval_type: Optional[ApprovalType] = None,
-    workflow_id: Optional[str] = None,
-    agent_id: Optional[str] = None,
+    status_filter: ApprovalStatus | None = None,
+    approval_type: ApprovalType | None = None,
+    workflow_id: str | None = None,
+    agent_id: str | None = None,
     pagination: PaginationParams = Depends(),
     current_user: dict = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session),

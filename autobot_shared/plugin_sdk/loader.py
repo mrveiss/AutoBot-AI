@@ -7,6 +7,8 @@ Plugin Loader
 Dynamic plugin discovery and loading system.
 
 Issue #730 - Plugin SDK for extensible tool architecture.
+Issue #6970 - Validate declared hooks against HOOK_REGISTRY on load.
+Issue #6971 - Raise PluginLoadError for missing required env vars.
 """
 
 import importlib
@@ -15,9 +17,11 @@ import json
 import logging
 import os
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Type
+from typing import Dict, List, Tuple, Type
 
-from plugin_sdk.base import BasePlugin, PluginManifest, PluginRegistry, PluginStatus
+from .base import BasePlugin, PluginLoadError, PluginManifest, PluginRegistry, PluginStatus
+from .hooks import validate_hook_names
+from .unified_registry import get_unified_registry
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +33,7 @@ class PluginLoader:
     Discovers plugins from filesystem, loads manifests, and instantiates plugins.
     """
 
-    def __init__(self, plugin_dirs: Optional[List[Path]] = None):
+    def __init__(self, plugin_dirs: List[Path] | None = None) -> None:
         """
         Initialize plugin loader.
 
@@ -73,7 +77,7 @@ class PluginLoader:
 
         return manifests
 
-    async def load_plugin(self, manifest: PluginManifest, config: Optional[Dict] = None) -> Optional[BasePlugin]:
+    async def load_plugin(self, manifest: PluginManifest, config: Dict | None = None) -> BasePlugin | None:
         """
         Load a plugin from its manifest.
 
@@ -95,15 +99,16 @@ class PluginLoader:
                 )
                 return None
 
-            # Check required environment variables
+            # Validate declared hooks against HOOK_REGISTRY (GH#6970)
+            if manifest.hooks:
+                validate_hook_names(manifest.hooks, plugin_name=manifest.name)
+
+            # Check required environment variables (GH#6971)
             missing_required, missing_optional = self._check_required_env(manifest)
             if missing_required:
-                logger.error(
-                    "Cannot load plugin %s: required env vars not set: %s",
-                    manifest.name,
-                    missing_required,
+                raise PluginLoadError(
+                    f"Cannot load plugin '{manifest.name}': " f"required env vars not set: {missing_required}"
                 )
-                return None
             if missing_optional:
                 logger.info(
                     "Plugin %s loaded with optional env vars unset: %s",
@@ -123,8 +128,9 @@ class PluginLoader:
             await plugin.initialize()
             plugin.status = PluginStatus.LOADED
 
-            # Register with registry
+            # Register with plugin registry and unified registry
             self.registry.register(plugin)
+            get_unified_registry().register(manifest)
 
             logger.info("Loaded plugin: %s v%s", manifest.name, manifest.version)
             return plugin
@@ -153,8 +159,9 @@ class PluginLoader:
             await plugin.shutdown()
             plugin.status = PluginStatus.UNLOADED
 
-            # Unregister from registry
+            # Unregister from plugin registry and unified registry
             self.registry.unregister(name)
+            get_unified_registry().unregister(name)
 
             logger.info("Unloaded plugin: %s", name)
             return True
@@ -223,7 +230,7 @@ class PluginLoader:
                     missing_optional.append(env.name)
         return missing_required, missing_optional
 
-    def get_env_status(self, plugin_name: str) -> Optional[Dict[str, Dict[str, object]]]:
+    def get_env_status(self, plugin_name: str) -> Dict[str, Dict[str, object]] | None:
         """
         Return per-env-var configuration status for a loaded plugin.
 
@@ -242,7 +249,7 @@ class PluginLoader:
             return None
         return {
             env.name: {
-                "configured": bool(os.environ.get(env.name)),
+                "configured": bool(os.environ.get(env.name)),  # ssot-config-exempt: dynamic env var name
                 "secret": env.secret,
                 "required": env.required,
                 "description": env.description,
@@ -252,7 +259,7 @@ class PluginLoader:
             for env in plugin.manifest.required_env
         }
 
-    def _import_plugin_class(self, entry_point: str) -> Optional[Type[BasePlugin]]:
+    def _import_plugin_class(self, entry_point: str) -> Type[BasePlugin] | None:
         """
         Import plugin class from entry point.
 
@@ -283,7 +290,7 @@ class PluginLoader:
         """Get all loaded plugins."""
         return self.registry.get_all_plugins()
 
-    def get_plugin_info(self, name: str) -> Optional[Dict]:
+    def get_plugin_info(self, name: str) -> Dict | None:
         """Get plugin information."""
         plugin = self.registry.get_plugin(name)
         return plugin.get_info() if plugin else None

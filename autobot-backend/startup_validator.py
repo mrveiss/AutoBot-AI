@@ -17,6 +17,7 @@ Key Features:
 
 Usage:
     from startup_validator import validate_startup_dependencies
+from autobot_shared.logging_manager import get_logger
 
     # In app startup
     validation_result = await validate_startup_dependencies()
@@ -26,17 +27,17 @@ Usage:
 
 import asyncio
 import importlib
-import logging
 import sys
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 from autobot_shared.http_client import get_http_client
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config as ssot_config
 from config.manager import get_config_manager
 from constants.path_constants import PATH
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 config = get_config_manager()
 
@@ -344,7 +345,7 @@ async def validate_startup_dependencies() -> ValidationResult:
     return await validator.validate_all()
 
 
-def validate_import_quickly(module_name: str) -> Tuple[bool, Optional[str]]:
+def validate_import_quickly(module_name: str) -> Tuple[bool, str | None]:
     """Quick import validation for a single module"""
     try:
         importlib.import_module(module_name)
@@ -354,7 +355,7 @@ def validate_import_quickly(module_name: str) -> Tuple[bool, Optional[str]]:
         return False, "Module import failed"
 
 
-async def validate_service_health(service_name: str) -> Tuple[bool, Optional[str]]:
+async def validate_service_health(service_name: str) -> Tuple[bool, str | None]:
     """Quick service health check"""
     validator = StartupValidator()
 

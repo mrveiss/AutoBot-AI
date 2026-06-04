@@ -30,8 +30,10 @@ import logging
 import os
 import threading
 import time
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
+# stdlib logging avoids circular import: network_constants → config.registry → get_logger
+# → logging_manager → from config import config_manager (partially initialized) GH#7765
 logger = logging.getLogger(__name__)
 
 # Redis key prefix for all config values
@@ -81,7 +83,7 @@ class ConfigRegistry:
 
             # Try environment variable (AUTOBOT_REDIS_HOST format)
             env_key = f"AUTOBOT_{key.upper().replace('.', '_')}"
-            env_value = os.getenv(env_key)
+            env_value = os.getenv(env_key)  # ssot-config-exempt: dynamic config key lookup
             if env_value is not None:
                 cls._update_cache(key, env_value)
                 return env_value
@@ -118,7 +120,7 @@ class ConfigRegistry:
             cls._cache_timestamps[key] = time.time()
 
     @classmethod
-    def _fetch_from_redis(cls, key: str) -> Optional[str]:
+    def _fetch_from_redis(cls, key: str) -> str | None:
         """Fetch value from Redis. Returns None if not found or error."""
         try:
             redis_client = cls._get_redis()

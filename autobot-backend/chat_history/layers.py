@@ -1,21 +1,23 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
-"""Tiered L0-L3 context wake-up stack (#5066).
+"""Tiered L0-L4 context wake-up stack (#5066, GH#6469).
 
-Replaces unconditional prompt injection (#4811) with a 4-tier context
+Replaces unconditional prompt injection (#4811) with a 5-tier context
 pipeline that is budget-aware and selectively loaded:
 
   L0 Identity     (~100 tok, always) — agent role + owner
   L1 EssentialStory (~500-800 tok, always) — compact memory summary
   L2 OnDemand     (~200-500 tok, conditional) — entity/topic lookup
   L3 DeepSearch   (unlimited, conditional) — hybrid KB search + rerank
+  L4 GoalAncestry (~150-300 tok, conditional) — goal→project→tenant chain
 
 Feature flag: ``TIERED_CONTEXT_ENABLED=true`` (env var, default false).
 
 Usage::
 
     from chat_history.layers import TieredContextBuilder
+from autobot_shared.logging_manager import get_logger
 
     ctx = await TieredContextBuilder().build(
         user_message=message,
@@ -23,22 +25,24 @@ Usage::
         session_id=session_id,
         memory_graph=self.memory_graph,           # Optional
         knowledge_service=self.knowledge_service, # Optional
+        goal_ancestry=self.goal_ancestry,         # Optional list[dict]
     )
 """
 
 import asyncio
-import logging
-import os
 import re
-from typing import Any, Optional
+from typing import Any
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config as _ssot_config
+
+logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # Feature flag
 # ---------------------------------------------------------------------------
 
-TIERED_CONTEXT_ENABLED: bool = os.getenv("TIERED_CONTEXT_ENABLED", "false").lower() == "true"
+TIERED_CONTEXT_ENABLED: bool = bool(_ssot_config.tiered_context_enabled)
 
 # ---------------------------------------------------------------------------
 # Retrieval-trigger keywords for L3
@@ -101,7 +105,7 @@ class Layer1EssentialStory:
         try:
             from memory.essential_story import EssentialStoryGenerator
 
-            model_name: Optional[str] = context.get("model_name")
+            model_name: str | None = context.get("model_name")
             return await EssentialStoryGenerator().generate(model_name)
         except Exception:
             logger.warning("Layer1EssentialStory.render failed", exc_info=True)
@@ -223,6 +227,49 @@ class Layer3DeepSearch:
 
 
 # ---------------------------------------------------------------------------
+# Layer 4 — Goal Ancestry (~150-300 tokens, conditional) GH#6469
+# ---------------------------------------------------------------------------
+
+
+class Layer4GoalAncestry:
+    """Goal→project→tenant ancestry chain injected as system context (GH#6469).
+
+    Loaded when ``goal_ancestry`` is present in the build context — a list of
+    dicts with at minimum ``title`` and ``level`` keys (mirrors LLCGoal fields).
+    Callers are responsible for fetching the chain via GoalService.get_goal_ancestry_for_work_item().
+    """
+
+    async def should_load(self, goal_ancestry: list | None) -> bool:
+        """Return True when a non-empty ancestry chain is available."""
+        return bool(goal_ancestry)
+
+    async def render(self, context: dict) -> str:
+        """Render a compact ancestry breadcrumb for prompt injection."""
+        try:
+            goal_ancestry: list | None = context.get("goal_ancestry")
+            if not goal_ancestry:
+                return ""
+
+            crumbs: list[str] = []
+            for node in goal_ancestry:
+                level = node.get("level", "goal")
+                title = node.get("title", "?")
+                crumbs.append(f"{level.capitalize()}: {title}")
+
+            if not crumbs:
+                return ""
+
+            chain = " → ".join(crumbs)
+            return f"## Goal Ancestry\n{chain}"
+        except Exception:
+            logger.warning("Layer4GoalAncestry.render failed", exc_info=True)
+            return ""
+
+    async def token_estimate(self, context: dict) -> int:  # noqa: ARG002
+        return 200  # conservative estimate per ancestry chain
+
+
+# ---------------------------------------------------------------------------
 # Tiered Context Builder
 # ---------------------------------------------------------------------------
 
@@ -241,13 +288,19 @@ class TieredContextBuilder:
         user_message: str,
         model_name: str,
         session_id: str,  # noqa: ARG002  (reserved for future per-session state)
-        memory_graph: Optional[Any] = None,
-        knowledge_service: Optional[Any] = None,
+        memory_graph: Any | None = None,
+        knowledge_service: Any | None = None,
+        goal_ancestry: list | None = None,
     ) -> str:
         """Build the tiered context string.
 
         Returns empty string when the feature flag is off so callers can
         fall through to the legacy unconditional injection path.
+
+        Args:
+            goal_ancestry: Optional root-first list of goal-like dicts
+                           (``title``, ``level``) from GoalService.get_ancestors().
+                           When present, L4 GoalAncestry is appended. GH#6469.
         """
         if not TIERED_CONTEXT_ENABLED:
             return ""
@@ -303,6 +356,16 @@ class TieredContextBuilder:
             if l3_text:
                 parts.append(l3_text)
 
+        # ------------------------------------------------------------------
+        # Conditional: L4 — goal ancestry (GH#6469)
+        # ------------------------------------------------------------------
+        l4 = Layer4GoalAncestry()
+        if await l4.should_load(goal_ancestry):
+            l4_ctx: dict = {**base_ctx, "goal_ancestry": goal_ancestry}
+            l4_text = await l4.render(l4_ctx)
+            if l4_text:
+                parts.append(l4_text)
+
         return "\n\n".join(parts)
 
 
@@ -312,5 +375,6 @@ __all__ = [
     "Layer1EssentialStory",
     "Layer2OnDemand",
     "Layer3DeepSearch",
+    "Layer4GoalAncestry",
     "TieredContextBuilder",
 ]

@@ -69,7 +69,7 @@ def get_local_ips() -> set:
 
     # Also include the IP/hostname from the configured external_url
     try:
-        from config import settings  # local import — only available in backend context
+        from config import settings  # type: ignore[attr-defined]  # GH#7105: local backend import  # noqa: PLC0415
 
         own_host = urlparse(settings.external_url).hostname or ""
         if own_host:

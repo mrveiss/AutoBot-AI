@@ -7,9 +7,8 @@ Knowledge Audit and Compliance API
 Issue #679: Audit logging and compliance reporting for knowledge access and modifications.
 """
 
-import logging
 from datetime import timedelta
-from typing import Dict, Optional
+from typing import Dict
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
@@ -21,12 +20,13 @@ from api.schemas_knowledge import (
 )
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.models.pagination import PaginationParams
 from autobot_shared.time_utils import now_utc
-from knowledge.audit_log import KnowledgeAuditLog
 from knowledge_factory import get_or_create_knowledge_base
+from services.audit.unified_audit import KnowledgeAuditLog  # GH#8290 Phase 2
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/knowledge/audit", tags=["knowledge-audit"])
 
@@ -229,7 +229,7 @@ async def get_organization_audit_log(
 async def get_permission_changes(
     request: Request,
     current_user: Dict = Depends(get_current_user),
-    fact_id: Optional[str] = Query(default=None),
+    fact_id: str | None = Query(default=None),
     limit: int = Query(default=100, ge=1, le=1000),
 ):
     """Get history of permission changes.

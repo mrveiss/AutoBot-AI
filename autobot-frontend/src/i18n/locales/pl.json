@@ -5128,6 +5128,12 @@
     "progressBar": {
       "timeRemaining": "{time} remaining"
     },
+    "offlineBanner": {
+      "backendLost": "Backend connection lost — retrying. Cached data still available.",
+      "queuedForRetry": "{count} action queued for retry. | {count} actions queued for retry.",
+      "checking": "Checking…",
+      "retry": "Retry"
+    },
     "systemStatus": {
       "dismissNotification": "Dismiss notification",
       "close": "Close",
@@ -6977,7 +6983,7 @@
     "secrets": "Sekrety",
     "plugins": "Wtyczki",
     "slmAdmin": "Administracja SLM",
-    "slmAdminTitle": "Otwórz panel administracyjny SLM",
+    "slmAdminTitle": "SLM Admin — otwiera w nowej karcie",
     "profileSettings": "Ustawienia profilu",
     "vision": "Vision",
     "preferences": "Preferences",
@@ -7007,7 +7013,11 @@
     "marketplace": "Marketplace",
     "usage": "Usage & Costs",
     "more": "More",
-    "moreItems": "More navigation items"
+    "moreItems": "More navigation items",
+    "llcPortability": "Portability",
+    "settingsAndTools": "Settings & Tools",
+    "adminPanel": "Admin Panel",
+    "documents": "AI Documents"
   },
   "reasoningTrace": {
     "title": "Slad rozumowania",
@@ -7038,6 +7048,17 @@
     "novnc": {
       "selectHost": "Select a host to connect",
       "selectHostDesc": "Choose a VNC-capable host from the list to open a remote desktop session."
+    }
+  },
+  "mobile": {
+    "pairing": {
+      "title": "Sparować urządzenie mobilne",
+      "instructions": "Zeskanuj ten kod QR na swoim urządzeniu mobilnym",
+      "instructionsDetail": "Otwórz aplikację mobilną AutoBot i zeskanuj ten kod, aby sparować urządzenie",
+      "generating": "Generowanie kodu QR...",
+      "expired": "Wygasło",
+      "refresh": "Uzyskaj nowy kod",
+      "retry": "Spróbuj ponownie"
     }
   }
 }

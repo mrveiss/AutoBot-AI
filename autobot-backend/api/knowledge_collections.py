@@ -22,7 +22,6 @@ Endpoints:
 Related Issues: #77 (Organization), #412 (Collections)
 """
 
-import logging
 import re
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
@@ -46,10 +45,11 @@ from api.schemas_knowledge import (
 )
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.models.pagination import PaginationParams
 from knowledge_factory import get_or_create_knowledge_base
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #412: Pre-compiled regex for collection/fact ID validation
 _COLLECTION_ID_RE = re.compile(r"^[a-zA-Z0-9_-]+$")

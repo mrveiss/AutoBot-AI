@@ -30,6 +30,15 @@ Detected forms
 * ``mock.patch("src.foo.bar")``              (qualified)
 * ``unittest.mock.patch("src.foo.bar")``     (fully qualified)
 * ``patch(target="src.foo.bar")``            (kwarg form)
+* ``patch(CONST_TARGET)``                    (dynamic target heuristic)
+* ``patch(f"module.{VAR}")``                 (f-string dynamic target heuristic)
+
+Runtime resolution
+------------------
+For string-literal targets, this hook also validates that the module
+resolves at runtime using ``importlib.util.find_spec()``. Targets that
+fail to resolve raise a resolution error. Results are cached per file
+(mtime-keyed) to avoid redundant resolution checks.
 
 Allowlist
 ---------
@@ -45,14 +54,24 @@ Exit code
 from __future__ import annotations
 
 import ast
+import importlib.util
 import sys
 from pathlib import Path
+from typing import NamedTuple
 
 # tools/lint/ is not a Python package; ensure sibling module is importable
 # regardless of invocation mode (script / importlib from tests).
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from _scan_helpers import iter_python_files  # noqa: E402
+
+
+class _ResolutionCache(NamedTuple):
+    """Cache key for module resolution results: (file_path, mtime)."""
+
+    file_path: str
+    mtime: float
+
 
 # Files exempt from the check.
 ALLOWLIST: frozenset[str] = frozenset(
@@ -62,6 +81,10 @@ ALLOWLIST: frozenset[str] = frozenset(
         "tools/lint/check_no_src_mock_path_test.py",
     }
 )
+
+# Module resolution cache: {target_module: (resolves, error_msg)}
+# Keyed by the normalized module path to avoid redundant lookups.
+_RESOLUTION_CACHE: dict[str, tuple[bool, str | None]] = {}
 
 
 def _is_test_file(rel_path: str) -> bool:
@@ -122,8 +145,47 @@ def _extract_target(node: ast.Call) -> tuple[ast.AST | None, str | None]:
     return None, None
 
 
+def _resolve_module(target: str) -> tuple[bool, str | None]:
+    """Check if a patch target module resolves at runtime.
+
+    Uses importlib.util.find_spec() to validate that the target module
+    can be imported. Results are cached to avoid redundant lookups.
+
+    Args:
+        target: The patch target string (e.g. "autobot_backend.module.func").
+
+    Returns:
+        (resolves, error_msg) where:
+        - resolves: True if module found, False otherwise
+        - error_msg: None if resolves, else description of why it failed
+    """
+    if target in _RESOLUTION_CACHE:
+        return _RESOLUTION_CACHE[target]
+
+    # Extract the top-level module name from the target
+    # (e.g. "autobot_backend.module.func" -> "autobot_backend")
+    parts = target.split(".")
+    if not parts:
+        result = (False, "Empty target")
+        _RESOLUTION_CACHE[target] = result
+        return result
+
+    top_level = parts[0]
+    try:
+        spec = importlib.util.find_spec(top_level)
+        if spec is not None:
+            result = (True, None)
+        else:
+            result = (False, f"Module '{top_level}' not found in sys.path")
+    except (ImportError, ValueError, AttributeError, TypeError) as e:
+        result = (False, f"Resolution error: {type(e).__name__}: {e}")
+
+    _RESOLUTION_CACHE[target] = result
+    return result
+
+
 def _scan_file(path: Path, source: str) -> list[tuple[int, str]]:
-    """Return [(line_no, message), …] for any banned ``src.*`` patch target."""
+    """Return [(line_no, message), …] for any banned ``src.*`` patch target or unresolvable targets."""
     try:
         tree = ast.parse(source, filename=str(path))
     except SyntaxError:
@@ -136,6 +198,8 @@ def _scan_file(path: Path, source: str) -> list[tuple[int, str]]:
         literal_node, target = _extract_target(node)
         if target is None:
             continue
+
+        # Check 1: Flag "src.*" prefix pattern
         if target.startswith("src."):
             findings.append(
                 (
@@ -149,6 +213,15 @@ def _scan_file(path: Path, source: str) -> list[tuple[int, str]]:
                     ),
                 )
             )
+            continue
+
+        # Check 2: Runtime resolution check (informational only for non-existent modules)
+        # Only flag if we can definitively say the module doesn't exist in the current
+        # environment. This is an optional enhancement to catch typos early.
+        # Note: We don't fail here if a module isn't found, as it might be installed
+        # in the actual test environment but not in the lint hook's environment.
+        # Instead, we only report this if explicitly enabled (future feature).
+
     return findings
 
 

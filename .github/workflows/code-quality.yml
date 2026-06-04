@@ -34,23 +34,36 @@ permissions:
 
 jobs:
   code-quality:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest  # Temporary: self-hosted runner offline (MVA-2605)
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v6
+      uses: actions/checkout@v6.0.2
 
     - name: Set up Python 3.12
       uses: actions/setup-python@v5
       with:
         python-version: '3.12'
         cache: 'pip'
+        cache-dependency-path: |
+          requirements*.txt
+          autobot-backend/requirements*.txt
 
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         # Pin versions to match .pre-commit-config.yaml (Issue #2128)
         python -m pip install black==26.3.1 isort==8.0.1 flake8==7.3.0 autoflake==2.3.3 'bandit[toml]==1.9.4'
+        # mypy and stubs (GH#7105)
+        python -m pip install \
+          mypy==1.16.0 \
+          pydantic-settings \
+          types-redis \
+          types-requests \
+          types-PyYAML \
+          types-setuptools \
+          opentelemetry-api \
+          opentelemetry-sdk
 
     - name: Check code formatting with Black
       run: |
@@ -108,10 +121,10 @@ jobs:
         echo "$files" | xargs python3 tools/lint/check_no_utcnow_isoformat.py
 
     - name: Block hardcoded value regressions (#694, #6725)
-      run: bash pipeline-scripts/check-hardcoded-values-pr.sh
+      run: bash pipeline-scripts/check-pre-commit-hook-pr.sh pre-commit-hardcoded-values
 
-    - name: Block hardcoded-IP fallback regressions (#6783)
-      run: bash pipeline-scripts/check-hardcoded-ip-fallbacks-pr.sh
+    - name: Block hardcoded-IP fallback regressions (#6783, #6991)
+      run: bash pipeline-scripts/check-pre-commit-hook-pr.sh --python tools/lint/check_no_hardcoded_ip_fallbacks.py --ext py
 
     - name: Block direct redis client regressions (#1086, #6785)
       run: bash pipeline-scripts/check-pre-commit-hook-pr.sh pre-commit-no-direct-redis
@@ -154,6 +167,40 @@ jobs:
           echo "Update the doc to point to the current file path."
           exit 1
         }
+
+    - name: Type-check autobot_shared (required)
+      run: |
+        # autobot_shared is the shared library and must be strictly typed.
+        # Errors in the backends are tracked in GH#7105.
+        python3 -m mypy autobot_shared/ || {
+          echo "mypy found type errors in autobot_shared/"
+          echo "Fix the errors above or suppress with '# type: ignore[code]  # GH#7105'"
+          exit 1
+        }
+
+    - name: Type-check autobot-backend (informational)
+      run: |
+        # Non-blocking: surfaces new regressions in trend output.
+        # 4133 pre-existing errors tracked for resolution in GH#7105.
+        python3 -m mypy autobot-backend/ 2>&1 | tail -5 || true
+
+    - name: Type-check autobot-slm-backend (informational)
+      run: |
+        # Non-blocking: 1281 SQLAlchemy Column[T] errors tracked in GH#7105.
+        python3 -m mypy autobot-slm-backend/ 2>&1 | tail -5 || true
+
+    - name: Enforce extension/skill/plugin import boundaries (#7372)
+      run: |
+        # Scan all extension, skill, and plugin Python files for layer-boundary violations.
+        # Rules: no core-backend imports, no sibling cross-imports.
+        # See docs/developer/plugin-boundaries.md and
+        #     security/semgrep/extension-import-boundaries.yaml
+        # Scans only tracked source directories — no user-supplied input.
+        find autobot-backend/extensions/builtin \
+             autobot-backend/skills/builtin \
+             plugins/core-plugins \
+             -name "*.py" -print0 \
+          | xargs -0 python3 tools/lint/check_extension_import_boundaries.py
 
     - name: Code quality summary
       if: always()

@@ -16,15 +16,15 @@ Supported languages: Python, JavaScript/TypeScript.
 import asyncio
 import hashlib
 import json
-import logging
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
+from autobot_shared.logging_manager import get_logger
 from constants.path_constants import PATH
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Process-level locks keyed by cache file path.  Two concurrent index_directory()
 # calls that share the same cache file (same CodeIndexer instance or different
@@ -48,7 +48,7 @@ class CodeIndexResult:
     errors: list[str] = field(default_factory=list)
 
 
-def _make_node_id(name: str, source_path: str, parent: Optional[str] = None) -> str:
+def _make_node_id(name: str, source_path: str, parent: str | None = None) -> str:
     """Stable lowercase ID: '<stem>::<safe_name>' or '<stem>::<parent_safe>__<safe_name>'."""
     stem = Path(source_path).stem
     safe = re.sub(r"[^a-z0-9_]", "", name.lower().replace(".", "_"))
@@ -84,7 +84,7 @@ def extract_python(source_path: str, content: bytes) -> dict:
     return {"nodes": list(nodes.values()), "edges": edges}
 
 
-def _py_structural(node: Any, source_path: str, nodes: dict, parent_scope: Optional[str]) -> None:
+def _py_structural(node: Any, source_path: str, nodes: dict, parent_scope: str | None) -> None:
     if node.type == "function_definition":
         name_node = node.child_by_field_name("name")
         if name_node:
@@ -129,8 +129,8 @@ def _py_call_graph(
     nodes: dict,
     edges: list,
     seen: set,
-    current_scope: Optional[str],
-    parent_scope: Optional[str] = None,
+    current_scope: str | None,
+    parent_scope: str | None = None,
 ) -> None:
     if node.type == "function_definition":
         name_node = node.child_by_field_name("name")
@@ -165,7 +165,7 @@ def _py_call_graph(
         _py_call_graph(child, source_path, nodes, edges, seen, current_scope)
 
 
-def _js_structural(node: Any, source_path: str, nodes: dict, parent_scope: Optional[str]) -> None:
+def _js_structural(node: Any, source_path: str, nodes: dict, parent_scope: str | None) -> None:
     """Helper for JS/TS structural extraction."""
     if node.type in ("function_declaration", "arrow_function", "function_expression"):
         name_node = node.child_by_field_name("name")
@@ -205,8 +205,8 @@ def _js_call_graph(
     nodes: dict,
     edges: list,
     seen: set,
-    current_scope: Optional[str],
-    parent_scope: Optional[str] = None,
+    current_scope: str | None,
+    parent_scope: str | None = None,
 ) -> None:
     """Helper for JS/TS call-graph extraction."""
     if node.type in ("function_declaration", "arrow_function", "function_expression"):

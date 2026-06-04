@@ -9,12 +9,13 @@ Part of Issue #870 - User-Centric Session Tracking (#608 Phase 1-2).
 """
 
 import uuid
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.datetime_utils import datetime_now
 from models.secret import Secret, SecretScope, SecretType
 
 
@@ -47,12 +48,12 @@ class TestSecretModel:
             type=SecretType.TOKEN.value,
             scope=SecretScope.USER.value,
             encrypted_value="encrypted",
-            expires_at=datetime.utcnow() - timedelta(days=1),
+            expires_at=datetime_now() - timedelta(days=1),
         )
 
         assert secret.is_expired is True
 
-        secret.expires_at = datetime.utcnow() + timedelta(days=1)
+        secret.expires_at = datetime_now() + timedelta(days=1)
         assert secret.is_expired is False
 
         secret.expires_at = None

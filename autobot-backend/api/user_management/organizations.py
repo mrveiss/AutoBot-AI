@@ -8,9 +8,7 @@ REST API for organization (tenant) management operations.
 Used in multi_company and provider deployment modes.
 """
 
-import logging
 import uuid
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
@@ -28,6 +26,7 @@ from api.user_management.dependencies import (
     require_platform_admin,
     require_user_management_enabled,
 )
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.models.pagination import PaginationParams
 from user_management.services import OrganizationService
 from user_management.services.organization_service import (
@@ -36,7 +35,7 @@ from user_management.services.organization_service import (
 )
 
 router = APIRouter(prefix="/organizations", tags=["Organizations"])
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # -------------------------------------------------------------------------
@@ -56,7 +55,7 @@ logger = logging.getLogger(__name__)
 )
 async def list_organizations(
     pagination: PaginationParams = Depends(),
-    search: Optional[str] = Query(None, description="Search by name or slug"),
+    search: str | None = Query(None, description="Search by name or slug"),
     include_inactive: bool = Query(False, description="Include inactive organizations"),
     org_service: OrganizationService = Depends(get_organization_service),
 ):

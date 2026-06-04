@@ -8,24 +8,24 @@ Issue #381: Extracted from computer_vision_system.py god class refactoring.
 Contains the main ComputerVisionSystem class that coordinates all components.
 """
 
-import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import numpy as np
 
+from autobot_shared.logging_manager import get_logger
 from memory import EnhancedMemoryManager, TaskPriority
 from task_execution_tracker import get_task_tracker
 
 from .screen_analyzer import ScreenAnalyzer
 from .types import ScreenState
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ComputerVisionSystem:
     """Main computer vision system coordinator"""
 
-    def __init__(self, memory_manager: Optional[EnhancedMemoryManager] = None):
+    def __init__(self, memory_manager: EnhancedMemoryManager | None = None):
         """Initialize vision system with memory manager and screen analyzer."""
         self.memory_manager = memory_manager or EnhancedMemoryManager()
         self.screen_analyzer = ScreenAnalyzer()
@@ -66,7 +66,7 @@ class ComputerVisionSystem:
             self.analysis_history = self.analysis_history[-self.max_history :]
 
     async def analyze_and_understand_screen(
-        self, session_id: Optional[str] = None, context_audio: Optional[bytes] = None
+        self, session_id: str | None = None, context_audio: bytes | None = None
     ) -> Dict[str, Any]:
         """Comprehensive screen analysis and understanding"""
 

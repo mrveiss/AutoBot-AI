@@ -13,12 +13,12 @@ Extracted from llm_pattern_analyzer.py as part of Issue #381 refactoring.
 """
 
 import hashlib
-import logging
 import re
 import time
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 
+from autobot_shared.logging_manager import get_logger
 from code_intelligence.llm_pattern_analysis.data_models import (
     BatchingOpportunity,
     CacheOpportunity,
@@ -34,7 +34,7 @@ from code_intelligence.llm_pattern_analysis.types import (
     UsagePatternType,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # =============================================================================
@@ -248,7 +248,7 @@ class CacheOpportunityDetector:
     """
 
     @classmethod
-    def _create_embedding_opportunity(cls, embeddings: List[UsagePattern]) -> Optional[CacheOpportunity]:
+    def _create_embedding_opportunity(cls, embeddings: List[UsagePattern]) -> CacheOpportunity | None:
         """
         Create embedding cache opportunity if embeddings exist.
 
@@ -268,7 +268,7 @@ class CacheOpportunityDetector:
         )
 
     @classmethod
-    def _create_static_prompt_opportunity(cls, patterns: List[UsagePattern]) -> Optional[CacheOpportunity]:
+    def _create_static_prompt_opportunity(cls, patterns: List[UsagePattern]) -> CacheOpportunity | None:
         """
         Create static prompt cache opportunity if cacheable prompts exist.
 
@@ -291,7 +291,7 @@ class CacheOpportunityDetector:
         )
 
     @classmethod
-    def _create_analysis_opportunity(cls, analysis: List[UsagePattern]) -> Optional[CacheOpportunity]:
+    def _create_analysis_opportunity(cls, analysis: List[UsagePattern]) -> CacheOpportunity | None:
         """
         Create analysis response cache opportunity if analysis patterns exist.
 
@@ -397,7 +397,7 @@ class BatchingAnalyzer:
         return type_groups
 
     @staticmethod
-    def _find_close_pair_opportunity(file_path: str, sorted_pats: List[UsagePattern]) -> Optional[BatchingOpportunity]:
+    def _find_close_pair_opportunity(file_path: str, sorted_pats: List[UsagePattern]) -> BatchingOpportunity | None:
         """Find batching opportunity from close patterns (Issue #335 - extracted helper)."""
         for i in range(len(sorted_pats) - 1):
             line_diff = sorted_pats[i + 1].line_number - sorted_pats[i].line_number

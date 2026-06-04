@@ -4,11 +4,11 @@
 
 """Version Control System integrations for GitLab and Bitbucket."""
 
-import logging
 from typing import Any, Dict, List
 
 import aiohttp
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
 from integrations.base import (
     BaseIntegration,
@@ -18,7 +18,7 @@ from integrations.base import (
     IntegrationStatus,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class GitLabIntegration(BaseIntegration):

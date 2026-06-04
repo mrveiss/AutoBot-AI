@@ -76,9 +76,9 @@ onUnmounted(() => {
     <!-- Header -->
     <div class="flex items-center justify-between">
       <div>
-        <h2 class="text-2xl font-bold text-gray-900">Metrics Details</h2>
+        <h2 class="text-2xl font-bold text-gray-900">{{ $t('monitoring.metricsDetailsView.metricsDetails') }}</h2>
         <p class="text-sm text-gray-500 mt-1">
-          Real-time fleet and performance metrics
+          {{ $t('monitoring.metricsDetailsView.realTimeFleetAnd') }}
           <span v-if="lastUpdate" class="ml-2">
             • Last updated: {{ lastUpdate.toLocaleTimeString() }}
           </span>
@@ -98,7 +98,7 @@ onUnmounted(() => {
           >
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
           </svg>
-          Refresh
+          {{ $t('monitoring.metricsDetailsView.refresh') }}
         </button>
         <button
           @click="downloadPrometheusMetrics"
@@ -107,7 +107,7 @@ onUnmounted(() => {
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
           </svg>
-          Export Prometheus
+          {{ $t('monitoring.metricsDetailsView.exportPrometheus') }}
         </button>
       </div>
     </div>
@@ -119,7 +119,7 @@ onUnmounted(() => {
           <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
         </svg>
         <div class="flex-1">
-          <h3 class="text-sm font-medium text-danger-800">Error Loading Metrics</h3>
+          <h3 class="text-sm font-medium text-danger-800">{{ $t('monitoring.metricsDetailsView.errorLoadingMetrics') }}</h3>
           <p class="text-sm text-danger-700 mt-1">{{ error }}</p>
         </div>
       </div>
@@ -137,28 +137,28 @@ onUnmounted(() => {
 
     <!-- Performance Metrics Panel -->
     <div v-if="performanceOverview" class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
-      <h3 class="text-lg font-semibold text-gray-900 mb-4">Performance Metrics</h3>
+      <h3 class="text-lg font-semibold text-gray-900 mb-4">{{ $t('monitoring.metricsDetailsView.performanceMetrics') }}</h3>
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <div class="space-y-2">
-          <div class="text-sm font-medium text-gray-500">Avg Response Time</div>
+          <div class="text-sm font-medium text-gray-500">{{ $t('monitoring.metricsDetailsView.avgResponseTime') }}</div>
           <div class="text-3xl font-bold text-gray-900">
             {{ performanceOverview.avg_response_time_ms.toFixed(0) }}ms
           </div>
         </div>
         <div class="space-y-2">
-          <div class="text-sm font-medium text-gray-500">P95 Response Time</div>
+          <div class="text-sm font-medium text-gray-500">{{ $t('monitoring.metricsDetailsView.p95ResponseTime') }}</div>
           <div class="text-3xl font-bold text-gray-900">
             {{ performanceOverview.p95_response_time_ms.toFixed(0) }}ms
           </div>
         </div>
         <div class="space-y-2">
-          <div class="text-sm font-medium text-gray-500">Request Rate</div>
+          <div class="text-sm font-medium text-gray-500">{{ $t('monitoring.metricsDetailsView.requestRate') }}</div>
           <div class="text-3xl font-bold text-gray-900">
             {{ performanceOverview.request_rate.toFixed(1) }}/s
           </div>
         </div>
         <div class="space-y-2">
-          <div class="text-sm font-medium text-gray-500">Error Rate</div>
+          <div class="text-sm font-medium text-gray-500">{{ $t('monitoring.metricsDetailsView.errorRate') }}</div>
           <div
             :class="[
               'text-3xl font-bold',
@@ -174,29 +174,29 @@ onUnmounted(() => {
 
     <!-- NPU Metrics Panel (conditional) -->
     <div v-if="showNPUMetrics && npuFleetMetrics" class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
-      <h3 class="text-lg font-semibold text-gray-900 mb-4">NPU Fleet Metrics</h3>
+      <h3 class="text-lg font-semibold text-gray-900 mb-4">{{ $t('monitoring.metricsDetailsView.nPUFleetMetrics') }}</h3>
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <div class="space-y-2">
-          <div class="text-sm font-medium text-gray-500">NPU Nodes</div>
+          <div class="text-sm font-medium text-gray-500">{{ $t('monitoring.metricsDetailsView.nPUNodes') }}</div>
           <div class="text-3xl font-bold text-gray-900">
             {{ npuFleetMetrics.online_npu_nodes }}/{{ npuFleetMetrics.total_npu_nodes }}
           </div>
-          <div class="text-xs text-gray-600">Online</div>
+          <div class="text-xs text-gray-600">{{ $t('monitoring.metricsDetailsView.online') }}</div>
         </div>
         <div class="space-y-2">
-          <div class="text-sm font-medium text-gray-500">Active Workers</div>
+          <div class="text-sm font-medium text-gray-500">{{ $t('monitoring.metricsDetailsView.activeWorkers') }}</div>
           <div class="text-3xl font-bold text-gray-900">
             {{ npuFleetMetrics.active_workers }}/{{ npuFleetMetrics.total_workers }}
           </div>
         </div>
         <div class="space-y-2">
-          <div class="text-sm font-medium text-gray-500">Avg Utilization</div>
+          <div class="text-sm font-medium text-gray-500">{{ $t('monitoring.metricsDetailsView.avgUtilization') }}</div>
           <div class="text-3xl font-bold text-primary-600">
             {{ npuFleetMetrics.avg_utilization_percent.toFixed(1) }}%
           </div>
         </div>
         <div class="space-y-2">
-          <div class="text-sm font-medium text-gray-500">Total Inferences</div>
+          <div class="text-sm font-medium text-gray-500">{{ $t('monitoring.metricsDetailsView.totalInferences') }}</div>
           <div class="text-3xl font-bold text-gray-900">
             {{ npuFleetMetrics.total_inferences.toLocaleString() }}
           </div>
@@ -208,7 +208,7 @@ onUnmounted(() => {
     <div v-if="isLoading && !fleetMetrics" class="flex items-center justify-center py-12">
       <div class="text-center">
         <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto"></div>
-        <p class="text-gray-500 mt-4">Loading metrics...</p>
+        <p class="text-gray-500 mt-4">{{ $t('monitoring.metricsDetailsView.loadingMetrics') }}</p>
       </div>
     </div>
   </div>

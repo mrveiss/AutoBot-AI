@@ -24,7 +24,7 @@
 
 - name: "AutoBot Dependency Patching - Pre-flight Checks"
   hosts: localhost
-  gather_facts: no
+  gather_facts: false
   tasks:
     - name: Display patching information
       ansible.builtin.debug:
@@ -55,7 +55,7 @@
 # Phase 1: Update Database (Redis) - No Python venv, but included for completeness
 - name: "Phase 1: Database Updates"
   hosts: database
-  become: yes
+  become: true
   serial: 1
   max_fail_percentage: 0
   roles:
@@ -67,7 +67,7 @@
 # Phase 2: Update Backend Services
 - name: "Phase 2: Backend Updates"
   hosts: backend
-  become: yes
+  become: true
   serial: 1
   max_fail_percentage: 0
   roles:
@@ -79,7 +79,7 @@
 # Phase 3: Update AI/ML Stack
 - name: "Phase 3: AI/ML Stack Updates"
   hosts: aiml
-  become: yes
+  become: true
   serial: 1
   max_fail_percentage: 0
   roles:
@@ -91,7 +91,7 @@
 # Phase 4: Update NPU Workers
 - name: "Phase 4: NPU Worker Updates"
   hosts: npu
-  become: yes
+  become: true
   serial: 1
   max_fail_percentage: 0
   roles:
@@ -103,7 +103,7 @@
 # Phase 5: Update Frontend (Node.js, not Python)
 - name: "Phase 5: Frontend Updates"
   hosts: frontend
-  become: yes
+  become: true
   serial: 1
   max_fail_percentage: 0
   roles:
@@ -115,7 +115,7 @@
 # Final: Summary and verification
 - name: "Post-Patching Summary"
   hosts: localhost
-  gather_facts: no
+  gather_facts: false
   tasks:
     - name: Display completion summary
       ansible.builtin.debug:

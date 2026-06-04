@@ -16,7 +16,7 @@
           </select>
         </div>
         <button @click="clearAll" class="btn-clear-all" :disabled="items.length === 0">
-          <i class="fas fa-trash"></i>
+          <Icon name="trash" />
           {{ t('vision.mediaGallery.clearAll') }}
         </button>
       </div>
@@ -39,10 +39,10 @@
             @error="handleThumbnailError"
           />
           <div v-else class="thumbnail-placeholder">
-            <i :class="getTypeIcon(item.type)"></i>
+            <Icon :name="getTypeIcon(item.type)" />
           </div>
           <div class="item-type-badge">
-            <i :class="getTypeIcon(item.type)"></i>
+            <Icon :name="getTypeIcon(item.type)" />
           </div>
         </div>
         <div class="item-info">
@@ -51,13 +51,13 @@
         </div>
         <div class="item-actions">
           <button @click.stop="$emit('re-analyze', item)" class="btn-action" :title="t('vision.mediaGallery.reAnalyze')">
-            <i class="fas fa-redo"></i>
+            <Icon name="redo" />
           </button>
           <button @click.stop="downloadItem(item)" class="btn-action" :title="t('vision.mediaGallery.download')">
-            <i class="fas fa-download"></i>
+            <Icon name="download" />
           </button>
           <button @click.stop="deleteItem(item.id)" class="btn-action btn-delete" :title="t('vision.mediaGallery.deleteItem')">
-            <i class="fas fa-trash"></i>
+            <Icon name="trash" />
           </button>
         </div>
       </div>
@@ -66,7 +66,7 @@
     <!-- Empty State -->
     <div v-else class="empty-state">
       <div class="empty-icon">
-        <i class="fas fa-images"></i>
+        <Icon name="image" />
       </div>
       <h4>{{ t('vision.mediaGallery.noMediaItems') }}</h4>
       <p v-if="filterType">{{ t('vision.mediaGallery.noFilterResults', { type: filterType }) }}</p>
@@ -79,7 +79,7 @@
         <div class="modal-header">
           <h4>{{ selectedItem.filename }}</h4>
           <button @click="selectedItem = null" class="btn-close">
-            <i class="fas fa-times"></i>
+            <Icon name="times" />
           </button>
         </div>
         <div class="modal-content">
@@ -92,7 +92,7 @@
               loading="lazy"
             />
             <div v-else class="preview-placeholder">
-              <i :class="getTypeIcon(selectedItem.type)"></i>
+              <Icon :name="getTypeIcon(selectedItem.type)" />
             </div>
           </div>
 
@@ -132,7 +132,7 @@
               </div>
 
               <button @click="showRawJson = !showRawJson" class="btn-toggle">
-                <i :class="showRawJson ? 'fas fa-chevron-up' : 'fas fa-chevron-down'"></i>
+                <Icon :name="showRawJson ? 'chevron-up' : 'chevron-down'" />
                 {{ showRawJson ? t('vision.mediaGallery.hideFullResults') : t('vision.mediaGallery.showFullResults') }}
               </button>
               <pre v-if="showRawJson" class="json-display">{{ JSON.stringify(selectedItem.analysisResult, null, 2) }}</pre>
@@ -141,15 +141,15 @@
         </div>
         <div class="modal-actions">
           <button @click="$emit('re-analyze', selectedItem); selectedItem = null" class="btn-primary">
-            <i class="fas fa-redo"></i>
+            <Icon name="redo" />
             {{ t('vision.mediaGallery.reAnalyze') }}
           </button>
           <button @click="downloadItem(selectedItem)" class="btn-secondary">
-            <i class="fas fa-download"></i>
+            <Icon name="download" />
             {{ t('vision.mediaGallery.download') }}
           </button>
           <button @click="deleteItem(selectedItem.id); selectedItem = null" class="btn-danger">
-            <i class="fas fa-trash"></i>
+            <Icon name="trash" />
             {{ t('vision.mediaGallery.deleteItem') }}
           </button>
         </div>
@@ -160,7 +160,7 @@
     <div v-if="showClearConfirm" class="confirm-overlay" @click.self="cancelClearAll">
       <div class="confirm-modal">
         <div class="confirm-icon">
-          <i class="fas fa-exclamation-triangle"></i>
+          <Icon name="exclamation-triangle" />
         </div>
         <h4>{{ t('vision.mediaGallery.clearAllConfirmTitle') }}</h4>
         <p>{{ t('vision.mediaGallery.clearAllConfirmMsg', { count: items.length }) }}</p>
@@ -174,14 +174,15 @@
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onUnmounted } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { useToast } from '@/composables/useToast';
+import { useNotificationBus } from '@/composables/useNotificationBus';
 import { useThumbnailWorker } from '@/composables/useThumbnailWorker';
 import type { GalleryItem } from '@/utils/VisionMultimodalApiClient';
 
 const { t } = useI18n();
-const { showToast } = useToast();
+const { showToast } = useNotificationBus();
 const { revokeBlobUrl } = useThumbnailWorker();
 
 // Props
@@ -216,11 +217,11 @@ const selectItem = (item: GalleryItem) => {
 
 const getTypeIcon = (type: string): string => {
   const icons: Record<string, string> = {
-    image: 'fas fa-image',
-    video: 'fas fa-video',
-    screen: 'fas fa-desktop',
+    image: 'image',
+    video: 'video',
+    screen: 'desktop',
   };
-  return icons[type] || 'fas fa-file';
+  return icons[type] || 'file';
 };
 
 const truncateFilename = (filename: string, maxLength: number = 20): string => {

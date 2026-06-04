@@ -9,7 +9,7 @@ Extracted from ArchitecturalPatternAnalyzer as part of Issue #394.
 """
 
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import List
 
 
 @dataclass
@@ -55,7 +55,7 @@ class ArchitecturalIssue:
     affected_components: List[ArchitecturalComponent] = field(default_factory=list)
     suggestion: str = ""
     refactoring_effort: str = "medium"  # low, medium, high
-    pattern_violation: Optional[str] = None
+    pattern_violation: str | None = None
 
     def to_dict(self) -> dict:
         """Serialize issue to dictionary."""

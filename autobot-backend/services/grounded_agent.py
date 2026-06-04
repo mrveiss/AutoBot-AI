@@ -27,21 +27,21 @@ Data flow:
 7. Return GroundedResponse with full provenance
 """
 
-import logging
 import time
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 from uuid import uuid4
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from knowledge_factory import get_or_create_knowledge_base
-from llm_interface_pkg.types import LLMType
+from llm_shared.types import LLMType
 from services.ai_stack_client import get_ai_stack_client
 from services.causal_inference_engine import CausalInferenceEngine
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ClaimStatus(str, Enum):
@@ -83,7 +83,7 @@ class VerifiedClaim:
 
     claim: Claim
     kb_status: ClaimStatus  # Classification result
-    kb_source: Optional[str] = None  # KB fact ID if IN_KB
+    kb_source: str | None = None  # KB fact ID if IN_KB
     confidence: float = 0.0  # Verification confidence (0.0-1.0)
     evidence: List[str] = field(default_factory=list)  # Supporting evidence
     verification_method: str = ""  # "kb_lookup", "external_research", "causal_inference"
@@ -96,11 +96,11 @@ class Conflict:
 
     conflict_id: str = field(default_factory=lambda: str(uuid4()))
     claim_1_id: str = ""  # First claim ID
-    claim_2_id: Optional[str] = None  # Second claim ID (or KB fact)
+    claim_2_id: str | None = None  # Second claim ID (or KB fact)
     description: str = ""  # Description of conflict
     severity: str = "medium"  # "low", "medium", "high"
     resolution: ConflictResolution = ConflictResolution.PENDING_REVIEW
-    chosen_fact: Optional[str] = None  # Fact ID chosen for resolution
+    chosen_fact: str | None = None  # Fact ID chosen for resolution
     reasoning: str = ""  # Human/system reasoning for resolution
     timestamp: float = field(default_factory=time.time)
 
@@ -113,7 +113,7 @@ class CausalTrace:
     query: str = ""
     reasoning_steps: List[Dict[str, Any]] = field(default_factory=list)
     claim_verifications: List[Dict[str, Any]] = field(default_factory=list)
-    causal_analysis: Optional[Dict[str, Any]] = None
+    causal_analysis: Dict[str, Any] | None = None
     confidence: float = 0.0
     timestamp: float = field(default_factory=time.time)
 
@@ -129,7 +129,7 @@ class GroundedResponse:
     verified_claims: List[VerifiedClaim] = field(default_factory=list)
     unverified_claims: List[Claim] = field(default_factory=list)
     conflicts: List[Conflict] = field(default_factory=list)
-    causal_trace: Optional[CausalTrace] = None
+    causal_trace: CausalTrace | None = None
     confidence_overall: float = 0.0  # Average of verified claims
     requires_human_review: bool = False
     timestamp: float = field(default_factory=time.time)
@@ -192,7 +192,7 @@ class GroundedAgent:
     6. Trace reasoning through causal inference
     """
 
-    def __init__(self, app=None):
+    def __init__(self, app=None) -> None:
         """Initialize GroundedAgent with optional FastAPI app."""
         self.app = app
         self.kb = None
@@ -200,7 +200,7 @@ class GroundedAgent:
         self.causal_engine = None
         self.redis_client = None
 
-    async def _init_dependencies(self):
+    async def _init_dependencies(self) -> None:
         """Lazy-load dependencies on first use."""
         if self.kb is None and self.app:
             self.kb = await get_or_create_knowledge_base(self.app, force_refresh=False)
@@ -220,7 +220,7 @@ class GroundedAgent:
         self,
         user_query: str,
         agent_response: str,
-        context: Optional[Dict[str, Any]] = None,
+        context: Dict[str, Any] | None = None,
     ) -> GroundedResponse:
         """
         Main entry point: Ground an agent response with KB verification.
@@ -504,7 +504,7 @@ Format as JSON array of objects with fields: claim_text, subject, predicate, obj
         response: str,
         verified_claims: List[VerifiedClaim],
         unverified_claims: List[Claim],
-    ) -> Optional[CausalTrace]:
+    ) -> CausalTrace | None:
         """
         Use Tier 3 (CausalInferenceEngine) to trace reasoning.
 
@@ -600,7 +600,7 @@ Format as JSON array of objects with fields: claim_text, subject, predicate, obj
         }
 
 
-_grounded_agent_instance: Optional[GroundedAgent] = None
+_grounded_agent_instance: GroundedAgent | None = None
 
 
 def get_grounded_agent(app=None) -> GroundedAgent:

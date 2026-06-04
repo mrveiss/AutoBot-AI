@@ -9,7 +9,6 @@ Related to Issue #760 Phase 2.
 """
 
 import logging
-from typing import Optional
 
 from cryptography.fernet import Fernet
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -52,7 +51,7 @@ def _encrypt_api_key(api_key: str) -> str:
     return cipher.encrypt(api_key.encode("utf-8")).decode("utf-8")
 
 
-def _decrypt_api_key(encrypted_key: str) -> Optional[str]:
+def _decrypt_api_key(encrypted_key: str) -> str | None:
     """Decrypt API key from storage."""
     if not encrypted_key:
         return None
@@ -70,8 +69,8 @@ async def list_agents(
     _: Annotated[dict, Depends(get_current_user)],
     page: int = Query(1, ge=1),
     per_page: int = Query(50, ge=1, le=200),
-    search: Optional[str] = Query(None),
-    is_active: Optional[bool] = Query(None),
+    search: str | None = Query(None),
+    is_active: bool | None = Query(None),
 ) -> AgentListResponse:
     """List all agents with pagination and filtering."""
     query = select(Agent)

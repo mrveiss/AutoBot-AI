@@ -9,10 +9,11 @@ For complex/multi-step tasks, queries AgentTopology to find
 collaborator agents that have historically succeeded together.
 """
 
-import logging
 from typing import Any, Protocol
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 
 _COMPLEX_PATTERNS = frozenset({"complex", "multi_hop", "multi_step"})
 

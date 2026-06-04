@@ -9,13 +9,13 @@ across steps so later queries can leverage earlier results.
 """
 
 import json
-import logging
 import re
 from dataclasses import dataclass, field
 
+from autobot_shared.logging_manager import get_logger
 from security.prompt_injection_detector import PromptInjectionDetector
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Singleton detector instance reused across all QueryDecomposer calls (#2169).
 _injection_detector = PromptInjectionDetector()

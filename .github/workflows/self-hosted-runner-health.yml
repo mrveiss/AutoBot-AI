@@ -1,0 +1,26 @@
+name: self-hosted-runner-health
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe runner state
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          state=$(gh api repos/${{ github.repository }}/actions/runners --jq '.runners[] | select(.name == "MV-Stealth-VM")')
+          status=$(echo "$state" | jq -r '.status')
+          busy=$(echo "$state" | jq -r '.busy')
+          if [ "$status" != "online" ] || [ "$busy" = "true" ]; then
+            in_progress=$(gh api repos/${{ github.repository }}/actions/runs --paginate --jq '[.workflow_runs[] | select(.status == "in_progress")] | length')
+            if [ "$in_progress" = "0" ] && [ "$busy" = "true" ]; then
+              echo "::error::Runner desynced: status=$status busy=$busy with 0 in_progress jobs"
+              exit 1
+            fi
+          fi

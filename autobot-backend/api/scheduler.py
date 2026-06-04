@@ -6,11 +6,11 @@ Workflow Scheduler API endpoints
 Provides workflow scheduling and queue management capabilities
 """
 
-import logging
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
-from typing import List, Optional
+from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
@@ -92,9 +92,9 @@ async def schedule_workflow(request: ScheduleWorkflowRequest):
     error_code_prefix="SCHEDULER",
 )
 async def list_scheduled_workflows(
-    status: Optional[str] = Query(None, description="Filter by status"),
-    user_id: Optional[str] = Query(None, description="Filter by user ID"),
-    tags: Optional[str] = Query(None, description="Filter by tags (comma-separated)"),
+    status: str | None = Query(None, description="Filter by status"),
+    user_id: str | None = Query(None, description="Filter by user ID"),
+    tags: str | None = Query(None, description="Filter by tags (comma-separated)"),
 ):
     """List scheduled workflows with optional filtering"""
     # Parse filters
@@ -320,7 +320,7 @@ async def stop_scheduler():
     return {"success": True, "message": "Workflow scheduler stopped"}
 
 
-def _parse_template_variables(variables: Optional[str]) -> Metadata:
+def _parse_template_variables(variables: str | None) -> Metadata:
     """Helper for schedule_template_workflow. Ref: #1088.
 
     Parses the JSON-encoded template variables query parameter.
@@ -351,7 +351,7 @@ def _build_template_schedule_request(
     scheduled_time: str,
     priority: str,
     auto_approve: bool,
-    user_id: Optional[str],
+    user_id: str | None,
 ) -> InternalScheduleRequest:
     """Helper for schedule_template_workflow. Ref: #1088.
 
@@ -396,9 +396,9 @@ async def schedule_template_workflow(
     template_id: str,
     scheduled_time: str = Query(..., description="When to execute the workflow"),
     priority: str = Query("normal", description="Workflow priority"),
-    variables: Optional[str] = Query(None, description="Template variables as JSON string"),
+    variables: str | None = Query(None, description="Template variables as JSON string"),
     auto_approve: bool = Query(False, description="Auto-approve workflow steps"),
-    user_id: Optional[str] = Query(None, description="User ID for the workflow"),
+    user_id: str | None = Query(None, description="User ID for the workflow"),
 ):
     """Schedule a workflow from a template.
 

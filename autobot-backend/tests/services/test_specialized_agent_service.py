@@ -8,12 +8,12 @@ Tests cover the three module-level helpers and the three public methods
 of SpecializedAgentService, using tmp_path for filesystem isolation.
 """
 
-import logging
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
+from autobot_shared.logging_manager import get_logger
 from services.specialized_agent_service import (
     SpecializedAgentService,
     _categorize_agent,
@@ -21,7 +21,7 @@ from services.specialized_agent_service import (
     _parse_frontmatter,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # ---------------------------------------------------------------
 # Fixtures

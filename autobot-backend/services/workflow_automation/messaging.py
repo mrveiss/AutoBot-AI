@@ -7,18 +7,18 @@ Workflow Messaging Module
 Handles WebSocket communication for workflow status updates.
 """
 
-import logging
 from typing import Any, Dict
 
+from autobot_shared.logging_manager import get_logger
 from type_defs.common import Metadata
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class WorkflowMessenger:
     """Handles workflow messaging via WebSocket"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize messenger with empty terminal sessions dictionary."""
         # Terminal WebSocket sessions keyed by session_id
         self.terminal_sessions: Dict[str, Any] = {}

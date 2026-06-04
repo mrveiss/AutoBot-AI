@@ -1,10 +1,5 @@
 <template>
   <div class="analytics-view view-container">
-    <!-- Load SVG sprite sheet -->
-    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
-      <use href="@/assets/icons/analytics-tabs.svg"></use>
-    </svg>
-
     <div class="analytics-content">
       <!-- Header Section - Issue #901 -->
       <div class="analytics-header">
@@ -25,9 +20,7 @@
             :aria-selected="isCodebaseActive"
             :aria-label="$t('analytics.views.tabs.codebaseAria')"
           >
-            <svg class="tab-icon" aria-hidden="true">
-              <use href="#icon-analytics-codebase"></use>
-            </svg>
+            <Icon name="code" class="tab-icon" />
             <span>{{ $t('analytics.views.tabs.codebase') }}</span>
           </router-link>
           <!-- Issue #3436: code-quality, code-review, code-generation, evolution moved under codebase/:sourceId -->
@@ -39,9 +32,7 @@
             :aria-selected="isBIActive"
             :aria-label="$t('analytics.views.tabs.businessIntelligenceAria')"
           >
-            <svg class="tab-icon" aria-hidden="true">
-              <use href="#icon-analytics-bi"></use>
-            </svg>
+            <Icon name="chart-pie" class="tab-icon" />
             <span>{{ $t('analytics.views.tabs.businessIntelligence') }}</span>
           </router-link>
           <router-link
@@ -52,9 +43,7 @@
             :aria-selected="isSecurityActive"
             :aria-label="$t('analytics.views.tabs.securityAria')"
           >
-            <svg class="tab-icon" aria-hidden="true">
-              <use href="#icon-analytics-security"></use>
-            </svg>
+            <Icon name="shield-alt" class="tab-icon" />
             <span>{{ $t('analytics.views.tabs.security') }}</span>
           </router-link>
           <router-link
@@ -65,9 +54,7 @@
             :aria-selected="isAuditActive"
             :aria-label="$t('analytics.views.tabs.auditAria')"
           >
-            <svg class="tab-icon" aria-hidden="true">
-              <use href="#icon-analytics-audit"></use>
-            </svg>
+            <Icon name="clipboard-check" class="tab-icon" />
             <span>{{ $t('analytics.views.tabs.audit') }}</span>
           </router-link>
           <!-- Issue #902: Dev Tools moved from standalone /dev-speedup into analytics tab -->
@@ -77,10 +64,10 @@
             :class="{ 'nav-tab-active': isDevToolsActive }"
             role="tab"
             :aria-selected="isDevToolsActive"
-            aria-label="Dev Tools"
+            :aria-label="$t('analytics.views.tabs.devToolsAria')"
           >
-            <Icon name="bolt" class="tab-icon-svg" aria-hidden="true" />
-            <span>Dev Tools</span>
+            <Icon name="bolt" class="tab-icon" aria-hidden="true" />
+            <span>{{ $t('analytics.views.tabs.devTools') }}</span>
           </router-link>
           <!-- Issue #4465: Usage & Costs moved from standalone nav into analytics tab -->
           <router-link
@@ -91,7 +78,7 @@
             :aria-selected="isUsageActive"
             :aria-label="$t('analytics.views.tabs.usageAria')"
           >
-            <Icon name="chart-bar" class="tab-icon-svg" aria-hidden="true" />
+            <Icon name="chart-bar" class="tab-icon" aria-hidden="true" />
             <span>{{ $t('analytics.views.tabs.usage') }}</span>
           </router-link>
           <!-- Issue #4270: Operations moved from standalone nav into analytics tab -->
@@ -103,7 +90,7 @@
             :aria-selected="isOperationsActive"
             :aria-label="$t('analytics.views.tabs.operationsAria')"
           >
-            <Icon name="list-alt" class="tab-icon-svg" aria-hidden="true" />
+            <Icon name="list-alt" class="tab-icon" aria-hidden="true" />
             <span>{{ $t('analytics.views.tabs.operations') }}</span>
           </router-link>
         </nav>
@@ -158,13 +145,6 @@ const isOperationsActive = computed(() => {
 
 <style scoped>
 /* Issue #901: Technical Precision Analytics View Design */
-
-.tab-icon-svg {
-  font-size: var(--text-base);
-  flex-shrink: 0;
-  width: 18px;
-  height: 18px;
-}
 
 .analytics-view {
   display: flex;

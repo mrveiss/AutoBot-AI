@@ -8,8 +8,8 @@
 
 - name: Diagnose Backend Crash-Loop
   hosts: autobot-backend
-  become: yes
-  gather_facts: yes
+  become: true
+  gather_facts: true
 
   vars:
     backend_install_dir: /opt/autobot
@@ -217,7 +217,7 @@
       systemd:
         name: autobot-backend
         state: stopped
-      ignore_errors: yes
+      ignore_errors: true
 
     - name: Wait for service to stop
       pause:
@@ -241,7 +241,7 @@
       systemd:
         name: autobot-backend
         state: started
-      ignore_errors: yes
+      ignore_errors: true
 
     # ============================================================
     # Phase 7: Collect All Diagnostics
@@ -251,7 +251,7 @@
       fetch:
         src: "{{ diagnostic_output_dir }}/{{ item }}"
         dest: "/tmp/backend-diagnostics-{{ ansible_facts['date_time'].iso8601_basic_short }}/"
-        flat: no
+        flat: false
       loop:
         - 01-service-status.txt
         - 02-service-config.txt

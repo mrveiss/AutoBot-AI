@@ -15,7 +15,6 @@ Related Issues: #185 (Split), #212 (Analytics split)
 
 import asyncio
 import json
-import logging
 import re
 import time
 from collections import defaultdict
@@ -26,6 +25,7 @@ import psutil
 import redis
 
 from api.schemas_analytics import CodeAnalysisRequest, CommunicationPattern
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import RedisDatabase, get_async_redis_client
 from autobot_shared.ssot_config import config as _ssot
 from constants import PATH
@@ -36,7 +36,7 @@ from utils.system_metrics import get_metrics_collector
 # Import existing monitoring infrastructure
 from .monitoring_hardware import hardware_monitor
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Lock for thread-safe analytics state access
 _analytics_state_lock = asyncio.Lock()

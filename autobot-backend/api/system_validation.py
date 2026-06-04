@@ -6,14 +6,11 @@
 System Validation API endpoints for AutoBot optimization suite
 """
 
-import logging
-
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 
 from api.schemas_workflows import (
     SystemValidationBenchmarkResponse,
     SystemValidationComponentResponse,
-    SystemValidationHealthResponse,
     SystemValidationQuickResponse,
     SystemValidationRecommendationsResponse,
     SystemValidationRequestModel,
@@ -22,37 +19,17 @@ from api.schemas_workflows import (
 )
 from api.system_health import register_singleton_probe
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from utils.catalog_http_exceptions import raise_catalog_error_simple, raise_server_error
 from utils.system_validator import get_system_validator
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Create router
 router = APIRouter()
 
 
 register_singleton_probe("system_validation", get_system_validator)
-
-
-@router.get("/health", response_model=SystemValidationHealthResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="validation_health",
-    error_code_prefix="SYSTEM_VALIDATION",
-)
-async def validation_health():
-    """Health check for validation system"""
-    try:
-        validator = get_system_validator()
-        return {
-            "status": "healthy",
-            "message": "System validation API is operational",
-            "validator_initialized": validator is not None,
-            "timestamp": validator._get_timestamp() if validator else None,
-        }
-    except Exception as e:
-        logger.error("Validation health check failed: %s", e)
-        raise_server_error("API_0003", "Health check failed")
 
 
 @router.post("/validate/comprehensive", response_model=SystemValidationResultModel)

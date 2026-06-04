@@ -15,7 +15,7 @@
             <BaseButton variant="primary">{{ $t('views.componentShowcase.primary') }}</BaseButton>
             <BaseButton variant="secondary">{{ $t('views.componentShowcase.secondary') }}</BaseButton>
             <BaseButton variant="success">{{ $t('views.componentShowcase.success') }}</BaseButton>
-            <BaseButton variant="danger">{{ $t('views.componentShowcase.danger') }}</BaseButton>
+            <BaseButton variant="error">{{ $t('views.componentShowcase.danger') }}</BaseButton>
             <BaseButton variant="warning">{{ $t('views.componentShowcase.warning') }}</BaseButton>
             <BaseButton variant="ghost">{{ $t('views.componentShowcase.ghost') }}</BaseButton>
             <BaseButton variant="link">{{ $t('views.componentShowcase.link') }}</BaseButton>

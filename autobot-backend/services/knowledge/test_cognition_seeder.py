@@ -55,7 +55,7 @@ def _make_seeder(tmp_chromadb=None) -> CognitionSeeder:
 # ---------------------------------------------------------------------------
 
 
-def test_load_manifest_parses_yaml(tmp_path):
+def test_load_manifest_parses_yaml(tmp_path) -> None:
     manifest = tmp_path / "seed.yaml"
     manifest.write_text(
         textwrap.dedent("""\
@@ -80,7 +80,7 @@ def test_load_manifest_parses_yaml(tmp_path):
     assert coll.sources[1].path == "docs/api/"
 
 
-def test_load_manifest_missing_raises(tmp_path):
+def test_load_manifest_missing_raises(tmp_path) -> None:
     with pytest.raises(FileNotFoundError):
         _load_manifest(str(tmp_path / "nonexistent.yaml"))
 
@@ -90,7 +90,7 @@ def test_load_manifest_missing_raises(tmp_path):
 # ---------------------------------------------------------------------------
 
 
-def test_chunk_text_splits_at_paragraphs():
+def test_chunk_text_splits_at_paragraphs() -> None:
     content = "Para one.\n\nPara two.\n\nPara three."
     chunks = _chunk_text(content, max_chars=15)
     assert len(chunks) > 1
@@ -99,7 +99,7 @@ def test_chunk_text_splits_at_paragraphs():
         assert len(c) <= 15 + 50  # generous tolerance
 
 
-def test_chunk_text_single_paragraph():
+def test_chunk_text_single_paragraph() -> None:
     content = "Short content."
     chunks = _chunk_text(content, max_chars=1500)
     assert chunks == ["Short content."]
@@ -110,13 +110,13 @@ def test_chunk_text_single_paragraph():
 # ---------------------------------------------------------------------------
 
 
-def test_chunk_id_deterministic():
+def test_chunk_id_deterministic() -> None:
     id1 = _chunk_id("cognition_store", "docs/api/foo.md", 0)
     id2 = _chunk_id("cognition_store", "docs/api/foo.md", 0)
     assert id1 == id2
 
 
-def test_chunk_id_unique_per_index():
+def test_chunk_id_unique_per_index() -> None:
     id0 = _chunk_id("cognition_store", "docs/api/foo.md", 0)
     id1 = _chunk_id("cognition_store", "docs/api/foo.md", 1)
     assert id0 != id1
@@ -128,7 +128,7 @@ def test_chunk_id_unique_per_index():
 
 
 @pytest.mark.asyncio
-async def test_seed_from_directory_indexes_markdown(tmp_path):
+async def test_seed_from_directory_indexes_markdown(tmp_path) -> None:
     # Create a small .md file
     (tmp_path / "guide.md").write_text("# Guide\n\nSome foundational knowledge.", encoding="utf-8")
 
@@ -141,14 +141,14 @@ async def test_seed_from_directory_indexes_markdown(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_seed_from_directory_skips_missing():
+async def test_seed_from_directory_skips_missing() -> None:
     seeder = _make_seeder()
     count = await seeder.seed_from_directory("/nonexistent/path/abc123")
     assert count == 0
 
 
 @pytest.mark.asyncio
-async def test_seed_from_directory_skips_empty_file(tmp_path):
+async def test_seed_from_directory_skips_empty_file(tmp_path) -> None:
     (tmp_path / "empty.md").write_text("", encoding="utf-8")
     seeder = _make_seeder()
     seeder._root_dir = tmp_path
@@ -162,7 +162,7 @@ async def test_seed_from_directory_skips_empty_file(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_seed_from_manifest_processes_sources(tmp_path):
+async def test_seed_from_manifest_processes_sources(tmp_path) -> None:
     # Set up project structure
     docs_dir = tmp_path / "docs" / "developer"
     docs_dir.mkdir(parents=True)
@@ -189,7 +189,7 @@ async def test_seed_from_manifest_processes_sources(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_seed_from_manifest_missing_manifest():
+async def test_seed_from_manifest_missing_manifest() -> None:
     seeder = _make_seeder()
     count = await seeder.seed_from_manifest("/nonexistent/manifest.yaml")
     assert count == 0
@@ -201,7 +201,7 @@ async def test_seed_from_manifest_missing_manifest():
 
 
 @pytest.mark.asyncio
-async def test_get_seed_status_returns_seeded_collections():
+async def test_get_seed_status_returns_seeded_collections() -> None:
     seeder = _make_seeder()
 
     # Mock a collection that has seeded documents
@@ -237,7 +237,7 @@ async def test_get_seed_status_returns_seeded_collections():
 
 
 @pytest.mark.asyncio
-async def test_get_seed_status_empty_when_no_seeded_docs():
+async def test_get_seed_status_empty_when_no_seeded_docs() -> None:
     seeder = _make_seeder()
 
     mock_coll_meta = MagicMock()
@@ -274,7 +274,7 @@ def _make_search_result(hybrid_score: float, seeded: bool = False, priority: str
     )
 
 
-def test_seed_priority_boost_high():
+def test_seed_priority_boost_high() -> None:
     from advanced_rag_optimizer import AdvancedRAGOptimizer
 
     optimizer = AdvancedRAGOptimizer.__new__(AdvancedRAGOptimizer)
@@ -284,7 +284,7 @@ def test_seed_priority_boost_high():
     assert boosted == pytest.approx(expected, abs=1e-6)
 
 
-def test_seed_priority_boost_medium():
+def test_seed_priority_boost_medium() -> None:
     from advanced_rag_optimizer import AdvancedRAGOptimizer
 
     optimizer = AdvancedRAGOptimizer.__new__(AdvancedRAGOptimizer)
@@ -294,7 +294,7 @@ def test_seed_priority_boost_medium():
     assert boosted == pytest.approx(expected, abs=1e-6)
 
 
-def test_seed_priority_boost_not_applied_to_non_seeded():
+def test_seed_priority_boost_not_applied_to_non_seeded() -> None:
     from advanced_rag_optimizer import AdvancedRAGOptimizer
 
     optimizer = AdvancedRAGOptimizer.__new__(AdvancedRAGOptimizer)
@@ -303,7 +303,7 @@ def test_seed_priority_boost_not_applied_to_non_seeded():
     assert boosted == pytest.approx(0.5, abs=1e-6)
 
 
-def test_seed_priority_boost_capped_at_one():
+def test_seed_priority_boost_capped_at_one() -> None:
     from advanced_rag_optimizer import AdvancedRAGOptimizer
 
     optimizer = AdvancedRAGOptimizer.__new__(AdvancedRAGOptimizer)
@@ -312,7 +312,7 @@ def test_seed_priority_boost_capped_at_one():
     assert boosted <= 1.0
 
 
-def test_cold_start_seeded_beats_unseeded():
+def test_cold_start_seeded_beats_unseeded() -> None:
     """Seeded high-priority result with lower raw score beats unseeded with higher raw score."""
     from advanced_rag_optimizer import AdvancedRAGOptimizer
 

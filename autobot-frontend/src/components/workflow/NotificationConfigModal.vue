@@ -13,15 +13,15 @@
       >
         <!-- Header -->
         <div class="notif-header">
-          <h3><i class="fas fa-bell"></i> {{ $t('workflow.notifications.title') }}</h3>
+          <h3><Icon name="bell" /> {{ $t('workflow.notifications.title') }}</h3>
           <button class="btn-close" @click="$emit('close')" :aria-label="$t('common.close')">
-            <i class="fas fa-times"></i>
+            <Icon name="times" />
           </button>
         </div>
 
         <!-- Loading state -->
         <div v-if="loading" class="notif-loading">
-          <i class="fas fa-spinner fa-spin"></i>
+          <Icon name="spinner" class="animate-spin" />
           <span>{{ $t('common.loading') }}</span>
         </div>
 
@@ -29,7 +29,7 @@
         <form v-else class="notif-body" @submit.prevent="handleSave">
           <!-- Error banner -->
           <div v-if="error" class="notif-error">
-            <i class="fas fa-exclamation-triangle"></i> {{ error }}
+            <Icon name="exclamation-triangle" /> {{ error }}
           </div>
 
           <!-- Email Recipients -->
@@ -40,7 +40,7 @@
                 <span v-for="(email, idx) in config.email_recipients" :key="idx" class="tag">
                   {{ email }}
                   <button type="button" class="tag-remove" @click="removeEmail(idx)" :aria-label="`Remove ${email}`">
-                    <i class="fas fa-times"></i>
+                    <Icon name="times" />
                   </button>
                 </span>
               </div>
@@ -114,8 +114,8 @@
             :disabled="saving || hasValidationErrors"
             @click="handleSave"
           >
-            <i v-if="saving" class="fas fa-spinner fa-spin"></i>
-            <i v-else class="fas fa-save"></i>
+            <Icon name="spinner" class="animate-spin" v-if="saving" />
+            <Icon name="save" v-else />
             {{ $t('common.save') }}
           </button>
         </div>
@@ -125,6 +125,7 @@
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, watch, toRef } from 'vue';
 import {
   useNotificationConfig,

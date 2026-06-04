@@ -31,19 +31,19 @@ Usage Examples:
 
 import asyncio
 import functools
-import logging
 import time
-from typing import Any, Callable, Optional
+from typing import Any, Callable
 
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
 
+from autobot_shared.logging_manager import get_logger
 from constants.api_constants import PATH_API_HEALTH
 from middleware.proxy_utils import get_client_ip
 from services.audit_logger import AuditResult, get_audit_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Module-level set to hold references to fire-and-forget background tasks (#1556)
 _audit_background_tasks: set = set()
@@ -54,7 +54,7 @@ _audit_background_tasks: set = set()
 # See: issue #1568.  The broader asyncio.get_event_loop() deprecation is
 # tracked in issue #1752 — this reference avoids calling that deprecated API
 # at runtime and instead relies on an explicitly stored loop.
-_main_event_loop: Optional[asyncio.AbstractEventLoop] = None
+_main_event_loop: asyncio.AbstractEventLoop | None = None
 
 
 def set_main_event_loop(loop: asyncio.AbstractEventLoop) -> None:
@@ -120,7 +120,7 @@ class AuditMiddleware(BaseHTTPMiddleware):
         self,
         app: ASGIApp,
         audit_all: bool = False,
-        exclude_paths: Optional[list] = None,
+        exclude_paths: list | None = None,
     ):
         """
         Initialize audit middleware
@@ -239,7 +239,7 @@ class AuditMiddleware(BaseHTTPMiddleware):
             self._background_tasks.add(task)
             task.add_done_callback(self._background_tasks.discard)
 
-    def _get_user_from_request(self, request: Request) -> Optional[str]:
+    def _get_user_from_request(self, request: Request) -> str | None:
         """Extract user ID from request"""
         # Try to get user from state (set by auth middleware)
         if hasattr(request.state, "user"):
@@ -251,7 +251,7 @@ class AuditMiddleware(BaseHTTPMiddleware):
         # Try to get from headers
         return request.headers.get("X-User-ID") or request.headers.get("X-Username")
 
-    def _get_session_from_request(self, request: Request) -> Optional[str]:
+    def _get_session_from_request(self, request: Request) -> str | None:
         """Extract session ID from request"""
         # Try to get from state
         if hasattr(request.state, "session_id"):
@@ -260,7 +260,7 @@ class AuditMiddleware(BaseHTTPMiddleware):
         # Try to get from headers
         return request.headers.get("X-Session-ID") or request.headers.get("X-Session")
 
-    def _get_client_ip(self, request: Request) -> Optional[str]:
+    def _get_client_ip(self, request: Request) -> str | None:
         """Extract client IP from request.
 
         Delegates to get_client_ip() which only trusts X-Forwarded-For
@@ -272,10 +272,10 @@ class AuditMiddleware(BaseHTTPMiddleware):
         self,
         operation: str,
         result: AuditResult,
-        user_id: Optional[str],
-        session_id: Optional[str],
-        ip_address: Optional[str],
-        resource: Optional[str],
+        user_id: str | None,
+        session_id: str | None,
+        ip_address: str | None,
+        resource: str | None,
         performance_ms: float,
         details: dict,
     ):
@@ -326,7 +326,7 @@ def _extract_request_context(args: tuple) -> tuple:
     return request, user_id, session_id, ip_address
 
 
-def _determine_resource(resource_handler: Optional[Callable[..., str]], args: tuple, kwargs: dict) -> Optional[str]:
+def _determine_resource(resource_handler: Callable[..., str] | None, args: tuple, kwargs: dict) -> str | None:
     """
     Determine resource from handler if provided.
 
@@ -352,12 +352,12 @@ def _determine_resource(resource_handler: Optional[Callable[..., str]], args: tu
 def _schedule_audit_log(
     operation: str,
     result: AuditResult,
-    user_id: Optional[str],
-    session_id: Optional[str],
-    ip_address: Optional[str],
-    resource: Optional[str],
+    user_id: str | None,
+    session_id: str | None,
+    ip_address: str | None,
+    resource: str | None,
     performance_ms: float,
-    error_details: Optional[str],
+    error_details: str | None,
 ) -> None:
     """Schedule audit log entry as a non-blocking background task.
 
@@ -409,8 +409,8 @@ def _schedule_audit_log(
 def _create_async_audit_wrapper(
     func: Callable,
     operation: str,
-    result_handler: Optional[Callable[[Any], AuditResult]],
-    resource_handler: Optional[Callable[..., str]],
+    result_handler: Callable[[Any], AuditResult] | None,
+    resource_handler: Callable[..., str] | None,
 ) -> Callable:
     """
     Create async wrapper function with audit logging.
@@ -468,8 +468,8 @@ def _create_async_audit_wrapper(
 def _create_sync_audit_wrapper(
     func: Callable,
     operation: str,
-    result_handler: Optional[Callable[[Any], AuditResult]],
-    resource_handler: Optional[Callable[..., str]],
+    result_handler: Callable[[Any], AuditResult] | None,
+    resource_handler: Callable[..., str] | None,
 ) -> Callable:
     """
     Create sync wrapper function with audit logging.
@@ -523,8 +523,8 @@ def _create_sync_audit_wrapper(
 
 def audit_operation(
     operation: str,
-    result_handler: Optional[Callable[[Any], AuditResult]] = None,
-    resource_handler: Optional[Callable[..., str]] = None,
+    result_handler: Callable[[Any], AuditResult] | None = None,
+    resource_handler: Callable[..., str] | None = None,
 ):
     """
     Decorator for audit logging function/endpoint calls.
@@ -564,9 +564,9 @@ async def audit_log_from_request(
     request: Request,
     operation: str,
     result: AuditResult = "success",
-    resource: Optional[str] = None,
-    user_role: Optional[str] = None,
-    details: Optional[dict] = None,
+    resource: str | None = None,
+    user_role: str | None = None,
+    details: dict | None = None,
 ):
     """
     Manual audit logging from within an endpoint
@@ -605,7 +605,7 @@ async def audit_log_from_request(
 
 
 # Helper functions
-def _extract_user(request: Request) -> Optional[str]:
+def _extract_user(request: Request) -> str | None:
     """Extract user ID from request"""
     if hasattr(request.state, "user"):
         user = request.state.user
@@ -615,14 +615,14 @@ def _extract_user(request: Request) -> Optional[str]:
     return request.headers.get("X-User-ID") or request.headers.get("X-Username")
 
 
-def _extract_session(request: Request) -> Optional[str]:
+def _extract_session(request: Request) -> str | None:
     """Extract session ID from request"""
     if hasattr(request.state, "session_id"):
         return request.state.session_id
     return request.headers.get("X-Session-ID") or request.headers.get("X-Session")
 
 
-def _extract_ip(request: Request) -> Optional[str]:
+def _extract_ip(request: Request) -> str | None:
     """Extract client IP from request.
 
     Only trusts X-Forwarded-For when TCP peer is a known reverse proxy
@@ -634,10 +634,10 @@ def _extract_ip(request: Request) -> Optional[str]:
 async def _log_audit_async(
     operation: str,
     result: AuditResult,
-    user_id: Optional[str],
-    session_id: Optional[str],
-    ip_address: Optional[str],
-    resource: Optional[str],
+    user_id: str | None,
+    session_id: str | None,
+    ip_address: str | None,
+    resource: str | None,
     performance_ms: float,
     details: dict,
 ):

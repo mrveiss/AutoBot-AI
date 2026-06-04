@@ -1,12 +1,13 @@
 /**
  * useToast Composable Tests
  *
- * Covers acceptance criteria from issue #3283:
+ * Covers acceptance criteria from issue #3283 and MVA-347:
  * - Global availability via provide/inject
  * - success / error / warning / info variants
  * - Auto-dismiss after configurable timeout (default 4s for success, persistent for errors)
- * - Maximum 5 toasts stacked; older ones evicted
- * - Manual dismiss
+ * - Maximum 3 toasts stacked; oldest Tier A/B evicted (Miller's Law)
+ * - Tier C (persistent error) toasts never auto-evicted; excess queued
+ * - Manual dismiss promotes queued toasts
  *
  * @author mrveiss
  * @copyright 2025 mrveiss
@@ -146,8 +147,8 @@ describe('useToast — acceptance criteria #3283', () => {
       expect(TOAST_DURATIONS.info).toBe(4000)
     })
 
-    it('warning default duration is 4000 ms', () => {
-      expect(TOAST_DURATIONS.warning).toBe(4000)
+    it('warning default duration is 6000 ms', () => {
+      expect(TOAST_DURATIONS.warning).toBe(6000)
     })
 
     it('error default duration is 0 (persistent)', () => {
@@ -173,26 +174,107 @@ describe('useToast — acceptance criteria #3283', () => {
   })
 
   // -------------------------------------------------------------------------
-  // 5. Maximum 5 toasts stacked
+  // 5. Maximum 3 toasts stacked with Tier C eviction protection (MVA-347)
   // -------------------------------------------------------------------------
-  describe('maximum stack size', () => {
-    it('MAX_TOASTS constant is 5', () => {
-      expect(MAX_TOASTS).toBe(5)
+  describe('maximum stack size and Tier C eviction protection', () => {
+    it('MAX_TOASTS constant is 3', () => {
+      expect(MAX_TOASTS).toBe(3)
     })
 
-    it('does not exceed 5 toasts; oldest is evicted when a 6th is added', () => {
+    it('does not exceed 3 toasts; oldest Tier A/B is evicted when a 4th is added', () => {
       const { showToast, toasts } = withSetup(() => useToast())
-      for (let i = 1; i <= 5; i++) {
-        showToast(`toast ${i}`, 'info', 0)
-      }
-      expect(toasts.value).toHaveLength(5)
+      showToast('toast 1', 'info', 0)
+      showToast('toast 2', 'success', 0)
+      showToast('toast 3', 'warning', 0)
+      expect(toasts.value).toHaveLength(3)
       expect(toasts.value[0].message).toBe('toast 1')
 
-      // Add a 6th — toast 1 should be evicted
-      showToast('toast 6', 'info', 0)
-      expect(toasts.value).toHaveLength(5)
+      // Add a 4th — toast 1 (oldest, Tier A/B) should be evicted
+      showToast('toast 4', 'info', 0)
+      expect(toasts.value).toHaveLength(3)
       expect(toasts.value.some((t) => t.message === 'toast 1')).toBe(false)
-      expect(toasts.value[toasts.value.length - 1].message).toBe('toast 6')
+      expect(toasts.value[toasts.value.length - 1].message).toBe('toast 4')
+    })
+
+    it('evicts oldest non-Tier-C when stack has mixed Tier A/B and Tier C toasts', () => {
+      const { showToast, toasts } = withSetup(() => useToast())
+      // Tier C (persistent error) first
+      showToast('error 1', 'error')
+      // Then two Tier A/B
+      showToast('info 1', 'info', 0)
+      showToast('info 2', 'info', 0)
+      expect(toasts.value).toHaveLength(3)
+
+      // 4th toast — should evict 'info 1' (oldest non-Tier-C), NOT 'error 1'
+      showToast('warning 1', 'warning', 0)
+      expect(toasts.value).toHaveLength(3)
+      expect(toasts.value.some((t) => t.message === 'error 1')).toBe(true)
+      expect(toasts.value.some((t) => t.message === 'info 1')).toBe(false)
+      expect(toasts.value.some((t) => t.message === 'warning 1')).toBe(true)
+    })
+
+    it('queues a new toast (not shown) when all 3 visible slots are Tier C', () => {
+      const { showToast, toasts } = withSetup(() => useToast())
+      showToast('error 1', 'error')
+      showToast('error 2', 'error')
+      showToast('error 3', 'error')
+      expect(toasts.value).toHaveLength(3)
+
+      // 4th toast cannot evict any Tier C — should be queued, not visible
+      showToast('info queued', 'info', 0)
+      expect(toasts.value).toHaveLength(3)
+      expect(toasts.value.some((t) => t.message === 'info queued')).toBe(false)
+    })
+
+    it('promotes queued toast when user dismisses a Tier C', async () => {
+      const { showToast, removeToast, toasts } = withSetup(() => useToast())
+      const id1 = showToast('error 1', 'error')
+      showToast('error 2', 'error')
+      showToast('error 3', 'error')
+
+      // Queue a non-Tier-C toast
+      showToast('info queued', 'info', 0)
+      expect(toasts.value.some((t) => t.message === 'info queued')).toBe(false)
+
+      // Dismiss one Tier C — queued toast should become visible
+      removeToast(id1)
+      await nextTick()
+      expect(toasts.value).toHaveLength(3)
+      expect(toasts.value.some((t) => t.message === 'info queued')).toBe(true)
+    })
+
+    it('clearAllToasts also clears the pending queue', async () => {
+      const { showToast, clearAllToasts, removeToast, toasts } = withSetup(() => useToast())
+      const id1 = showToast('error 1', 'error')
+      showToast('error 2', 'error')
+      showToast('error 3', 'error')
+
+      // Queue a toast
+      showToast('queued info', 'info', 0)
+
+      // Clear everything — pending queue must also be cleared
+      clearAllToasts()
+      expect(toasts.value).toHaveLength(0)
+
+      // Simulate dismissing (no-op after clear) — queued toast must NOT reappear
+      removeToast(id1)
+      await nextTick()
+      expect(toasts.value).toHaveLength(0)
+    })
+
+    it('error toast with non-zero duration is NOT Tier C and can be evicted', () => {
+      const { showToast, toasts } = withSetup(() => useToast())
+      // Custom-duration error (Tier A/B, not Tier C)
+      showToast('timed error', 'error', 2000)
+      showToast('info 1', 'info', 0)
+      showToast('info 2', 'info', 0)
+      expect(toasts.value).toHaveLength(3)
+
+      // 4th toast: 'timed error' is the oldest and NOT Tier C — evict it
+      showToast('info 3', 'info', 0)
+      expect(toasts.value).toHaveLength(3)
+      expect(toasts.value.some((t) => t.message === 'timed error')).toBe(false)
+      expect(toasts.value.some((t) => t.message === 'info 3')).toBe(true)
     })
   })
 

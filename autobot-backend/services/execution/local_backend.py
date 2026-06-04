@@ -9,11 +9,11 @@ Supports Python, shell, and other system commands.
 """
 
 import asyncio
-import logging
 import os
 import sys
 from typing import Dict, Tuple
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
 from services.execution.base_backend import (
     BackendType,
@@ -23,13 +23,13 @@ from services.execution.base_backend import (
     ExecutionTask,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class LocalBackend(ExecutionBackend):
     """Execute tasks locally using subprocess (Issue #4343)."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize local backend."""
         super().__init__(BackendType.LOCAL)
         self._max_processes = 10

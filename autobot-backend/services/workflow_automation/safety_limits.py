@@ -9,12 +9,13 @@ CostTracker service for token/cost budgeting per workflow execution.
 """
 
 import asyncio
-import logging
 import time
 from dataclasses import dataclass, field
-from typing import Dict, Optional
+from typing import Dict
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -174,12 +175,12 @@ class CostTracker:
             return False
         return True
 
-    def get_summary(self, workflow_id: str) -> Optional[Dict]:
+    def get_summary(self, workflow_id: str) -> Dict | None:
         """Return cost summary dict, or None if *workflow_id* is unknown."""
         cost = self._executions.get(workflow_id)
         return cost.to_dict() if cost else None
 
-    def finish(self, workflow_id: str) -> Optional[Dict]:
+    def finish(self, workflow_id: str) -> Dict | None:
         """
         Remove tracking entry for *workflow_id* and return its final summary.
 
@@ -244,7 +245,7 @@ class StepTimeoutEnforcer:
         self,
         coro,
         step_id: str,
-        timeout_seconds: Optional[int],
+        timeout_seconds: int | None,
         limits: WorkflowLimits,
     ):
         """

@@ -10,10 +10,9 @@
     </div>
 
     <div class="desktop-container">
-      <UnifiedLoadingView
-        :is-loading="loading"
+      <LoadingBoundary
+        :loading="loading"
         :error="error"
-        :has-content="!loading && !error"
         :timeout-ms="15000"
         @loading-complete="handleDesktopConnected"
         @loading-error="handleDesktopError"
@@ -49,7 +48,7 @@
             allowfullscreen
           ></iframe>
         </div>
-      </UnifiedLoadingView>
+      </LoadingBoundary>
     </div>
 
     <div class="desktop-controls">
@@ -106,7 +105,7 @@
           ⌨️ {{ $t('desktop.interface.typeText') }}
         </TouchFriendlyButton>
         <TouchFriendlyButton
-          variant="danger"
+          variant="error"
           size="sm"
           @click="sendCtrlAltDel"
           :title="$t('desktop.interface.ctrlAltDel')"
@@ -132,7 +131,13 @@
         <div class="screenshot-content" @click.stop>
           <div class="screenshot-header">
             <h3 class="text-lg font-semibold text-autobot-text-primary">{{ $t('desktop.interface.screenshotTitle') }}</h3>
-            <button @click="showScreenshotModal = false" class="close-btn">×</button>
+            <button
+              @click="showScreenshotModal = false"
+              class="close-btn"
+              :aria-label="$t('common.close')"
+              :title="$t('common.close')"
+              type="button"
+            >×</button>
           </div>
           <div class="screenshot-body">
             <img v-if="screenshotData" :src="screenshotData" :alt="$t('desktop.interface.screenshotAlt')" class="screenshot-image" loading="lazy" />
@@ -153,7 +158,13 @@
         <div class="type-dialog-content" @click.stop>
           <div class="type-dialog-header">
             <h3 class="text-lg font-semibold text-autobot-text-primary">{{ $t('desktop.interface.typeTextTitle') }}</h3>
-            <button @click="showTypeDialog = false" class="close-btn">×</button>
+            <button
+              @click="showTypeDialog = false"
+              class="close-btn"
+              :aria-label="$t('common.close')"
+              :title="$t('common.close')"
+              type="button"
+            >×</button>
           </div>
           <div class="type-dialog-body">
             <textarea
@@ -182,7 +193,7 @@ import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 // MIGRATED: Removed environment.js, using AppConfig.js only
 import appConfig from '@/config/AppConfig.js'
-import UnifiedLoadingView from '@/components/ui/UnifiedLoadingView.vue'
+import LoadingBoundary from '@/components/ui/LoadingBoundary.vue'
 import TouchFriendlyButton from '@/components/ui/TouchFriendlyButton.vue'
 import DesktopContextPanel from '@/components/desktop/DesktopContextPanel.vue'
 import { useLoadingState } from '@/composables/useLoadingState'
@@ -388,17 +399,17 @@ const checkConnection = async () => {
   });
 }
 
-// UnifiedLoadingView event handlers
+// LoadingBoundary event handlers
 const handleDesktopConnected = () => {
   loading.value = false
   connectionStatus.value = 'Connected'
 }
 
-const handleDesktopError = (error) => {
-  logger.error('Desktop connection error:', error)
+const handleDesktopError = (err: Error | unknown) => {
+  logger.error('Desktop connection error:', err)
   loading.value = false
   connectionStatus.value = 'Error'
-  error.value = t('desktop.interface.errorVncConnection', { error: error.message || error })
+  error.value = t('desktop.interface.errorVncConnection', { error: error.value?.message || error })
 }
 
 const handleDesktopTimeout = () => {
@@ -532,7 +543,7 @@ onUnmounted(() => {
   contain: layout style paint;
 }
 
-/* Loading and error styles moved to UnifiedLoadingView */
+/* Loading and error styles handled by LoadingBoundary */
 
 .desktop-controls {
   padding: var(--spacing-3) var(--spacing-6);

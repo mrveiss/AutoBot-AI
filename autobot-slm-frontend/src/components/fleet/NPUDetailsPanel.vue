@@ -166,6 +166,7 @@ onMounted(async () => {
           <button
             @click="emit('close')"
             class="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+            aria-label="Close"
           >
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -185,35 +186,35 @@ onMounted(async () => {
 
           <!-- Device Info -->
           <div class="bg-gray-50 rounded-lg p-4">
-            <h3 class="text-sm font-medium text-gray-700 mb-3">Device Information</h3>
+            <h3 class="text-sm font-medium text-gray-700 mb-3">{{ $t('fleet.nPUDetailsPanel.deviceInformation') }}</h3>
             <dl class="space-y-2">
               <div class="flex justify-between">
-                <dt class="text-sm text-gray-500">Device Type</dt>
+                <dt class="text-sm text-gray-500">{{ $t('fleet.nPUDetailsPanel.deviceType') }}</dt>
                 <dd class="text-sm font-medium text-gray-900">{{ deviceTypeLabel }}</dd>
               </div>
               <div class="flex justify-between">
-                <dt class="text-sm text-gray-500">Memory</dt>
+                <dt class="text-sm text-gray-500">{{ $t('fleet.nPUDetailsPanel.memory') }}</dt>
                 <dd class="text-sm font-medium text-gray-900">
                   {{ npuStatus?.capabilities?.memoryGB ?? 'N/A' }} GB
                 </dd>
               </div>
               <div class="flex justify-between">
-                <dt class="text-sm text-gray-500">Max Concurrent</dt>
+                <dt class="text-sm text-gray-500">{{ $t('fleet.nPUDetailsPanel.maxConcurrent') }}</dt>
                 <dd class="text-sm font-medium text-gray-900">
                   {{ npuStatus?.capabilities?.maxConcurrent ?? 'N/A' }}
                 </dd>
               </div>
               <div class="flex justify-between">
-                <dt class="text-sm text-gray-500">Last Health Check</dt>
+                <dt class="text-sm text-gray-500">{{ $t('fleet.nPUDetailsPanel.lastHealthCheck') }}</dt>
                 <dd class="text-sm font-medium text-gray-900">{{ lastHealthCheck }}</dd>
               </div>
               <div class="flex justify-between">
-                <dt class="text-sm text-gray-500">Detection Status</dt>
+                <dt class="text-sm text-gray-500">{{ $t('fleet.nPUDetailsPanel.detectionStatus') }}</dt>
                 <dd class="text-sm font-medium">
-                  <span v-if="npuStatus?.detectionStatus === 'detected'" class="text-green-600">Detected</span>
-                  <span v-else-if="npuStatus?.detectionStatus === 'pending'" class="text-yellow-600">Pending</span>
-                  <span v-else-if="npuStatus?.detectionStatus === 'failed'" class="text-red-600">Failed</span>
-                  <span v-else class="text-gray-600">Unknown</span>
+                  <span v-if="npuStatus?.detectionStatus === 'detected'" class="text-green-600">{{ $t('fleet.nPUDetailsPanel.detected') }}</span>
+                  <span v-else-if="npuStatus?.detectionStatus === 'pending'" class="text-yellow-600">{{ $t('fleet.nPUDetailsPanel.pending') }}</span>
+                  <span v-else-if="npuStatus?.detectionStatus === 'failed'" class="text-red-600">{{ $t('fleet.nPUDetailsPanel.failed') }}</span>
+                  <span v-else class="text-gray-600">{{ $t('fleet.nPUDetailsPanel.unknown') }}</span>
                 </dd>
               </div>
             </dl>
@@ -221,32 +222,32 @@ onMounted(async () => {
 
           <!-- Live Metrics (Issue #590) -->
           <div v-if="liveMetrics" class="bg-gray-50 rounded-lg p-4">
-            <h3 class="text-sm font-medium text-gray-700 mb-3">Live Metrics</h3>
+            <h3 class="text-sm font-medium text-gray-700 mb-3">{{ $t('fleet.nPUDetailsPanel.liveMetrics') }}</h3>
             <div class="grid grid-cols-2 gap-3">
               <div class="text-center p-2 bg-white rounded-sm border border-gray-100">
                 <p class="text-lg font-semibold text-gray-900">{{ liveMetrics.inference_count }}</p>
-                <p class="text-xs text-gray-500">Inferences</p>
+                <p class="text-xs text-gray-500">{{ $t('fleet.nPUDetailsPanel.inferences') }}</p>
               </div>
               <div class="text-center p-2 bg-white rounded-sm border border-gray-100">
                 <p class="text-lg font-semibold text-gray-900">{{ liveMetrics.avg_latency_ms.toFixed(1) }}ms</p>
-                <p class="text-xs text-gray-500">Avg Latency</p>
+                <p class="text-xs text-gray-500">{{ $t('fleet.nPUDetailsPanel.avgLatency') }}</p>
               </div>
               <div class="text-center p-2 bg-white rounded-sm border border-gray-100">
                 <p class="text-lg font-semibold text-gray-900">{{ liveMetrics.throughput_rps.toFixed(1) }}</p>
-                <p class="text-xs text-gray-500">Throughput (req/s)</p>
+                <p class="text-xs text-gray-500">{{ $t('fleet.nPUDetailsPanel.throughputReqS') }}</p>
               </div>
               <div class="text-center p-2 bg-white rounded-sm border border-gray-100">
                 <p class="text-lg font-semibold" :class="tempColor">
                   {{ liveMetrics.temperature_celsius != null ? `${liveMetrics.temperature_celsius}°C` : 'N/A' }}
                 </p>
-                <p class="text-xs text-gray-500">Temperature</p>
+                <p class="text-xs text-gray-500">{{ $t('fleet.nPUDetailsPanel.temperature') }}</p>
               </div>
             </div>
 
             <!-- Memory bar -->
             <div class="mt-3">
               <div class="flex justify-between text-xs text-gray-500 mb-1">
-                <span>Memory</span>
+                <span>{{ $t('fleet.nPUDetailsPanel.memory') }}</span>
                 <span>{{ liveMetrics.memory_used_gb.toFixed(1) }} / {{ liveMetrics.memory_total_gb.toFixed(1) }} GB</span>
               </div>
               <div class="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
@@ -265,7 +266,7 @@ onMounted(async () => {
 
           <!-- Utilization -->
           <div>
-            <h3 class="text-sm font-medium text-gray-700 mb-3">Current Utilization</h3>
+            <h3 class="text-sm font-medium text-gray-700 mb-3">{{ $t('fleet.nPUDetailsPanel.currentUtilization') }}</h3>
             <div class="flex items-center gap-4">
               <div class="flex-1">
                 <div class="w-full h-4 bg-gray-200 rounded-full overflow-hidden">
@@ -290,7 +291,7 @@ onMounted(async () => {
               Models ({{ availableModels.length }})
             </h3>
             <div v-if="availableModels.length === 0" class="text-sm text-gray-500">
-              No models detected
+              {{ $t('fleet.nPUDetailsPanel.noModelsDetected') }}
             </div>
             <ul v-else class="space-y-2">
               <li
@@ -311,13 +312,13 @@ onMounted(async () => {
                   v-if="loadedModels.includes(model)"
                   class="px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded-sm"
                 >
-                  Loaded
+                  {{ $t('fleet.nPUDetailsPanel.loaded') }}
                 </span>
                 <span
                   v-else
                   class="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded-sm"
                 >
-                  Available
+                  {{ $t('fleet.nPUDetailsPanel.available') }}
                 </span>
               </li>
             </ul>
@@ -329,7 +330,7 @@ onMounted(async () => {
               @click="showConfigSection = !showConfigSection"
               class="flex items-center justify-between w-full text-sm font-medium text-gray-700 hover:text-gray-900"
             >
-              <span>Worker Configuration</span>
+              <span>{{ $t('fleet.nPUDetailsPanel.workerConfiguration') }}</span>
               <svg
                 :class="['w-4 h-4 transition-transform', showConfigSection ? 'rotate-180' : '']"
                 fill="none"
@@ -343,7 +344,7 @@ onMounted(async () => {
             <div v-if="showConfigSection" class="mt-3 space-y-4 bg-gray-50 rounded-lg p-4">
               <div class="grid grid-cols-2 gap-4">
                 <div>
-                  <label class="block text-xs font-medium text-gray-600 mb-1">Priority (1-10)</label>
+                  <label class="block text-xs font-medium text-gray-600 mb-1">{{ $t('fleet.nPUDetailsPanel.priority110') }}</label>
                   <input
                     v-model.number="workerConfig.priority"
                     type="number" min="1" max="10"
@@ -351,7 +352,7 @@ onMounted(async () => {
                   />
                 </div>
                 <div>
-                  <label class="block text-xs font-medium text-gray-600 mb-1">Weight (1-100)</label>
+                  <label class="block text-xs font-medium text-gray-600 mb-1">{{ $t('fleet.nPUDetailsPanel.weight1100') }}</label>
                   <input
                     v-model.number="workerConfig.weight"
                     type="number" min="1" max="100"
@@ -362,7 +363,7 @@ onMounted(async () => {
 
               <div class="grid grid-cols-2 gap-4">
                 <div>
-                  <label class="block text-xs font-medium text-gray-600 mb-1">Max Concurrent</label>
+                  <label class="block text-xs font-medium text-gray-600 mb-1">{{ $t('fleet.nPUDetailsPanel.maxConcurrent') }}</label>
                   <input
                     v-model.number="workerConfig.max_concurrent"
                     type="number" min="1"
@@ -370,7 +371,7 @@ onMounted(async () => {
                   />
                 </div>
                 <div>
-                  <label class="block text-xs font-medium text-gray-600 mb-1">Max Retries</label>
+                  <label class="block text-xs font-medium text-gray-600 mb-1">{{ $t('fleet.nPUDetailsPanel.maxRetries') }}</label>
                   <input
                     v-model.number="workerConfig.max_retries"
                     type="number" min="0" max="10"
@@ -380,15 +381,15 @@ onMounted(async () => {
               </div>
 
               <div>
-                <label class="block text-xs font-medium text-gray-600 mb-1">Failure Action</label>
+                <label class="block text-xs font-medium text-gray-600 mb-1">{{ $t('fleet.nPUDetailsPanel.failureAction') }}</label>
                 <select
                   v-model="workerConfig.failure_action"
                   class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-sm focus:ring-1 focus:ring-primary-500"
                 >
-                  <option value="retry">Retry on Same Worker</option>
-                  <option value="failover">Failover to Another Worker</option>
-                  <option value="skip">Skip Task</option>
-                  <option value="alert">Alert Only</option>
+                  <option value="retry">{{ $t('fleet.nPUDetailsPanel.retryOnSameWorker') }}</option>
+                  <option value="failover">{{ $t('fleet.nPUDetailsPanel.failoverToAnotherWorker') }}</option>
+                  <option value="skip">{{ $t('fleet.nPUDetailsPanel.skipTask') }}</option>
+                  <option value="alert">{{ $t('fleet.nPUDetailsPanel.alertOnly') }}</option>
                 </select>
               </div>
 
@@ -408,7 +409,7 @@ onMounted(async () => {
 
           <!-- Detection Error -->
           <div v-if="npuStatus?.detectionError" class="bg-red-50 rounded-lg p-4">
-            <h3 class="text-sm font-medium text-red-700 mb-2">Detection Error</h3>
+            <h3 class="text-sm font-medium text-red-700 mb-2">{{ $t('fleet.nPUDetailsPanel.detectionError') }}</h3>
             <p class="text-sm text-red-600">{{ npuStatus.detectionError }}</p>
           </div>
         </div>
@@ -420,7 +421,7 @@ onMounted(async () => {
             :disabled="loading"
             class="px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
           >
-            Remove NPU Role
+            {{ $t('fleet.nPUDetailsPanel.removeNPURole') }}
           </button>
           <button
             @click="refreshStatus"

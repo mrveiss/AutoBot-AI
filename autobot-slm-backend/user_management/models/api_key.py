@@ -9,7 +9,7 @@ Long-lived API keys for programmatic access.
 
 import uuid
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, String
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -70,7 +70,7 @@ class APIKey(Base, TimestampMixin):
     )
 
     # Optional team scope
-    team_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    team_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("teams.id", ondelete="CASCADE"),
         nullable=True,
@@ -84,7 +84,7 @@ class APIKey(Base, TimestampMixin):
     )
 
     # Description
-    description: Mapped[Optional[str]] = mapped_column(
+    description: Mapped[str | None] = mapped_column(
         String(500),
         nullable=True,
     )
@@ -104,13 +104,13 @@ class APIKey(Base, TimestampMixin):
     )
 
     # Expiration (nullable = never expires)
-    expires_at: Mapped[Optional[datetime]] = mapped_column(
+    expires_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
 
     # Usage tracking
-    last_used_at: Mapped[Optional[datetime]] = mapped_column(
+    last_used_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
@@ -121,12 +121,12 @@ class APIKey(Base, TimestampMixin):
     )
 
     # Revocation info
-    revoked_at: Mapped[Optional[datetime]] = mapped_column(
+    revoked_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
 
-    revoked_by: Mapped[Optional[uuid.UUID]] = mapped_column(
+    revoked_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
@@ -139,7 +139,7 @@ class APIKey(Base, TimestampMixin):
         foreign_keys=[user_id],
     )
 
-    team: Mapped[Optional["Team"]] = relationship(
+    team: Mapped["Team | None"] = relationship(
         "Team",
         back_populates="api_keys",
     )
@@ -169,7 +169,7 @@ class APIKey(Base, TimestampMixin):
         self.last_used_at = datetime.now(timezone.utc)
         self.usage_count += 1
 
-    def revoke(self, revoked_by_user_id: Optional[uuid.UUID] = None) -> None:
+    def revoke(self, revoked_by_user_id: uuid.UUID | None = None) -> None:
         """Revoke the API key."""
         self.is_active = False
         self.revoked_at = datetime.now(timezone.utc)

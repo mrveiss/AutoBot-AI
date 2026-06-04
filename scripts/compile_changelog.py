@@ -55,7 +55,7 @@ def parse_fragment(path: Path) -> dict | None:
         return None
 
     frontmatter = text[3:end].strip()
-    body = text[end + 3:].strip()
+    body = text[end + 3 :].strip()
 
     meta: dict = {}
     for line in frontmatter.splitlines():

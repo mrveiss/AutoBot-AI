@@ -19,18 +19,20 @@ Features:
 
 import asyncio
 import json
-import logging
 import os
 import re
 import sqlite3
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 from uuid import uuid4
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import RedisDatabase, get_redis_client
+from autobot_shared.singleton_factory import lazy_singleton
+from autobot_shared.ssot_config import config
 from autobot_shared.time_utils import utc_timestamp
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Read-only SQL prefixes allowed
 _SAFE_SQL_PREFIXES = ("SELECT", "SHOW", "DESCRIBE", "DESC", "EXPLAIN", "WITH")
@@ -60,8 +62,8 @@ _DANGEROUS_KEYWORDS = frozenset(
 _HISTORY_KEY_PREFIX = "nl_database:history:"
 
 # Local DB path (autobot_data.db)
-_DEFAULT_BASE = os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot")
-_LOCAL_DB_PATH = os.environ.get("AUTOBOT_DATA_DB", os.path.join(_DEFAULT_BASE, "autobot_data.db"))
+_DEFAULT_BASE = config.base_dir
+_LOCAL_DB_PATH = config.data_db
 
 
 def _validate_readonly_sql(sql: str) -> bool:
@@ -224,7 +226,7 @@ async def _run_external_query(db_url: str, sql: str) -> List[Dict[str, Any]]:
 def _error_response(
     error: str,
     question: str,
-    sql: Optional[str],
+    sql: str | None,
 ) -> Dict[str, Any]:
     """
     Build a standardised error response dict for NL database queries.
@@ -275,23 +277,14 @@ class NLDatabaseService:
     databases. Enforces read-only access and logs all queries for audit.
     """
 
-    _instance: Optional["NLDatabaseService"] = None
-
     def __init__(self) -> None:
         """Initialize the NLDatabaseService."""
-        self._vanna: Optional[Any] = None
-        self._llm: Optional[Any] = None
+        self._vanna: Any | None = None
+        self._llm: Any | None = None
         self._trained_schemas: Dict[str, str] = {}  # db_id -> DDL
         self._local_schema: str = ""
         self._vanna_available = False
         self._initialized = False
-
-    @classmethod
-    def get_instance(cls) -> "NLDatabaseService":
-        """Get or create singleton instance."""
-        if cls._instance is None:
-            cls._instance = cls()
-        return cls._instance
 
     async def initialize(self) -> None:
         """Initialize Vanna.ai and train on local schema."""
@@ -349,9 +342,9 @@ class NLDatabaseService:
     async def query(
         self,
         question: str,
-        db_url: Optional[str] = None,
+        db_url: str | None = None,
         db_id: str = "local",
-        user_id: Optional[str] = None,
+        user_id: str | None = None,
     ) -> Dict[str, Any]:
         """
         Execute a natural language query against a database.
@@ -392,7 +385,7 @@ class NLDatabaseService:
     async def _safe_execute_query(
         self,
         sql: str,
-        db_url: Optional[str],
+        db_url: str | None,
         db_id: str,
     ) -> tuple:
         """
@@ -413,7 +406,7 @@ class NLDatabaseService:
         sql: str,
         db_id: str,
         results: List[Dict[str, Any]],
-        user_id: Optional[str],
+        user_id: str | None,
         elapsed_ms: int,
     ) -> None:
         """
@@ -524,13 +517,13 @@ class NLDatabaseService:
             Extracted SQL string
         """
         try:
-            from llm_multi_provider import UnifiedLLMInterface
+            from services.llm_service import LLMService
 
             if self._llm is None:
-                self._llm = UnifiedLLMInterface()
-                await self._llm.initialize()
+                self._llm = LLMService()
 
-            response = await self._llm.generate_response(prompt, llm_type="task")
+            llm_response = await self._llm.chat([{"role": "user", "content": prompt}], llm_type="task")
+            response = llm_response.content
             return _extract_sql_from_response(response)
         except Exception as exc:
             logger.error("LLM SQL generation failed: %s", exc)
@@ -539,7 +532,7 @@ class NLDatabaseService:
     async def _execute_query(
         self,
         sql: str,
-        db_url: Optional[str],
+        db_url: str | None,
         db_id: str,
     ) -> List[Dict[str, Any]]:
         """
@@ -694,7 +687,9 @@ class NLDatabaseService:
 
                 ddl_parts = []
                 for tbl in tables:
-                    await cur.execute(f"SHOW CREATE TABLE `{tbl}`")  # noqa: S608
+                    await cur.execute(  # nosemgrep: autobot-sql-string-format  # nosemgrep
+                        f"SHOW CREATE TABLE `{tbl}`"
+                    )  # noqa: S608
                     row = await cur.fetchone()
                     if row:
                         ddl_parts.append(list(row.values())[1])
@@ -726,7 +721,7 @@ class NLDatabaseService:
 
     async def get_query_history(
         self,
-        user_id: Optional[str] = None,
+        user_id: str | None = None,
         limit: int = 50,
     ) -> List[Dict[str, Any]]:
         """
@@ -748,7 +743,7 @@ class NLDatabaseService:
             logger.warning("Failed to retrieve query history: %s", exc)
             return []
 
-    async def _save_history(self, entry: Dict[str, Any], user_id: Optional[str]) -> None:
+    async def _save_history(self, entry: Dict[str, Any], user_id: str | None) -> None:
         """
         Save a query entry to Redis history.
 
@@ -772,6 +767,5 @@ class NLDatabaseService:
             logger.warning("Failed to save query history: %s", exc)
 
 
-def get_nl_database_service() -> NLDatabaseService:
-    """Get the singleton NLDatabaseService instance."""
-    return NLDatabaseService.get_instance()
+get_nl_database_service = lazy_singleton(NLDatabaseService)
+"""Get the singleton NLDatabaseService instance."""

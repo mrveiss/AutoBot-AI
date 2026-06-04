@@ -21,7 +21,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from functools import wraps
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import aiofiles
 
@@ -42,15 +42,15 @@ class APIMetrics:
     response_time_ms: float
     request_size_bytes: int
     response_size_bytes: int
-    user_agent: Optional[str]
+    user_agent: str | None
     client_ip: str
     database_queries: int
     cache_hits: int
     cache_misses: int
     memory_usage_mb: float
     cpu_time_ms: float
-    error_message: Optional[str] = None
-    trace_id: Optional[str] = None
+    error_message: str | None = None
+    trace_id: str | None = None
 
 
 @dataclass
@@ -64,7 +64,7 @@ class CacheMetrics:
     hit: bool
     response_time_ms: float
     data_size_bytes: int
-    ttl_seconds: Optional[int]
+    ttl_seconds: int | None
     eviction_count: int
     memory_usage_mb: float
     hit_rate_percent: float
@@ -86,7 +86,7 @@ class DatabaseMetrics:
     connection_pool_size: int
     active_connections: int
     query_hash: str
-    error_message: Optional[str] = None
+    error_message: str | None = None
 
 
 @dataclass
@@ -115,7 +115,7 @@ class Alert:
     metric_value: float
     threshold_value: float
     resolved: bool = False
-    resolution_timestamp: Optional[str] = None
+    resolution_timestamp: str | None = None
 
 
 class PerformanceTracker:
@@ -310,7 +310,7 @@ class AdvancedAPMSystem:
         status_code: int,
         response_time: float,
         trace_id: str,
-        error_message: Optional[str] = None,
+        error_message: str | None = None,
     ):
         """Complete API request tracking."""
         try:
@@ -350,7 +350,7 @@ class AdvancedAPMSystem:
         hit: bool,
         response_time: float,
         data_size: int = 0,
-        ttl: Optional[int] = None,
+        ttl: int | None = None,
     ):
         """Track cache operation performance."""
         try:
@@ -394,7 +394,7 @@ class AdvancedAPMSystem:
         operation: str,
         execution_time: float,
         success: bool = True,
-        error: Optional[str] = None,
+        error: str | None = None,
         rows_affected: int = 0,
         table: str = "unknown",
     ):

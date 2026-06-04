@@ -2,7 +2,7 @@
   <div class="code-evolution-timeline">
     <!-- Header with controls -->
     <div class="timeline-header">
-      <h2><i class="fas fa-chart-line"></i> {{ $t('analytics.codeEvolution.title') }}</h2>
+      <h2><Icon name="chart-line" /> {{ $t('analytics.codeEvolution.title') }}</h2>
       <div class="timeline-controls">
         <select v-model="selectedGranularity" class="control-select">
           <option value="daily">{{ $t('analytics.codeEvolution.daily') }}</option>
@@ -16,23 +16,23 @@
           <option value="365">{{ $t('analytics.codeEvolution.lastYear') }}</option>
         </select>
         <BaseButton variant="secondary" size="sm" @click="fetchTimeline" :loading="loading">
-          <i class="fas fa-sync"></i> {{ $t('analytics.codeEvolution.refresh') }}
+          <Icon name="sync" /> {{ $t('analytics.codeEvolution.refresh') }}
         </BaseButton>
         <BaseButton variant="primary" size="sm" @click="exportData">
-          <i class="fas fa-download"></i> {{ $t('analytics.codeEvolution.export') }}
+          <Icon name="download" /> {{ $t('analytics.codeEvolution.export') }}
         </BaseButton>
       </div>
     </div>
 
     <!-- Loading State -->
     <div v-if="loading" class="loading-state">
-      <i class="fas fa-spinner fa-spin"></i>
+      <Icon name="spinner" class="animate-spin" />
       <span>{{ $t('analytics.codeEvolution.loading') }}</span>
     </div>
 
     <!-- Error State -->
     <div v-else-if="error" class="error-state">
-      <i class="fas fa-exclamation-triangle"></i>
+      <Icon name="exclamation-triangle" />
       <span>{{ error }}</span>
       <BaseButton variant="secondary" size="sm" @click="fetchTimeline">{{ $t('analytics.codeEvolution.retry') }}</BaseButton>
     </div>
@@ -49,7 +49,7 @@
         >
           <div class="trend-header">
             <span class="metric-name">{{ formatMetricName(metric) }}</span>
-            <i :class="getTrendIcon(trend.direction)"></i>
+            <Icon :name="getTrendIcon(trend.direction)" />
           </div>
           <div class="trend-value">{{ trend.last_value?.toFixed(1) || 0 }}</div>
           <div class="trend-change">
@@ -162,7 +162,7 @@
 
       <!-- Pattern Evolution Section -->
       <div class="patterns-section" v-if="patterns && Object.keys(patterns).length">
-        <h3><i class="fas fa-bug"></i> {{ $t('analytics.codeEvolution.antiPatternEvolution') }}</h3>
+        <h3><Icon name="bug" /> {{ $t('analytics.codeEvolution.antiPatternEvolution') }}</h3>
         <div class="patterns-grid">
           <div
             v-for="(data, patternType) in patterns"
@@ -184,7 +184,7 @@
               ></div>
             </div>
             <div class="pattern-trend">
-              <i :class="getPatternTrendIcon(data)"></i>
+              <Icon :name="getPatternTrendIcon(data)" />
               {{ getPatternTrendText(data) }}
             </div>
           </div>
@@ -208,17 +208,18 @@
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 // @ts-ignore - Component may not have type declarations
 import BaseButton from '@/components/base/BaseButton.vue'
-import { useToast } from '@/composables/useToast'
+import { useNotificationBus } from '@/composables/useNotificationBus'
 import { useCodeEvolutionData } from '@/composables/analytics/useCodeEvolutionData'
 import type { TimelinePoint, TrendData, PatternPoint } from '@/composables/analytics/useCodeEvolutionData'
 
 const { t } = useI18n()
 
-const { showToast } = useToast()
+const { showToast } = useNotificationBus()
 const { fetchTimeline: apiFetchTimeline, fetchTrends: apiFetchTrends, fetchPatterns: apiFetchPatterns, fetchExport: apiFetchExport } = useCodeEvolutionData()
 
 // State
@@ -422,9 +423,9 @@ function getTrendClass(direction: string): string {
 
 function getTrendIcon(direction: string): string {
   switch (direction) {
-    case 'improving': return 'fas fa-arrow-up trend-up'
-    case 'declining': return 'fas fa-arrow-down trend-down'
-    default: return 'fas fa-minus trend-stable'
+    case 'improving': return 'arrow-up'
+    case 'declining': return 'arrow-down'
+    default: return 'minus'
   }
 }
 
@@ -444,9 +445,9 @@ function getPatternTrend(data: PatternPoint[]): string {
 
 function getPatternTrendIcon(data: PatternPoint[]): string {
   const trend = getPatternTrend(data)
-  if (trend === 'declining') return 'fas fa-arrow-down text-green-500'
-  if (trend === 'increasing') return 'fas fa-arrow-up text-red-500'
-  return 'fas fa-minus text-autobot-text-muted'
+  if (trend === 'declining') return 'arrow-down'
+  if (trend === 'increasing') return 'arrow-up'
+  return 'minus'
 }
 
 function getPatternTrendText(data: PatternPoint[]): string {

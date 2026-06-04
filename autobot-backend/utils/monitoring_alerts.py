@@ -6,17 +6,34 @@ Monitors system metrics and sends alerts when thresholds are exceeded
 
 import asyncio
 import json
-import logging
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
+from autobot_shared.alert_cooldown import AlertCooldownManager, AlertTier
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.singleton_factory import lazy_singleton
 from constants.threshold_constants import TimingConstants
 from constants.ttl_constants import TTL_7_DAYS
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
+
+_get_alert_cooldown = lazy_singleton(AlertCooldownManager)
+
+_SEVERITY_TO_TIER = {
+    "critical": AlertTier.FLASH,
+    "high": AlertTier.PRIORITY,
+    "medium": AlertTier.PRIORITY,
+    "low": AlertTier.ROUTINE,
+}
+
+
+def _severity_to_tier(severity) -> AlertTier:
+    """Map AlertSeverity to AlertTier for cooldown checks (#1948)."""
+    key = severity.value if hasattr(severity, "value") else str(severity)
+    return _SEVERITY_TO_TIER.get(key, AlertTier.ROUTINE)
 
 
 class AlertSeverity(Enum):
@@ -68,9 +85,9 @@ class Alert:
     message: str
     created_at: datetime
     updated_at: datetime
-    acknowledged_at: Optional[datetime] = None
-    resolved_at: Optional[datetime] = None
-    acknowledged_by: Optional[str] = None
+    acknowledged_at: datetime | None = None
+    resolved_at: datetime | None = None
+    acknowledged_by: str | None = None
     tags: List[str] = field(default_factory=list)
     metadata: Dict[str, Any] = field(default_factory=dict)
 
@@ -533,7 +550,7 @@ class MonitoringAlertsManager:
             logger.warning(f"Unknown operator: {operator}")
             return False
 
-    def _get_nested_value(self, data: Dict[str, Any], path: str) -> Optional[float]:
+    def _get_nested_value(self, data: Dict[str, Any], path: str) -> float | None:
         """Get nested value from dict using dot notation path"""
         try:
             keys = path.split(".")
@@ -686,16 +703,27 @@ class MonitoringAlertsManager:
 
     async def _send_alert_notifications(self, alert: Alert):
         """Send alert to all enabled notification channels"""
+        tier = _severity_to_tier(alert.severity)
+        cooldown = _get_alert_cooldown()
+        if not cooldown.should_send(alert.message, tier):
+            logger.debug("Alert suppressed by cooldown: %s (tier=%s)", alert.rule_name, tier)
+            return
+
+        sent_any = False
         for channel_name, channel in self.notification_channels.items():
             if channel.enabled:
                 try:
                     success = await channel.send_alert(alert)
                     if success:
+                        sent_any = True
                         logger.debug(f"Alert sent via {channel_name}")
                     else:
                         logger.warning(f"Failed to send alert via {channel_name}")
                 except Exception as e:
                     logger.error(f"Error sending alert via {channel_name}: {e}")
+
+        if sent_any:
+            cooldown.record_sent(alert.message, tier)
 
     async def _send_recovery_notifications(self, alert: Alert):
         """Send recovery notification to all enabled notification channels"""

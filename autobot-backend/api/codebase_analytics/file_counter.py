@@ -7,13 +7,13 @@ File counting and scanning helper functions for codebase analytics.
 Issue #2013: Decomposed from scanner.py god module.
 """
 
-import logging
 from pathlib import Path
 from typing import Tuple
 
+from autobot_shared.logging_manager import get_logger
 from utils.file_categorization import SKIP_DIRS
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def _should_count_file(file_path: Path) -> bool:

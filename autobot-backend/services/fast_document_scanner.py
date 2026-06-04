@@ -9,17 +9,18 @@ Enhanced for Issue #422: Integration with ManPageParser for structured content e
 """
 
 import gzip
-import logging
 import os
 import subprocess
 import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List
 
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_constants import TTL_7_DAYS
 from services.man_page_parser import ManPageContent, ManPageParser
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -41,9 +42,9 @@ class DocumentChange:
     title: str
     change_type: str  # 'added', 'updated', 'removed'
     timestamp: float
-    file_path: Optional[str] = None
-    size: Optional[int] = None
-    mtime: Optional[float] = None
+    file_path: str | None = None
+    size: int | None = None
+    mtime: float | None = None
 
 
 class FastDocumentScanner:
@@ -59,7 +60,7 @@ class FastDocumentScanner:
     4. Only compute hash if mtime changed
     """
 
-    def __init__(self, redis_client):
+    def __init__(self, redis_client) -> None:
         """Initialize document scanner with Redis client for caching."""
         self.redis = redis_client
         self.CACHE_KEY_PREFIX = "file_meta:"
@@ -90,9 +91,9 @@ class FastDocumentScanner:
         self,
         command: str,
         change_type: str,
-        file_path: Optional[str] = None,
-        size: Optional[int] = None,
-        mtime: Optional[float] = None,
+        file_path: str | None = None,
+        size: int | None = None,
+        mtime: float | None = None,
     ) -> DocumentChange:
         """
         Create a DocumentChange record for a command.
@@ -147,7 +148,7 @@ class FastDocumentScanner:
 
         return command_files
 
-    def _get_file_metadata(self, file_path: str) -> Optional[FileMetadata]:
+    def _get_file_metadata(self, file_path: str) -> FileMetadata | None:
         """
         Get file metadata (FAST - no content reading).
 
@@ -163,7 +164,7 @@ class FastDocumentScanner:
         except (FileNotFoundError, PermissionError):
             return None
 
-    def _get_cached_metadata(self, file_path: str) -> Optional[FileMetadata]:
+    def _get_cached_metadata(self, file_path: str) -> FileMetadata | None:
         """
         Get cached file metadata from Redis.
 
@@ -204,14 +205,14 @@ class FastDocumentScanner:
             },
         )
         # Expire after 7 days
-        self.redis.expire(cache_key, 604800)
+        self.redis.expire(cache_key, TTL_7_DAYS)
 
     def _check_file_changes(
         self,
         commands_to_check,
         current_files: Dict[str, List[str]],
         changes: Dict[str, List],
-        limit: Optional[int],
+        limit: int | None,
     ) -> None:
         """Check files for new/updated changes. Helper extracted for #665. Ref: #1088."""
         checked_count = 0
@@ -264,7 +265,7 @@ class FastDocumentScanner:
         self,
         current_files: Dict[str, List[str]],
         machine_id: str,
-        limit: Optional[int] = None,
+        limit: int | None = None,
     ) -> Dict[str, List[DocumentChange]]:
         """
         Detect document changes using file metadata (ULTRA FAST).
@@ -302,7 +303,7 @@ class FastDocumentScanner:
         if commands_to_check:
             self.redis.delete(cache_key)
             self.redis.sadd(cache_key, *commands_to_check)
-            self.redis.expire(cache_key, 604800)  # 7 days
+            self.redis.expire(cache_key, TTL_7_DAYS)  # 7 days
 
         return changes
 
@@ -310,7 +311,7 @@ class FastDocumentScanner:
         self,
         machine_id: str,
         scan_type: str = "manpages",
-        limit: Optional[int] = None,
+        limit: int | None = None,
         force: bool = False,
     ) -> Dict:
         """Fast scan for document changes. Ref: #1088."""
@@ -359,7 +360,7 @@ class FastDocumentScanner:
 
         return result
 
-    def read_man_page_content(self, file_path: str, command: str) -> Optional[str]:
+    def read_man_page_content(self, file_path: str, command: str) -> str | None:
         """
         Read man page content from file (handles .gz compression).
 
@@ -422,9 +423,7 @@ class FastDocumentScanner:
     # Issue #422: Enhanced methods for ManPageParser integration
     # =========================================================================
 
-    def get_parsed_man_page(
-        self, file_path: str, command: str, section: Optional[str] = None
-    ) -> Optional[ManPageContent]:
+    def get_parsed_man_page(self, file_path: str, command: str, section: str | None = None) -> ManPageContent | None:
         """
         Get parsed man page content with structured extraction.
 
@@ -469,9 +468,9 @@ class FastDocumentScanner:
         self,
         file_path: str,
         command: str,
-        section: Optional[str] = None,
-        system_context: Optional[Dict] = None,
-    ) -> Optional[Dict]:
+        section: str | None = None,
+        system_context: Dict | None = None,
+    ) -> Dict | None:
         """
         Get man page content and metadata ready for knowledge base storage.
 
@@ -501,8 +500,8 @@ class FastDocumentScanner:
     def scan_and_parse_changes(
         self,
         machine_id: str,
-        limit: Optional[int] = None,
-        system_context: Optional[Dict] = None,
+        limit: int | None = None,
+        system_context: Dict | None = None,
     ) -> Dict:
         """
         Scan for changes and parse affected man pages.
@@ -588,9 +587,9 @@ class FastDocumentScanner:
 
     def get_all_man_pages_for_indexing(
         self,
-        limit: Optional[int] = None,
-        sections: Optional[List[str]] = None,
-        system_context: Optional[Dict] = None,
+        limit: int | None = None,
+        sections: List[str] | None = None,
+        system_context: Dict | None = None,
     ) -> List[Dict]:
         """
         Get all man pages for bulk indexing into knowledge base.

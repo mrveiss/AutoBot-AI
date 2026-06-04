@@ -42,7 +42,7 @@ class TestMeshEdgeSync:
     """Tests for MeshEdgeSync.sync() and get_neighbors()."""
 
     @pytest.mark.asyncio
-    async def test_syncs_only_above_threshold(self):
+    async def test_syncs_only_above_threshold(self) -> None:
         """Only edges at or above min_weight are returned by the DB query."""
         edges = [{"from_node": "A", "to_node": "B", "weight": 0.8}]
         db = _make_db_mock(edges)
@@ -55,7 +55,7 @@ class TestMeshEdgeSync:
         db.fetch_edges.assert_awaited_once_with(min_weight=0.5)
 
     @pytest.mark.asyncio
-    async def test_empty_edges_returns_zero(self):
+    async def test_empty_edges_returns_zero(self) -> None:
         """sync() returns 0 and skips pipeline when DB has no matching edges."""
         db = _make_db_mock([])
         redis, pipe = _make_redis_mock()
@@ -67,7 +67,7 @@ class TestMeshEdgeSync:
         pipe.execute.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_bidirectional_sync(self):
+    async def test_bidirectional_sync(self) -> None:
         """Each edge writes forward (A→B) AND reverse (B→A) sorted-set entries."""
         edges = [{"from_node": "X", "to_node": "Y", "weight": 0.9}]
         db = _make_db_mock(edges)
@@ -82,7 +82,7 @@ class TestMeshEdgeSync:
         assert "mesh:edges:Y" in keys_written
 
     @pytest.mark.asyncio
-    async def test_get_neighbors_queries_redis(self):
+    async def test_get_neighbors_queries_redis(self) -> None:
         """get_neighbors() calls zrangebyscore with the correct key and args."""
         db = _make_db_mock([])
         redis, _ = _make_redis_mock()
@@ -102,7 +102,7 @@ class TestMeshEdgeSync:
         assert result == [("B", 0.9)]
 
     @pytest.mark.asyncio
-    async def test_pipeline_used_for_batch(self):
+    async def test_pipeline_used_for_batch(self) -> None:
         """sync() uses a single pipeline for all zadd calls, then executes once."""
         edges = [
             {"from_node": "A", "to_node": "B", "weight": 0.7},
@@ -121,7 +121,7 @@ class TestMeshEdgeSync:
         assert pipe.zadd.call_count == 4
 
     @pytest.mark.asyncio
-    async def test_sync_deletes_stale_keys_before_writing(self):
+    async def test_sync_deletes_stale_keys_before_writing(self) -> None:
         """delete() is called for every touched node before any zadd (#2053)."""
         edges = [{"from_node": "A", "to_node": "B", "weight": 0.8}]
         db = _make_db_mock(edges)
@@ -142,7 +142,7 @@ class TestMeshEdgeSync:
         assert last_delete < first_zadd, "all deletes must precede first zadd"
 
     @pytest.mark.asyncio
-    async def test_sync_does_not_leave_orphaned_entries(self):
+    async def test_sync_does_not_leave_orphaned_entries(self) -> None:
         """A node absent from the current sync has its key deleted (#2053)."""
         first_edges = [
             {"from_node": "A", "to_node": "B", "weight": 0.9},

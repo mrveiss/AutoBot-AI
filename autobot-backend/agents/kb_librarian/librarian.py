@@ -9,13 +9,13 @@ discovery. Refactored from god class into focused package (Issue #381).
 """
 
 import asyncio
-import logging
 import time
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from agents.web_researcher import WebResearcher as WebResearchAssistant
-from event_manager import get_event_manager
+from autobot_shared.logging_manager import get_logger
+from events.bus import PersistStrategy, publish_event
 from knowledge_base import KnowledgeBase
 
 from .formatters import ToolInfoFormatter
@@ -23,7 +23,7 @@ from .parsers import InstructionParser
 from .processors import ResearchResultsProcessor, ResultProcessor, ToolInfoData
 from .text_extraction import TextExtractor
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def _build_basic_info_section(tool_info: Dict[str, Any], tool_name: str) -> str:
@@ -341,13 +341,15 @@ class EnhancedKBLibrarian:
         await self.knowledge_base.store_fact(document_content, metadata=metadata)
         logger.info("Stored knowledge for tool: %s", tool_name)
 
-        await get_event_manager().publish(
+        await publish_event(
+            "global",
             "knowledge_update",
             {
                 "type": "new_tool",
                 "tool_name": tool_name,
                 "message": f"Added knowledge about {tool_name} to the knowledge base",
             },
+            persist=PersistStrategy.NONE,
         )
 
     async def get_tool_instructions(self, tool_name: str) -> Dict[str, Any]:
@@ -369,7 +371,7 @@ class EnhancedKBLibrarian:
 
         return {"name": tool_name, "error": "Could not find instructions for this tool"}
 
-    async def _research_specific_tool(self, tool_name: str) -> Optional[ToolInfoData]:
+    async def _research_specific_tool(self, tool_name: str) -> ToolInfoData | None:
         """Research a specific tool comprehensively."""
         research_queries = {
             "installation": f"how to install {tool_name} linux ubuntu debian",
@@ -488,7 +490,7 @@ Found {len(tools)} tools for {tool_type}:
         for tool in tools:
             await self.store_tool_knowledge(tool)
 
-    async def _get_detailed_tool_info(self, tool_name: str) -> Optional[Dict[str, Any]]:
+    async def _get_detailed_tool_info(self, tool_name: str) -> Dict[str, Any] | None:
         """Get detailed information about a specific tool."""
         query = f"{tool_name} tool description features"
         results = await self.web_assistant.research_query(query)

@@ -8,12 +8,11 @@ Handles command execution in PTY with intelligent polling and cancellation.
 """
 
 import asyncio
-import logging
 import re
 import time
 import uuid
-from typing import Optional
 
+from autobot_shared.logging_manager import get_logger
 from constants.path_constants import PATH
 from constants.threshold_constants import TimingConstants
 from type_defs.common import Metadata
@@ -21,7 +20,7 @@ from utils.encoding_utils import strip_ansi_codes
 
 from .models import AgentTerminalSession
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level tuple for error detection patterns
 _ERROR_PATTERNS = (
@@ -58,7 +57,7 @@ def _extract_terminal_output(messages: list) -> str:
 class CommandExecutor:
     """Executes commands in PTY with intelligent polling"""
 
-    def __init__(self, chat_history_manager=None):
+    def __init__(self, chat_history_manager=None) -> None:
         """
         Initialize command executor.
 
@@ -258,7 +257,7 @@ class CommandExecutor:
             logger.error("[CANCEL] Error during command cancellation: %s", e, exc_info=True)
             return False
 
-    def _search_for_exit_marker(self, messages: list, marker: str, marker_id: str) -> Optional[int]:
+    def _search_for_exit_marker(self, messages: list, marker: str, marker_id: str) -> int | None:
         """Search messages for exit code marker. (Issue #315 - extracted)"""
         escaped_marker = re.escape(marker)
         for msg in reversed(messages):
@@ -272,7 +271,7 @@ class CommandExecutor:
                 return return_code
         return None
 
-    async def _detect_return_code(self, session: AgentTerminalSession, max_attempts: int = 10) -> Optional[int]:
+    async def _detect_return_code(self, session: AgentTerminalSession, max_attempts: int = 10) -> int | None:
         """
         Detect command return code using exit code marker injection.
 

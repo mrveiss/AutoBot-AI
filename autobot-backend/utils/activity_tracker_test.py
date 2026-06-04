@@ -215,9 +215,12 @@ class TestDesktopActivityTracking:
             db=mock_db,
             user_id=user_id,
             action="screenshot",
-            screenshot_path="/tmp/screenshot_123.png",
+            screenshot_path="/tmp/screenshot_123.png",  # nosec B108 - test/controlled code uses tmpdir intentionally
         )
 
         assert isinstance(activity_id, uuid.UUID)
         activity_model = mock_db.add.call_args[0][0]
-        assert "/tmp/screenshot_123.png" in activity_model.screenshot_path
+        assert (
+            "/tmp/screenshot_123.png"
+            in activity_model.screenshot_path  # nosec B108 - test/controlled code uses tmpdir intentionally
+        )

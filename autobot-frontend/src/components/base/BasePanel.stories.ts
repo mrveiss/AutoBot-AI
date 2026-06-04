@@ -4,7 +4,6 @@ import BasePanel from './BasePanel.vue';
 const meta = {
   title: 'Components/Base/BasePanel',
   component: BasePanel,
-  tags: ['autodocs'],
   argTypes: {
     title: {
       control: 'text',

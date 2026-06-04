@@ -23,17 +23,17 @@ to the score at enqueue time.
 
 from __future__ import annotations
 
-import logging
 import time
 import uuid
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Awaitable, Callable, Dict, List, Optional
+from typing import Any, Awaitable, Callable, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -89,7 +89,7 @@ class SyncQueueEntry:
     reason: SyncReason
     status: SyncStatus = SyncStatus.PENDING
     attempts: int = 0
-    last_error: Optional[str] = None
+    last_error: str | None = None
     created_at: str = field(default_factory=lambda: datetime.now(tz=timezone.utc).isoformat())
     updated_at: str = field(default_factory=lambda: datetime.now(tz=timezone.utc).isoformat())
 
@@ -224,7 +224,7 @@ class DocumentSyncQueue:
         )
         return entry
 
-    async def get_next_pending(self) -> Optional[SyncQueueEntry]:
+    async def get_next_pending(self) -> SyncQueueEntry | None:
         """Return the highest-priority pending entry without dequeuing it.
 
         Uses ``zrange`` with ``withscores=False`` to read the smallest-score
@@ -248,7 +248,7 @@ class DocumentSyncQueue:
             return None
         return SyncQueueEntry.from_redis_mapping(raw)
 
-    async def claim_next_pending(self) -> Optional[SyncQueueEntry]:
+    async def claim_next_pending(self) -> SyncQueueEntry | None:
         """Atomically claim the highest-priority pending entry.
 
         Returns the claimed entry (status set to PROCESSING) or ``None`` if
@@ -439,7 +439,7 @@ class DocumentSyncQueue:
     async def process_one(
         self,
         processor: Callable[[SyncQueueEntry], Awaitable[None]],
-    ) -> Optional[SyncQueueEntry]:
+    ) -> SyncQueueEntry | None:
         """Atomically claim one entry and pass it to ``processor``.
 
         Uses :meth:`claim_next_pending` so concurrent workers cannot both
@@ -465,7 +465,7 @@ class DocumentSyncQueue:
 # ---------------------------------------------------------------------------
 
 
-_queue: Optional[DocumentSyncQueue] = None
+_queue: DocumentSyncQueue | None = None
 
 
 def get_document_sync_queue() -> DocumentSyncQueue:
@@ -505,9 +505,9 @@ class SyncQueueWorker:
 
     def __init__(
         self,
-        queue: Optional[DocumentSyncQueue] = None,
+        queue: DocumentSyncQueue | None = None,
         idle_sleep_seconds: float = 2.0,
-        processor: Optional[Callable[[SyncQueueEntry], Awaitable[None]]] = None,
+        processor: Callable[[SyncQueueEntry], Awaitable[None]] | None = None,
     ) -> None:
         self._queue = queue or get_document_sync_queue()
         self._idle_sleep = idle_sleep_seconds

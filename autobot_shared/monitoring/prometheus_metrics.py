@@ -15,7 +15,6 @@ Refactoring History:
 """
 
 import threading
-from typing import Optional
 
 from prometheus_client import (
     CollectorRegistry,
@@ -30,7 +29,10 @@ from prometheus_client import (
 # Issue #470: Added KnowledgeBase, LLMProvider, WebSocket, Redis recorders
 # Issue #476: Added FrontendMetricsRecorder for RUM metrics
 # Issue #4109: Added MCPWorkerMetricsRecorder for worker restart monitoring
+# Phase 4 (#7590): Added ChatMetricsRecorder for SSOT observability
+# Issue #7421: Added VoiceRealtimeMetricsRecorder for Realtime WebRTC session metrics
 from .metrics import (
+    ChatMetricsRecorder,
     ClaudeAPIMetricsRecorder,
     FrontendMetricsRecorder,
     GitHubMetricsRecorder,
@@ -43,6 +45,7 @@ from .metrics import (
     ServiceHealthMetricsRecorder,
     SystemMetricsRecorder,
     TaskMetricsRecorder,
+    VoiceRealtimeMetricsRecorder,
     WebSocketMetricsRecorder,
     WorkflowMetricsRecorder,
 )
@@ -80,9 +83,10 @@ class PrometheusMetricsManager:
     - RedisMetricsRecorder: Redis operation metrics (Issue #470)
     - FrontendMetricsRecorder: Frontend RUM metrics (Issue #476)
     - MCPWorkerMetricsRecorder: MCP worker restart budget metrics (Issue #4109)
+    - VoiceRealtimeMetricsRecorder: Realtime WebRTC session metrics (Issue #7421)
     """
 
-    def __init__(self, registry: Optional[CollectorRegistry] = None):
+    def __init__(self, registry: CollectorRegistry | None = None) -> None:
         """Initialize Prometheus metrics manager with optional registry."""
         self.registry = registry or CollectorRegistry()
 
@@ -114,6 +118,10 @@ class PrometheusMetricsManager:
         self._inference_profiler = InferenceProfilerMetricsRecorder(self.registry)
         # Issue #4109: Initialize MCP worker metrics recorder
         self._mcp_worker = MCPWorkerMetricsRecorder(self.registry)
+        # Phase 4 (#7590): Initialize chat SSOT observability recorder
+        self._chat = ChatMetricsRecorder(self.registry)
+        # Issue #7421: Initialize Voice Realtime WebRTC metrics recorder
+        self._voice_realtime = VoiceRealtimeMetricsRecorder(self.registry)
 
     # =========================================================================
     # Core Infrastructure Metrics Initialization
@@ -269,7 +277,7 @@ class PrometheusMetricsManager:
     # Workflow Metrics (Issue #394: Delegates to WorkflowMetricsRecorder)
     # =========================================================================
 
-    def record_workflow_execution(self, workflow_type: str, status: str, duration: Optional[float] = None) -> None:
+    def record_workflow_execution(self, workflow_type: str, status: str, duration: float | None = None) -> None:
         """Record a workflow execution."""
         self._workflow.record_execution(workflow_type, status, duration)
 
@@ -289,7 +297,7 @@ class PrometheusMetricsManager:
     # GitHub Metrics (Issue #394: Delegates to GitHubMetricsRecorder)
     # =========================================================================
 
-    def record_github_operation(self, operation: str, status: str, duration: Optional[float] = None) -> None:
+    def record_github_operation(self, operation: str, status: str, duration: float | None = None) -> None:
         """Record a GitHub API operation."""
         self._github.record_operation(operation, status, duration)
 
@@ -318,7 +326,7 @@ class PrometheusMetricsManager:
         task_type: str,
         agent_type: str,
         status: str,
-        duration: Optional[float] = None,
+        duration: float | None = None,
     ) -> None:
         """Record a task execution."""
         self._task.record_execution(task_type, agent_type, status, duration)
@@ -781,6 +789,22 @@ class PrometheusMetricsManager:
         self._mcp_worker.set_permanently_failed(bridge, failed)
 
     # =========================================================================
+    # Chat SSOT Observability Metrics (Phase 4, #7590)
+    # =========================================================================
+
+    def record_chat_message_sent(self, event_type: str) -> None:
+        """Increment autobot_chat_messages_sent_total for event_type."""
+        self._chat.record_message_sent(event_type)
+
+    def set_chat_recent_cardinality(self, count: int) -> None:
+        """Update autobot_chat_recent_cardinality gauge (ZCARD chat:recent)."""
+        self._chat.set_recent_cardinality(count)
+
+    def set_chat_disk_file_count(self, count: int) -> None:
+        """Update autobot_chat_disk_file_count gauge."""
+        self._chat.set_disk_file_count(count)
+
+    # =========================================================================
     # Metrics Export
     # =========================================================================
 
@@ -793,7 +817,7 @@ class PrometheusMetricsManager:
 # Global Metrics Instance (Thread-safe Singleton)
 # =============================================================================
 
-_metrics_instance: Optional[PrometheusMetricsManager] = None
+_metrics_instance: PrometheusMetricsManager | None = None
 _metrics_instance_lock = threading.Lock()
 
 

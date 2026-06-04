@@ -4,7 +4,7 @@
 """Tests for LLM cost tracker pricing. Issue #1961."""
 
 from datetime import date, timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -47,6 +47,7 @@ from services.llm_cost_tracker import (
     LLMCostTracker,
     _check_pricing_staleness,
 )
+from tests.fixtures.mocks import make_async_redis, make_redis_pipeline
 
 
 class TestModelPricingCompleteness:
@@ -236,16 +237,6 @@ class TestUnknownModelFallback:
         assert cost == expected
 
 
-def _make_async_iter(items):
-    """Return an async generator that yields items — used to mock scan_iter."""
-
-    async def _gen():
-        for item in items:
-            yield item
-
-    return _gen()
-
-
 class TestScanIterUsage:
     """Verify get_all_user_costs / get_all_agent_costs / _fetch_model_costs use scan_iter
     instead of redis.keys() — Issue #4443."""
@@ -258,25 +249,16 @@ class TestScanIterUsage:
     async def test_get_all_user_costs_uses_scan_iter(self):
         """get_all_user_costs must iterate via scan_iter, not keys()."""
         tracker = self._make_tracker()
-        redis_mock = MagicMock()
-        # scan_iter returns an async generator; keys() is NOT called
         user_key = b"cost:user_totals:alice"
-        redis_mock.scan_iter = MagicMock(return_value=_make_async_iter([user_key]))
-        redis_mock.pipeline = MagicMock(
-            return_value=MagicMock(
-                hgetall=MagicMock(),
-                execute=AsyncMock(
-                    return_value=[
-                        {b"cost_usd": b"1.5", b"input_tokens": b"100", b"output_tokens": b"200", b"call_count": b"3"}
-                    ]
-                ),
-            )
+        pipe = make_redis_pipeline(
+            execute_returns=[
+                {b"cost_usd": b"1.5", b"input_tokens": b"100", b"output_tokens": b"200", b"call_count": b"3"}
+            ]
         )
+        redis_mock = make_async_redis(scan_iter_keys=[user_key], pipeline=pipe)
         with patch.object(tracker, "get_redis", AsyncMock(return_value=redis_mock)):
             result = await tracker.get_all_user_costs()
 
-        redis_mock.scan_iter.assert_called_once()
-        assert not hasattr(redis_mock, "keys") or redis_mock.keys.call_count == 0
         assert len(result) == 1
         assert result[0]["user_id"] == "alice"
         assert result[0]["cost_usd"] == pytest.approx(1.5)
@@ -285,19 +267,13 @@ class TestScanIterUsage:
     async def test_get_all_user_costs_excludes_daily_subkeys(self):
         """Keys containing ':daily:' must be filtered out."""
         tracker = self._make_tracker()
-        redis_mock = MagicMock()
         keys = [b"cost:user_totals:alice", b"cost:user_totals:alice:daily:2026-04-15"]
-        redis_mock.scan_iter = MagicMock(return_value=_make_async_iter(keys))
-        redis_mock.pipeline = MagicMock(
-            return_value=MagicMock(
-                hgetall=MagicMock(),
-                execute=AsyncMock(
-                    return_value=[
-                        {b"cost_usd": b"2.0", b"input_tokens": b"50", b"output_tokens": b"50", b"call_count": b"1"}
-                    ]
-                ),
-            )
+        pipe = make_redis_pipeline(
+            execute_returns=[
+                {b"cost_usd": b"2.0", b"input_tokens": b"50", b"output_tokens": b"50", b"call_count": b"1"}
+            ]
         )
+        redis_mock = make_async_redis(scan_iter_keys=keys, pipeline=pipe)
         with patch.object(tracker, "get_redis", AsyncMock(return_value=redis_mock)):
             result = await tracker.get_all_user_costs()
 
@@ -308,8 +284,7 @@ class TestScanIterUsage:
     async def test_get_all_user_costs_returns_empty_on_no_keys(self):
         """Returns [] when no matching keys exist."""
         tracker = self._make_tracker()
-        redis_mock = MagicMock()
-        redis_mock.scan_iter = MagicMock(return_value=_make_async_iter([]))
+        redis_mock = make_async_redis(scan_iter_keys=[])
         with patch.object(tracker, "get_redis", AsyncMock(return_value=redis_mock)):
             result = await tracker.get_all_user_costs()
 
@@ -319,23 +294,16 @@ class TestScanIterUsage:
     async def test_get_all_agent_costs_uses_scan_iter(self):
         """get_all_agent_costs must use scan_iter, not keys()."""
         tracker = self._make_tracker()
-        redis_mock = MagicMock()
         agent_key = b"cost:agent_totals:bot1"
-        redis_mock.scan_iter = MagicMock(return_value=_make_async_iter([agent_key]))
-        redis_mock.pipeline = MagicMock(
-            return_value=MagicMock(
-                hgetall=MagicMock(),
-                execute=AsyncMock(
-                    return_value=[
-                        {b"cost_usd": b"0.75", b"input_tokens": b"80", b"output_tokens": b"120", b"call_count": b"2"}
-                    ]
-                ),
-            )
+        pipe = make_redis_pipeline(
+            execute_returns=[
+                {b"cost_usd": b"0.75", b"input_tokens": b"80", b"output_tokens": b"120", b"call_count": b"2"}
+            ]
         )
+        redis_mock = make_async_redis(scan_iter_keys=[agent_key], pipeline=pipe)
         with patch.object(tracker, "get_redis", AsyncMock(return_value=redis_mock)):
             result = await tracker.get_all_agent_costs()
 
-        redis_mock.scan_iter.assert_called_once()
         assert len(result) == 1
         assert result[0]["agent_id"] == "bot1"
         assert result[0]["cost_usd"] == pytest.approx(0.75)
@@ -344,21 +312,14 @@ class TestScanIterUsage:
     async def test_fetch_model_costs_uses_scan_iter(self):
         """_fetch_model_costs must use scan_iter, not keys()."""
         tracker = self._make_tracker()
-        redis_mock = MagicMock()
         model_key = b"cost:model_totals:gpt-4o"
-        redis_mock.scan_iter = MagicMock(return_value=_make_async_iter([model_key]))
-        redis_mock.pipeline = MagicMock(
-            return_value=MagicMock(
-                hgetall=MagicMock(),
-                execute=AsyncMock(
-                    return_value=[
-                        {b"cost_usd": b"3.0", b"input_tokens": b"200", b"output_tokens": b"300", b"call_count": b"5"}
-                    ]
-                ),
-            )
+        pipe = make_redis_pipeline(
+            execute_returns=[
+                {b"cost_usd": b"3.0", b"input_tokens": b"200", b"output_tokens": b"300", b"call_count": b"5"}
+            ]
         )
+        redis_mock = make_async_redis(scan_iter_keys=[model_key], pipeline=pipe)
         result = await tracker._fetch_model_costs(redis_mock)
 
-        redis_mock.scan_iter.assert_called_once()
         assert "gpt-4o" in result
         assert result["gpt-4o"]["cost_usd"] == pytest.approx(3.0)

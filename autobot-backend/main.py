@@ -22,6 +22,8 @@ from pathlib import Path
 # This ensures AUTOBOT_SECRETS_KEY is available for SecretsService
 from dotenv import load_dotenv
 
+from autobot_shared.ssot_config import config
+
 _env_path = Path(__file__).parent.parent / ".env"
 if _env_path.exists():
     load_dotenv(_env_path)
@@ -29,11 +31,10 @@ if _env_path.exists():
 # CRITICAL: Disable HuggingFace tokenizers parallelism BEFORE any imports
 # This prevents deadlocks when using run_in_executor() with forked processes
 # See: https://github.com/huggingface/tokenizers/issues/1062
-os.environ["TOKENIZERS_PARALLELISM"] = "false"
+os.environ["TOKENIZERS_PARALLELISM"] = "false"  # ssot-config-exempt: runtime env mutation for HuggingFace
 
 from app_factory import create_app
 from autobot_shared.logging_manager import get_logger
-from constants.network_constants import NetworkConstants
 
 # Get centralized logger (respects AUTOBOT_LOG_LEVEL environment variable)
 logger = get_logger(__name__, "backend")
@@ -50,34 +51,32 @@ if __name__ == "__main__":
     logger.info("🌟 Starting AutoBot Backend in standalone mode...")
 
     # Get configuration from environment with intelligent defaults
-    host = os.getenv(
-        "AUTOBOT_BACKEND_HOST", NetworkConstants.BIND_ALL_INTERFACES
-    )  # Bind to all interfaces for network access
-    port = int(os.getenv("AUTOBOT_BACKEND_PORT", str(NetworkConstants.BACKEND_PORT)))
+    host = config.vm.main  # Bind to all interfaces for network access
+    port = config.port.backend
 
     # Determine if we're in development mode
-    dev_mode = os.getenv("AUTOBOT_DEV_MODE", "false").lower() == "true"
+    dev_mode = bool(config.misc.dev_mode)
     reload = dev_mode or "--reload" in sys.argv
 
     # TLS Configuration - Issue #725, #164
-    tls_enabled = os.getenv("AUTOBOT_BACKEND_TLS_ENABLED", "false").lower() == "true"
+    tls_enabled = config.tls.backend_tls_enabled
     ssl_keyfile = None
     ssl_certfile = None
 
     if tls_enabled:
         # Check for explicit cert/key paths first (set by SLM enable-tls playbook)
-        ssl_certfile = os.getenv("AUTOBOT_TLS_CERT_PATH")
-        ssl_keyfile = os.getenv("AUTOBOT_TLS_KEY_PATH")
+        ssl_certfile = config.misc.tls_cert_path or None
+        ssl_keyfile = config.misc.tls_key_path or None
 
         # Fallback to cert_dir + main-host pattern for legacy compatibility
         if not ssl_certfile or not ssl_keyfile:
-            cert_dir = os.getenv("AUTOBOT_TLS_CERT_DIR", "certs")
+            cert_dir = config.tls.cert_dir
             project_root = Path(__file__).parent.parent
             ssl_keyfile = str(project_root / cert_dir / "main-host" / "server-key.pem")
             ssl_certfile = str(project_root / cert_dir / "main-host" / "server-cert.pem")
 
         # Override port to TLS port when enabled
-        port = int(os.getenv("AUTOBOT_BACKEND_TLS_PORT", "8443"))
+        port = config.tls.backend_tls_port
         logger.info("🔒 TLS enabled - using HTTPS on port %s", port)
         logger.info("🔒 TLS cert: %s", ssl_certfile)
         logger.info("🔒 TLS key: %s", ssl_keyfile)  # codeql[py/clear-text-logging-sensitive-data]

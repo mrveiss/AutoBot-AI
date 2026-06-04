@@ -11,7 +11,7 @@ Contains enums and dataclasses for error boundary system.
 import time
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 # Module-level tuples for error type classification (from original module)
 CRITICAL_ERROR_TYPES = (SystemExit, KeyboardInterrupt, MemoryError)
@@ -29,6 +29,27 @@ class ErrorSeverity(Enum):
     MEDIUM = "medium"
     HIGH = "high"
     CRITICAL = "critical"
+
+
+def classify_error(error: Exception) -> ErrorSeverity:
+    """Return the ErrorSeverity for an exception (GH#6628).
+
+    Precedence: CRITICAL → RETRY (LOW) → HIGH → MEDIUM → else LOW.
+    CRITICAL is checked first as a defensive invariant so a future exception that
+    subclasses both a RETRY type and a CRITICAL type is never silently downgraded.
+    RETRY must precede HIGH because ConnectionError and TimeoutError are subclasses
+    of OSError (which is in HIGH_SEVERITY_ERROR_TYPES); checking HIGH first would
+    prematurely cap transient network errors at the 1-retry HIGH budget (GH#8649).
+    """
+    if isinstance(error, CRITICAL_ERROR_TYPES):
+        return ErrorSeverity.CRITICAL
+    if isinstance(error, RETRY_ERROR_TYPES):
+        return ErrorSeverity.LOW
+    if isinstance(error, HIGH_SEVERITY_ERROR_TYPES):
+        return ErrorSeverity.HIGH
+    if isinstance(error, MEDIUM_SEVERITY_ERROR_TYPES):
+        return ErrorSeverity.MEDIUM
+    return ErrorSeverity.LOW
 
 
 class ErrorCategory(Enum):
@@ -76,8 +97,8 @@ class ErrorContext:
     function: str
     args: tuple = field(default_factory=tuple)
     kwargs: dict = field(default_factory=dict)
-    user_id: Optional[str] = None
-    request_id: Optional[str] = None
+    user_id: str | None = None
+    request_id: str | None = None
     timestamp: float = field(default_factory=time.time)
     additional_data: dict = field(default_factory=dict)
 
@@ -93,7 +114,7 @@ class ErrorReport:
     category: ErrorCategory
     context: ErrorContext
     stack_trace: str
-    recovery_strategy: Optional[RecoveryStrategy] = None
+    recovery_strategy: RecoveryStrategy | None = None
     recovery_attempts: int = 0
     resolved: bool = False
     timestamp: float = field(default_factory=time.time)
@@ -107,9 +128,9 @@ class APIErrorResponse:
     message: str
     code: str  # Error code like "KB_001", "AUTH_002"
     status_code: int
-    details: Optional[Dict[str, Any]] = None
-    retry_after: Optional[int] = None  # Seconds to wait before retry
-    trace_id: Optional[str] = None
+    details: Dict[str, Any] | None = None
+    retry_after: int | None = None  # Seconds to wait before retry
+    trace_id: str | None = None
     timestamp: float = field(default_factory=time.time)
 
     def to_dict(self) -> Dict[str, Any]:
@@ -179,7 +200,7 @@ class ErrorBoundaryException(Exception):
         severity: ErrorSeverity = ErrorSeverity.MEDIUM,
         category: ErrorCategory = ErrorCategory.SYSTEM,
         recovery_strategy: RecoveryStrategy = RecoveryStrategy.RETRY,
-        context: Optional[ErrorContext] = None,
+        context: ErrorContext | None = None,
     ):
         """
         Initialize error boundary exception.

@@ -9,62 +9,57 @@ Provides endpoints for configuring and monitoring AI agents used throughout the 
 Each agent can have its own LLM model configuration and status monitoring.
 """
 
-import logging
-import os
 from datetime import datetime, timezone
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.schemas_agent import (
+    AgentConfigAllAgentsResponse,
     AgentConfigDetailResponse,
     AgentConfigEnableDisableResponse,
     AgentConfigHealthResponse,
+    AgentConfigListAgentsResponse,
     AgentConfigOverviewResponse,
+    AgentConfigSpecializedDetailResponse,
+    AgentConfigSpecializedListResponse,
     AgentConfigUpdateModelResponse,
+    AgentConfigUsageResponse,
     AgentModelUpdate,
 )
 from api.schemas_common import DataResponse
 from api.user_management.dependencies import get_db_session
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 from autobot_shared.time_utils import parse_utc_iso
 from services.config_revision_service import ConfigRevisionService
 from services.config_service import ConfigService
 from services.slm_client import get_slm_client
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # 6-tier model mapping (#2553) — all defaults from SSOT constants.
-from autobot_shared.ssot_config import CLASSIFICATION_MODEL as _SSOT_CLASSIFICATION
-from autobot_shared.ssot_config import INSTRUCTION_MODEL as _SSOT_INSTRUCTION
-from autobot_shared.ssot_config import LIGHT_PROCESSING_MODEL as _SSOT_LIGHT
-from autobot_shared.ssot_config import QUALITY_MODEL as _SSOT_QUALITY
-from autobot_shared.ssot_config import ROUTING_MODEL as _SSOT_ROUTING
-from autobot_shared.ssot_config import SYSTEM_MODEL as _SSOT_SYSTEM
 
 # Routing tier — orchestrator only, no tool use
-ROUTING_TIER_MODEL = os.getenv("AUTOBOT_ROUTING_MODEL", _SSOT_ROUTING)
+ROUTING_TIER_MODEL = config.routing_model
 # Classification tier — intent detection
-CLASSIFICATION_TIER_MODEL = os.getenv("AUTOBOT_CLASSIFICATION_MODEL", _SSOT_CLASSIFICATION)
+CLASSIFICATION_TIER_MODEL = config.classification_model
 # Light processing tier — extraction, formatting, lightweight tasks
-LIGHT_TIER_MODEL = os.getenv("AUTOBOT_LIGHT_PROCESSING_MODEL", _SSOT_LIGHT)
+LIGHT_TIER_MODEL = config.light_processing_model
 # Instruction following tier — RAG, entity extraction, instruction following
-INSTRUCTION_TIER_MODEL = os.getenv("AUTOBOT_INSTRUCTION_MODEL", _SSOT_INSTRUCTION)
+INSTRUCTION_TIER_MODEL = config.instruction_model
 # System/uncensored tier — system commands, security tasks
-SYSTEM_TIER_MODEL = os.getenv("AUTOBOT_SYSTEM_MODEL", _SSOT_SYSTEM)
+SYSTEM_TIER_MODEL = config.system_model
 # Quality tier — user-facing chat, research, code analysis
-QUALITY_TIER_MODEL = os.getenv(
-    "AUTOBOT_DEFAULT_LLM_MODEL",
-    os.getenv("AUTOBOT_DEFAULT_AGENT_MODEL", _SSOT_QUALITY),
-)
+QUALITY_TIER_MODEL = config.misc.default_llm_model or config.default_agent_model
 
 router = APIRouter()
 
 
-async def _get_agent_config_from_slm(agent_id: str) -> Optional[dict]:
+async def _get_agent_config_from_slm(agent_id: str) -> dict | None:
     """
     Fetch agent config from SLM.
 
@@ -141,7 +136,12 @@ DEFAULT_AGENT_CONFIGS = {
         "enabled": True,
         "priority": 1,
         "tasks": ["workflow_planning", "task_classification", "agent_coordination"],
-        "mcp_tools": ["memory_mcp", "sequential_thinking_mcp", "structured_thinking_mcp", "shrimp_task_manager_mcp"],
+        "mcp_tools": [
+            "memory_mcp",
+            "sequential_thinking_mcp",
+            "structured_thinking_mcp",
+            "shrimp_task_manager_mcp",
+        ],
         "invoked_by": "AsyncChatWorkflow (automatic on every request)",
         "source_file": "orchestrator.py, agents/agent_orchestration/coordinator.py",
     },
@@ -178,7 +178,12 @@ DEFAULT_AGENT_CONFIGS = {
         "enabled": True,
         "priority": 2,
         "tasks": ["knowledge_search", "document_analysis", "information_retrieval"],
-        "mcp_tools": ["memory_mcp", "knowledge_mcp", "filesystem_mcp", "shrimp_task_manager_mcp"],
+        "mcp_tools": [
+            "memory_mcp",
+            "knowledge_mcp",
+            "filesystem_mcp",
+            "shrimp_task_manager_mcp",
+        ],
         "invoked_by": "AsyncChatWorkflow via KNOWLEDGE_PATTERNS, knowledge_mcp tools",
         "source_file": "src/agents/kb_librarian_agent.py, src/agents/kb_librarian/",
     },
@@ -190,7 +195,12 @@ DEFAULT_AGENT_CONFIGS = {
         "enabled": True,
         "priority": 2,
         "tasks": ["rag_queries", "context_retrieval", "knowledge_synthesis"],
-        "mcp_tools": ["memory_mcp", "knowledge_mcp", "database_mcp", "sequential_thinking_mcp"],
+        "mcp_tools": [
+            "memory_mcp",
+            "knowledge_mcp",
+            "database_mcp",
+            "sequential_thinking_mcp",
+        ],
         "invoked_by": "AgentRouter as secondary_agent with KNOWLEDGE_RETRIEVAL",
         "source_file": "src/agents/rag_agent.py",
     },
@@ -202,7 +212,13 @@ DEFAULT_AGENT_CONFIGS = {
         "enabled": True,
         "priority": 2,
         "tasks": ["web_research", "fact_checking", "data_gathering"],
-        "mcp_tools": ["memory_mcp", "browser_mcp", "http_client_mcp", "knowledge_mcp", "sequential_thinking_mcp"],
+        "mcp_tools": [
+            "memory_mcp",
+            "browser_mcp",
+            "http_client_mcp",
+            "knowledge_mcp",
+            "sequential_thinking_mcp",
+        ],
         "invoked_by": "AgentRouter via RESEARCH_PATTERNS matching",
         "source_file": "src/agents/web_research_integration_agent.py",
     },
@@ -214,7 +230,12 @@ DEFAULT_AGENT_CONFIGS = {
         "enabled": True,
         "priority": 2,
         "tasks": ["entity_extraction", "relation_extraction", "knowledge_structuring"],
-        "mcp_tools": ["memory_mcp", "knowledge_mcp", "filesystem_mcp", "structured_thinking_mcp"],
+        "mcp_tools": [
+            "memory_mcp",
+            "knowledge_mcp",
+            "filesystem_mcp",
+            "structured_thinking_mcp",
+        ],
         "invoked_by": "kb_librarian during document processing",
         "source_file": "src/agents/knowledge_extraction_agent.py",
     },
@@ -226,7 +247,12 @@ DEFAULT_AGENT_CONFIGS = {
         "enabled": True,
         "priority": 2,
         "tasks": ["semantic_search", "similarity_matching", "context_retrieval"],
-        "mcp_tools": ["memory_mcp", "knowledge_mcp", "database_mcp", "sequential_thinking_mcp"],
+        "mcp_tools": [
+            "memory_mcp",
+            "knowledge_mcp",
+            "database_mcp",
+            "sequential_thinking_mcp",
+        ],
         "invoked_by": "AgentRouter via KNOWLEDGE_PATTERNS as primary_agent",
         "source_file": "src/agents/knowledge_retrieval_agent.py",
     },
@@ -238,7 +264,13 @@ DEFAULT_AGENT_CONFIGS = {
         "enabled": True,
         "priority": 2,
         "tasks": ["code_review", "static_analysis", "bug_detection"],
-        "mcp_tools": ["memory_mcp", "filesystem_mcp", "git_mcp", "sequential_thinking_mcp", "shrimp_task_manager_mcp"],
+        "mcp_tools": [
+            "memory_mcp",
+            "filesystem_mcp",
+            "git_mcp",
+            "sequential_thinking_mcp",
+            "shrimp_task_manager_mcp",
+        ],
         "invoked_by": "Codebase Analytics API, CODE_SEARCH_TERMS patterns",
         "source_file": "src/code_intelligence/",
     },
@@ -263,7 +295,12 @@ DEFAULT_AGENT_CONFIGS = {
         "enabled": True,
         "priority": 3,
         "tasks": ["safe_command_execution", "privilege_management", "audit_logging"],
-        "mcp_tools": ["memory_mcp", "filesystem_mcp", "prometheus_mcp", "sequential_thinking_mcp"],
+        "mcp_tools": [
+            "memory_mcp",
+            "filesystem_mcp",
+            "prometheus_mcp",
+            "sequential_thinking_mcp",
+        ],
         "invoked_by": "Orchestrator for security-sensitive system operations",
         "source_file": "src/agents/enhanced_system_commands_agent.py",
     },
@@ -275,7 +312,13 @@ DEFAULT_AGENT_CONFIGS = {
         "enabled": True,
         "priority": 3,
         "tasks": ["security_analysis", "vulnerability_scanning", "threat_assessment"],
-        "mcp_tools": ["memory_mcp", "filesystem_mcp", "http_client_mcp", "database_mcp", "sequential_thinking_mcp"],
+        "mcp_tools": [
+            "memory_mcp",
+            "filesystem_mcp",
+            "http_client_mcp",
+            "database_mcp",
+            "sequential_thinking_mcp",
+        ],
         "invoked_by": "Security API endpoints, Orchestrator for security queries",
         "source_file": "src/agents/security_scanner_agent.py",
     },
@@ -287,7 +330,12 @@ DEFAULT_AGENT_CONFIGS = {
         "enabled": True,
         "priority": 3,
         "tasks": ["network_scanning", "service_discovery", "topology_mapping"],
-        "mcp_tools": ["memory_mcp", "http_client_mcp", "prometheus_mcp", "sequential_thinking_mcp"],
+        "mcp_tools": [
+            "memory_mcp",
+            "http_client_mcp",
+            "prometheus_mcp",
+            "sequential_thinking_mcp",
+        ],
         "invoked_by": "Network API endpoints, Orchestrator for network queries",
         "source_file": "src/agents/network_discovery_agent.py",
     },
@@ -337,7 +385,13 @@ DEFAULT_AGENT_CONFIGS = {
         "enabled": True,
         "priority": 3,
         "tasks": ["code_generation", "boilerplate_creation", "workflow_automation"],
-        "mcp_tools": ["memory_mcp", "filesystem_mcp", "git_mcp", "sequential_thinking_mcp", "shrimp_task_manager_mcp"],
+        "mcp_tools": [
+            "memory_mcp",
+            "filesystem_mcp",
+            "git_mcp",
+            "sequential_thinking_mcp",
+            "shrimp_task_manager_mcp",
+        ],
         "invoked_by": "Codebase Analytics API, Developer Tools UI",
         "source_file": "src/agents/development_speedup_agent.py",
     },
@@ -361,7 +415,12 @@ DEFAULT_AGENT_CONFIGS = {
         "enabled": True,
         "priority": 3,
         "tasks": ["entity_extraction", "relationship_mapping", "graph_construction"],
-        "mcp_tools": ["memory_mcp", "knowledge_mcp", "database_mcp", "sequential_thinking_mcp"],
+        "mcp_tools": [
+            "memory_mcp",
+            "knowledge_mcp",
+            "database_mcp",
+            "sequential_thinking_mcp",
+        ],
         "invoked_by": "KnowledgeExtractionAgent, conversation processing pipeline",
         "source_file": "src/agents/graph_entity_extractor.py",
     },
@@ -378,7 +437,13 @@ DEFAULT_AGENT_CONFIGS = {
             "npu_acceleration",
             "large_codebase_analysis",
         ],
-        "mcp_tools": ["memory_mcp", "filesystem_mcp", "git_mcp", "knowledge_mcp", "sequential_thinking_mcp"],
+        "mcp_tools": [
+            "memory_mcp",
+            "filesystem_mcp",
+            "git_mcp",
+            "knowledge_mcp",
+            "sequential_thinking_mcp",
+        ],
         "invoked_by": "DevelopmentSpeedupAgent, Codebase Analytics for semantic search",
         "source_file": "src/agents/npu_code_search_agent.py",
     },
@@ -395,7 +460,13 @@ DEFAULT_AGENT_CONFIGS = {
         "enabled": True,
         "priority": 4,
         "tasks": ["web_research", "content_extraction", "knowledge_storage"],
-        "mcp_tools": ["memory_mcp", "knowledge_mcp", "filesystem_mcp", "browser_mcp", "sequential_thinking_mcp"],
+        "mcp_tools": [
+            "memory_mcp",
+            "knowledge_mcp",
+            "filesystem_mcp",
+            "browser_mcp",
+            "sequential_thinking_mcp",
+        ],
         "invoked_by": "Orchestrator when external research is needed",
         "source_file": "src/agents/librarian_assistant.py",
     },
@@ -435,7 +506,12 @@ DEFAULT_AGENT_CONFIGS = {
             "resource_aware_processing",
             "adaptive_caching",
         ],
-        "mcp_tools": ["memory_mcp", "knowledge_mcp", "prometheus_mcp", "sequential_thinking_mcp"],
+        "mcp_tools": [
+            "memory_mcp",
+            "knowledge_mcp",
+            "prometheus_mcp",
+            "sequential_thinking_mcp",
+        ],
         "invoked_by": "SystemKnowledgeManager for machine-specific operations",
         "source_file": "src/agents/machine_aware_system_knowledge_manager.py",
     },
@@ -447,7 +523,12 @@ DEFAULT_AGENT_CONFIGS = {
         "enabled": True,
         "priority": 4,
         "tasks": ["man_page_parsing", "command_documentation", "unix_knowledge"],
-        "mcp_tools": ["memory_mcp", "knowledge_mcp", "filesystem_mcp", "sequential_thinking_mcp"],
+        "mcp_tools": [
+            "memory_mcp",
+            "knowledge_mcp",
+            "filesystem_mcp",
+            "sequential_thinking_mcp",
+        ],
         "invoked_by": "MachineAwareKnowledgeManager, system initialization",
         "source_file": "src/agents/man_page_knowledge_integrator.py",
     },
@@ -520,7 +601,12 @@ DEFAULT_AGENT_CONFIGS = {
             "step_orchestration",
             "dependency_management",
         ],
-        "mcp_tools": ["memory_mcp", "sequential_thinking_mcp", "structured_thinking_mcp", "shrimp_task_manager_mcp"],
+        "mcp_tools": [
+            "memory_mcp",
+            "sequential_thinking_mcp",
+            "structured_thinking_mcp",
+            "shrimp_task_manager_mcp",
+        ],
         "invoked_by": "AsyncChatWorkflow for complex multi-step queries requiring task planning",
         "source_file": "src/agents/overseer/overseer_agent.py",
     },
@@ -538,7 +624,12 @@ DEFAULT_AGENT_CONFIGS = {
             "output_streaming",
             "explanation_generation",
         ],
-        "mcp_tools": ["memory_mcp", "filesystem_mcp", "sequential_thinking_mcp", "shrimp_task_manager_mcp"],
+        "mcp_tools": [
+            "memory_mcp",
+            "filesystem_mcp",
+            "sequential_thinking_mcp",
+            "shrimp_task_manager_mcp",
+        ],
         "invoked_by": "OverseerAgent during task plan execution",
         "source_file": "src/agents/overseer/step_executor_agent.py",
     },
@@ -570,7 +661,7 @@ async def _resolve_agent_effective_config(agent_id: str, config: dict, unified_c
     return current_model, current_provider, enabled, "local"
 
 
-@router.get("/agents", response_model=DataResponse)
+@router.get("/agents", response_model=DataResponse[AgentConfigListAgentsResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_agents",
@@ -588,27 +679,27 @@ async def list_agents(admin_check: bool = Depends(check_admin_permission)):
     provider_type = llm_config.get("provider_type", "local")
 
     agents = []
-    for agent_id, config in DEFAULT_AGENT_CONFIGS.items():
+    for agent_id, agent_cfg in DEFAULT_AGENT_CONFIGS.items():
         (
             current_model,
             current_provider,
             enabled,
             config_source,
-        ) = await _resolve_agent_effective_config(agent_id, config, unified_config_manager)
+        ) = await _resolve_agent_effective_config(agent_id, agent_cfg, unified_config_manager)
 
         status = "connected" if enabled and current_model else "disconnected"
 
         agent_info = {
             "id": agent_id,
-            "name": config["name"],
-            "description": config["description"],
+            "name": agent_cfg["name"],
+            "description": agent_cfg["description"],
             "current_model": current_model,
             "provider": current_provider,
             "enabled": enabled,
             "status": status,
-            "priority": config["priority"],
-            "tasks": config["tasks"],
-            "mcp_tools": config.get("mcp_tools", []),
+            "priority": agent_cfg["priority"],
+            "tasks": agent_cfg["tasks"],
+            "mcp_tools": agent_cfg.get("mcp_tools", []),
             "config_source": config_source,
             "last_used": None,
             "performance": {
@@ -680,7 +771,7 @@ async def _resolve_agent_entry(agent_id: str, config: dict, unified_config_manag
     }
 
 
-@router.get("/agents/all", response_model=DataResponse)
+@router.get("/agents/all", response_model=DataResponse[AgentConfigAllAgentsResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_all_agents",
@@ -697,8 +788,8 @@ async def get_all_agents(admin_check: bool = Depends(check_admin_permission)):
     from config import unified_config_manager
 
     backend_agents = []
-    for agent_id, config in DEFAULT_AGENT_CONFIGS.items():
-        backend_agents.append(await _resolve_agent_entry(agent_id, config, unified_config_manager))
+    for agent_id, agent_cfg in DEFAULT_AGENT_CONFIGS.items():
+        backend_agents.append(await _resolve_agent_entry(agent_id, agent_cfg, unified_config_manager))
 
     healthy_count = sum(1 for a in backend_agents if a["status"] == "connected")
 
@@ -724,7 +815,10 @@ async def get_all_agents(admin_check: bool = Depends(check_admin_permission)):
     )
 
 
-@router.get("/agents/specialized", response_model=DataResponse)
+@router.get(
+    "/agents/specialized",
+    response_model=DataResponse[AgentConfigSpecializedListResponse],
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_specialized_agents",
@@ -757,7 +851,10 @@ async def list_specialized_agents(
     )
 
 
-@router.get("/agents/specialized/{agent_id}", response_model=DataResponse)
+@router.get(
+    "/agents/specialized/{agent_id}",
+    response_model=DataResponse[AgentConfigSpecializedDetailResponse],
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_specialized_agent",
@@ -787,16 +884,16 @@ async def get_specialized_agent(
     return JSONResponse(status_code=200, content=agent)
 
 
-@router.get("/agents/usage", response_model=DataResponse)
+@router.get("/agents/usage", response_model=DataResponse[AgentConfigUsageResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_agents_usage",
     error_code_prefix="AGENT_CONFIG",
 )
 async def get_agents_usage(
-    agent_id: Optional[str] = Query(None, description="Filter to a specific agent (all agents if omitted)"),
+    agent_id: str | None = Query(None, description="Filter to a specific agent (all agents if omitted)"),
     days: int = Query(default=7, ge=1, le=90, description="Lookback window in days for trend data"),
-    outcome: Optional[str] = Query(None, description="Filter by outcome: completed, failed, timeout, cancelled"),
+    outcome: str | None = Query(None, description="Filter by outcome: completed, failed, timeout, cancelled"),
     admin_check: bool = Depends(check_admin_permission),
 ):
     """
@@ -1238,9 +1335,9 @@ async def get_agents_overview(admin_check: bool = Depends(check_admin_permission
 
     agent_summary = []
 
-    for agent_id, config in DEFAULT_AGENT_CONFIGS.items():
-        enabled = unified_config_manager.get_nested(f"agents.{agent_id}.enabled", config["enabled"])
-        model = unified_config_manager.get_nested(f"agents.{agent_id}.model", config["default_model"])
+    for agent_id, agent_cfg in DEFAULT_AGENT_CONFIGS.items():
+        enabled = unified_config_manager.get_nested(f"agents.{agent_id}.enabled", agent_cfg["enabled"])
+        model = unified_config_manager.get_nested(f"agents.{agent_id}.model", agent_cfg["default_model"])
 
         if enabled:
             enabled_agents += 1
@@ -1250,10 +1347,10 @@ async def get_agents_overview(admin_check: bool = Depends(check_admin_permission
         agent_summary.append(
             {
                 "id": agent_id,
-                "name": config["name"],
+                "name": agent_cfg["name"],
                 "enabled": enabled,
                 "status": "healthy" if enabled and model else "unhealthy",
-                "priority": config["priority"],
+                "priority": agent_cfg["priority"],
             }
         )
 

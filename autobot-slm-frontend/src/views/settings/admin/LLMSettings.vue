@@ -204,7 +204,7 @@ onMounted(fetchConfig)
           d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
       </svg>
       {{ error }}
-      <button class="ml-auto text-red-500 hover:text-red-700" @click="error = null">
+      <button class="ml-auto text-red-500 hover:text-red-700" @click="error = null" aria-label="Dismiss error">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
         </svg>
@@ -235,7 +235,7 @@ onMounted(fetchConfig)
       <span v-if="testResult.latency_ms" class="text-sm opacity-75">
         ({{ testResult.latency_ms }}ms)
       </span>
-      <button class="ml-auto opacity-60 hover:opacity-100" @click="testResult = null">
+      <button class="ml-auto opacity-60 hover:opacity-100" @click="testResult = null" aria-label="Dismiss">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
         </svg>
@@ -245,13 +245,13 @@ onMounted(fetchConfig)
     <!-- Header -->
     <div class="flex items-center justify-between">
       <div>
-        <h2 class="text-lg font-semibold text-gray-900">LLM Configuration</h2>
+        <h2 class="text-lg font-semibold text-gray-900">{{ $t('settings.admin.lLMSettings.lLMConfiguration') }}</h2>
         <p class="text-sm text-gray-500 mt-1">
-          Manage LLM providers, models, and Ollama server settings. Changes are pushed to fleet nodes via Ansible.
+          {{ $t('settings.admin.lLMSettings.manageLLMProvidersModels') }}
         </p>
       </div>
       <div class="flex items-center gap-3">
-        <span v-if="hasUnsavedChanges" class="text-sm text-amber-600 font-medium">Unsaved changes</span>
+        <span v-if="hasUnsavedChanges" class="text-sm text-amber-600 font-medium">{{ $t('settings.admin.lLMSettings.unsavedChanges') }}</span>
         <button
           :disabled="!hasUnsavedChanges || saving"
           class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium"
@@ -311,7 +311,7 @@ onMounted(fetchConfig)
     <div v-else-if="activeTab === 'providers'" class="space-y-4">
       <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
         <div class="flex items-center gap-2">
-          <span class="text-sm font-medium text-blue-800">Active Provider:</span>
+          <span class="text-sm font-medium text-blue-800">{{ $t('settings.admin.lLMSettings.activeProvider') }}</span>
           <span class="text-sm text-blue-700 font-mono">{{ config.active_provider }}</span>
         </div>
       </div>
@@ -326,25 +326,25 @@ onMounted(fetchConfig)
       </div>
 
       <div v-if="showAddProvider" class="bg-gray-50 border border-gray-200 rounded-lg p-5 space-y-4">
-        <h3 class="font-medium text-gray-900">New Provider</h3>
+        <h3 class="font-medium text-gray-900">{{ $t('settings.admin.lLMSettings.newProvider') }}</h3>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Name</label>
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.lLMSettings.name') }}</label>
             <input v-model="newProvider.name" type="text" placeholder="e.g. ollama, openai, anthropic"
               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm" />
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Model</label>
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.lLMSettings.model') }}</label>
             <input v-model="newProvider.model" type="text" placeholder="e.g. mistral:7b-instruct"
               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm" />
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Endpoint</label>
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.lLMSettings.endpoint') }}</label>
             <input v-model="newProvider.endpoint" type="url" placeholder="https://api.example.com/v1"
               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm" />
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">API Key</label>
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.lLMSettings.aPIKey') }}</label>
             <input v-model="newProvider.api_key" type="password" placeholder="API key (encrypted at rest)"
               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm font-mono" />
           </div>
@@ -353,7 +353,7 @@ onMounted(fetchConfig)
           <button :disabled="!newProvider.name"
             class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium"
             @click="addProvider">
-            Add Provider
+            {{ $t('settings.admin.lLMSettings.addProvider') }}
           </button>
         </div>
       </div>
@@ -363,8 +363,8 @@ onMounted(fetchConfig)
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
             d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
         </svg>
-        <h3 class="mt-2 text-sm font-medium text-gray-900">No providers configured</h3>
-        <p class="mt-1 text-sm text-gray-500">Add an LLM provider to get started.</p>
+        <h3 class="mt-2 text-sm font-medium text-gray-900">{{ $t('settings.admin.lLMSettings.noProvidersConfigured') }}</h3>
+        <p class="mt-1 text-sm text-gray-500">{{ $t('settings.admin.lLMSettings.addAnLLMProvider') }}</p>
       </div>
 
       <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -375,25 +375,25 @@ onMounted(fetchConfig)
             <div class="flex items-center gap-2">
               <span class="font-medium text-gray-900">{{ provider.name }}</span>
               <span v-if="config.active_provider === provider.name"
-                class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">Active</span>
+                class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">{{ $t('settings.admin.lLMSettings.active') }}</span>
               <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium"
                 :class="provider.enabled ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'">
                 {{ provider.enabled ? 'Enabled' : 'Disabled' }}
               </span>
             </div>
-            <button class="text-red-500 hover:text-red-700 text-sm" @click="removeProvider(idx)">Remove</button>
+            <button class="text-red-500 hover:text-red-700 text-sm" @click="removeProvider(idx)">{{ $t('settings.admin.lLMSettings.remove') }}</button>
           </div>
           <div class="text-sm text-gray-600 space-y-1">
-            <div v-if="provider.model"><span class="font-medium">Model:</span> {{ provider.model }}</div>
-            <div v-if="provider.endpoint"><span class="font-medium">Endpoint:</span> {{ provider.endpoint }}</div>
-            <div><span class="font-medium">Temperature:</span> {{ provider.temperature }}</div>
+            <div v-if="provider.model"><span class="font-medium">{{ $t('settings.admin.lLMSettings.model1') }}</span> {{ provider.model }}</div>
+            <div v-if="provider.endpoint"><span class="font-medium">{{ $t('settings.admin.lLMSettings.endpoint1') }}</span> {{ provider.endpoint }}</div>
+            <div><span class="font-medium">{{ $t('settings.admin.lLMSettings.temperature') }}</span> {{ provider.temperature }}</div>
           </div>
           <div class="flex items-center gap-2 mt-3 pt-3 border-t border-gray-100">
-            <button class="text-sm text-blue-600 hover:text-blue-800" @click="setActiveProvider(provider.name)">Set Active</button>
+            <button class="text-sm text-blue-600 hover:text-blue-800" @click="setActiveProvider(provider.name)">{{ $t('settings.admin.lLMSettings.setActive') }}</button>
             <button class="text-sm text-gray-600 hover:text-gray-800" @click="toggleProvider(idx)">
               {{ provider.enabled ? 'Disable' : 'Enable' }}
             </button>
-            <button class="text-sm text-green-600 hover:text-green-800" @click="testProvider(provider)">Test</button>
+            <button class="text-sm text-green-600 hover:text-green-800" @click="testProvider(provider)">{{ $t('settings.admin.lLMSettings.test') }}</button>
           </div>
         </div>
       </div>
@@ -402,16 +402,16 @@ onMounted(fetchConfig)
     <!-- Server Settings Tab -->
     <div v-else-if="activeTab === 'server'" class="space-y-6">
       <div class="bg-white border border-gray-200 rounded-lg p-6">
-        <h3 class="text-sm font-semibold text-gray-900 mb-4">Ollama Server</h3>
+        <h3 class="text-sm font-semibold text-gray-900 mb-4">{{ $t('settings.admin.lLMSettings.ollamaServer') }}</h3>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Listen Host</label>
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.lLMSettings.listenHost') }}</label>
             <input v-model="config.ollama_host" type="text"
               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm font-mono"
               @input="markDirty" />
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Port</label>
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.lLMSettings.port') }}</label>
             <input v-model.number="config.ollama_port" type="number"
               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm font-mono"
               @input="markDirty" />
@@ -420,39 +420,39 @@ onMounted(fetchConfig)
       </div>
 
       <div class="bg-white border border-gray-200 rounded-lg p-6">
-        <h3 class="text-sm font-semibold text-gray-900 mb-4">Concurrency</h3>
+        <h3 class="text-sm font-semibold text-gray-900 mb-4">{{ $t('settings.admin.lLMSettings.concurrency') }}</h3>
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Max Loaded Models</label>
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.lLMSettings.maxLoadedModels') }}</label>
             <input v-model.number="config.max_loaded_models" type="number" min="1" max="20"
               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
               @input="markDirty" />
-            <p class="text-xs text-gray-500 mt-1">Models kept hot in RAM</p>
+            <p class="text-xs text-gray-500 mt-1">{{ $t('settings.admin.lLMSettings.modelsKeptHotIn') }}</p>
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Parallel Requests</label>
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.lLMSettings.parallelRequests') }}</label>
             <input v-model.number="config.num_parallel" type="number" min="1" max="16"
               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
               @input="markDirty" />
-            <p class="text-xs text-gray-500 mt-1">Concurrent requests per model</p>
+            <p class="text-xs text-gray-500 mt-1">{{ $t('settings.admin.lLMSettings.concurrentRequestsPerModel') }}</p>
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Keep Alive</label>
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.lLMSettings.keepAlive') }}</label>
             <input v-model="config.keep_alive" type="text" placeholder="10m"
               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm font-mono"
               @input="markDirty" />
-            <p class="text-xs text-gray-500 mt-1">Idle timeout before unloading</p>
+            <p class="text-xs text-gray-500 mt-1">{{ $t('settings.admin.lLMSettings.idleTimeoutBeforeUnloading') }}</p>
           </div>
         </div>
       </div>
 
       <div class="bg-white border border-gray-200 rounded-lg p-6">
-        <h3 class="text-sm font-semibold text-gray-900 mb-4">Performance</h3>
+        <h3 class="text-sm font-semibold text-gray-900 mb-4">{{ $t('settings.admin.lLMSettings.performance') }}</h3>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div class="flex items-center justify-between">
             <div>
-              <label class="text-sm font-medium text-gray-700">Flash Attention</label>
-              <p class="text-xs text-gray-500">Faster attention computation</p>
+              <label class="text-sm font-medium text-gray-700">{{ $t('settings.admin.lLMSettings.flashAttention') }}</label>
+              <p class="text-xs text-gray-500">{{ $t('settings.admin.lLMSettings.fasterAttentionComputation') }}</p>
             </div>
             <button
               @click="config.flash_attention = !config.flash_attention; markDirty()"
@@ -463,13 +463,13 @@ onMounted(fetchConfig)
             </button>
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">KV Cache Type</label>
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.lLMSettings.kVCacheType') }}</label>
             <select v-model="config.kv_cache_type"
               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
               @change="markDirty">
-              <option value="q8_0">q8_0 (Quantized, less memory)</option>
-              <option value="f16">f16 (Full precision)</option>
-              <option value="f32">f32 (Maximum precision)</option>
+              <option value="q8_0">{{ $t('settings.admin.lLMSettings.q80QuantizedLess') }}</option>
+              <option value="f16">{{ $t('settings.admin.lLMSettings.f16FullPrecision') }}</option>
+              <option value="f32">{{ $t('settings.admin.lLMSettings.f32MaximumPrecision') }}</option>
             </select>
           </div>
         </div>
@@ -480,8 +480,8 @@ onMounted(fetchConfig)
     <div v-else-if="activeTab === 'models'" class="space-y-6">
       <div class="bg-white border border-gray-200 rounded-lg p-6">
         <div class="mb-4">
-          <h3 class="text-sm font-semibold text-gray-900">GPU Models</h3>
-          <p class="text-xs text-gray-500">Require GPU for reasonable performance (&gt;= 7B parameters)</p>
+          <h3 class="text-sm font-semibold text-gray-900">{{ $t('settings.admin.lLMSettings.gPUModels') }}</h3>
+          <p class="text-xs text-gray-500">{{ $t('settings.admin.lLMSettings.requireGPUForReasonable') }}</p>
         </div>
         <div class="flex gap-2 mb-3">
           <input v-model="newGpuModel" type="text" placeholder="e.g. mistral:7b-instruct"
@@ -489,9 +489,9 @@ onMounted(fetchConfig)
             @keyup.enter="addModel('gpu')" />
           <button :disabled="!newGpuModel"
             class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 text-sm"
-            @click="addModel('gpu')">Add</button>
+            @click="addModel('gpu')">{{ $t('settings.admin.lLMSettings.add') }}</button>
         </div>
-        <div v-if="config.gpu_models.length === 0" class="text-sm text-gray-500 py-4 text-center">No GPU models configured</div>
+        <div v-if="config.gpu_models.length === 0" class="text-sm text-gray-500 py-4 text-center">{{ $t('settings.admin.lLMSettings.noGPUModelsConfigured') }}</div>
         <div v-else class="flex flex-wrap gap-2">
           <span v-for="(model, idx) in config.gpu_models" :key="model"
             class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-purple-50 border border-purple-200 text-sm font-mono text-purple-800">
@@ -507,8 +507,8 @@ onMounted(fetchConfig)
 
       <div class="bg-white border border-gray-200 rounded-lg p-6">
         <div class="mb-4">
-          <h3 class="text-sm font-semibold text-gray-900">CPU Models</h3>
-          <p class="text-xs text-gray-500">Lightweight models that run well on CPU (&lt;= 3B parameters)</p>
+          <h3 class="text-sm font-semibold text-gray-900">{{ $t('settings.admin.lLMSettings.cPUModels') }}</h3>
+          <p class="text-xs text-gray-500">{{ $t('settings.admin.lLMSettings.lightweightModelsThatRun') }}</p>
         </div>
         <div class="flex gap-2 mb-3">
           <input v-model="newCpuModel" type="text" placeholder="e.g. nomic-embed-text"
@@ -516,9 +516,9 @@ onMounted(fetchConfig)
             @keyup.enter="addModel('cpu')" />
           <button :disabled="!newCpuModel"
             class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 text-sm"
-            @click="addModel('cpu')">Add</button>
+            @click="addModel('cpu')">{{ $t('settings.admin.lLMSettings.add') }}</button>
         </div>
-        <div v-if="config.cpu_models.length === 0" class="text-sm text-gray-500 py-4 text-center">No CPU models configured</div>
+        <div v-if="config.cpu_models.length === 0" class="text-sm text-gray-500 py-4 text-center">{{ $t('settings.admin.lLMSettings.noCPUModelsConfigured') }}</div>
         <div v-else class="flex flex-wrap gap-2">
           <span v-for="(model, idx) in config.cpu_models" :key="model"
             class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-blue-50 border border-blue-200 text-sm font-mono text-blue-800">
@@ -541,11 +541,9 @@ onMounted(fetchConfig)
             d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
         <div class="text-sm text-blue-800">
-          <p class="font-medium">About LLM Configuration</p>
+          <p class="font-medium">{{ $t('settings.admin.lLMSettings.aboutLLMConfiguration') }}</p>
           <p class="mt-1">
-            Changes saved here are stored on the SLM node. Use "Apply to Fleet" to push
-            configuration to all fleet nodes via Ansible. GPU nodes automatically detect hardware
-            and adjust concurrency settings. API keys for cloud providers are stored encrypted.
+            {{ $t('settings.admin.lLMSettings.changesSavedHereAre') }}
           </p>
         </div>
       </div>

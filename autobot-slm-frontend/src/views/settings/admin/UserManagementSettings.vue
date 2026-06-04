@@ -542,7 +542,7 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
       </svg>
       {{ error }}
-      <button @click="error = null" class="ml-auto text-red-500 hover:text-red-700">
+      <button @click="error = null" class="ml-auto text-red-500 hover:text-red-700" aria-label="Dismiss error">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
         </svg>
@@ -558,7 +558,7 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
 
     <!-- Authentication Status -->
     <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
-      <h2 class="text-lg font-semibold text-gray-900 mb-4">Authentication Status</h2>
+      <h2 class="text-lg font-semibold text-gray-900 mb-4">{{ $t('settings.admin.userManagementSettings.authenticationStatus') }}</h2>
 
       <div v-if="authStore.isAuthenticated" class="flex items-center gap-4 p-4 bg-green-50 border border-green-200 rounded-lg">
         <div class="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center">
@@ -567,14 +567,14 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
           </svg>
         </div>
         <div class="flex-1">
-          <p class="font-medium text-green-800">Authenticated</p>
+          <p class="font-medium text-green-800">{{ $t('settings.admin.userManagementSettings.authenticated') }}</p>
           <p class="text-sm text-green-600">{{ authStore.user?.username }} ({{ isAdmin ? 'Admin' : 'User' }})</p>
         </div>
         <button @click="logout" class="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 flex items-center gap-2">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
           </svg>
-          Logout
+          {{ $t('settings.admin.userManagementSettings.logout') }}
         </button>
       </div>
 
@@ -585,46 +585,46 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
           </svg>
         </div>
         <div class="flex-1">
-          <p class="font-medium text-yellow-800">Not Authenticated</p>
-          <p class="text-sm text-yellow-600">Please log in to access user management</p>
+          <p class="font-medium text-yellow-800">{{ $t('settings.admin.userManagementSettings.notAuthenticated') }}</p>
+          <p class="text-sm text-yellow-600">{{ $t('settings.admin.userManagementSettings.pleaseLogInTo') }}</p>
         </div>
       </div>
     </div>
 
     <!-- User Preferences -->
     <div v-if="authStore.isAuthenticated" class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
-      <h2 class="text-lg font-semibold text-gray-900 mb-4">User Preferences</h2>
+      <h2 class="text-lg font-semibold text-gray-900 mb-4">{{ $t('settings.admin.userManagementSettings.userPreferences') }}</h2>
 
       <div class="space-y-4">
         <div class="flex items-center justify-between pb-4 border-b border-gray-100">
           <div>
-            <label class="block text-sm font-medium text-gray-900">Theme</label>
-            <p class="text-xs text-gray-500 mt-1">Choose your preferred color scheme</p>
+            <label class="block text-sm font-medium text-gray-900">{{ $t('settings.admin.userManagementSettings.theme') }}</label>
+            <p class="text-xs text-gray-500 mt-1">{{ $t('settings.admin.userManagementSettings.chooseYourPreferredColor') }}</p>
           </div>
           <select v-model="preferences.theme" class="w-40 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500">
-            <option value="auto">Auto (System)</option>
-            <option value="light">Light</option>
-            <option value="dark">Dark</option>
+            <option value="auto">{{ $t('settings.admin.userManagementSettings.autoSystem') }}</option>
+            <option value="light">{{ $t('settings.admin.userManagementSettings.light') }}</option>
+            <option value="dark">{{ $t('settings.admin.userManagementSettings.dark') }}</option>
           </select>
         </div>
 
         <div class="flex items-center justify-between pb-4 border-b border-gray-100">
           <div>
-            <label class="block text-sm font-medium text-gray-900">Language</label>
-            <p class="text-xs text-gray-500 mt-1">Interface language</p>
+            <label class="block text-sm font-medium text-gray-900">{{ $t('settings.admin.userManagementSettings.language') }}</label>
+            <p class="text-xs text-gray-500 mt-1">{{ $t('settings.admin.userManagementSettings.interfaceLanguage') }}</p>
           </div>
           <select v-model="preferences.language" class="w-40 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500">
-            <option value="en">English</option>
-            <option value="es">Spanish</option>
-            <option value="fr">French</option>
-            <option value="de">German</option>
+            <option value="en">{{ $t('settings.admin.userManagementSettings.english') }}</option>
+            <option value="es">{{ $t('settings.admin.userManagementSettings.spanish') }}</option>
+            <option value="fr">{{ $t('settings.admin.userManagementSettings.french') }}</option>
+            <option value="de">{{ $t('settings.admin.userManagementSettings.german') }}</option>
           </select>
         </div>
 
         <div class="flex items-center justify-between pb-4 border-b border-gray-100">
           <div>
-            <label class="block text-sm font-medium text-gray-900">Enable Notifications</label>
-            <p class="text-xs text-gray-500 mt-1">Receive system notifications</p>
+            <label class="block text-sm font-medium text-gray-900">{{ $t('settings.admin.userManagementSettings.enableNotifications') }}</label>
+            <p class="text-xs text-gray-500 mt-1">{{ $t('settings.admin.userManagementSettings.receiveSystemNotifications') }}</p>
           </div>
           <label class="relative inline-flex items-center cursor-pointer">
             <input type="checkbox" v-model="preferences.enableNotifications" class="sr-only peer" />
@@ -634,8 +634,8 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
 
         <div class="flex items-center justify-between">
           <div>
-            <label class="block text-sm font-medium text-gray-900">Auto-save Settings</label>
-            <p class="text-xs text-gray-500 mt-1">Automatically save changes</p>
+            <label class="block text-sm font-medium text-gray-900">{{ $t('settings.admin.userManagementSettings.autoSaveSettings') }}</label>
+            <p class="text-xs text-gray-500 mt-1">{{ $t('settings.admin.userManagementSettings.automaticallySaveChanges') }}</p>
           </div>
           <label class="relative inline-flex items-center cursor-pointer">
             <input type="checkbox" v-model="preferences.autoSaveSettings" class="sr-only peer" />
@@ -650,28 +650,28 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
           </svg>
-          Save Preferences
+          {{ $t('settings.admin.userManagementSettings.savePreferences') }}
         </button>
       </div>
     </div>
 
     <!-- Security Settings -->
     <div v-if="authStore.isAuthenticated" class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
-      <h2 class="text-lg font-semibold text-gray-900 mb-4">Security</h2>
+      <h2 class="text-lg font-semibold text-gray-900 mb-4">{{ $t('settings.admin.userManagementSettings.security') }}</h2>
 
       <div class="space-y-4">
         <div class="flex items-center justify-between pb-4 border-b border-gray-100">
           <div>
-            <label class="block text-sm font-medium text-gray-900">Session Timeout</label>
-            <p class="text-xs text-gray-500 mt-1">Auto-logout after inactivity (minutes)</p>
+            <label class="block text-sm font-medium text-gray-900">{{ $t('settings.admin.userManagementSettings.sessionTimeout') }}</label>
+            <p class="text-xs text-gray-500 mt-1">{{ $t('settings.admin.userManagementSettings.autoLogoutAfterInactivity') }}</p>
           </div>
           <input v-model.number="securitySettings.sessionTimeout" type="number" min="5" max="1440" class="w-24 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500" />
         </div>
 
         <div class="flex items-center justify-between pb-4 border-b border-gray-100">
           <div>
-            <label class="block text-sm font-medium text-gray-900">Require Re-authentication</label>
-            <p class="text-xs text-gray-500 mt-1">For sensitive operations</p>
+            <label class="block text-sm font-medium text-gray-900">{{ $t('settings.admin.userManagementSettings.requireReAuthentication') }}</label>
+            <p class="text-xs text-gray-500 mt-1">{{ $t('settings.admin.userManagementSettings.forSensitiveOperations') }}</p>
           </div>
           <label class="relative inline-flex items-center cursor-pointer">
             <input type="checkbox" v-model="securitySettings.requireReauth" class="sr-only peer" />
@@ -681,14 +681,14 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
 
         <div class="flex items-center justify-between">
           <div>
-            <label class="block text-sm font-medium text-gray-900">Password</label>
-            <p class="text-xs text-gray-500 mt-1">Change your account password</p>
+            <label class="block text-sm font-medium text-gray-900">{{ $t('settings.admin.userManagementSettings.password') }}</label>
+            <p class="text-xs text-gray-500 mt-1">{{ $t('settings.admin.userManagementSettings.changeYourAccountPassword') }}</p>
           </div>
           <button @click="openPasswordChangeModal()" class="px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 flex items-center gap-2">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
             </svg>
-            Change Password
+            {{ $t('settings.admin.userManagementSettings.changePassword') }}
           </button>
         </div>
       </div>
@@ -699,7 +699,7 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
           </svg>
-          Save Security Settings
+          {{ $t('settings.admin.userManagementSettings.saveSecuritySettings') }}
         </button>
       </div>
     </div>
@@ -718,7 +718,7 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
             ]"
           >
-            SLM Administrators
+            {{ $t('settings.admin.userManagementSettings.sLMAdministrators') }}
           </button>
           <button
             @click="activeTab = 'autobot-users'"
@@ -729,7 +729,7 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
             ]"
           >
-            AutoBot Users
+            {{ $t('settings.admin.userManagementSettings.autoBotUsers') }}
           </button>
           <button
             @click="activeTab = 'teams'"
@@ -740,7 +740,7 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
             ]"
           >
-            Teams
+            {{ $t('settings.admin.userManagementSettings.teams') }}
           </button>
           <button
             @click="activeTab = 'sso'"
@@ -751,7 +751,7 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
             ]"
           >
-            SSO Providers
+            {{ $t('settings.admin.userManagementSettings.sSOProviders') }}
           </button>
         </nav>
       </div>
@@ -768,14 +768,14 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
       <div v-else-if="activeTab === 'slm-admins'">
         <div class="flex items-center justify-between mb-4">
           <div>
-            <h2 class="text-lg font-semibold text-gray-900">SLM Fleet Administrators</h2>
-            <p class="text-sm text-gray-500">Users who manage the AutoBot fleet via the SLM admin dashboard</p>
+            <h2 class="text-lg font-semibold text-gray-900">{{ $t('settings.admin.userManagementSettings.sLMFleetAdministrators') }}</h2>
+            <p class="text-sm text-gray-500">{{ $t('settings.admin.userManagementSettings.usersWhoManageThe') }}</p>
           </div>
           <button @click="showCreateUserModal = true" class="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 flex items-center gap-2">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
             </svg>
-            Add SLM Admin
+            {{ $t('settings.admin.userManagementSettings.addSLMAdmin') }}
           </button>
         </div>
 
@@ -783,12 +783,12 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
           <table class="w-full">
             <thead>
               <tr class="border-b border-gray-200">
-                <th class="text-left py-3 px-4 text-sm font-medium text-gray-500">Username</th>
-                <th class="text-left py-3 px-4 text-sm font-medium text-gray-500">Email</th>
-                <th class="text-left py-3 px-4 text-sm font-medium text-gray-500">Roles</th>
-                <th class="text-left py-3 px-4 text-sm font-medium text-gray-500">Status</th>
-                <th class="text-left py-3 px-4 text-sm font-medium text-gray-500">Last Login</th>
-                <th class="text-right py-3 px-4 text-sm font-medium text-gray-500">Actions</th>
+                <th class="text-left py-3 px-4 text-sm font-medium text-gray-500">{{ $t('settings.admin.userManagementSettings.username') }}</th>
+                <th class="text-left py-3 px-4 text-sm font-medium text-gray-500">{{ $t('settings.admin.userManagementSettings.email') }}</th>
+                <th class="text-left py-3 px-4 text-sm font-medium text-gray-500">{{ $t('settings.admin.userManagementSettings.roles') }}</th>
+                <th class="text-left py-3 px-4 text-sm font-medium text-gray-500">{{ $t('settings.admin.userManagementSettings.status') }}</th>
+                <th class="text-left py-3 px-4 text-sm font-medium text-gray-500">{{ $t('settings.admin.userManagementSettings.lastLogin') }}</th>
+                <th class="text-right py-3 px-4 text-sm font-medium text-gray-500">{{ $t('settings.admin.userManagementSettings.actions') }}</th>
               </tr>
             </thead>
             <tbody>
@@ -824,7 +824,7 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
                 </td>
               </tr>
               <tr v-if="slmUsers.length === 0">
-                <td colspan="6" class="py-8 text-center text-gray-500">No SLM administrators found</td>
+                <td colspan="6" class="py-8 text-center text-gray-500">{{ $t('settings.admin.userManagementSettings.noSLMAdministratorsFound') }}</td>
               </tr>
             </tbody>
           </table>
@@ -835,14 +835,14 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
       <div v-else-if="activeTab === 'autobot-users'">
         <div class="flex items-center justify-between mb-4">
           <div>
-            <h2 class="text-lg font-semibold text-gray-900">AutoBot Application Users</h2>
-            <p class="text-sm text-gray-500">Users who access AutoBot chat, workflows, and tools</p>
+            <h2 class="text-lg font-semibold text-gray-900">{{ $t('settings.admin.userManagementSettings.autoBotApplicationUsers') }}</h2>
+            <p class="text-sm text-gray-500">{{ $t('settings.admin.userManagementSettings.usersWhoAccessAutoBot') }}</p>
           </div>
           <button @click="showCreateUserModal = true" class="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 flex items-center gap-2">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
             </svg>
-            Add User
+            {{ $t('settings.admin.userManagementSettings.addUser') }}
           </button>
         </div>
 
@@ -850,12 +850,12 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
           <table class="w-full">
             <thead>
               <tr class="border-b border-gray-200">
-                <th class="text-left py-3 px-4 text-sm font-medium text-gray-500">Username</th>
-                <th class="text-left py-3 px-4 text-sm font-medium text-gray-500">Email</th>
-                <th class="text-left py-3 px-4 text-sm font-medium text-gray-500">Roles</th>
-                <th class="text-left py-3 px-4 text-sm font-medium text-gray-500">Status</th>
-                <th class="text-left py-3 px-4 text-sm font-medium text-gray-500">Last Login</th>
-                <th class="text-right py-3 px-4 text-sm font-medium text-gray-500">Actions</th>
+                <th class="text-left py-3 px-4 text-sm font-medium text-gray-500">{{ $t('settings.admin.userManagementSettings.username') }}</th>
+                <th class="text-left py-3 px-4 text-sm font-medium text-gray-500">{{ $t('settings.admin.userManagementSettings.email') }}</th>
+                <th class="text-left py-3 px-4 text-sm font-medium text-gray-500">{{ $t('settings.admin.userManagementSettings.roles') }}</th>
+                <th class="text-left py-3 px-4 text-sm font-medium text-gray-500">{{ $t('settings.admin.userManagementSettings.status') }}</th>
+                <th class="text-left py-3 px-4 text-sm font-medium text-gray-500">{{ $t('settings.admin.userManagementSettings.lastLogin') }}</th>
+                <th class="text-right py-3 px-4 text-sm font-medium text-gray-500">{{ $t('settings.admin.userManagementSettings.actions') }}</th>
               </tr>
             </thead>
             <tbody>
@@ -891,7 +891,7 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
                 </td>
               </tr>
               <tr v-if="autobotUsers.length === 0">
-                <td colspan="6" class="py-8 text-center text-gray-500">No AutoBot users found</td>
+                <td colspan="6" class="py-8 text-center text-gray-500">{{ $t('settings.admin.userManagementSettings.noAutoBotUsersFound') }}</td>
               </tr>
             </tbody>
           </table>
@@ -902,14 +902,14 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
       <div v-else-if="activeTab === 'teams'">
         <div class="flex items-center justify-between mb-4">
           <div>
-            <h2 class="text-lg font-semibold text-gray-900">AutoBot Teams</h2>
-            <p class="text-sm text-gray-500">Organize users into teams for collaboration and shared resources</p>
+            <h2 class="text-lg font-semibold text-gray-900">{{ $t('settings.admin.userManagementSettings.autoBotTeams') }}</h2>
+            <p class="text-sm text-gray-500">{{ $t('settings.admin.userManagementSettings.organizeUsersIntoTeams') }}</p>
           </div>
           <button @click="showCreateTeamModal = true" class="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 flex items-center gap-2">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
             </svg>
-            Create Team
+            {{ $t('settings.admin.userManagementSettings.createTeam') }}
           </button>
         </div>
 
@@ -917,10 +917,10 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
           <table class="w-full">
             <thead>
               <tr class="border-b border-gray-200">
-                <th class="text-left py-3 px-4 text-sm font-medium text-gray-500">Name</th>
-                <th class="text-left py-3 px-4 text-sm font-medium text-gray-500">Description</th>
-                <th class="text-left py-3 px-4 text-sm font-medium text-gray-500">Created</th>
-                <th class="text-right py-3 px-4 text-sm font-medium text-gray-500">Actions</th>
+                <th class="text-left py-3 px-4 text-sm font-medium text-gray-500">{{ $t('settings.admin.userManagementSettings.name') }}</th>
+                <th class="text-left py-3 px-4 text-sm font-medium text-gray-500">{{ $t('settings.admin.userManagementSettings.description') }}</th>
+                <th class="text-left py-3 px-4 text-sm font-medium text-gray-500">{{ $t('settings.admin.userManagementSettings.created') }}</th>
+                <th class="text-right py-3 px-4 text-sm font-medium text-gray-500">{{ $t('settings.admin.userManagementSettings.actions') }}</th>
               </tr>
             </thead>
             <tbody>
@@ -937,7 +937,7 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
                 </td>
               </tr>
               <tr v-if="teams.length === 0">
-                <td colspan="4" class="py-8 text-center text-gray-500">No teams found</td>
+                <td colspan="4" class="py-8 text-center text-gray-500">{{ $t('settings.admin.userManagementSettings.noTeamsFound') }}</td>
               </tr>
             </tbody>
           </table>
@@ -948,14 +948,14 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
       <div v-else-if="activeTab === 'sso'">
         <div class="flex items-center justify-between mb-4">
           <div>
-            <h2 class="text-lg font-semibold text-gray-900">SSO Providers</h2>
-            <p class="text-sm text-gray-500">Configure OAuth2, LDAP, and SAML authentication providers</p>
+            <h2 class="text-lg font-semibold text-gray-900">{{ $t('settings.admin.userManagementSettings.sSOProviders') }}</h2>
+            <p class="text-sm text-gray-500">{{ $t('settings.admin.userManagementSettings.configureOAuth2LDAPAnd') }}</p>
           </div>
           <button @click="showCreateProviderModal = true" class="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 flex items-center gap-2">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
             </svg>
-            Add Provider
+            {{ $t('settings.admin.userManagementSettings.addProvider') }}
           </button>
         </div>
 
@@ -963,11 +963,11 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
           <table class="w-full">
             <thead>
               <tr class="border-b border-gray-200">
-                <th class="text-left py-3 px-4 text-sm font-medium text-gray-500">Name</th>
-                <th class="text-left py-3 px-4 text-sm font-medium text-gray-500">Type</th>
-                <th class="text-left py-3 px-4 text-sm font-medium text-gray-500">Status</th>
-                <th class="text-left py-3 px-4 text-sm font-medium text-gray-500">Last Sync</th>
-                <th class="text-right py-3 px-4 text-sm font-medium text-gray-500">Actions</th>
+                <th class="text-left py-3 px-4 text-sm font-medium text-gray-500">{{ $t('settings.admin.userManagementSettings.name') }}</th>
+                <th class="text-left py-3 px-4 text-sm font-medium text-gray-500">{{ $t('settings.admin.userManagementSettings.type') }}</th>
+                <th class="text-left py-3 px-4 text-sm font-medium text-gray-500">{{ $t('settings.admin.userManagementSettings.status') }}</th>
+                <th class="text-left py-3 px-4 text-sm font-medium text-gray-500">{{ $t('settings.admin.userManagementSettings.lastSync') }}</th>
+                <th class="text-right py-3 px-4 text-sm font-medium text-gray-500">{{ $t('settings.admin.userManagementSettings.actions') }}</th>
               </tr>
             </thead>
             <tbody>
@@ -1000,7 +1000,7 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
                 </td>
               </tr>
               <tr v-if="ssoProviders.length === 0">
-                <td colspan="5" class="py-8 text-center text-gray-500">No SSO providers configured</td>
+                <td colspan="5" class="py-8 text-center text-gray-500">{{ $t('settings.admin.userManagementSettings.noSSOProvidersConfigured') }}</td>
               </tr>
             </tbody>
           </table>
@@ -1010,7 +1010,7 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
 
     <!-- RBAC Management (Admin Only) -->
     <div v-if="isAdmin" class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
-      <h2 class="text-lg font-semibold text-gray-900 mb-4">Role-Based Access Control</h2>
+      <h2 class="text-lg font-semibold text-gray-900 mb-4">{{ $t('settings.admin.userManagementSettings.roleBasedAccessControl') }}</h2>
 
       <div class="p-4 rounded-lg mb-4" :class="rbacStatus.initialized ? 'bg-green-50 border border-green-200' : 'bg-yellow-50 border border-yellow-200'">
         <div class="flex items-center gap-3">
@@ -1029,8 +1029,8 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
       </div>
 
       <div class="p-4 bg-gray-50 rounded-lg mb-4">
-        <p class="text-sm text-gray-600"><strong>System Permissions:</strong> 23 permissions across 8 resources</p>
-        <p class="text-sm text-gray-600"><strong>System Roles:</strong> admin, user, readonly, guest</p>
+        <p class="text-sm text-gray-600"><strong>{{ $t('settings.admin.userManagementSettings.systemPermissions') }}</strong> {{ $t('settings.admin.userManagementSettings.23PermissionsAcross8') }}</p>
+        <p class="text-sm text-gray-600"><strong>{{ $t('settings.admin.userManagementSettings.systemRoles') }}</strong> {{ $t('settings.admin.userManagementSettings.adminUserReadonlyGuest') }}</p>
       </div>
 
       <div class="flex gap-3">
@@ -1042,13 +1042,13 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
           <svg v-else class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
           </svg>
-          Initialize RBAC
+          {{ $t('settings.admin.userManagementSettings.initializeRBAC') }}
         </button>
         <button @click="checkRbacStatus" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 flex items-center gap-2">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
           </svg>
-          Refresh Status
+          {{ $t('settings.admin.userManagementSettings.refreshStatus') }}
         </button>
       </div>
     </div>
@@ -1073,7 +1073,7 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
 
         <div class="flex justify-end mt-4">
           <button @click="showChangePasswordModal = false; selectedUser = null; selectedUserType = 'legacy'" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200">
-            Cancel
+            {{ $t('settings.admin.userManagementSettings.cancel') }}
           </button>
         </div>
       </div>
@@ -1089,33 +1089,33 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
 
         <div class="space-y-4">
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Username</label>
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.userManagementSettings.username') }}</label>
             <input v-model="newUserForm.username" type="text" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500" placeholder="Lowercase, letters, numbers, underscores" />
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Email</label>
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.userManagementSettings.email') }}</label>
             <input v-model="newUserForm.email" type="email" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500" />
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Password</label>
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.userManagementSettings.password') }}</label>
             <input v-model="newUserForm.password" type="password" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500" placeholder="Min 8 chars, upper + lower + digit" />
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Confirm Password</label>
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.userManagementSettings.confirmPassword') }}</label>
             <input v-model="newUserForm.confirmPassword" type="password" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500" />
           </div>
         </div>
 
         <div class="flex justify-end gap-3 mt-6">
           <button @click="showCreateUserModal = false" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200">
-            Cancel
+            {{ $t('settings.admin.userManagementSettings.cancel') }}
           </button>
           <button @click="createUser" :disabled="saving" class="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:opacity-50 flex items-center gap-2">
             <svg v-if="saving" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
               <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
               <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
             </svg>
-            Create
+            {{ $t('settings.admin.userManagementSettings.create') }}
           </button>
         </div>
       </div>
@@ -1125,29 +1125,29 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
     <div v-if="showCreateTeamModal" class="fixed inset-0 z-50 flex items-center justify-center">
       <div class="absolute inset-0 bg-black/50" @click="showCreateTeamModal = false"></div>
       <div class="relative bg-white rounded-lg shadow-xl w-full max-w-md p-6">
-        <h3 class="text-lg font-semibold text-gray-900 mb-4">Create Team</h3>
+        <h3 class="text-lg font-semibold text-gray-900 mb-4">{{ $t('settings.admin.userManagementSettings.createTeam') }}</h3>
 
         <div class="space-y-4">
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Team Name</label>
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.userManagementSettings.teamName') }}</label>
             <input v-model="newTeamForm.name" type="text" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500" placeholder="e.g., Engineering, Design" />
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Description (optional)</label>
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.userManagementSettings.descriptionOptional') }}</label>
             <textarea v-model="newTeamForm.description" rows="3" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500" placeholder="Brief description of the team's purpose"></textarea>
           </div>
         </div>
 
         <div class="flex justify-end gap-3 mt-6">
           <button @click="showCreateTeamModal = false" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200">
-            Cancel
+            {{ $t('settings.admin.userManagementSettings.cancel') }}
           </button>
           <button @click="createTeam" :disabled="saving || !newTeamForm.name" class="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:opacity-50 flex items-center gap-2">
             <svg v-if="saving" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
               <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
               <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
             </svg>
-            Create Team
+            {{ $t('settings.admin.userManagementSettings.createTeam') }}
           </button>
         </div>
       </div>
@@ -1157,7 +1157,7 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
     <div v-if="showRbacModal" class="fixed inset-0 z-50 flex items-center justify-center">
       <div class="absolute inset-0 bg-black/50" @click="showRbacModal = false"></div>
       <div class="relative bg-white rounded-lg shadow-xl w-full max-w-md p-6">
-        <h3 class="text-lg font-semibold text-gray-900 mb-4">Initialize RBAC System</h3>
+        <h3 class="text-lg font-semibold text-gray-900 mb-4">{{ $t('settings.admin.userManagementSettings.initializeRBACSystem') }}</h3>
 
         <div class="p-4 bg-yellow-50 border border-yellow-200 rounded-lg mb-4">
           <div class="flex gap-3">
@@ -1165,9 +1165,9 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
             </svg>
             <div>
-              <p class="font-medium text-yellow-800">RBAC Initialization</p>
+              <p class="font-medium text-yellow-800">{{ $t('settings.admin.userManagementSettings.rBACInitialization') }}</p>
               <p class="text-sm text-yellow-700">
-                This will create system permissions and roles in the database. It is safe to run multiple times.
+                {{ $t('settings.admin.userManagementSettings.thisWillCreateSystem') }}
               </p>
             </div>
           </div>
@@ -1176,25 +1176,25 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
         <div class="space-y-4">
           <div class="flex items-center gap-3">
             <input id="create-admin" v-model="rbacInitOptions.createAdmin" type="checkbox" class="w-4 h-4 text-primary-600 border-gray-300 rounded-sm focus:ring-primary-500" />
-            <label for="create-admin" class="text-sm text-gray-700">Create initial admin user</label>
+            <label for="create-admin" class="text-sm text-gray-700">{{ $t('settings.admin.userManagementSettings.createInitialAdminUser') }}</label>
           </div>
 
           <div v-if="rbacInitOptions.createAdmin">
-            <label class="block text-sm font-medium text-gray-700 mb-1">Admin Username</label>
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.userManagementSettings.adminUsername') }}</label>
             <input v-model="rbacInitOptions.adminUsername" type="text" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500" />
           </div>
         </div>
 
         <div class="flex justify-end gap-3 mt-6">
           <button @click="showRbacModal = false" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200">
-            Cancel
+            {{ $t('settings.admin.userManagementSettings.cancel') }}
           </button>
           <button @click="initializeRbac" :disabled="isInitializingRbac" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 flex items-center gap-2">
             <svg v-if="isInitializingRbac" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
               <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
               <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
             </svg>
-            Initialize RBAC
+            {{ $t('settings.admin.userManagementSettings.initializeRBAC') }}
           </button>
         </div>
       </div>
@@ -1204,44 +1204,44 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
     <div v-if="showCreateProviderModal" class="fixed inset-0 z-50 flex items-center justify-center">
       <div class="absolute inset-0 bg-black/50" @click="showCreateProviderModal = false"></div>
       <div class="relative bg-white rounded-lg shadow-xl w-full max-w-lg p-6">
-        <h3 class="text-lg font-semibold text-gray-900 mb-4">Add SSO Provider</h3>
+        <h3 class="text-lg font-semibold text-gray-900 mb-4">{{ $t('settings.admin.userManagementSettings.addSSOProvider') }}</h3>
         <div class="space-y-4">
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Provider Type</label>
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.userManagementSettings.providerType') }}</label>
             <select v-model="newProviderForm.provider_type" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500">
-              <option value="google">Google OAuth</option>
-              <option value="github">GitHub</option>
-              <option value="microsoft_entra">Microsoft Entra ID</option>
+              <option value="google">{{ $t('settings.admin.userManagementSettings.googleOAuth') }}</option>
+              <option value="github">{{ $t('settings.admin.userManagementSettings.gitHub') }}</option>
+              <option value="microsoft_entra">{{ $t('settings.admin.userManagementSettings.microsoftEntraID') }}</option>
               <option value="ldap">LDAP</option>
-              <option value="active_directory">Active Directory</option>
-              <option value="saml">SAML 2.0</option>
-              <option value="google_workspace">Google Workspace</option>
+              <option value="active_directory">{{ $t('settings.admin.userManagementSettings.activeDirectory') }}</option>
+              <option value="saml">{{ $t('settings.admin.userManagementSettings.sAML20') }}</option>
+              <option value="google_workspace">{{ $t('settings.admin.userManagementSettings.googleWorkspace') }}</option>
             </select>
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Display Name</label>
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.userManagementSettings.displayName') }}</label>
             <input v-model="newProviderForm.name" type="text" placeholder="e.g., Company Google SSO" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500" />
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Client ID</label>
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.userManagementSettings.clientID') }}</label>
             <input v-model="(newProviderForm.config as Record<string, string>).client_id" type="text" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500" />
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Client Secret</label>
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.userManagementSettings.clientSecret') }}</label>
             <input v-model="(newProviderForm.config as Record<string, string>).client_secret" type="password" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500" />
           </div>
           <div class="flex items-center gap-3">
             <input id="sso-active" v-model="newProviderForm.is_active" type="checkbox" class="w-4 h-4 text-primary-600 border-gray-300 rounded-sm focus:ring-primary-500" />
-            <label for="sso-active" class="text-sm text-gray-700">Active</label>
+            <label for="sso-active" class="text-sm text-gray-700">{{ $t('settings.admin.userManagementSettings.active') }}</label>
           </div>
           <div class="flex items-center gap-3">
             <input id="sso-provision" v-model="newProviderForm.allow_user_creation" type="checkbox" class="w-4 h-4 text-primary-600 border-gray-300 rounded-sm focus:ring-primary-500" />
-            <label for="sso-provision" class="text-sm text-gray-700">Allow automatic user creation (JIT provisioning)</label>
+            <label for="sso-provision" class="text-sm text-gray-700">{{ $t('settings.admin.userManagementSettings.allowAutomaticUserCreation') }}</label>
           </div>
         </div>
         <div class="flex justify-end gap-3 mt-6">
-          <button @click="showCreateProviderModal = false" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200">Cancel</button>
-          <button @click="createSsoProvider" :disabled="saving" class="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:opacity-50">Create Provider</button>
+          <button @click="showCreateProviderModal = false" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200">{{ $t('settings.admin.userManagementSettings.cancel') }}</button>
+          <button @click="createSsoProvider" :disabled="saving" class="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:opacity-50">{{ $t('settings.admin.userManagementSettings.createProvider') }}</button>
         </div>
       </div>
     </div>

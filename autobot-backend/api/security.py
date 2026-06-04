@@ -11,16 +11,17 @@ Includes:
 - Domain security statistics
 """
 
-import logging
-
 import aiofiles
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from api.schemas_common import DataResponse
 from api.schemas_system import (
+    AuditLogData,
     CommandApprovalRequest,
     CommandApprovalResponse,
+    CommandHistoryData,
     DomainSecurityStatsResponse,
+    PendingApprovalsData,
     SecurityStatusResponse,
     ThreatIntelStatusResponse,
     URLCheckRequest,
@@ -28,11 +29,12 @@ from api.schemas_system import (
 )
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from enhanced_security_layer import EnhancedSecurityLayer
 from security.domain_security import get_domain_security_manager
 from security.threat_intelligence import ThreatLevel, get_threat_intelligence_service
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 router = APIRouter(dependencies=[Depends(check_admin_permission)])
 
 
@@ -111,7 +113,7 @@ async def approve_command(request: Request, approval: CommandApprovalRequest):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/pending-approvals", response_model=DataResponse)
+@router.get("/pending-approvals", response_model=DataResponse[PendingApprovalsData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_pending_approvals",
@@ -133,7 +135,7 @@ async def get_pending_approvals(request: Request):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/command-history", response_model=DataResponse)
+@router.get("/command-history", response_model=DataResponse[CommandHistoryData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_command_history",
@@ -182,7 +184,7 @@ async def _read_audit_log_file(log_file: str, limit: int) -> list:
         return []
 
 
-@router.get("/audit-log", response_model=DataResponse)
+@router.get("/audit-log", response_model=DataResponse[AuditLogData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_audit_log",

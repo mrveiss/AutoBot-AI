@@ -8,12 +8,13 @@ Issue #381: Extracted from enhanced_orchestrator.py god class refactoring.
 Contains agent registration, lookup, and management functionality.
 """
 
-import logging
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Set
+
+from autobot_shared.logging_manager import get_logger
 
 from .types import AgentCapability, AgentProfile
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def _create_research_agent() -> AgentProfile:
@@ -98,11 +99,15 @@ def get_default_agents() -> List[AgentProfile]:
 
 
 class AgentRegistry:
-    """
-    Manages agent registration and lookup.
+    """Static profile registry for orchestration agent capabilities.
 
-    Provides methods to register, find, and manage agent profiles
-    for the orchestration system.
+    Scope (#6828): holds in-memory AgentProfile + AgentCapability catalogue
+    populated at orchestrator startup from DEFAULT_AGENT_CONFIGS.  This is
+    the **what-can-each-agent-do** registry — it does not track live health or
+    database persistence.  See also:
+    - agents.agent_client.AgentRegistry — health-tracking runtime registry
+    - services.agent_registry_service.AgentRegistryService — DB-backed CRUD
+    - agents.agent_orchestration.distributed_management.DistributedAgentManager — dynamic/distributed
     """
 
     def __init__(self, initialize_defaults: bool = True):
@@ -151,7 +156,7 @@ class AgentRegistry:
             logger.error("Failed to register agent %s: %s", agent_profile.agent_id, e)
             return False
 
-    def get(self, agent_id: str) -> Optional[AgentProfile]:
+    def get(self, agent_id: str) -> AgentProfile | None:
         """Get an agent by ID."""
         return self._agents.get(agent_id)
 
@@ -174,8 +179,8 @@ class AgentRegistry:
     def find_best_for_task(
         self,
         task_type: str,
-        required_capabilities: Optional[Set[AgentCapability]] = None,
-    ) -> Optional[str]:
+        required_capabilities: Set[AgentCapability] | None = None,
+    ) -> str | None:
         """
         Find the best agent for a specific task.
 

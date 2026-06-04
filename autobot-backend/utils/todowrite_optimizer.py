@@ -21,16 +21,16 @@ import asyncio
 import difflib
 import hashlib
 import json
-import logging
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Set, Tuple
 
+from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import TimingConstants
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class TodoOptimizationStrategy(Enum):
@@ -104,7 +104,7 @@ class TodoWriteOptimizer:
     and prevent conversation crashes due to rate limiting.
     """
 
-    def __init__(self, config: Optional[Dict[str, Any]] = None):
+    def __init__(self, config: Dict[str, Any] | None = None):
         """Initialize TodoWrite optimizer with configuration"""
         self.config = config or {}
 
@@ -138,7 +138,7 @@ class TodoWriteOptimizer:
         status: str = "pending",
         active_form: str = "",
         priority: int = 5,
-        tags: Optional[List[str]] = None,
+        tags: List[str] | None = None,
     ) -> bool:
         """
         Add a todo item for optimization instead of immediate writing.
@@ -166,7 +166,7 @@ class TodoWriteOptimizer:
         status: str,
         active_form: str,
         priority: int,
-        tags: Optional[List[str]],
+        tags: List[str] | None,
     ) -> "OptimizedTodoItem":
         """
         Create an OptimizedTodoItem from input parameters. Issue #620.
@@ -255,7 +255,7 @@ class TodoWriteOptimizer:
 
         return False
 
-    async def _process_optimization_batch(self) -> Optional[TodoBatch]:
+    async def _process_optimization_batch(self) -> TodoBatch | None:
         """Process current batch of todos for optimization"""
         if not self.pending_todos:
             return None
@@ -636,7 +636,7 @@ class TodoWriteOptimizer:
 
         return recommendations
 
-    async def force_optimization(self) -> Optional[TodoBatch]:
+    async def force_optimization(self) -> TodoBatch | None:
         """Force immediate optimization of pending todos"""
         if not self.pending_todos:
             logger.info("No pending todos to optimize")
@@ -728,7 +728,7 @@ _global_optimizer = lazy_singleton(TodoWriteOptimizer)
 
 
 def get_todowrite_optimizer(
-    config: Optional[Dict[str, Any]] = None,
+    config: Dict[str, Any] | None = None,
 ) -> TodoWriteOptimizer:
     """Get global TodoWrite optimizer instance (thread-safe)"""
     return _global_optimizer()

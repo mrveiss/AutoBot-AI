@@ -1,7 +1,7 @@
 <template>
   <div class="analytics-header">
     <div class="header-content">
-      <h2><i class="fas fa-code"></i> {{ $t('analytics.header.title') }}</h2>
+      <h2><Icon name="code" /> {{ $t('analytics.header.title') }}</h2>
       <div class="header-controls">
         <!-- Source selector row -->
         <div class="source-selector-row">
@@ -24,12 +24,12 @@
                 <template v-else> ({{ $t('analytics.header.local') }})</template>
               </option>
             </select>
-            <i class="fas fa-chevron-down select-chevron"></i>
+            <Icon name="chevron-down" class="select-chevron" />
           </div>
 
           <!-- Manage Sources button -->
           <button class="btn-manage" @click="$emit('open-source-manager')" :title="$t('analytics.header.manageSourcesTitle')">
-            <i class="fas fa-code-branch"></i>
+            <Icon name="code-branch" />
             {{ $t('analytics.header.manageSources') }}
           </button>
         </div>
@@ -46,7 +46,7 @@
 
         <!-- Selected source info bar -->
         <div v-if="selectedSource" class="selected-source-bar">
-          <i :class="selectedSource.source_type === 'github' ? 'fab fa-github' : 'fas fa-folder'"></i>
+          <i :class="selectedSource.source_type === 'github' ? 'github' : 'folder'"></i>
           <span class="selected-source-name">{{ selectedSource.name }}</span>
           <span class="selected-source-path">
             {{ selectedSource.repo ?? selectedSource.clone_path ?? '' }}
@@ -55,20 +55,20 @@
             {{ selectedSource.status }}
           </span>
           <button class="btn-clear-source" @click="$emit('clear-source')" :title="$t('analytics.header.useCustomPath')">
-            <i class="fas fa-times"></i>
+            <Icon name="times" />
           </button>
         </div>
 
         <button @click="$emit('index-codebase')" :disabled="analyzing" class="btn-primary">
-          <i :class="analyzing ? 'fas fa-spinner fa-spin' : 'fas fa-database'"></i>
+          <i :class="analyzing ? 'fas fa-spinner fa-spin' : 'database'"></i>
           {{ analyzing ? $t('analytics.header.indexing') : $t('analytics.header.indexCodebase') }}
         </button>
         <button v-if="analyzing && currentJobId" @click="$emit('cancel-indexing')" class="btn-cancel">
-          <i class="fas fa-stop-circle"></i>
+          <Icon name="stop-circle" />
           {{ $t('analytics.header.cancel') }}
         </button>
         <button @click="$emit('run-full-analysis')" :disabled="analyzing || (!rootPath && !selectedSource)" class="btn-secondary">
-          <i :class="analyzing ? 'fas fa-spinner fa-spin' : 'fas fa-chart-bar'"></i>
+          <i :class="analyzing ? 'fas fa-spinner fa-spin' : 'chart-bar'"></i>
           {{ analyzing ? $t('analytics.header.analyzingAll') : $t('analytics.header.analyzeAll') }}
         </button>
 
@@ -83,18 +83,18 @@
           <button @click="$emit('test-all-endpoints')" class="btn-debug btn-endpoints">{{ $t('analytics.header.debug.testAllApis') }}</button>
           <!-- Code Intelligence -->
           <button @click="$emit('run-code-smell-analysis')" :disabled="analyzingCodeSmells" class="btn-debug btn-smells">
-            <i :class="analyzingCodeSmells ? 'fas fa-spinner fa-spin' : 'fas fa-bug'"></i>
+            <i :class="analyzingCodeSmells ? 'fas fa-spinner fa-spin' : 'bug'"></i>
             {{ analyzingCodeSmells ? $t('analytics.header.debug.scanning') : $t('analytics.header.debug.codeSmells') }}
           </button>
           <button @click="$emit('get-code-health-score')" :disabled="analyzingCodeSmells" class="btn-debug btn-health">
-            <i class="fas fa-heartbeat"></i> {{ $t('analytics.header.debug.healthScore') }}
+            <Icon name="heartbeat" /> {{ $t('analytics.header.debug.healthScore') }}
           </button>
           <button @click="$emit('export-report')" :disabled="exportingReport" class="btn-debug btn-export">
-            <i :class="exportingReport ? 'fas fa-spinner fa-spin' : 'fas fa-file-export'"></i>
+            <i :class="exportingReport ? 'fas fa-spinner fa-spin' : 'file-export'"></i>
             {{ exportingReport ? $t('analytics.header.debug.exporting') : $t('analytics.header.debug.exportReport') }}
           </button>
           <button @click="$emit('clear-cache')" :disabled="clearingCache" class="btn-debug btn-cache">
-            <i :class="clearingCache ? 'fas fa-spinner fa-spin' : 'fas fa-trash-alt'"></i>
+            <i :class="clearingCache ? 'fas fa-spinner fa-spin' : 'trash-alt'"></i>
             {{ clearingCache ? $t('analytics.header.debug.clearing') : $t('analytics.header.debug.clearCache') }}
           </button>
         </div>
@@ -119,6 +119,7 @@
 
 // ---- Types ----------------------------------------------------------------
 
+import Icon from '@/components/ui/Icon.vue'
 import type { CodeSource } from '@/types/analytics'
 
 // ---- Props & Emits --------------------------------------------------------

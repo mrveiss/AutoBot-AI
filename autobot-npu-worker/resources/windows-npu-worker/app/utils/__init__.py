@@ -4,6 +4,7 @@
 """
 Windows NPU Worker Utilities Package
 """
+
 from .redis_client import get_redis_client
 from .backend_telemetry import (
     BackendTelemetryClient,

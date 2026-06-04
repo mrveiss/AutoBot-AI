@@ -21,8 +21,8 @@
  *
  * // Basic async operation wrapper
  * const { execute, loading, error } = useAsyncHandler(async () => {
- *   const response = await apiClient.get<any>('/data')
- *   return response.data
+ *   // apiClient.get() returns parsed JSON directly — no .data envelope
+ *   return await apiClient.get<any>('/data')
  * })
  *
  * // Execute operation

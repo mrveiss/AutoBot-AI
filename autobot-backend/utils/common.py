@@ -13,9 +13,11 @@ import logging
 import re
 import sqlite3
 from pathlib import Path
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 
 _SQL_IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
@@ -86,7 +88,7 @@ class CommonUtils:
     """Common utility functions used across the codebase"""
 
     @staticmethod
-    def load_config(config_path: Union[str, Path], default: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def load_config(config_path: str | Path, default: Dict[str, Any] | None = None) -> Dict[str, Any]:
         """
         Centralized configuration loading utility
 
@@ -116,7 +118,7 @@ class CommonUtils:
             return default.copy()
 
     @staticmethod
-    def save_config(config: Dict[str, Any], config_path: Union[str, Path]) -> bool:
+    def save_config(config: Dict[str, Any], config_path: str | Path) -> bool:
         """
         Save configuration to file
 
@@ -146,7 +148,7 @@ class CommonUtils:
             return False
 
     @staticmethod
-    def init_logger(name: str, level: str = "INFO", format_str: Optional[str] = None) -> logging.Logger:
+    def init_logger(name: str, level: str = "INFO", format_str: str | None = None) -> logging.Logger:
         """
         Centralized logger initialization
 
@@ -158,7 +160,7 @@ class CommonUtils:
         Returns:
             Configured logger instance
         """
-        logger = logging.getLogger(name)
+        logger = get_logger(name)
 
         # Avoid duplicate handlers
         if logger.handlers:
@@ -176,9 +178,7 @@ class CommonUtils:
         return logger
 
     @staticmethod
-    def get_database_connection(
-        db_path: Union[str, Path], create_if_missing: bool = True
-    ) -> Optional[sqlite3.Connection]:
+    def get_database_connection(db_path: str | Path, create_if_missing: bool = True) -> sqlite3.Connection | None:
         """
         Get database connection with consistent error handling
 
@@ -204,7 +204,7 @@ class CommonUtils:
             return None
 
     @staticmethod
-    def execute_sql_safely(conn: sqlite3.Connection, sql: str, params: Optional[tuple] = None) -> bool:
+    def execute_sql_safely(conn: sqlite3.Connection, sql: str, params: tuple | None = None) -> bool:
         """
         Execute SQL with consistent error handling
 
@@ -230,7 +230,7 @@ class CommonUtils:
             return False
 
     @staticmethod
-    def ensure_directory(directory_path: Union[str, Path]) -> bool:
+    def ensure_directory(directory_path: str | Path) -> bool:
         """
         Ensure directory exists, create if necessary
 
@@ -250,7 +250,7 @@ class CommonUtils:
             return False
 
     @staticmethod
-    def safe_json_load(file_path: Union[str, Path], default: Optional[Any] = None) -> Any:
+    def safe_json_load(file_path: str | Path, default: Any | None = None) -> Any:
         """
         Safely load JSON file with error handling
 
@@ -277,7 +277,7 @@ class CommonUtils:
             return default
 
     @staticmethod
-    def safe_json_save(data: Any, file_path: Union[str, Path], indent: int = 2) -> bool:
+    def safe_json_save(data: Any, file_path: str | Path, indent: int = 2) -> bool:
         """
         Safely save data to JSON file
 
@@ -303,7 +303,7 @@ class CommonUtils:
             return False
 
     @staticmethod
-    def validate_file_path(file_path: Union[str, Path], must_exist: bool = False) -> bool:
+    def validate_file_path(file_path: str | Path, must_exist: bool = False) -> bool:
         """
         Validate file path
 
@@ -326,7 +326,7 @@ class CommonUtils:
             return False
 
     @staticmethod
-    def get_file_size_mb(file_path: Union[str, Path]) -> float:
+    def get_file_size_mb(file_path: str | Path) -> float:
         """
         Get file size in megabytes
 
@@ -345,7 +345,7 @@ class CommonUtils:
         return 0.0
 
     @staticmethod
-    def cleanup_temp_files(temp_dir: Union[str, Path], max_age_hours: int = 24) -> int:
+    def cleanup_temp_files(temp_dir: str | Path, max_age_hours: int = 24) -> int:
         """
         Clean up temporary files older than specified age (Issue #315 - refactored).
 
@@ -427,7 +427,9 @@ class DatabaseUtils:
         try:
             _validate_sql_identifier(table_name, "table name")
             cursor = conn.cursor()
-            cursor.execute(f"SELECT COUNT(*) FROM {table_name}")  # nosec B608
+            cursor.execute(
+                f"SELECT COUNT(*) FROM {table_name}"
+            )  # nosec B608  # nosemgrep: autobot-sql-string-format  # nosemgrep
             result = cursor.fetchone()
             return result[0] if result else 0
         except Exception:
@@ -528,7 +530,7 @@ class PathUtils:
         return str(path_obj)
 
     @staticmethod
-    def ensure_path_exists(path: Union[str, Path], is_file: bool = False) -> bool:
+    def ensure_path_exists(path: str | Path, is_file: bool = False) -> bool:
         """
         Ensure path exists, creating directories as needed
 
@@ -555,7 +557,7 @@ class PathUtils:
             return False
 
     @staticmethod
-    def normalize_path(path: Union[str, Path]) -> str:
+    def normalize_path(path: str | Path) -> str:
         """
         Normalize path by resolving relative components and converting to string
 
@@ -568,7 +570,7 @@ class PathUtils:
         return str(Path(path).resolve())
 
     @staticmethod
-    def get_relative_path(path: Union[str, Path], base: Union[str, Path]) -> str:
+    def get_relative_path(path: str | Path, base: str | Path) -> str:
         """
         Get relative path from base directory
 
@@ -588,7 +590,7 @@ class PathUtils:
             return str(Path(path).resolve())
 
     @staticmethod
-    def is_safe_path(path: Union[str, Path], allowed_dirs: Optional[list] = None) -> bool:
+    def is_safe_path(path: str | Path, allowed_dirs: list | None = None) -> bool:
         """
         Check if path is safe (within allowed directories) (Issue #315 - refactored).
 

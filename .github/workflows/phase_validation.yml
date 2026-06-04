@@ -40,13 +40,16 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v6
+      uses: actions/checkout@v6.0.2
 
     - name: Set up Python 3.12
       uses: actions/setup-python@v5
       with:
         python-version: '3.12'
         cache: 'pip'
+        cache-dependency-path: |
+          requirements*.txt
+          autobot-backend/requirements*.txt
 
     - name: Install Python dependencies
       run: |
@@ -107,12 +110,16 @@ jobs:
         # file/directory presence is what we can measure pre-deploy.
         python3 autobot-infrastructure/shared/scripts/phase_validation_system.py \
           --ci-mode --output-format json \
-          > phase_validation_results.json \
+          > phase_validation_results.json || true
+        # Only apply zero-maturity fallback when the script produced no valid JSON
+        # (e.g. import error). A non-zero exit due to Redis unavailability still
+        # writes valid JSON — overwriting it with 0 was the cause of false failures.
+        python3 -c 'import json; json.load(open("phase_validation_results.json"))' 2>/dev/null \
           || echo '{"overall_maturity": 0, "phases": []}' > phase_validation_results.json
 
         # Display results summary
-        echo "## Phase Validation Results" >> $GITHUB_STEP_SUMMARY
-        python3 -c 'import json; r=json.load(open("phase_validation_results.json")); print(f"**Overall System Maturity:** {r.get(\"overall_maturity\", 0):.1f}%")' >> $GITHUB_STEP_SUMMARY 2>/dev/null || echo "Results not available" >> $GITHUB_STEP_SUMMARY
+        echo "## Phase Validation Results" >> "$GITHUB_STEP_SUMMARY"
+        python3 -c 'import json; r=json.load(open("phase_validation_results.json")); print(f"**Overall System Maturity:** {r.get(\"overall_maturity\", 0):.1f}%")' >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || echo "Results not available" >> "$GITHUB_STEP_SUMMARY"
 
     - name: Generate Validation Dashboard
       env:
@@ -123,13 +130,9 @@ jobs:
         python3 autobot-infrastructure/shared/scripts/validation_dashboard_generator.py --ci-mode > validation_dashboard.html || echo "Dashboard generation failed"
 
     - name: Phase Validation Gate
-      # Non-blocking until #7496 rewrites the legacy PHASE_CRITERIA paths
-      # (`src/`, `backend/`, `main.py`, …) to match the current
-      # `autobot-backend/` / `autobot-frontend/` reorganisation. The gate
-      # currently scores ~22% against stale criteria; gating on it would
-      # block every merge for reasons unrelated to the change under review.
-      continue-on-error: true
+      shell: bash
       run: |
+        set -euo pipefail
         echo "Checking phase validation gate..."
 
         # Extract overall maturity from results
@@ -148,11 +151,11 @@ jobs:
 
         # Compare maturity to threshold
         if (( $(echo "$MATURITY >= $THRESHOLD" | bc -l) )); then
-          echo "Phase validation passed: ${MATURITY}% >= ${THRESHOLD}%"
+          echo "Phase validation passed: $MATURITY% >= $THRESHOLD%"
         else
-          echo "::error::Phase validation below threshold: ${MATURITY}% < ${THRESHOLD}%"
-          echo "## Phase Validation Below Threshold" >> $GITHUB_STEP_SUMMARY
-          echo "Current maturity (${MATURITY}%) is below threshold (${THRESHOLD}%)" >> $GITHUB_STEP_SUMMARY
+          echo "::error::Phase validation below threshold: $MATURITY% < $THRESHOLD%"
+          echo "## Phase Validation Below Threshold" >> "$GITHUB_STEP_SUMMARY"
+          echo "Current maturity ($MATURITY%) is below threshold ($THRESHOLD%)" >> "$GITHUB_STEP_SUMMARY"
           exit 1
         fi
 
@@ -228,7 +231,7 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v6
+      uses: actions/checkout@v6.0.2
 
     - name: Download validation results
       uses: actions/download-artifact@v8
@@ -236,9 +239,9 @@ jobs:
         name: phase-validation-reports
 
     - name: Integration readiness check
-      # Non-blocking until #7496 — same reason as Phase Validation Gate.
-      continue-on-error: true
+      shell: bash
       run: |
+        set -euo pipefail
         echo "Checking integration readiness..."
 
         # Check if validation results indicate system is ready for integration
@@ -246,12 +249,12 @@ jobs:
 
         if (( $(echo "$MATURITY >= 70" | bc -l) )); then
           echo "System ready for integration (${MATURITY}%)"
-          echo "## Integration Ready" >> $GITHUB_STEP_SUMMARY
-          echo "System maturity: ${MATURITY}% - Ready for integration testing" >> $GITHUB_STEP_SUMMARY
+          echo "## Integration Ready" >> "$GITHUB_STEP_SUMMARY"
+          echo "System maturity: ${MATURITY}% - Ready for integration testing" >> "$GITHUB_STEP_SUMMARY"
         else
           echo "::error::System not ready for integration (${MATURITY}%)"
-          echo "## Integration Not Ready" >> $GITHUB_STEP_SUMMARY
-          echo "System maturity: ${MATURITY}% - Additional development required" >> $GITHUB_STEP_SUMMARY
+          echo "## Integration Not Ready" >> "$GITHUB_STEP_SUMMARY"
+          echo "System maturity: ${MATURITY}% - Additional development required" >> "$GITHUB_STEP_SUMMARY"
           exit 1
         fi
 

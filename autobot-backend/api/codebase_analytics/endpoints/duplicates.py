@@ -15,28 +15,28 @@ Issue #554: Enhanced with semantic analysis support:
 """
 
 import asyncio
-import logging
 from pathlib import Path
-from typing import Optional
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
+from celery.result import AsyncResult
+from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import AnalyticsConfig
-from utils.background_task_manager import BackgroundTaskManager
+from tasks.analytics_tasks import run_duplicate_analysis
+from utils.celery_task_status import celery_result_to_status, get_latest_task_result, store_latest_task_id
 from utils.chromadb_client import get_all_paginated
 from utils.io_executor import get_analytics_executor
 
 from ..duplicate_detector import DuplicateCodeDetector, detect_duplicates_async
 from ..storage import get_code_collection
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter()
 
-# Background task manager for duplicate analysis (#1304)
-_manager = BackgroundTaskManager(redis_prefix="dup_task:")
+_REDIS_PREFIX = "dup_task:"
 
 # Cache for duplicate analysis (in-memory, refreshed on demand)
 # Keyed by source_id (or "" for unscoped) to prevent cross-project leakage (#3685)
@@ -146,7 +146,7 @@ def _convert_analysis_to_result(analysis, project_root: str) -> dict:
     }
 
 
-def _get_chromadb_fallback(error_msg: str, source_id: Optional[str] = None) -> Optional[dict]:
+def _get_chromadb_fallback(error_msg: str, source_id: str | None = None) -> dict | None:
     """
     Get cached duplicates from ChromaDB as fallback.
 
@@ -236,7 +236,7 @@ def _build_detection_error_response() -> dict:
     }
 
 
-def _process_and_cache_analysis(analysis, project_root: str, source_id: Optional[str] = None) -> dict:
+def _process_and_cache_analysis(analysis, project_root: str, source_id: str | None = None) -> dict:
     """
     Convert analysis to result dict and log completion.
 
@@ -290,7 +290,7 @@ async def _run_duplicate_analysis(project_root: str, min_similarity: float, use_
     return analysis
 
 
-def _check_duplicate_cache(refresh: bool, source_id: Optional[str] = None) -> Optional[JSONResponse]:
+def _check_duplicate_cache(refresh: bool, source_id: str | None = None) -> JSONResponse | None:
     """
     Check if cached results are available and return them.
 
@@ -314,7 +314,7 @@ def _check_duplicate_cache(refresh: bool, source_id: Optional[str] = None) -> Op
     return None
 
 
-async def _handle_detection_failure(error: Exception, source_id: Optional[str] = None) -> JSONResponse:
+async def _handle_detection_failure(error: Exception, source_id: str | None = None) -> JSONResponse:
     """
     Handle duplicate detection failure with fallback.
 
@@ -348,7 +348,7 @@ async def get_duplicate_code(
     refresh: bool = Query(False, description="Force fresh analysis instead of cache"),
     min_similarity: float = Query(0.5, description="Minimum similarity threshold (0.0-1.0)"),
     use_semantic: bool = Query(False, description="Enable LLM-based semantic analysis (Issue #554)"),
-    source_id: Optional[str] = Query(None, description="#1772: source_id for per-project scoping"),
+    source_id: str | None = Query(None, description="#1772: source_id for per-project scoping"),
 ):
     """
     Get duplicate code detected in the codebase (Issue #528).
@@ -409,7 +409,7 @@ def _make_relative_path(path: str, project_root: str) -> str:
         return path
 
 
-async def _run_semantic_config_detection(project_root: Path) -> Optional[dict]:
+async def _run_semantic_config_detection(project_root: Path) -> dict | None:
     """
     Run semantic config duplicate detection.
 
@@ -492,7 +492,7 @@ def _convert_config_duplicates_to_array(duplicates_dict: dict) -> list:
 )
 async def detect_config_duplicates_endpoint(
     use_semantic: bool = Query(False, description="Enable LLM-based semantic analysis (Issue #554)"),
-    source_id: Optional[str] = Query(None, description="#3685: source_id for per-project scoping"),
+    source_id: str | None = Query(None, description="#3685: source_id for per-project scoping"),
 ):
     """
     Detect configuration value duplicates across codebase (Issue #341).
@@ -545,31 +545,10 @@ async def detect_config_duplicates_endpoint(
 # ------------------------------------------------------------------
 
 
-async def _run_dup_analysis(task_id: str) -> None:
-    """Background worker for duplicate analysis (#1304)."""
-    try:
-        project_root = _get_project_root()
-
-        await _manager.update_progress(task_id, "Running duplicate analysis", 20.0)
-        analysis = await _run_duplicate_analysis(project_root, 0.5, False)
-
-        if analysis is None:
-            await _manager.update_progress(task_id, "Analysis timed out", 90.0)
-            await _manager.complete_task(task_id, _build_timeout_response())
-            return
-
-        await _manager.update_progress(task_id, "Processing results", 80.0)
-        result = _process_and_cache_analysis(analysis, project_root)
-        await _manager.complete_task(task_id, result)
-    except Exception:
-        logger.exception("Duplicate analysis failed")
-        await _manager.fail_task(task_id, "Analysis failed")
-
-
 @router.get("/duplicates/cached")
 async def get_cached_duplicate_result(source_id: str = ""):
-    """Return the latest completed duplicate analysis result (#1540, #1757)."""
-    cached = await _manager.get_latest_result(source_id=source_id)
+    """Return the latest completed duplicate analysis result (#1540)."""
+    cached = await get_latest_task_result(_REDIS_PREFIX)
     if cached and cached.get("result"):
         return {
             "status": "success",
@@ -581,34 +560,25 @@ async def get_cached_duplicate_result(source_id: str = ""):
 
 
 @router.post("/duplicates/analyze")
-async def start_duplicate_analysis(
-    background_tasks: BackgroundTasks,
-):
-    """Start background duplicate analysis (#1304)."""
-    task_id = await _manager.create_task()
-    background_tasks.add_task(_run_dup_analysis, task_id)
-    return {"task_id": task_id, "status": "pending"}
+async def start_duplicate_analysis():
+    """Enqueue duplicate analysis as a Celery task (GH#6505)."""
+    result = run_duplicate_analysis.delay()
+    await store_latest_task_id(_REDIS_PREFIX, result.id)
+    return {"task_id": result.id, "status": "pending"}
 
 
 @router.get("/duplicates/status/{task_id}")
 async def get_duplicate_status(task_id: str):
-    """Get duplicate analysis task status (#1304)."""
-    task = await _manager.get_status(task_id)
-    if task is None:
+    """Get duplicate analysis task status."""
+    status = celery_result_to_status(AsyncResult(task_id))
+    if status is None or status["status"] == "pending":
         raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
-    return task
+    return status
 
 
 @router.post("/duplicates/tasks/clear-stuck")
 async def clear_stuck_dup_tasks(
-    force: bool = Query(
-        default=False,
-        description="Force clear ALL running tasks",
-    ),
+    force: bool = Query(default=False, description="Force clear ALL running tasks"),
 ):
-    """Clear stuck duplicate analysis tasks (#1304)."""
-    cleaned = await _manager.clear_stuck(force=force)
-    return {
-        "cleared_count": cleaned,
-        "message": f"Cleared {cleaned} task(s)" + (" (forced)" if force else ""),
-    }
+    """No-op: Celery handles stuck-task recovery automatically (GH#6505)."""
+    return {"cleared_count": 0, "message": "Celery handles task recovery automatically"}

@@ -5,25 +5,31 @@
   systemd:
     name: redis-stack-server
     state: restarted
-  become: yes
+  become: true
 
 - name: reload systemd
   systemd:
-    daemon_reload: yes
-  become: yes
+    daemon_reload: true
+  become: true
 
 - name: reload firewall
   ufw:
     state: reloaded
-  become: yes
+  become: true
 
 - name: Reload systemd
   ansible.builtin.systemd:
     daemon_reload: true
-  become: yes
+  become: true
 
 - name: Restart redis_exporter
   ansible.builtin.systemd:
     name: redis_exporter
     state: restarted
-  become: yes
+  become: true
+
+- name: restart chromadb
+  ansible.builtin.systemd:
+    name: autobot-chromadb
+    state: restarted
+  become: true

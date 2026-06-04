@@ -14,11 +14,12 @@ guards or Jina logic — those live in media/link/pipeline.py.
 from __future__ import annotations
 
 import json
-import logging
 import re
 from typing import Any, Dict, Tuple
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 
 # SPA detection markers — pages dominated by these patterns require JS rendering.
 _SPA_MARKERS = (
@@ -166,7 +167,7 @@ def _build_extraction_prompt(markdown: str, schema: Dict[str, Any]) -> str:
 
 async def _call_llm_for_extraction(prompt: str) -> str:
     """Call the LLM gateway with structured-output mode and return raw content."""
-    from llm_interface_pkg.types import LLMType
+    from llm_shared.types import LLMType
     from services.llm_service import get_llm_service
 
     svc = get_llm_service()

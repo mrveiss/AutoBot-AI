@@ -1,14 +1,14 @@
 <template>
-  <BasePanel variant="bordered" size="medium">
+  <BasePanel variant="bordered" size="md">
     <template #header>
-      <h3><i class="fas fa-desktop"></i> {{ $t('manpage.machineProfile.title') }}</h3>
+      <h3><Icon name="desktop" /> {{ $t('manpage.machineProfile.title') }}</h3>
       <BaseButton
         size="sm"
         variant="outline-solid"
         @click="$emit('refresh')"
         :disabled="loading"
       >
-        <i class="fas fa-sync" :class="{ 'fa-spin': loading }"></i>
+        <Icon name="sync" />
         {{ $t('manpage.machineProfile.refresh') }}
       </BaseButton>
     </template>
@@ -45,12 +45,12 @@
     </div>
 
     <div v-else-if="!loading" class="no-data">
-      <i class="fas fa-exclamation-triangle"></i>
+      <Icon name="exclamation-triangle" />
       {{ $t('manpage.machineProfile.noData') }}
     </div>
 
     <div v-if="loading" class="loading">
-      <i class="fas fa-spinner fa-spin"></i>
+      <Icon name="spinner" class="animate-spin" />
       {{ $t('manpage.machineProfile.loading') }}
     </div>
   </BasePanel>
@@ -69,6 +69,7 @@
  * Issue #184: Split oversized Vue components
  */
 
+import Icon from '@/components/ui/Icon.vue'
 import { computed } from 'vue'
 import BasePanel from '@/components/base/BasePanel.vue'
 import BaseButton from '@/components/base/BaseButton.vue'

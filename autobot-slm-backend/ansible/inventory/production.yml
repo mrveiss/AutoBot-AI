@@ -8,7 +8,7 @@ all:
     # Issue #700: SSH key authentication (no plaintext passwords)
     ansible_user: autobot
     ansible_ssh_private_key_file: /etc/autobot/ssh/autobot_key
-    ansible_become: yes
+    ansible_become: true
     # Become password from vault (only needed if passwordless sudo not configured)
     # To use: ansible-playbook ... --ask-vault-pass
     # ansible_become_password: "{{ vault_become_password_autobot }}"
@@ -92,7 +92,7 @@ all:
           ansible_connection: local    # This is the local WSL machine
           ansible_host: 127.0.0.1      # Local connection
           network_address: "{{ lookup('env', 'AUTOBOT_BACKEND_HOST') | default('127.0.0.1', true) }}"  # IP used by other VMs to reach this host
-          ansible_become: no           # Issue #700: Disable become for local host by default
+          ansible_become: false           # Issue #700: Disable become for local host by default
           # Enable become when needed with: --extra-vars "ansible_become=yes"
           # Or use: --ask-become-pass for operations requiring sudo
           vm_id: "autobot-wsl-machine"
@@ -228,7 +228,7 @@ all:
     llm:
       hosts:
         autobot-llm:
-          ansible_host: "{{ lookup('env', 'AUTOBOT_LLM_HOST') | default('127.0.0.1', true) }}"  # LLM CPU node (#1040) -- also VNC desktop (#1525)
+          ansible_host: "{{ lookup('env', 'AUTOBOT_LLM_HOST') | default('127.0.0.1', true) }}"  # LLM CPU + xrdp RDP desktop (GH#1525 — xrdp replaces VNC)
           vm_id: "autobot-llm-vm"
           vm_role: "llm"
           vm_hostname: "autobot-llm"
@@ -238,18 +238,16 @@ all:
             disk_gb: 100
           node_roles:
             - llm
-            - vnc
+            - xrdp
           services:
             - ollama
-            - vnc-server
-            - vnc-websockify
+            - xrdp
           desktop_features:
-            vnc_enabled: true
-            desktop_environment: "xfce4"
+            rdp_enabled: true
+            rdp_port: 3389
       vars:
         ollama_port: 11434
-        vnc_port: 5900
-        websockify_port: 6080
+        xrdp_port: 3389
 
     reserved:
       hosts:
@@ -350,8 +348,8 @@ llm_nodes:
   children:
     llm:
 
-# VNC desktop nodes (#1525, #2407) -- nodes with VNC remote desktop access
-vnc_nodes:
+# RDP desktop nodes via xrdp (GH#1525 — xrdp on port 3389 replaces VNC)
+rdp_nodes:
   children:
     llm:
 

@@ -8,12 +8,12 @@ Capture, organize, and search notes with tagging and
 full-text search via the knowledge base.
 """
 
-import logging
 from typing import Any, Dict
 
+from autobot_shared.logging_manager import get_logger
 from skills.base_skill import BaseSkill, SkillConfigField, SkillManifest
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class NoteTakingSkill(BaseSkill):

@@ -25,13 +25,12 @@ whereas ``MeshGraph.get_neighbors()`` expects ``list[tuple[str, float]]``.
 Use ``create_mesh_db_adapter()`` at application startup to get an engine-wired instance.
 """
 
-import logging
-
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from autobot_shared.logging_manager import get_logger
 from services.mesh_brain.mesh_db import MeshDB
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class MeshDBAdapter:

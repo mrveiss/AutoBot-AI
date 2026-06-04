@@ -21,14 +21,15 @@ Usage:
     )
 """
 
-import logging
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.singleton_factory import lazy_singleton
 
 from autobot_shared.singleton_factory import lazy_singleton
 
 from .manager import ChatWorkflowManager
 from .models import WorkflowSession
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #1047: LangGraph imports are conditional — langgraph is in
 # requirements.txt but may fail on fresh installs before pip install.

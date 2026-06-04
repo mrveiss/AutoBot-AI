@@ -13,6 +13,8 @@ Expected output:
 
 * `no-hardcoded-vm-ip-deny.test.ts` — **6 errors** (one per `// EXPECT-ERROR` line)
 * `no-hardcoded-vm-ip-allow.test.ts` — **0 errors**
+* `no-deprecated-design-tokens-deny.test.vue` — **8 errors** (one per `<!-- EXPECT-ERROR -->` line)
+* `no-deprecated-design-tokens-allow.test.vue` — **0 errors**
 
 ## When to add fixtures here
 
@@ -24,3 +26,4 @@ When introducing a new custom ESLint rule, add a deny + allow fixture pair so fu
 ## Issue references
 
 * `no-restricted-syntax`: hardcoded VM-IP rule — `#6784`
+* `vue/no-restricted-static-attribute` + `vue/no-restricted-syntax`: deprecated design tokens — MVA-192

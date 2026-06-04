@@ -9,7 +9,6 @@ Endpoints for managing NPU worker nodes and load balancing.
 
 import logging
 from datetime import datetime, timezone
-from typing import Optional
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -62,7 +61,7 @@ async def _update_npu_data(db: AsyncSession, node: Node, updates: dict) -> None:
     await db.commit()
 
 
-async def _detect_npu_capabilities(ip_address: str, port: int) -> tuple[Optional[NPUCapabilities], str]:
+async def _detect_npu_capabilities(ip_address: str, port: int) -> tuple[NPUCapabilities | None, str]:
     """Query NPU worker health endpoint to detect capabilities.
 
     Helper for trigger_npu_detection (Issue #813).
@@ -168,7 +167,7 @@ async def trigger_npu_detection(
     node_id: str,
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(get_current_user)],
-    request: Optional[NPUDetectionRequest] = None,
+    request: NPUDetectionRequest | None = None,
 ) -> NPUDetectionResponse:
     """
     Trigger NPU capability detection for a node.

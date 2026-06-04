@@ -8,10 +8,13 @@ Issue #381: Extracted from agent_orchestrator.py god class refactoring.
 Contains agent execution logic, result synthesis, and fallback handling.
 """
 
-import logging
+from __future__ import annotations
+
 import uuid
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Callable, Dict, List
+
+from autobot_shared.logging_manager import get_logger
 
 from .types import CLASSIFICATION_TERMS, CODE_SEARCH_TERMS, AgentType
 
@@ -21,7 +24,7 @@ if TYPE_CHECKING:
     from .distributed_management import DistributedAgentManager
     from .routing import AgentRouter
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class AgentExecutor:
@@ -36,7 +39,7 @@ class AgentExecutor:
         get_rag_agent: Callable,
         get_kb_librarian: Callable,
         get_research_agent: Callable,
-        specialized_agent_getters: Optional[Dict[str, Callable]] = None,
+        specialized_agent_getters: Dict[str, Callable] | None = None,
     ):
         """
         Initialize the agent executor.
@@ -61,8 +64,8 @@ class AgentExecutor:
         task_id: str,
         agent_type: str,
         request: str,
-        context: Optional[Dict[str, Any]],
-        chat_history: Optional[List[Dict[str, Any]]],
+        context: Dict[str, Any] | None,
+        chat_history: List[Dict[str, Any]] | None,
     ) -> "AgentRequest":
         """
         Create an AgentRequest object for distributed processing.
@@ -125,9 +128,9 @@ class AgentExecutor:
     async def process_with_distributed_agents(
         self,
         request: str,
-        context: Optional[Dict[str, Any]] = None,
-        chat_history: Optional[List[Dict[str, Any]]] = None,
-        preferred_agents: Optional[List[str]] = None,
+        context: Dict[str, Any] | None = None,
+        chat_history: List[Dict[str, Any]] | None = None,
+        preferred_agents: List[str] | None = None,
     ) -> Dict[str, Any]:
         """Process request using distributed agent system. Issue #620."""
         selected_agent = await self._select_distributed_agent(request, context, preferred_agents)
@@ -139,7 +142,7 @@ class AgentExecutor:
         start_time = datetime.now(tz=timezone.utc)
 
         try:
-            self.distributed_manager.add_active_task(selected_agent.agent_id, task_id)
+            await self.distributed_manager.add_active_task(selected_agent.agent_id, task_id)
             agent_request = self._create_agent_request(
                 task_id, selected_agent.agent_type, request, context, chat_history
             )
@@ -154,14 +157,14 @@ class AgentExecutor:
                 task_id,
             )
         finally:
-            self.distributed_manager.remove_active_task(selected_agent.agent_id, task_id)
+            await self.distributed_manager.remove_active_task(selected_agent.agent_id, task_id)
 
     async def _select_distributed_agent(
         self,
         request: str,
-        context: Optional[Dict[str, Any]] = None,
-        preferred_agents: Optional[List[str]] = None,
-    ) -> Optional["BaseAgent"]:
+        context: Dict[str, Any] | None = None,
+        preferred_agents: List[str] | None = None,
+    ) -> "BaseAgent" | None:
         """Select the best distributed agent for the request."""
         # Filter healthy agents
         healthy_agents = self.distributed_manager.get_healthy_agents()
@@ -198,8 +201,8 @@ class AgentExecutor:
     async def process_with_legacy_agents(
         self,
         request: str,
-        context: Optional[Dict[str, Any]] = None,
-        chat_history: Optional[List[Dict[str, Any]]] = None,
+        context: Dict[str, Any] | None = None,
+        chat_history: List[Dict[str, Any]] | None = None,
     ) -> Dict[str, Any]:
         """Process request using legacy agent system."""
         # Determine optimal agent routing
@@ -254,7 +257,7 @@ class AgentExecutor:
         except Exception as exc:
             logger.debug("Gap development hook failed (non-critical): %s", exc)
 
-    def _register_specialized_handlers(self, handlers: Dict, request: str, context: Optional[Dict]) -> None:
+    def _register_specialized_handlers(self, handlers: Dict, request: str, context: Dict | None) -> None:
         """Register specialized agent handlers (Issue #60)."""
         agent_type_map = {
             AgentType.DATA_ANALYSIS: "data_analysis",
@@ -271,18 +274,18 @@ class AgentExecutor:
                 handlers[agent_type] = lambda g=getter: g().process_query(request, context)
 
     async def _execute_chat_agent(
-        self, request: str, context: Optional[Dict], chat_history: Optional[List]
+        self, request: str, context: Dict | None, chat_history: List | None
     ) -> Dict[str, Any]:
         """Execute chat agent (Issue #334 - extracted helper)."""
         agent = self._get_chat_agent()
         return await agent.process_chat_message(request, context, chat_history)
 
-    async def _execute_system_commands_agent(self, request: str, context: Optional[Dict]) -> Dict[str, Any]:
+    async def _execute_system_commands_agent(self, request: str, context: Dict | None) -> Dict[str, Any]:
         """Execute system commands agent (Issue #334 - extracted helper)."""
         agent = self._get_system_commands_agent()
         return await agent.process_command_request(request, context)
 
-    async def _execute_rag_agent(self, request: str, context: Optional[Dict]) -> Dict[str, Any]:
+    async def _execute_rag_agent(self, request: str, context: Dict | None) -> Dict[str, Any]:
         """Execute RAG agent with document retrieval (Issue #334 - extracted helper)."""
         kb_agent = self._get_kb_librarian()
         kb_result = await kb_agent.process_query(request)
@@ -295,8 +298,8 @@ class AgentExecutor:
         self,
         agent_type: AgentType,
         request: str,
-        context: Optional[Dict[str, Any]],
-        chat_history: Optional[List[Dict[str, Any]]],
+        context: Dict[str, Any] | None,
+        chat_history: List[Dict[str, Any]] | None,
     ) -> Dict[str, Any]:
         """Execute request using a single specialized agent."""
         try:
@@ -334,8 +337,8 @@ class AgentExecutor:
         self,
         routing_decision: Dict[str, Any],
         request: str,
-        context: Optional[Dict[str, Any]],
-        chat_history: Optional[List[Dict[str, Any]]],
+        context: Dict[str, Any] | None,
+        chat_history: List[Dict[str, Any]] | None,
     ) -> Dict[str, Any]:
         """Execute request using multiple coordinated agents."""
         try:
@@ -379,8 +382,8 @@ class AgentExecutor:
     async def _execute_orchestrator_fallback(
         self,
         request: str,
-        context: Optional[Dict[str, Any]],
-        chat_history: Optional[List[Dict[str, Any]]],
+        context: Dict[str, Any] | None,
+        chat_history: List[Dict[str, Any]] | None,
     ) -> Dict[str, Any]:
         """Fallback to direct orchestrator processing."""
         try:

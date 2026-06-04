@@ -9,14 +9,14 @@ This judge evaluates workflow steps before execution to ensure quality, safety, 
 """
 
 import json
-import logging
-from typing import Any, Dict, FrozenSet, List, Optional
+from typing import Any, Dict, FrozenSet, List
 
+from autobot_shared.logging_manager import get_logger
 from constants import WorkflowThresholds
 
 from . import BaseLLMJudge, JudgmentDimension, JudgmentResult
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level frozenset for approval recommendations
 _APPROVAL_RECOMMENDATIONS: FrozenSet[str] = frozenset({"APPROVE", "CONDITIONAL"})
@@ -37,7 +37,7 @@ class WorkflowStepJudge(BaseLLMJudge):
         step_data: Dict[str, Any],
         workflow_context: Dict[str, Any],
         user_context: Dict[str, Any],
-        alternatives: Optional[List[Dict[str, Any]]] = None,
+        alternatives: List[Dict[str, Any]] | None = None,
         risk_tolerance: str = "medium",
     ) -> JudgmentResult:
         """
@@ -170,7 +170,7 @@ Please evaluate this step on the following dimensions (score 0.0 to 1.0):
         self,
         context: Dict[str, Any],
         risk_tolerance: str,
-        alternatives: Optional[List[Any]] = None,
+        alternatives: List[Any] | None = None,
     ) -> str:
         """Format decision criteria and final instructions for judgment.
 
@@ -211,7 +211,7 @@ Focus on being thorough but practical - the goal is to ensure safe, effective wo
         subject: Any,
         criteria: List[JudgmentDimension],
         context: Dict[str, Any],
-        alternatives: Optional[List[Any]] = None,
+        alternatives: List[Any] | None = None,
         **kwargs,
     ) -> str:
         """Prepare the prompt for workflow step evaluation.
@@ -260,7 +260,7 @@ Focus on being thorough but practical - the goal is to ensure safe, effective wo
             0.0,
         )
 
-    def _check_threshold_violation(self, score: float, threshold: float, score_name: str) -> Optional[tuple[bool, str]]:
+    def _check_threshold_violation(self, score: float, threshold: float, score_name: str) -> tuple[bool, str] | None:
         """
         Check if a score violates its threshold.
 

@@ -5,8 +5,8 @@
 
 - name: Setup VM Names and Expand LVM Storage
   hosts: all
-  become: yes
-  gather_facts: yes
+  become: true
+  gather_facts: true
 
   vars:
     # LVM configuration
@@ -35,7 +35,7 @@
         path: /etc/hosts
         regexp: '^127\.0\.1\.1'
         line: "127.0.1.1 {{ vm_hostname }}.{{ autobot_domain | default('local') }} {{ vm_hostname }}"
-        backup: yes
+        backup: true
 
     - name: Update /etc/hosts with all AutoBot VMs
       blockinfile:
@@ -48,7 +48,7 @@
           {% endif %}
           {% endfor %}
         marker: "# {mark} AUTOBOT VM BLOCK"
-        backup: yes
+        backup: true
 
     - name: Check current LVM setup
       shell: |
@@ -61,7 +61,7 @@
         echo "=== Filesystem Usage ==="
         df -h /
       register: lvm_info
-      ignore_errors: yes
+      ignore_errors: true
 
     - name: Display current LVM configuration
       debug:
@@ -71,7 +71,7 @@
     - name: Get available disk space
       shell: vgs --noheadings --units g -o vg_free {{ volume_group }}
       register: vg_free_space
-      ignore_errors: yes
+      ignore_errors: true
 
     - name: Check if LVM expansion is needed
       set_fact:
@@ -96,18 +96,18 @@
         # Refresh volume group
         vgchange -a y {{ volume_group }}
       when: vm_resources is defined and expansion_needed | default(false) | bool
-      ignore_errors: yes
+      ignore_errors: true
 
     - name: Extend logical volume to use available space
       lvol:
         vg: "{{ volume_group }}"
         lv: "{{ logical_volume }}"
         size: "+100%FREE"
-        resizefs: yes
-        force: yes
+        resizefs: true
+        force: true
       when: vm_resources is defined and expansion_needed | default(false) | bool
       register: lv_extend_result
-      ignore_errors: yes
+      ignore_errors: true
 
     - name: Alternative LVM extension method (if first method fails)
       shell: |
@@ -119,7 +119,7 @@
         - expansion_needed | bool
         - lv_extend_result is failed
       register: manual_extend
-      ignore_errors: yes
+      ignore_errors: true
 
     - name: Verify disk expansion results
       shell: |
@@ -135,10 +135,11 @@
 
     - name: Update system packages (since we're setting up VMs)
       apt:
-        update_cache: yes
+        update_cache: true
+        cache_valid_time: 3600
         upgrade: dist
-        autoremove: yes
-        autoclean: yes
+        autoremove: true
+        autoclean: true
       register: package_update
       retries: 3
       delay: 10
@@ -169,13 +170,14 @@
           - rsync
           - ntp
         state: present
-        update_cache: yes
+        update_cache: true
+        cache_valid_time: 3600
 
     - name: Configure NTP for time synchronization
       service:
         name: systemd-timesyncd
         state: started
-        enabled: yes
+        enabled: true
 
     - name: Create autobot application directory structure
       file:

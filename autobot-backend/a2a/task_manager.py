@@ -27,10 +27,10 @@ Redis key layout:
 """
 
 import json
-import logging
 import uuid
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.ssot_config import config
 from autobot_shared.time_utils import now_utc
@@ -38,7 +38,7 @@ from autobot_shared.time_utils import now_utc
 from .tracing import TraceContext, TraceEvent, new_trace_id
 from .types import A2ATaskStatus, Task, TaskArtifact, TaskState
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Terminal states — no further transitions allowed
 _TERMINAL_STATES = {TaskState.COMPLETED, TaskState.FAILED, TaskState.CANCELLED}
@@ -102,7 +102,7 @@ def _task_from_json(raw: str) -> Task:
         )
         for a in d.get("artifacts", [])
     ]
-    tc: Optional[TraceContext] = None
+    tc: TraceContext | None = None
     if d.get("trace_id"):
         tc = TraceContext(
             trace_id=d["trace_id"],
@@ -158,7 +158,7 @@ class TaskManager:
         self._redis.sadd(_KEY_TASKS, task.id)
         self._redis.expire(_KEY_TASKS, ttl)
 
-    def _load(self, task_id: str) -> Optional[Task]:
+    def _load(self, task_id: str) -> Task | None:
         raw = self._redis.get(_KEY_TASK.format(task_id))
         if raw is None:
             return None
@@ -176,9 +176,9 @@ class TaskManager:
     def create_task(
         self,
         input_text: str,
-        context: Optional[Dict] = None,
+        context: Dict | None = None,
         caller_id: str = "anonymous",
-        trace_id: Optional[str] = None,
+        trace_id: str | None = None,
     ) -> Task:
         """Create and register a new task in SUBMITTED state."""
         task_id = str(uuid.uuid4())
@@ -206,12 +206,13 @@ class TaskManager:
         )
         return task
 
-    def get_task(self, task_id: str) -> Optional[Task]:
+    def get_task(self, task_id: str) -> Task | None:
         """Retrieve a task by ID, sliding its TTL on each access.
 
         Issue #4554: Resetting the TTL on every GET means any client that
         is actively polling will never see a 404 — tasks only expire when
         genuinely abandoned (no polls for a full TTL window).
+        Issue #8162: Pipeline the three EXPIRE calls into one round-trip.
         """
         key = _KEY_TASK.format(task_id)
         raw = self._redis.get(key)
@@ -220,31 +221,50 @@ class TaskManager:
         # Slide TTL — reset expiry from now so active pollers stay alive.
         # Slide the audit key too so it doesn't expire before the task does.
         ttl = self._ttl()
-        self._redis.expire(key, ttl)
-        self._redis.expire(_KEY_AUDIT.format(task_id), ttl)
-        self._redis.expire(_KEY_TASKS, ttl)
+        with self._redis.pipeline() as pipe:
+            pipe.expire(key, ttl)
+            pipe.expire(_KEY_AUDIT.format(task_id), ttl)
+            pipe.expire(_KEY_TASKS, ttl)
+            pipe.execute()
         return _task_from_json(raw if isinstance(raw, str) else raw.decode("utf-8"))
 
     def list_tasks(self) -> List[Task]:
-        """Return all tasks whose keys are still alive in Redis."""
+        """Return all tasks whose keys are still alive in Redis.
+
+        Issue #8162: Use MGET to batch all task fetches into one round-trip
+        instead of issuing one GET per task ID (N+1 pattern).
+        """
         ids = self._redis.smembers(_KEY_TASKS)
+        if not ids:
+            return []
+
+        id_strs = [tid if isinstance(tid, str) else tid.decode("utf-8") for tid in ids]
+        keys = [_KEY_TASK.format(tid) for tid in id_strs]
+        raws = self._redis.mget(keys)
+
         tasks: List[Task] = []
-        for tid in ids:
-            tid_str = tid if isinstance(tid, str) else tid.decode("utf-8")
-            task = self._load(tid_str)
-            if task is not None:
-                tasks.append(task)
+        expired_ids = []
+        for tid, raw in zip(ids, raws):
+            if raw is not None:
+                tasks.append(_task_from_json(raw if isinstance(raw, str) else raw.decode("utf-8")))
             else:
-                # TTL expired — remove from tracking set
-                self._redis.srem(_KEY_TASKS, tid)
+                # TTL expired — collect for bulk removal from tracking set
+                expired_ids.append(tid)
+
+        if expired_ids:
+            with self._redis.pipeline() as pipe:
+                for expired in expired_ids:
+                    pipe.srem(_KEY_TASKS, expired)
+                pipe.execute()
+
         return tasks
 
     def update_state(
         self,
         task_id: str,
         state: TaskState,
-        message: Optional[str] = None,
-    ) -> Optional[Task]:
+        message: str | None = None,
+    ) -> Task | None:
         """Transition a task to a new state.
 
         Returns the updated task, or None if task not found or already terminal.
@@ -306,7 +326,7 @@ class TaskManager:
         logger.info("A2A task cancelled: %s", task_id)
         return True
 
-    def get_audit_log(self, task_id: str) -> Optional[List[Dict[str, Any]]]:
+    def get_audit_log(self, task_id: str) -> List[Dict[str, Any]] | None:
         """Return the full trace event log for a task, or None if not found."""
         if not self._load(task_id):
             return None

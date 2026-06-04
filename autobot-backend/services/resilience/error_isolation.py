@@ -11,10 +11,11 @@ without affecting core functionality.
 
 import asyncio
 import functools
-import logging
 from typing import Any, Callable, TypeVar
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 
 T = TypeVar("T")
 
@@ -22,7 +23,7 @@ T = TypeVar("T")
 class IsolatedError(Exception):
     """Error occurred in isolated component but was handled gracefully."""
 
-    def __init__(self, component: str, original_error: Exception, fallback_value: Any = None):
+    def __init__(self, component: str, original_error: Exception, fallback_value: Any = None) -> None:
         """Initialize isolated error with context."""
         self.component = component
         self.original_error = original_error

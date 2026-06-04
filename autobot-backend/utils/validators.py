@@ -39,7 +39,8 @@ from utils.validators import (
 class MyModel(BaseModel):
     username: str
 
-    @validator("username")
+    @field_validator("username")
+    @classmethod
     def validate_username(cls, v):
         v = sanitize_string(v)  # Strip and lowercase
         validate_non_empty_string(v, "Username")
@@ -56,7 +57,7 @@ def process_input(value: str):
 import re
 from collections.abc import Collection
 from pathlib import Path
-from typing import Any, Iterable, Optional, Set, Union
+from typing import Any, Iterable, Set
 from urllib.parse import urlparse
 
 from utils.path_validation import contains_path_traversal
@@ -72,7 +73,7 @@ _UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f
 # ============================================================================
 
 
-def validate_non_empty_string(value: Optional[str], field_name: str = "Value", strip: bool = True) -> str:
+def validate_non_empty_string(value: str | None, field_name: str = "Value", strip: bool = True) -> str:
     """
     Validate that string is not None, not empty, and not just whitespace.
 
@@ -112,8 +113,8 @@ def validate_non_empty_string(value: Optional[str], field_name: str = "Value", s
 def validate_string_length(
     value: str,
     field_name: str = "Value",
-    min_length: Optional[int] = None,
-    max_length: Optional[int] = None,
+    min_length: int | None = None,
+    max_length: int | None = None,
 ) -> str:
     """
     Validate string length bounds.
@@ -153,9 +154,9 @@ def validate_string_length(
 
 def validate_string_pattern(
     value: str,
-    pattern: Union[str, re.Pattern],
+    pattern: str | re.Pattern,
     field_name: str = "Value",
-    error_message: Optional[str] = None,
+    error_message: str | None = None,
 ) -> str:
     """
     Validate string matches regex pattern.
@@ -273,7 +274,7 @@ def sanitize_alphanumeric(value: str, allowed_chars: str = "_-.", strip: bool = 
 # ============================================================================
 
 
-def validate_non_empty_collection(value: Optional[Collection], field_name: str = "Collection") -> Collection:
+def validate_non_empty_collection(value: Collection | None, field_name: str = "Collection") -> Collection:
     """
     Validate collection is not None or empty.
 
@@ -306,8 +307,8 @@ def validate_non_empty_collection(value: Optional[Collection], field_name: str =
 def validate_collection_size(
     value: Collection,
     field_name: str = "Collection",
-    min_size: Optional[int] = None,
-    max_size: Optional[int] = None,
+    min_size: int | None = None,
+    max_size: int | None = None,
 ) -> Collection:
     """
     Validate collection size bounds.
@@ -349,7 +350,7 @@ def validate_collection_size(
 
 def validate_in_choices(
     value: Any,
-    choices: Union[Set, Iterable],
+    choices: Set | Iterable,
     field_name: str = "Value",
     case_sensitive: bool = True,
 ) -> Any:
@@ -473,8 +474,8 @@ def validate_filename_safe(filename: str, field_name: str = "Filename", max_leng
 def validate_file_size(
     size: int,
     field_name: str = "File",
-    max_size: Optional[int] = None,
-    min_size: Optional[int] = None,
+    max_size: int | None = None,
+    min_size: int | None = None,
 ) -> int:
     """
     Validate file size bounds.

@@ -43,7 +43,7 @@ Usage
 import ipaddress
 import logging
 import os
-from typing import Iterable, Optional
+from typing import Iterable
 
 from starlette.requests import Request
 
@@ -63,7 +63,7 @@ def _build_default_trusted_proxies() -> frozenset:
     autobot_shared/network_constants.py itself depends on autobot-backend's
     config.registry at runtime.
     """
-    raw = os.getenv("AUTOBOT_TRUSTED_PROXIES", "")
+    raw = os.getenv("AUTOBOT_TRUSTED_PROXIES", "")  # ssot-config-exempt: pre-ssot shim
     if raw:
         return frozenset(ip.strip() for ip in raw.split(",") if ip.strip())
 
@@ -110,8 +110,8 @@ def _normalize_ip(ip_str: str) -> str:
 
 def get_client_ip(
     request: Request,
-    trusted_proxies: Optional[Iterable[str]] = None,
-) -> Optional[str]:
+    trusted_proxies: Iterable[str] | None = None,
+) -> str | None:
     """Extract the real client IP from a Starlette/FastAPI request.
 
     X-Forwarded-For is only honoured when the direct TCP connection

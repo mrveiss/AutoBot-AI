@@ -253,8 +253,8 @@ class TestSecurityAnalyzer:
         code = textwrap.dedent("""
             import os
 
-            API_KEY = os.getenv("API_KEY")
-            PASSWORD = os.environ.get("DATABASE_PASSWORD")
+            API_KEY = config.api_key
+            PASSWORD = config.database_password
 
             def connect():
                 return db.connect(password=PASSWORD)
@@ -310,7 +310,7 @@ class TestSecurityAnalyzer:
             import os
 
             def get_config():
-                return os.getenv("CONFIG")
+                return config.config
         """))
 
         (tmp_path / "vulnerable.py").write_text(textwrap.dedent("""

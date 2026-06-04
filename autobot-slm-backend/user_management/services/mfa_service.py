@@ -11,7 +11,6 @@ import json
 import logging
 import secrets
 import uuid
-from typing import Optional
 
 import bcrypt
 from sqlalchemy import select
@@ -188,7 +187,7 @@ class MFAService(BaseService):
         decrypted = decrypt_data(encrypted)
         return json.loads(decrypted)
 
-    async def _get_user_by_id(self, user_id: uuid.UUID) -> Optional[User]:
+    async def _get_user_by_id(self, user_id: uuid.UUID) -> User | None:
         """Get user by ID."""
         query = select(User).where(User.id == user_id)
         result = await self.session.execute(query)
@@ -218,7 +217,7 @@ class MFAService(BaseService):
             is_verified=False,
         )
 
-    async def _get_unverified_mfa(self, user_id: uuid.UUID) -> Optional[UserMFA]:
+    async def _get_unverified_mfa(self, user_id: uuid.UUID) -> UserMFA | None:
         """Get unverified MFA record."""
         query = select(UserMFA).where(UserMFA.user_id == user_id, UserMFA.is_verified.is_(False))
         result = await self.session.execute(query)
@@ -241,7 +240,7 @@ class MFAService(BaseService):
 
         await self.session.flush()
 
-    async def _get_verified_mfa(self, user_id: uuid.UUID) -> Optional[UserMFA]:
+    async def _get_verified_mfa(self, user_id: uuid.UUID) -> UserMFA | None:
         """Get verified MFA record."""
         query = select(UserMFA).where(UserMFA.user_id == user_id, UserMFA.is_verified.is_(True))
         result = await self.session.execute(query)

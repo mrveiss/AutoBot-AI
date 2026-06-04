@@ -5,13 +5,13 @@
 Terminal history service for persistent command history in Redis.
 """
 
-import logging
 import time
 from typing import List
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class TerminalHistoryService(AsyncRedisClientMixin):
@@ -19,7 +19,7 @@ class TerminalHistoryService(AsyncRedisClientMixin):
 
     _redis_database = "main"
 
-    def __init__(self, max_entries: int = 10000):
+    def __init__(self, max_entries: int = 10000) -> None:
         """Initialize history service.
 
         Args:

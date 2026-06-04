@@ -11,12 +11,11 @@ with cross-encoder reranking for improved relevance scoring.
 Issue #4681: Added GET /entity/{id}/history for evolutionary lineage tracking.
 """
 
-import logging
-
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from knowledge.schemas.rag import (
     AdvancedSearchRequest,
     AdvancedSearchResponse,
@@ -37,7 +36,7 @@ from knowledge_factory import get_or_create_knowledge_base
 from services.rag_config import get_rag_config, update_rag_config
 from services.rag_service import RAGService
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter()
 

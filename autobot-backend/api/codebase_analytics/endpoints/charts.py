@@ -7,18 +7,18 @@ Chart data endpoints for analytics visualization
 
 import asyncio
 import json
-import logging
-from typing import Dict, Optional
+from typing import Dict
 
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from utils.chromadb_client import get_all_paginated
 
 from ..storage import get_code_collection, get_redis_connection
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter()
 
@@ -32,7 +32,7 @@ def _try_chromadb_aggregation(
     severity_counts: Dict[str, int],
     race_conditions: Dict[str, int],
     file_problems: Dict[str, int],
-    source_id: Optional[str] = None,
+    source_id: str | None = None,
 ) -> tuple[int, bool]:
     """
     Try to aggregate problem data from ChromaDB collection.
@@ -156,7 +156,7 @@ async def _aggregate_from_redis(
     severity_counts: Dict[str, int],
     race_conditions: Dict[str, int],
     file_problems: Dict[str, int],
-    source_id: Optional[str] = None,
+    source_id: str | None = None,
 ) -> int:
     """Aggregate problem data from Redis.
 
@@ -230,7 +230,7 @@ async def _get_redis_fallback_chart_data(
     severity_counts: Dict[str, int],
     race_conditions: Dict[str, int],
     file_problems: Dict[str, int],
-    source_id: Optional[str] = None,
+    source_id: str | None = None,
 ):
     """Helper for get_chart_data. Ref: #1088.
 
@@ -275,7 +275,7 @@ async def _get_redis_fallback_chart_data(
     error_code_prefix="CODEBASE",
 )
 async def get_chart_data(
-    source_id: Optional[str] = None,
+    source_id: str | None = None,
 ):
     """
     Get aggregated data for analytics charts.

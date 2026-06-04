@@ -1,0 +1,16 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "overrides": [
+    {
+      "files": [
+        "src/components/terminal/**",
+        "src/components/chat/**",
+        "public/service-worker.ts",
+        "src/service-worker.test.ts"
+      ],
+      "rules": {
+        "no-control-regex": "off"
+      }
+    }
+  ]
+}

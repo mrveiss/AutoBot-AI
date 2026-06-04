@@ -2,16 +2,16 @@
   <div class="man-page-manager">
 
     <!-- Machine Profile Section -->
-    <BasePanel variant="bordered" size="medium">
+    <BasePanel variant="bordered" size="md">
       <template #header>
-        <h3><i class="fas fa-desktop"></i> {{ $t('manpage.manager.title') }}</h3>
+        <h3><Icon name="desktop" /> {{ $t('manpage.manager.title') }}</h3>
         <BaseButton
           size="sm"
           variant="outline-solid"
           @click="refreshMachineProfile"
           :disabled="loading?.profile"
         >
-          <i class="fas fa-sync" :class="{ 'fa-spin': loading?.profile }"></i>
+          <Icon name="sync" />
           {{ $t('manpage.manager.refresh') }}
         </BaseButton>
       </template>
@@ -48,34 +48,34 @@
       </div>
 
       <div v-else-if="!loading?.profile" class="no-data">
-        <i class="fas fa-exclamation-triangle"></i>
+        <Icon name="exclamation-triangle" />
         {{ $t('manpage.manager.noProfile') }}
       </div>
 
       <div v-if="loading?.profile" class="loading">
-        <i class="fas fa-spinner fa-spin"></i>
+        <Icon name="spinner" class="animate-spin" />
         {{ $t('manpage.manager.detectingProfile') }}
       </div>
     </BasePanel>
 
     <!-- Integration Status Section -->
-    <BasePanel variant="bordered" size="medium">
+    <BasePanel variant="bordered" size="md">
       <template #header>
-        <h3><i class="fas fa-chart-bar"></i> {{ $t('manpage.manager.integrationStatus') }}</h3>
+        <h3><Icon name="chart-bar" /> {{ $t('manpage.manager.integrationStatus') }}</h3>
         <BaseButton
           size="sm"
           variant="outline-solid"
           @click="refreshIntegrationStatus"
           :disabled="loading?.status"
         >
-          <i class="fas fa-sync" :class="{ 'fa-spin': loading?.status }"></i>
+          <Icon name="sync" />
           {{ $t('manpage.manager.refresh') }}
         </BaseButton>
       </template>
 
       <div v-if="integrationStatus" class="status-info">
         <div v-if="integrationStatus.status === 'not_integrated'" class="not-integrated">
-          <i class="fas fa-info-circle"></i>
+          <Icon name="info-circle" />
           <div>
             <strong>{{ $t('manpage.manager.notIntegrated') }}</strong>
             <p>{{ $t('manpage.manager.notIntegratedDesc') }}</p>
@@ -83,7 +83,7 @@
         </div>
 
         <div v-else-if="integrationStatus.status === 'error'" class="error">
-          <i class="fas fa-exclamation-circle"></i>
+          <Icon name="exclamation-circle" />
           <div>
             <strong>{{ $t('manpage.manager.integrationError') }}</strong>
             <p>{{ integrationStatus.message }}</p>
@@ -111,7 +111,7 @@
           </div>
 
           <div v-if="integrationStatus.integration_date" class="integration-date">
-            <i class="fas fa-clock"></i>
+            <Icon name="clock" />
             {{ $t('manpage.manager.lastIntegrated') }} {{ formatDate(integrationStatus.integration_date) }}
           </div>
 
@@ -131,7 +131,7 @@
       </div>
 
       <div v-if="loading?.status" class="loading">
-        <i class="fas fa-spinner fa-spin"></i>
+        <Icon name="spinner" class="animate-spin" />
         {{ $t('manpage.manager.loadingStatus') }}
       </div>
     </BasePanel>
@@ -139,7 +139,7 @@
     <!-- Integration Actions -->
     <div class="integration-actions">
       <div class="section-header">
-        <h3><i class="fas fa-cogs"></i> {{ $t('manpage.manager.integrationActions') }}</h3>
+        <h3><Icon name="cogs" /> {{ $t('manpage.manager.integrationActions') }}</h3>
       </div>
 
       <div class="action-buttons">
@@ -149,7 +149,7 @@
           :disabled="loading?.initialize || !canInitialize"
           :loading="loading?.initialize"
         >
-          <i class="fas fa-rocket"></i>
+          <Icon name="rocket" />
           {{ $t('manpage.manager.initializeMachineKnowledge') }}
         </BaseButton>
 
@@ -159,7 +159,7 @@
           :disabled="loading?.integrate || !canIntegrate"
           :loading="loading?.integrate"
         >
-          <i class="fas fa-book-open"></i>
+          <Icon name="book-open" />
           {{ $t('manpage.manager.integrateManPages') }}
         </BaseButton>
 
@@ -169,21 +169,21 @@
           :disabled="loading?.search || !hasIntegration"
           :loading="loading?.search"
         >
-          <i class="fas fa-search"></i>
+          <Icon name="search" />
           {{ $t('manpage.manager.testSearch') }}
         </BaseButton>
       </div>
 
       <!-- Real-time Progress Tracking -->
-      <BasePanel v-if="showProgressTracking" variant="bordered" size="medium">
+      <BasePanel v-if="showProgressTracking" variant="bordered" size="md">
         <template #header>
-          <h3><i class="fas fa-tasks"></i> {{ $t('manpage.manager.progressTitle') }}</h3>
+          <h3><Icon name="tasks" /> {{ $t('manpage.manager.progressTitle') }}</h3>
           <BaseButton
             size="sm"
             variant="outline-solid"
             @click="showProgressTracking = false"
           >
-            <i class="fas fa-times"></i>
+            <Icon name="times" />
             {{ $t('manpage.manager.hideProgress') }}
           </BaseButton>
         </template>
@@ -226,7 +226,7 @@
               class="progress-message"
               :class="message.type"
             >
-              <i :class="getMessageIcon(message.type)"></i>
+              <Icon :name="getMessageIcon(message.type)" />
               <span class="timestamp">{{ formatTime(message.timestamp) }}</span>
               <span class="message">{{ message.text }}</span>
             </div>
@@ -234,7 +234,7 @@
 
           <!-- Connection Status -->
           <div class="connection-status">
-            <i :class="websocketConnected ? 'fas fa-plug connected-icon' : 'fas fa-plug disconnected-icon'"></i>
+            <Icon :name="websocketConnected ? 'plug' : 'plug'" :class="websocketConnected ? 'connected-icon' : 'disconnected-icon'" />
             <span :class="websocketConnected ? 'connected-text' : 'disconnected-text'">
               {{ websocketConnected ? $t('manpage.progressTracking.connected') : $t('manpage.progressTracking.disconnected') }}
             </span>
@@ -259,9 +259,9 @@
     </div>
 
     <!-- Search Section -->
-    <BasePanel v-if="showSearch" variant="bordered" size="medium">
+    <BasePanel v-if="showSearch" variant="bordered" size="md">
       <template #header>
-        <h3><i class="fas fa-search"></i> {{ $t('manpage.manager.searchTitle') }}</h3>
+        <h3><Icon name="search" /> {{ $t('manpage.manager.searchTitle') }}</h3>
       </template>
 
       <div class="search-input">
@@ -277,7 +277,7 @@
           @click="searchManPages"
           :disabled="!searchQuery.trim() || loading?.search"
         >
-          <i class="fas fa-search"></i>
+          <Icon name="search" />
           {{ $t('manpage.manager.search') }}
         </BaseButton>
       </div>
@@ -309,7 +309,7 @@
 
     <!-- Progress Messages -->
     <div v-if="progressMessage" class="progress-message" :class="progressMessageType">
-      <i class="fas" :class="getProgressIcon()"></i>
+      <Icon :name="getProgressIcon()" />
       {{ progressMessage }}
     </div>
   </div>
@@ -331,13 +331,15 @@ import { useLoadingState } from '@/composables/useLoadingState'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import BasePanel from '@/components/base/BasePanel.vue'
+import Icon from '@/components/ui/Icon.vue'
 
 export default {
   name: 'ManPageManager',
   components: {
     EmptyState,
     BaseButton,
-    BasePanel
+    BasePanel,
+    Icon,
   },
   setup() {
     const { t } = useI18n()
@@ -422,10 +424,10 @@ export default {
 
     const getProgressIcon = () => {
       switch (progressMessageType.value) {
-        case 'success': return 'fa-check-circle'
-        case 'error': return 'fa-exclamation-circle'
-        case 'warning': return 'fa-exclamation-triangle'
-        default: return 'fa-info-circle'
+        case 'success': return 'check-circle'
+        case 'error': return 'exclamation-circle'
+        case 'warning': return 'exclamation-triangle'
+        default: return 'info-circle'
       }
     }
 

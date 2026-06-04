@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from skills.builtin.autonomous_skill_development import (
+from skills.builtin.autonomous_skill_development import (  # nosemgrep: skill-no-sibling-import
     AutonomousSkillDevelopmentSkill,
     _get_governance_mode,
     _run_development_pipeline,

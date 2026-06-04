@@ -21,15 +21,16 @@ DEBUG
 """
 
 import asyncio
-import logging
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
+
+from autobot_shared.logging_manager import get_logger
 
 from .dag_executor import build_dag
 from .variable_resolver import VariableResolver
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -64,7 +65,7 @@ class StepPlan:
 
     step_id: str
     action: str
-    assigned_agent: Optional[str]
+    assigned_agent: str | None
     dependencies: List[str]
     variable_refs: List[str]
     """Variable tokens found in command/inputs for this step."""
@@ -149,7 +150,7 @@ class DryRunValidator:
         self,
         workflow_id: str,
         steps: List[Dict[str, Any]],
-        edges: Optional[List[Dict[str, Any]]] = None,
+        edges: List[Dict[str, Any]] | None = None,
     ) -> DryRunReport:
         """
         Validate *steps* (and optionally *edges*) for *workflow_id*.
@@ -325,9 +326,9 @@ class DebugController:
 
     def __init__(self) -> None:
         self._event: asyncio.Event = asyncio.Event()
-        self._signal: Optional["DebugController.Signal"] = None
+        self._signal: "DebugController.Signal" | None = None
         self._active: bool = True
-        self._paused_step_id: Optional[str] = None
+        self._paused_step_id: str | None = None
 
     # ------------------------------------------------------------------
     # Controller API (called by the test harness / UI)

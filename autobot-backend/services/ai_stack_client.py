@@ -10,20 +10,21 @@ This module provides a centralized interface for communicating with the AI Stack
 
 import asyncio
 import json
-import logging
 import time
 import uuid
-from typing import Dict, List, Optional
+from typing import Dict, List
 from urllib.parse import urljoin
 
 import aiohttp
 
 from autobot_shared.http_client import get_http_client
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 from autobot_shared.time_utils import utc_timestamp
 from constants.network_constants import NetworkConstants
 from type_defs.common import Metadata
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Rate-limit connection error log messages to prevent log flooding (#3686).
 # The first failure is logged at WARNING; subsequent failures within the
@@ -75,9 +76,9 @@ class AIStackError(Exception):
     def __init__(
         self,
         message: str,
-        status_code: Optional[int] = None,
-        details: Optional[Dict] = None,
-    ):
+        status_code: int | None = None,
+        details: Dict | None = None,
+    ) -> None:
         """Initialize AI Stack error with message, status code, and details."""
         self.message = message
         self.status_code = status_code
@@ -128,11 +129,11 @@ class AIStackClient:
 
     RETRY_INTERVAL_SECONDS = 60
 
-    def __init__(self, base_url: Optional[str] = None):
+    def __init__(self, base_url: str | None = None) -> None:
         """Initialize AI Stack client with base URL and HTTP client configuration."""
         # Connection status: "unknown" -> "connected" | "error"
         self.connection_status: str = "unknown"
-        self._retry_task: Optional[asyncio.Task] = None
+        self._retry_task: asyncio.Task | None = None
 
         # Use NetworkConstants for AI Stack configuration
         ai_stack_config = {
@@ -152,6 +153,12 @@ class AIStackClient:
             base_url = f"http://{host}:{port}"
         self.base_url = base_url.rstrip("/")
         self.http_client = get_http_client()
+
+        # Ollama backing URL: when the dedicated AI Stack service is absent,
+        # use the local Ollama instance for health/capability signalling (#6228).
+        # config.port.ollama is the canonical path; config.ollama_port does not
+        # exist on AutoBotConfig and raises AttributeError (MVA-1454).
+        self._ollama_url: str | None = config.ollama_url or None
 
         # Get timeout, retry, and connection configuration from config
         timeout_seconds = ai_stack_config.get("timeout", 60)
@@ -180,11 +187,11 @@ class AIStackClient:
         await self.connect()
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
+    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
         """Async context manager exit."""
         await self.close()
 
-    async def connect(self):
+    async def connect(self) -> None:
         """Initialize HTTP session and verify AI Stack reachability."""
         logger.info("AI Stack client connecting to %s", self.base_url)
         check = await self.health_check()
@@ -195,7 +202,7 @@ class AIStackClient:
                 self.RETRY_INTERVAL_SECONDS,
             )
 
-    async def close(self):
+    async def close(self) -> None:
         """Close the HTTP session and stop retry loop."""
         self.stop_retry_loop()
         logger.info("AI Stack client session closed")
@@ -231,9 +238,9 @@ class AIStackClient:
         self,
         method: str,
         endpoint: str,
-        data: Optional[Metadata] = None,
-        params: Optional[Metadata] = None,
-        headers: Optional[Dict[str, str]] = None,
+        data: Metadata | None = None,
+        params: Metadata | None = None,
+        headers: Dict[str, str] | None = None,
     ) -> Metadata:
         """Make HTTP request to AI Stack with retry logic. Ref: #1088."""
         url = urljoin(self.base_url, endpoint)
@@ -325,8 +332,32 @@ class AIStackClient:
         return await self._make_request("POST", endpoint, data=request_body)
 
     async def health_check(self) -> Metadata:
-        """Check AI Stack health status and update connection_status."""
+        """Check AI Stack health — uses Ollama as backing service when configured (#6228)."""
+        if self._ollama_url:
+            try:
+                async with aiohttp.ClientSession() as _sess:
+                    async with _sess.get(
+                        f"{self._ollama_url}/api/tags",
+                        timeout=aiohttp.ClientTimeout(total=10),
+                    ) as resp:
+                        if resp.status == 200:
+                            data = await resp.json()
+                            models = [m["name"] for m in data.get("models", [])]
+                            if self.connection_status != "connected":
+                                logger.info("Ollama backing connected at %s", self._ollama_url)
+                            self.connection_status = "connected"
+                            return {
+                                "status": "healthy",
+                                "models": models,
+                                "model_count": len(models),
+                                "backend": "ollama",
+                                "timestamp": utc_timestamp(),
+                            }
+            except Exception as exc:
+                logger.debug("Ollama health probe failed: %s", exc)
+
         try:
+            # Fallback: try the dedicated AI Stack service directly.
             # AI Stack exposes /health (#6649) — /api/v2 is the ChromaDB heartbeat
             # path and was wrongly applied here, producing a 404 every poll.
             response = await self._make_request("GET", "/health")
@@ -355,13 +386,35 @@ class AIStackClient:
             }
 
     async def list_available_agents(self) -> Metadata:
-        """Get list of available AI agents."""
+        """List available agents — from Ollama models when configured (#6228), else AI Stack."""
+        if self._ollama_url:
+            try:
+                async with aiohttp.ClientSession() as _sess:
+                    async with _sess.get(
+                        f"{self._ollama_url}/api/tags",
+                        timeout=aiohttp.ClientTimeout(total=10),
+                    ) as resp:
+                        if resp.status == 200:
+                            data = await resp.json()
+                            agents = [
+                                {
+                                    "type": m["name"].replace(":", "_").replace(".", "_"),
+                                    "name": m["name"],
+                                    "status": "ready",
+                                    "provider": "ollama",
+                                    "parameters": m.get("details", {}).get("parameter_size", ""),
+                                }
+                                for m in data.get("models", [])
+                            ]
+                            return {"agents": agents, "total": len(agents), "source": "ollama"}
+            except Exception as exc:
+                logger.debug("Ollama agent list failed: %s", exc)
+
         try:
             response = await self._make_request("GET", "/agents")
             return response
         except AIStackError as e:
             logger.warning("Cannot list AI Stack agents: %s", e.message)
-            # Fallback: return configured agents
             return {
                 "agents": list(self.agent_endpoints.keys()),
                 "total": len(self.agent_endpoints),
@@ -375,8 +428,8 @@ class AIStackClient:
     async def rag_query(
         self,
         query: str,
-        documents: Optional[List[Dict]] = None,
-        context: Optional[str] = None,
+        documents: List[Dict] | None = None,
+        context: str | None = None,
         max_results: int = 10,
     ) -> Metadata:
         """
@@ -399,7 +452,7 @@ class AIStackClient:
 
         return await self._agent_request("rag", "document_query", payload)
 
-    async def reformulate_query(self, query: str, context: Optional[str] = None) -> Metadata:
+    async def reformulate_query(self, query: str, context: str | None = None) -> Metadata:
         """
         Reformulate query for better retrieval results.
 
@@ -435,8 +488,8 @@ class AIStackClient:
     async def chat_message(
         self,
         message: str,
-        context: Optional[str] = None,
-        chat_history: Optional[List[Dict]] = None,
+        context: str | None = None,
+        chat_history: List[Dict] | None = None,
     ) -> Metadata:
         """
         Process chat message with intelligent conversation handling.
@@ -511,7 +564,7 @@ class AIStackClient:
     async def retrieve_knowledge(
         self,
         query: str,
-        knowledge_types: Optional[List[str]] = None,
+        knowledge_types: List[str] | None = None,
         confidence_threshold: float = 0.7,
     ) -> Metadata:
         """
@@ -539,7 +592,7 @@ class AIStackClient:
         self,
         query: str,
         research_depth: str = "comprehensive",
-        sources: Optional[List[str]] = None,
+        sources: List[str] | None = None,
     ) -> Metadata:
         """
         Perform comprehensive research query.
@@ -603,7 +656,7 @@ class AIStackClient:
         return await self._agent_request("npu_code_search", "search_code", payload)
 
     async def analyze_development_speedup(
-        self, code_path: Optional[str] = None, analysis_type: str = "comprehensive"
+        self, code_path: str | None = None, analysis_type: str = "comprehensive"
     ) -> Metadata:
         """
         Analyze codebase for development speedup opportunities.
@@ -625,7 +678,7 @@ class AIStackClient:
     # Content Classification Integration
     # ====================================================================
 
-    async def classify_content(self, content: str, classification_types: Optional[List[str]] = None) -> Metadata:
+    async def classify_content(self, content: str, classification_types: List[str] | None = None) -> Metadata:
         """
         Classify content using AI classification agent.
 
@@ -646,7 +699,7 @@ class AIStackClient:
     # System Knowledge Management
     # ====================================================================
 
-    async def get_system_knowledge(self, knowledge_category: Optional[str] = None) -> Metadata:
+    async def get_system_knowledge(self, knowledge_category: str | None = None) -> Metadata:
         """
         Get system-wide knowledge insights.
 
@@ -680,7 +733,7 @@ class AIStackClient:
 
 
 # Global AI Stack client instance with thread-safe initialization (Issue #662)
-_ai_stack_client: Optional[AIStackClient] = None
+_ai_stack_client: AIStackClient | None = None
 _ai_stack_client_lock = asyncio.Lock()
 
 
@@ -698,7 +751,7 @@ async def get_ai_stack_client() -> AIStackClient:
     return _ai_stack_client
 
 
-async def close_ai_stack_client():
+async def close_ai_stack_client() -> None:
     """Close global AI Stack client."""
     global _ai_stack_client
 

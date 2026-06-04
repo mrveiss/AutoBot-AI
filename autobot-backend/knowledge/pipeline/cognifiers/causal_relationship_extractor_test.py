@@ -21,10 +21,10 @@ from uuid import uuid4
 
 import pytest
 
-# Stub out llm_interface_pkg and autobot_shared to avoid dependency issues
-_mock_llm_mod = ModuleType("llm_interface_pkg")
+# Stub out llm_shared and autobot_shared to avoid dependency issues
+_mock_llm_mod = ModuleType("llm_shared")
 _mock_llm_mod.LLMInterface = type("LLMInterface", (), {})  # type: ignore[attr-defined]
-sys.modules.setdefault("llm_interface_pkg", _mock_llm_mod)
+sys.modules.setdefault("llm_shared", _mock_llm_mod)
 
 _mock_shared = ModuleType("autobot_shared")
 _mock_redis_mod = ModuleType("autobot_shared.redis_client")

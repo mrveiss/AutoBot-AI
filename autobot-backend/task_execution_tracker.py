@@ -8,13 +8,13 @@ Integrates with orchestrator and agents to provide comprehensive execution track
 
 import asyncio
 import json
-import logging
 from collections import defaultdict
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
 from enhanced_memory_manager_async import Priority  # Import Priority for backward compatibility
@@ -26,7 +26,7 @@ from enhanced_memory_manager_async import (
     get_async_enhanced_memory_manager,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Phase 2 of #6495 — unified Redis pub/sub channels for in-flight task progress.
 # Wire format matches the legacy OperationProgressTracker so existing WebSocket
@@ -52,7 +52,7 @@ class TaskExecutionTracker:
     to provide automatic task logging, performance monitoring, and execution analytics
     """
 
-    def __init__(self, memory_manager: Optional[AsyncEnhancedMemoryManager] = None):
+    def __init__(self, memory_manager: AsyncEnhancedMemoryManager | None = None):
         """Initialize task tracker with memory manager and callback registry."""
         self.memory_manager = memory_manager or get_async_enhanced_memory_manager()
         self.active_tasks: Dict[str, Dict[str, Any]] = {}
@@ -65,10 +65,10 @@ class TaskExecutionTracker:
         task_name: str,
         description: str,
         priority: TaskPriority,
-        agent_type: Optional[str],
-        inputs: Optional[Dict[str, Any]],
-        parent_task_id: Optional[str],
-        metadata: Optional[Dict[str, Any]],
+        agent_type: str | None,
+        inputs: Dict[str, Any] | None,
+        parent_task_id: str | None,
+        metadata: Dict[str, Any] | None,
     ) -> str:
         """Create task record and mark as started.
 
@@ -100,8 +100,8 @@ class TaskExecutionTracker:
         self,
         task_id: str,
         task_name: str,
-        agent_type: Optional[str],
-        inputs: Optional[Dict[str, Any]],
+        agent_type: str | None,
+        inputs: Dict[str, Any] | None,
     ) -> None:
         """Register task in active tasks tracking dictionary.
 
@@ -138,7 +138,7 @@ class TaskExecutionTracker:
         items_processed: int = 0,
         total_items: int = 0,
         estimated_remaining: float = 0.0,
-        details: Optional[Dict[str, Any]] = None,
+        details: Dict[str, Any] | None = None,
         operation_type: str = "",
         name: str = "",
         status: str = "running",
@@ -195,7 +195,7 @@ class TaskExecutionTracker:
         except Exception as e:
             logger.warning("Failed to broadcast progress update for %s: %s", task_id, e)
 
-    async def get_progress(self, task_id: str) -> Optional[Dict[str, Any]]:
+    async def get_progress(self, task_id: str) -> Dict[str, Any] | None:
         """Read the latest progress snapshot for a task from Redis (#6506).
 
         Returns the parsed JSON payload last written by :meth:`update_progress`,
@@ -221,11 +221,11 @@ class TaskExecutionTracker:
         self,
         task_name: str,
         description: str,
-        agent_type: Optional[str] = None,
+        agent_type: str | None = None,
         priority: TaskPriority = TaskPriority.MEDIUM,
-        inputs: Optional[Dict[str, Any]] = None,
-        parent_task_id: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        inputs: Dict[str, Any] | None = None,
+        parent_task_id: str | None = None,
+        metadata: Dict[str, Any] | None = None,
     ):
         """Context manager for automatic task tracking with proper cleanup.
 
@@ -267,10 +267,10 @@ class TaskExecutionTracker:
         parent_task_id: str,
         task_name: str,
         description: str,
-        agent_type: Optional[str] = None,
+        agent_type: str | None = None,
         priority: TaskPriority = TaskPriority.MEDIUM,
-        inputs: Optional[Dict[str, Any]] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        inputs: Dict[str, Any] | None = None,
+        metadata: Dict[str, Any] | None = None,
     ) -> str:
         """Create a subtask linked to a parent task"""
         return self.memory_manager.create_task_record(
@@ -323,8 +323,8 @@ class TaskExecutionTracker:
 
     def get_task_history(
         self,
-        agent_type: Optional[str] = None,
-        status: Optional[TaskStatus] = None,
+        agent_type: str | None = None,
+        status: TaskStatus | None = None,
         limit: int = 100,
         days_back: int = 30,
     ) -> List[ExecutionRecord]:
@@ -449,7 +449,7 @@ class TaskExecutionTracker:
         task_type: TaskType,
         description: str,
         priority: Priority,
-        context: Optional[Dict[str, Any]] = None,
+        context: Dict[str, Any] | None = None,
     ):
         """
         Start a task with the given parameters (backward compatibility wrapper).
@@ -528,7 +528,7 @@ class TaskExecutionContext:
         """Initialize execution context with tracker reference and task ID."""
         self.tracker = tracker
         self.task_id = task_id
-        self.outputs: Optional[Dict[str, Any]] = None
+        self.outputs: Dict[str, Any] | None = None
         self.metadata: Dict[str, Any] = {}
 
     def set_outputs(self, outputs: Dict[str, Any]):
@@ -543,9 +543,9 @@ class TaskExecutionContext:
         self,
         task_name: str,
         description: str,
-        agent_type: Optional[str] = None,
+        agent_type: str | None = None,
         priority: TaskPriority = TaskPriority.MEDIUM,
-        inputs: Optional[Dict[str, Any]] = None,
+        inputs: Dict[str, Any] | None = None,
     ) -> str:
         """Create a subtask of the current task"""
         return self.tracker.create_subtask(

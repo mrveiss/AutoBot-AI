@@ -234,6 +234,7 @@ export function useDebounce<T extends (...args: any[]) => any>(
     } else if (!leading) {
       // Only save args for trailing edge execution (not in leading mode)
       lastArgs = args
+      // eslint-disable-next-line @typescript-eslint/no-this-alias
       lastThis = this
     }
 

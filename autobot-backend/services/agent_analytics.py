@@ -15,14 +15,14 @@ Related Issues: #59 (Advanced Analytics & Business Intelligence)
 """
 
 import json
-import logging
 import uuid
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from datetime import timedelta
 from enum import Enum
-from typing import Any, AsyncGenerator, Dict, List, Optional
+from typing import Any, AsyncGenerator, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import RedisDatabase
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
 from autobot_shared.singleton_factory import lazy_singleton
@@ -30,7 +30,7 @@ from autobot_shared.status_enums import TaskStatus
 from autobot_shared.time_utils import now_utc, parse_utc_iso, utc_timestamp
 from constants.ttl_constants import TTL_1_HOUR, TTL_30_DAYS
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class AgentType(str, Enum):
@@ -56,12 +56,12 @@ class AgentTaskRecord:
     task_name: str
     status: str
     started_at: str
-    completed_at: Optional[str] = None
-    duration_ms: Optional[float] = None
-    input_size: Optional[int] = None
-    output_size: Optional[int] = None
-    tokens_used: Optional[int] = None
-    error_message: Optional[str] = None
+    completed_at: str | None = None
+    duration_ms: float | None = None
+    input_size: int | None = None
+    output_size: int | None = None
+    tokens_used: int | None = None
+    error_message: str | None = None
     metadata: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
@@ -119,7 +119,7 @@ class AgentMetrics:
     total_tokens_used: int = 0
     error_rate: float = 0
     success_rate: float = 0
-    last_activity: Optional[str] = None
+    last_activity: str | None = None
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary"""
@@ -208,8 +208,8 @@ class AgentAnalytics(AsyncRedisClientMixin):
         agent_type: str,
         task_id: str,
         task_name: str,
-        input_size: Optional[int] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        input_size: int | None = None,
+        metadata: Dict[str, Any] | None = None,
     ) -> AgentTaskRecord:
         """
         Track the start of an agent task.
@@ -250,10 +250,10 @@ class AgentAnalytics(AsyncRedisClientMixin):
         self,
         task_id: str,
         status: TaskStatus,
-        output_size: Optional[int] = None,
-        tokens_used: Optional[int] = None,
-        error_message: Optional[str] = None,
-    ) -> Optional[AgentTaskRecord]:
+        output_size: int | None = None,
+        tokens_used: int | None = None,
+        error_message: str | None = None,
+    ) -> AgentTaskRecord | None:
         """
         Track task completion.
 
@@ -355,7 +355,7 @@ class AgentAnalytics(AsyncRedisClientMixin):
         except Exception as e:
             logger.error("Failed to update agent metrics: %s", e)
 
-    async def get_agent_metrics(self, agent_id: str) -> Optional[AgentMetrics]:
+    async def get_agent_metrics(self, agent_id: str) -> AgentMetrics | None:
         """Get aggregated metrics for an agent"""
         try:
             redis = await self.get_redis()
@@ -495,7 +495,7 @@ class AgentAnalytics(AsyncRedisClientMixin):
             logger.error("Failed to get recent tasks: %s", e)
             return []
 
-    async def compare_agents(self, agent_ids: Optional[List[str]] = None) -> Dict[str, Any]:
+    async def compare_agents(self, agent_ids: List[str] | None = None) -> Dict[str, Any]:
         """
         Compare performance across agents.
 
@@ -580,7 +580,7 @@ class AgentAnalytics(AsyncRedisClientMixin):
                 stats["success_rate"] = 0
                 stats["avg_duration_ms"] = 0
 
-    async def get_performance_trends(self, agent_id: Optional[str] = None, days: int = 7) -> Dict[str, Any]:
+    async def get_performance_trends(self, agent_id: str | None = None, days: int = 7) -> Dict[str, Any]:
         """
         Get performance trends over time.
 
@@ -618,7 +618,7 @@ get_agent_analytics = lazy_singleton(AgentAnalytics)
 async def track_agent_usage(
     agent_name: str,
     task_type: str,
-    token_usage: Optional[int] = None,
+    token_usage: int | None = None,
 ) -> AsyncGenerator[None, None]:
     """Async context manager for tracking a single agent invocation.
 

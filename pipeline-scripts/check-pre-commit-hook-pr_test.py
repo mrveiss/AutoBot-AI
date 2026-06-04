@@ -66,9 +66,7 @@ def _make_pr(tmp_path: Path, files: dict[str, str]) -> tuple[str, str]:
     return base, head
 
 
-def _run_wrapper(
-    tmp_path: Path, hook_name: str, base: str, head: str
-) -> subprocess.CompletedProcess:
+def _run_wrapper(tmp_path: Path, hook_name: str, base: str, head: str) -> subprocess.CompletedProcess:
     """Run the wrapper inside ``tmp_path`` so its `git diff` finds the test repo."""
     return subprocess.run(
         ["bash", str(WRAPPER), hook_name],
@@ -135,8 +133,64 @@ class TestForwardsArgvToHooks:
 
     def test_no_direct_redis_blocks_bare_redis(self, tmp_path: Path) -> None:
         # `redis.Redis()` direct instantiation in production code
-        base, head = _make_pr(
-            tmp_path, {"src/r.py": "import redis\nclient = redis.Redis()\n"}
-        )
+        base, head = _make_pr(tmp_path, {"src/r.py": "import redis\nclient = redis.Redis()\n"})
         result = _run_wrapper(tmp_path, "pre-commit-no-direct-redis", base, head)
         assert result.returncode != 0
+
+
+def _run_wrapper_python(
+    tmp_path: Path, validator: Path, base: str, head: str, ext: str = ""
+) -> subprocess.CompletedProcess:
+    """Run the wrapper in --python mode from tmp_path."""
+    args = ["bash", str(WRAPPER), "--python", str(validator)]
+    if ext:
+        args += ["--ext", ext]
+    return subprocess.run(
+        args,
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        env={"BASE_SHA": base, "HEAD_SHA": head, "PATH": "/usr/bin:/bin"},
+    )
+
+
+@pytest.mark.skipif(not WRAPPER.exists(), reason="wrapper script not found")
+class TestPythonValidatorMode:
+    """--python flag: routes to a Python validator instead of a bash hook."""
+
+    def test_missing_validator_exits_2(self, tmp_path: Path) -> None:
+        base, head = _make_pr(tmp_path, {"a.py": "x = 1\n"})
+        result = subprocess.run(
+            ["bash", str(WRAPPER), "--python", "tools/lint/nonexistent.py"],
+            cwd=tmp_path,
+            capture_output=True,
+            text=True,
+            env={"BASE_SHA": base, "HEAD_SHA": head, "PATH": "/usr/bin:/bin"},
+        )
+        assert result.returncode == 2
+        assert "not found" in result.stderr.lower()
+
+    def test_no_changed_py_files_skips(self, tmp_path: Path) -> None:
+        # Write a dummy validator that always exits 1
+        validator = tmp_path / "check_always_fail.py"
+        validator.write_text("import sys; sys.exit(1)\n", encoding="utf-8")
+        base, head = _make_pr(tmp_path, {"docs/README.md": "# docs\n"})
+        result = _run_wrapper_python(tmp_path, validator, base, head, ext="py")
+        assert result.returncode == 0
+        assert "No changed source files" in result.stdout
+
+    def test_python_validator_exit_code_propagated(self, tmp_path: Path) -> None:
+        # A validator that exits 1 must cause the wrapper to exit non-zero
+        validator = tmp_path / "check_always_fail.py"
+        validator.write_text("import sys; sys.exit(1)\n", encoding="utf-8")
+        base, head = _make_pr(tmp_path, {"src/foo.py": "x = 1\n"})
+        result = _run_wrapper_python(tmp_path, validator, base, head, ext="py")
+        assert result.returncode != 0
+
+    def test_python_validator_clean_exit_0(self, tmp_path: Path) -> None:
+        # A validator that exits 0 (clean) passes
+        validator = tmp_path / "check_always_pass.py"
+        validator.write_text("import sys; sys.exit(0)\n", encoding="utf-8")
+        base, head = _make_pr(tmp_path, {"src/foo.py": "x = 1\n"})
+        result = _run_wrapper_python(tmp_path, validator, base, head, ext="py")
+        assert result.returncode == 0

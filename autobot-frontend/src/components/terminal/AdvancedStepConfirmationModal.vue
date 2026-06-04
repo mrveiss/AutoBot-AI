@@ -11,6 +11,7 @@
  * TerminalWindow.vue during automated workflow execution.
  */
 
+import Icon from '@/components/ui/Icon.vue'
 import { computed, ref, watch } from 'vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
@@ -182,7 +183,7 @@ function resetEdit(): void {
   <BaseModal
     v-model="isOpen"
     :title="t('terminal.window.workflowStepConfirmation')"
-    size="medium"
+    size="md"
     :close-on-overlay="false"
     @close="handleClose"
   >
@@ -191,7 +192,7 @@ function resetEdit(): void {
       <div class="step-progress">
         <div class="progress-header">
           <span class="step-counter">
-            <i class="fas fa-tasks" aria-hidden="true"></i>
+            <Icon name="tasks" />
             {{ t('terminal.window.stepProgress', { current: currentStepNumber, total: totalSteps }) }}
           </span>
           <span class="progress-percent">{{ progressPercent }}%</span>
@@ -223,10 +224,10 @@ function resetEdit(): void {
       <!-- Command Preview -->
       <div class="command-preview">
         <div class="command-label">
-          <i class="fas fa-terminal" aria-hidden="true"></i>
+          <Icon name="terminal" />
           {{ t('terminal.window.commandToExecute') }}
           <span v-if="isModified" class="modified-badge">
-            <i class="fas fa-pencil-alt" aria-hidden="true"></i>
+            <Icon name="pencil-alt" />
             {{ t('terminal.modal.editedBadge') }}
           </span>
           <button
@@ -235,7 +236,7 @@ function resetEdit(): void {
             :aria-label="t('terminal.modal.editCommandAriaLabel')"
             @click="openEditDialog"
           >
-            <i class="fas fa-pencil-alt" aria-hidden="true"></i>
+            <Icon name="pencil-alt" />
             {{ t('terminal.modal.editCommand') }}
           </button>
         </div>
@@ -257,20 +258,20 @@ function resetEdit(): void {
             @keydown.escape.prevent="cancelEdit"
           ></textarea>
           <p v-if="editError" id="step-edit-error" class="edit-error" role="alert">
-            <i class="fas fa-exclamation-circle" aria-hidden="true"></i>
+            <Icon name="exclamation-circle" />
             {{ editError }}
           </p>
           <div class="edit-actions">
             <button class="edit-action-btn edit-action-cancel" @click="cancelEdit">
-              <i class="fas fa-times" aria-hidden="true"></i>
+              <Icon name="times" />
               {{ t('terminal.modal.editCancel') }}
             </button>
             <button v-if="isModified" class="edit-action-btn edit-action-reset" @click="resetEdit">
-              <i class="fas fa-undo" aria-hidden="true"></i>
+              <Icon name="undo" />
               {{ t('terminal.modal.editReset') }}
             </button>
             <button class="edit-action-btn edit-action-save" @click="saveEdit">
-              <i class="fas fa-check" aria-hidden="true"></i>
+              <Icon name="check" />
               {{ t('terminal.modal.editSave') }}
             </button>
           </div>
@@ -309,7 +310,7 @@ function resetEdit(): void {
         variant="outline-solid"
         @click="handleTakeControl"
       >
-        <i class="fas fa-hand-paper" aria-hidden="true"></i>
+        <Icon name="hand-paper" />
         {{ t('terminal.window.takeControlLabel') }}
       </BaseButton>
 
@@ -318,7 +319,7 @@ function resetEdit(): void {
         variant="outline-solid"
         @click="handleExecuteAll"
       >
-        <i class="fas fa-forward" aria-hidden="true"></i>
+        <Icon name="forward" />
         {{ t('terminal.modal.executeAll') }}
       </BaseButton>
 
@@ -326,7 +327,7 @@ function resetEdit(): void {
         variant="secondary"
         @click="handleSkip"
       >
-        <i class="fas fa-step-forward" aria-hidden="true"></i>
+        <Icon name="forward" />
         {{ t('terminal.window.skipLabel') }}
       </BaseButton>
 
@@ -334,7 +335,7 @@ function resetEdit(): void {
         variant="success"
         @click="handleExecute"
       >
-        <i class="fas fa-play" aria-hidden="true"></i>
+        <Icon name="play" />
         {{ t('terminal.window.executeLabel') }}
       </BaseButton>
     </template>

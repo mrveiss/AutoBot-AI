@@ -8,12 +8,13 @@ Handles LLM streaming responses using natural completion signals instead of time
 
 import asyncio
 import json
-import logging
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 
 # Issue #380: Module-level frozenset for O(1) lookup
 _OPENAI_PROVIDERS = frozenset({"openai", "gpt"})
@@ -40,7 +41,7 @@ class StreamProcessingResult:
     total_chunks: int
     processing_time: float
     metadata: Dict[str, Any]
-    error_message: Optional[str] = None
+    error_message: str | None = None
 
 
 class StreamProcessor:
@@ -54,7 +55,7 @@ class StreamProcessor:
         self.accumulated_content = ""
         self.start_time = None
 
-    async def process_chunk(self, chunk_data: str) -> Tuple[bool, Optional[str]]:
+    async def process_chunk(self, chunk_data: str) -> Tuple[bool, str | None]:
         """
         Process a single chunk. Returns (is_complete, content_to_add)
         Must be implemented by provider-specific processors
@@ -65,7 +66,7 @@ class StreamProcessor:
         """Check if chunk indicates natural completion"""
         return False
 
-    def detect_error_condition(self, chunk_data: str) -> Optional[str]:
+    def detect_error_condition(self, chunk_data: str) -> str | None:
         """Detect error conditions in chunk"""
         return None
 
@@ -78,7 +79,7 @@ class OllamaStreamProcessor(StreamProcessor):
         super().__init__("ollama", max_chunks)
         self.expecting_done = False
 
-    async def process_chunk(self, chunk_data: str) -> Tuple[bool, Optional[str]]:
+    async def process_chunk(self, chunk_data: str) -> Tuple[bool, str | None]:
         """Process Ollama streaming chunk"""
         if not chunk_data.strip():
             return False, None
@@ -139,7 +140,7 @@ class OllamaStreamProcessor(StreamProcessor):
         except json.JSONDecodeError:
             return False
 
-    def detect_error_condition(self, chunk_data: str) -> Optional[str]:
+    def detect_error_condition(self, chunk_data: str) -> str | None:
         """Detect Ollama error conditions"""
         try:
             chunk_json = json.loads(chunk_data.strip())
@@ -155,7 +156,7 @@ class OpenAIStreamProcessor(StreamProcessor):
         """Initialize OpenAI stream processor."""
         super().__init__("openai", max_chunks)
 
-    async def process_chunk(self, chunk_data: str) -> Tuple[bool, Optional[str]]:
+    async def process_chunk(self, chunk_data: str) -> Tuple[bool, str | None]:
         """Process OpenAI streaming chunk"""
         if not chunk_data.strip():
             return False, None
@@ -196,7 +197,7 @@ def _check_stream_limits(
     max_chunks: int,
     current_buffer_size: int,
     max_buffer_size: int,
-) -> Optional[StreamCompletionSignal]:
+) -> StreamCompletionSignal | None:
     """Issue #665: Extracted from _process_stream_loop to reduce function length.
 
     Check if stream has exceeded chunk or buffer limits.
@@ -218,7 +219,7 @@ def _check_stream_limits(
     return None
 
 
-def _decode_chunk(chunk_bytes: bytes, chunk_count: int) -> Optional[str]:
+def _decode_chunk(chunk_bytes: bytes, chunk_count: int) -> str | None:
     """Issue #665: Extracted from _process_stream_loop to reduce function length.
 
     Decode chunk bytes to string with error handling.
@@ -253,7 +254,7 @@ def _determine_completion_signal(
     return StreamCompletionSignal.PROVIDER_SPECIFIC
 
 
-def _check_error_condition(processor: StreamProcessor, chunk_data: str) -> Optional[StreamCompletionSignal]:
+def _check_error_condition(processor: StreamProcessor, chunk_data: str) -> StreamCompletionSignal | None:
     """Issue #665: Extracted from _process_stream_loop to reduce function length."""
     error = processor.detect_error_condition(chunk_data)
     if error:
@@ -267,11 +268,11 @@ async def _process_stream_loop(
     processor: StreamProcessor,
     max_chunks: int,
     max_buffer_size: int = 10 * 1024 * 1024,
-) -> Tuple[List[str], int, Optional[StreamCompletionSignal]]:
+) -> Tuple[List[str], int, StreamCompletionSignal | None]:
     """Process stream chunks until completion or limit (Issue #281, #551, #665)."""
     content_parts: List[str] = []
     chunk_count = 0
-    completion_signal: Optional[StreamCompletionSignal] = None
+    completion_signal: StreamCompletionSignal | None = None
     current_buffer_size = 0
 
     async for chunk_bytes in response.content:

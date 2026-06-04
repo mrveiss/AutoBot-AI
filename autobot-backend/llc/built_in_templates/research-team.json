@@ -1,0 +1,120 @@
+{
+  "metadata": {
+    "name": "Research Team",
+    "description": "Comprehensive research workflow with lead researcher, deep research specialists, summarizers, and technical writers",
+    "category": "company",
+    "version": "1.0",
+    "tags": ["research", "analysis", "writing", "documentation"]
+  },
+  "variables": {
+    "company_name": "{{COMPANY_NAME}}",
+    "research_domain": "{{RESEARCH_DOMAIN}}"
+  },
+  "agents": [
+    {
+      "name": "Research Lead",
+      "role": "research_lead",
+      "description": "Coordinates research projects, defines methodologies, and ensures quality of research outputs",
+      "capabilities": ["research_planning", "methodology_design", "quality_review"],
+      "instructions": "You are the research lead. Define research questions, design methodologies, coordinate the research team, and ensure findings are rigorous and well-documented.",
+      "model": "claude-opus-4-8",
+      "adapter_config": {
+        "type": "local",
+        "tools": ["read", "write", "bash", "grep"]
+      }
+    },
+    {
+      "name": "Deep Research Agent",
+      "role": "researcher",
+      "description": "Conducts in-depth research, analyzes sources, and extracts insights",
+      "capabilities": ["web_research", "source_analysis", "data_extraction", "fact_checking"],
+      "instructions": "You are a deep research specialist. Conduct thorough investigations, analyze multiple sources, verify facts, and extract meaningful insights. Focus on accuracy and comprehensiveness.",
+      "model": "claude-sonnet-4-6",
+      "adapter_config": {
+        "type": "local",
+        "tools": ["read", "write", "web_search", "web_fetch"]
+      }
+    },
+    {
+      "name": "Research Summarizer",
+      "role": "summarizer",
+      "description": "Synthesizes research findings into concise, actionable summaries",
+      "capabilities": ["synthesis", "summarization", "insight_extraction"],
+      "instructions": "You are a research summarizer. Take complex research findings and distill them into clear, concise summaries that highlight key insights and actionable recommendations.",
+      "model": "claude-sonnet-4-6",
+      "adapter_config": {
+        "type": "local",
+        "tools": ["read", "write"]
+      }
+    },
+    {
+      "name": "Technical Writer",
+      "role": "writer",
+      "description": "Creates polished research reports, documentation, and presentations",
+      "capabilities": ["technical_writing", "documentation", "report_creation"],
+      "instructions": "You are a technical writer. Transform research summaries into well-structured, professionally written reports and documentation. Ensure clarity, accuracy, and proper citations.",
+      "model": "claude-sonnet-4-6",
+      "adapter_config": {
+        "type": "local",
+        "tools": ["read", "write"]
+      }
+    }
+  ],
+  "goals": [
+    {
+      "title": "Establish Research Methodology",
+      "description": "Define research processes, quality standards, and documentation templates",
+      "priority": "high",
+      "status": "todo"
+    },
+    {
+      "title": "Build Knowledge Base",
+      "description": "Create structured repository of research findings and insights",
+      "priority": "high",
+      "status": "backlog"
+    },
+    {
+      "title": "Publish Research Reports",
+      "description": "Produce comprehensive research reports on key topics",
+      "priority": "medium",
+      "status": "backlog"
+    }
+  ],
+  "work_items": [
+    {
+      "title": "Define research workflow",
+      "description": "Document the end-to-end research process from question to published report",
+      "assignee_role": "research_lead",
+      "priority": "high",
+      "status": "todo"
+    },
+    {
+      "title": "Create research templates",
+      "description": "Develop templates for research briefs, findings, and final reports",
+      "assignee_role": "writer",
+      "priority": "high",
+      "status": "todo"
+    },
+    {
+      "title": "Setup source verification process",
+      "description": "Establish fact-checking and source validation procedures",
+      "assignee_role": "researcher",
+      "priority": "medium",
+      "status": "todo"
+    }
+  ],
+  "kb_collections": [
+    {
+      "name": "Research Methodology",
+      "description": "Research processes, quality standards, and best practices"
+    },
+    {
+      "name": "Source Library",
+      "description": "Curated collection of trusted sources and references"
+    },
+    {
+      "name": "Published Research",
+      "description": "Completed research reports and findings"
+    }
+  ]
+}

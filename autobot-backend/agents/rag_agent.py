@@ -9,9 +9,10 @@ and context ranking. Handles knowledge base integration and document analysis.
 """
 
 import json
-import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import (
     get_agent_endpoint_explicit,
     get_agent_model_explicit,
@@ -21,9 +22,10 @@ from constants.threshold_constants import LLMDefaults
 from services.llm_service import get_llm_service
 
 from .base_agent import AgentRequest
+from .payloads import AgentStatus, RAGPayload
 from .standardized_agent import ActionHandler, StandardizedAgent
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class RAGAgent(StandardizedAgent):
@@ -136,31 +138,31 @@ class RAGAgent(StandardizedAgent):
         document_analysis: Dict[str, Any],
         documents: List[Dict[str, Any]],
     ) -> Dict[str, Any]:
-        """
-        Build successful RAG query response.
+        """Build successful RAG query response (#6703).
 
-        (Issue #398: extracted helper)
+        Constructs a typed RAGPayload then returns model_dump() so the
+        public API contract (Dict[str, Any]) is unchanged.
         """
-        return {
-            "status": "success",
-            "synthesized_response": synthesis_result.get("response", ""),
-            "confidence_score": synthesis_result.get("confidence", 0.8),
-            "document_analysis": document_analysis,
-            "sources_used": [doc.get("metadata", {}).get("filename", "Unknown") for doc in documents],
-            "agent_type": "rag",
-            "model_used": self.model_name,
-            "metadata": {
+        return RAGPayload(
+            status=AgentStatus.SUCCESS,
+            agent_type="rag",
+            model_used=self.model_name,
+            synthesized_response=synthesis_result.get("response", ""),
+            confidence_score=synthesis_result.get("confidence", 0.8),
+            document_analysis=document_analysis,
+            sources_used=[doc.get("metadata", {}).get("filename", "Unknown") for doc in documents],
+            metadata={
                 "agent": "RAGAgent",
                 "documents_processed": len(documents),
                 "synthesis_complexity": "high",
             },
-        }
+        ).model_dump()
 
     async def process_document_query(
         self,
         query: str,
         documents: List[Dict[str, Any]],
-        context: Optional[Dict[str, Any]] = None,
+        context: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
         """
         Process a query against retrieved documents and synthesize response.
@@ -204,7 +206,7 @@ class RAGAgent(StandardizedAgent):
                 "model_used": self.model_name,
             }
 
-    async def reformulate_query(self, original_query: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async def reformulate_query(self, original_query: str, context: Dict[str, Any] | None = None) -> Dict[str, Any]:
         """
         Reformulate a query to improve retrieval effectiveness.
 
@@ -459,14 +461,14 @@ Focus on creating 2-4 reformulated queries that would retrieve different but rel
                 "search_strategy": "Error in extraction",
             }
 
-    def _try_extract_from_message(self, response: Dict) -> Optional[str]:
+    def _try_extract_from_message(self, response: Dict) -> str | None:
         """Try to extract content from message dict (Issue #334 - extracted helper)."""
         if "message" not in response or not isinstance(response["message"], dict):
             return None
         content = response["message"].get("content")
         return content.strip() if content else None
 
-    def _try_extract_from_choices(self, response: Dict) -> Optional[str]:
+    def _try_extract_from_choices(self, response: Dict) -> str | None:
         """Try to extract content from choices list (Issue #334 - extracted helper)."""
         if "choices" not in response or not isinstance(response["choices"], list):
             return None
@@ -502,6 +504,64 @@ Focus on creating 2-4 reformulated queries that would retrieve different but rel
             logger.error("Error extracting response content: %s", e)
             return "Error extracting response content"
 
+    async def generate_response(
+        self,
+        query: str,
+        context: str = "",
+        **kwargs: Any,
+    ) -> Dict[str, Any]:
+        """Synthesize a RAG response from a free-form context string.
+
+        Caller contract (see `api/knowledge_search_scoped.py`):
+        - kwargs `query` and `context` (already-joined fact text).
+        - Returns a dict with a `response` key holding the synthesized answer text.
+
+        Never raises — on LLM/runtime failure, returns a status="error" payload
+        with a generic message so callers (and ultimately end users) do not see
+        stack traces or internal error details.
+        """
+        try:
+            if not isinstance(query, str) or not query.strip():
+                return {
+                    "status": "error",
+                    "response": "Query is required for RAG response generation.",
+                    "agent_type": "rag",
+                    "model_used": self.model_name,
+                }
+
+            context_block = context if isinstance(context, str) and context.strip() else "(no context provided)"
+            messages = [
+                {"role": "system", "content": self._get_rag_system_prompt()},
+                {"role": "system", "content": f"Retrieved Context:\n{context_block}"},
+                {"role": "user", "content": query},
+            ]
+
+            llm_response = await self.llm_interface.chat(
+                messages=messages,
+                llm_type="rag",
+                temperature=kwargs.get("temperature", 0.5),
+                max_tokens=kwargs.get("max_tokens", LLMDefaults.SYNTHESIS_MAX_TOKENS),
+                top_p=kwargs.get("top_p", LLMDefaults.DEFAULT_TOP_P),
+            )
+
+            synthesis = self._extract_synthesis_response(llm_response)
+            return {
+                "status": "success",
+                "response": synthesis.get("response", ""),
+                "confidence_score": synthesis.get("confidence", 0.8),
+                "agent_type": "rag",
+                "model_used": self.model_name,
+            }
+
+        except Exception as exc:
+            logger.error("RAGAgent.generate_response failed: %s", exc)
+            return {
+                "status": "error",
+                "response": "Unable to synthesize a response at this time.",
+                "agent_type": "rag",
+                "model_used": self.model_name,
+            }
+
     def is_rag_appropriate(self, message: str, has_documents: bool = False) -> bool:
         """
         Determine if a message requires RAG processing.
@@ -536,19 +596,5 @@ Focus on creating 2-4 reformulated queries that would retrieve different but rel
         return any(pattern in message_lower for pattern in rag_patterns)
 
 
-# Singleton instance (thread-safe)
-import threading
-
-_rag_agent_instance = None
-_rag_agent_lock = threading.Lock()
-
-
-def get_rag_agent() -> RAGAgent:
-    """Get the singleton RAG Agent instance (thread-safe)."""
-    global _rag_agent_instance
-    if _rag_agent_instance is None:
-        with _rag_agent_lock:
-            # Double-check after acquiring lock
-            if _rag_agent_instance is None:
-                _rag_agent_instance = RAGAgent()
-    return _rag_agent_instance
+get_rag_agent = lazy_singleton(RAGAgent)
+"""Get the singleton RAG Agent instance (thread-safe)."""

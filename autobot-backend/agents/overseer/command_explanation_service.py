@@ -13,10 +13,10 @@ Uses caching to reduce LLM calls for common commands.
 
 import hashlib
 import json
-import logging
-from typing import Dict, Optional
+from typing import Dict
 
 from autobot_shared.http_client import get_http_client
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import DEFAULT_LLM_MODEL
 from constants.api_constants import PATH_OLLAMA_GENERATE
 from dependencies import get_config
@@ -24,7 +24,7 @@ from services.tool_output_filter import get_tool_output_filter
 
 from .types import CommandBreakdownPart, CommandExplanation, OutputExplanation
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class CommandExplanationService:
@@ -75,13 +75,13 @@ class CommandExplanationService:
         """Generate cache key for a command."""
         # Normalize command by removing extra whitespace
         normalized = " ".join(command.split())
-        return hashlib.md5(normalized.encode()).hexdigest()
+        return hashlib.md5(normalized.encode(), usedforsecurity=False).hexdigest()
 
     def _get_output_cache_key(self, command: str, output: str) -> str:
         """Generate cache key for command+output combination."""
         filtered_output = get_tool_output_filter().filter(command, output)
         combined = f"{command}::{filtered_output}"
-        return hashlib.md5(combined.encode()).hexdigest()
+        return hashlib.md5(combined.encode(), usedforsecurity=False).hexdigest()
 
     async def explain_command(self, command: str) -> CommandExplanation:
         """
@@ -326,7 +326,7 @@ Rules:
 
 
 # Singleton instance
-_service_instance: Optional[CommandExplanationService] = None
+_service_instance: CommandExplanationService | None = None
 
 
 def get_command_explanation_service() -> CommandExplanationService:

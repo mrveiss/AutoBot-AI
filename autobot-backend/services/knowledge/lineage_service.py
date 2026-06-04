@@ -10,14 +10,14 @@ SynthesisProvenanceLog and ChromaDB entity metadata.
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc, parse_utc_iso
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -34,7 +34,7 @@ class SynthesisRun:
     """
 
     run_id: str
-    parent_run_id: Optional[str]
+    parent_run_id: str | None
     prompt_variant: str
     source_doc_ids: List[str]
     output_summary_id: str
@@ -110,7 +110,7 @@ class LineageService:
             List of SynthesisRun from oldest ancestor to run_id, inclusive.
         """
         chain: List[SynthesisRun] = []
-        current_id: Optional[str] = run_id
+        current_id: str | None = run_id
         seen: set = set()
         for _ in range(depth + 1):
             if current_id is None or current_id in seen:
@@ -125,7 +125,7 @@ class LineageService:
         chain.reverse()
         return chain
 
-    async def get_best_ancestor(self, collection: str, metric: str = "score") -> Optional[SynthesisRun]:
+    async def get_best_ancestor(self, collection: str, metric: str = "score") -> SynthesisRun | None:
         """Return the highest-scoring run in the lineage tree for *collection*.
 
         Uses ``get_best_run_id_for_collection()`` for O(1) sorted-set lookup
@@ -308,7 +308,7 @@ class LineageService:
 # Module-level singleton
 # ---------------------------------------------------------------------------
 
-_lineage_service: Optional[LineageService] = None
+_lineage_service: LineageService | None = None
 
 
 def get_lineage_service(provenance_log: Any, chromadb_collection_factory: Any) -> LineageService:

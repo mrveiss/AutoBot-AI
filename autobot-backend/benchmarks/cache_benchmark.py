@@ -14,9 +14,10 @@ import time
 from typing import Any, Dict, List
 
 from autobot_shared.async_compat import run_or_schedule
-from llm_interface_pkg.cache import CachedResponse, LLMResponseCache
+from autobot_shared.logging_manager import get_logger
+from llm_shared.cache import CachedResponse, LLMResponseCache
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 async def benchmark_l1_hit(cache: LLMResponseCache, keys: List[str]) -> List[float]:

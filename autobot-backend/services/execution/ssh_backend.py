@@ -9,8 +9,10 @@ Supports key-based and password authentication.
 """
 
 import asyncio
-import logging
-from typing import Optional, Tuple
+from typing import Tuple
+
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.time_utils import now_utc
 
 from autobot_shared.time_utils import now_utc
 
@@ -29,7 +31,7 @@ from services.execution.base_backend import (
     ExecutionTask,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class SSHBackend(ExecutionBackend):
@@ -40,10 +42,10 @@ class SSHBackend(ExecutionBackend):
         hostname: str,
         port: int = 22,
         username: str = "autobot",
-        password: Optional[str] = None,
-        private_key_path: Optional[str] = None,
+        password: str | None = None,
+        private_key_path: str | None = None,
         timeout: int = 30,
-    ):
+    ) -> None:
         """Initialize SSH backend.
 
         Args:
@@ -68,7 +70,7 @@ class SSHBackend(ExecutionBackend):
         self.password = password
         self.private_key_path = private_key_path
         self.timeout = timeout
-        self._client: Optional[SSHClient] = None
+        self._client: SSHClient | None = None
 
     async def execute(self, task: ExecutionTask) -> ExecutionResult:
         """Execute task on remote machine via SSH.
@@ -141,7 +143,9 @@ class SSHBackend(ExecutionBackend):
         try:
             client = await self._get_ssh_client()
             # Try a simple command
-            stdin, stdout, stderr = client.exec_command("true")
+            stdin, stdout, stderr = client.exec_command(
+                "true"
+            )  # nosec B601 - hardcoded literal command in health check, not user input
             stdout.channel.recv_exit_status()
             return True
         except Exception as e:

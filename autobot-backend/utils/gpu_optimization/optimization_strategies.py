@@ -8,20 +8,20 @@ Issue #381: Extracted from gpu_acceleration_optimizer.py god class refactoring.
 Contains individual optimization strategy implementations.
 """
 
-import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from utils.performance_monitor import performance_monitor
 
 from .types import GPUCapabilities, GPUOptimizationConfig
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def _get_memory_utilization_recommendations(
     memory_util: float,
     memory_total_mb: float,
-    memory_limit_mb: Optional[int],
+    memory_limit_mb: int | None,
 ) -> List[str]:
     """
     Generate recommendations based on current GPU memory utilization.

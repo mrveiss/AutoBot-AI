@@ -12,12 +12,10 @@ to generate_response with the critique as a refinement hint.
 Issue #1373: Initial RLM prototype.
 """
 
-import logging
-from typing import Optional
-
+from autobot_shared.logging_manager import get_logger
 from rlm.types import ReflectionResult, ReflectionVerdict, RLMConfig
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # -----------------------------------------------------------------------
 # Evaluation prompt
@@ -59,7 +57,7 @@ class ResponseQualityEvaluator:
     that even small models can produce valid output.
     """
 
-    def __init__(self, config: Optional[RLMConfig] = None):
+    def __init__(self, config: RLMConfig | None = None):
         self.config = config or RLMConfig()
 
     async def evaluate(
@@ -119,7 +117,7 @@ class ResponseQualityEvaluator:
     async def _call_llm(self, prompt: str) -> str:
         """Send *prompt* to Ollama and return the raw text response."""
         from autobot_shared.ssot_config import get_config
-        from llm_providers.ollama_helpers import call_ollama_generate
+        from llm_shared.ollama_helpers import call_ollama_generate
 
         ssot = get_config()
         return await call_ollama_generate(

@@ -2765,8 +2765,8 @@ class TestGetImportStatusEndpoint:
         source = inspect.getsource(get_import_status)
 
         # Should accept filtering parameters
-        assert "file_path: Optional[str] = None" in source
-        assert "category: Optional[str] = None" in source
+        assert "file_path: str | None = None" in source
+        assert "category: str | None = None" in source
         # Should pass to tracker
         assert "file_path=file_path, category=category" in source
 
@@ -28449,8 +28449,8 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
         # Verify list_operations supports filtering
         list_source = inspect.getsource(long_running_operations.list_operations)
-        self.assertIn("status: Optional[str]", list_source)
-        self.assertIn("operation_type: Optional[str]", list_source)
+        self.assertIn("status: str | None", list_source)
+        self.assertIn("operation_type: str | None", list_source)
         self.assertIn("OperationStatus(status)", list_source)
         self.assertIn("OperationType(operation_type)", list_source)
 

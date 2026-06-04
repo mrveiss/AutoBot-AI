@@ -32,35 +32,35 @@ class Greeter:
 """
 
 
-def test_make_node_id_is_stable_and_lowercase():
+def test_make_node_id_is_stable_and_lowercase() -> None:
     nid = _make_node_id("MyFunc", "src/auth.py")
     assert nid == "auth::myfunc"
     assert nid == _make_node_id("MyFunc", "src/auth.py")
 
 
 @requires_tree_sitter
-def test_extract_python_finds_function_nodes():
+def test_extract_python_finds_function_nodes() -> None:
     result = extract_python("module.py", SIMPLE_PYTHON)
     node_names = [n["name"] for n in result["nodes"]]
     assert "greet" in node_names
 
 
 @requires_tree_sitter
-def test_extract_python_finds_class_nodes():
+def test_extract_python_finds_class_nodes() -> None:
     result = extract_python("module.py", SIMPLE_PYTHON)
     node_names = [n["name"] for n in result["nodes"]]
     assert "Greeter" in node_names
 
 
 @requires_tree_sitter
-def test_extract_python_finds_call_edge():
+def test_extract_python_finds_call_edge() -> None:
     result = extract_python("module.py", SIMPLE_PYTHON)
     edge_pairs = [(e["source"], e["target_name"]) for e in result["edges"]]
     assert any(target == "greet" for _, target in edge_pairs)
 
 
 @requires_tree_sitter
-def test_extract_python_no_duplicate_edges():
+def test_extract_python_no_duplicate_edges() -> None:
     result = extract_python("module.py", SIMPLE_PYTHON)
     pairs = [(e["source"], e["target_name"]) for e in result["edges"]]
     assert len(pairs) == len(set(pairs))
@@ -76,7 +76,7 @@ def _make_indexer(tmp_path: Path):
 
 
 @requires_tree_sitter
-async def test_index_python_file_upserts_nodes(tmp_path):
+async def test_index_python_file_upserts_nodes(tmp_path) -> None:
     src = tmp_path / "module.py"
     src.write_bytes(SIMPLE_PYTHON)
     indexer = _make_indexer(tmp_path)
@@ -86,7 +86,7 @@ async def test_index_python_file_upserts_nodes(tmp_path):
 
 
 @requires_tree_sitter
-async def test_index_unchanged_file_skips(tmp_path):
+async def test_index_unchanged_file_skips(tmp_path) -> None:
     src = tmp_path / "module.py"
     src.write_bytes(SIMPLE_PYTHON)
     indexer = _make_indexer(tmp_path)
@@ -99,7 +99,7 @@ async def test_index_unchanged_file_skips(tmp_path):
 
 
 @requires_tree_sitter
-async def test_force_reindex_bypasses_cache(tmp_path):
+async def test_force_reindex_bypasses_cache(tmp_path) -> None:
     src = tmp_path / "module.py"
     src.write_bytes(SIMPLE_PYTHON)
     indexer = _make_indexer(tmp_path)
@@ -118,7 +118,7 @@ async def test_force_reindex_bypasses_cache(tmp_path):
 
 @requires_tree_sitter
 @pytest.mark.asyncio
-async def test_index_directory_indexes_all_py_files(tmp_path):
+async def test_index_directory_indexes_all_py_files(tmp_path) -> None:
     """index_directory walks a tree and indexes every .py file."""
     (tmp_path / "a.py").write_bytes(SIMPLE_PYTHON)
     (tmp_path / "b.py").write_bytes(b"def foo(): pass\n")
@@ -132,7 +132,7 @@ async def test_index_directory_indexes_all_py_files(tmp_path):
 
 @requires_tree_sitter
 @pytest.mark.asyncio
-async def test_index_directory_skips_hidden_dirs(tmp_path):
+async def test_index_directory_skips_hidden_dirs(tmp_path) -> None:
     """index_directory skips files inside .git and similar hidden directories."""
     hidden = tmp_path / ".git"
     hidden.mkdir()
@@ -149,7 +149,7 @@ async def test_index_directory_skips_hidden_dirs(tmp_path):
 
 @requires_tree_sitter
 @pytest.mark.asyncio
-async def test_index_directory_skips_node_modules(tmp_path):
+async def test_index_directory_skips_node_modules(tmp_path) -> None:
     """index_directory skips node_modules entirely."""
     nm = tmp_path / "node_modules" / "pkg"
     nm.mkdir(parents=True)
@@ -163,7 +163,7 @@ async def test_index_directory_skips_node_modules(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_index_directory_unsupported_extension_skipped(tmp_path):
+async def test_index_directory_unsupported_extension_skipped(tmp_path) -> None:
     """index_directory skips files with unsupported extensions."""
     (tmp_path / "config.yaml").write_bytes(b"key: value\n")
     indexer = _make_indexer(tmp_path)
@@ -180,7 +180,7 @@ async def test_index_directory_unsupported_extension_skipped(tmp_path):
 
 @requires_tree_sitter
 @pytest.mark.asyncio
-async def test_concurrent_index_directory_preserves_all_cache_entries(tmp_path):
+async def test_concurrent_index_directory_preserves_all_cache_entries(tmp_path) -> None:
     """Two concurrent index_directory() calls on disjoint file sets must both
     have their cache entries persisted — neither must overwrite the other."""
     import asyncio
@@ -231,7 +231,7 @@ async def test_concurrent_index_directory_preserves_all_cache_entries(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_index_code_rejects_out_of_root_path(tmp_path):
+async def test_index_code_rejects_out_of_root_path(tmp_path) -> None:
     """POST /index/code must return 400 when root_dir is outside PROJECT_ROOT."""
     from unittest.mock import patch
 
@@ -249,7 +249,7 @@ async def test_index_code_rejects_out_of_root_path(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_index_code_rejects_prefix_confusion_path(tmp_path):
+async def test_index_code_rejects_prefix_confusion_path(tmp_path) -> None:
     """root_dir=/tmp/projectroot_evil must not match /tmp/projectroot."""
     from unittest.mock import patch
 
@@ -269,7 +269,7 @@ async def test_index_code_rejects_prefix_confusion_path(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_index_code_accepts_project_root_itself(tmp_path):
+async def test_index_code_accepts_project_root_itself(tmp_path) -> None:
     """root_dir equal to PROJECT_ROOT is allowed and proceeds to indexing."""
     from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -300,15 +300,15 @@ async def test_index_code_accepts_project_root_itself(tmp_path):
 
 @requires_tree_sitter
 @pytest.mark.asyncio
-async def test_class_method_call_graph(tmp_path):
+async def test_class_method_call_graph(tmp_path) -> None:
     """Class method node ID uses parent prefix; calls metadata is non-empty (#4908)."""
     src = tmp_path / "mymod.py"
     src.write_bytes(b"""
 class MyClass:
-    def helper(self):
+    def helper(self) -> None:
         pass
 
-    def run(self):
+    def run(self) -> None:
         self.helper()
 """)
     indexer = _make_indexer(tmp_path)
@@ -329,7 +329,7 @@ class MyClass:
 
 
 @pytest.mark.asyncio
-async def test_index_code_accepts_subdir_of_project_root(tmp_path):
+async def test_index_code_accepts_subdir_of_project_root(tmp_path) -> None:
     """root_dir within PROJECT_ROOT is allowed and proceeds to indexing."""
     from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -365,7 +365,7 @@ async def test_index_code_accepts_subdir_of_project_root(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_index_file_dep_error_counts_as_failed(tmp_path):
+async def test_index_file_dep_error_counts_as_failed(tmp_path) -> None:
     """When an extractor returns dep_error, index_file must record failed=1 not skipped=1."""
     import services.knowledge.code_indexer as _ci_mod
 

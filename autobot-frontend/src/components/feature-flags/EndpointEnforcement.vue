@@ -2,32 +2,32 @@
   <div class="endpoint-enforcement">
     <div class="section-header">
       <div class="header-info">
-        <h3><i class="fas fa-sitemap"></i> {{ $t('featureFlags.enforcement.title') }}</h3>
+        <h3><Icon name="sitemap" /> {{ $t('featureFlags.enforcement.title') }}</h3>
         <p class="description">
           {{ $t('featureFlags.enforcement.description') }}
         </p>
       </div>
       <button @click="showAddModal = true" class="btn-add">
-        <i class="fas fa-plus"></i> {{ $t('featureFlags.enforcement.addOverride') }}
+        <Icon name="plus" /> {{ $t('featureFlags.enforcement.addOverride') }}
       </button>
     </div>
 
     <!-- Empty State -->
     <div v-if="Object.keys(overrides).length === 0" class="empty-state">
       <div class="empty-icon">
-        <i class="fas fa-sitemap"></i>
+        <Icon name="sitemap" />
       </div>
       <h4>{{ $t('featureFlags.enforcement.noOverrides') }}</h4>
       <p>{{ $t('featureFlags.enforcement.noOverridesDesc') }}</p>
       <button @click="showAddModal = true" class="btn-primary">
-        <i class="fas fa-plus"></i> {{ $t('featureFlags.enforcement.addOverride') }}
+        <Icon name="plus" /> {{ $t('featureFlags.enforcement.addOverride') }}
       </button>
     </div>
 
     <!-- Overrides List -->
     <div v-else class="overrides-list">
       <div class="global-mode-banner">
-        <i class="fas fa-globe"></i>
+        <Icon name="globe" />
         <span>{{ $t('featureFlags.enforcement.globalMode') }} <strong>{{ globalModeLabel }}</strong></span>
       </div>
 
@@ -42,7 +42,7 @@
           </div>
           <div class="override-mode">
             <span class="mode-badge" :class="mode">
-              <i :class="getModeIcon(mode)"></i>
+              <Icon :name="getModeIcon(mode)" />
               {{ getModeLabel(mode) }}
             </span>
             <span class="vs-global" v-if="mode !== globalMode">
@@ -56,14 +56,14 @@
             class="action-btn"
             :title="t('featureFlags.enforcement.edit')"
           >
-            <i class="fas fa-edit"></i>
+            <Icon name="edit" />
           </button>
           <button
             @click="confirmRemove(endpoint)"
             class="action-btn delete"
             :title="t('featureFlags.enforcement.removeLabel')"
           >
-            <i class="fas fa-trash"></i>
+            <Icon name="trash" />
           </button>
         </div>
       </div>
@@ -73,7 +73,7 @@
     <BaseModal
       v-model="showAddModal"
       :title="editingEndpoint ? $t('featureFlags.enforcement.editOverride') : $t('featureFlags.enforcement.addEndpointOverride')"
-      size="medium"
+      size="md"
     >
       <form @submit.prevent="saveOverride" class="override-form">
         <div class="form-group">
@@ -100,7 +100,7 @@
             >
               <input type="radio" v-model="form.mode" :value="option.value" />
               <div class="option-icon" :class="option.value">
-                <i :class="option.icon"></i>
+                <Icon :name="option.icon" />
               </div>
               <div class="option-content">
                 <span class="option-label">{{ option.label }}</span>
@@ -119,7 +119,7 @@
           class="btn-primary"
           :disabled="!isFormValid || loading"
         >
-          <i v-if="loading" class="fas fa-spinner fa-spin"></i>
+          <Icon name="spinner" class="animate-spin" v-if="loading" />
           {{ $t('featureFlags.enforcement.save') }}
         </button>
       </template>
@@ -129,11 +129,11 @@
     <BaseModal
       v-model="showRemoveModal"
       :title="$t('featureFlags.enforcement.removeOverride')"
-      size="small"
+      size="sm"
     >
       <div class="remove-content">
         <div class="remove-icon">
-          <i class="fas fa-undo"></i>
+          <Icon name="undo" />
         </div>
         <h4>{{ t('featureFlags.enforcement.revertTitle') }}</h4>
         <p>
@@ -144,7 +144,7 @@
       <template #actions>
         <button @click="showRemoveModal = false" class="btn-secondary">{{ $t('featureFlags.enforcement.cancel') }}</button>
         <button @click="removeOverride" class="btn-primary" :disabled="loading">
-          <i v-if="loading" class="fas fa-spinner fa-spin"></i>
+          <Icon name="spinner" class="animate-spin" v-if="loading" />
           {{ $t('featureFlags.enforcement.remove') }}
         </button>
       </template>
@@ -153,6 +153,7 @@
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, reactive } from 'vue';
 import { useI18n } from 'vue-i18n';
 import type { EnforcementMode } from '@/utils/FeatureFlagsApiClient';
@@ -189,19 +190,19 @@ const modeOptions = computed(() => [
   {
     value: 'disabled' as EnforcementMode,
     label: t('featureFlags.enforcement.modeDisabled'),
-    icon: 'fas fa-ban',
+    icon: 'ban',
     shortDesc: t('featureFlags.enforcement.modeDisabledDesc'),
   },
   {
     value: 'log_only' as EnforcementMode,
     label: t('featureFlags.enforcement.modeLogOnly'),
-    icon: 'fas fa-clipboard-list',
+    icon: 'clipboard-list',
     shortDesc: t('featureFlags.enforcement.modeLogOnlyDesc'),
   },
   {
     value: 'enforced' as EnforcementMode,
     label: t('featureFlags.enforcement.modeEnforced'),
-    icon: 'fas fa-shield-alt',
+    icon: 'shield-alt',
     shortDesc: t('featureFlags.enforcement.modeEnforcedDesc'),
   },
 ]);
@@ -225,11 +226,11 @@ const getModeLabel = (mode: EnforcementMode) => {
 
 const getModeIcon = (mode: EnforcementMode) => {
   const icons: Record<EnforcementMode, string> = {
-    disabled: 'fas fa-ban',
-    log_only: 'fas fa-clipboard-list',
-    enforced: 'fas fa-shield-alt',
+    disabled: 'ban',
+    log_only: 'clipboard-list',
+    enforced: 'shield-alt',
   };
-  return icons[mode] || 'fas fa-question';
+  return icons[mode] || 'question';
 };
 
 const editOverride = (endpoint: string, mode: EnforcementMode) => {

@@ -10,10 +10,11 @@ Admin endpoints for managing SSO provider configurations.
 import logging
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from services.auth import require_admin
+from autobot_shared.auth.permissions import Permission
+from services.auth import require_permission
 from user_management.database import get_slm_session
 from user_management.schemas.sso import (
     SSOProviderCreate,
@@ -43,7 +44,7 @@ async def get_slm_db():
 async def list_providers(
     org_id: uuid.UUID | None = None,
     active_only: bool = False,
-    current_user: dict = Depends(require_admin),
+    current_user: dict = Depends(require_permission(Permission.SECURITY_MANAGE)),
     db: AsyncSession = Depends(get_slm_db),
 ) -> SSOProviderListResponse:
     """List SSO providers."""
@@ -61,7 +62,7 @@ async def list_providers(
 @router.post("", response_model=SSOProviderResponse, status_code=status.HTTP_201_CREATED)
 async def create_provider(
     provider_data: SSOProviderCreate,
-    current_user: dict = Depends(require_admin),
+    current_user: dict = Depends(require_permission(Permission.SECURITY_MANAGE)),
     db: AsyncSession = Depends(get_slm_db),
 ) -> SSOProviderResponse:
     """Create a new SSO provider."""
@@ -87,7 +88,7 @@ async def create_provider(
 @router.get("/{provider_id}", response_model=SSOProviderResponse)
 async def get_provider(
     provider_id: uuid.UUID,
-    current_user: dict = Depends(require_admin),
+    current_user: dict = Depends(require_permission(Permission.SECURITY_MANAGE)),
     db: AsyncSession = Depends(get_slm_db),
 ) -> SSOProviderResponse:
     """Get SSO provider by ID."""
@@ -108,7 +109,7 @@ async def get_provider(
 async def update_provider(
     provider_id: uuid.UUID,
     updates: SSOProviderUpdate,
-    current_user: dict = Depends(require_admin),
+    current_user: dict = Depends(require_permission(Permission.SECURITY_MANAGE)),
     db: AsyncSession = Depends(get_slm_db),
 ) -> SSOProviderResponse:
     """Update SSO provider."""
@@ -135,7 +136,7 @@ async def update_provider(
 @router.delete("/{provider_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_provider(
     provider_id: uuid.UUID,
-    current_user: dict = Depends(require_admin),
+    current_user: dict = Depends(require_permission(Permission.SECURITY_MANAGE)),
     db: AsyncSession = Depends(get_slm_db),
 ) -> None:
     """Delete SSO provider."""
@@ -155,7 +156,7 @@ async def delete_provider(
 @router.get("/{provider_id}/test", response_model=SSOTestResponse)
 async def test_provider(
     provider_id: uuid.UUID,
-    current_user: dict = Depends(require_admin),
+    current_user: dict = Depends(require_permission(Permission.SECURITY_MANAGE)),
     db: AsyncSession = Depends(get_slm_db),
 ) -> SSOTestResponse:
     """Test SSO provider connection."""
@@ -177,3 +178,13 @@ async def test_provider(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Internal server error",
         ) from e
+
+
+@router.get("/provider-templates/{provider_type}", response_model=dict)
+async def get_provider_template(
+    provider_type: str,
+    domain: str = Query("", description="Domain or tenant ID for endpoint URL construction"),
+    current_user: dict = Depends(require_permission(Permission.SECURITY_MANAGE)),
+) -> dict:
+    """Get pre-filled endpoint template for a known SSO provider type."""
+    return SSOService.get_provider_endpoint_template(provider_type, domain)

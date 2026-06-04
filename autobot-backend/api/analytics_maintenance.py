@@ -14,7 +14,6 @@ Related Issues: #59 (Advanced Analytics & Business Intelligence)
 """
 
 import asyncio
-import logging
 from datetime import timedelta
 
 from fastapi import APIRouter, Depends, Query
@@ -24,7 +23,6 @@ from api.schemas_analytics import (
     MaintenanceByCategoryResponse,
     MaintenanceCustomReportResponse,
     MaintenanceDashboardResponse,
-    MaintenanceHealthStatusResponse,
     MaintenanceInsightsResponse,
     MaintenanceRecommendationsResponse,
     MaintenanceSummaryResponse,
@@ -36,6 +34,7 @@ from api.schemas_analytics import (
 from api.system_health import register_singleton_probe
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc, utc_timestamp
 from services.analytics_service import (
     MaintenancePriority,
@@ -43,7 +42,7 @@ from services.analytics_service import (
     get_analytics_service,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 # Issue #3355: prefix moved to router registry (analytics_routers.py)
 router = APIRouter(tags=["analytics", "advanced"])
 
@@ -309,37 +308,6 @@ async def get_unified_dashboard(
 
 
 register_singleton_probe("analytics_maintenance", get_analytics_service)
-
-
-@router.get("/health", response_model=MaintenanceHealthStatusResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_health_status",
-    error_code_prefix="ANALYTICS_MAINTENANCE",
-)
-async def get_health_status(
-    admin_check: bool = Depends(check_admin_permission),
-):
-    """
-    Get system health status.
-
-    Returns overall health score and status indicators.
-
-    Issue #744: Requires admin authentication.
-    """
-    service = get_analytics_service()
-    dashboard = await service.get_unified_dashboard(7)  # Last 7 days for health
-
-    return {
-        "timestamp": utc_timestamp(),
-        "health": dashboard["health"],
-        "indicators": {
-            "cost_trend": dashboard["cost"]["trend"],
-            "agent_success_rate": dashboard["agents"]["avg_success_rate"],
-            "maintenance_issues": dashboard["maintenance"]["total_recommendations"],
-            "optimization_opportunities": dashboard["optimization"]["total_recommendations"],
-        },
-    }
 
 
 # ============================================================================

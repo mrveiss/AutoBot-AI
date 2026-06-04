@@ -1,0 +1,216 @@
+name: Hardened Smoke Test
+
+# Verifies that docker-compose.hardened.yml starts correctly on top of
+# the base compose — read-only filesystems, secrets, and PID limits
+# are only tested in CI via this job. Closes GH#8094.
+
+on:
+  push:
+    branches:
+      - Dev_new_gui
+  pull_request:
+    branches:
+      - Dev_new_gui
+  schedule:
+    - cron: '0 11 * * 0'  # Every Sunday at 11 AM UTC (offset from regular smoke test)
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  hardened-smoke-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6.0.2
+
+      - name: Free disk space
+        uses: ./.github/actions/free-disk-space
+        with:
+          min-free-gb: '15'  # Increased from 10GB due to MVA-2869
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5  # v4
+
+      - name: Cache Docker layers
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-hardened-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-hardened-
+            ${{ runner.os }}-buildx-
+
+      - name: Create .env from .env.example
+        run: cp .env.example .env
+
+      - name: Create Docker secrets for hardened config
+        run: |
+          mkdir -p secrets
+          openssl rand -hex 32 > secrets/postgres_password.txt
+          openssl rand -hex 32 > secrets/slm_admin_password.txt
+          openssl rand -hex 32 > secrets/slm_jwt_secret.txt
+          chmod 600 secrets/*.txt
+
+      - name: Build images with layer cache
+        run: |
+          echo "=== Building backend image ==="
+          docker buildx build \
+            --cache-from type=local,src=/tmp/.buildx-cache \
+            --cache-to   type=local,dest=/tmp/.buildx-cache-new,mode=min \
+            --file docker/backend/Dockerfile \
+            --tag autobot/backend:latest \
+            --load \
+            .
+          echo "Backend build complete. Disk space:"
+          df -h / | grep -v Filesystem
+
+          echo ""
+          echo "=== Building SLM image ==="
+          docker buildx build \
+            --cache-from type=local,src=/tmp/.buildx-cache \
+            --cache-to   type=local,dest=/tmp/.buildx-cache-new,mode=min \
+            --file docker/slm/Dockerfile \
+            --tag autobot/slm:latest \
+            --load \
+            .
+          echo "SLM build complete. Disk space:"
+          df -h / | grep -v Filesystem
+
+          echo ""
+          echo "=== Building frontend image ==="
+          docker buildx build \
+            --cache-from type=local,src=/tmp/.buildx-cache \
+            --cache-to   type=local,dest=/tmp/.buildx-cache-new,mode=min \
+            --file docker/frontend/Dockerfile \
+            --tag autobot/frontend:latest \
+            --load \
+            .
+          echo "Frontend build complete. Disk space:"
+          df -h / | grep -v Filesystem
+
+          echo ""
+          echo "=== Rotating cache ==="
+          rm -rf /tmp/.buildx-cache
+          mv /tmp/.buildx-cache-new /tmp/.buildx-cache
+
+          echo "Final disk space:"
+          df -h
+
+      - name: Start services with hardened overlay
+        run: |
+          docker compose \
+            -f docker-compose.yml \
+            -f docker-compose.hardened.yml \
+            --env-file docker/.env.docker \
+            up -d
+
+      - name: Wait for services to be healthy
+        run: |
+          echo "Waiting for hardened services to become healthy..."
+          max_attempts=90
+          attempt=0
+
+          while [ $attempt -lt $max_attempts ]; do
+            attempt=$((attempt + 1))
+            echo "Attempt $attempt/$max_attempts: Checking service health..."
+
+            frontend_ok=false
+            backend_ok=false
+            slm_ok=false
+
+            curl -s -f http://localhost > /dev/null 2>&1            && frontend_ok=true
+            curl -s -f http://localhost/api/system/health > /dev/null 2>&1 && backend_ok=true
+            curl -s -f http://localhost/slm/api/health > /dev/null 2>&1    && slm_ok=true
+
+            if $frontend_ok && $backend_ok && $slm_ok; then
+              echo "OK Frontend responding on port 80"
+              echo "OK Backend health check passed"
+              echo "OK SLM health check passed"
+              exit 0
+            fi
+
+            $frontend_ok || echo "  waiting: frontend not yet responding"
+            $backend_ok  || echo "  waiting: backend not yet responding"
+            $slm_ok      || echo "  waiting: SLM not yet responding"
+
+            sleep 10
+          done
+
+          echo "Hardened services failed to become healthy within 15 minutes (900s)"
+          echo ""
+          echo "=== Docker Compose Logs ==="
+          docker compose \
+            -f docker-compose.yml \
+            -f docker-compose.hardened.yml \
+            --env-file docker/.env.docker \
+            logs
+          exit 1
+
+      - name: Verify hardened constraints are active
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "=== Service status ==="
+          docker compose \
+            -f docker-compose.yml \
+            -f docker-compose.hardened.yml \
+            --env-file docker/.env.docker \
+            ps
+
+          echo ""
+          echo "=== Verify read-only root filesystem on backend ==="
+          if docker exec autobot-backend sh -c "touch /readonly-test 2>/dev/null"; then
+            echo "FAIL: backend root filesystem is writable (read_only not enforced)"
+            exit 1
+          else
+            echo "OK backend root filesystem is read-only"
+          fi
+
+          echo ""
+          echo "=== Verify PID limit is set on backend ==="
+          pids_limit=$(docker inspect autobot-backend --format '{{.HostConfig.PidsLimit}}')
+          if [ "$pids_limit" = "0" ] || [ -z "$pids_limit" ]; then
+            echo "FAIL: backend PID limit not set (got: $pids_limit)"
+            exit 1
+          else
+            echo "OK backend PID limit: $pids_limit"
+          fi
+
+          echo ""
+          echo "=== Health endpoint checks ==="
+          curl -v http://localhost 2>&1 | head -20 || true
+          echo ""
+          curl -v http://localhost/api/system/health 2>&1 | head -20 || true
+          echo ""
+          curl -v http://localhost/slm/api/health 2>&1 | head -20 || true
+
+      - name: Collect logs on failure
+        if: failure()
+        run: |
+          docker compose \
+            -f docker-compose.yml \
+            -f docker-compose.hardened.yml \
+            --env-file docker/.env.docker \
+            logs > failure-logs.txt
+
+      - name: Upload failure logs
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: hardened-docker-compose-logs
+          path: failure-logs.txt
+
+      - name: Clean up
+        if: always()
+        run: |
+          docker compose \
+            -f docker-compose.yml \
+            -f docker-compose.hardened.yml \
+            --env-file docker/.env.docker \
+            down
+          rm -rf secrets/

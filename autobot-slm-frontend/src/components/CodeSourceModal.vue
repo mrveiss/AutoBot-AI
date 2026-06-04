@@ -98,16 +98,16 @@ async function handleAssign(): Promise<void> {
         {{ isEditing ? 'Edit Code Source' : 'Assign Code Source' }}
       </h3>
 
-      <div v-if="isLoading" class="text-gray-500">Loading nodes...</div>
+      <div v-if="isLoading" class="text-gray-500">{{ $t('codeSourceModal.loadingNodes') }}</div>
 
       <div v-else class="space-y-4">
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Node</label>
+          <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('codeSourceModal.node') }}</label>
           <select
             v-model="selectedNodeId"
             class="w-full border border-gray-300 rounded-md p-2 bg-white text-gray-900"
           >
-            <option value="">Select a node...</option>
+            <option value="">{{ $t('codeSourceModal.selectANode') }}</option>
             <option v-for="node in nodes" :key="node.node_id" :value="node.node_id">
               {{ node.hostname }} ({{ node.ip_address }})
             </option>
@@ -115,7 +115,7 @@ async function handleAssign(): Promise<void> {
         </div>
 
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Repository Path</label>
+          <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('codeSourceModal.repositoryPath') }}</label>
           <input
             v-model="repoPath"
             type="text"
@@ -124,7 +124,7 @@ async function handleAssign(): Promise<void> {
         </div>
 
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Branch</label>
+          <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('codeSourceModal.branch') }}</label>
           <input
             v-model="branch"
             type="text"
@@ -137,7 +137,7 @@ async function handleAssign(): Promise<void> {
 
       <div class="flex justify-end gap-3 mt-6">
         <button @click="emit('close')" class="btn btn-secondary">
-          Cancel
+          {{ $t('codeSourceModal.cancel') }}
         </button>
         <button
           @click="handleAssign"

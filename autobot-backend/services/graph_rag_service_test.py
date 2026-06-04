@@ -134,7 +134,7 @@ def graph_rag_service(mock_rag_service, mock_memory_graph):
 # ============================================================================
 
 
-def test_graph_rag_service_initialization(mock_rag_service, mock_memory_graph):
+def test_graph_rag_service_initialization(mock_rag_service, mock_memory_graph) -> None:
     """Test GraphRAGService initialization with composition pattern."""
     service = GraphRAGService(
         rag_service=mock_rag_service,
@@ -156,7 +156,7 @@ def test_graph_rag_service_initialization(mock_rag_service, mock_memory_graph):
 
 
 @pytest.mark.asyncio
-async def test_graph_aware_search_basic(graph_rag_service, mock_rag_service):
+async def test_graph_aware_search_basic(graph_rag_service, mock_rag_service) -> None:
     """Test basic graph-aware search delegates to RAGService."""
     results, metrics = await graph_rag_service.graph_aware_search(
         query="Redis configuration",
@@ -182,7 +182,7 @@ async def test_graph_aware_search_basic(graph_rag_service, mock_rag_service):
 
 
 @pytest.mark.asyncio
-async def test_graph_aware_search_with_entity_expansion(graph_rag_service, mock_rag_service, mock_memory_graph):
+async def test_graph_aware_search_with_entity_expansion(graph_rag_service, mock_rag_service, mock_memory_graph) -> None:
     """Test graph expansion adds related entity content."""
     results, metrics = await graph_rag_service.graph_aware_search(
         query="Redis issues",
@@ -201,7 +201,9 @@ async def test_graph_aware_search_with_entity_expansion(graph_rag_service, mock_
 
 
 @pytest.mark.asyncio
-async def test_graph_aware_search_no_expansion_without_entities(graph_rag_service, mock_rag_service, mock_memory_graph):
+async def test_graph_aware_search_no_expansion_without_entities(
+    graph_rag_service, mock_rag_service, mock_memory_graph
+) -> None:
     """Test search without entity expansion when no entities found."""
     # Mock empty entity extraction
     graph_rag_service.enable_entity_extraction = False
@@ -222,7 +224,7 @@ async def test_graph_aware_search_no_expansion_without_entities(graph_rag_servic
 
 
 @pytest.mark.asyncio
-async def test_graph_aware_search_timeout_handling(graph_rag_service, mock_rag_service):
+async def test_graph_aware_search_timeout_handling(graph_rag_service, mock_rag_service) -> None:
     """Test timeout handling delegates to RAGService."""
     # Mock timeout in RAG service
     import asyncio
@@ -245,7 +247,7 @@ async def test_graph_aware_search_timeout_handling(graph_rag_service, mock_rag_s
 
 
 @pytest.mark.asyncio
-async def test_extract_entities_from_results(graph_rag_service, mock_memory_graph):
+async def test_extract_entities_from_results(graph_rag_service, mock_memory_graph) -> None:
     """Test entity extraction from search results."""
     rag_results = [
         SearchResult(
@@ -272,7 +274,7 @@ async def test_extract_entities_from_results(graph_rag_service, mock_memory_grap
 
 
 @pytest.mark.asyncio
-async def test_extract_entities_handles_missing_entities(graph_rag_service, mock_memory_graph):
+async def test_extract_entities_handles_missing_entities(graph_rag_service, mock_memory_graph) -> None:
     """Test entity extraction handles missing entities gracefully."""
     # Mock entity not found
     mock_memory_graph.get_entity = AsyncMock(return_value=None)
@@ -302,7 +304,7 @@ async def test_extract_entities_handles_missing_entities(graph_rag_service, mock
 
 
 @pytest.mark.asyncio
-async def test_expand_via_graph(graph_rag_service, mock_memory_graph):
+async def test_expand_via_graph(graph_rag_service, mock_memory_graph) -> None:
     """Test graph expansion creates SearchResult objects from entities."""
     entity_matches = [
         EntityMatch(
@@ -335,7 +337,7 @@ async def test_expand_via_graph(graph_rag_service, mock_memory_graph):
 
 
 @pytest.mark.asyncio
-async def test_expand_via_graph_multiple_starting_points(graph_rag_service, mock_memory_graph):
+async def test_expand_via_graph_multiple_starting_points(graph_rag_service, mock_memory_graph) -> None:
     """Test graph expansion from multiple entity matches."""
     entity_matches = [
         EntityMatch(
@@ -368,7 +370,7 @@ async def test_expand_via_graph_multiple_starting_points(graph_rag_service, mock
 
 
 @pytest.mark.asyncio
-async def test_deduplicate_and_rank(graph_rag_service):
+async def test_deduplicate_and_rank(graph_rag_service) -> None:
     """Test deduplication removes duplicate content and ranks by score."""
     results = [
         SearchResult(
@@ -419,7 +421,7 @@ async def test_deduplicate_and_rank(graph_rag_service):
 
 
 @pytest.mark.asyncio
-async def test_deduplicate_and_rank_respects_max_results(graph_rag_service):
+async def test_deduplicate_and_rank_respects_max_results(graph_rag_service) -> None:
     """Test deduplication respects max_results limit."""
     results = [
         SearchResult(
@@ -453,7 +455,7 @@ async def test_deduplicate_and_rank_respects_max_results(graph_rag_service):
 
 
 @pytest.mark.asyncio
-async def test_end_to_end_composition(graph_rag_service, mock_rag_service, mock_memory_graph):
+async def test_end_to_end_composition(graph_rag_service, mock_rag_service, mock_memory_graph) -> None:
     """Test end-to-end flow verifies proper composition."""
     # Execute full search
     results, metrics = await graph_rag_service.graph_aware_search(
@@ -481,7 +483,7 @@ async def test_end_to_end_composition(graph_rag_service, mock_rag_service, mock_
 
 
 @pytest.mark.asyncio
-async def test_get_metrics(graph_rag_service):
+async def test_get_metrics(graph_rag_service) -> None:
     """Test service metrics reporting."""
     metrics = await graph_rag_service.get_metrics()
 
@@ -497,7 +499,7 @@ async def test_get_metrics(graph_rag_service):
 # ============================================================================
 
 
-def test_create_search_result_includes_source_extracted():
+def test_create_search_result_includes_source_extracted() -> None:
     """source='extracted' propagates into metadata when relation has origin='extracted'."""
     rag = AsyncMock()
     graph = AsyncMock()
@@ -513,7 +515,7 @@ def test_create_search_result_includes_source_extracted():
     assert result.metadata["source_provenance"] == "extracted"
 
 
-def test_create_search_result_includes_source_inferred():
+def test_create_search_result_includes_source_inferred() -> None:
     """source='inferred' propagates when origin is absent (defaults to inferred)."""
     rag = AsyncMock()
     graph = AsyncMock()
@@ -529,7 +531,7 @@ def test_create_search_result_includes_source_inferred():
     assert result.metadata["source_provenance"] == "inferred"
 
 
-def test_create_search_result_includes_source_ambiguous():
+def test_create_search_result_includes_source_ambiguous() -> None:
     """source='ambiguous' passes through when origin='ambiguous'."""
     rag = AsyncMock()
     graph = AsyncMock()
@@ -545,7 +547,7 @@ def test_create_search_result_includes_source_ambiguous():
     assert result.metadata["source_provenance"] == "ambiguous"
 
 
-def test_create_search_result_unknown_origin_defaults_to_inferred():
+def test_create_search_result_unknown_origin_defaults_to_inferred() -> None:
     """Unknown origin value falls back to 'inferred' via whitelist guard."""
     rag = AsyncMock()
     graph = AsyncMock()
@@ -567,7 +569,7 @@ def test_create_search_result_unknown_origin_defaults_to_inferred():
 
 
 @pytest.mark.asyncio
-async def test_deduplicate_and_rank_applies_provenance_boost(graph_rag_service):
+async def test_deduplicate_and_rank_applies_provenance_boost(graph_rag_service) -> None:
     """extracted > inferred after deduplication when base hybrid_score is equal."""
     base_score = 0.5
     extracted = SearchResult(
@@ -599,7 +601,7 @@ async def test_deduplicate_and_rank_applies_provenance_boost(graph_rag_service):
 
 
 @pytest.mark.asyncio
-async def test_deduplicate_and_rank_applies_provenance_penalty(graph_rag_service):
+async def test_deduplicate_and_rank_applies_provenance_penalty(graph_rag_service) -> None:
     """inferred > ambiguous after deduplication when base hybrid_score is equal."""
     base_score = 0.5
     inferred = SearchResult(
@@ -631,7 +633,7 @@ async def test_deduplicate_and_rank_applies_provenance_penalty(graph_rag_service
 
 
 @pytest.mark.asyncio
-async def test_deduplicate_and_rank_no_provenance_unchanged(graph_rag_service):
+async def test_deduplicate_and_rank_no_provenance_unchanged(graph_rag_service) -> None:
     """Results without source_provenance are not adjusted (0.0 delta, no mutation)."""
     result = SearchResult(
         content="Graph entity E",
@@ -652,7 +654,7 @@ async def test_deduplicate_and_rank_no_provenance_unchanged(graph_rag_service):
 
 
 @pytest.mark.asyncio
-async def test_metadata_none_does_not_raise(graph_rag_service):
+async def test_metadata_none_does_not_raise(graph_rag_service) -> None:
     """Result with metadata=None passes through _deduplicate_and_rank without AttributeError (#4939)."""
     result = SearchResult(
         content="Graph entity F",
@@ -674,7 +676,7 @@ async def test_metadata_none_does_not_raise(graph_rag_service):
 
 
 @pytest.mark.asyncio
-async def test_hybrid_score_clamped_at_1_0(graph_rag_service):
+async def test_hybrid_score_clamped_at_1_0(graph_rag_service) -> None:
     """hybrid_score + provenance boost is clamped at 1.0 (#4943)."""
     result = SearchResult(
         content="Graph entity G",
@@ -694,7 +696,7 @@ async def test_hybrid_score_clamped_at_1_0(graph_rag_service):
 
 
 @pytest.mark.asyncio
-async def test_hybrid_score_clamped_at_0_0(graph_rag_service):
+async def test_hybrid_score_clamped_at_0_0(graph_rag_service) -> None:
     """hybrid_score + provenance penalty is clamped at 0.0 (#4943)."""
     result = SearchResult(
         content="Graph entity H",

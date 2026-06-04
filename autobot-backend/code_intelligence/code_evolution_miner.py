@@ -16,15 +16,15 @@ Features:
 - Evolution reports and visualizations
 """
 
-import logging
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from code_intelligence.anti_pattern_detector import AntiPatternDetector
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class PatternOccurrence:
@@ -54,8 +54,8 @@ class PatternLifecycle:
         self.pattern_type = pattern_type
         self.file_path = file_path
         self.line_number = line_number
-        self.first_seen: Optional[datetime] = None
-        self.last_seen: Optional[datetime] = None
+        self.first_seen: datetime | None = None
+        self.last_seen: datetime | None = None
         self.occurrences: List[PatternOccurrence] = []
         self.status: str = "active"  # active, resolved, migrated
 
@@ -90,9 +90,7 @@ class GitHistoryCrawler:
             logger.error("Failed to initialize git repository: %s", e)
             self.repo = None
 
-    def get_commits_in_range(
-        self, start_date: Optional[datetime] = None, end_date: Optional[datetime] = None
-    ) -> List[Dict]:
+    def get_commits_in_range(self, start_date: datetime | None = None, end_date: datetime | None = None) -> List[Dict]:
         """Get commits within a date range"""
         if self.repo is None:
             return []
@@ -261,7 +259,7 @@ class PatternEvolutionTracker:
 
         lifecycle.add_occurrence(occurrence)
 
-    def _find_lifecycle(self, pattern_type: str, file_path: str, line_number: int) -> Optional[PatternLifecycle]:
+    def _find_lifecycle(self, pattern_type: str, file_path: str, line_number: int) -> PatternLifecycle | None:
         """Find existing lifecycle for a pattern"""
         for lifecycle in self.lifecycles:
             if (
@@ -364,8 +362,8 @@ class CodeEvolutionMiner:
 
     def analyze_evolution(
         self,
-        start_date: Optional[datetime] = None,
-        end_date: Optional[datetime] = None,
+        start_date: datetime | None = None,
+        end_date: datetime | None = None,
     ) -> Dict:
         """Analyze code evolution over time"""
         logger.info("Starting code evolution analysis for %s", self.repo_path)
@@ -417,21 +415,19 @@ class CodeEvolutionMiner:
 
                 # Analyze file for anti-patterns
                 try:
-                    with open(file_path, encoding="utf-8") as f:
-                        code = f.read()
-
-                    # Use anti-pattern detector
-                    results = self.anti_pattern_detector.analyze_code(code, str(file_path))
+                    # #6757: analyze_code() never existed; use analyze_file()
+                    # which returns {"anti_patterns": [dict, ...], ...}.
+                    result_dict = self.anti_pattern_detector.analyze_file(str(file_path))
 
                     # Track each detected pattern
-                    for result in results.patterns:
+                    for ap in result_dict.get("anti_patterns", []):
                         occurrence = PatternOccurrence(
-                            pattern_type=result.type.value,
+                            pattern_type=ap.get("pattern_type", "unknown"),
                             file_path=str(item),
-                            line_number=result.line_number,
+                            line_number=ap.get("line_number", 0),
                             commit_hash=commit["hash"],
                             timestamp=commit["timestamp"],
-                            severity=result.severity.value,
+                            severity=ap.get("severity", "low"),
                         )
                         self.tracker.track_pattern(occurrence)
 

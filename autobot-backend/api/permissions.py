@@ -24,9 +24,6 @@ Usage:
     GET  /api/permissions/status        - Get system status
 """
 
-import logging
-from typing import Optional
-
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from api.schemas_system import (
@@ -48,11 +45,12 @@ from api.schemas_system import (
 )
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import PermissionAction, PermissionMode, config
 from services.approval_memory import get_approval_memory
 from services.permission_matcher import get_permission_matcher
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/permissions", tags=["permissions"])
 
@@ -407,7 +405,7 @@ async def get_project_approvals(
 async def clear_project_approvals(
     project_path: str,
     admin_check: bool = Depends(check_admin_permission),
-    user_id: Optional[str] = Query(default=None, description="User ID (optional)"),
+    user_id: str | None = Query(default=None, description="User ID (optional)"),
 ):
     """
     Clear stored approvals for a project.
@@ -452,7 +450,7 @@ async def store_approval(
     command: str = Query(..., description="Approved command"),
     risk_level: str = Query(..., description="Risk level"),
     tool: str = Query(default="Bash", description="Tool name"),
-    comment: Optional[str] = Query(default=None, description="Approval comment"),
+    comment: str | None = Query(default=None, description="Approval comment"),
 ):
     """
     Store a command approval in memory.

@@ -5,11 +5,18 @@
 
 Structural refactor (#6393/#6392): collaboration and agent-routing responsibilities
 moved to CollaborationCoordinator and AgentRouter collaborators respectively.
+
+Executor scope (#6826): WorkflowRunner is the **enhanced/multi-agent strategy engine**.
+It executes WorkflowPlan objects via pluggable ExecutionStrategy instances and delegates
+agent routing and collaboration to injected collaborators.  It does not handle DAG graphs
+or step-level checkpoints — those remain in orchestration.WorkflowExecutor and
+CheckpointResumer.  WorkflowRunner is the post-#5058 successor for the multi-agent path;
+orchestration.WorkflowExecutor remains canonical for the legacy step-based path.
 """
 
 import asyncio
 import time
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Set
 
 from autobot_shared.logging_manager import get_logger
 from enhanced_orchestration.agent_router import AgentRouter
@@ -18,7 +25,7 @@ from enhanced_orchestration.execution_strategies import ExecutionStrategyHandler
 from enhanced_orchestration.success_criteria import SuccessCriteriaEvaluator
 from enhanced_orchestration.types import AgentTask, WorkflowDependencies, WorkflowPlan
 from enhanced_orchestration.workflow_planning import StrategyPlanner
-from event_manager import get_event_manager as _get_event_manager
+from events.bus import PersistStrategy, publish_event
 from orchestration.performance_tracker import PerformanceTracker
 
 logger = get_logger("workflow_runner")
@@ -41,7 +48,7 @@ class WorkflowRunner:
         collaboration: CollaborationCoordinator,
         agent_router: AgentRouter,
         max_parallel_tasks: int = 5,
-        criteria_evaluator: Optional[SuccessCriteriaEvaluator] = None,
+        criteria_evaluator: SuccessCriteriaEvaluator | None = None,
     ) -> None:
         self._strategy_planner = strategy_planner
         self._perf = performance_tracker
@@ -51,14 +58,14 @@ class WorkflowRunner:
         self.max_parallel_tasks = max_parallel_tasks
         self.resource_semaphore: asyncio.Semaphore = asyncio.Semaphore(max_parallel_tasks)
         self._criteria_evaluator = criteria_evaluator or SuccessCriteriaEvaluator()
-        self._strategy_handler: Optional[ExecutionStrategyHandler] = None
+        self._strategy_handler: ExecutionStrategyHandler | None = None
         # #7431 ADR-006 §Q1: subscriber that wakes blocked plans when
         # skill_promoted events arrive on Redis pub-sub. Lazy-constructed
         # via get_blocked_plan_resumer(); not started automatically — the
         # orchestrator (or whichever caller owns the lifecycle) must call
         # start() / stop() to enable auto-resume. Tests that don't need
         # auto-resume never construct the resumer (zero overhead).
-        self._resumer: Optional[Any] = None
+        self._resumer: Any | None = None
 
     # ------------------------------------------------------------------ helpers
 
@@ -255,7 +262,7 @@ class WorkflowRunner:
                 "criteria_evaluation": criteria_eval,
             },
         )
-        return {
+        response = {
             "plan_id": plan.plan_id,
             "success": success,
             "results": results,
@@ -263,6 +270,46 @@ class WorkflowRunner:
             "strategy_used": plan.strategy.value,
             "criteria_evaluation": criteria_eval,
         }
+        # GH#7357: capture trajectory for future planner retrieval
+        await self._capture_trajectory(plan, response)
+        return response
+
+    async def _capture_trajectory(self, plan: WorkflowPlan, result: Dict[str, Any]) -> None:
+        """Write a trajectory record to the TrajectoryStore (GH#7357).
+
+        Fire-and-forget: errors are logged but never propagate to the caller so
+        trajectory capture cannot break workflow execution.
+        """
+        try:
+            from memory.trajectory_store import get_trajectory_store, reward_from_execution
+
+            store = await get_trajectory_store()
+            action_sequence = [
+                {
+                    "task_id": t.task_id,
+                    "agent_type": getattr(t, "agent_type", ""),
+                    "description": getattr(t, "description", ""),
+                    "status": getattr(t, "status", ""),
+                }
+                for t in plan.tasks
+            ]
+            outcome = "success" if result.get("success") else "failure"
+            criteria = result.get("criteria_evaluation", {})
+            if isinstance(criteria, dict) and criteria.get("overall") == "partial":
+                outcome = "partial"
+            reward = reward_from_execution(result)
+            await store.capture(
+                task_text=plan.goal,
+                action_sequence=action_sequence,
+                outcome=outcome,
+                reward=reward,
+                duration=float(result.get("execution_time", 0.0)),
+                agent_id=getattr(plan, "assigned_agent", ""),
+                plan_id=plan.plan_id,
+                strategy=plan.strategy.value,
+            )
+        except Exception as exc:
+            logger.warning("TrajectoryStore.capture failed (non-fatal): %s", exc)
 
     async def _handle_workflow_execution_failure(
         self, plan: WorkflowPlan, error: Exception, results: Dict[str, Any], _depth: int = 0
@@ -271,12 +318,88 @@ class WorkflowRunner:
         if _depth >= 5:
             logger.error("Max fallback depth (5) reached, aborting fallback chain")
             return {"plan_id": plan.plan_id, "success": False, "error": str(error), "results": results}
+
+        # GH#7354: GOAP adaptive replanning.  When the plan was produced by
+        # GOAPPlanner, derive the current world-state from completed tasks and
+        # ask the planner for an alternative path to the original goal.
+        # Capability-mapping plans keep the existing fallback-chain behaviour.
+        if plan.is_goap_plan and plan.goap_goal:
+            replan_result = await self._try_goap_replan(plan, results, _depth)
+            if replan_result is not None:
+                return replan_result
+
         for fallback in plan.fallback_plans or []:
             try:
                 return await self.execute_workflow(fallback, _depth + 1)
             except Exception as fe:
                 logger.error("Fallback plan failed: %s", fe)
         return {"plan_id": plan.plan_id, "success": False, "error": str(error), "results": results}
+
+    async def _try_goap_replan(self, plan: WorkflowPlan, results: Dict[str, Any], _depth: int) -> Dict[str, Any] | None:
+        """Attempt GOAP adaptive replanning after a step failure (GH#7354).
+
+        Derives the current world-state from effects of completed tasks, then
+        calls GOAPPlanner.replan().  Returns a new execution result dict when
+        a valid replan is found and successfully executed; returns None when
+        replanning is impossible or produces an equivalent plan (avoid loop).
+        """
+        try:
+            from orchestration.goap_planner import GOAPPlanner
+        except ImportError as exc:
+            logger.error("GOAP replanning unavailable: %s", exc)
+            return None
+
+        # Accumulate world state from completed task effects.
+        current_state: set[str] = set()
+        for task in plan.tasks:
+            if task.status == "completed" and task.effects:
+                current_state.update(task.effects)
+
+        goal_facts: set[str] = set(plan.goap_goal)
+        if goal_facts.issubset(current_state):
+            # Goal already satisfied — treat as success.
+            logger.info("GOAP replan: goal already satisfied by completed tasks")
+            return {"plan_id": plan.plan_id, "success": True, "results": results}
+
+        planner = GOAPPlanner()
+        new_actions = planner.replan(current_state, goal_facts)
+        if not new_actions:
+            logger.warning("GOAP replan: no alternative path found for goal %s", goal_facts)
+            return None
+
+        new_plan_id = f"{plan.plan_id}-replan-{_depth}"
+        task_dicts = planner.build_workflow_tasks(
+            goal_facts=goal_facts,
+            initial_state=current_state,
+            plan_id=new_plan_id,
+        )
+        if not task_dicts:
+            return None
+
+        new_tasks = [AgentTask.from_dict(d) for d in task_dicts]
+        # Avoid re-executing the exact same plan (cycle guard).
+        new_action_names = [t.action for t in new_tasks]
+        original_action_names = [t.action for t in plan.tasks if t.status != "completed"]
+        if new_action_names == original_action_names:
+            logger.warning("GOAP replan: produced identical remaining steps, skipping")
+            return None
+
+        replan = WorkflowPlan(
+            plan_id=new_plan_id,
+            goal=plan.goal,
+            tasks=new_tasks,
+            strategy=plan.strategy,
+            success_criteria=plan.success_criteria,
+            is_goap_plan=True,
+            goap_goal=list(goal_facts),
+            metadata={**plan.metadata, "replanned_from": plan.plan_id},
+        )
+        logger.info(
+            "GOAP replan: executing %d-step alternative plan %s",
+            len(new_tasks),
+            new_plan_id,
+        )
+        return await self.execute_workflow(replan, _depth + 1)
 
     async def _handle_task_timeout(self, task: AgentTask, context: Dict[str, Any]) -> Dict[str, Any]:
         task.fail_execution("Timeout")
@@ -374,7 +497,9 @@ class WorkflowRunner:
         return task.to_completed_result(result)
 
     async def _publish_workflow_event(self, workflow_id: str, event_type: str, data: Dict[str, Any]) -> None:
-        await _get_event_manager().publish(
+        await publish_event(
+            "global",
             "workflow_event",
             {"workflow_id": workflow_id, "event_type": event_type, "timestamp": time.time(), "data": data},
+            persist=PersistStrategy.NONE,
         )

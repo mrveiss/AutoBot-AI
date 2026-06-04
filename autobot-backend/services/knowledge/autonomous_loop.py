@@ -29,14 +29,14 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
 import time
 import uuid
 from collections import deque
 from dataclasses import asdict, dataclass, field
 from datetime import timezone
-from typing import Any, Deque, Dict, List, Optional
+from typing import Any, Deque, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.time_utils import now_utc, parse_utc_iso
 
@@ -59,7 +59,7 @@ except Exception:  # pragma: no cover
     get_rag_config = None  # type: ignore[assignment]
     update_rag_config = None  # type: ignore[assignment]
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Redis key for persisting _pending_approval across server restarts (Issue #4792).
 _PENDING_APPROVAL_REDIS_KEY = "autobot:loop:pending_approval"
@@ -103,7 +103,7 @@ class VariantResult:
     precision_at_k: float
     coherence_score: float
     composite_score: float
-    error: Optional[str] = None
+    error: str | None = None
 
 
 @dataclass
@@ -116,12 +116,12 @@ class LoopRunRecord:
     dry_run: bool
     baseline_score: float
     variants_tested: int
-    best_variant_id: Optional[str]
+    best_variant_id: str | None
     best_score: float
     promoted: bool
-    promoted_params: Optional[Dict[str, Any]]
+    promoted_params: Dict[str, Any] | None
     lessons_stored: int
-    error: Optional[str] = None
+    error: str | None = None
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -133,9 +133,9 @@ class LoopStatus:
 
     enabled: bool
     dry_run: bool
-    last_run: Optional[LoopRunRecord]
+    last_run: LoopRunRecord | None
     history: List[LoopRunRecord] = field(default_factory=list)
-    pending_approval: Optional[Dict[str, Any]] = None  # staging variant awaiting /approve
+    pending_approval: Dict[str, Any] | None = None  # staging variant awaiting /approve
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -172,9 +172,9 @@ class _RAGEvaluator:
     }
 
     def __init__(self) -> None:
-        self._collection: Optional[Any] = None
+        self._collection: Any | None = None
 
-    async def _ensure_collection(self) -> Optional[Any]:
+    async def _ensure_collection(self) -> Any | None:
         """Lazy-init an in-memory collection seeded with the corpus."""
         if self._collection is not None:
             return self._collection
@@ -290,7 +290,7 @@ class AutonomousLoopRunner:
 
         self._evaluator = _RAGEvaluator()
         self._history: Deque[LoopRunRecord] = deque(maxlen=100)
-        self._pending_approval: Optional[Dict[str, Any]] = None
+        self._pending_approval: Dict[str, Any] | None = None
         self._no_improvement_count: int = 0
         self._running = False
 
@@ -721,7 +721,7 @@ class AutonomousLoopRunner:
 # Module-level singleton
 # ---------------------------------------------------------------------------
 
-_loop_orchestrator: Optional[AutonomousLoopRunner] = None
+_loop_orchestrator: AutonomousLoopRunner | None = None
 _loop_lock = asyncio.Lock()
 
 

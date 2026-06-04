@@ -11,7 +11,7 @@
       <!-- Document Change Feed Section (PROMINENT) -->
       <div class="change-feed-section-wrapper">
         <div class="section-header prominent">
-          <h3><i class="fas fa-sync-alt"></i> {{ $t('knowledge.categories.documentLifecycle') }}</h3>
+          <h3><Icon name="sync-alt" /> {{ $t('knowledge.categories.documentLifecycle') }}</h3>
           <span class="section-badge">{{ $t('knowledge.categories.realTimeTracking') }}</span>
         </div>
         <DocumentChangeFeed />
@@ -19,16 +19,16 @@
 
       <!-- Categories loading state -->
       <div v-if="isLoadingCategories" class="loading-state">
-        <i class="fas fa-spinner fa-spin"></i>
+        <Icon name="spinner" class="animate-spin" />
         <p>{{ $t('knowledge.categories.loadingCategories') }}</p>
       </div>
 
       <!-- Categories error state -->
       <div v-else-if="categoriesError" class="categories-error-state">
-        <i class="fas fa-exclamation-triangle"></i>
+        <Icon name="exclamation-triangle" />
         <p>{{ categoriesError }}</p>
         <button class="retry-btn" @click="loadMainCategories">
-          <i class="fas fa-redo"></i> {{ $t('knowledge.categories.retryBtn') }}
+          <Icon name="redo" /> {{ $t('knowledge.categories.retryBtn') }}
         </button>
       </div>
 
@@ -46,10 +46,10 @@
             :title="$t('knowledge.categories.editCategory')"
             @click="openCategoryEdit(category, $event)"
           >
-            <i class="fas fa-pencil-alt"></i>
+            <Icon name="pencil-alt" />
           </button>
           <div class="category-icon-large" :style="{ backgroundColor: category.color }">
-            <i :class="category.icon"></i>
+            <Icon :name="category.icon" />
           </div>
           <div class="category-content">
             <h3>{{ category.name }}</h3>
@@ -57,13 +57,13 @@
             <p class="category-examples">{{ category.examples }}</p>
             <div class="category-stats">
               <div class="stat">
-                <i class="fas fa-file-alt"></i>
+                <Icon name="file-alt" />
                 <span>{{ category.count }} {{ $t('knowledge.categories.facts') }}</span>
               </div>
             </div>
           </div>
           <div class="browse-arrow">
-            <i class="fas fa-arrow-right"></i>
+            <Icon name="arrow-right" />
           </div>
         </div>
       </div>
@@ -77,7 +77,7 @@
           @click="backToCategories"
           class="back-btn"
         >
-          <i class="fas fa-arrow-left"></i>
+          <Icon name="arrow-left" />
           {{ $t('knowledge.categories.backToCategories') }}
         </BaseButton>
         <h3>{{ getSelectedCategoryName() }}</h3>
@@ -89,11 +89,11 @@
     <BaseModal
       v-model="showCategoryDocuments"
       :title="`${formatCategoryName(selectedCategoryPath)} - Documents`"
-      size="large"
+      size="lg"
       @close="closeCategoryDocuments"
     >
       <div v-if="isLoadingCategoryDocs" class="loading-state">
-        <i class="fas fa-spinner fa-spin"></i>
+        <Icon name="spinner" class="animate-spin" />
         <p>{{ $t('knowledge.categories.loadingDocuments') }}</p>
       </div>
 
@@ -111,14 +111,14 @@
           @click="viewDocumentDetails(doc)"
         >
           <div class="doc-icon-large">
-            <i :class="getTypeIcon(doc.type || 'document')"></i>
+            <Icon :name="getTypeIcon(doc.type || 'document')" />
           </div>
           <div class="doc-details">
             <h4>{{ doc.title || doc.filename }}</h4>
             <p class="doc-path">{{ doc.path }}</p>
             <div class="doc-meta">
-              <span><i class="fas fa-file"></i> {{ doc.type || 'document' }}</span>
-              <span v-if="doc.size"><i class="fas fa-database"></i> {{ formatFileSize(doc.size) }}</span>
+              <span><Icon name="file" /> {{ doc.type || 'document' }}</span>
+              <span v-if="doc.size"><Icon name="database" /> {{ formatFileSize(doc.size) }}</span>
             </div>
           </div>
         </div>
@@ -129,7 +129,7 @@
     <BaseModal
       v-model="showDocumentModal"
       :title="currentDocument?.title || currentDocument?.filename || $t('knowledge.categories.documentDetails')"
-      size="large"
+      size="lg"
       @close="closeDocumentModal"
     >
       <div v-if="currentDocument">
@@ -159,12 +159,12 @@
       @updated="handleCategoryUpdated"
       @deleted="handleCategoryDeleted"
     />
-    </div>
 
   </div>
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter, useRoute } from 'vue-router'

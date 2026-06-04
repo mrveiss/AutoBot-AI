@@ -9,16 +9,16 @@ and improve performance across multiple concurrent requests.
 """
 
 import asyncio
-import logging
 import time
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict
 
 from autobot_shared.http_client import get_http_client
+from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import TimingConstants
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -253,7 +253,7 @@ class OllamaConnectionPool:
             async with session.get(health_url) as response:
                 return response.status == 200
 
-    async def _update_health_status(self, healthy: bool, error: Optional[Exception] = None) -> None:
+    async def _update_health_status(self, healthy: bool, error: Exception | None = None) -> None:
         """Update health status with logging (Issue #315 - extracted helper)."""
         async with self._stats_lock:
             self.pool_healthy = healthy
@@ -365,7 +365,7 @@ class _OllamaPoolManager:
 
     def __init__(self) -> None:
         self._lock: threading.Lock = threading.Lock()
-        self._pool: Optional[OllamaConnectionPool] = None
+        self._pool: OllamaConnectionPool | None = None
 
     def get(self) -> OllamaConnectionPool:
         """Return the pool, constructing it lazily on first call (double-checked locking).

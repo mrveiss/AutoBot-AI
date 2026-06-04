@@ -8,14 +8,14 @@ Provides secure sudo command execution with GUI elevation dialogs
 """
 
 import asyncio
-import logging
 import re
 import subprocess  # nosec B404 - elevation wrapper requires subprocess
 from typing import Dict, Tuple
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Pattern to detect sudo commands
 SUDO_PATTERN = re.compile(r"^\s*sudo\s+(.+)$", re.IGNORECASE)

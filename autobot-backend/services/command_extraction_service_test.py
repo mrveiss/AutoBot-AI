@@ -29,7 +29,7 @@ class TestSlmExec:
     """Tests for _slm_exec (Issue #933)."""
 
     @pytest.mark.asyncio
-    async def test_calls_correct_endpoint(self):
+    async def test_calls_correct_endpoint(self) -> None:
         resp = MagicMock()
         resp.status = 200
         resp.json = AsyncMock(return_value={"success": True, "stdout": "output", "stderr": ""})
@@ -54,13 +54,13 @@ class TestSlmExec:
         assert "04-Databases/exec" in called_url
 
     @pytest.mark.asyncio
-    async def test_returns_false_when_no_slm_url(self):
+    async def test_returns_false_when_no_slm_url(self) -> None:
         ok, stdout, stderr = await _slm_exec("node1", "cmd", slm_url="")
         assert ok is False
         assert "SLM_URL not configured" in stderr
 
     @pytest.mark.asyncio
-    async def test_returns_false_on_exception(self):
+    async def test_returns_false_on_exception(self) -> None:
         session = MagicMock()
         session.post.side_effect = Exception("network error")
         session_cm = MagicMock()
@@ -79,20 +79,20 @@ class TestExtractCommandList:
     """Tests for _extract_command_list (Issue #933)."""
 
     @pytest.mark.asyncio
-    async def test_returns_set_of_commands(self):
+    async def test_returns_set_of_commands(self) -> None:
         with _patch_slm_exec((True, "ls\ncat\npwd\n", "")):
             cmds = await _extract_command_list("node1", "https://slm", "token")
         assert "ls" in cmds
         assert "cat" in cmds
 
     @pytest.mark.asyncio
-    async def test_filters_short_names(self):
+    async def test_filters_short_names(self) -> None:
         with _patch_slm_exec((True, "ls\na\npwd\n", "")):
             cmds = await _extract_command_list("node1", "https://slm", "token")
         assert "a" not in cmds  # too short
 
     @pytest.mark.asyncio
-    async def test_returns_empty_on_failure(self):
+    async def test_returns_empty_on_failure(self) -> None:
         with _patch_slm_exec((False, "", "error")):
             cmds = await _extract_command_list("node1", "https://slm", "token")
         assert cmds == set()
@@ -102,7 +102,7 @@ class TestExtractCommandDescriptions:
     """Tests for _extract_command_descriptions (Issue #933)."""
 
     @pytest.mark.asyncio
-    async def test_returns_descriptions_dict(self):
+    async def test_returns_descriptions_dict(self) -> None:
         whatis_output = "ls (1) - list directory contents\ncat (1) - concatenate files"
         with _patch_slm_exec((True, whatis_output, "")):
             descs = await _extract_command_descriptions("node1", {"ls", "cat"}, "https://slm", "token")
@@ -110,7 +110,7 @@ class TestExtractCommandDescriptions:
         assert "list directory" in descs["ls"]
 
     @pytest.mark.asyncio
-    async def test_handles_batch_failure_gracefully(self):
+    async def test_handles_batch_failure_gracefully(self) -> None:
         with _patch_slm_exec((False, "", "whatis error")):
             descs = await _extract_command_descriptions("node1", {"ls"}, "https://slm", "token")
         assert descs == {}
@@ -141,13 +141,13 @@ class TestExtractHostCommands:
         assert result["ls"].source_hosts == ["04-Databases"]
 
     @pytest.mark.asyncio
-    async def test_returns_empty_dict_when_no_commands(self):
+    async def test_returns_empty_dict_when_no_commands(self) -> None:
         with _patch_slm_exec((False, "", "error")):
             result = await extract_host_commands("04-Databases")
         assert result == {}
 
     @pytest.mark.asyncio
-    async def test_assigns_category(self):
+    async def test_assigns_category(self) -> None:
         with patch(
             "services.command_extraction_service._slm_exec",
             new_callable=AsyncMock,

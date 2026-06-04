@@ -31,16 +31,17 @@ Channel name and payload shape are stable contract for the resume path:
 
 import asyncio
 import json
-import logging
 import time
-from typing import List, Optional
+from typing import List
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 
 CHANNEL_SKILL_PROMOTED = "skill_promoted"
 
 
-def publish_skill_promoted(skill_name: str, tools: Optional[List[str]] = None) -> None:
+def publish_skill_promoted(skill_name: str, tools: List[str] | None = None) -> None:
     """Schedule a fire-and-forget publish of ``skill_promoted``.
 
     Safe to call from sync code: when an event loop is running, schedules

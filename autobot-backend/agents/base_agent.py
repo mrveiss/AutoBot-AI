@@ -8,14 +8,17 @@ Provides unified interface for agents running locally or in containers
 
 import asyncio
 import json
-import logging
 import threading
 import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
+
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
+from autobot_shared.status_enums import AgentStatus  # #7504 consolidation
 
 # Import communication protocol
 from constants.threshold_constants import TimingConstants
@@ -28,7 +31,7 @@ from protocols.agent_communication import (
     get_communication_manager,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class DeploymentMode(Enum):
@@ -37,15 +40,6 @@ class DeploymentMode(Enum):
     LOCAL = "local"
     CONTAINER = "container"
     REMOTE = "remote"
-
-
-class AgentStatus(Enum):
-    """Agent health status"""
-
-    HEALTHY = "healthy"
-    DEGRADED = "degraded"
-    UNHEALTHY = "unhealthy"
-    OFFLINE = "offline"
 
 
 # Performance optimization: O(1) lookup for available agent statuses (Issue #326)
@@ -60,10 +54,10 @@ class AgentRequest:
     agent_type: str
     action: str
     payload: Dict[str, Any]
-    context: Optional[Dict[str, Any]] = None
+    context: Dict[str, Any] | None = None
     priority: str = "normal"  # low, normal, high, urgent
     timeout: float = 30.0
-    metadata: Optional[Dict[str, Any]] = None
+    metadata: Dict[str, Any] | None = None
 
 
 @dataclass
@@ -74,9 +68,9 @@ class AgentResponse:
     agent_type: str
     status: str  # success, error, partial
     result: Any
-    error: Optional[str] = None
+    error: str | None = None
     execution_time: float = 0.0
-    metadata: Optional[Dict[str, Any]] = None
+    metadata: Dict[str, Any] | None = None
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization"""
@@ -104,7 +98,7 @@ class AgentHealth:
     error_count: int
     resource_usage: Dict[str, Any]
     capabilities: List[str]
-    details: Optional[Dict[str, Any]] = None
+    details: Dict[str, Any] | None = None
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization"""
@@ -452,7 +446,7 @@ class BaseAgent(ABC):
             logger.error("Failed to initialize communication for %s: %s", self.agent_id, e)
             return False
 
-    async def _handle_communication_request(self, message: StandardMessage) -> Optional[StandardMessage]:
+    async def _handle_communication_request(self, message: StandardMessage) -> StandardMessage | None:
         """Handle incoming communication requests"""
         try:
             # Convert communication message to AgentRequest
@@ -497,7 +491,7 @@ class BaseAgent(ABC):
                 ),
             )
 
-    async def send_message_to_agent(self, recipient_id: str, message_data: Any, timeout: float = 30.0) -> Optional[Any]:
+    async def send_message_to_agent(self, recipient_id: str, message_data: Any, timeout: float = 30.0) -> Any | None:
         """Send a message to another agent"""
         if not self.communication_protocol:
             logger.error("Communication not initialized for agent %s", self.agent_id)
@@ -535,6 +529,24 @@ class BaseAgent(ABC):
                 logger.info("Agent %s communication shutdown", self.agent_id)
             except Exception as e:
                 logger.error("Error shutting down communication: %s", e)
+
+    def get_mcp_token(self) -> str:
+        """Return the auth token to use for MCP JSON-RPC calls (SEC-2 Phase 2, #6473).
+
+        Prefers the run-scoped JWT set by the heartbeat scheduler via
+        ``AUTOBOT_RUN_JWT``.  Falls back to the long-lived ``AUTOBOT_MCP_TOKEN``
+        for direct user-driven calls that run outside a scheduled heartbeat.
+
+        Usage::
+
+            token = self.get_mcp_token()
+            params = {"name": tool, "arguments": args}
+            if token.count(".") == 2:  # JWT format
+                params["run_jwt"] = token
+            else:
+                auth = token  # legacy bearer token
+        """
+        return config.run_jwt or config.mcp_token
 
     def get_statistics(self) -> Dict[str, Any]:
         """Get performance statistics for this agent (thread-safe)"""
@@ -607,7 +619,7 @@ def create_agent_request(
     agent_type: str,
     action: str,
     payload: Dict[str, Any],
-    context: Optional[Dict[str, Any]] = None,
+    context: Dict[str, Any] | None = None,
     priority: str = "normal",
     timeout: float = 30.0,
 ) -> AgentRequest:

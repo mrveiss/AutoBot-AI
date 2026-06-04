@@ -248,6 +248,7 @@ async function runShellCommand(): Promise<void> {
         <button
           @click="closeTool"
           class="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+          aria-label="Close tool panel"
         >
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -261,19 +262,19 @@ async function runShellCommand(): Promise<void> {
         <div v-if="activeTool === 'log-viewer'" class="space-y-4">
           <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-2">Select Node</label>
+              <label class="block text-sm font-medium text-gray-700 mb-2">{{ $t('fleet.fleetToolsTab.selectNode') }}</label>
               <select
                 v-model="selectedNode"
                 class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               >
-                <option value="">-- Select a node --</option>
+                <option value="">{{ $t('fleet.fleetToolsTab.selectANode') }}</option>
                 <option v-for="node in nodes" :key="node.node_id" :value="node.node_id">
                   {{ node.hostname }} ({{ node.ip_address }})
                 </option>
               </select>
             </div>
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-2">Service Name</label>
+              <label class="block text-sm font-medium text-gray-700 mb-2">{{ $t('fleet.fleetToolsTab.serviceName') }}</label>
               <input
                 type="text"
                 v-model="selectedService"
@@ -282,15 +283,15 @@ async function runShellCommand(): Promise<void> {
               />
             </div>
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-2">Lines</label>
+              <label class="block text-sm font-medium text-gray-700 mb-2">{{ $t('fleet.fleetToolsTab.lines') }}</label>
               <select
                 v-model="logLines"
                 class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               >
-                <option :value="50">50 lines</option>
-                <option :value="100">100 lines</option>
-                <option :value="200">200 lines</option>
-                <option :value="500">500 lines</option>
+                <option :value="50">{{ $t('fleet.fleetToolsTab.50Lines') }}</option>
+                <option :value="100">{{ $t('fleet.fleetToolsTab.100Lines') }}</option>
+                <option :value="200">{{ $t('fleet.fleetToolsTab.200Lines') }}</option>
+                <option :value="500">{{ $t('fleet.fleetToolsTab.500Lines') }}</option>
               </select>
             </div>
           </div>
@@ -310,7 +311,7 @@ async function runShellCommand(): Promise<void> {
         <!-- Redis CLI Tool -->
         <div v-else-if="activeTool === 'redis-cli'" class="space-y-4">
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-2">Redis Command</label>
+            <label class="block text-sm font-medium text-gray-700 mb-2">{{ $t('fleet.fleetToolsTab.redisCommand') }}</label>
             <input
               type="text"
               v-model="redisCommand"
@@ -319,7 +320,7 @@ async function runShellCommand(): Promise<void> {
             />
           </div>
           <p class="text-xs text-gray-500">
-            Command will be executed on the Redis node. Common commands: PING, INFO, DBSIZE, CLIENT LIST
+            {{ $t('fleet.fleetToolsTab.commandWillBeExecuted') }}
           </p>
           <button
             @click="runRedisCommand"
@@ -338,19 +339,19 @@ async function runShellCommand(): Promise<void> {
         <div v-else-if="activeTool === 'ansible-runner'" class="space-y-4">
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-2">Select Node</label>
+              <label class="block text-sm font-medium text-gray-700 mb-2">{{ $t('fleet.fleetToolsTab.selectNode') }}</label>
               <select
                 v-model="selectedNode"
                 class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               >
-                <option value="">-- Select a node --</option>
+                <option value="">{{ $t('fleet.fleetToolsTab.selectANode') }}</option>
                 <option v-for="node in nodes" :key="node.node_id" :value="node.node_id">
                   {{ node.hostname }} ({{ node.ip_address }})
                 </option>
               </select>
             </div>
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-2">Command</label>
+              <label class="block text-sm font-medium text-gray-700 mb-2">{{ $t('fleet.fleetToolsTab.command') }}</label>
               <input
                 type="text"
                 v-model="shellCommand"
@@ -360,7 +361,7 @@ async function runShellCommand(): Promise<void> {
             </div>
           </div>
           <p class="text-xs text-gray-500">
-            Run shell commands on the selected node via SSH. Be careful with destructive commands.
+            {{ $t('fleet.fleetToolsTab.runShellCommandsOn') }}
           </p>
           <button
             @click="runShellCommand"
@@ -382,7 +383,7 @@ async function runShellCommand(): Promise<void> {
 
         <!-- Result Output -->
         <div v-if="result" class="mt-4">
-          <label class="block text-sm font-medium text-gray-700 mb-2">Output</label>
+          <label class="block text-sm font-medium text-gray-700 mb-2">{{ $t('fleet.fleetToolsTab.output') }}</label>
           <pre class="p-4 bg-gray-900 text-gray-100 rounded-lg overflow-auto max-h-96 text-sm font-mono whitespace-pre-wrap">{{ result }}</pre>
         </div>
       </div>

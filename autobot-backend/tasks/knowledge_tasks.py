@@ -11,17 +11,17 @@ Issue #424: Added periodic task for incremental man page updates.
 
 import asyncio
 import fnmatch
-import logging
 import os
 import subprocess  # nosec B404 - used for internal script execution only
 import sys
 import time
 from pathlib import Path
 
+from autobot_shared.logging_manager import get_logger
 from celery_app import celery_app
 from type_defs.common import Metadata
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # Issue #5083: exclude patterns for cleanup_generated_files. Matches filenames

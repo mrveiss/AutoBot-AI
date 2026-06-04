@@ -8,11 +8,11 @@ Issue #2013: Decomposed from scanner.py god module.
 """
 
 import asyncio
-import logging
-import os
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 from utils.file_categorization import (
     ALL_CODE_EXTENSIONS,
     CONFIG_EXTENSIONS,
@@ -34,7 +34,7 @@ from .analyzers import (
 )
 from .types import FileAnalysisResult
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # =============================================================================
 # Issue #711: Parallel file processing configuration
@@ -45,7 +45,7 @@ logger = logging.getLogger(__name__)
 # Higher values = faster scanning but more memory/CPU usage
 # Default: 50, Range: 1-200
 try:
-    _parallel_concurrency = int(os.getenv("CODEBASE_INDEX_PARALLEL_FILES", "50"))
+    _parallel_concurrency = int(config.codebase_index_parallel_files)
     PARALLEL_FILE_CONCURRENCY = max(1, min(_parallel_concurrency, 200))
 except ValueError:
     logger.warning("Invalid CODEBASE_INDEX_PARALLEL_FILES, using default 50")
@@ -55,7 +55,7 @@ except ValueError:
 # When True, files are processed in parallel using asyncio.gather with semaphore
 # When False, falls back to sequential processing (original behavior)
 # Default: True (parallel mode enabled)
-PARALLEL_MODE_ENABLED = os.getenv("CODEBASE_PARALLEL_MODE", "true").lower() == "true"
+PARALLEL_MODE_ENABLED = config.codebase_parallel_mode.lower() == "true"
 
 
 # Issue #398: File type mapping for cleaner dispatch
@@ -72,7 +72,7 @@ _FILE_TYPE_MAP = [
 ]
 
 
-def _determine_analyzer_type(extension: str) -> Tuple[Optional[str], str]:
+def _determine_analyzer_type(extension: str) -> Tuple[str | None, str]:
     """
     Determine analyzer type and stat key from file extension.
 
@@ -92,8 +92,8 @@ def _determine_analyzer_type(extension: str) -> Tuple[Optional[str], str]:
 
 async def _run_file_analyzer(
     file_path: Path,
-    analyzer_type: Optional[str],
-) -> Optional[Dict]:
+    analyzer_type: str | None,
+) -> Dict | None:
     """
     Run the appropriate analyzer for a file.
 
@@ -152,7 +152,7 @@ def _build_file_analysis_result(
     file_category: str,
     file_hash: str,
     file_analysis: Dict,
-    analyzer_type: Optional[str],
+    analyzer_type: str | None,
     stat_key: str,
 ) -> FileAnalysisResult:
     """

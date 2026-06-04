@@ -23,6 +23,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Dict, List
 
+from autobot_shared.ssot_config import config
+
 
 class IsolationMode(str, Enum):
     """How a bridge is executed."""
@@ -59,7 +61,7 @@ def _env_int(name: str, default: int) -> int:
 
 def _global_mode() -> IsolationMode:
     """Resolve global default isolation mode from env."""
-    raw = os.environ.get("MCP_ISOLATION_MODE", "inprocess").lower()
+    raw = config.mcp_isolation_mode.lower()
     try:
         return IsolationMode(raw)
     except ValueError:
@@ -72,7 +74,9 @@ def resolve_mode(bridge: str) -> IsolationMode:
     Precedence: per-bridge env override -> always-inprocess list ->
     high-risk default (subprocess) -> global default.
     """
-    override = os.environ.get(f"MCP_ISOLATION_MODE_{bridge.upper()}")
+    override = os.environ.get(
+        f"MCP_ISOLATION_MODE_{bridge.upper()}"
+    )  # ssot-config-exempt: dynamic env var name (f-string)
     if override:
         try:
             return IsolationMode(override.lower())

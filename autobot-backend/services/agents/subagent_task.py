@@ -12,20 +12,11 @@ Defines task data structures for subagent spawning and execution:
 
 import time
 from dataclasses import dataclass, field
-from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 from uuid import uuid4
 
+from autobot_shared.status_enums import TaskPriority  # #7504 consolidation
 from autobot_shared.status_enums import TaskStatus  # #6973 consolidation
-
-
-class TaskPriority(str, Enum):
-    """Priority level for task execution."""
-
-    LOW = "low"
-    NORMAL = "normal"
-    HIGH = "high"
-    URGENT = "urgent"
 
 
 @dataclass
@@ -38,7 +29,7 @@ class SubagentTask:
     constraints: Dict[str, Any] = field(default_factory=dict)
     timeout_seconds: int = 300
     priority: TaskPriority = TaskPriority.NORMAL
-    parent_task_id: Optional[str] = None
+    parent_task_id: str | None = None
     depth: int = 0  # Recursion depth (max 2)
     created_at: float = field(default_factory=time.time)
     metadata: Dict[str, Any] = field(default_factory=dict)
@@ -82,9 +73,9 @@ class TaskResult:
     task_id: str
     status: TaskStatus
     output: Any = None
-    error: Optional[str] = None
+    error: str | None = None
     duration_seconds: float = 0.0
-    tokens_used: Optional[int] = None
+    tokens_used: int | None = None
     completed_at: float = field(default_factory=time.time)
     metadata: Dict[str, Any] = field(default_factory=dict)
 

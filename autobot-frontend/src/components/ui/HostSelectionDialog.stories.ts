@@ -4,7 +4,6 @@ import HostSelectionDialog from './HostSelectionDialog.vue';
 const meta = {
   title: 'Components/UI/HostSelectionDialog',
   component: HostSelectionDialog,
-  tags: ['autodocs'],
   argTypes: {
     show: {
       control: 'boolean',

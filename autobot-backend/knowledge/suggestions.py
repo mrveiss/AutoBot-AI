@@ -12,7 +12,6 @@ from them weighted by similarity score.
 
 import asyncio
 import json
-import logging
 import math
 from collections import defaultdict
 from datetime import datetime, timezone
@@ -24,8 +23,9 @@ if TYPE_CHECKING:
     import aioredis
     import redis
     from llama_index.vector_stores.chroma import ChromaVectorStore
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class SuggestionsMixin:

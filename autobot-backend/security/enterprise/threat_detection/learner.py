@@ -26,14 +26,14 @@ Consolidation
     operators can review detection rules.
 """
 
-import logging
 from datetime import datetime, timedelta
-from typing import Dict, Optional
+from typing import Dict
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.time_utils import now_utc, parse_utc_iso, utc_timestamp
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 _OUTCOME_KEY_PREFIX = "security:detection_outcomes:"
@@ -92,7 +92,7 @@ class ThreatDetectionLearner:
 
     # ── Precision calculation ──────────────────────────────────────────────────
 
-    def get_pattern_precision(self, pattern_id: str) -> Optional[float]:
+    def get_pattern_precision(self, pattern_id: str) -> float | None:
         """
         Return the historical precision (tp / (tp + fp)) for a pattern.
 
@@ -179,7 +179,7 @@ class ThreatDetectionLearner:
                 exc,
             )
 
-    def get_best_mitigation(self, threat_type: str) -> Optional[str]:
+    def get_best_mitigation(self, threat_type: str) -> str | None:
         """
         Return the action with the highest EMA effectiveness for a threat type.
 

@@ -10,14 +10,15 @@ auto-deprecation of underperforming skills.
 """
 
 import json
-import logging
 from datetime import timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
+from autobot_shared.ssot_constants import TTL_90_DAYS
 from autobot_shared.time_utils import now_utc
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Redis key prefixes
 REDIS_SKILL_METRICS_PREFIX = "skill_metrics:"
@@ -37,8 +38,8 @@ class SkillMetrics(AsyncRedisClientMixin):
         action: str,
         success: bool,
         duration_ms: float,
-        error_type: Optional[str] = None,
-        user_feedback: Optional[str] = None,
+        error_type: str | None = None,
+        user_feedback: str | None = None,
     ) -> None:
         """Log a skill invocation with outcome.
 
@@ -93,11 +94,11 @@ class SkillMetrics(AsyncRedisClientMixin):
             await redis.ltrim(f"{day_prefix}:durations", 0, 999)
 
             # Set key expiry (keep 90 days of metrics)
-            await redis.expire(f"{day_prefix}:total", 90 * 86400)
-            await redis.expire(f"{day_prefix}:success", 90 * 86400)
-            await redis.expire(f"{day_prefix}:failures", 90 * 86400)
-            await redis.expire(f"{day_prefix}:feedback", 90 * 86400)
-            await redis.expire(f"{day_prefix}:durations", 90 * 86400)
+            await redis.expire(f"{day_prefix}:total", TTL_90_DAYS)
+            await redis.expire(f"{day_prefix}:success", TTL_90_DAYS)
+            await redis.expire(f"{day_prefix}:failures", TTL_90_DAYS)
+            await redis.expire(f"{day_prefix}:feedback", TTL_90_DAYS)
+            await redis.expire(f"{day_prefix}:durations", TTL_90_DAYS)
 
         except Exception as e:
             logger.error("Failed to log skill metrics: %s", e)
@@ -248,7 +249,7 @@ class SkillMetrics(AsyncRedisClientMixin):
                 await redis.set(
                     f"{REDIS_SKILL_HEALTH_PREFIX}{skill_id}:stale",
                     "true",
-                    ex=90 * 86400,
+                    ex=TTL_90_DAYS,
                 )
                 logger.info(
                     "Marked skill %s as stale (no invocations in 30 days)",

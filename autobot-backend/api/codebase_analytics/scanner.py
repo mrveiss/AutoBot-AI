@@ -25,15 +25,15 @@ Sub-module responsibilities
 """
 
 import asyncio
-import logging
-import os
 import threading
 from collections import deque
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 
 from fastapi import HTTPException
 
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 from constants.path_constants import PATH
 from type_defs.common import Metadata
 
@@ -88,7 +88,7 @@ from .storage import get_redis_connection
 from .subprocess_runner import _run_indexing_subprocess as _sr_run_indexing_subprocess
 from .types import FileAnalysisResult
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # =============================================================================
 # File processing configuration (Issue #659)
@@ -96,7 +96,7 @@ logger = logging.getLogger(__name__)
 # Default: 50, Range: 1-100
 # =============================================================================
 try:
-    _parallel_files = int(os.getenv("CODEBASE_SCAN_PARALLEL_FILES", "50"))
+    _parallel_files = int(config.codebase_scan_parallel_files)
     PARALLEL_FILE_PROCESSING = max(1, min(_parallel_files, 100))
 except ValueError:
     logger.warning("Invalid CODEBASE_SCAN_PARALLEL_FILES, using default 50")
@@ -124,7 +124,7 @@ _tasks_lock = asyncio.Lock()
 # Threading lock for synchronous callbacks
 _tasks_sync_lock = threading.Lock()
 
-_current_indexing_task_id: Optional[str] = None
+_current_indexing_task_id: str | None = None
 
 # FIFO queue of pending indexing jobs (#1133)
 # Each item: {"source_id": str, "root_path": str, "queued_at": str, "requested_by": str}
@@ -144,7 +144,7 @@ async def _save_task_to_redis_bound(task_id: str) -> None:
     await _pt_save_task_to_redis(task_id, indexing_tasks)
 
 
-async def _load_task_from_redis_bound(task_id: str) -> Optional[Dict]:
+async def _load_task_from_redis_bound(task_id: str) -> Dict | None:
     """Load task from Redis (re-exported for convenience)."""
     return await _load_task_from_redis(task_id)
 
@@ -256,11 +256,11 @@ _analyze_single_file = _analyze_single_file_bound
 
 
 async def scan_codebase(
-    root_path: Optional[str] = None,
-    progress_callback: Optional[callable] = None,
+    root_path: str | None = None,
+    progress_callback: callable | None = None,
     immediate_store_collection=None,
     redis_client=None,
-    source_id: Optional[str] = None,
+    source_id: str | None = None,
 ) -> Metadata:
     """Scan the entire codebase using MCP-like file operations.
 
@@ -333,7 +333,7 @@ def _create_progress_updater(task_id: str, update_phase, update_batch_info):
 # =============================================================================
 
 
-async def _run_indexing_subprocess(task_id: str, root_path: str, source_id: Optional[str] = None) -> None:
+async def _run_indexing_subprocess(task_id: str, root_path: str, source_id: str | None = None) -> None:
     """Launch isolated indexing subprocess to prevent ChromaDB SIGSEGV (#1180).
 
     Delegates to subprocess_runner._run_indexing_subprocess with module-level
@@ -356,7 +356,7 @@ async def _run_indexing_subprocess(task_id: str, root_path: str, source_id: Opti
 # =============================================================================
 
 
-async def do_indexing_with_progress(task_id: str, root_path: str, source_id: Optional[str] = None):
+async def do_indexing_with_progress(task_id: str, root_path: str, source_id: str | None = None):
     """Background task: Index codebase with real-time progress updates.
 
     Issue #281, #398: Refactored with extracted helpers for reduced complexity.

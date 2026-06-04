@@ -1,39 +1,14 @@
-RISKY_COMMAND_PATTERNS = [
-    "rm -r",
-    "rm -r",
-    "sudo rm",
-    "rmdir",
-    "dd if=",
-    "mkfs",
-    "fdisk",
-    "parted",
-    "chmod 777",
-    "chmod -R 777",
-    "chown -R",
-    "> /dev/",
-    "/dev/sda",
-    "/dev/sdb",
-    "iptables -F",
-    "ufw disable",
-    "shutdown",
-    "reboot",
-    "halt",
-    "powerof",
-    "apt-get remove",
-    "yum remove",
-    "rm /etc/",
-]
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+"""Terminal Constants for AutoBot
 
-MODERATE_RISK_PATTERNS = [
-    "sudo",
-    "su -",
-    "chmod",
-    "chown",
-    "apt-get install",
-    "yum install",
-    "pip install",
-    "systemctl",
-    "service",
-    "mount",
-    "umount",
-]
+MIGRATION (Issue #GH7440):
+    This module re-exports from autobot_shared.ssot_constants for backward compatibility.
+    Import directly from autobot_shared.ssot_constants for new code.
+"""
+
+from autobot_shared.ssot_constants import (  # noqa: F401,F403
+    MODERATE_RISK_PATTERNS,
+    RISKY_COMMAND_PATTERNS,
+)

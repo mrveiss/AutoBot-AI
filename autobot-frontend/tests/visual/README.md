@@ -35,29 +35,93 @@ Baselines are stored per-OS (`-linux.png`, `-darwin.png`, `-win32.png`)
 because subpixel font rendering varies across platforms. CI runs Linux
 baselines.
 
+## ⚠️ Baseline generation policy — read before running `--update-snapshots`
+
+**Linux baselines must be generated on the CI runner (ubuntu-latest), not
+on a developer machine — even if that machine runs Linux.**
+
+Font rendering on WSL2, macOS Docker containers, or other Linux variants
+differs from the GitHub Actions `ubuntu-latest` runner in ways that exceed
+the 100-pixel diff tolerance. Committing locally-generated `-linux.png`
+baselines will cause CI failures for other contributors.
+
+This policy was established after [MVA-270] to fix renderer-mismatch
+failures on 6-7 stories (CommandPermissionDialog, EmptyState,
+HostSelectionDialog, Icon, StableLoadingState, ThemeToggle, NavOverflowMenu).
+
+### Correct way to regenerate baselines
+
+**Option A — GitHub Actions workflow_dispatch (recommended):**
+
+1. Go to **Actions → Visual Regression → Run workflow** on GitHub
+2. Select your branch, set **Regenerate baselines** to `true`, and run
+3. When the run finishes, download the `visual-regression-updated-baselines-*`
+   artifact
+4. Extract it and copy the contents into
+   `autobot-frontend/tests/visual/__screenshots__/`
+5. Commit and push — the baselines came from the exact CI environment and
+   are guaranteed to match future CI runs
+
+**Option B — Docker (for local iteration):**
+
+```bash
+# Run inside a container that matches ubuntu-latest
+docker run --rm \
+  -v "$(pwd)":/workspace \
+  -w /workspace/autobot-frontend \
+  mcr.microsoft.com/playwright:v1.52.0-jammy \
+  bash -c "npm ci && SKIP_STORYBOOK_START=1 npm run test:visual -- --update-snapshots"
+```
+
+The Playwright Docker image ships with the same Chromium version and system
+fonts used in CI, eliminating rendering drift.
+
+**Option C — native ubuntu-22.04/24.04 only:**
+
+If you have an actual Ubuntu 22.04/24.04 install (not WSL2, not Docker),
+you can run `npm run test:visual -- --update-snapshots` directly. Verify
+the CI passes before opening the PR.
+
+### Never do this
+
+- `--update-snapshots` on macOS → committing the `-linux.png` files
+- `--update-snapshots` on WSL2 → committing as CI baselines
+- Accepting a "first run" artifact from a non-CI source
+
 ## Workflow
 
 ### When adding a new component
 
 1. Write the component as usual
 2. Add a `*.stories.ts` file demonstrating the variants you care about
-3. Run `npm run test:visual -- --update-snapshots`
+3. Use Option A or B above to generate CI-matched baselines
 4. Commit the new `__screenshots__/*.png` baselines alongside the component
 
 ### When intentionally changing visuals
 
 1. Make the design change
-2. Run `npm run test:visual` — it'll fail with a diff
+2. Run `npm run test:visual` locally — it will fail with a diff showing old
+   vs. new rendering
 3. Inspect the diff (HTML report) to confirm the change is what you wanted
-4. Run `npm run test:visual -- --update-snapshots` to accept
+4. Use Option A or B above to regenerate CI-matched baselines
 5. Commit the updated baselines with the design change in the same PR
 
 ### When unintentionally breaking visuals
 
 1. PR review fails CI on visual regression
-2. Inspect the HTML report to see exactly what shifted
+2. Inspect the HTML report artifact from CI to see exactly what shifted
 3. Either fix the regression (most common) or update baselines if the
    change was intentional but missed step 2 above
+
+### When CI fails with renderer mismatch
+
+Symptom: CI fails on stories that pass locally; diff looks like font
+kerning, antialiasing, or sub-pixel shift.
+
+Root cause: baselines were generated in a different environment than the CI
+runner.
+
+Fix: use Option A (workflow_dispatch) to regenerate baselines directly on CI.
 
 ## Coverage today
 

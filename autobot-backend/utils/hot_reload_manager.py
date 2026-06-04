@@ -9,16 +9,17 @@ Enables reloading of chat workflow modules without backend restart
 
 import asyncio
 import importlib
-import logging
 import sys
 import time
 from pathlib import Path
-from typing import Any, Callable, Dict, FrozenSet, Optional, Set
+from typing import Any, Callable, Dict, FrozenSet, Set
 
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 
 # Issue #380: Module-level constants to avoid repeated Path computation
 _SRC_ROOT = Path(__file__).parent.parent  # src/
@@ -70,7 +71,7 @@ class HotReloadManager:
         """Initialize hot reload manager with module tracking structures."""
         self.watched_modules: Dict[str, Any] = {}
         self.module_callbacks: Dict[str, Set[Callable]] = {}
-        self.observer: Optional[Observer] = None
+        self.observer: Observer | None = None
         self.watched_paths: Set[Path] = set()
         self.reload_lock = asyncio.Lock()
 
@@ -125,7 +126,7 @@ class HotReloadManager:
         except Exception as e:
             logger.error("Error stopping hot reload manager: %s", e)
 
-    def register_module(self, module_name: str, callback: Optional[Callable] = None) -> None:
+    def register_module(self, module_name: str, callback: Callable | None = None) -> None:
         """Register a module for hot reloading"""
         try:
             # Import the module initially
@@ -143,7 +144,7 @@ class HotReloadManager:
         except ImportError as e:
             logger.warning("Could not register module %s: %s", module_name, e)
 
-    def register_chat_workflow_modules(self, callback: Optional[Callable] = None) -> None:
+    def register_chat_workflow_modules(self, callback: Callable | None = None) -> None:
         """Register all chat workflow modules for hot reloading"""
         for module_name in self.chat_workflow_modules:
             self.register_module(module_name, callback)
@@ -208,7 +209,7 @@ class HotReloadManager:
         except Exception as e:
             logger.error("Error handling file change for %s: %s", file_path, e)
 
-    def _path_to_module_name(self, file_path: Path) -> Optional[str]:
+    def _path_to_module_name(self, file_path: Path) -> str | None:
         """Convert a file path to a Python module name"""
         try:
             # Get path relative to project root
@@ -236,7 +237,7 @@ class HotReloadManager:
                 except Exception as e:
                     logger.error("Callback error for %s: %s", module_name, e)
 
-    def get_module(self, module_name: str) -> Optional[Any]:
+    def get_module(self, module_name: str) -> Any | None:
         """Get a registered module"""
         return self.watched_modules.get(module_name)
 

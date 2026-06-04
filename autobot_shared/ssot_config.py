@@ -42,7 +42,7 @@ import os
 from enum import Enum
 from functools import lru_cache
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -56,7 +56,7 @@ def _find_project_root() -> Path:
         if (parent / ".env").exists():
             return parent
     # Fallback to runtime location (env var or /opt/autobot)
-    return Path(os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot"))
+    return Path(os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot"))  # ssot-config-exempt: bootstrap self-reference
 
 
 PROJECT_ROOT = _find_project_root()
@@ -72,6 +72,7 @@ DEFAULT_EMBEDDING_MODEL = "nomic-embed-text:latest"
 
 # Per-role model defaults (6-tier mapping, #2553)
 # Each tier is optimised for its workload class — see docs/developer/TIERED_MODEL_ROUTING.md
+TRIVIAL_MODEL = "llama3.2:1b"  # Trivial tier: simplest queries, no tools/RAG/memory (GH#9050)
 ROUTING_MODEL = "llama3.2:1b"  # Orchestrator only, no tool use
 CLASSIFICATION_MODEL = "gemma2:2b"  # Intent detection, classification
 LIGHT_PROCESSING_MODEL = "phi3:mini"  # Extraction, formatting, lightweight tasks
@@ -161,6 +162,7 @@ class LLMConfig(BaseSettings):
     # Primary models — each role maps to its optimal 6-tier (#2553)
     default_model: str = Field(default=DEFAULT_LLM_MODEL, alias="AUTOBOT_DEFAULT_LLM_MODEL")
     embedding_model: str = Field(default=DEFAULT_EMBEDDING_MODEL, alias="AUTOBOT_EMBEDDING_MODEL")
+    trivial_model: str = Field(default=TRIVIAL_MODEL, alias="AUTOBOT_TRIVIAL_MODEL")  # GH#9050
     classification_model: str = Field(default=CLASSIFICATION_MODEL, alias="AUTOBOT_CLASSIFICATION_MODEL")
     reasoning_model: str = Field(default=QUALITY_MODEL, alias="AUTOBOT_REASONING_MODEL")
     rag_model: str = Field(default=INSTRUCTION_MODEL, alias="AUTOBOT_RAG_MODEL")
@@ -203,6 +205,11 @@ class LLMConfig(BaseSettings):
     # API keys (optional - can also come from provider-specific env vars)
     openai_api_key: str = Field(default="", alias="OPENAI_API_KEY")
     anthropic_api_key: str = Field(default="", alias="ANTHROPIC_API_KEY")
+
+    # Claude escalation feature flag (#8171): disabled by default so local LLM
+    # path is unchanged unless AUTOBOT_CLAUDE_ESCALATION_ENABLED=true is set.
+    claude_escalation_enabled: bool = Field(default=False, alias="AUTOBOT_CLAUDE_ESCALATION_ENABLED")
+    claude_escalation_threshold: float = Field(default=7.0, alias="AUTOBOT_CLAUDE_ESCALATION_THRESHOLD")
 
     # LlamaIndex-specific configuration for RAG/vectorization
     # These are explicit settings - no fallbacks. Must be configured correctly.
@@ -593,7 +600,7 @@ class RedisConfig(BaseSettings):
     )
 
     # Security
-    password: Optional[str] = Field(default=None, alias="AUTOBOT_REDIS_PASSWORD")
+    password: str | None = Field(default=None, alias="AUTOBOT_REDIS_PASSWORD")
 
 
 class CacheCoordinatorConfig(BaseSettings):
@@ -710,6 +717,16 @@ class CacheL1Config(BaseSettings):
         default=10000,
         alias="AUTOBOT_CACHE_L1_SEMANTIC_MAX_SIZE",
         description="Max entries in semantic query cache ChromaDB collection",
+    )
+    search_result_cache_max_size: int = Field(
+        default=10000,
+        alias="AUTOBOT_SEARCH_RESULT_CACHE_SIZE",
+        description="Max entries in NPU semantic search result cache (#8154)",
+    )
+    search_result_cache_ttl: int = Field(
+        default=1800,
+        alias="AUTOBOT_SEARCH_RESULT_CACHE_TTL",
+        description="TTL in seconds for NPU search result cache entries (#8154)",
     )
 
 
@@ -1116,6 +1133,315 @@ class PathConfig(BaseSettings):
         return Path(self.vnc_passwd_file)
 
 
+class MiscConfig(BaseSettings):
+    """Miscellaneous/unmapped environment variables.
+
+    This class collects all env vars not yet migrated to structured config sections.
+    Vars default to empty string ("") when not set in environment.
+    Issue: GH#7437 — Migrate 675 os.getenv/os.environ callsites
+    """
+
+    model_config = SettingsConfigDict(
+        env_file=str(PROJECT_ROOT / ".env"),
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+    anthropic_api_base_url: str = Field(default="", alias="ANTHROPIC_API_BASE_URL")
+    api_key: str = Field(default="", alias="API_KEY")
+    ast_cache_max_size: int = Field(default=0, alias="AST_CACHE_MAX_SIZE")
+    audit_log_file: str = Field(default="/opt/autobot/logs/audit.log", alias="AUTOBOT_AUDIT_LOG_FILE")
+    autoresearch_docker_cpus: str = Field(default="", alias="AUTOBOT_AUTORESEARCH_DOCKER_CPUS")
+    autoresearch_data_dir: str = Field(default="", alias="AUTOBOT_AUTORESEARCH_DATA_DIR")
+    autoresearch_dir: str = Field(default="", alias="AUTOBOT_AUTORESEARCH_DIR")
+    autoresearch_docker_enabled: bool = Field(default=False, alias="AUTOBOT_AUTORESEARCH_DOCKER_ENABLED")
+    autoresearch_docker_image: str = Field(default="", alias="AUTOBOT_AUTORESEARCH_DOCKER_IMAGE")
+    autoresearch_docker_memory: str = Field(default="", alias="AUTOBOT_AUTORESEARCH_DOCKER_MEMORY")
+    autoresearch_docker_timeout: int = Field(default=0, alias="AUTOBOT_AUTORESEARCH_DOCKER_TIMEOUT")
+    autoresearch_improvement_threshold: float = Field(default=0.0, alias="AUTOBOT_AUTORESEARCH_IMPROVEMENT_THRESHOLD")
+    autoresearch_max_steps: str = Field(default="", alias="AUTOBOT_AUTORESEARCH_MAX_STEPS")
+    autoresearch_significant_threshold: float = Field(default=0.0, alias="AUTOBOT_AUTORESEARCH_SIGNIFICANT_THRESHOLD")
+    autoresearch_staged_eval_fraction: str = Field(default="", alias="AUTOBOT_AUTORESEARCH_STAGED_EVAL_FRACTION")
+    autoresearch_staged_eval_threshold: float = Field(default=0.0, alias="AUTOBOT_AUTORESEARCH_STAGED_EVAL_THRESHOLD")
+    autoresearch_timeout: int = Field(default=0, alias="AUTOBOT_AUTORESEARCH_TIMEOUT")
+    cache_enabled: bool = Field(default=False, alias="AUTOBOT_CACHE_ENABLED")
+    cache_size: int = Field(default=0, alias="AUTOBOT_CACHE_SIZE")
+    cache_l1_size: int = Field(
+        default=100,
+        alias="AUTOBOT_CACHE_L1_SIZE",
+        description="L1 in-memory LLM response cache size",
+    )
+    cache_l2_ttl: int = Field(
+        default=300,
+        alias="AUTOBOT_CACHE_L2_TTL",
+        description="L2 Redis LLM response cache TTL in seconds",
+    )
+    celery_result_expires: str = Field(default="", alias="AUTOBOT_CELERY_RESULT_EXPIRES")
+    celery_visibility_timeout: int = Field(default=0, alias="AUTOBOT_CELERY_VISIBILITY_TIMEOUT")
+    chats_directory: str = Field(default="", alias="AUTOBOT_CHATS_DIRECTORY")
+    chat_history_file: str = Field(default="", alias="AUTOBOT_CHAT_HISTORY_FILE")
+    chat_recent_max_entries: str = Field(default="", alias="AUTOBOT_CHAT_RECENT_MAX_ENTRIES")
+    chat_session_cache_ttl: str = Field(default="", alias="AUTOBOT_CHAT_SESSION_CACHE_TTL")
+    contradiction_surface_threshold: str = Field(
+        default="",
+        alias="AUTOBOT_CONTRADICTION_SURFACE_THRESHOLD",
+    )
+    chat_ssot_strict: str = Field(default="", alias="AUTOBOT_CHAT_SSOT_STRICT")
+    chat_timeout: int = Field(default=0, alias="AUTOBOT_CHAT_TIMEOUT")
+    chromadb_collection: str = Field(default="", alias="AUTOBOT_CHROMADB_COLLECTION")
+    chromadb_path: str = Field(default="", alias="AUTOBOT_CHROMADB_PATH")
+    cloud_batch_window_ms: str = Field(default="", alias="AUTOBOT_CLOUD_BATCH_WINDOW_MS")
+    cloud_connection_pool_size: int = Field(default=0, alias="AUTOBOT_CLOUD_CONNECTION_POOL_SIZE")
+    cloud_max_batch_size: int = Field(default=0, alias="AUTOBOT_CLOUD_MAX_BATCH_SIZE")
+    cloud_retry_base_delay: str = Field(default="", alias="AUTOBOT_CLOUD_RETRY_BASE_DELAY")
+    cloud_retry_max_attempts: str = Field(default="", alias="AUTOBOT_CLOUD_RETRY_MAX_ATTEMPTS")
+    cloud_retry_max_delay: str = Field(default="", alias="AUTOBOT_CLOUD_RETRY_MAX_DELAY")
+    concurrent_limiter_timeout: int = Field(default=0, alias="AUTOBOT_CONCURRENT_LIMITER_TIMEOUT")
+    coqui_model: str = Field(default="", alias="AUTOBOT_COQUI_MODEL")
+    database_url: str = Field(default="", alias="AUTOBOT_DATABASE_URL")
+    data_db: str = Field(default="", alias="AUTOBOT_DATA_DB")
+    db_host: str = Field(default="", alias="AUTOBOT_DB_HOST")
+    db_path: str = Field(default="", alias="AUTOBOT_DB_PATH")
+    default_agent_model: str = Field(default="", alias="AUTOBOT_DEFAULT_AGENT_MODEL")
+    default_choice: str = Field(default="", alias="AUTOBOT_DEFAULT_CHOICE")
+    default_command: str = Field(default="", alias="AUTOBOT_DEFAULT_COMMAND")
+    default_continue: str = Field(default="", alias="AUTOBOT_DEFAULT_CONTINUE")
+    default_host: str = Field(default="", alias="AUTOBOT_DEFAULT_HOST")
+    default_llm_model: str = Field(default="", alias="AUTOBOT_DEFAULT_LLM_MODEL")
+    default_port: str = Field(default="", alias="AUTOBOT_DEFAULT_PORT")
+    default_scan_network: str = Field(default="", alias="AUTOBOT_DEFAULT_SCAN_NETWORK")
+    default_yes_no: str = Field(default="", alias="AUTOBOT_DEFAULT_YES_NO")
+    test_file_path: str = Field(default="", alias="AUTOBOT_TEST_FILE_PATH")
+    test_filename: str = Field(default="", alias="AUTOBOT_TEST_FILENAME")
+    test_path: str = Field(default="", alias="AUTOBOT_TEST_PATH")
+    desktop_depth: str = Field(default="", alias="AUTOBOT_DESKTOP_DEPTH")
+    desktop_max_sessions: str = Field(default="", alias="AUTOBOT_DESKTOP_MAX_SESSIONS")
+    desktop_resolution: str = Field(default="", alias="AUTOBOT_DESKTOP_RESOLUTION")
+    dev_auth_bypass: str = Field(default="", alias="AUTOBOT_DEV_AUTH_BYPASS")
+    dev_mode: str = Field(default="", alias="AUTOBOT_DEV_MODE")
+    encryption_key: str = Field(default="", alias="AUTOBOT_ENCRYPTION_KEY")
+    env: str = Field(default="", alias="AUTOBOT_ENV")
+    feature_routers_strict: str = Field(default="1", alias="AUTOBOT_FEATURE_ROUTERS_STRICT")
+    gc_threshold_0: int = Field(default=0, alias="AUTOBOT_GC_THRESHOLD_0")
+    gc_threshold_1: int = Field(default=0, alias="AUTOBOT_GC_THRESHOLD_1")
+    gc_threshold_2: int = Field(default=0, alias="AUTOBOT_GC_THRESHOLD_2")
+    hnsw_construction_ef: str = Field(default="", alias="AUTOBOT_HNSW_CONSTRUCTION_EF")
+    hnsw_m: str = Field(default="", alias="AUTOBOT_HNSW_M")
+    hnsw_quantization_type: str = Field(
+        default="",
+        alias="AUTOBOT_HNSW_QUANTIZATION_TYPE",
+        description=(
+            "ChromaDB HNSW quantization type (e.g. 'sq' for SQ8). "
+            "Only applies to ChromaDB versions that support hnsw:quantization_type metadata (#8155). "
+            "Empty string disables quantization (safe default for ChromaDB 1.5.x)."
+        ),
+    )
+    hnsw_search_ef: str = Field(default="", alias="AUTOBOT_HNSW_SEARCH_EF")
+    hnsw_space: str = Field(default="", alias="AUTOBOT_HNSW_SPACE")
+    inference_profiling: str = Field(default="", alias="AUTOBOT_INFERENCE_PROFILING")
+    input_timeout: int = Field(default=0, alias="AUTOBOT_INPUT_TIMEOUT")
+    internal_api_key: str = Field(default="", alias="AUTOBOT_INTERNAL_API_KEY")
+    jaeger_endpoint: str = Field(default="", alias="AUTOBOT_JAEGER_ENDPOINT")
+    jwt_secret: str = Field(default="", alias="AUTOBOT_JWT_SECRET")
+    llm_key_rotation_grace_secs: str = Field(default="", alias="AUTOBOT_LLM_KEY_ROTATION_GRACE_SECS")
+    llm_key_rotation_interval_minutes: str = Field(default="", alias="AUTOBOT_LLM_KEY_ROTATION_INTERVAL_MINUTES")
+    llm_models_yaml: str = Field(default="", alias="AUTOBOT_LLM_MODELS_YAML")
+    llm_temperature: str = Field(default="", alias="AUTOBOT_LLM_TEMPERATURE")
+    log_backup_count: int = Field(default=0, alias="AUTOBOT_LOG_BACKUP_COUNT")
+    log_max_bytes: int = Field(default=0, alias="AUTOBOT_LOG_MAX_BYTES")
+    mcp_token: str = Field(default="", alias="AUTOBOT_MCP_TOKEN")
+    voice_toolset_bundle: str = Field(default="voice_safe", alias="AUTOBOT_VOICE_TOOLSETS")
+    voice_disabled_tools: str = Field(default="", alias="AUTOBOT_VOICE_DISABLED_TOOLS")
+    voice_realtime_model: str = Field(default="gpt-realtime-2", alias="AUTOBOT_VOICE_REALTIME_MODEL")
+    voice_realtime_max_seconds: int = Field(
+        default=1800,
+        alias="AUTOBOT_VOICE_REALTIME_MAX_SECONDS",
+        description="Soft-cap: auto-disconnect Realtime sessions exceeding this wall-clock seconds. Default 30 min.",
+    )
+    voice_realtime_max_cost_usd: float = Field(
+        default=5.0,
+        alias="AUTOBOT_VOICE_REALTIME_MAX_COST_USD",
+        description="Soft-cap: auto-disconnect Realtime sessions exceeding this estimated USD cost. Default $5.00.",
+    )
+    voice_realtime_session_ttl_days: int = Field(
+        default=90,
+        alias="AUTOBOT_VOICE_REALTIME_SESSION_TTL_DAYS",
+        description="Redis TTL (days) for voice_realtime_session:* keys. Default 90 days.",
+    )
+    memory_log_threshold_mb: int = Field(default=0, alias="AUTOBOT_MEMORY_LOG_THRESHOLD_MB")
+    memory_pool_size: int = Field(default=0, alias="AUTOBOT_MEMORY_POOL_SIZE")
+    memory_threshold_mb: int = Field(default=0, alias="AUTOBOT_MEMORY_THRESHOLD_MB")
+    meta_agent_approval_threshold: float = Field(default=0.0, alias="AUTOBOT_META_AGENT_APPROVAL_THRESHOLD")
+    meta_agent_llm_model: str = Field(default="", alias="AUTOBOT_META_AGENT_LLM_MODEL")
+    meta_agent_max_module_lines: str = Field(default="", alias="AUTOBOT_META_AGENT_MAX_MODULE_LINES")
+    meta_agent_test_timeout: int = Field(default=0, alias="AUTOBOT_META_AGENT_TEST_TIMEOUT")
+    ollama_url: str = Field(default="", alias="AUTOBOT_OLLAMA_URL")
+    postgres_db: str = Field(default="", alias="AUTOBOT_POSTGRES_DB")
+    postgres_host: str = Field(default="", alias="AUTOBOT_POSTGRES_HOST")
+    postgres_password: str = Field(default="", alias="AUTOBOT_POSTGRES_PASSWORD")
+    postgres_port: int = Field(default=0, alias="AUTOBOT_POSTGRES_PORT")
+    postgres_user: str = Field(default="", alias="AUTOBOT_POSTGRES_USER")
+    project_root: str = Field(default="", alias="AUTOBOT_PROJECT_ROOT")
+    project_state_db_path: str = Field(default="", alias="AUTOBOT_PROJECT_STATE_DB_PATH")
+    prompt_compression_enabled: bool = Field(default=False, alias="AUTOBOT_PROMPT_COMPRESSION_ENABLED")
+    prompt_compression_min_length: str = Field(default="", alias="AUTOBOT_PROMPT_COMPRESSION_MIN_LENGTH")
+    prompt_compression_ratio: float = Field(default=0.0, alias="AUTOBOT_PROMPT_COMPRESSION_RATIO")
+    quantization_type: str = Field(default="", alias="AUTOBOT_QUANTIZATION_TYPE")
+    redis_memory_db: str = Field(default="", alias="AUTOBOT_REDIS_MEMORY_DB")
+    redis_task_db: str = Field(default="", alias="AUTOBOT_REDIS_TASK_DB")
+    redis_url: str = Field(default="", alias="AUTOBOT_REDIS_URL")
+    research_checkpoints_enabled: bool = Field(default=False, alias="AUTOBOT_RESEARCH_CHECKPOINTS_ENABLED")
+    research_checkpoint_timeout: int = Field(default=0, alias="AUTOBOT_RESEARCH_CHECKPOINT_TIMEOUT")
+    routing_model: str = Field(default="", alias="AUTOBOT_ROUTING_MODEL")
+    run_jwt: str = Field(default="", alias="AUTOBOT_RUN_JWT")
+    schema_dir: str = Field(default="", alias="AUTOBOT_SCHEMA_DIR")
+    secrets_key: str = Field(default="", alias="AUTOBOT_SECRETS_KEY")
+    skip_tls_verify: str = Field(default="", alias="AUTOBOT_SKIP_TLS_VERIFY")
+    smtp_from: str = Field(default="", alias="AUTOBOT_SMTP_FROM")
+    smtp_host: str = Field(default="", alias="AUTOBOT_SMTP_HOST")
+    smtp_password: str = Field(default="", alias="AUTOBOT_SMTP_PASSWORD")
+    smtp_port: int = Field(default=0, alias="AUTOBOT_SMTP_PORT")
+    smtp_tls: str = Field(default="", alias="AUTOBOT_SMTP_TLS")
+    smtp_user: str = Field(default="", alias="AUTOBOT_SMTP_USER")
+    speculation_draft_model: str = Field(default="", alias="AUTOBOT_SPECULATION_DRAFT_MODEL")
+    speculation_enabled: bool = Field(default=False, alias="AUTOBOT_SPECULATION_ENABLED")
+    speculation_num_tokens: str = Field(default="", alias="AUTOBOT_SPECULATION_NUM_TOKENS")
+    speculation_use_ngram: str = Field(default="", alias="AUTOBOT_SPECULATION_USE_NGRAM")
+    test_backend_url: str = Field(default="", alias="AUTOBOT_TEST_BACKEND_URL")
+    test_email: str = Field(default="", alias="AUTOBOT_TEST_EMAIL")
+    test_mode: str = Field(default="", alias="AUTOBOT_TEST_MODE")
+    test_user_name: str = Field(default="", alias="AUTOBOT_TEST_USER_NAME")
+    tls_ca_path: str = Field(default="", alias="AUTOBOT_TLS_CA_PATH")
+    tls_cert_path: str = Field(default="", alias="AUTOBOT_TLS_CERT_PATH")
+    tls_key_path: str = Field(default="", alias="AUTOBOT_TLS_KEY_PATH")
+    trace_console: str = Field(default="", alias="AUTOBOT_TRACE_CONSOLE")
+    trace_sample_rate: float = Field(default=0.0, alias="AUTOBOT_TRACE_SAMPLE_RATE")
+    tts_pipeline_depth: str = Field(default="", alias="AUTOBOT_TTS_PIPELINE_DEPTH")
+    urlhaus_feed_url: str = Field(default="", alias="AUTOBOT_URLHAUS_FEED_URL")
+    user_mode: str = Field(default="", alias="AUTOBOT_USER_MODE")
+    vue_root: str = Field(default="", alias="AUTOBOT_VUE_ROOT")
+    vllm_async_output: bool = Field(default=False, alias="AUTOBOT_VLLM_ASYNC_OUTPUT")
+    vllm_multi_step: str = Field(default="", alias="AUTOBOT_VLLM_MULTI_STEP")
+    vllm_prefix_caching: str = Field(default="", alias="AUTOBOT_VLLM_PREFIX_CACHING")
+    vnc_host: str = Field(default="", alias="AUTOBOT_VNC_HOST")
+    vosk_model_path: str = Field(default="", alias="AUTOBOT_VOSK_MODEL_PATH")
+    weak_cache_size: int = Field(default=0, alias="AUTOBOT_WEAK_CACHE_SIZE")
+    web_fetch_cache_ttl: str = Field(default="", alias="AUTOBOT_WEB_FETCH_CACHE_TTL")
+    web_fetch_max_bytes: int = Field(default=0, alias="AUTOBOT_WEB_FETCH_MAX_BYTES")
+    celery_broker_url: str = Field(default="", alias="CELERY_BROKER_URL")
+    celery_result_backend: str = Field(default="", alias="CELERY_RESULT_BACKEND")
+    ci: str = Field(default="", alias="CI")
+    codebase_index_batch_size: int = Field(default=0, alias="CODEBASE_INDEX_BATCH_SIZE")
+    codebase_index_embedding_mode: int = Field(default=0, alias="CODEBASE_INDEX_EMBEDDING_MODE")
+    codebase_index_embed_batch_size: int = Field(default=0, alias="CODEBASE_INDEX_EMBED_BATCH_SIZE")
+    codebase_index_incremental: str = Field(default="", alias="CODEBASE_INDEX_INCREMENTAL")
+    codebase_index_parallel_batches: str = Field(default="", alias="CODEBASE_INDEX_PARALLEL_BATCHES")
+    codebase_index_parallel_files: str = Field(default="", alias="CODEBASE_INDEX_PARALLEL_FILES")
+    codebase_parallel_mode: str = Field(default="", alias="CODEBASE_PARALLEL_MODE")
+    codebase_scan_parallel_files: str = Field(default="", alias="CODEBASE_SCAN_PARALLEL_FILES")
+    config: str = Field(default="", alias="CONFIG")
+    content_cache_max_size: int = Field(default=0, alias="CONTENT_CACHE_MAX_SIZE")
+    context_enabled: bool = Field(default=False, alias="CONTEXT_ENABLED")
+    context_model: str = Field(default="", alias="CONTEXT_MODEL")
+    context_summary_ttl_days: str = Field(default="", alias="CONTEXT_SUMMARY_TTL_DAYS")
+    cuda_cache_disable: bool = Field(default=False, alias="CUDA_CACHE_DISABLE")
+    cuda_launch_blocking: str = Field(default="", alias="CUDA_LAUNCH_BLOCKING")
+    custom_openai_api_key: str = Field(default="", alias="CUSTOM_OPENAI_API_KEY")
+    custom_openai_base_url: str = Field(default="", alias="CUSTOM_OPENAI_BASE_URL")
+    custom_openai_default_model: str = Field(default="", alias="CUSTOM_OPENAI_DEFAULT_MODEL")
+    database_password: str = Field(default="", alias="DATABASE_PASSWORD")
+    display: str = Field(default="", alias="DISPLAY")
+    display_height: str = Field(default="", alias="DISPLAY_HEIGHT")
+    display_width: str = Field(default="", alias="DISPLAY_WIDTH")
+    encryption_key: str = Field(default="", alias="ENCRYPTION_KEY")  # type: ignore[no-redef]  # GH#7105
+    file_cache_ttl_seconds: int = Field(default=0, alias="FILE_CACHE_TTL_SECONDS")
+    gateway_enable_sandbox: str = Field(default="", alias="GATEWAY_ENABLE_SANDBOX")
+    gateway_heartbeat_interval: str = Field(default="", alias="GATEWAY_HEARTBEAT_INTERVAL")
+    gateway_max_message_size: int = Field(default=0, alias="GATEWAY_MAX_MESSAGE_SIZE")
+    gateway_max_sessions_user: str = Field(default="", alias="GATEWAY_MAX_SESSIONS_USER")
+    gateway_message_retention_hours: str = Field(default="", alias="GATEWAY_MESSAGE_RETENTION_HOURS")
+    gateway_rate_limit_channel: int = Field(default=0, alias="GATEWAY_RATE_LIMIT_CHANNEL")
+    gateway_rate_limit_user: int = Field(default=0, alias="GATEWAY_RATE_LIMIT_USER")
+    gateway_session_timeout: int = Field(default=0, alias="GATEWAY_SESSION_TIMEOUT")
+    github_actions: str = Field(default="", alias="GITHUB_ACTIONS")
+    google_api_key: str = Field(default="", alias="GOOGLE_API_KEY")
+    groq_api_key: str = Field(default="", alias="GROQ_API_KEY")
+    hf_hub_cache: str = Field(default="", alias="HF_HUB_CACHE")
+    hf_hub_disable_progress_bars: bool = Field(default=False, alias="HF_HUB_DISABLE_PROGRESS_BARS")
+    hf_token: str = Field(default="", alias="HF_TOKEN")
+    home: str = Field(default="", alias="HOME")
+    huggingface_api_token: str = Field(default="", alias="HUGGINGFACE_API_TOKEN")
+    huggingface_hub_cache: str = Field(default="", alias="HUGGINGFACE_HUB_CACHE")
+    jenkins_url: str = Field(default="", alias="JENKINS_URL")
+    keras_backend: str = Field(default="", alias="KERAS_BACKEND")
+    layer_inference_model: str = Field(default="", alias="LAYER_INFERENCE_MODEL")
+    log_level: str = Field(default="", alias="LOG_LEVEL")
+    master_key: str = Field(default="", alias="MASTER_KEY")
+    mcp_isolation_mode: str = Field(default="", alias="MCP_ISOLATION_MODE")
+    mcp_registry_cache_enabled: bool = Field(default=False, alias="MCP_REGISTRY_CACHE_ENABLED")
+    mcp_registry_cache_ttl: str = Field(default="", alias="MCP_REGISTRY_CACHE_TTL")
+    mcp_run_jwt: str = Field(default="", alias="MCP_RUN_JWT")
+    mcp_run_jwt_enforce: str = Field(default="", alias="MCP_RUN_JWT_ENFORCE")
+    mcp_worker_cpu_seconds: int = Field(default=0, alias="MCP_WORKER_CPU_SECONDS")
+    mcp_worker_log_level: str = Field(default="", alias="MCP_WORKER_LOG_LEVEL")
+    mcp_worker_mem_mb: int = Field(default=0, alias="MCP_WORKER_MEM_MB")
+    mcp_worker_nofile: str = Field(default="", alias="MCP_WORKER_NOFILE")
+    network_subnet: str = Field(default="", alias="NETWORK_SUBNET")
+    nous_api_base_url: str = Field(default="", alias="NOUS_API_BASE_URL")
+    nous_api_key: str = Field(default="", alias="NOUS_API_KEY")
+    nous_default_model: str = Field(default="", alias="NOUS_DEFAULT_MODEL")
+    ollama_host: str = Field(default="", alias="OLLAMA_HOST")
+    ollama_url: str = Field(default="", alias="OLLAMA_URL")  # type: ignore[no-redef]  # GH#7105
+    openai_api_base_url: str = Field(default="", alias="OPENAI_API_BASE_URL")
+    openrouter_api_base_url: str = Field(default="", alias="OPENROUTER_API_BASE_URL")
+    openrouter_api_key: str = Field(default="", alias="OPENROUTER_API_KEY")
+    openrouter_default_model: str = Field(default="", alias="OPENROUTER_DEFAULT_MODEL")
+    password: str = Field(default="", alias="PASSWORD")
+    pytest_current_test: str = Field(default="", alias="PYTEST_CURRENT_TEST")
+    pytest_running: str = Field(default="", alias="PYTEST_RUNNING")
+    redis_host: str = Field(default="localhost", alias="REDIS_HOST")
+    redis_node_id: str = Field(default="", alias="REDIS_NODE_ID")
+    redis_port: int = Field(default=0, alias="REDIS_PORT")
+    secret_key: str = Field(default="", alias="SECRET_KEY")
+    service_auth_circuit_breaker_percentage: float = Field(default=0.0, alias="SERVICE_AUTH_CIRCUIT_BREAKER_PERCENTAGE")
+    service_auth_enforcement_mode: str = Field(default="", alias="SERVICE_AUTH_ENFORCEMENT_MODE")
+    service_auth_override_token: str = Field(default="", alias="SERVICE_AUTH_OVERRIDE_TOKEN")
+    service_auth_rate_limit_max_failures: int = Field(default=0, alias="SERVICE_AUTH_RATE_LIMIT_MAX_FAILURES")
+    service_auth_rate_limit_window: int = Field(default=0, alias="SERVICE_AUTH_RATE_LIMIT_WINDOW")
+    service_id: str = Field(default="", alias="SERVICE_ID")
+    service_key: str = Field(default="", alias="SERVICE_KEY")
+    service_key_file: str = Field(default="", alias="SERVICE_KEY_FILE")
+    shell: str = Field(default="", alias="SHELL")
+    slack_approvals_channel: str = Field(default="", alias="SLACK_APPROVALS_CHANNEL")
+    slack_bot_token: str = Field(default="", alias="SLACK_BOT_TOKEN")
+    slack_notifications_channel: str = Field(default="", alias="SLACK_NOTIFICATIONS_CHANNEL")
+    slm_auth_token: str = Field(default="", alias="SLM_AUTH_TOKEN")
+    slm_url: str = Field(default="", alias="SLM_URL")
+    skill_hub_url: str = Field(default="", alias="AUTOBOT_SKILL_HUB_URL")
+    testing: str = Field(default="", alias="TESTING")
+    tf_use_legacy_keras: str = Field(default="", alias="TF_USE_LEGACY_KERAS")
+    tiered_context_enabled: bool = Field(default=False, alias="TIERED_CONTEXT_ENABLED")
+    tokenizers_parallelism: str = Field(default="", alias="TOKENIZERS_PARALLELISM")
+    transformers_offline: bool = Field(default=False, alias="TRANSFORMERS_OFFLINE")
+    travis: str = Field(default="", alias="TRAVIS")
+    urlvoid_api_key: str = Field(default="", alias="URLVOID_API_KEY")
+    urlvoid_rate_limit: int = Field(default=0, alias="URLVOID_RATE_LIMIT")
+    user: str = Field(default="", alias="USER")
+    username: str = Field(default="", alias="USERNAME")
+    virustotal_api_key: str = Field(default="", alias="VIRUSTOTAL_API_KEY")
+    virustotal_rate_limit: int = Field(default=0, alias="VIRUSTOTAL_RATE_LIMIT")
+    vertex_ai_default_model: str = Field(default="gemini-2.5-flash", alias="VERTEX_AI_DEFAULT_MODEL")
+    vertex_ai_location: str = Field(default="us-central1", alias="VERTEX_AI_LOCATION")
+    vertex_ai_project: str = Field(default="", alias="VERTEX_AI_PROJECT")
+    vertex_ai_service_account_json: str = Field(default="", alias="VERTEX_AI_SERVICE_ACCOUNT_JSON")
+    vllm_dtype: str = Field(default="", alias="VLLM_DTYPE")
+    vllm_gpu_memory_utilization: str = Field(default="", alias="VLLM_GPU_MEMORY_UTILIZATION")
+    vllm_host: str = Field(default="", alias="VLLM_HOST")
+    vllm_model: str = Field(default="", alias="VLLM_MODEL")
+    vllm_tensor_parallel_size: int = Field(default=0, alias="VLLM_TENSOR_PARALLEL_SIZE")
+    vnc_resolution: str = Field(default="", alias="VNC_RESOLUTION")
+
+
 class FeatureConfig(BaseSettings):
     """Feature flags configuration."""
 
@@ -1173,7 +1499,7 @@ class AutoBotConfig(BaseSettings):
         model = config.llm.default_model  # qwen3.5:9b
     """
 
-    model_config = SettingsConfigDict(
+    model_config = SettingsConfigDict(  # type: ignore[typeddict-unknown-key]  # GH#7105: env_ignore valid pydantic-settings key, not yet in stubs  # noqa: E501
         env_file=str(PROJECT_ROOT / ".env"),
         env_file_encoding="utf-8",
         extra="ignore",
@@ -1198,6 +1524,7 @@ class AutoBotConfig(BaseSettings):
     path: PathConfig = Field(
         default_factory=PathConfig, alias="AUTOBOT_PATH_CONFIG"
     )  # Issue #3397; alias avoids collision with system PATH env var
+    misc: MiscConfig = Field(default_factory=MiscConfig)  # GH#7437: Unmapped env vars
 
     # Top-level settings
     deployment_mode: str = Field(default="distributed", alias="AUTOBOT_DEPLOYMENT_MODE")
@@ -1392,7 +1719,7 @@ class AutoBotConfig(BaseSettings):
         base = self.redis_url_with_auth
         return f"{base}/{db_number}"
 
-    def get_service_url(self, service_name: str) -> Optional[str]:
+    def get_service_url(self, service_name: str) -> str | None:
         """
         Get service URL by name.
 
@@ -1418,7 +1745,7 @@ class AutoBotConfig(BaseSettings):
         }
         return url_map.get(service_name.lower())
 
-    def get_vm_ip(self, vm_name: str) -> Optional[str]:
+    def get_vm_ip(self, vm_name: str) -> str | None:
         """
         Get VM IP address by name.
 
@@ -1463,6 +1790,165 @@ class AutoBotConfig(BaseSettings):
             "browser": self.vm.browser,
         }
 
+    # Convenience top-level properties for commonly accessed sub-config fields.
+    # These were previously accessed as top-level config attributes but live in
+    # sub-configs after the config reorganisation. Properties restore backward compat.
+
+    @property
+    def base_dir(self) -> str:
+        """Backward-compat: config.base_dir → config.path.base_dir."""
+        return self.path.base_dir
+
+    @property
+    def npu_worker_host(self) -> str:
+        """Backward-compat: config.npu_worker_host → config.vm.npu."""
+        return self.vm.npu
+
+    @property
+    def npu_worker_port(self) -> int:
+        """Backward-compat: config.npu_worker_port → config.port.npu."""
+        return self.port.npu
+
+    @property
+    def tts_worker_host(self) -> str:
+        """Backward-compat: config.tts_worker_host → config.vm.tts."""
+        return self.vm.tts
+
+    @property
+    def tts_worker_port(self) -> int:
+        """Backward-compat: config.tts_worker_port → config.port.tts."""
+        return self.port.tts
+
+    @property
+    def user_mode(self) -> str:
+        """Backward-compat: config.user_mode → config.misc.user_mode."""
+        return self.misc.user_mode
+
+    @property
+    def redis_node_id(self) -> str:
+        """Backward-compat: config.redis_node_id → config.misc.redis_node_id."""
+        return self.misc.redis_node_id
+
+    @property
+    def mcp_registry_cache_enabled(self) -> bool:
+        """Backward-compat: config.mcp_registry_cache_enabled → config.misc.mcp_registry_cache_enabled."""
+        return self.misc.mcp_registry_cache_enabled
+
+    @property
+    def chat_ssot_strict(self) -> str:
+        """Backward-compat: config.chat_ssot_strict → config.misc.chat_ssot_strict."""
+        return self.misc.chat_ssot_strict
+
+    @property
+    def concurrent_limiter_timeout(self) -> int:
+        """Backward-compat: config.concurrent_limiter_timeout → config.misc.concurrent_limiter_timeout."""
+        return self.misc.concurrent_limiter_timeout
+
+    @property
+    def postgres_host(self) -> str:
+        """Backward-compat: config.postgres_host → config.misc.postgres_host."""
+        return self.misc.postgres_host
+
+    @property
+    def postgres_port(self) -> int:
+        """Backward-compat: config.postgres_port → config.misc.postgres_port."""
+        return self.misc.postgres_port
+
+    @property
+    def postgres_user(self) -> str:
+        """Backward-compat: config.postgres_user → config.misc.postgres_user."""
+        return self.misc.postgres_user
+
+    @property
+    def postgres_password(self) -> str:
+        """Backward-compat: config.postgres_password → config.misc.postgres_password."""
+        return self.misc.postgres_password
+
+    @property
+    def postgres_db(self) -> str:
+        """Backward-compat: config.postgres_db → config.misc.postgres_db."""
+        return self.misc.postgres_db
+
+    @property
+    def data_db(self) -> str:
+        """Backward-compat: config.data_db → config.misc.data_db."""
+        return self.misc.data_db
+
+    @property
+    def encryption_key(self) -> str:
+        """Backward-compat: config.encryption_key → config.misc.encryption_key."""
+        return self.misc.encryption_key
+
+    @property
+    def mcp_registry_cache_ttl(self) -> str:
+        """Backward-compat: config.mcp_registry_cache_ttl → config.misc.mcp_registry_cache_ttl."""
+        return self.misc.mcp_registry_cache_ttl
+
+    @property
+    def skip_tls_verify(self) -> str:
+        """Backward-compat: config.skip_tls_verify → config.misc.skip_tls_verify."""
+        return self.misc.skip_tls_verify
+
+    @property
+    def llm_provider(self) -> str:
+        """Backward-compat: config.llm_provider → config.llm.provider."""
+        return self.llm.provider
+
+    @property
+    def default_llm_model(self) -> str:
+        """Backward-compat: config.default_llm_model → config.llm.default_model."""
+        return self.llm.default_model
+
+    @property
+    def llm_timeout(self) -> int:
+        """Backward-compat: config.llm_timeout → config.llm.timeout."""
+        return self.llm.timeout
+
+    @property
+    def llm_temperature(self) -> float:
+        """Backward-compat: config.llm_temperature with float default 0.7."""
+        raw = self.misc.llm_temperature
+        return float(raw) if raw else 0.7
+
+    def __getattr__(self, name: str):
+        """Fall back to misc/sub-configs for unmapped top-level attribute access.
+
+        Many legacy call sites use config.X where X was a MiscConfig or sub-config
+        field. Delegate unknown lookups to llm/timeout/misc etc. in priority order.
+        """
+        _sub_config_names = (
+            "llm",
+            "timeout",
+            "vm",
+            "port",
+            "redis",
+            "cache",
+            "tls",
+            "feature",
+            "permission",
+            "database_pool",
+            "auth",
+            "path",
+            "misc",
+        )
+        if name in _sub_config_names:
+            raise AttributeError(f"'AutoBotConfig' object has no attribute {name!r}")
+        for sub_name in _sub_config_names:
+            try:
+                sub = object.__getattribute__(self, sub_name)
+                val = getattr(sub, name)
+                # Skip empty-string fallbacks from MiscConfig for numeric attrs
+                if (
+                    sub_name == "misc"
+                    and val == ""
+                    and name.endswith(("_timeout", "_port", "_size", "_ttl", "_max", "_min"))
+                ):
+                    continue
+                return val
+            except AttributeError:
+                continue
+        raise AttributeError(f"'AutoBotConfig' object has no attribute {name!r}")
+
 
 @lru_cache(maxsize=1)
 def get_config() -> AutoBotConfig:
@@ -1503,6 +1989,46 @@ class _ConfigProxy:
 
 
 config = _ConfigProxy()
+
+
+# =============================================================================
+# Lazy Env Var Access for Unmapped Variables (GH#7437)
+# =============================================================================
+# This section provides backward compatibility for env vars not yet added as
+# structured fields in AutoBotConfig. Unmapped vars are read directly from
+# environment on access.
+#
+# For frequently-used vars, migration to structured fields is recommended.
+
+
+class _EnvVarAccessor:
+    """Lazy accessor for env vars — provides config.XXX style access."""
+
+    def __getattr__(self, name: str) -> str:
+        """Get env var value by field name (raises KeyError if not set)."""
+        # Convert snake_case field name back to UPPERCASE_ENV format
+        env_var = name.upper()
+
+        # Try exact match first
+        value = os.environ.get(env_var)  # ssot-config-exempt: dynamic env var name
+        if value is not None:
+            return value
+
+        # Try with AUTOBOT_ prefix if not already there
+        if not env_var.startswith("AUTOBOT_"):
+            env_var = f"AUTOBOT_{env_var}"
+            value = os.environ.get(env_var)  # ssot-config-exempt: dynamic env var name
+            if value is not None:
+                return value
+
+        # Return empty string for missing vars (matches original behavior)
+        return ""
+
+
+# Global lazy accessor for unmapped env vars
+# This allows: from autobot_shared.ssot_config import env
+#              value = env.SOME_UNMAPPED_VAR
+env = _EnvVarAccessor()
 
 
 # Backward compatibility exports

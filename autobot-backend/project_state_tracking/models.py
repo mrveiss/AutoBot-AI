@@ -11,7 +11,7 @@ Part of Issue #381 - God Class Refactoring
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Set
 
 from .types import StateChangeType, TrackingMetric
 
@@ -35,10 +35,10 @@ class StateChange:
 
     timestamp: datetime
     change_type: StateChangeType
-    before_state: Optional[Dict[str, Any]]
+    before_state: Dict[str, Any] | None
     after_state: Dict[str, Any]
     description: str
-    user_id: Optional[str] = None
+    user_id: str | None = None
     metadata: Dict[str, Any] = field(default_factory=dict)
 
 
@@ -50,5 +50,5 @@ class ProjectMilestone:
     description: str
     criteria: Dict[str, Any]
     achieved: bool = False
-    achieved_at: Optional[datetime] = None
+    achieved_at: datetime | None = None
     evidence: List[str] = field(default_factory=list)

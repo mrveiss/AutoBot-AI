@@ -1,0 +1,294 @@
+rules:
+  # ── Subprocess / shell injection ─────────────────────────────────────────────
+
+  - id: autobot-shell-true-with-variable
+    patterns:
+      - pattern: subprocess.$FUNC(..., shell=True, ...)
+      - pattern-not: subprocess.$FUNC("...", shell=True, ...)
+    message: >
+      shell=True with a non-literal command can enable shell injection.
+      Build argument lists and use shell=False, or wrap via shlex.
+    languages: [python]
+    severity: ERROR
+    metadata:
+      category: security
+      cwe: CWE-78
+
+  - id: autobot-os-system-variable
+    patterns:
+      - pattern: os.system($VAR)
+      - pattern-not: os.system("...")
+    message: >
+      os.system() with a variable argument is shell-injection-prone.
+      Use subprocess.run() with a list argument and shell=False.
+    languages: [python]
+    severity: ERROR
+    metadata:
+      category: security
+      cwe: CWE-78
+
+  # ── LLM prompt injection ──────────────────────────────────────────────────────
+
+  - id: autobot-unsanitized-user-input-in-prompt
+    patterns:
+      - pattern: |
+          $PROMPT = ... + $USER_INPUT + ...
+      - pattern-either:
+          - pattern-inside: |
+              def $FUNC(..., user_input=..., ...):
+                  ...
+          - pattern-inside: |
+              def $FUNC(..., message=..., ...):
+                  ...
+          - pattern-inside: |
+              def $FUNC(..., query=..., ...):
+                  ...
+    message: >
+      Potential prompt injection: user-controlled input concatenated directly
+      into an LLM prompt. Sanitize or clearly delimit user content from
+      system instructions.
+    languages: [python]
+    severity: WARNING
+    metadata:
+      category: security
+      cwe: CWE-20
+
+  # ── Hardcoded secrets / credentials ──────────────────────────────────────────
+
+  - id: autobot-hardcoded-secret-key
+    patterns:
+      - pattern-either:
+          - pattern: SECRET_KEY = "..."
+          - pattern: secret_key = "..."
+          - pattern: API_KEY = "..."
+          - pattern: api_key = "..."
+          - pattern: PASSWORD = "..."
+          - pattern: password = "..."
+          - pattern: TOKEN = "..."
+          - pattern: token = "..."
+      - pattern-not: $VAR = ""
+      - pattern-not: $VAR = "changeme"
+      - pattern-not: $VAR = "your-secret-here"
+      - pattern-not: $VAR = "placeholder"
+    message: >
+      Potential hardcoded secret. Use environment variables or a secrets
+      manager (e.g. os.environ, Vault) instead.
+    languages: [python]
+    severity: ERROR
+    metadata:
+      category: security
+      cwe: CWE-798
+
+  # ── SQL injection ─────────────────────────────────────────────────────────────
+
+  - id: autobot-sql-string-format
+    patterns:
+      - pattern-either:
+          - pattern: $DB.execute(f"...{$VAR}...")
+          - pattern: $DB.execute("..." % $VAR)
+          - pattern: $DB.execute("..." + $VAR + "...")
+          - pattern: $DB.execute("..." + $VAR)
+          - pattern: $DB.execute($VAR + "...")
+    message: >
+      SQL query built with string interpolation/concatenation risks SQL
+      injection. Use parameterised queries: db.execute(sql, [params]).
+    languages: [python]
+    severity: ERROR
+    metadata:
+      category: security
+      cwe: CWE-89
+
+  # ── Unsafe deserialisation ────────────────────────────────────────────────────
+
+  - id: autobot-unsafe-deserialise-pickle
+    patterns:
+      - pattern: pickle.loads($DATA)
+      - pattern-not-inside: |
+          # nosec
+          ...
+    message: >
+      Deserialising untrusted data via pickle enables arbitrary code execution.
+      Use a safe alternative (json, msgpack) or validate the source strictly.
+    languages: [python]
+    severity: ERROR
+    metadata:
+      category: security
+      cwe: CWE-502
+
+  - id: autobot-yaml-load-unsafe
+    patterns:
+      - pattern: yaml.load($DATA, ...)
+      - pattern-not: yaml.load($DATA, Loader=yaml.SafeLoader)
+      - pattern-not: yaml.safe_load($DATA)
+    message: >
+      yaml.load() without SafeLoader can deserialise arbitrary Python objects.
+      Use yaml.safe_load() or explicitly pass Loader=yaml.SafeLoader.
+    languages: [python]
+    severity: ERROR
+    metadata:
+      category: security
+      cwe: CWE-502
+
+  # ── JWT misuse ────────────────────────────────────────────────────────────────
+
+  - id: autobot-jwt-none-algorithm
+    pattern: jwt.decode($TOKEN, ..., algorithms=["none"])
+    message: >
+      JWT decoded with "none" algorithm allows signature bypass. Remove
+      "none" from the algorithms list.
+    languages: [python]
+    severity: ERROR
+    metadata:
+      category: security
+      cwe: CWE-347
+
+  - id: autobot-jwt-decode-no-verify
+    pattern: 'jwt.decode($TOKEN, options={"verify_signature": False, ...})'
+    message: >
+      JWT signature verification explicitly disabled. Only skip in tests,
+      never in production code paths.
+    languages: [python]
+    severity: ERROR
+    metadata:
+      category: security
+      cwe: CWE-347
+
+  # ── Flask / FastAPI security ──────────────────────────────────────────────────
+
+  - id: autobot-flask-debug-true
+    patterns:
+      - pattern: app.run(..., debug=True, ...)
+      - pattern-not-inside: |
+          if __name__ == "__main__":
+              ...
+    message: >
+      Flask debug mode enabled outside of the __main__ guard. The interactive
+      debugger exposes an unauthenticated RCE endpoint.
+    languages: [python]
+    severity: ERROR
+    metadata:
+      category: security
+      cwe: CWE-94
+
+  - id: autobot-cors-wildcard-credentials
+    pattern: CORS($APP, origins="*", supports_credentials=True)
+    message: >
+      CORS wildcard origin combined with credentials=True violates the CORS
+      spec and exposes session cookies to any origin. Enumerate allowed origins.
+    languages: [python]
+    severity: ERROR
+    metadata:
+      category: security
+      cwe: CWE-942
+
+  # ── Path traversal ────────────────────────────────────────────────────────────
+
+  - id: autobot-path-traversal-open
+    patterns:
+      - pattern: open($PATH, ...)
+      - pattern-not: open("...", ...)
+      - pattern-either:
+          - pattern-inside: |
+              def $FUNC(..., $PATH, ...):
+                  ...
+          - pattern-inside: |
+              def $FUNC(..., filename=..., ...):
+                  ...
+          - pattern-inside: |
+              def $FUNC(..., path=..., ...):
+                  ...
+    message: >
+      open() called with a variable path. Validate that the resolved path
+      stays within the expected directory using pathlib.Path.resolve() +
+      is_relative_to().
+    languages: [python]
+    severity: WARNING
+    metadata:
+      category: security
+      cwe: CWE-22
+
+  # ── AutoBot-specific anti-patterns (Issue #6597) ──────────────────────────
+
+  - id: autobot-direct-aioredis-client-access
+    patterns:
+      - pattern: $KB._aioredis_client
+    message: >
+      Direct access to _aioredis_client bypasses connection-pool management.
+      Use kb.redis() instead. The pre-commit hook already enforces this;
+      this rule adds IDE feedback (CWE-668).
+    languages: [python]
+    severity: WARNING
+    metadata:
+      category: best-practice
+      cwe: CWE-668
+
+  - id: autobot-no-print-in-backend
+    pattern: print(...)
+    message: >
+      Use the AutoBot logger instead of print(): logging.getLogger(__name__).
+      Direct stdout output bypasses structured logging and log-level control.
+    languages: [python]
+    severity: WARNING
+    paths:
+      include:
+        - autobot-backend/**
+        - autobot_shared/**
+        - autobot-slm-backend/**
+    metadata:
+      category: best-practice
+
+  - id: autobot-pydantic-settings-path-field
+    patterns:
+      - pattern-either:
+          - pattern: |
+              class $SETTINGS(BaseSettings):
+                  path: ...
+          - pattern: |
+              class $SETTINGS(BaseSettings):
+                  path: str = ...
+          - pattern: |
+              class $SETTINGS(BaseSettings):
+                  path: Path = ...
+    message: >
+      A pydantic-settings field named 'path' silently reads the OS PATH env var,
+      overwriting your intended default. Rename the field (e.g. config_path) or
+      add alias="AUTOBOT_PATH_CONFIG" to avoid the collision.
+    languages: [python]
+    severity: ERROR
+    metadata:
+      category: security
+      cwe: CWE-20
+
+  - id: autobot-hardcoded-model-name
+    patterns:
+      - pattern-either:
+          - pattern: model = "gpt-4..."
+          - pattern: model = "claude-..."
+          - pattern: model = "gemini-..."
+          - pattern: model = "llama..."
+          - pattern: model = "mistral..."
+          - pattern: model_name = "gpt-4..."
+          - pattern: model_name = "claude-..."
+          - pattern: model_name = "gemini-..."
+    message: >
+      Hardcoded LLM model name. Import from autobot_shared.ssot_constants
+      (e.g. ANTHROPIC_CLAUDE_SONNET4, OPENAI_GPT4O) so model changes are
+      made in one place and tracked in the SSOT.
+    languages: [python]
+    severity: WARNING
+    metadata:
+      category: best-practice
+
+  - id: autobot-no-console-log-frontend
+    pattern: console.log(...)
+    message: >
+      Use createLogger('ComponentName') from @/utils/logger instead of
+      console.log(). Direct console output bypasses log-level filtering
+      and structured logging.
+    languages: [javascript, typescript]
+    severity: WARNING
+    paths:
+      include:
+        - autobot-frontend/src/**
+    metadata:
+      category: best-practice

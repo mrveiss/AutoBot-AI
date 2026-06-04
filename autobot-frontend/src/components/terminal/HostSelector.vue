@@ -1,7 +1,7 @@
 <template>
   <div class="host-selector">
     <div class="selector-label">
-      <i class="fas fa-server text-autobot-text-secondary mr-2"></i>
+      <Icon name="server" class="text-autobot-text-secondary mr-2" />
       <span class="text-sm font-medium text-autobot-text-primary">{{ $t('terminal.host') }}</span>
     </div>
     <select
@@ -32,13 +32,14 @@
       </optgroup>
     </select>
     <div v-if="showDescription && selectedHostConfig" class="host-description">
-      <i class="fas fa-info-circle text-blue-500 mr-1"></i>
+      <Icon name="info-circle" class="text-blue-500 mr-1" />
       <span class="text-xs text-autobot-text-secondary">{{ selectedHostConfig.description }}</span>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, watch, onMounted } from 'vue'
 import { useTerminalStore, AVAILABLE_HOSTS, type HostConfig } from '@/composables/useTerminalStore'
 import { createLogger } from '@/utils/debugUtils'

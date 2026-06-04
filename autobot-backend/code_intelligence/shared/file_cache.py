@@ -33,23 +33,25 @@ Usage:
 Part of EPIC #217 - Advanced Code Intelligence Methods
 """
 
+from __future__ import annotations
+
 import asyncio
-import logging
-import os
 import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, FrozenSet, List, Optional
+from typing import Dict, FrozenSet, List
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
+from autobot_shared.ssot_config import config
 from constants.path_constants import PATH
 from utils.file_categorization import SKIP_DIRS
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Configuration via environment variables
-DEFAULT_CACHE_TTL = int(os.getenv("FILE_CACHE_TTL_SECONDS", "300"))  # 5 minutes
+DEFAULT_CACHE_TTL = int(config.file_cache_ttl_seconds)  # 5 minutes
 DEFAULT_ROOT_PATH = PATH.PROJECT_ROOT
 
 # File extension sets for different categories
@@ -121,7 +123,7 @@ class FileListCache:
         Safe to use from multiple async tasks and threads.
     """
 
-    _instance: Optional["FileListCache"] = None
+    _instance: "FileListCache" | None = None
     _lock = threading.Lock()
 
     # CacheProtocol properties - Issue #743
@@ -153,7 +155,7 @@ class FileListCache:
     def __init__(
         self,
         ttl: int = DEFAULT_CACHE_TTL,
-        root_path: Optional[Path] = None,
+        root_path: Path | None = None,
     ):
         """Initialize cache (only runs once due to singleton)."""
         if self._initialized:
@@ -215,7 +217,7 @@ class FileListCache:
     async def get_files(
         self,
         extensions: FrozenSet[str],
-        root_path: Optional[Path] = None,
+        root_path: Path | None = None,
     ) -> List[Path]:
         """
         Get list of files matching extensions, using cache if available.
@@ -257,7 +259,7 @@ class FileListCache:
 
         return files.copy()
 
-    def invalidate(self, extensions: Optional[FrozenSet[str]] = None) -> None:
+    def invalidate(self, extensions: FrozenSet[str] | None = None) -> None:
         """
         Invalidate cache entries.
 
@@ -312,7 +314,7 @@ class FileListCache:
                 self._stats.invalidations += 1
         return evicted
 
-    def clear(self) -> None:
+    async def clear(self) -> None:
         """
         Clear all items from cache (CacheProtocol).
 
@@ -336,7 +338,7 @@ class FileListCache:
 _get_cache = lazy_singleton(FileListCache)
 
 
-async def get_python_files(root_path: Optional[Path] = None) -> List[Path]:
+async def get_python_files(root_path: Path | None = None) -> List[Path]:
     """
     Get list of Python files (.py) in the codebase.
 
@@ -354,7 +356,7 @@ async def get_python_files(root_path: Optional[Path] = None) -> List[Path]:
     return await _get_cache().get_files(PYTHON_EXTENSIONS, root_path)
 
 
-async def get_frontend_files(root_path: Optional[Path] = None) -> List[Path]:
+async def get_frontend_files(root_path: Path | None = None) -> List[Path]:
     """
     Get list of frontend files (.ts, .tsx, .js, .jsx, .vue, .css, .html).
 
@@ -367,7 +369,7 @@ async def get_frontend_files(root_path: Optional[Path] = None) -> List[Path]:
     return await _get_cache().get_files(FRONTEND_EXTENSIONS, root_path)
 
 
-async def get_all_code_files(root_path: Optional[Path] = None) -> List[Path]:
+async def get_all_code_files(root_path: Path | None = None) -> List[Path]:
     """
     Get list of all code files (Python + frontend + shell).
 
@@ -380,7 +382,7 @@ async def get_all_code_files(root_path: Optional[Path] = None) -> List[Path]:
     return await _get_cache().get_files(ALL_CODE_EXTENSIONS, root_path)
 
 
-def invalidate_file_cache(extensions: Optional[FrozenSet[str]] = None) -> None:
+def invalidate_file_cache(extensions: FrozenSet[str] | None = None) -> None:
     """
     Invalidate file list cache.
 

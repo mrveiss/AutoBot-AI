@@ -10,7 +10,6 @@ Pool sizes are coordinated via SSOT config (#2860).
 """
 
 import asyncio
-import logging
 import re
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -20,11 +19,13 @@ from typing import Any, Dict
 
 import aiosqlite
 
+from autobot_shared.logging_manager import get_logger
+
 # Import shared database helpers (Issue #292 - Eliminate duplicate code)
 from constants.threshold_constants import TimingConstants
 from utils.database_helpers import join_results  # noqa: F401 - re-export
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def _get_sqlite_pool_size() -> int:

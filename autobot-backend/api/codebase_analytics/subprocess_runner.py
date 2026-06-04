@@ -15,10 +15,10 @@ Public functions
 """
 
 import asyncio
-import logging
 import sys
 from pathlib import Path
-from typing import Optional
+
+from autobot_shared.logging_manager import get_logger
 
 from .indexing_executor import (
     _SUBPROCESS_HARD_TIMEOUT,
@@ -27,7 +27,7 @@ from .indexing_executor import (
 )
 from .progress_tracker import _load_task_from_redis
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 async def _handle_subprocess_crash(
@@ -117,7 +117,7 @@ async def _run_indexing_subprocess(
     create_initial_state_fn,
     save_task_fn,
     mark_task_failed_fn,
-    source_id: Optional[str] = None,
+    source_id: str | None = None,
 ) -> None:
     """Launch isolated indexing subprocess to prevent ChromaDB SIGSEGV (#1180).
 

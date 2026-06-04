@@ -5,13 +5,16 @@ Extends the analysis suite to support JavaScript, TypeScript, Vue, React, and ot
 
 import asyncio
 import json
-import logging
 import re
 import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
+
+from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_constants import TTL_1_HOUR
 
 from autobot_shared.async_compat import run_or_schedule
 
@@ -33,7 +36,7 @@ except ImportError:
 
     config = Config()
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -304,7 +307,7 @@ class FrontendAnalyzer:
 
         return components
 
-    async def _analyze_file_component(self, file_path: str) -> Optional[FrontendComponent]:
+    async def _analyze_file_component(self, file_path: str) -> FrontendComponent | None:
         """Analyze a single file as a frontend component"""
 
         try:
@@ -342,7 +345,7 @@ class FrontendAnalyzer:
             logger.error(f"Error analyzing component {file_path}: {e}")
             return None
 
-    def _detect_framework(self, content: str, file_path: str) -> Optional[str]:
+    def _detect_framework(self, content: str, file_path: str) -> str | None:
         """Detect frontend framework"""
 
         # Check file extension first
@@ -800,7 +803,7 @@ class FrontendAnalyzer:
         await self._ensure_redis()
         if self.redis_client:
             try:
-                await self.redis_client.setex(self.FRONTEND_KEY, 3600, json.dumps(results, default=str))
+                await self.redis_client.setex(self.FRONTEND_KEY, TTL_1_HOUR, json.dumps(results, default=str))
             except Exception as e:
                 logger.warning(f"Failed to cache results: {e}")
 

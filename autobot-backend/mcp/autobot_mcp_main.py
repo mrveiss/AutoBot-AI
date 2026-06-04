@@ -24,7 +24,7 @@ from mcp.autobot_server import AutoBotMCPServer
 async def main() -> None:
     server = AutoBotMCPServer()
     if "--http" in sys.argv:
-        host = "0.0.0.0"
+        host = "0.0.0.0"  # nosec B104 - intentional bind to all interfaces for service/test
         port = 8200
         args = sys.argv[1:]
         if "--host" in args:

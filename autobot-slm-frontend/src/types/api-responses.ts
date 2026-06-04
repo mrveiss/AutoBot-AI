@@ -638,11 +638,18 @@ export interface SecurityPolicyListResponse {
 // =============================================================================
 
 export interface FleetCert {
+  cert_id: string
   node_id: string
-  hostname: string
-  certificate: string
-  expiry: string
+  serial_number: string | null
+  subject: string | null
+  issuer: string | null
+  not_before: string | null
+  not_after: string | null
+  fingerprint: string | null
   status: string
+  days_until_expiry: number | null
+  created_at: string
+  updated_at: string
 }
 
 // =============================================================================

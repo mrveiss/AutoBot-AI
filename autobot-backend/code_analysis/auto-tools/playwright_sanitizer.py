@@ -22,9 +22,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
+from autobot_shared.logging_manager import get_logger
+
 # Configure logging for security fixer
 logging.basicConfig(level=logging.INFO, format="%(message)s")
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level constant for HTML extensions (performance optimization)
 _HTML_EXTENSIONS = (".html", ".htm")

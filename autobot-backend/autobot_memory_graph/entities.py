@@ -12,14 +12,15 @@ Part of the modular autobot_memory_graph package (Issue #716).
 """
 
 import asyncio
-import logging
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
+
+from autobot_shared.logging_manager import get_logger
 
 from .core import ENTITY_TYPES, AutoBotMemoryGraphCore
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class EntityOperationsMixin:
@@ -32,8 +33,8 @@ class EntityOperationsMixin:
 
     def _prepare_entity_metadata(
         self: AutoBotMemoryGraphCore,
-        metadata: Optional[Dict[str, Any]],
-        tags: Optional[List[str]],
+        metadata: Dict[str, Any] | None,
+        tags: List[str] | None,
     ) -> Dict[str, Any]:
         """
         Prepare enriched metadata for a new entity.
@@ -133,8 +134,8 @@ class EntityOperationsMixin:
         entity_type: str,
         name: str,
         observations: List[str],
-        metadata: Optional[Dict[str, Any]] = None,
-        tags: Optional[List[str]] = None,
+        metadata: Dict[str, Any] | None = None,
+        tags: List[str] | None = None,
     ) -> Dict[str, Any]:
         """
         Create a new entity in the memory graph.
@@ -178,10 +179,10 @@ class EntityOperationsMixin:
 
     async def get_entity(
         self: AutoBotMemoryGraphCore,
-        entity_id: Optional[str] = None,
-        entity_name: Optional[str] = None,
+        entity_id: str | None = None,
+        entity_name: str | None = None,
         include_relations: bool = False,
-    ) -> Optional[Dict[str, Any]]:
+    ) -> Dict[str, Any] | None:
         """
         Retrieve entity by ID or name.
 
@@ -300,7 +301,7 @@ class EntityOperationsMixin:
     async def invalidate_entity(
         self: AutoBotMemoryGraphCore,
         entity_id: str,
-        ended_at: Optional[str] = None,
+        ended_at: str | None = None,
     ) -> bool:
         """Mark entity as no longer valid by setting valid_to.
 
@@ -409,8 +410,8 @@ class EntityOperationsMixin:
     def _prepare_conversation_data(
         self: AutoBotMemoryGraphCore,
         session_id: str,
-        metadata: Optional[Dict[str, Any]],
-        observations: Optional[List[str]],
+        metadata: Dict[str, Any] | None,
+        observations: List[str] | None,
     ) -> tuple[List[str], List[str], Dict[str, Any]]:
         """
         Prepare observations, tags, and metadata for conversation entity.
@@ -442,8 +443,8 @@ class EntityOperationsMixin:
     async def create_conversation_entity(
         self: AutoBotMemoryGraphCore,
         session_id: str,
-        metadata: Optional[Dict[str, Any]] = None,
-        observations: Optional[List[str]] = None,
+        metadata: Dict[str, Any] | None = None,
+        observations: List[str] | None = None,
     ) -> Dict[str, Any]:
         """
         Automatically create entity from chat session.

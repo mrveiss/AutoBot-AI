@@ -10,12 +10,11 @@ and AI-generated review comments. Learns from past reviews.
 
 import asyncio
 import json
-import logging
 import re
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, List, Optional
+from typing import Any, List
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
@@ -44,11 +43,12 @@ from api.schemas_code import (
 )
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import parse_utc_iso
 from constants.threshold_constants import TimingConstants
 from constants.ttl_constants import TTL_7_DAYS
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Allowlist pattern for git commit range arguments (Issue #1733).
 # Allows: HEAD, HEAD~N, commit hashes, branch names, .. and ... range operators.
@@ -384,7 +384,7 @@ def generate_summary(comments: list[ReviewComment]) -> dict[str, Any]:
     }
 
 
-async def get_git_diff(commit_range: Optional[str] = None) -> str:
+async def get_git_diff(commit_range: str | None = None) -> str:
     """Get git diff for review."""
     try:
         cmd = ["git", "diff"]
@@ -425,8 +425,8 @@ async def get_git_diff(commit_range: Optional[str] = None) -> str:
 )
 async def analyze_diff(
     admin_check: bool = Depends(check_admin_permission),
-    commit_range: Optional[str] = Query(None, description="Git commit range (e.g., HEAD~1..HEAD)"),
-    source_id: Optional[str] = Query(None, description="Project source ID to scope analysis"),
+    commit_range: str | None = Query(None, description="Git commit range (e.g., HEAD~1..HEAD)"),
+    source_id: str | None = Query(None, description="Project source ID to scope analysis"),
 ) -> dict[str, Any]:
     """
     Analyze git diff and generate review comments.
@@ -533,7 +533,7 @@ async def analyze_diff(
 async def get_review_by_id(
     review_id: str,
     _user: dict = Depends(get_current_user),
-    source_id: Optional[str] = Query(None, description="Project source ID (optional, speeds up lookup)"),
+    source_id: str | None = Query(None, description="Project source ID (optional, speeds up lookup)"),
 ) -> dict[str, Any]:
     """
     Retrieve a persisted code review result by its UUID.
@@ -577,7 +577,7 @@ async def get_review_by_id(
 async def review_file(
     admin_check: bool = Depends(check_admin_permission),
     file_path: str = None,
-    content: Optional[str] = None,
+    content: str | None = None,
 ) -> dict[str, Any]:
     """
     Review a specific file.
@@ -650,8 +650,8 @@ async def get_review_patterns(
 async def get_review_history(
     admin_check: bool = Depends(check_admin_permission),
     limit: int = Query(20, ge=1, le=100),
-    since: Optional[str] = Query(None, description="ISO date string"),
-    source_id: Optional[str] = Query(None, description="Project source ID to scope analysis"),
+    since: str | None = Query(None, description="ISO date string"),
+    source_id: str | None = Query(None, description="Project source ID to scope analysis"),
 ) -> dict[str, Any]:
     """
     Get review history.
@@ -711,7 +711,7 @@ async def get_review_history(
 async def get_review_metrics(
     admin_check: bool = Depends(check_admin_permission),
     period: str = Query("30d", pattern="^(7d|30d|90d)$"),
-    source_id: Optional[str] = Query(None, description="Project source ID to scope analysis"),
+    source_id: str | None = Query(None, description="Project source ID to scope analysis"),
 ) -> dict[str, Any]:
     """
     Get review metrics over time.
@@ -736,7 +736,7 @@ async def submit_feedback(
     admin_check: bool = Depends(check_admin_permission),
     comment_id: str = None,
     is_helpful: bool = None,
-    feedback_text: Optional[str] = None,
+    feedback_text: str | None = None,
 ) -> dict[str, Any]:
     """
     Submit feedback on a review comment.
@@ -781,7 +781,7 @@ async def submit_feedback(
 )
 async def get_review_summary(
     admin_check: bool = Depends(check_admin_permission),
-    source_id: Optional[str] = Query(None, description="Project source ID to scope analysis"),
+    source_id: str | None = Query(None, description="Project source ID to scope analysis"),
 ) -> dict[str, Any]:
     """
     Get overall review system summary.

@@ -14,12 +14,13 @@ import os
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from autobot_shared.ssot_config import TLSMode  # noqa: F401 — canonical enum
+from autobot_shared.ssot_config import config
 
 
 def _find_project_root() -> Path:
@@ -28,7 +29,7 @@ def _find_project_root() -> Path:
     for parent in [current] + list(current.parents):
         if (parent / ".env").exists():
             return parent
-    return Path(os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot"))
+    return Path(config.base_dir)
 
 
 PROJECT_ROOT = _find_project_root()
@@ -60,10 +61,10 @@ class CertificateStatus:
 
     exists: bool
     valid: bool
-    expires_at: Optional[str] = None
-    days_until_expiry: Optional[int] = None
-    subject: Optional[str] = None
-    issuer: Optional[str] = None
+    expires_at: str | None = None
+    days_until_expiry: int | None = None
+    subject: str | None = None
+    issuer: str | None = None
     needs_renewal: bool = False
 
 

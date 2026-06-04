@@ -1,21 +1,21 @@
 <template>
   <div class="duplicates-section analytics-section">
     <h3>
-      <i class="fas fa-copy"></i> {{ $t('analytics.duplicates.title') }}
+      <Icon name="copy" /> {{ $t('analytics.duplicates.title') }}
       <span v-if="duplicates && duplicates.length > 0" class="total-count">
         ({{ duplicates.length.toLocaleString() }} {{ $t('analytics.duplicates.pairs') }})
       </span>
       <div v-if="duplicates && duplicates.length > 0" class="section-export-buttons">
         <button @click="emit('export', 'md')" class="export-btn" :title="$t('analytics.codebase.actions.exportMarkdown')">
-          <i class="fas fa-file-alt"></i> MD
+          <Icon name="file-alt" /> MD
         </button>
         <button @click="emit('export', 'json')" class="export-btn" :title="$t('analytics.codebase.actions.exportJson')">
-          <i class="fas fa-file-code"></i> JSON
+          <Icon name="file-code" /> JSON
         </button>
       </div>
     </h3>
     <div v-if="loading" class="section-loading">
-      <i class="fas fa-spinner fa-spin"></i>
+      <Icon name="spinner" class="animate-spin" />
       <span>{{ $t('analytics.codebase.actions.loading') }}</span>
     </div>
     <div v-else-if="duplicates && duplicates.length > 0" class="section-content">
@@ -56,7 +56,7 @@
             @click="toggleDuplicateGroup(String(similarity))"
           >
             <div class="header-info">
-              <i :class="isGroupExpanded(similarity) ? 'fas fa-chevron-down' : 'fas fa-chevron-right'"></i>
+              <Icon :name="isGroupExpanded(similarity) ? 'chevron-down' : 'chevron-right'" />
               <span class="header-name">{{ formatSimilarityGroup(String(similarity)) }}</span>
               <span class="header-count">({{ group.length }})</span>
             </div>
@@ -113,6 +113,7 @@
  * Issue #184: Split oversized Vue components
  */
 
+import Icon from '@/components/ui/Icon.vue'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import EmptyState from '@/components/ui/EmptyState.vue'

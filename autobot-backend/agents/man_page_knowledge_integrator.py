@@ -8,21 +8,21 @@ Scrapes, parses, and integrates Linux man pages into machine-aware knowledge sys
 
 import asyncio
 import json
-import logging
 import re
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, FrozenSet, List, Optional, Set, Tuple
+from typing import Any, Dict, FrozenSet, List, Set, Tuple
 
 import aiofiles
 import yaml
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import utc_timestamp
 from intelligence.os_detector import get_os_detector
 from utils.command_utils import execute_command
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level frozenset for common command line starters
 _COMMON_COMMAND_STARTERS: FrozenSet[str] = frozenset({"ls", "cat", "grep", "find", "awk", "sed"})
@@ -40,9 +40,9 @@ class ManPageInfo:
     options: List[Dict[str, str]]
     examples: List[Dict[str, str]]
     see_also: List[str]
-    file_path: Optional[str] = None
-    last_updated: Optional[str] = None
-    machine_id: Optional[str] = None
+    file_path: str | None = None
+    last_updated: str | None = None
+    machine_id: str | None = None
 
 
 class ManPageParser:
@@ -350,7 +350,7 @@ class ManPageKnowledgeIntegrator:
         result = await execute_command(["man", "-w", command], timeout=5.0)
         return result.return_code == 0
 
-    async def extract_man_page(self, command: str, section: int = 1) -> Optional[ManPageInfo]:
+    async def extract_man_page(self, command: str, section: int = 1) -> ManPageInfo | None:
         """Extract and parse man page for a command.
 
         Issue #751: Uses centralized execute_command from command_utils.
@@ -410,7 +410,7 @@ class ManPageKnowledgeIntegrator:
             logger.error("Failed to cache man page to %s: %s", cache_file, e)
         return cache_file
 
-    async def load_cached_man_page(self, command: str, section: int = 1) -> Optional[ManPageInfo]:
+    async def load_cached_man_page(self, command: str, section: int = 1) -> ManPageInfo | None:
         """Load cached man page data from disk"""
         cache_file = self.man_cache_dir / f"{command}_{section}.json"
 
@@ -629,7 +629,7 @@ import asyncio as _asyncio_lock
 
 from autobot_shared.async_compat import run_or_schedule
 
-_integrator_instance: Optional[ManPageKnowledgeIntegrator] = None
+_integrator_instance: ManPageKnowledgeIntegrator | None = None
 _integrator_lock = _asyncio_lock.Lock()
 
 

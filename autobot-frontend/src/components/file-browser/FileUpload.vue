@@ -2,7 +2,7 @@
   <div class="file-upload-section">
     <div class="file-upload-inline-wrapper">
       <label for="visible-file-input" class="file-input-label">
-        <i class="fas fa-cloud-upload-alt"></i>
+        <Icon name="cloud-upload-alt" />
         {{ $t('fileBrowser.upload.dragAndDrop') }}
       </label>
 
@@ -33,6 +33,7 @@
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { ref } from 'vue'
 
 interface Emits {

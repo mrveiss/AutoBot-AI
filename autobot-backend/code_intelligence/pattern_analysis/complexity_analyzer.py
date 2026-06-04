@@ -9,10 +9,11 @@ Identifies complexity hotspots and suggests simplifications.
 """
 
 import ast
-import logging
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Set
+
+from autobot_shared.logging_manager import get_logger
 
 from .types import CodeLocation, ComplexityHotspot, PatternSeverity
 
@@ -24,7 +25,7 @@ try:
 except ImportError:
     HAS_SHARED_CACHE = False
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Try to import radon - it's optional but recommended
 try:
@@ -67,7 +68,7 @@ class FunctionComplexity:
     nesting_depth: int = 0
     parameter_count: int = 0
     line_count: int = 0
-    class_name: Optional[str] = None
+    class_name: str | None = None
 
     @property
     def complexity_rank(self) -> str:
@@ -269,7 +270,7 @@ class ComplexityAnalyzer:
         cc_threshold: int = 10,
         mi_threshold: float = 50,
         nesting_threshold: int = 4,
-        exclude_dirs: Optional[Set[str]] = None,
+        exclude_dirs: Set[str] | None = None,
         use_shared_cache: bool = True,
     ):
         """Initialize complexity analyzer.

@@ -12,7 +12,7 @@ import ast
 from services.type_inference import TypeInferencer
 
 
-def test_type_inferencer_initialization():
+def test_type_inferencer_initialization() -> None:
     """Test TypeInferencer initialization."""
     inferencer = TypeInferencer()
 
@@ -21,7 +21,7 @@ def test_type_inferencer_initialization():
     assert "str" in inferencer.builtins
 
 
-def test_infer_from_constant():
+def test_infer_from_constant() -> None:
     """Test type inference from constant values."""
     inferencer = TypeInferencer()
 
@@ -42,7 +42,7 @@ def test_infer_from_constant():
     assert inferencer.infer_from_assignment("x", node) == "bool"
 
 
-def test_infer_from_collection():
+def test_infer_from_collection() -> None:
     """Test type inference from collection literals."""
     inferencer = TypeInferencer()
 
@@ -63,7 +63,7 @@ def test_infer_from_collection():
     assert inferencer.infer_from_assignment("x", node) == "tuple"
 
 
-def test_infer_from_builtin_call():
+def test_infer_from_builtin_call() -> None:
     """Test type inference from builtin constructor calls."""
     inferencer = TypeInferencer()
 
@@ -76,7 +76,7 @@ def test_infer_from_builtin_call():
     assert inferencer.infer_from_assignment("x", node) == "str"
 
 
-def test_infer_from_comparison():
+def test_infer_from_comparison() -> None:
     """Test type inference from comparison operations."""
     inferencer = TypeInferencer()
 
@@ -84,7 +84,7 @@ def test_infer_from_comparison():
     assert inferencer.infer_from_assignment("x", node) == "bool"
 
 
-def test_infer_from_arithmetic():
+def test_infer_from_arithmetic() -> None:
     """Test type inference from arithmetic operations."""
     inferencer = TypeInferencer()
 
@@ -99,7 +99,7 @@ def test_infer_from_arithmetic():
     assert inferencer.infer_from_assignment("x", node) == "float"
 
 
-def test_infer_from_string_concat():
+def test_infer_from_string_concat() -> None:
     """Test type inference from string concatenation."""
     inferencer = TypeInferencer()
 
@@ -108,7 +108,7 @@ def test_infer_from_string_concat():
     assert inferencer.infer_from_assignment("x", node) == "str"
 
 
-def test_infer_from_annotation():
+def test_infer_from_annotation() -> None:
     """Test type extraction from annotations."""
     inferencer = TypeInferencer()
 
@@ -122,7 +122,7 @@ def test_infer_from_annotation():
     assert "List" in inferred or "list" in inferred
 
 
-def test_infer_function_return_type():
+def test_infer_function_return_type() -> None:
     """Test function return type inference."""
     inferencer = TypeInferencer()
 
@@ -145,7 +145,7 @@ def test_infer_function_return_type():
     assert inferencer.infer_function_return_type(func) == "None"
 
 
-def test_extract_function_params():
+def test_extract_function_params() -> None:
     """Test function parameter extraction."""
     inferencer = TypeInferencer()
 
@@ -160,12 +160,12 @@ def test_extract_function_params():
     assert params[2] == ("c", "Any")
 
 
-def test_analyze_scope():
+def test_analyze_scope() -> None:
     """Test variable scope analysis."""
     inferencer = TypeInferencer()
 
     code = """
-def test():
+def test() -> None:
     x = 42
     y: str = "hello"
     z = x + 10
@@ -179,7 +179,7 @@ def test():
     assert variables["y"] == "str"
 
 
-def test_analyze_scope_with_for_loop():
+def test_analyze_scope_with_for_loop() -> None:
     """Test scope analysis with for loop."""
     inferencer = TypeInferencer()
 
@@ -194,7 +194,7 @@ for i in range(10):
     assert "x" in variables
 
 
-def test_infer_from_variable():
+def test_infer_from_variable() -> None:
     """Test type inference from variable assignment."""
     inferencer = TypeInferencer()
 
@@ -203,7 +203,7 @@ def test_infer_from_variable():
     assert inferencer.infer_from_assignment("x", node) == "int"
 
 
-def test_unknown_type_defaults_to_any():
+def test_unknown_type_defaults_to_any() -> None:
     """Test unknown types default to Any."""
     inferencer = TypeInferencer()
 

@@ -33,7 +33,6 @@ Related modules:
 import asyncio
 import json
 import logging
-from typing import Optional
 
 from fastapi import (
     APIRouter,
@@ -52,9 +51,10 @@ from api.schemas_knowledge import (
     DocsBrowseRequest,
     OrgKnowledgeConfigPayload,
 )
-from api.system_health import ComponentHealth, register_health_probe
+from api.system_health import ComponentHealth, KnownProbes, register_health_probe
 from auth_middleware import check_admin_permission, get_auth_middleware, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import QueryDefaults
 from exceptions import InternalError
 from knowledge.query_sanitizer import sanitize_document as _sanitize_document
@@ -81,7 +81,6 @@ from knowledge.schemas.facts import (
 from knowledge.schemas.operations import (
     ImportStatisticsResponse,
     ImportStatusResponse,
-    KnowledgeHealthResponse,
     KnowledgeStatsResponse,
     MachineKnowledgeInitResponse,
     MachineProfileResponse,
@@ -101,7 +100,7 @@ from knowledge.schemas.stats import (
 # NOTE: Tag-related models moved to knowledge_tags.py
 # NOTE: Search models (EnhancedSearchRequest) moved to knowledge_search.py
 from knowledge_factory import get_or_create_knowledge_base
-from services.audit.audit_log import AuditAction, audit_record
+from services.audit.unified_audit import AuditAction, audit_record  # GH#8290 Phase 2
 from utils.path_validation import contains_path_traversal
 
 # =============================================================================
@@ -116,7 +115,7 @@ ALLOWED_EXTENSIONS = {".txt", ".md", ".pdf", ".docx", ".json", ".csv", ".html"}
 
 # Import RAG Agent for enhanced search capabilities
 try:
-    from agents.rag_agent import get_rag_agent
+    pass
 
     RAG_AVAILABLE = True
 except ImportError:
@@ -126,7 +125,7 @@ except ImportError:
 # NOTE: RAGService and ADVANCED_RAG_AVAILABLE moved to knowledge_search.py (Issue #209)
 
 # Set up logging
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Cache TTL constants (seconds)
 CATEGORY_CACHE_TTL = 3600  # 1 hour for category counts (expensive to compute with 5k+ facts)
@@ -593,7 +592,7 @@ def _build_ownership_metadata(
     organization_id,
     group_ids: list,
     shared_with: list,
-    board_id: Optional[str] = None,
+    board_id: str | None = None,
 ) -> dict:
     """Helper for add_text_to_knowledge. Ref: #1088.
 
@@ -662,6 +661,19 @@ async def add_text_to_knowledge(
         shared_with,
         board_id,
     ) = _extract_add_text_fields(request)
+
+    # GH#8598: block sub-company agents from writing to parent-company KB
+    if organization_id:
+        from llc.kb.write_guard import assert_not_writing_to_ancestor_kb
+        from user_management.database import get_async_session_factory
+
+        _requester = get_auth_middleware().get_user_from_request(req)
+        _requester_role = (_requester or {}).get("role", "")
+        if _requester_role not in ("platform_admin", "superadmin"):
+            _requester_org_id = (_requester or {}).get("org_id")
+            _session_factory = get_async_session_factory()
+            async with _session_factory() as _session:
+                await assert_not_writing_to_ancestor_kb(_requester_org_id, organization_id, _session)
 
     metadata = _build_ownership_metadata(
         title,
@@ -949,31 +961,31 @@ async def add_facts_to_knowledge(
     )
 
 
-async def _fetch_and_extract_url(validated_url: str, fallback_title: str) -> "tuple[str, str]":
-    """Fetch HTML from a validated URL and return (content, title). Ref: #2735.
+async def _fetch_and_extract_url(url: str, fallback_title: str) -> "tuple[str, str]":
+    """Fetch HTML from a URL and return (content, title). Ref: #2735, #6533.
 
-    Raises HTTPException on HTTP error or connection failure.
-    SSRF-hardened via fetch_safe_url (#6533): DNS pin + allow_redirects=False.
+    Uses fetch_safe_url which enforces: scheme validation, DNS resolution to
+    public IPs only, pinned resolver (defeats DNS-rebind), allow_redirects=False.
+    Raises HTTPException on SSRF rejection, HTTP error, or connection failure.
     """
     import aiohttp
 
     from autobot_shared.security.ssrf_guard import SSRFError, fetch_safe_url
 
     try:
-        # codeql[py/full-ssrf] - SSRF mitigated by fetch_safe_url (DNS pin, no redirects)
-        status_code, body = await fetch_safe_url(validated_url, timeout_s=30.0)
-    except SSRFError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        status, body_bytes, _ = await fetch_safe_url(url, timeout=30.0)
+    except SSRFError:
+        raise HTTPException(status_code=400, detail="Request failed")
     except aiohttp.ClientError:
         raise HTTPException(status_code=400, detail="Failed to fetch URL")
 
-    if status_code != 200:
-        raise HTTPException(status_code=400, detail=f"HTTP {status_code}")
+    if status != 200:
+        raise HTTPException(status_code=400, detail=f"HTTP {status}")
 
-    html_content = body.decode("utf-8", errors="replace")
+    html_content = body_bytes.decode("utf-8", errors="replace")
     # Use safe HTML parser instead of regex (Issue #549 Code Review)
     content, extracted_title = _sanitize_html_content(html_content)
-    title = fallback_title or extracted_title or validated_url
+    title = fallback_title or extracted_title or url
     return content, title
 
 
@@ -1004,16 +1016,14 @@ async def add_url_to_knowledge(
         autobot_kb_degradation_total.labels(endpoint="url_add", reason="kb_uninit").inc()
         raise InternalError("Knowledge base not initialized")
 
-    # SSRF validation (scheme, DNS-resolved private-IP check, redirect guard)
-    # is applied inside _fetch_and_extract_url via fetch_safe_url (#6533).
-    url = str(request.url)
-    logger.info("Fetching content from URL: %s", url)
+    logger.info("Fetching content from URL: %s", request.url)
 
-    content, title = await _fetch_and_extract_url(url, request.title or "")
+    # SSRF validation + fetch handled in _fetch_and_extract_url via fetch_safe_url (#6533)
+    content, title = await _fetch_and_extract_url(request.url, request.title or "")
 
     url_metadata: dict = {
         "title": title,
-        "source": validated_url,
+        "source": request.url,
         "category": request.category,
         "tags": request.tags,
         "type": "url",
@@ -1264,7 +1274,7 @@ async def _ingest_audio_source(
     category: str,
     tags: list,
     whisper_model: str,
-    language: Optional[str],
+    language: str | None,
 ) -> AudioIngestResponse:
     """Run transcription and store result in KB. Helper for audio endpoints.
 
@@ -1466,9 +1476,9 @@ async def upload_audio_file(
 # Includes: /search, /enhanced_search, /rag_search, /similarity_search
 
 
-@register_health_probe("knowledge")
+@register_health_probe(KnownProbes.KNOWLEDGE)
 async def probe_knowledge(
-    request: Optional[Request] = None,
+    request: Request | None = None,
 ) -> ComponentHealth:
     """Issue #3333: probe registration for the knowledge base.
 
@@ -1501,67 +1511,6 @@ async def probe_knowledge(
         )
 
 
-@router.get("/health", response_model=KnowledgeHealthResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_knowledge_health",
-    error_code_prefix="KNOWLEDGE",
-)
-async def get_knowledge_health(
-    admin_check: bool = Depends(check_admin_permission),
-    req: Request = None,
-) -> KnowledgeHealthResponse:
-    """Get knowledge base health status with RAG capability status - FIXED to use proper instance
-
-    Issue #744: Requires admin authentication.
-    """
-    kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
-
-    if kb_to_use is None:
-        # Issue #5407: KB instance not initialized.
-        logger.warning("get_knowledge_health: KB uninitialized - returning unhealthy status")
-        from knowledge.metrics import autobot_kb_degradation_total
-
-        autobot_kb_degradation_total.labels(endpoint="health", reason="kb_uninit").inc()
-        return KnowledgeHealthResponse(
-            status="unhealthy",
-            initialized=False,
-            redis_connected=False,
-            vector_store_available=False,
-            rag_available=RAG_AVAILABLE,
-            rag_status="disabled" if not RAG_AVAILABLE else "unknown",
-            message="Knowledge base not initialized",
-        )
-
-    # Try to get stats to verify health
-    stats = await kb_to_use.get_stats()
-
-    # Check RAG Agent health if available
-    rag_status = "disabled"
-    if RAG_AVAILABLE:
-        try:
-            rag_agent = get_rag_agent()
-            # Verify RAG agent is properly initialized by checking key attributes
-            if hasattr(rag_agent, "is_rag_appropriate") and callable(rag_agent.is_rag_appropriate):
-                rag_status = "healthy"
-            else:
-                rag_status = "unhealthy: missing required methods"
-        except Exception:
-            rag_status = "error"
-
-    return {
-        "status": "healthy",
-        "initialized": stats.get("initialized", False),
-        "redis_connected": True,
-        "vector_store_available": stats.get("index_available", False),
-        "total_facts": stats.get("total_facts", 0),
-        "db_size": stats.get("db_size", 0),
-        "kb_implementation": kb_to_use.__class__.__name__,
-        "rag_available": RAG_AVAILABLE,
-        "rag_status": rag_status,
-    }
-
-
 def _empty_entries_response(message: str = "", error: str = "") -> dict:
     """Create empty entries response (Issue #398: extracted)."""
     resp = {"entries": [], "next_cursor": "0", "count": 0, "has_more": False}
@@ -1572,7 +1521,7 @@ def _empty_entries_response(message: str = "", error: str = "") -> dict:
     return resp
 
 
-def _parse_and_filter_facts(items: dict, category: Optional[str], limit: int) -> list:
+def _parse_and_filter_facts(items: dict, category: str | None, limit: int) -> list:
     """Parse and filter facts from HSCAN results (Issue #398: extracted)."""
     entries = []
     for fact_id, fact_json in items.items():
@@ -1598,8 +1547,8 @@ async def get_knowledge_entries(
     admin_check: bool = Depends(check_admin_permission),
     req: Request = None,
     limit: int = Query(default=QueryDefaults.KNOWLEDGE_DEFAULT_LIMIT, ge=1, le=1000),
-    cursor: Optional[str] = Query(default="0", pattern=r"^[0-9]+$"),
-    category: Optional[str] = Query(default=None, pattern=r"^[a-zA-Z0-9_-]*$"),
+    cursor: str | None = Query(default="0", pattern=r"^[0-9]+$"),
+    category: str | None = Query(default=None, pattern=r"^[a-zA-Z0-9_-]*$"),
 ):
     """Get knowledge base entries with cursor-based pagination.
 
@@ -2127,7 +2076,7 @@ async def query_knowledge(
 # =============================================================================
 
 
-async def _check_facts_cache(kb, category: Optional[str], limit: int) -> tuple:
+async def _check_facts_cache(kb, category: str | None, limit: int) -> tuple:
     """Check cache for facts_by_category result (Issue #281: extracted)."""
     import json
 
@@ -2178,7 +2127,7 @@ async def _batch_fetch_facts(kb, category_fact_ids: dict) -> tuple:
     return all_fact_keys, fact_results
 
 
-def _process_fact_data(fact_data: dict, cat: str, fact_key: str) -> Optional[dict]:
+def _process_fact_data(fact_data: dict, cat: str, fact_key: str) -> dict | None:
     """Process a single fact from Redis data (Issue #281: extracted)."""
     import json
 
@@ -2259,7 +2208,7 @@ def _build_categories_dict(all_fact_keys: list, fact_results: list) -> dict:
 async def get_facts_by_category(
     admin_check: bool = Depends(check_admin_permission),
     req: Request = None,
-    category: Optional[str] = None,
+    category: str | None = None,
     limit: int = 100,
 ):
     """Get facts grouped by category for browsing with caching.
@@ -2339,7 +2288,7 @@ def _decode_bytes(raw, default: str = "") -> str:
     return str(raw) if raw else default
 
 
-def _parse_fact_entry(fact_key_bytes, fact_data, get_category_for_source) -> Optional[tuple]:
+def _parse_fact_entry(fact_key_bytes, fact_data, get_category_for_source) -> tuple | None:
     """Parse a single fact entry (Issue #398: extracted).
 
     Returns:
@@ -2362,7 +2311,7 @@ def _parse_fact_entry(fact_key_bytes, fact_data, get_category_for_source) -> Opt
         return None
 
 
-async def _get_facts_by_category_legacy(kb, category: Optional[str], limit: int):
+async def _get_facts_by_category_legacy(kb, category: str | None, limit: int):
     """Legacy fallback: Get facts by scanning all keys (Issue #398: refactored)."""
     from knowledge_categories import get_category_for_source
 
@@ -2508,8 +2457,8 @@ async def get_fact_by_key(
 async def get_import_status(
     admin_check: bool = Depends(check_admin_permission),
     req: Request = None,
-    file_path: Optional[str] = None,
-    category: Optional[str] = None,
+    file_path: str | None = None,
+    category: str | None = None,
 ):
     """Get import status for files
 
@@ -2913,7 +2862,7 @@ async def control_documentation_watcher(
 # fallback chain org config -> SSOT default (see OrgKnowledgeConfigService).
 
 
-def _resolve_target_org_id(current_user: dict, override_org_id: Optional[str]) -> Optional[str]:
+def _resolve_target_org_id(current_user: dict, override_org_id: str | None) -> str | None:
     """Pick the org_id a config request should target.
 
     Admins can target another org via ``?org_id=`` query param. Non-admins
@@ -2935,7 +2884,7 @@ def _resolve_target_org_id(current_user: dict, override_org_id: Optional[str]) -
     error_code_prefix="KNOWLEDGE",
 )
 async def get_org_model_config(
-    org_id: Optional[str] = Query(default=None, max_length=128),
+    org_id: str | None = Query(default=None, max_length=128),
     current_user: dict = Depends(get_current_user),
 ):
     """Return the org's persisted model config with SSOT-resolved defaults.
@@ -2968,7 +2917,7 @@ async def get_org_model_config(
 )
 async def set_org_model_config(
     payload: OrgKnowledgeConfigPayload,
-    org_id: Optional[str] = Query(default=None, max_length=128),
+    org_id: str | None = Query(default=None, max_length=128),
     current_user: dict = Depends(get_current_user),
     admin_check: bool = Depends(check_admin_permission),
 ):

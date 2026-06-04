@@ -10,18 +10,18 @@ and data type validation.
 """
 
 import json
-import logging
 import re
 import threading
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import StringParsingConstants
 
 from .base_agent import AgentRequest
 from .standardized_agent import ActionHandler, StandardizedAgent
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -122,7 +122,7 @@ class JSONFormatterAgent(StandardizedAgent):
             warnings=["Empty or whitespace-only input"],
         )
 
-    def _try_direct_json_parse(self, response: str) -> Optional[JSONParseResult]:
+    def _try_direct_json_parse(self, response: str) -> JSONParseResult | None:
         """
         Attempt direct JSON parsing of the response.
 
@@ -149,7 +149,7 @@ class JSONFormatterAgent(StandardizedAgent):
             logger.debug("Direct JSON parse failed, trying extraction: %s", e)
         return None
 
-    def parse_llm_response(self, response: str, expected_schema: Optional[Dict[str, Any]] = None) -> JSONParseResult:
+    def parse_llm_response(self, response: str, expected_schema: Dict[str, Any] | None = None) -> JSONParseResult:
         """
         Parse JSON from an LLM response using multiple strategies.
 
@@ -189,7 +189,7 @@ class JSONFormatterAgent(StandardizedAgent):
         # Strategy 5: Last resort - create minimal valid JSON
         return self._create_fallback_json(response, expected_schema)
 
-    def _try_parse_json_match(self, match: str) -> Optional[Dict[str, Any]]:
+    def _try_parse_json_match(self, match: str) -> Dict[str, Any] | None:
         """Try to parse a potential JSON match (Issue #334 - extracted helper)."""
         try:
             parsed = json.loads(match)
@@ -269,7 +269,7 @@ class JSONFormatterAgent(StandardizedAgent):
         text: str,
         fixes_applied: List[str],
         warnings: List[str],
-    ) -> Optional[JSONParseResult]:
+    ) -> JSONParseResult | None:
         """Attempt to parse fixed JSON and return result if successful (Issue #665: extracted helper)."""
         try:
             parsed = json.loads(json_content)
@@ -384,9 +384,7 @@ class JSONFormatterAgent(StandardizedAgent):
             warnings=[warning_msg],
         )
 
-    def _reconstruct_from_patterns(
-        self, text: str, expected_schema: Optional[Dict[str, Any]] = None
-    ) -> JSONParseResult:
+    def _reconstruct_from_patterns(self, text: str, expected_schema: Dict[str, Any] | None = None) -> JSONParseResult:
         """Reconstruct JSON from known patterns like empty keys. Issue #620."""
         warnings = []
 
@@ -429,9 +427,7 @@ class JSONFormatterAgent(StandardizedAgent):
             warnings=warnings,
         )
 
-    def _extract_field_value_from_text(
-        self, text: str, field: str, expected_type: type, warnings: list
-    ) -> Optional[Any]:
+    def _extract_field_value_from_text(self, text: str, field: str, expected_type: type, warnings: list) -> Any | None:
         """Extract field value from text (Issue #334 - extracted helper)."""
         pattern = rf'{field}["\s]*:\s*["\s]*([^",}}]+)'
         match = re.search(pattern, text, re.IGNORECASE)
@@ -446,7 +442,7 @@ class JSONFormatterAgent(StandardizedAgent):
             logger.debug("Type conversion failed for field %s: %s", field, e)
             return None
 
-    def _create_fallback_json(self, text: str, expected_schema: Optional[Dict[str, Any]] = None) -> JSONParseResult:
+    def _create_fallback_json(self, text: str, expected_schema: Dict[str, Any] | None = None) -> JSONParseResult:
         """Create a minimal valid JSON as last resort"""
         warnings = ["Using fallback JSON creation"]
 
@@ -548,7 +544,7 @@ class JSONFormatterAgent(StandardizedAgent):
 json_formatter = JSONFormatterAgent()
 
 
-def parse_llm_json(response: str, expected_schema: Optional[Dict[str, Any]] = None) -> JSONParseResult:
+def parse_llm_json(response: str, expected_schema: Dict[str, Any] | None = None) -> JSONParseResult:
     """
     Convenience function to parse JSON from LLM response.
 

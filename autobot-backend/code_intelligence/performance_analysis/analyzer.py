@@ -10,11 +10,12 @@ Contains the main PerformanceAnalyzer class and convenience functions.
 """
 
 import ast
-import logging
 import re
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
+
+from autobot_shared.logging_manager import get_logger
 
 from .ast_visitor import PerformanceASTVisitor
 from .types import PerformanceIssue, PerformanceIssueType, PerformanceSeverity
@@ -39,7 +40,7 @@ try:
 except ImportError:
     HAS_SHARED_CACHE = False
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class PerformanceAnalyzer(SemanticAnalysisMixin):
@@ -52,8 +53,8 @@ class PerformanceAnalyzer(SemanticAnalysisMixin):
 
     def __init__(
         self,
-        project_root: Optional[str] = None,
-        exclude_patterns: Optional[List[str]] = None,
+        project_root: str | None = None,
+        exclude_patterns: List[str] | None = None,
         use_semantic_analysis: bool = False,
         use_cache: bool = True,
         use_shared_cache: bool = True,
@@ -247,7 +248,7 @@ class PerformanceAnalyzer(SemanticAnalysisMixin):
 
         return findings
 
-    def analyze_directory(self, directory: Optional[str] = None) -> List[PerformanceIssue]:
+    def analyze_directory(self, directory: str | None = None) -> List[PerformanceIssue]:
         """Analyze all Python files in a directory."""
         target = Path(directory) if directory else self.project_root
         self.results = []
@@ -411,7 +412,7 @@ class PerformanceAnalyzer(SemanticAnalysisMixin):
 
     async def analyze_directory_async(
         self,
-        directory: Optional[str] = None,
+        directory: str | None = None,
         find_semantic_duplicates: bool = True,
     ) -> Dict[str, Any]:
         """
@@ -516,7 +517,7 @@ class PerformanceAnalyzer(SemanticAnalysisMixin):
     async def get_cached_analysis(
         self,
         directory: str,
-    ) -> Optional[Dict[str, Any]]:
+    ) -> Dict[str, Any] | None:
         """
         Get cached analysis results from Redis.
 
@@ -538,9 +539,7 @@ class PerformanceAnalyzer(SemanticAnalysisMixin):
         )
 
 
-def analyze_performance(
-    directory: Optional[str] = None, exclude_patterns: Optional[List[str]] = None
-) -> Dict[str, Any]:
+def analyze_performance(directory: str | None = None, exclude_patterns: List[str] | None = None) -> Dict[str, Any]:
     """
     Convenience function to analyze performance of a directory.
 
@@ -613,8 +612,8 @@ def _get_category(issue_type: PerformanceIssueType) -> str:
 
 
 async def analyze_performance_async(
-    directory: Optional[str] = None,
-    exclude_patterns: Optional[List[str]] = None,
+    directory: str | None = None,
+    exclude_patterns: List[str] | None = None,
     use_semantic_analysis: bool = True,
     find_semantic_duplicates: bool = True,
 ) -> Dict[str, Any]:

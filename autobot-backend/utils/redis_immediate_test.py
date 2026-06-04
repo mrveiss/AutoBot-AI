@@ -7,17 +7,17 @@ Replaces timeout-based Redis connection with immediate success/failure patterns
 """
 
 import asyncio
-import logging
 import threading
 from contextlib import asynccontextmanager
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Tuple
 
 import redis
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 from constants.network_constants import NetworkConstants
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class RedisConnectionState:
@@ -26,8 +26,8 @@ class RedisConnectionState:
     def __init__(self):
         """Initialize Redis connection state with default disconnected status."""
         self.is_connected = False
-        self.client: Optional[redis.Redis] = None
-        self.last_error: Optional[str] = None
+        self.client: redis.Redis | None = None
+        self.last_error: str | None = None
         self.connection_params: Dict[str, Any] = {}
 
     def mark_connected(self, client: redis.Redis, params: Dict[str, Any]):
@@ -60,7 +60,7 @@ def _create_redis_client_for_test(host: str, port: int, db: int) -> redis.Redis:
 
     Issue #620.
     """
-    return redis.Redis(
+    return redis.Redis(  # noqa: redis — diagnostic connectivity probe, not a production client (Issue #620)
         host=host,
         port=port,
         db=db,
@@ -91,7 +91,7 @@ async def _test_redis_ping(client: redis.Redis) -> bool:
     return await asyncio.to_thread(client.ping)
 
 
-async def _cleanup_redis_client(client: Optional[redis.Redis]) -> None:
+async def _cleanup_redis_client(client: redis.Redis | None) -> None:
     """
     Cleanup Redis client connection safely.
 
@@ -144,8 +144,8 @@ async def immediate_redis_test(host: str, port: int, db: int = 0):
 
 
 async def create_redis_with_fallback(
-    primary_config: Dict[str, Any], fallback_configs: Optional[list] = None
-) -> Tuple[Optional[redis.Redis], str]:
+    primary_config: Dict[str, Any], fallback_configs: list | None = None
+) -> Tuple[redis.Redis | None, str]:
     """
     Create Redis connection with immediate fallback testing.
     No timeouts - tries each config immediately.
@@ -252,7 +252,7 @@ redis_circuit_breaker = RedisCircuitBreaker()
 
 async def get_redis_with_immediate_test(
     config: Dict[str, Any],
-) -> Tuple[Optional[redis.Redis], str]:
+) -> Tuple[redis.Redis | None, str]:
     """
     Get Redis client using immediate testing pattern.
     No arbitrary timeouts - either works immediately or fails immediately.
@@ -273,7 +273,7 @@ async def get_redis_with_immediate_test(
 
 async def test_redis_connection_immediate(
     database: str = "main",
-) -> Optional[redis.Redis]:
+) -> redis.Redis | None:
     """
     Test Redis connection immediately and return canonical client if successful.
     Used by backend startup to quickly test Redis availability.

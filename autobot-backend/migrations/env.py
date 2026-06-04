@@ -19,10 +19,16 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# Import canvas models so Alembic autogenerate sees them (MVA-359)
+import canvas.models  # noqa: F401
 from autobot_shared.async_compat import run_or_schedule
-from user_management.config import get_deployment_config
 
 # Import models to register with SQLAlchemy
+from llc.models.activity import (  # noqa: F401 — registers LLC tables with metadata
+    LLCBase,
+)
+from models.push_subscription import PushSubscription  # noqa: F401 — GH#4459
+from user_management.config import get_deployment_config
 from user_management.models import Base
 
 # this is the Alembic Config object
@@ -33,13 +39,13 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 # add your model's MetaData object here for 'autogenerate' support
-target_metadata = Base.metadata
+target_metadata = [Base.metadata, LLCBase.metadata]
 
 
 def get_url() -> str:
     """Get database URL from deployment config or environment."""
     # Try environment variable first
-    url = os.getenv("AUTOBOT_DATABASE_URL")
+    url = config.database_url
     if url:
         return url
 
@@ -49,7 +55,7 @@ def get_url() -> str:
         return deployment_config.postgres_sync_url
     except Exception:
         # Default fallback for development
-        db_host = os.getenv("AUTOBOT_DB_HOST", "")
+        db_host = config.db_host
         return f"postgresql://autobot:autobot@{db_host}:5432/autobot"
 
 

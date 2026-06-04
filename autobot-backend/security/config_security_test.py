@@ -9,6 +9,7 @@ from unittest.mock import patch
 
 import pytest
 
+from autobot_shared.logging_manager import get_logger
 from config.manager import ConfigManager as ConfigManager
 
 
@@ -364,7 +365,7 @@ class TestSecretsHandlingInConfig:
         handler = logging.StreamHandler(log_capture)
 
         # Get the config logger and add our handler
-        config_logger = logging.getLogger("src.utils.config_manager")
+        config_logger = get_logger("src.utils.config_manager")
         config_logger.addHandler(handler)
         config_logger.setLevel(logging.DEBUG)
 

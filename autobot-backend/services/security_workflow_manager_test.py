@@ -31,7 +31,7 @@ from services.security_workflow_manager import (
 class TestAssessmentPhase:
     """Test AssessmentPhase enum."""
 
-    def test_all_phases_defined(self):
+    def test_all_phases_defined(self) -> None:
         """Verify all expected phases are defined."""
         expected_phases = [
             "INIT",
@@ -47,7 +47,7 @@ class TestAssessmentPhase:
         actual_phases = [p.value for p in AssessmentPhase]
         assert set(expected_phases) == set(actual_phases)
 
-    def test_phase_string_value(self):
+    def test_phase_string_value(self) -> None:
         """Test phase enum string values."""
         assert AssessmentPhase.INIT.value == "INIT"
         assert AssessmentPhase.RECON.value == "RECON"
@@ -57,23 +57,23 @@ class TestAssessmentPhase:
 class TestValidTransitions:
     """Test phase transition validation."""
 
-    def test_init_transitions(self):
+    def test_init_transitions(self) -> None:
         """INIT can transition to RECON or ERROR."""
         assert "RECON" in VALID_TRANSITIONS["INIT"]
         assert "ERROR" in VALID_TRANSITIONS["INIT"]
 
-    def test_complete_no_transitions(self):
+    def test_complete_no_transitions(self) -> None:
         """COMPLETE is terminal - no valid transitions."""
         assert VALID_TRANSITIONS["COMPLETE"] == []
 
-    def test_error_recovery_transitions(self):
+    def test_error_recovery_transitions(self) -> None:
         """ERROR can transition to most phases for recovery."""
         error_transitions = VALID_TRANSITIONS["ERROR"]
         assert "INIT" in error_transitions
         assert "RECON" in error_transitions
         assert "PORT_SCAN" in error_transitions
 
-    def test_exploitation_requires_training(self):
+    def test_exploitation_requires_training(self) -> None:
         """VULN_ANALYSIS can transition to EXPLOITATION."""
         vuln_transitions = VALID_TRANSITIONS["VULN_ANALYSIS"]
         assert "EXPLOITATION" in vuln_transitions
@@ -83,7 +83,7 @@ class TestValidTransitions:
 class TestTargetHost:
     """Test TargetHost dataclass."""
 
-    def test_create_host(self):
+    def test_create_host(self) -> None:
         """Test basic host creation."""
         host = TargetHost(ip="192.168.1.1")
         assert host.ip == "192.168.1.1"
@@ -93,7 +93,7 @@ class TestTargetHost:
         assert host.services == []
         assert host.vulnerabilities == []
 
-    def test_host_with_details(self):
+    def test_host_with_details(self) -> None:
         """Test host with all details."""
         host = TargetHost(
             ip="192.168.1.1",
@@ -108,7 +108,7 @@ class TestTargetHost:
         assert len(host.ports) == 1
         assert len(host.services) == 1
 
-    def test_host_to_dict(self):
+    def test_host_to_dict(self) -> None:
         """Test host serialization."""
         host = TargetHost(ip="192.168.1.1", hostname="test")
         data = host.to_dict()
@@ -116,7 +116,7 @@ class TestTargetHost:
         assert data["hostname"] == "test"
         assert isinstance(data["ports"], list)
 
-    def test_host_from_dict(self):
+    def test_host_from_dict(self) -> None:
         """Test host deserialization."""
         data = {
             "ip": "192.168.1.1",
@@ -135,7 +135,7 @@ class TestTargetHost:
 class TestSecurityAssessment:
     """Test SecurityAssessment dataclass."""
 
-    def test_create_assessment(self):
+    def test_create_assessment(self) -> None:
         """Test basic assessment creation."""
         assessment = SecurityAssessment(
             id="test-123",
@@ -150,7 +150,7 @@ class TestSecurityAssessment:
         assert assessment.phase == AssessmentPhase.INIT
         assert assessment.training_mode is False
 
-    def test_assessment_timestamps(self):
+    def test_assessment_timestamps(self) -> None:
         """Test automatic timestamp generation."""
         assessment = SecurityAssessment(
             id="test-123",
@@ -162,7 +162,7 @@ class TestSecurityAssessment:
         assert assessment.created_at != ""
         assert assessment.updated_at != ""
 
-    def test_assessment_to_dict(self):
+    def test_assessment_to_dict(self) -> None:
         """Test assessment serialization."""
         assessment = SecurityAssessment(
             id="test-123",
@@ -177,7 +177,7 @@ class TestSecurityAssessment:
         assert data["phase"] == "RECON"
         assert data["training_mode"] is True
 
-    def test_assessment_from_dict(self):
+    def test_assessment_from_dict(self) -> None:
         """Test assessment deserialization."""
         data = {
             "id": "test-123",
@@ -223,7 +223,7 @@ class TestSecurityWorkflowManager:
         return mgr
 
     @pytest.mark.asyncio
-    async def test_create_assessment(self, manager):
+    async def test_create_assessment(self, manager) -> None:
         """Test assessment creation."""
         assessment = await manager.create_assessment(
             name="Test Scan",
@@ -239,14 +239,14 @@ class TestSecurityWorkflowManager:
         assert len(assessment.id) == 36  # UUID format
 
     @pytest.mark.asyncio
-    async def test_create_training_assessment(self, manager):
+    async def test_create_training_assessment(self, manager) -> None:
         """Test assessment with training mode enabled."""
         assessment = await manager.create_assessment(name="Training Scan", target="10.0.0.1", training_mode=True)
 
         assert assessment.training_mode is True
 
     @pytest.mark.asyncio
-    async def test_advance_phase(self, manager, mock_redis):
+    async def test_advance_phase(self, manager, mock_redis) -> None:
         """Test advancing through phases."""
         # Create assessment
         assessment = await manager.create_assessment(name="Test", target="192.168.1.1")
@@ -263,7 +263,7 @@ class TestSecurityWorkflowManager:
         assert updated.phase == AssessmentPhase.RECON
 
     @pytest.mark.asyncio
-    async def test_add_host(self, manager, mock_redis):
+    async def test_add_host(self, manager, mock_redis) -> None:
         """Test adding a host to assessment."""
         assessment = await manager.create_assessment(name="Test", target="192.168.1.0/24")
 
@@ -279,7 +279,7 @@ class TestSecurityWorkflowManager:
         assert updated.hosts[0].hostname == "web-server"
 
     @pytest.mark.asyncio
-    async def test_add_port(self, manager, mock_redis):
+    async def test_add_port(self, manager, mock_redis) -> None:
         """Test adding a port to a host."""
         assessment = await manager.create_assessment(name="Test", target="192.168.1.1")
 
@@ -303,7 +303,7 @@ class TestSecurityWorkflowManager:
         assert updated.hosts[0].ports[0]["port"] == 22
 
     @pytest.mark.asyncio
-    async def test_add_vulnerability(self, manager, mock_redis):
+    async def test_add_vulnerability(self, manager, mock_redis) -> None:
         """Test adding a vulnerability."""
         assessment = await manager.create_assessment(name="Test", target="192.168.1.1")
 
@@ -326,7 +326,7 @@ class TestSecurityWorkflowManager:
         assert updated.hosts[0].vulnerabilities[0]["cve_id"] == "CVE-2024-1234"
 
     @pytest.mark.asyncio
-    async def test_exploitation_requires_training(self, manager, mock_redis):
+    async def test_exploitation_requires_training(self, manager, mock_redis) -> None:
         """Test that exploitation phase requires training mode."""
         # Create non-training assessment
         assessment = await manager.create_assessment(name="Safe Scan", target="192.168.1.1", training_mode=False)
@@ -345,7 +345,7 @@ class TestSecurityWorkflowManager:
         assert updated.phase == AssessmentPhase.REPORTING
 
     @pytest.mark.asyncio
-    async def test_training_mode_allows_exploitation(self, manager, mock_redis):
+    async def test_training_mode_allows_exploitation(self, manager, mock_redis) -> None:
         """Test that training mode enables exploitation."""
         assessment = await manager.create_assessment(name="Training Scan", target="192.168.1.1", training_mode=True)
 
@@ -360,7 +360,7 @@ class TestSecurityWorkflowManager:
         assert updated.phase == AssessmentPhase.EXPLOITATION
 
     @pytest.mark.asyncio
-    async def test_get_assessment_summary(self, manager, mock_redis):
+    async def test_get_assessment_summary(self, manager, mock_redis) -> None:
         """Test getting assessment summary."""
         assessment = await manager.create_assessment(name="Test", target="192.168.1.1")
 
@@ -393,19 +393,19 @@ class TestSecurityWorkflowManager:
 class TestPhaseDescriptions:
     """Test phase descriptions configuration."""
 
-    def test_all_phases_have_descriptions(self):
+    def test_all_phases_have_descriptions(self) -> None:
         """All phases should have descriptions."""
         for phase in AssessmentPhase:
             assert phase.value in PHASE_DESCRIPTIONS
 
-    def test_phase_description_structure(self):
+    def test_phase_description_structure(self) -> None:
         """Phase descriptions should have required fields."""
         for phase, info in PHASE_DESCRIPTIONS.items():
             assert "description" in info
             assert "actions" in info
             assert isinstance(info["actions"], list)
 
-    def test_exploitation_requires_training(self):
+    def test_exploitation_requires_training(self) -> None:
         """EXPLOITATION phase should require training mode."""
         exploit_info = PHASE_DESCRIPTIONS.get("EXPLOITATION", {})
         assert exploit_info.get("requires_training_mode") is True

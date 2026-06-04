@@ -21,6 +21,7 @@ from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
 
 from api.schemas_agent import SavedReportRequest, SavedReportResponse, SavedReportsListResponse
+from api.schemas_analytics import SavedReportDeleteResponse, SavedReportRunResponse
 from api.schemas_common import DataResponse
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -79,7 +80,7 @@ async def list_saved_reports(
 # =========================================================================
 
 
-@router.get("/reports/saved/{report_id}", response_model=DataResponse)
+@router.get("/reports/saved/{report_id}", response_model=DataResponse[SavedReportResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_saved_report",
@@ -105,7 +106,7 @@ async def get_saved_report(
 # =========================================================================
 
 
-@router.put("/reports/saved/{report_id}", response_model=DataResponse)
+@router.put("/reports/saved/{report_id}", response_model=DataResponse[SavedReportResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="update_saved_report",
@@ -137,7 +138,7 @@ async def update_saved_report(
 # =========================================================================
 
 
-@router.delete("/reports/saved/{report_id}", response_model=DataResponse)
+@router.delete("/reports/saved/{report_id}", response_model=DataResponse[SavedReportDeleteResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="delete_saved_report",
@@ -163,7 +164,7 @@ async def delete_saved_report(
 # =========================================================================
 
 
-@router.post("/reports/saved/{report_id}/run", response_model=DataResponse)
+@router.post("/reports/saved/{report_id}/run", response_model=DataResponse[SavedReportRunResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="run_saved_report",

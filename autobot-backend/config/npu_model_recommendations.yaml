@@ -1,0 +1,33 @@
+# SSOT: VRAM tier → recommended models for NPU worker auto-suggestion (GH#6738)
+# Tiers are evaluated in ascending order; all tiers with min_vram_gb <= available VRAM are eligible.
+tiers:
+  - min_vram_gb: 4
+    models:
+      - id: "gemma-3-1b"
+        reason: "fits in 4GB VRAM, lightweight inference"
+      - id: "phi-3-mini"
+        reason: "fits in 4GB VRAM, efficient small model"
+  - min_vram_gb: 8
+    models:
+      - id: "gemma-3-4b"
+        reason: "fits in 8GB VRAM, good quality/size tradeoff"
+      - id: "llama-3.2-3b"
+        reason: "fits in 8GB VRAM, fast generation"
+  - min_vram_gb: 12
+    models:
+      - id: "glm-4-9b"
+        reason: "fits in 12GB VRAM, strong reasoning"
+      - id: "qwen2.5-7b"
+        reason: "fits in 12GB VRAM, multilingual"
+  - min_vram_gb: 16
+    models:
+      - id: "gpt-oss-20b"
+        reason: "fits in 16GB VRAM, strong general capability"
+  - min_vram_gb: 24
+    models:
+      - id: "gemma-3-27b"
+        reason: "fits in 24GB VRAM, high quality output"
+  - min_vram_gb: 40
+    models:
+      - id: "qwen2.5-coder-32b"
+        reason: "fits in 40GB VRAM, expert coding ability"

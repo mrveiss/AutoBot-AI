@@ -9,15 +9,13 @@ Consolidates all cache-related endpoints (Issue #1286).
 
 import asyncio
 import json
-import logging
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from api.schemas_system import (
     CacheClearTypeResponse,
     CacheConfigResponse,
-    CacheHealthResponse,
     CacheStatsResponse,
     CacheWarmingRequest,
     CacheWarmupResponse,
@@ -33,11 +31,12 @@ from api.schemas_system import (
 from api.system_health import ComponentHealth, register_health_probe
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 from type_defs.common import Metadata
 from utils.advanced_cache_manager import advanced_cache
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 router = APIRouter(tags=["cache_management"])
 
 # Issue #380: Module-level tuple for essential cache data types
@@ -331,7 +330,7 @@ async def warmup_caches():
     error_code_prefix="CACHE_MANAGEMENT",
 )
 async def get_advanced_cache_stats(
-    data_type: Optional[str] = Query(None),
+    data_type: str | None = Query(None),
     current_user: dict = Depends(get_current_user),
 ):
     """Get cache statistics - global or for specific data type.
@@ -418,7 +417,7 @@ async def warm_cache(
 async def invalidate_cache(
     data_type: str,
     key: str = Query("*", description="Key pattern to invalidate (* for all)"),
-    user_id: Optional[str] = Query(None, description="User ID for user-scoped data"),
+    user_id: str | None = Query(None, description="User ID for user-scoped data"),
     admin_check: bool = Depends(check_admin_permission),
 ):
     """Invalidate cache entries.
@@ -589,7 +588,7 @@ async def _warm_data_type(data_type: str, force_refresh: bool = False) -> bool:
 
 @register_health_probe("cache")
 async def probe_cache(
-    request: Optional[Request] = None,
+    request: Request | None = None,
 ) -> ComponentHealth:
     """Issue #3333: probe registration for cache-manager health."""
     try:
@@ -607,32 +606,6 @@ async def probe_cache(
             status="down",
             detail=f"probe error: {type(exc).__name__}",
         )
-
-
-@router.get("/health", response_model=CacheHealthResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="cache_health_check",
-    error_code_prefix="CACHE_MANAGEMENT",
-)
-async def cache_health_check():
-    """Check cache system health"""
-    try:
-        stats = await advanced_cache.get_stats()
-
-        is_healthy = stats.get("status") == "enabled"
-
-        return {
-            "status": "healthy" if is_healthy else "unhealthy",
-            "redis_status": stats.get("status", "unknown"),
-            "total_keys": stats.get("total_cache_keys", 0),
-            "memory_usage": stats.get("memory_usage", "N/A"),
-            "global_hit_rate": stats.get("global_hit_rate", "0%"),
-        }
-
-    except Exception as e:
-        logger.error("Error checking cache health: %s", e)
-        return {"status": "unhealthy", "error": "Internal server error"}
 
 
 # =========================================================================

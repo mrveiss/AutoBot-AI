@@ -16,7 +16,6 @@ Features:
 
 import asyncio
 import json
-import logging
 import re
 import uuid
 from typing import TYPE_CHECKING, Any, Dict, List
@@ -26,8 +25,9 @@ from autobot_shared.time_utils import parse_utc_iso, utc_timestamp
 if TYPE_CHECKING:
     import aioredis
     import redis
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Supported field types
 FIELD_TYPES = {"string", "number", "date", "boolean", "list", "url", "email"}

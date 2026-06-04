@@ -27,7 +27,7 @@ def _base_config(**overrides: Any) -> Dict[str, Any]:
     """Return a minimal valid config, with optional dot-notation overrides applied."""
     cfg: Dict[str, Any] = {
         "backend": {
-            "server_host": "0.0.0.0",
+            "server_host": "0.0.0.0",  # nosec B104 - intentional bind to all interfaces for service/test
             "server_port": 8001,
         },
         "memory": {

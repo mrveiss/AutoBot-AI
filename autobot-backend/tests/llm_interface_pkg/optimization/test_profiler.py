@@ -7,7 +7,7 @@ import json
 import time
 from unittest.mock import MagicMock, patch
 
-from llm_interface_pkg.optimization.profiler import (
+from llm_shared.optimization.profiler import (
     INFERENCE_STAGES,
     LayeredProfiler,
     _StageAccumulator,
@@ -58,7 +58,7 @@ class TestVRAMTracker:
         assert tracker.peak_allocated_bytes == 0
 
     @patch(
-        "llm_interface_pkg.optimization.profiler._VRAMTracker._check_cuda",
+        "llm_shared.optimization.profiler._VRAMTracker._check_cuda",
         return_value=True,
     )
     def test_cuda_sampling(self, mock_check):
@@ -215,7 +215,7 @@ class TestLayeredProfilerHistory:
 
     def test_save_history_creates_file(self, tmp_path):
         with patch(
-            "llm_interface_pkg.optimization.profiler._get_history_dir",
+            "llm_shared.optimization.profiler._get_history_dir",
             return_value=tmp_path,
         ):
             profiler = LayeredProfiler("test-model", enabled=True)

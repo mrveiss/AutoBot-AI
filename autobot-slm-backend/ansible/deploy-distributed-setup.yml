@@ -23,8 +23,8 @@
 
 - name: Setup distributed architecture
   hosts: slm_server
-  become: yes
-  gather_facts: yes
+  become: true
+  gather_facts: true
 
   roles:
     - role: distributed_setup

@@ -18,3 +18,12 @@ HEARTBEAT_RUN_COMPLETED = "heartbeat_run_completed"
 
 # RAG service retrieval feedback (services/rag_service.py)
 RAG_RETRIEVAL = "rag_retrieval"
+
+# Agent loop — abstention outcome (loop.py → LiveEventManager → WebSocket)
+# Emitted when confidence stays below floor for confidence_window iterations.
+# Frontend consumers can surface a distinct "abstained" badge for the task.
+AGENT_ABSTAINED = "agent_abstained"
+
+# Agent loop — belief cache hit (loop.py → LiveEventManager → WebSocket)
+# Emitted when a high-confidence cached assertion suppresses a redundant tool call.
+BELIEF_CACHE_HIT = "belief_cache_hit"

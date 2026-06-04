@@ -11,6 +11,8 @@ Provides comprehensive file operations with robust security boundaries:
 - Write operations (create, edit)
 - Directory management (create, list, move)
 - Discovery/analysis (search, tree, metadata)
+- MCP Resources (Issue MVA-2164): Expose filesystem paths as browseable resources
+- MCP Prompts (Issue MVA-2164): Predefined prompt templates for common tasks
 
 Security Model:
 - Whitelist-based directory access control
@@ -20,11 +22,86 @@ Security Model:
 
 Issue #718: Uses dedicated thread pool for file I/O to prevent blocking
 when the main asyncio thread pool is saturated by indexing operations.
+
+MCP Resources and Prompts Architecture (Issue MVA-2164)
+========================================================
+
+Resources:
+----------
+MCP resources provide a standardized way to expose filesystem paths as
+browseable, addressable resources using the file:// URI scheme.
+
+Endpoints:
+  - GET  /mcp/resources       - List available file resources
+  - POST /mcp/resources/read  - Read a resource by URI (file:// scheme)
+
+Resource URIs follow the pattern: file:///absolute/path/to/resource
+
+Implementation Details:
+  - Resources are generated from ALLOWED_DIRECTORIES
+  - Only directories that exist are exposed as resources
+  - URI-to-path conversion validates against security boundaries
+  - MIME type detection for proper content handling
+  - Same size limits apply as for regular file reads (MAX_FILE_SIZE)
+
+Prompts:
+--------
+MCP prompt templates provide predefined, parameterized prompts for common
+filesystem analysis tasks. Templates interpolate arguments to generate
+contextual instructions for LLMs.
+
+Endpoints:
+  - GET  /mcp/prompts     - List available prompt templates
+  - POST /mcp/prompts/get - Get a specific prompt with arguments
+
+Available Templates:
+  1. analyze_directory - Analyze directory structure and contents
+     Arguments: path (required)
+
+  2. summarize_file - Generate a summary of file contents
+     Arguments: path (required), focus (optional)
+
+  3. search_pattern - Search for files matching a pattern with context
+     Arguments: directory (required), pattern (required)
+
+Implementation Details:
+  - Templates are defined in-code for type safety and validation
+  - Arguments are validated at runtime before interpolation
+  - Generated prompts follow the messages format (role + content)
+  - Templates can be extended by adding new cases to get_prompt_mcp
+
+Usage Example:
+--------------
+    # List available resources
+    GET /api/filesystem/mcp/resources
+
+    # Read a resource
+    POST /api/filesystem/mcp/resources/read
+    {"uri": "file:///tmp/autobot/data.json"}
+
+    # List prompt templates
+    GET /api/filesystem/mcp/prompts
+
+    # Get a prompt template
+    POST /api/filesystem/mcp/prompts/get
+    {
+      "name": "analyze_directory",
+      "arguments": {"path": "/tmp/autobot/logs"}
+    }
+
+Future Extensions:
+------------------
+Other MCP bridges can follow this pattern by:
+  1. Implementing GET /<bridge>/mcp/resources endpoint
+  2. Implementing POST /<bridge>/mcp/resources/read endpoint
+  3. Implementing GET /<bridge>/mcp/prompts endpoint
+  4. Implementing POST /<bridge>/mcp/prompts/get endpoint
+  5. Using appropriate URI schemes for their resource types
+  6. Defining domain-specific prompt templates
 """
 
 import asyncio
 import base64
-import logging
 import mimetypes
 import os
 import shutil
@@ -33,8 +110,19 @@ from typing import Dict, List
 
 import aiofiles
 
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
+from services.mcp_bridge_manifest import MCPBridgeManifest
 from type_defs.common import Metadata
 from utils.io_executor import run_in_file_executor
+
+MANIFEST = MCPBridgeManifest(
+    name="filesystem_mcp",
+    version="1.0.0",
+    description="Filesystem Operations - Secure File & Directory Access",
+    features=["read_files", "write_files", "directory_management", "search", "metadata"],
+    endpoint="/api/filesystem/mcp/tools",
+)
 
 # Issue #514: Per-file locking to prevent concurrent write corruption
 _file_locks: Dict[str, asyncio.Lock] = {}
@@ -74,20 +162,30 @@ from api.schemas_code import (
     FilesystemListDirectoryResponse,
     FilesystemListDirectoryWithSizesResponse,
     FilesystemMoveFileResponse,
+    FilesystemPromptGetResponse,
+    FilesystemPromptsListResponse,
     FilesystemReadMediaResponse,
     FilesystemReadMultipleResponse,
     FilesystemReadTextResponse,
+    FilesystemResourceReadResponse,
+    FilesystemResourcesListResponse,
     FilesystemSearchFilesResponse,
     FilesystemWriteFileResponse,
     GetFileInfoRequest,
+    GetPromptRequest,
     ListDirectoryRequest,
     ListDirectoryWithSizesRequest,
     MCPTool,
     MoveFileRequest,
     ReadMediaFileRequest,
     ReadMultipleFilesRequest,
+    ReadResourceRequest,
     ReadTextFileRequest,
     SearchFilesRequest,
+    SubscribeResourceRequest,
+    SubscribeResourceResponse,
+    UnsubscribeResourceRequest,
+    UnsubscribeResourceResponse,
     WriteFileRequest,
 )
 from auth_middleware import check_admin_permission
@@ -95,13 +193,13 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.security.path_validator import validate_path
 from utils.catalog_http_exceptions import raise_internal_error, raise_invalid_input, raise_not_found
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 router = APIRouter(tags=["filesystem_mcp", "mcp"])
 
 
 # Security Configuration: Allowed Directories
 # Only paths within these directories are accessible
-_BASE_DIR = os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot")
+_BASE_DIR = config.base_dir
 ALLOWED_DIRECTORIES = [
     f"{_BASE_DIR}/",  # Project root
     "/tmp/autobot/",  # Temporary files  # nosec B108
@@ -1319,3 +1417,416 @@ async def list_allowed_directories_mcp(
             "max_file_size_bytes": MAX_FILE_SIZE,
         },
     }
+
+
+# ---------------------------------------------------------------------------
+# MCP Resources and Prompts (Issue MVA-2164)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/mcp/resources", response_model=FilesystemResourcesListResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_resources_mcp",
+    error_code_prefix="FILESYSTEM_MCP",
+)
+async def list_resources_mcp(
+    admin_check: bool = Depends(check_admin_permission),
+) -> Metadata:
+    """
+    List available file resources as MCP resources.
+
+    Issue MVA-2164: Exposes allowed directories as browseable resources.
+    Issue #744: Requires admin authentication.
+
+    Resources use file:// URI scheme for accessing filesystem paths.
+    Each allowed directory is exposed as a resource that can be read
+    via the /mcp/resources/read endpoint.
+    """
+    resources = []
+
+    for allowed_dir in ALLOWED_DIRECTORIES:
+        # Check if directory exists
+        dir_exists = await run_in_file_executor(os.path.exists, allowed_dir)
+        if dir_exists:
+            is_dir = await run_in_file_executor(os.path.isdir, allowed_dir)
+            if is_dir:
+                # Create resource for directory
+                dir_name = os.path.basename(allowed_dir.rstrip("/")) or "root"
+                resources.append(
+                    {
+                        "uri": f"file://{allowed_dir}",
+                        "name": dir_name,
+                        "description": f"Directory: {allowed_dir}",
+                        "mime_type": "inode/directory",
+                    }
+                )
+
+    return {
+        "success": True,
+        "resources": resources,
+        "total": len(resources),
+    }
+
+
+@router.post("/mcp/resources/read", response_model=FilesystemResourceReadResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="read_resource_mcp",
+    error_code_prefix="FILESYSTEM_MCP",
+)
+async def read_resource_mcp(
+    request: ReadResourceRequest,
+    admin_check: bool = Depends(check_admin_permission),
+) -> Metadata:
+    """
+    Read a resource by its URI.
+
+    Issue MVA-2164: Implements MCP resource reading via file:// URIs.
+    Issue #744: Requires admin authentication.
+
+    Supports file:// URI scheme for accessing filesystem paths.
+    The URI is converted to a filesystem path and validated against
+    allowed directories before reading.
+    """
+    # Parse file:// URI
+    if not request.uri.startswith("file://"):
+        raise_invalid_input("uri", "Only file:// URIs are supported")
+
+    # Extract path from URI
+    path = request.uri[7:]  # Remove 'file://'
+
+    # Validate path
+    safe_path = _validated_path(path)
+
+    # Check if path exists
+    path_exists = await run_in_file_executor(os.path.exists, safe_path)
+    if not path_exists:
+        raise_not_found("Resource", request.uri)
+
+    # Check if it's a file
+    is_file = await run_in_file_executor(os.path.isfile, safe_path)
+    if not is_file:
+        raise_invalid_input("uri", f"Resource is not a file: {request.uri}")
+
+    # Check file size
+    file_size = await run_in_file_executor(os.path.getsize, safe_path)
+    if file_size > MAX_FILE_SIZE:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Resource too large: {file_size} bytes (max {MAX_FILE_SIZE})",
+        )
+
+    # Detect MIME type
+    mime_type, _ = mimetypes.guess_type(safe_path)
+    if mime_type is None:
+        mime_type = "text/plain"
+
+    try:
+        async with aiofiles.open(safe_path, "r", encoding="utf-8") as f:  # codeql[py/path-injection]
+            content = await f.read()
+
+        return {
+            "success": True,
+            "uri": request.uri,
+            "content": content,
+            "mime_type": mime_type,
+            "size_bytes": file_size,
+        }
+    except UnicodeDecodeError:
+        raise_invalid_input("uri", "Resource is not a text file")
+    except OSError:
+        raise_internal_error("Failed to read resource")
+
+
+@router.post("/mcp/resources/subscribe", response_model=SubscribeResourceResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="subscribe_resource_mcp",
+    error_code_prefix="FILESYSTEM_MCP",
+)
+async def subscribe_resource_mcp(
+    request: SubscribeResourceRequest,
+    admin_check: bool = Depends(check_admin_permission),
+) -> Metadata:
+    """
+    Subscribe to resource change notifications.
+
+    Issue MVA-2166: Implements MCP resource subscriptions for real-time updates.
+    Issue #744: Requires admin authentication.
+
+    Clients can subscribe to file:// URIs and receive notifications when files change
+    via the WebSocket live events channel. Notifications are published when:
+    - File is created
+    - File is modified
+    - File is deleted
+
+    The response includes a WebSocket channel name that clients should subscribe to
+    via /ws/live to receive notifications.
+
+    Args:
+        request: Subscription request with URI and session_id
+
+    Returns:
+        Subscription confirmation with WebSocket channel
+    """
+    from services.mcp_subscription_manager import get_mcp_subscription_manager
+
+    # Validate URI
+    if not request.uri.startswith("file://"):
+        raise_invalid_input("uri", "Only file:// URIs are supported for filesystem subscriptions")
+
+    # Extract and validate path
+    path = request.uri[7:]  # Remove 'file://'
+    safe_path = _validated_path(path)
+
+    # Construct canonical URI from validated path to prevent path traversal
+    canonical_uri = f"file://{safe_path}"
+
+    # Subscribe via subscription manager
+    success = await get_mcp_subscription_manager().subscribe(request.session_id, canonical_uri)
+
+    if not success:
+        raise_internal_error("Failed to create subscription")
+
+    # Generate channel name for WebSocket subscription
+    import hashlib
+
+    uri_hash = hashlib.sha256(canonical_uri.encode()).hexdigest()[:16]
+    channel = f"mcp:resource:{uri_hash}"
+
+    logger.info(
+        "Created subscription: session=%s, uri=%s, channel=%s",
+        request.session_id[:8],
+        canonical_uri,
+        channel,
+    )
+
+    return {
+        "success": True,
+        "uri": canonical_uri,
+        "session_id": request.session_id,
+        "channel": channel,
+        "message": f"Subscribed to {canonical_uri}. Connect to WebSocket /ws/live, channel: {channel}",
+    }
+
+
+@router.post("/mcp/resources/unsubscribe", response_model=UnsubscribeResourceResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="unsubscribe_resource_mcp",
+    error_code_prefix="FILESYSTEM_MCP",
+)
+async def unsubscribe_resource_mcp(
+    request: UnsubscribeResourceRequest,
+    admin_check: bool = Depends(check_admin_permission),
+) -> Metadata:
+    """
+    Unsubscribe from resource change notifications.
+
+    Issue MVA-2166: Implements MCP resource subscriptions for real-time updates.
+    Issue #744: Requires admin authentication.
+
+    Removes a subscription for a specific session and resource URI.
+    If this was the last subscriber for the resource, the file watcher is stopped.
+
+    Args:
+        request: Unsubscription request with URI and session_id
+
+    Returns:
+        Unsubscription confirmation
+    """
+    from services.mcp_subscription_manager import get_mcp_subscription_manager
+
+    # Validate URI
+    if not request.uri.startswith("file://"):
+        raise_invalid_input("uri", "Only file:// URIs are supported for filesystem subscriptions")
+
+    # Extract and validate path
+    path = request.uri[7:]  # Remove 'file://'
+    safe_path = _validated_path(path)
+
+    # Construct canonical URI from validated path
+    canonical_uri = f"file://{safe_path}"
+
+    # Unsubscribe via subscription manager
+    success = await get_mcp_subscription_manager().unsubscribe(request.session_id, canonical_uri)
+
+    if not success:
+        raise_internal_error("Failed to remove subscription")
+
+    logger.info(
+        "Removed subscription: session=%s, uri=%s",
+        request.session_id[:8],
+        canonical_uri,
+    )
+
+    return {
+        "success": True,
+        "uri": canonical_uri,
+        "session_id": request.session_id,
+        "message": f"Unsubscribed from {canonical_uri}",
+    }
+
+
+@router.get("/mcp/prompts", response_model=FilesystemPromptsListResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_prompts_mcp",
+    error_code_prefix="FILESYSTEM_MCP",
+)
+async def list_prompts_mcp(
+    admin_check: bool = Depends(check_admin_permission),
+) -> Metadata:
+    """
+    List available prompt templates.
+
+    Issue MVA-2164: Exposes predefined prompt templates for common
+    filesystem analysis tasks.
+    Issue #744: Requires admin authentication.
+
+    Templates can be invoked via the /mcp/prompts/get endpoint with
+    appropriate arguments to generate contextual prompts.
+    """
+    prompts = [
+        {
+            "name": "analyze_directory",
+            "description": "Analyze directory structure and contents",
+            "arguments": [
+                {
+                    "name": "path",
+                    "description": "Directory path to analyze",
+                    "required": True,
+                }
+            ],
+        },
+        {
+            "name": "summarize_file",
+            "description": "Generate a summary of a file's contents",
+            "arguments": [
+                {
+                    "name": "path",
+                    "description": "File path to summarize",
+                    "required": True,
+                },
+                {
+                    "name": "focus",
+                    "description": "Aspect to focus on (e.g., 'structure', 'security', 'performance')",
+                    "required": False,
+                },
+            ],
+        },
+        {
+            "name": "search_pattern",
+            "description": "Search for files matching a pattern with context",
+            "arguments": [
+                {
+                    "name": "directory",
+                    "description": "Directory to search in",
+                    "required": True,
+                },
+                {
+                    "name": "pattern",
+                    "description": "File pattern to search for",
+                    "required": True,
+                },
+            ],
+        },
+    ]
+
+    return {
+        "success": True,
+        "prompts": prompts,
+        "total": len(prompts),
+    }
+
+
+@router.post("/mcp/prompts/get", response_model=FilesystemPromptGetResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_prompt_mcp",
+    error_code_prefix="FILESYSTEM_MCP",
+)
+async def get_prompt_mcp(
+    request: GetPromptRequest,
+    admin_check: bool = Depends(check_admin_permission),
+) -> Metadata:
+    """
+    Get a specific prompt template with arguments interpolated.
+
+    Issue MVA-2164: Returns formatted prompt messages for common
+    filesystem analysis tasks.
+    Issue #744: Requires admin authentication.
+
+    The template arguments are validated and interpolated into the
+    prompt to generate contextual instructions for LLMs.
+    """
+    if request.name == "analyze_directory":
+        path = request.arguments.get("path")
+        if not path:
+            raise_invalid_input("arguments", "Missing required argument: path")
+
+        return {
+            "success": True,
+            "name": request.name,
+            "description": "Analyze directory structure and contents",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": f"Please analyze the directory at {path}. "
+                    f"Provide insights on:\n"
+                    f"- Directory structure and organization\n"
+                    f"- File types and distributions\n"
+                    f"- Potential issues or improvements\n"
+                    f"- Overall code quality indicators",
+                }
+            ],
+        }
+
+    elif request.name == "summarize_file":
+        path = request.arguments.get("path")
+        if not path:
+            raise_invalid_input("arguments", "Missing required argument: path")
+
+        focus = request.arguments.get("focus", "general overview")
+        return {
+            "success": True,
+            "name": request.name,
+            "description": "Generate a summary of a file's contents",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": f"Please summarize the file at {path}. "
+                    f"Focus on: {focus}.\n"
+                    f"Provide a concise but comprehensive summary.",
+                }
+            ],
+        }
+
+    elif request.name == "search_pattern":
+        directory = request.arguments.get("directory")
+        pattern = request.arguments.get("pattern")
+
+        if not directory:
+            raise_invalid_input("arguments", "Missing required argument: directory")
+        if not pattern:
+            raise_invalid_input("arguments", "Missing required argument: pattern")
+
+        return {
+            "success": True,
+            "name": request.name,
+            "description": "Search for files matching a pattern with context",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": f"Search for files in {directory} matching pattern '{pattern}'.\n"
+                    f"For each match, provide:\n"
+                    f"- File location and purpose\n"
+                    f"- Key contents or functionality\n"
+                    f"- Relationships to other files",
+                }
+            ],
+        }
+
+    else:
+        raise_invalid_input("name", f"Unknown prompt template: {request.name}")

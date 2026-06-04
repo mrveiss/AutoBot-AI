@@ -8,12 +8,16 @@ Event-based extensibility system allowing plugins to register callbacks
 for system events.
 
 Issue #730 - Plugin SDK for extensible tool architecture.
+Issue #6970 - Hook registry with signatures and validation.
 """
+
+from __future__ import annotations
 
 import asyncio
 import logging
+import warnings
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +58,122 @@ class Hook(str, Enum):
     CUSTOM = "custom"
 
 
+class HookSignature:
+    """Describes the expected keyword arguments for a hook."""
+
+    def __init__(self, description: str, params: Dict[str, str]) -> None:
+        self.description = description
+        # Maps param name → type description string
+        self.params = params
+
+    def __repr__(self) -> str:
+        return f"HookSignature({self.description!r}, params={list(self.params)})"
+
+
+# Registry mapping canonical hook names to their expected signatures.
+# Plugins declare hooks by name in PluginManifest.hooks; the loader
+# validates each name against this registry and emits a DeprecationWarning
+# for any name not found here.
+HOOK_REGISTRY: Dict[str, HookSignature] = {
+    Hook.ON_STARTUP.value: HookSignature(
+        "Called once after all plugins are loaded.",
+        {},
+    ),
+    Hook.ON_SHUTDOWN.value: HookSignature(
+        "Called before the application shuts down.",
+        {},
+    ),
+    Hook.ON_CONFIG_CHANGE.value: HookSignature(
+        "Called when application configuration changes.",
+        {"key": "str", "old_value": "Any", "new_value": "Any"},
+    ),
+    Hook.ON_AGENT_EXECUTE.value: HookSignature(
+        "Called before an agent task is executed.",
+        {"agent_id": "str", "task": "dict"},
+    ),
+    Hook.ON_AGENT_COMPLETE.value: HookSignature(
+        "Called after an agent task completes.",
+        {"agent_id": "str", "task": "dict", "result": "Any"},
+    ),
+    Hook.ON_AGENT_ERROR.value: HookSignature(
+        "Called when an agent task raises an error.",
+        {"agent_id": "str", "task": "dict", "error": "Exception"},
+    ),
+    Hook.ON_TOOL_CALL.value: HookSignature(
+        "Called before a tool is invoked.",
+        {"tool_name": "str", "args": "dict"},
+    ),
+    Hook.ON_TOOL_COMPLETE.value: HookSignature(
+        "Called after a tool returns.",
+        {"tool_name": "str", "args": "dict", "result": "Any"},
+    ),
+    Hook.ON_TOOL_ERROR.value: HookSignature(
+        "Called when a tool raises an error.",
+        {"tool_name": "str", "args": "dict", "error": "Exception"},
+    ),
+    Hook.ON_MESSAGE_RECEIVED.value: HookSignature(
+        "Called when a chat message is received.",
+        {"session_id": "str", "message": "str"},
+    ),
+    Hook.ON_MESSAGE_SENT.value: HookSignature(
+        "Called when a chat message is sent.",
+        {"session_id": "str", "message": "str"},
+    ),
+    Hook.ON_KB_SEARCH.value: HookSignature(
+        "Called when the knowledge base is queried.",
+        {"query": "str", "results": "list"},
+    ),
+    Hook.ON_KB_DOCUMENT_ADDED.value: HookSignature(
+        "Called when a document is added to the knowledge base.",
+        {"document_id": "str", "metadata": "dict"},
+    ),
+    Hook.ON_KB_DOCUMENT_REMOVED.value: HookSignature(
+        "Called when a document is removed from the knowledge base.",
+        {"document_id": "str"},
+    ),
+    Hook.ON_WORKFLOW_START.value: HookSignature(
+        "Called when a workflow begins execution.",
+        {"workflow_id": "str", "context": "dict"},
+    ),
+    Hook.ON_WORKFLOW_COMPLETE.value: HookSignature(
+        "Called when a workflow finishes successfully.",
+        {"workflow_id": "str", "result": "Any"},
+    ),
+    Hook.ON_WORKFLOW_ERROR.value: HookSignature(
+        "Called when a workflow raises an error.",
+        {"workflow_id": "str", "error": "Exception"},
+    ),
+    Hook.CUSTOM.value: HookSignature(
+        "Generic custom hook for plugin-defined events.",
+        {},
+    ),
+}
+
+
+def validate_hook_names(hook_names: List[str], plugin_name: str = "unknown") -> None:
+    """Emit a DeprecationWarning for any hook name not in HOOK_REGISTRY.
+
+    Args:
+        hook_names: Hook names declared in a plugin manifest.
+        plugin_name: Plugin identifier, used in the warning message.
+    """
+    for name in hook_names:
+        if name not in HOOK_REGISTRY:
+            warnings.warn(
+                f"Plugin '{plugin_name}' declares unknown hook '{name}'. "
+                "This hook is not in HOOK_REGISTRY and may not be called. "
+                "Use a name from plugin_sdk.hooks.Hook or register a custom "
+                "hook in HOOK_REGISTRY before declaring it.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            logger.warning(
+                "Plugin '%s' declares unknown hook '%s' — not in HOOK_REGISTRY",
+                plugin_name,
+                name,
+            )
+
+
 class HookRegistry:
     """
     Singleton registry for managing hooks and callbacks.
@@ -61,8 +181,8 @@ class HookRegistry:
     Allows plugins to register callbacks for system events.
     """
 
-    _instance: Optional["HookRegistry"] = None
-    _hooks: Dict[str, List[Callable]] = {}
+    _instance: "HookRegistry" | None = None
+    _hooks: Dict[str, List[Any]] = {}  # Each entry is a dict with callback and plugin_name keys
 
     def __new__(cls):
         """Singleton pattern."""
@@ -74,7 +194,7 @@ class HookRegistry:
         self,
         hook_name: str,
         callback: Callable,
-        plugin_name: Optional[str] = None,
+        plugin_name: str | None = None,
     ) -> None:
         """
         Register a callback for a hook.
@@ -100,7 +220,7 @@ class HookRegistry:
             plugin_name or "unknown",
         )
 
-    def unregister_hook(self, hook_name: str, plugin_name: Optional[str] = None) -> None:
+    def unregister_hook(self, hook_name: str, plugin_name: str | None = None) -> None:
         """
         Unregister callbacks for a hook.
 

@@ -17,14 +17,14 @@
       </div>
       <div class="header-actions">
         <div class="status-badge" :class="workflowStatus">
-          <i :class="statusIcon"></i>
+          <Icon :name="statusIcon" />
           {{ statusText }}
         </div>
         <button @click="toggleLayout" class="layout-btn" :title="t('visualizations.workflowViz.toggleLayout')">
-          <i :class="layoutMode === 'horizontal' ? 'fas fa-arrows-alt-v' : 'fas fa-arrows-alt-h'"></i>
+          <i :class="layoutMode === 'horizontal' ? 'arrows-alt-v' : 'arrows-alt-h'"></i>
         </button>
         <button @click="fitToView" class="fit-btn" :title="t('visualizations.workflowViz.fitToView')">
-          <i class="fas fa-expand"></i>
+          <Icon name="expand" />
         </button>
       </div>
     </div>
@@ -194,11 +194,11 @@
       <!-- Zoom controls -->
       <div class="zoom-controls">
         <button @click="zoomIn" :title="t('visualizations.workflowViz.zoomIn')">
-          <i class="fas fa-plus"></i>
+          <Icon name="plus" />
         </button>
         <span class="zoom-level">{{ Math.round(zoomLevel * 100) }}%</span>
         <button @click="zoomOut" :title="t('visualizations.workflowViz.zoomOut')">
-          <i class="fas fa-minus"></i>
+          <Icon name="minus" />
         </button>
       </div>
 
@@ -224,7 +224,7 @@
             <span class="node-type">{{ formatNodeType(selectedNode.type) }}</span>
           </div>
           <button @click="selectedNode = null" class="close-btn">
-            <i class="fas fa-times"></i>
+            <Icon name="times" />
           </button>
         </div>
 
@@ -262,6 +262,7 @@
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils'
@@ -366,10 +367,10 @@ const workflowStatus = computed(() => props.workflow?.status || 'pending')
 
 const statusIcon = computed(() => {
   switch (workflowStatus.value) {
-    case 'running': return 'fas fa-spinner fa-spin'
-    case 'completed': return 'fas fa-check-circle'
-    case 'failed': return 'fas fa-times-circle'
-    default: return 'fas fa-clock'
+    case 'running': return 'spinner'
+    case 'completed': return 'check-circle'
+    case 'failed': return 'times-circle'
+    default: return 'clock'
   }
 })
 

@@ -471,6 +471,17 @@ code_deployment() {
 
     if [[ -d "${CODE_SOURCE}/.git" ]]; then
         info "Updating existing repository..."
+
+        # Remove stale git lock files left by prior crashed processes (exit 128 guard)
+        local _lock _lf
+        for _lock in index config HEAD; do
+            _lf="${CODE_SOURCE}/.git/${_lock}.lock"
+            if [[ -f "${_lf}" ]]; then
+                warn "Removing stale git lock: ${_lf}"
+                rm -f "${_lf}"
+            fi
+        done
+
         run_ok "Fetching latest code" \
             sudo -u autobot git -C "${CODE_SOURCE}" fetch origin
         run_ok "Checking out ${GIT_BRANCH}" \
@@ -517,12 +528,11 @@ ansible_deployment() {
     local inventory="${ansible_dir}/inventory/localhost.yml"
 
     info "Generating localhost inventory..."
-    # Single-host install: SLM Manager host also runs autobot-backend so the
-    # /api/auth/login flow works out of the box (#6600). The plural node_roles
-    # is the variable consulted by provision-fleet-roles.yml's role gates;
-    # node_role (singular) is preserved for backward compat.
+    # The installer sets up the SLM control plane only. User-facing components
+    # (backend, frontend, AI stack, browser, etc.) are deployed from the SLM
+    # instance via the deployment wizard, where the user selects target nodes.
     cat > "${inventory}" << 'INVENTORY'
-# AutoBot localhost inventory for self-deploy (Issue #1294, #6600, #7162)
+# AutoBot SLM-Manager inventory (Issue #1294, #7162)
 all:
   vars:
     # #7162: network_subnet/network_gateway/slm_host MUST be defined here so
@@ -538,17 +548,9 @@ all:
       ansible_python_interpreter: /usr/bin/python3
       slm_node_id: "00-SLM-Manager"
       node_role: "slm-manager"
-      node_roles:
-        - autobot-backend
-        - vnc
+      node_roles: []
   children:
     slm_server:
-      hosts:
-        00-SLM-Manager:
-    main:
-      hosts:
-        00-SLM-Manager:
-    backend:
       hosts:
         00-SLM-Manager:
 INVENTORY

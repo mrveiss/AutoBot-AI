@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from autobot_shared.logging_manager import get_logger as _get_logger
 from services.mesh_brain.community_clusterer import CommunityClusterer, cluster_graph
 
 
@@ -53,11 +54,11 @@ def _ensure_graspologic_stub() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_cluster_graph_empty_returns_empty():
+def test_cluster_graph_empty_returns_empty() -> None:
     assert cluster_graph([]) == []
 
 
-def test_cluster_graph_single_edge_returns_one_centroid():
+def test_cluster_graph_single_edge_returns_one_centroid() -> None:
     _ensure_graspologic_stub()
     edges = _make_edges([("n1", "n2", 1.0)])
     centroids = cluster_graph(edges)
@@ -65,7 +66,7 @@ def test_cluster_graph_single_edge_returns_one_centroid():
     assert centroids[0] in ("n1", "n2")
 
 
-def test_cluster_graph_triangle_returns_one_centroid():
+def test_cluster_graph_triangle_returns_one_centroid() -> None:
     """Three fully-connected nodes → one community → one centroid."""
     _ensure_graspologic_stub()
     edges = _make_edges([("n1", "n2", 1.0), ("n2", "n3", 1.0), ("n1", "n3", 1.0)])
@@ -73,7 +74,7 @@ def test_cluster_graph_triangle_returns_one_centroid():
     assert len(centroids) == 1
 
 
-def test_cluster_graph_two_components_returns_two_centroids():
+def test_cluster_graph_two_components_returns_two_centroids() -> None:
     """Two disconnected triangles → two communities → two centroids."""
     _ensure_graspologic_stub()
     edges = _make_edges(
@@ -97,7 +98,7 @@ def test_cluster_graph_two_components_returns_two_centroids():
 
 
 @pytest.mark.asyncio
-async def test_run_seeds_anchors_from_centroids():
+async def test_run_seeds_anchors_from_centroids() -> None:
     """run() fetches edges, clusters, and promotes centroid nodes to anchors."""
     _ensure_graspologic_stub()
     db = AsyncMock()
@@ -120,7 +121,7 @@ async def test_run_seeds_anchors_from_centroids():
 
 
 @pytest.mark.asyncio
-async def test_run_empty_graph_promotes_nothing():
+async def test_run_empty_graph_promotes_nothing() -> None:
     db = AsyncMock()
     db.fetch_edges = AsyncMock(return_value=[])
     db.promote_to_anchor = AsyncMock()
@@ -151,7 +152,7 @@ async def _run_clustering_loop_once(mesh_db) -> list[str]:
 
 
 @pytest.mark.asyncio
-async def test_periodic_caller_promotes_anchors_on_connected_graph():
+async def test_periodic_caller_promotes_anchors_on_connected_graph() -> None:
     """A scheduler-style caller creates CommunityClusterer per run and promotes centroids."""
     _ensure_graspologic_stub()
     db = AsyncMock()
@@ -173,7 +174,7 @@ async def test_periodic_caller_promotes_anchors_on_connected_graph():
 
 
 @pytest.mark.asyncio
-async def test_periodic_caller_noop_on_empty_graph():
+async def test_periodic_caller_noop_on_empty_graph() -> None:
     """A scheduler-style caller handles an empty graph gracefully — no promotions."""
     db = AsyncMock()
     db.fetch_edges = AsyncMock(return_value=[])
@@ -186,7 +187,7 @@ async def test_periodic_caller_noop_on_empty_graph():
 
 
 @pytest.mark.asyncio
-async def test_periodic_caller_promotes_two_anchors_for_two_components():
+async def test_periodic_caller_promotes_two_anchors_for_two_components() -> None:
     """Two disconnected components produce two anchor promotions per run."""
     _ensure_graspologic_stub()
     db = AsyncMock()
@@ -217,7 +218,7 @@ async def test_periodic_caller_promotes_two_anchors_for_two_components():
 # ---------------------------------------------------------------------------
 
 
-def test_cluster_graph_raises_import_error_when_graspologic_missing():
+def test_cluster_graph_raises_import_error_when_graspologic_missing() -> None:
     """cluster_graph raises ImportError when graspologic is unavailable (#4896).
 
     Ensures callers can distinguish a missing dependency from an empty-graph result.
@@ -251,9 +252,9 @@ async def test_loop_body_logs_warning_and_sleeps_on_import_error(caplog):
         try:
             await CommunityClusterer(mesh_db).run()
         except ImportError as exc:
-            import logging as _logging
+            pass
 
-            _logging.getLogger(__name__).warning(
+            _get_logger(__name__).warning(
                 "graspologic not installed — community clustering paused. "
                 "Install with: pip install graspologic. Retrying in 24h. Error: %s",
                 exc,

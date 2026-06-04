@@ -10,7 +10,7 @@ Supports TOTP-based 2FA with backup codes.
 import uuid
 from datetime import datetime, timezone
 from enum import Enum
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, String
 from sqlalchemy.dialects.postgresql import UUID
@@ -68,7 +68,7 @@ class UserMFA(Base, TimestampMixin):
     )
 
     # Encrypted backup codes (JSON array of bcrypt hashes, Fernet encrypted)
-    backup_codes_encrypted: Mapped[Optional[str]] = mapped_column(
+    backup_codes_encrypted: Mapped[str | None] = mapped_column(
         String(2000),
         nullable=True,
     )
@@ -87,13 +87,13 @@ class UserMFA(Base, TimestampMixin):
     )
 
     # Last verification timestamp
-    last_verified_at: Mapped[Optional[datetime]] = mapped_column(
+    last_verified_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
 
     # Recovery email (for email-based recovery)
-    recovery_email: Mapped[Optional[str]] = mapped_column(
+    recovery_email: Mapped[str | None] = mapped_column(
         String(255),
         nullable=True,
     )

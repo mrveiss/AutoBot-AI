@@ -4,7 +4,7 @@
 <template>
   <div class="approvals-tab space-y-3">
     <div v-if="approvals.length === 0" class="text-center py-12 text-gray-400">
-      No pending approvals
+      {{ $t('skills.approvalsTab.noPendingApprovals') }}
     </div>
     <div
       v-for="approval in approvals"
@@ -36,24 +36,24 @@
           class="bg-gray-900 border border-gray-700 rounded px-2 py-1 text-sm text-white
                  focus:outline-hidden focus:border-blue-500"
         >
-          <option value="monitored">Monitored</option>
-          <option value="trusted">Trusted</option>
-          <option value="sandboxed">Sandboxed</option>
-          <option value="restricted">Restricted</option>
+          <option value="monitored">{{ $t('skills.approvalsTab.monitored') }}</option>
+          <option value="trusted">{{ $t('skills.approvalsTab.trusted') }}</option>
+          <option value="sandboxed">{{ $t('skills.approvalsTab.sandboxed') }}</option>
+          <option value="restricted">{{ $t('skills.approvalsTab.restricted') }}</option>
         </select>
         <button
           class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 rounded text-sm
                  text-white transition-colors"
           @click="handleApprove(approval.id)"
         >
-          Approve
+          {{ $t('skills.approvalsTab.approve') }}
         </button>
         <button
           class="px-3 py-1.5 bg-red-700 hover:bg-red-800 rounded text-sm
                  text-white transition-colors"
           @click="handleReject(approval.id)"
         >
-          Reject
+          {{ $t('skills.approvalsTab.reject') }}
         </button>
       </div>
     </div>

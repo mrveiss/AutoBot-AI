@@ -8,10 +8,11 @@ Tracks imports and dependencies for completion suggestions.
 """
 
 import ast
-import logging
 from typing import Dict, List, Set
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 
 
 class DependencyTracker:
@@ -22,7 +23,7 @@ class DependencyTracker:
     frequently co-imported modules.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.imports: List[str] = []
         self.import_aliases: Dict[str, str] = {}
         self.used_names: Set[str] = set()

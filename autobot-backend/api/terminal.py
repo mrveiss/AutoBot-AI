@@ -110,13 +110,12 @@ See Also:
 
 import asyncio
 import json
-import logging
 import shlex
 import signal
 import time
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket, WebSocketDisconnect
 
@@ -138,7 +137,6 @@ from api.schemas_terminal import (
     TerminalCapabilitiesResponse,
     TerminalCommandHistoryResponse,
     TerminalFeaturesResponse,
-    TerminalHealthResponse,
     TerminalInfoResponse,
     TerminalInputRequest,
     TerminalInputResponse,
@@ -156,6 +154,7 @@ from api.system_health import ComponentHealth, register_health_probe
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.error_utils import safe_http_detail
+from autobot_shared.logging_manager import get_logger
 from constants.error_constants import ERR_SESSION_NOT_FOUND
 from constants.terminal_constants import MODERATE_RISK_PATTERNS, RISKY_COMMAND_PATTERNS
 from services.simple_pty import simple_pty_manager
@@ -163,7 +162,7 @@ from services.simple_pty import simple_pty_manager
 # Import terminal secrets service for SSH key integration (Issue #211)
 from services.terminal_secrets_service import get_terminal_secrets_service
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Create router for consolidated terminal API
 router = APIRouter(
@@ -190,7 +189,7 @@ class SSHTerminalWebSocket:
         websocket: WebSocket,
         session_id: str,
         host_id: str,
-        conversation_id: Optional[str] = None,
+        conversation_id: str | None = None,
         redis_client=None,
     ):
         """Initialize SSH terminal handler stub."""
@@ -271,14 +270,14 @@ class _SSHTerminalManager:
         async with self._lock:
             self.active_sessions.pop(session_id, None)
 
-    async def get_session(self, session_id: str) -> Optional[SSHTerminalWebSocket]:
+    async def get_session(self, session_id: str) -> SSHTerminalWebSocket | None:
         """Get an SSH terminal session."""
         async with self._lock:
             return self.active_sessions.get(session_id)
 
     async def close_session(self, session_id: str) -> None:
         """Close and clean up an SSH terminal session."""
-        terminal: Optional[SSHTerminalWebSocket] = None
+        terminal: SSHTerminalWebSocket | None = None
         async with self._lock:
             terminal = self.active_sessions.get(session_id)
         if terminal:
@@ -1104,7 +1103,7 @@ async def terminal_info(
 
 @register_health_probe("terminal")
 async def probe_terminal(
-    request: Optional[Request] = None,
+    request: Request | None = None,
 ) -> ComponentHealth:
     """Issue #3333: probe registration for terminal module."""
     try:
@@ -1124,52 +1123,6 @@ async def probe_terminal(
             status="down",
             detail=f"probe error: {type(exc).__name__}",
         )
-
-
-@router.get("/health", response_model=TerminalHealthResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="terminal_health_check",
-    error_code_prefix="TERMINAL",
-)
-async def terminal_health_check(
-    current_user: dict = Depends(get_current_user),
-):
-    """Health check for consolidated terminal system
-    Issue #744: Requires authenticated user.
-
-    Returns:
-        Health status of all terminal components including:
-        - Consolidated terminal manager
-        - WebSocket manager
-        - PTY system (SimplePTY)
-        - Session management
-    """
-    try:
-        # Check if manager is operational
-        active_sessions = len(simple_pty_manager.sessions)
-
-        return {
-            "status": "healthy",
-            "service": "consolidated_terminal_system",
-            "components": {
-                "terminal_manager": "operational",
-                "websocket_manager": "operational",
-                "pty_system": "operational",
-                "session_manager": "operational",
-            },
-            "metrics": {
-                "active_sessions": active_sessions,
-                "manager_initialized": simple_pty_manager is not None,
-            },
-        }
-    except Exception as e:
-        logger.exception("Unexpected error: %s", e)
-        return {
-            "status": "degraded",
-            "service": "consolidated_terminal_system",
-            "error": "Internal server error",
-        }
 
 
 @router.get("/status", response_model=TerminalSystemStatusResponse)

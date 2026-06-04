@@ -8,7 +8,7 @@
     <!-- Codebase Statistics -->
     <div class="stats-section">
       <h3>
-        <i class="fas fa-chart-pie"></i> {{ $t('analytics.codebase.stats.title') }}
+        <Icon name="chart-pie" /> {{ $t('analytics.codebase.stats.title') }}
         <div class="section-export-buttons">
           <button
             @click="emit('export-section', 'statistics', 'md')"
@@ -16,7 +16,7 @@
             :disabled="!codebaseStats"
             :title="$t('analytics.codebase.actions.exportMarkdown')"
           >
-            <i class="fas fa-file-alt"></i> MD
+            <Icon name="file-alt" /> MD
           </button>
           <button
             @click="emit('export-section', 'statistics', 'json')"
@@ -24,24 +24,24 @@
             :disabled="!codebaseStats"
             :title="$t('analytics.codebase.actions.exportJson')"
           >
-            <i class="fas fa-file-code"></i> JSON
+            <Icon name="file-code" /> JSON
           </button>
         </div>
       </h3>
       <div v-if="codebaseStats" class="stats-grid">
-        <BasePanel variant="elevated" size="small">
+        <BasePanel variant="elevated" size="sm">
           <div class="stat-value">{{ codebaseStats.total_files || 0 }}</div>
           <div class="stat-label">{{ $t('analytics.codebase.stats.totalFiles') }}</div>
         </BasePanel>
-        <BasePanel variant="elevated" size="small">
+        <BasePanel variant="elevated" size="sm">
           <div class="stat-value">{{ codebaseStats.total_lines || 0 }}</div>
           <div class="stat-label">{{ $t('analytics.codebase.stats.linesOfCode') }}</div>
         </BasePanel>
-        <BasePanel variant="elevated" size="small">
+        <BasePanel variant="elevated" size="sm">
           <div class="stat-value">{{ codebaseStats.total_functions || 0 }}</div>
           <div class="stat-label">{{ $t('analytics.codebase.stats.functions') }}</div>
         </BasePanel>
-        <BasePanel variant="elevated" size="small">
+        <BasePanel variant="elevated" size="sm">
           <div class="stat-value">{{ codebaseStats.total_classes || 0 }}</div>
           <div class="stat-label">{{ $t('analytics.codebase.stats.classes') }}</div>
         </BasePanel>
@@ -56,7 +56,7 @@
     <!-- Analytics Charts Section -->
     <div class="charts-section">
       <div class="section-header">
-        <h3><i class="fas fa-chart-bar"></i> {{ $t('analytics.codebase.problems.title') }}</h3>
+        <h3><Icon name="chart-bar" /> {{ $t('analytics.codebase.problems.title') }}</h3>
         <div class="section-header-actions">
           <button
             @click="emit('load-unified-report')"
@@ -64,7 +64,7 @@
             :disabled="unifiedReportLoading"
             :title="$t('analytics.codebase.problems.loadReport')"
           >
-            <i :class="unifiedReportLoading ? 'fas fa-spinner fa-spin' : 'fas fa-layer-group'"></i>
+            <i :class="unifiedReportLoading ? 'fas fa-spinner fa-spin' : 'layer-group'"></i>
           </button>
           <button
             @click="emit('load-chart-data')"
@@ -72,7 +72,7 @@
             :disabled="chartDataLoading"
             :title="$t('analytics.codebase.actions.refreshCharts')"
           >
-            <i :class="chartDataLoading ? 'fas fa-spinner fa-spin' : 'fas fa-sync-alt'"></i>
+            <i :class="chartDataLoading ? 'fas fa-spinner fa-spin' : 'sync-alt'"></i>
           </button>
         </div>
       </div>
@@ -84,7 +84,7 @@
           class="category-tab"
           :class="{ active: selectedCategory === 'all' }"
         >
-          <i class="fas fa-th-large"></i>
+          <Icon name="th-large" />
           {{ $t('analytics.codebase.problems.allIssues') }}
           <span class="tab-count" v-if="chartData?.summary?.total_problems">
             {{ chartData.summary.total_problems.toLocaleString() }}
@@ -97,7 +97,7 @@
           class="category-tab"
           :class="{ active: selectedCategory === cat.id }"
         >
-          <i :class="getCategoryIcon(cat.id)"></i>
+          <Icon :name="getCategoryIcon(cat.id)" />
           {{ cat.name }}
           <span class="tab-count">{{ cat.count }}</span>
         </button>
@@ -105,7 +105,7 @@
 
       <!-- Unified Report Error -->
       <div v-if="unifiedReportError" class="charts-error">
-        <i class="fas fa-exclamation-triangle"></i>
+        <Icon name="exclamation-triangle" />
         <span>{{ unifiedReportError }}</span>
         <button @click="emit('load-unified-report')" class="btn-link">
           {{ $t('analytics.codebase.actions.retry') }}
@@ -113,12 +113,12 @@
       </div>
 
       <div v-if="chartDataLoading" class="charts-loading">
-        <i class="fas fa-spinner fa-spin"></i>
+        <Icon name="spinner" class="animate-spin" />
         <span>{{ $t('analytics.codebase.problems.loadingChartData') }}</span>
       </div>
 
       <div v-else-if="chartDataError" class="charts-error">
-        <i class="fas fa-exclamation-triangle"></i>
+        <Icon name="exclamation-triangle" />
         <span>{{ chartDataError }}</span>
         <button @click="emit('load-chart-data')" class="btn-link">
           {{ $t('analytics.codebase.actions.retry') }}
@@ -216,7 +216,7 @@
       >
         <template #actions>
           <button @click="emit('index-codebase')" class="btn-primary" :disabled="analyzing">
-            <i class="fas fa-database"></i> {{ $t('analytics.codebase.buttons.indexCodebase') }}
+            <Icon name="database" /> {{ $t('analytics.codebase.buttons.indexCodebase') }}
           </button>
         </template>
       </EmptyState>
@@ -225,6 +225,7 @@
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { computed } from 'vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import BasePanel from '@/components/base/BasePanel.vue'
@@ -303,18 +304,18 @@ const filteredChartData = computed((): ChartData | null => {
 
 function getCategoryIcon(categoryId: string): string {
   const iconMap: Record<string, string> = {
-    race_conditions: 'fas fa-random',
-    debug_code: 'fas fa-bug',
-    complexity: 'fas fa-project-diagram',
-    code_smells: 'fas fa-exclamation-circle',
-    performance: 'fas fa-tachometer-alt',
-    security: 'fas fa-shield-alt',
-    long_functions: 'fas fa-scroll',
-    duplicate_code: 'fas fa-clone',
-    hardcoded_values: 'fas fa-lock',
-    missing_types: 'fas fa-question-circle',
-    unused_imports: 'fas fa-unlink',
-    default: 'fas fa-tag',
+    race_conditions: 'random',
+    debug_code: 'bug',
+    complexity: 'project-diagram',
+    code_smells: 'exclamation-circle',
+    performance: 'tachometer-alt',
+    security: 'shield-alt',
+    long_functions: 'scroll',
+    duplicate_code: 'clone',
+    hardcoded_values: 'lock',
+    missing_types: 'question-circle',
+    unused_imports: 'unlink',
+    default: 'tag',
   }
   return iconMap[categoryId] || iconMap.default
 }

@@ -10,12 +10,13 @@ Issue #7400: Foundation package for unified web search/scrape/crawl.
 from __future__ import annotations
 
 import hashlib
-import logging
 from collections import deque
-from typing import List, Optional, Tuple
+from typing import List, Tuple
 from urllib.parse import urljoin, urlparse
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 
 
 def _url_key(url: str) -> str:
@@ -106,7 +107,7 @@ class Frontier:
             self._visited.add(key)
             self._queue.append((url, depth))
 
-    def next(self) -> Optional[Tuple[str, int]]:
+    def next(self) -> Tuple[str, int] | None:
         """Pop the next (url, depth) pair, or return None when frontier is empty."""
         if not self._queue or self._pages_emitted >= self._max_pages:
             return None

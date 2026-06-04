@@ -4,11 +4,12 @@ Test the new workflow scheduler and queue management system
 """
 
 import asyncio
-import os
 import sys
 from datetime import datetime, timedelta
 
-sys.path.append(os.environ.get("AUTOBOT_PROJECT_ROOT", "/opt/autobot/code_source"))
+from autobot_shared.ssot_config import config
+
+sys.path.append(config.project_root)
 
 from tests.test_helpers import get_test_backend_url
 from workflow_scheduler import WorkflowPriority, WorkflowStatus, workflow_scheduler

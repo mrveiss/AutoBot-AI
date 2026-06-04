@@ -19,7 +19,7 @@ from skills.base_skill import BaseSkill, SkillConfigField, SkillManifest
 from skills.registry import get_skill_registry
 
 try:
-    from services.llm_service import get_llm_service
+    from services.llm_service import get_llm_service  # nosemgrep: extension-no-core-internals
 except ImportError:
     get_llm_service = None  # type: ignore[assignment]
 
@@ -170,8 +170,18 @@ class SkillRouterSkill(BaseSkill):
         return await self._enable_and_respond(winner, reason, method, candidates, registry, dry_run)
 
     def _build_candidates(self, task: str, registry: Any) -> List[Dict[str, Any]]:
-        """Score all registered skills and return top-K candidates."""
+        """Score all registered skills and return top-K candidates.
+
+        Uses the pre-built SkillRoutingIndex when available (no per-request
+        regex — only the task text is tokenized at call time).  Falls back to
+        per-request tokenization when the index is not yet built (e.g. during
+        the very first register() call).
+        """
         top_k: int = self._config.get("top_k", 5)
+        index = registry.get_routing_index() if hasattr(registry, "get_routing_index") else None
+        if index is not None:
+            return index.score_candidates(task, top_k)
+        # Fallback: per-request tokenization (index not yet built)
         task_tokens = _tokenize(task)
         scored = [
             {

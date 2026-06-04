@@ -16,6 +16,7 @@ Functions:
 
 Usage:
     from utils.chat_utils import (
+from autobot_shared.logging_manager import get_logger
         generate_request_id,
         create_chat_response,
         get_chat_history_manager
@@ -25,14 +26,14 @@ Related Issue: #40 - Chat/Conversation Targeted Refactoring
 Created: 2025-01-14
 """
 
-import logging
 import re
-from typing import Any, Optional
+from typing import Any
 from uuid import uuid4
 
 from fastapi import Request
 from fastapi.responses import JSONResponse
 
+from autobot_shared.logging_manager import get_logger
 from type_defs.common import Metadata
 from utils.path_validation import contains_injection_patterns
 
@@ -40,7 +41,7 @@ from utils.path_validation import contains_injection_patterns
 from utils.request_utils import generate_request_id
 from utils.response_helpers import create_error_response as _canonical_create_error_response
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Pre-compiled regex for session ID validation
 _SESSION_ID_RE = re.compile(r"^[a-zA-Z0-9_-]+$")
@@ -184,7 +185,7 @@ def validate_message_content(content: str) -> bool:
 def create_chat_response(
     data: Any,
     message: str = "Success",
-    request_id: Optional[str] = None,
+    request_id: str | None = None,
     status_code: int = 200,
 ) -> JSONResponse:
     """
@@ -338,9 +339,9 @@ def log_chat_error(error: Exception, context: str = "chat", request_id: str = "u
 
 def log_chat_event(
     event_type: str,
-    session_id: Optional[str] = None,
-    details: Optional[Metadata] = None,
-    request_id: Optional[str] = None,
+    session_id: str | None = None,
+    details: Metadata | None = None,
+    request_id: str | None = None,
 ) -> None:
     """
     Log chat-related events for monitoring and debugging.

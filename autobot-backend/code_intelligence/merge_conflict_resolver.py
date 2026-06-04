@@ -26,14 +26,15 @@ Resolution Strategies:
 """
 
 import ast
-import logging
 import re
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 
 
 class ConflictSeverity(Enum):
@@ -79,8 +80,8 @@ class ConflictBlock:
     end_line: int
     ours_content: str  # Current branch content
     theirs_content: str  # Incoming branch content
-    base_content: Optional[str] = None  # Common ancestor (if available)
-    conflict_type: Optional[ConflictType] = None
+    base_content: str | None = None  # Common ancestor (if available)
+    conflict_type: ConflictType | None = None
     severity: ConflictSeverity = ConflictSeverity.MODERATE
 
     def __post_init__(self):
@@ -354,7 +355,7 @@ class MergeConflictResolver:
     def resolve_file(
         self,
         file_path: str,
-        strategy: Optional[ResolutionStrategy] = None,
+        strategy: ResolutionStrategy | None = None,
     ) -> List[ResolutionResult]:
         """
         Resolve all conflicts in a file.
@@ -383,7 +384,7 @@ class MergeConflictResolver:
     def _resolve_conflict(
         self,
         conflict: ConflictBlock,
-        strategy: Optional[ResolutionStrategy],
+        strategy: ResolutionStrategy | None,
     ) -> ResolutionResult:
         """Resolve a single conflict block."""
         # Auto-select strategy if not provided
@@ -539,7 +540,7 @@ class MergeConflictResolver:
 
         return "\n".join(merged) + "\n"
 
-    def _pattern_based_resolution(self, conflict: ConflictBlock) -> Optional[str]:
+    def _pattern_based_resolution(self, conflict: ConflictBlock) -> str | None:
         """
         Pattern-based resolution using common conflict patterns.
 

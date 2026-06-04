@@ -42,7 +42,7 @@ def _make_component(method: str = "sync") -> AsyncMock:
 
 
 class TestMeshBrainSchedulerInit:
-    def test_init_creates_job_statuses(self):
+    def test_init_creates_job_statuses(self) -> None:
         """All five expected jobs are present in _jobs after construction."""
         scheduler = _make_scheduler()
         assert set(scheduler._jobs.keys()) == {
@@ -53,7 +53,7 @@ class TestMeshBrainSchedulerInit:
             "mesh_pruner",
         }
 
-    def test_init_job_statuses_are_idle(self):
+    def test_init_job_statuses_are_idle(self) -> None:
         """Every JobStatus starts with no run history and is_running=False."""
         scheduler = _make_scheduler()
         for job in scheduler._jobs.values():
@@ -62,7 +62,7 @@ class TestMeshBrainSchedulerInit:
             assert job.last_result is None
             assert job.is_running is False
 
-    def test_init_not_running(self):
+    def test_init_not_running(self) -> None:
         """Scheduler is not running until start() is called."""
         scheduler = _make_scheduler()
         assert scheduler._running is False
@@ -74,27 +74,27 @@ class TestMeshBrainSchedulerInit:
 
 
 class TestGetStatus:
-    def test_get_status_returns_all_jobs(self):
+    def test_get_status_returns_all_jobs(self) -> None:
         """status dict contains exactly five job entries."""
         scheduler = _make_scheduler()
         status = scheduler.get_status()
         assert len(status["jobs"]) == 5
 
-    def test_get_status_running_reflects_state(self):
+    def test_get_status_running_reflects_state(self) -> None:
         """'running' key mirrors the scheduler's _running flag."""
         scheduler = _make_scheduler()
         assert status_running(scheduler) is False
         scheduler._running = True
         assert status_running(scheduler) is True
 
-    def test_get_status_component_available_false_when_none(self):
+    def test_get_status_component_available_false_when_none(self) -> None:
         """component_available is False when no component was injected."""
         scheduler = _make_scheduler()
         status = scheduler.get_status()
         for job in status["jobs"].values():
             assert job["component_available"] is False
 
-    def test_get_status_component_available_true_when_injected(self):
+    def test_get_status_component_available_true_when_injected(self) -> None:
         """component_available is True for the injected edge_sync component."""
         scheduler = _make_scheduler(edge_sync=_make_component("sync"))
         status = scheduler.get_status()
@@ -113,7 +113,7 @@ def status_running(scheduler: MeshBrainScheduler) -> bool:
 
 class TestExecuteJob:
     @pytest.mark.asyncio
-    async def test_execute_job_success_updates_status(self):
+    async def test_execute_job_success_updates_status(self) -> None:
         """last_result becomes 'success' and is_running resets to False after a clean run."""
         sync_comp = _make_component("sync")
         scheduler = _make_scheduler(edge_sync=sync_comp)
@@ -126,7 +126,7 @@ class TestExecuteJob:
         sync_comp.sync.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_execute_job_failure_logs_evolution(self):
+    async def test_execute_job_failure_logs_evolution(self) -> None:
         """last_result becomes 'failed' and log_evolution is called when a job raises."""
         sync_comp = AsyncMock()
         sync_comp.sync = AsyncMock(side_effect=RuntimeError("db down"))
@@ -144,7 +144,7 @@ class TestExecuteJob:
         assert call_args[4] == "edge_sync"
 
     @pytest.mark.asyncio
-    async def test_execute_job_failure_no_mesh_db_does_not_raise(self):
+    async def test_execute_job_failure_no_mesh_db_does_not_raise(self) -> None:
         """A job failure without mesh_db does not propagate an exception."""
         sync_comp = AsyncMock()
         sync_comp.sync = AsyncMock(side_effect=ValueError("fail"))
@@ -154,14 +154,14 @@ class TestExecuteJob:
         assert scheduler._jobs["edge_sync"].last_result == "failed"
 
     @pytest.mark.asyncio
-    async def test_execute_job_skips_missing_component(self):
+    async def test_execute_job_skips_missing_component(self) -> None:
         """_execute_job is a no-op and raises nothing when no component is injected."""
         scheduler = _make_scheduler()
         await scheduler._execute_job("edge_sync")
         assert scheduler._jobs["edge_sync"].last_result is None
 
     @pytest.mark.asyncio
-    async def test_execute_job_node_promoter_calls_evaluate(self):
+    async def test_execute_job_node_promoter_calls_evaluate(self) -> None:
         """node_promoter job invokes .evaluate() on its component."""
         promoter = _make_component("evaluate")
         scheduler = _make_scheduler(node_promoter=promoter)
@@ -176,7 +176,7 @@ class TestExecuteJob:
 
 class TestStartStop:
     @pytest.mark.asyncio
-    async def test_start_creates_tasks_for_available_components(self):
+    async def test_start_creates_tasks_for_available_components(self) -> None:
         """asyncio.Task entries are created for each injected component."""
         sync_comp = _make_component("sync")
         promoter_comp = _make_component("evaluate")
@@ -194,7 +194,7 @@ class TestStartStop:
         await scheduler.stop()
 
     @pytest.mark.asyncio
-    async def test_start_creates_realtime_task_for_edge_learner(self):
+    async def test_start_creates_realtime_task_for_edge_learner(self) -> None:
         """edge_learner gets a task when that component is injected."""
         learner = AsyncMock()
         learner.consume_feedback_stream = AsyncMock()
@@ -208,7 +208,7 @@ class TestStartStop:
         await scheduler.stop()
 
     @pytest.mark.asyncio
-    async def test_stop_cancels_tasks(self):
+    async def test_stop_cancels_tasks(self) -> None:
         """stop() cancels all tasks and clears the _tasks dict."""
         mock_task_a = MagicMock(spec=asyncio.Task)
         mock_task_b = MagicMock(spec=asyncio.Task)

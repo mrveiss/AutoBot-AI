@@ -1,0 +1,67 @@
+name: canonical-audit
+
+on:
+  schedule:
+    - cron: "0 3 * * 1"  # Mondays 03:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: canonical-audit-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-python@0a5c61591373683505ea898e09a3ea4f39ef2b9c  # v5.0.0
+        with:
+          python-version: "3.11"
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6.4.0
+        with:
+          node-version: "20"
+
+      - name: Generate audit reports
+        id: audit
+        run: |
+          DATE=$(date -u +%Y-%m-%d)
+          mkdir -p audit-output
+          python tools/lint/canonical_check.py --all --format markdown \
+            --output "audit-output/canonical-audit-py-$DATE.md"
+          python tools/lint/canonical_check.py --all --format json \
+            --output "audit-output/canonical-audit-py-$DATE.json"
+          python tools/lint/canonical_check_infra.py --all --format markdown \
+            --output "audit-output/canonical-audit-infra-$DATE.md"
+          python tools/lint/canonical_check_infra.py --all --format json \
+            --output "audit-output/canonical-audit-infra-$DATE.json"
+          # Frontend audit deferred to Wave 3 (no --all support yet); empty placeholder
+          echo "# Canonical-style audit — Frontend ($DATE)" > "audit-output/canonical-audit-fe-$DATE.md"
+          echo "Frontend full-codebase audit not yet implemented (Wave 3)." >> "audit-output/canonical-audit-fe-$DATE.md"
+          echo "date=$DATE" >> "$GITHUB_OUTPUT"
+
+      - name: Upload audit artifact
+        uses: actions/upload-artifact@26f96dfa697d77e81fd5907df203aa23a56210a8  # v4.3.0
+        with:
+          name: canonical-audit-${{ steps.audit.outputs.date }}
+          path: audit-output/
+          retention-days: 365
+          if-no-files-found: error
+
+      - name: Job summary
+        run: |
+          echo "## Canonical audit — ${{ steps.audit.outputs.date }}" >> "$GITHUB_STEP_SUMMARY"
+          for f in audit-output/*.md; do
+            {
+              echo ""
+              cat "$f"
+            } >> "$GITHUB_STEP_SUMMARY"
+          done

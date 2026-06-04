@@ -10,7 +10,6 @@ Writes to both Prometheus and legacy systems during transition.
 
 import logging
 import threading
-from typing import Optional
 
 from monitoring.prometheus_metrics import get_metrics_manager
 
@@ -147,7 +146,7 @@ class MetricsAdapter:
 
     # Claude API Metrics
 
-    def record_claude_api_request(self, tool_name: str, success: bool, payload_bytes: Optional[int] = None):
+    def record_claude_api_request(self, tool_name: str, success: bool, payload_bytes: int | None = None):
         """Record Claude API request to both systems"""
         # Write to Prometheus (primary)
         self.prometheus.record_claude_api_request(tool_name, success)
@@ -207,7 +206,7 @@ class MetricsAdapter:
 
 
 # Global adapter instance (thread-safe)
-_adapter_instance: Optional[MetricsAdapter] = None
+_adapter_instance: MetricsAdapter | None = None
 _adapter_instance_lock = threading.Lock()
 
 

@@ -18,17 +18,17 @@ Event Types:
 """
 
 import json
-import logging
 import time
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum, auto
-from typing import Any, Optional
+from typing import Any
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc, parse_utc_iso
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ArtifactType(str, Enum):
@@ -55,7 +55,7 @@ class TaskArtifact:
     artifact_type: ArtifactType
     content: str  # Raw text content (diff, log line, etc.)
     label: str = ""  # Human-readable label, e.g. "pytest output"
-    file_path: Optional[str] = None  # Source file if applicable
+    file_path: str | None = None  # Source file if applicable
     truncated: bool = False  # True when content was capped to MAX_ARTIFACT_BYTES
 
     # Maximum bytes stored per artifact to guard against runaway tool output
@@ -117,15 +117,15 @@ class AgentEvent:
 
     # Source tracking
     source: str = "user"  # user, agent, planner, knowledge_module, tool, system
-    agent_id: Optional[str] = None
+    agent_id: str | None = None
 
     # Correlation for multi-turn conversations
-    correlation_id: Optional[str] = None  # Links related events
-    parent_event_id: Optional[str] = None  # For nested events (action → observation)
+    correlation_id: str | None = None  # Links related events
+    parent_event_id: str | None = None  # For nested events (action → observation)
 
     # Task context
-    task_id: Optional[str] = None  # Current task being executed
-    step_number: Optional[int] = None  # Current step in plan
+    task_id: str | None = None  # Current task being executed
+    step_number: int | None = None  # Current step in plan
 
     # Metadata
     metadata: dict = field(default_factory=dict)
@@ -196,7 +196,7 @@ class MessageContent:
 
     # For assistant messages
     tool_calls_made: list[str] = field(default_factory=list)
-    confidence: Optional[float] = None
+    confidence: float | None = None
 
     def to_dict(self) -> dict:
         return {
@@ -228,7 +228,7 @@ class ActionContent:
 
     # Execution context
     is_parallel: bool = False
-    parallel_group_id: Optional[str] = None  # Groups parallel actions
+    parallel_group_id: str | None = None  # Groups parallel actions
     depends_on: list[str] = field(default_factory=list)  # Action IDs this depends on
 
     def to_dict(self) -> dict:
@@ -263,11 +263,11 @@ class ObservationContent:
     # Result
     success: bool
     result: Any = None
-    error: Optional[str] = None
+    error: str | None = None
 
     # Performance
     execution_time_ms: float = 0.0
-    device_used: Optional[str] = None  # For NPU/GPU operations
+    device_used: str | None = None  # For NPU/GPU operations
 
     # Task evidence — artifacts produced during this observation (#4094)
     artifacts: list["TaskArtifact"] = field(default_factory=list)
@@ -310,7 +310,7 @@ class PlanContent:
 
     # Status tracking
     status: str = "planning"  # planning, in_progress, completed, blocked, failed
-    reflection: Optional[str] = None  # Current state assessment
+    reflection: str | None = None  # Current state assessment
 
     # Updates
     is_update: bool = False  # True if updating existing plan
@@ -428,7 +428,7 @@ def _validate_artifact_serialization(artifacts: list["TaskArtifact"]) -> None:
 def create_message_event(
     role: str,
     text: str,
-    task_id: Optional[str] = None,
+    task_id: str | None = None,
     source: str = "user",
     **kwargs,
 ) -> AgentEvent:
@@ -445,10 +445,10 @@ def create_message_event(
 def create_action_event(
     tool_name: str,
     arguments: dict,
-    task_id: Optional[str] = None,
+    task_id: str | None = None,
     is_parallel: bool = False,
-    parallel_group_id: Optional[str] = None,
-    depends_on: Optional[list[str]] = None,
+    parallel_group_id: str | None = None,
+    depends_on: list[str] | None = None,
 ) -> AgentEvent:
     """Helper to create an ACTION event"""
     content = ActionContent(
@@ -471,11 +471,11 @@ def create_observation_event(
     tool_name: str,
     success: bool,
     result: Any = None,
-    error: Optional[str] = None,
+    error: str | None = None,
     execution_time_ms: float = 0.0,
-    task_id: Optional[str] = None,
-    device_used: Optional[str] = None,
-    artifacts: Optional[list["TaskArtifact"]] = None,
+    task_id: str | None = None,
+    device_used: str | None = None,
+    artifacts: list["TaskArtifact"] | None = None,
 ) -> AgentEvent:
     """Helper to create an OBSERVATION event, optionally with task artifacts.
 
@@ -516,7 +516,7 @@ def build_artifact(
     artifact_type: ArtifactType,
     content: str,
     label: str = "",
-    file_path: Optional[str] = None,
+    file_path: str | None = None,
 ) -> TaskArtifact:
     """Convenience factory for TaskArtifact with explicit type."""
     return TaskArtifact(
@@ -533,10 +533,10 @@ def create_plan_event(
     current_step: int,
     total_steps: int,
     status: str = "planning",
-    task_id: Optional[str] = None,
+    task_id: str | None = None,
     is_update: bool = False,
-    changes_made: Optional[list[str]] = None,
-    reflection: Optional[str] = None,
+    changes_made: list[str] | None = None,
+    reflection: str | None = None,
 ) -> AgentEvent:
     """Helper to create a PLAN event"""
     content = PlanContent(
@@ -564,8 +564,8 @@ def create_knowledge_event(
     scope: str = "general",
     relevance_score: float = 0.0,
     source_type: str = "chromadb",
-    task_id: Optional[str] = None,
-    document_ids: Optional[list[str]] = None,
+    task_id: str | None = None,
+    document_ids: list[str] | None = None,
 ) -> AgentEvent:
     """Helper to create a KNOWLEDGE event"""
     content = KnowledgeContent(
@@ -657,7 +657,7 @@ class ApprovalResponseContent:
 
     approval_id: str  # Matches ApprovalContent.approval_id
     approved: bool  # True = approved, False = denied
-    comment: Optional[str] = None  # Optional user comment / reason
+    comment: str | None = None  # Optional user comment / reason
 
     def to_dict(self) -> dict:
         return {
@@ -682,7 +682,7 @@ def create_approval_required_event(
     reason: str,
     risk_level: str = "high",
     timeout_seconds: int = 300,
-    task_id: Optional[str] = None,
+    task_id: str | None = None,
 ) -> AgentEvent:
     """Helper to create an APPROVAL_REQUIRED event (Issue #4092)."""
     content = ApprovalContent(
@@ -706,8 +706,8 @@ def create_approval_required_event(
 def create_approval_response_event(
     approval_id: str,
     approved: bool,
-    comment: Optional[str] = None,
-    task_id: Optional[str] = None,
+    comment: str | None = None,
+    task_id: str | None = None,
 ) -> AgentEvent:
     """Helper to create an APPROVAL_RESPONSE event (Issue #4092)."""
     content = ApprovalResponseContent(

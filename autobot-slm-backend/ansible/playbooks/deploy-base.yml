@@ -18,7 +18,7 @@
       debug:
         msg:
           - "Configuring VM: {{ inventory_hostname }}"
-          - "IP Address: {{ ansible_facts['default_ipv4'].address }}"
+          - "IP Address: {{ ansible_facts['default_ipv4'].address | default(ansible_host) }}"
           - "OS: {{ ansible_facts['distribution'] }} {{ ansible_facts['distribution_version'] }}"
           - "Role: {{ group_names | join(', ') }}"
           - "Resources: {{ hostvars[inventory_hostname]['vm_resources'] | default('Default') }}"
@@ -94,6 +94,7 @@
 
         state: present
         update_cache: true
+        cache_valid_time: 3600
       retries: 3
       delay: 10
 
@@ -247,8 +248,8 @@
     - name: Update /etc/hosts with VM information
       lineinfile:
         path: /etc/hosts
-        regexp: "^{{ hostvars[item]['ansible_default_ipv4']['address'] }}"
-        line: "{{ hostvars[item]['ansible_default_ipv4']['address'] }} {{ item }} {{ item }}.{{ network.domain }}"
+        regexp: "^{{ hostvars[item]['ansible_default_ipv4']['address'] | default(hostvars[item]['ansible_host']) }}"
+        line: "{{ hostvars[item]['ansible_default_ipv4']['address'] | default(hostvars[item]['ansible_host']) }} {{ item }} {{ item }}.{{ network.domain }}"
         state: present
       loop: "{{ groups['all'] }}"
       when: hostvars[item]['ansible_default_ipv4']['address'] is defined

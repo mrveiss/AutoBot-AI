@@ -12,25 +12,27 @@ Related Issues:
 - #211 - Secrets Management System - Missing Features
 """
 
-import logging
 import threading
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Set
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from services.secrets_service import SecretsService, get_secrets_service
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class SecretRequirement(Enum):
     """Types of secrets that agents may require."""
 
     SSH_KEY = "ssh_key"
-    API_KEY = "api_key"
-    PASSWORD = "password"  # nosec B105 - secret type enum, not actual password
-    TOKEN = "token"  # nosec B105 - secret type enum, not actual token
+    API_KEY = "api_key"  # nosemgrep: autobot-hardcoded-secret-key  # nosemgrep
+    PASSWORD = (  # nosemgrep: autobot-hardcoded-secret-key  # nosemgrep
+        "password"  # nosec B105 - secret type enum, not actual password
+    )
+    TOKEN = "token"  # nosec B105 - secret type enum, not actual token  # nosemgrep: autobot-hardcoded-secret-key  # nosemgrep
     CERTIFICATE = "certificate"
     DATABASE_URL = "database_url"
     ANY = "any"  # Agent can use any available secrets
@@ -143,7 +145,7 @@ class AgentSecretsIntegration:
     with proper access control and caching for performance.
     """
 
-    def __init__(self, secrets_service: Optional[SecretsService] = None):
+    def __init__(self, secrets_service: SecretsService | None = None) -> None:
         """Initialize agent secrets integration.
 
         Args:
@@ -162,7 +164,7 @@ class AgentSecretsIntegration:
             self._secrets_service = get_secrets_service()
         return self._secrets_service
 
-    def get_agent_mapping(self, agent_type: str) -> Optional[AgentSecretMapping]:
+    def get_agent_mapping(self, agent_type: str) -> AgentSecretMapping | None:
         """Get secret mapping for an agent type.
 
         Args:
@@ -189,7 +191,7 @@ class AgentSecretsIntegration:
     def _determine_types_to_fetch(
         self,
         mapping: AgentSecretMapping,
-        secret_types: Optional[List[str]],
+        secret_types: List[str] | None,
     ) -> Set[str]:
         """Determine which secret types to fetch based on mapping and overrides (Issue #665: extracted helper)."""
         if secret_types:
@@ -200,9 +202,9 @@ class AgentSecretsIntegration:
         self,
         types_to_fetch: Set[str],
         agent_type: str,
-        chat_id: Optional[str],
+        chat_id: str | None,
         include_general: bool,
-        accessed_by: Optional[str],
+        accessed_by: str | None,
     ) -> Dict[str, str]:
         """Fetch chat and general secrets and merge with priority (Issue #665: extracted helper)."""
         agent_secrets: Dict[str, str] = {}
@@ -230,10 +232,10 @@ class AgentSecretsIntegration:
     async def get_secrets_for_agent(
         self,
         agent_type: str,
-        chat_id: Optional[str] = None,
+        chat_id: str | None = None,
         include_general: bool = True,
-        secret_types: Optional[List[str]] = None,
-        accessed_by: Optional[str] = None,
+        secret_types: List[str] | None = None,
+        accessed_by: str | None = None,
     ) -> Dict[str, str]:
         """Get relevant secrets for a specific agent type.
 
@@ -281,8 +283,8 @@ class AgentSecretsIntegration:
         self,
         secret_types: Set[str],
         scope: str,
-        chat_id: Optional[str],
-        accessed_by: Optional[str],
+        chat_id: str | None,
+        accessed_by: str | None,
     ) -> Dict[str, str]:
         """Fetch secrets filtered by types.
 
@@ -320,7 +322,7 @@ class AgentSecretsIntegration:
     def _fetch_ssh_keys_by_scope(
         self,
         scope: str,
-        chat_id: Optional[str] = None,
+        chat_id: str | None = None,
     ) -> List[Dict[str, str]]:
         """Fetch SSH keys from secrets service for a specific scope. Issue #620.
 
@@ -357,7 +359,7 @@ class AgentSecretsIntegration:
 
     async def get_ssh_keys_for_terminal(
         self,
-        chat_id: Optional[str] = None,
+        chat_id: str | None = None,
         include_general: bool = True,
     ) -> List[Dict[str, str]]:
         """Get SSH keys specifically for terminal sessions.
@@ -392,8 +394,8 @@ class AgentSecretsIntegration:
     async def get_api_keys_for_service(
         self,
         service_name: str,
-        chat_id: Optional[str] = None,
-    ) -> Optional[str]:
+        chat_id: str | None = None,
+    ) -> str | None:
         """Get API key for a specific service.
 
         Args:

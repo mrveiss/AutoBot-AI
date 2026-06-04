@@ -9,16 +9,17 @@ Supports real-time analytics, communication patterns, and code analysis integrat
 
 import asyncio
 import json
-import logging
 import time
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Tuple
 
 import httpx
+
+# Import root cause analyzer for causal failure analysis
+from celery.result import AsyncResult
 from fastapi import (
     APIRouter,
-    BackgroundTasks,
     Depends,
     HTTPException,
     Query,
@@ -52,26 +53,25 @@ from api.schemas_analytics import (
 )
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import RedisDatabase
 from autobot_shared.time_utils import parse_utc_iso
 from constants.network_constants import NetworkConstants
 from constants.threshold_constants import TimingConstants
-
-# Import root cause analyzer for causal failure analysis
 from services.root_cause_analyzer import RootCauseAnalyzer
-from utils.background_task_manager import BackgroundTaskManager
+from tasks.analytics_tasks import run_dashboard_analysis
+from utils.celery_task_status import celery_result_to_status, store_latest_task_id
 
 # Import existing monitoring infrastructure (extracted to monitoring_hardware.py - Issue #213)
 from .monitoring_hardware import hardware_monitor
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 router = APIRouter(tags=["analytics"])
 
 # Module-level root cause analyzer instance (lazy initialized)
 _root_cause_analyzer = RootCauseAnalyzer()
 
-# Background task manager for dashboard overview (#1304)
-_dash_manager = BackgroundTaskManager(redis_prefix="dash_task:")
+_REDIS_PREFIX = "dash_task:"
 
 # Module-level constants for O(1) lookups (Issue #326)
 ANALYTICS_REDIS_DATABASES = {
@@ -388,6 +388,7 @@ from api import (
     analytics_behavior,
     analytics_code,
     analytics_cost,
+    analytics_engagement,
     analytics_export,
 )
 
@@ -397,6 +398,7 @@ router.include_router(analytics_code.router)
 # Include Issue #59 sub-routers (Advanced Analytics & BI)
 router.include_router(analytics_cost.router)
 router.include_router(analytics_agents.router)
+router.include_router(analytics_engagement.router)
 router.include_router(analytics_export.router)
 router.include_router(analytics_behavior.router)
 
@@ -1237,46 +1239,6 @@ async def analyze_root_cause(
 # ------------------------------------------------------------------
 
 
-async def _run_dashboard_analysis(task_id: str) -> None:
-    """Background worker for dashboard overview (#1304)."""
-    try:
-        await _dash_manager.update_progress(task_id, "Collecting system health", 10.0)
-        results = await asyncio.gather(
-            hardware_monitor.get_system_health(),
-            analytics_controller.collect_performance_metrics(),
-            analytics_controller.analyze_communication_patterns(),
-            analytics_controller.get_usage_statistics(),
-            analytics_controller.detect_trends(),
-            return_exceptions=True,
-        )
-
-        await _dash_manager.update_progress(task_id, "Processing metrics", 60.0)
-        system_health = _handle_task_exception(results[0], "system_health")
-        performance = _handle_task_exception(results[1], "performance")
-        communication = _handle_task_exception(results[2], "communication")
-        usage = _handle_task_exception(results[3], "usage")
-        trends = _handle_task_exception(results[4], "trends")
-
-        await _dash_manager.update_progress(task_id, "Building overview", 80.0)
-        code_status = await _get_code_analysis_status()
-        realtime = await _get_realtime_metrics()
-
-        result = {
-            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
-            "system_health": system_health,
-            "performance_metrics": performance,
-            "communication_patterns": communication,
-            "code_analysis_status": code_status,
-            "usage_statistics": usage,
-            "realtime_metrics": realtime,
-            "trends": trends,
-        }
-        await _dash_manager.complete_task(task_id, result)
-    except Exception as e:
-        logger.error("Dashboard analysis failed: %s", e)
-        await _dash_manager.fail_task(task_id, str(e))
-
-
 @router.post("/dashboard/overview/analyze", response_model=AnalyticsDashboardAnalyzeResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1284,13 +1246,12 @@ async def _run_dashboard_analysis(task_id: str) -> None:
     error_code_prefix="ANALYTICS",
 )
 async def start_dashboard_analysis(
-    background_tasks: BackgroundTasks,
     current_user: Dict = Depends(get_current_user),
 ):
-    """Start background dashboard overview analysis (#1304)."""
-    task_id = await _dash_manager.create_task()
-    background_tasks.add_task(_run_dashboard_analysis, task_id)
-    return {"task_id": task_id, "status": "pending"}
+    """Start background dashboard overview analysis (#1304, GH#8433)."""
+    celery_result = run_dashboard_analysis.delay()
+    await store_latest_task_id(_REDIS_PREFIX, celery_result.id)
+    return {"task_id": celery_result.id, "status": "pending"}
 
 
 @router.get("/dashboard/overview/status/{task_id}", response_model=AnalyticsDashboardStatusResponse)
@@ -1300,11 +1261,11 @@ async def start_dashboard_analysis(
     error_code_prefix="ANALYTICS",
 )
 async def get_dashboard_status(task_id: str):
-    """Get dashboard overview task status (#1304)."""
-    task = await _dash_manager.get_status(task_id)
-    if task is None:
+    """Get dashboard overview task status (#1304, GH#8433)."""
+    status = celery_result_to_status(AsyncResult(task_id))
+    if status is None or status["status"] == "pending":
         raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
-    return task
+    return status
 
 
 @router.post("/dashboard/overview/tasks/clear-stuck", response_model=AnalyticsClearStuckTasksResponse)
@@ -1314,14 +1275,7 @@ async def get_dashboard_status(task_id: str):
     error_code_prefix="ANALYTICS",
 )
 async def clear_stuck_dashboard_tasks(
-    force: bool = Query(
-        default=False,
-        description="Force clear ALL running tasks",
-    ),
+    force: bool = Query(default=False, description="Force clear ALL running tasks"),
 ):
-    """Clear stuck dashboard overview tasks (#1304)."""
-    cleaned = await _dash_manager.clear_stuck(force=force)
-    return {
-        "cleared_count": cleaned,
-        "message": f"Cleared {cleaned} task(s)" + (" (forced)" if force else ""),
-    }
+    """Clear stuck dashboard overview tasks — no-op, Celery handles recovery (GH#8433)."""
+    return {"cleared_count": 0, "message": "Celery handles task recovery automatically"}

@@ -14,7 +14,6 @@ import apiClient from '@/utils/ApiClient'
 import appConfig from '@/config/AppConfig.js'
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
-import { useDebounce } from './useTimeout'
 
 // Create scoped logger for useKnowledgeVectorization
 
@@ -28,6 +27,7 @@ interface VectorizationStatusResponse {
 interface VectorizationJobResponse {
   job_id?: string
   status?: string
+  results?: Array<{ id: string; status: string; error?: string }>
   [key: string]: unknown
 }
 
@@ -49,7 +49,6 @@ interface CachedRequest {
 
 // Constants for request deduplication (Issue #4006)
 const BATCH_STATUS_CACHE_TTL = 30000 // 30 seconds
-const DEBOUNCE_DELAY = 500 // 500ms debounce for refresh calls
 
 export type VectorizationStatus = 'vectorized' | 'pending' | 'failed' | 'unknown'
 
@@ -442,7 +441,7 @@ export function useKnowledgeVectorization() {
         setDocumentStatus(result.id, 'vectorized', 100)
         succeeded.push(result.id)
       } else {
-        setDocumentStatus(result.id, 'failed', 0, result.error)
+        setDocumentStatus(result.id, 'failed', 0, result.error ?? undefined)
         failed.push(result.id)
       }
     }

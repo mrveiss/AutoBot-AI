@@ -21,7 +21,7 @@ export class MockWebSocket {
   // Track all instances for testing
   static instances: MockWebSocket[] = []
 
-  constructor(url: string, protocols?: string | string[]) {
+  constructor(url: string, _protocols?: string | string[]) {
     this.url = url
     this.readyState = MockWebSocket.CONNECTING
 
@@ -103,6 +103,9 @@ export const WebSocketMessageType = {
   TERMINAL_CONNECTED: 'terminal_connected',
   TERMINAL_DISCONNECTED: 'terminal_disconnected',
   SYSTEM_STATUS: 'system_status',
+  // Live Canvas envelope types (MVA-359 frozen contract)
+  CANVAS_CELL: 'canvas_cell',
+  CANVAS_CANCEL: 'canvas_cancel',
   ERROR: 'error',
 } as const
 
@@ -193,6 +196,41 @@ export class WebSocketTestUtil {
     if (ws) {
       ws.simulateError(error)
     }
+  }
+
+  // Canvas cell streaming helpers (MVA-359 WS envelope)
+  simulateCanvasCellDelta(
+    cellId: string,
+    delta: string,
+    seq: number,
+    state: 'skeleton' | 'streaming' | 'complete' | 'error' | 'cancelled' = 'streaming',
+  ) {
+    this.simulateMessage(WebSocketMessageType.CANVAS_CELL, { cellId, seq, delta, state })
+  }
+
+  simulateCanvasCellComplete(cellId: string, seq: number) {
+    this.simulateMessage(WebSocketMessageType.CANVAS_CELL, {
+      cellId,
+      seq,
+      delta: null,
+      state: 'complete',
+    })
+  }
+
+  simulateCanvasCellError(cellId: string, seq: number) {
+    this.simulateMessage(WebSocketMessageType.CANVAS_CELL, {
+      cellId,
+      seq,
+      delta: null,
+      state: 'error',
+    })
+  }
+
+  expectCanvasCancelSent(cellId: string) {
+    const ws = this.getConnection()
+    expect(ws?.send).toHaveBeenCalledWith(
+      JSON.stringify({ type: WebSocketMessageType.CANVAS_CANCEL, cellId }),
+    )
   }
 
   simulateClose(code = 1000, reason = '') {

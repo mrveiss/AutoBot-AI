@@ -16,7 +16,6 @@ Provides comprehensive secrets management with dual scope:
 import asyncio
 import base64
 import json
-import logging
 import os
 import re
 import threading
@@ -24,7 +23,7 @@ from collections import defaultdict
 from copy import deepcopy
 from datetime import datetime, timezone
 from time import time
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from cryptography.fernet import Fernet
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -32,23 +31,30 @@ from fastapi.responses import JSONResponse
 
 from api.schemas_common import DataResponse
 from api.schemas_system import (
+    ChatSecretsDeleteData,
+    SecretCreatedData,
     SecretCreateRequest,
     SecretModel,
     SecretScope,
+    SecretsListData,
+    SecretsStatsData,
     SecretsStatusResponse,
+    SecretTransferData,
     SecretTransferRequest,
     SecretType,
+    SecretTypesData,
     SecretUpdateRequest,
 )
 from auth_middleware import check_admin_permission, get_auth_middleware
 from autobot_memory_graph import AutoBotMemoryGraph
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import parse_utc_iso
 from middleware.proxy_utils import get_client_ip
-from services.audit.audit_log import AuditAction, audit_record
+from services.audit.unified_audit import AuditAction, audit_record  # GH#8290 Phase 2
 from type_defs.common import Metadata
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter()
 
@@ -118,9 +124,9 @@ class SecretsManager:
         self._initialize_encryption()
 
         # Cache layer to reduce file I/O (Issue #327)
-        self._secrets_cache: Optional[Dict[str, Dict]] = None
+        self._secrets_cache: Dict[str, Dict] | None = None
         self._cache_lock = threading.RLock()  # Thread-safe access to cache
-        self._cache_mtime: Optional[float] = None  # Track file modification time
+        self._cache_mtime: float | None = None  # Track file modification time
 
     def _ensure_directories(self):
         """Ensure data directory exists - now handled by centralized paths"""
@@ -265,7 +271,7 @@ class SecretsManager:
         logger.info("Created %s (ID: %s)", request.get_log_summary(), secret.id)
         return secret
 
-    def get_secret(self, secret_id: str, chat_id: Optional[str] = None) -> Optional[Dict]:
+    def get_secret(self, secret_id: str, chat_id: str | None = None) -> Dict | None:
         """Get a secret with access control"""
         secrets = self._load_secrets()
         secret_data = secrets.get(secret_id)
@@ -285,7 +291,7 @@ class SecretsManager:
 
         return secret_data
 
-    def list_secrets(self, chat_id: Optional[str] = None, scope: Optional[SecretScope] = None) -> List[Dict]:
+    def list_secrets(self, chat_id: str | None = None, scope: SecretScope | None = None) -> List[Dict]:
         """List secrets with access control"""
         secrets = self._load_secrets()
         result = []
@@ -312,8 +318,8 @@ class SecretsManager:
         self,
         secret_id: str,
         request: SecretUpdateRequest,
-        chat_id: Optional[str] = None,
-    ) -> Optional[SecretModel]:
+        chat_id: str | None = None,
+    ) -> SecretModel | None:
         """Update a secret with access control"""
         secrets = self._load_secrets()
         secret_data = secrets.get(secret_id)
@@ -350,7 +356,7 @@ class SecretsManager:
         del safe_data["encrypted_value"]
         return SecretModel(**safe_data)
 
-    def delete_secret(self, secret_id: str, chat_id: Optional[str] = None) -> bool:
+    def delete_secret(self, secret_id: str, chat_id: str | None = None) -> bool:
         """Delete a secret with access control"""
         secrets = self._load_secrets()
         secret_data = secrets.get(secret_id)
@@ -369,7 +375,7 @@ class SecretsManager:
         logger.info("Deleted secret (ID: %s...)", secret_id[:8])  # codeql[py/clear-text-logging-sensitive-data]
         return True
 
-    def transfer_secrets(self, request: SecretTransferRequest, chat_id: Optional[str] = None) -> Metadata:
+    def transfer_secrets(self, request: SecretTransferRequest, chat_id: str | None = None) -> Metadata:
         """Transfer secrets between scopes"""
         secrets = self._load_secrets()
         transferred = []
@@ -451,7 +457,7 @@ class SecretsManager:
             "total_count": len(chat_secrets),
         }
 
-    def delete_chat_secrets(self, chat_id: str, secret_ids: Optional[List[str]] = None) -> Metadata:
+    def delete_chat_secrets(self, chat_id: str, secret_ids: List[str] | None = None) -> Metadata:
         """Delete specific or all secrets for a chat"""
         secrets = self._load_secrets()
         deleted = []
@@ -513,7 +519,7 @@ def audit_log(
         "[Secrets Audit] %s | Operation: %s | " "SecretID: %s | Client: %s",
         status,
         operation,
-        safe_id,
+        safe_id,  # codeql[py/clear-text-logging-sensitive-data]
         client_id,
     )
 
@@ -521,7 +527,7 @@ def audit_log(
 # API Endpoints
 
 
-@router.post("/", response_model=DataResponse)
+@router.post("/", response_model=DataResponse[SecretCreatedData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="create_secret",
@@ -574,7 +580,7 @@ async def create_secret(
         raise HTTPException(status_code=500, detail="Failed to create secret")
 
 
-@router.get("/", response_model=DataResponse)
+@router.get("/", response_model=DataResponse[SecretsListData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_secrets",
@@ -582,8 +588,8 @@ async def create_secret(
 )
 async def list_secrets(
     http_request: Request,
-    chat_id: Optional[str] = Query(None),
-    scope: Optional[SecretScope] = Query(None),
+    chat_id: str | None = Query(None),
+    scope: SecretScope | None = Query(None),
     admin_check: bool = Depends(check_admin_permission),
 ):
     """List secrets with optional filtering (Issue #744: requires admin authentication)"""
@@ -605,7 +611,7 @@ async def list_secrets(
         raise HTTPException(status_code=500, detail="Failed to list secrets")
 
 
-@router.get("/types", response_model=DataResponse)
+@router.get("/types", response_model=DataResponse[SecretTypesData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_secret_types",
@@ -656,7 +662,7 @@ async def get_secrets_status(
         }
 
 
-@router.get("/stats", response_model=DataResponse)
+@router.get("/stats", response_model=DataResponse[SecretsStatsData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_secrets_stats",
@@ -705,7 +711,7 @@ async def get_secrets_stats(
         raise HTTPException(status_code=500, detail="Failed to get stats")
 
 
-@router.get("/{secret_id}", response_model=DataResponse)
+@router.get("/{secret_id}", response_model=DataResponse[SecretCreatedData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_secret",
@@ -714,7 +720,7 @@ async def get_secrets_stats(
 async def get_secret(
     secret_id: str,
     http_request: Request,
-    chat_id: Optional[str] = Query(None),
+    chat_id: str | None = Query(None),
     admin_check: bool = Depends(check_admin_permission),
 ):
     """Get a specific secret with its value (Issue #744: requires admin authentication)"""
@@ -728,7 +734,7 @@ async def get_secret(
 
         # Issue #608: Track secret usage in memory graph when accessed within a chat
         if chat_id:
-            memory_graph: Optional[AutoBotMemoryGraph] = getattr(http_request.app.state, "memory_graph", None)
+            memory_graph: AutoBotMemoryGraph | None = getattr(http_request.app.state, "memory_graph", None)
             if memory_graph:
                 try:
                     await memory_graph.create_secret_entity(
@@ -770,7 +776,7 @@ async def get_secret(
         raise HTTPException(status_code=500, detail="Failed to get secret")
 
 
-@router.put("/{secret_id}", response_model=DataResponse)
+@router.put("/{secret_id}", response_model=DataResponse[SecretCreatedData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="update_secret",
@@ -780,7 +786,7 @@ async def update_secret(
     secret_id: str,
     request: SecretUpdateRequest,
     http_request: Request,
-    chat_id: Optional[str] = Query(None),
+    chat_id: str | None = Query(None),
     admin_check: bool = Depends(check_admin_permission),
 ):
     """Update a secret's metadata (Issue #744: requires admin authentication)"""
@@ -827,7 +833,7 @@ async def update_secret(
         raise HTTPException(status_code=500, detail="Failed to update secret")
 
 
-@router.delete("/{secret_id}", response_model=DataResponse)
+@router.delete("/{secret_id}", response_model=DataResponse[SecretCreatedData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="delete_secret",
@@ -836,7 +842,7 @@ async def update_secret(
 async def delete_secret(
     secret_id: str,
     http_request: Request,
-    chat_id: Optional[str] = Query(None),
+    chat_id: str | None = Query(None),
     admin_check: bool = Depends(check_admin_permission),
 ):
     """Delete a secret (Issue #744: requires admin authentication)"""
@@ -880,7 +886,7 @@ async def delete_secret(
         raise HTTPException(status_code=500, detail="Failed to delete secret")
 
 
-@router.post("/transfer", response_model=DataResponse)
+@router.post("/transfer", response_model=DataResponse[SecretTransferData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="transfer_secrets",
@@ -889,7 +895,7 @@ async def delete_secret(
 async def transfer_secrets(
     request: SecretTransferRequest,
     http_request: Request,
-    chat_id: Optional[str] = Query(None),
+    chat_id: str | None = Query(None),
     admin_check: bool = Depends(check_admin_permission),
 ):
     """Transfer secrets between scopes (Issue #744: requires admin authentication)"""
@@ -920,7 +926,7 @@ async def transfer_secrets(
         raise HTTPException(status_code=500, detail="Failed to transfer secrets")
 
 
-@router.get("/chat/{chat_id}/cleanup", response_model=DataResponse)
+@router.get("/chat/{chat_id}/cleanup", response_model=DataResponse[ChatSecretsDeleteData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_chat_cleanup_info",
@@ -940,7 +946,7 @@ async def get_chat_cleanup_info(
         raise HTTPException(status_code=500, detail="Failed to get cleanup info")
 
 
-@router.delete("/chat/{chat_id}", response_model=DataResponse)
+@router.delete("/chat/{chat_id}", response_model=DataResponse[ChatSecretsDeleteData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="delete_chat_secrets",
@@ -949,7 +955,7 @@ async def get_chat_cleanup_info(
 async def delete_chat_secrets(
     chat_id: str,
     http_request: Request,
-    secret_ids: Optional[List[str]] = Query(None),
+    secret_ids: List[str] | None = Query(None),
     admin_check: bool = Depends(check_admin_permission),
 ):
     """Delete secrets for a specific chat (Issue #744: requires admin authentication)"""

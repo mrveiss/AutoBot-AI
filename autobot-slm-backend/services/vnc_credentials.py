@@ -11,7 +11,7 @@ storage and connection token generation.
 import logging
 import secrets
 from datetime import datetime, timedelta, timezone
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -108,7 +108,7 @@ class VNCCredentialService:
         self,
         db: AsyncSession,
         credential_id: str,
-    ) -> Optional[NodeCredential]:
+    ) -> NodeCredential | None:
         """Get a credential by ID (without decrypting password)."""
         result = await db.execute(
             select(NodeCredential).where(
@@ -140,7 +140,7 @@ class VNCCredentialService:
         db: AsyncSession,
         credential_id: str,
         data: VNCCredentialUpdate,
-    ) -> Optional[NodeCredential]:
+    ) -> NodeCredential | None:
         """Update a VNC credential."""
         credential = await self.get_credential(db, credential_id)
         if not credential:
@@ -193,7 +193,7 @@ class VNCCredentialService:
         db: AsyncSession,
         credential_id: str,
         generate_token: bool = True,
-    ) -> Optional[VNCConnectionInfo]:
+    ) -> VNCConnectionInfo | None:
         """Get connection info with optional temporary token."""
         credential = await self.get_credential(db, credential_id)
         if not credential or not credential.is_active:
@@ -232,7 +232,7 @@ class VNCCredentialService:
             token_expires_at=token_expires_at,
         )
 
-    def exchange_token_for_password(self, token: str) -> Optional[str]:
+    def exchange_token_for_password(self, token: str) -> str | None:
         """Exchange a connection token for the encrypted password (one-time use)."""
         if token not in _connection_tokens:
             return None
@@ -250,7 +250,7 @@ class VNCCredentialService:
         self,
         db: AsyncSession,
         token: str,
-    ) -> Optional[str]:
+    ) -> str | None:
         """Get decrypted password using connection token (one-time use)."""
         credential_id = self.exchange_token_for_password(token)
         if not credential_id:
@@ -306,7 +306,7 @@ class VNCCredentialService:
     def to_response(
         self,
         credential: NodeCredential,
-        node: Optional[Node] = None,
+        node: Node | None = None,
     ) -> VNCCredentialResponse:
         """Convert credential to response schema."""
         websocket_url = None

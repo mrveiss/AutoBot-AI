@@ -313,5 +313,62 @@ self.addEventListener('message', (event) => {
   }
 })
 
+// ==================================================================================
+// Web Push Notifications (GH#4459)
+// ==================================================================================
+
+/**
+ * Push event handler — shows a browser notification when the backend delivers
+ * a Web Push message.  Expected payload shape:
+ *   { title: string, body: string, url?: string, icon?: string }
+ */
+self.addEventListener('push', (event) => {
+  if (!event.data) return
+
+  let payload = { title: 'AutoBot', body: 'You have a new notification.', url: '/', icon: '/favicon.ico' }
+  try {
+    Object.assign(payload, event.data.json())
+  } catch {
+    payload.body = event.data.text() || payload.body
+  }
+
+  event.waitUntil(
+    self.registration.showNotification(payload.title, {
+      body: payload.body,
+      icon: payload.icon || '/favicon.ico',
+      badge: '/favicon.ico',
+      data: { url: payload.url || '/' },
+    })
+  )
+})
+
+/**
+ * Notification click handler — focuses the AutoBot tab (or opens a new one)
+ * and navigates to the URL embedded in the notification data.
+ */
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close()
+
+  const targetUrl = (event.notification.data && event.notification.data.url) || '/'
+
+  event.waitUntil(
+    clients
+      .matchAll({ type: 'window', includeUncontrolled: true })
+      .then((windowClients) => {
+        // Re-use an existing AutoBot tab if one is open
+        for (const client of windowClients) {
+          if (new URL(client.url).origin === self.location.origin && 'focus' in client) {
+            client.navigate(targetUrl)
+            return client.focus()
+          }
+        }
+        // Otherwise open a new tab
+        if (clients.openWindow) {
+          return clients.openWindow(targetUrl)
+        }
+      })
+  )
+})
+
 // Log service worker activation
 console.log('[AutoBot SW] Service Worker loaded with stale-while-revalidate strategy')

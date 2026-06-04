@@ -6,6 +6,8 @@ Secure Command Executor with Sandboxing and Permission Controls
 Implements security measures to prevent arbitrary command execution
 """
 
+from __future__ import annotations
+
 import asyncio
 import logging
 import os
@@ -13,9 +15,10 @@ import re
 import shlex
 from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Tuple
 
 from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.logging_manager import get_logger
 from constants.network_constants import NetworkConstants
 from security.command_patterns import (
     FORBIDDEN_COMMANDS,
@@ -34,7 +37,232 @@ if TYPE_CHECKING:
     from services.approval_memory import ApprovalMemoryManager
     from services.permission_matcher import PermissionMatcher
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
+
+
+# #7375: env-var prefix injection — surfaced by #7367 test rot triage.
+# Production previously classified `PATH=/x:$PATH ls` and
+# `LD_PRELOAD=/x.so ls` as MODERATE because the base-command lookup hit
+# `ls` (a SAFE/MODERATE command) without parsing the env-var prefix as a
+# distinct injection vector. Both are real attacker techniques:
+#   - PATH manipulation shadows standard binaries (sudo helpers, cron,
+#     login shells) by prepending an attacker-controlled directory.
+#   - LD_PRELOAD / LD_LIBRARY_PATH / DYLD_INSERT_LIBRARIES hijack any
+#     dynamic-linker symbol before the target binary runs — used in
+#     container-escape and privilege-escalation chains.
+#   - IFS / BASH_ENV / ENV affect shell parsing in subshells.
+#   - PYTHONPATH / PERL5LIB / RUBYLIB / NODE_PATH inject malicious
+#     libraries into interpreter startup.
+_ENV_VAR_PREFIX_RE = re.compile(r"^\s*(?:[A-Za-z_][A-Za-z0-9_]*=(?:'[^']*'|\"[^\"]*\"|\S*)\s+)+")
+_DANGEROUS_ENV_VARS = frozenset(
+    {
+        # Linker / loader hijack
+        "LD_PRELOAD",
+        "LD_LIBRARY_PATH",
+        "LD_AUDIT",
+        "DYLD_INSERT_LIBRARIES",
+        "DYLD_LIBRARY_PATH",
+        # Path / executable resolution
+        "PATH",
+        # Shell parsing / startup
+        "IFS",
+        "BASH_ENV",
+        "ENV",
+        "PROMPT_COMMAND",
+        # #7406: SHELL controls which interpreter `sudo -E` (and other env-
+        # preserving wrappers) invoke — `SHELL=/bin/sh; sudo -E sh` is a
+        # real escalation chain.
+        "SHELL",
+        # Interpreter library paths
+        "PYTHONPATH",
+        "PERL5LIB",
+        "RUBYLIB",
+        "NODE_PATH",
+        "GEM_PATH",
+        # Process tracing
+        "LD_DEBUG",
+    }
+)
+
+
+# #7384: argument-aware risk for tools whose base command is allowlisted
+# but whose flags / arguments elevate them to attack vectors.
+# Same family as #7375 (env-var prefix) — the base command (`docker`,
+# `find`, `dig`) lookup says SAFE/MODERATE, but specific argument shapes
+# turn them into container-escape, SUID-recon, or DNS-tunneling vectors.
+_DOCKER_ESCAPE_FLAGS = (
+    "--privileged",
+    "--net=host",
+    "--network=host",
+    "--pid=host",
+    "--ipc=host",
+    "--uts=host",
+    "--userns=host",
+    "--cap-add",
+    "-v /:",
+    "--volume=/:",
+    "--device=",
+    "--security-opt=seccomp=unconfined",
+    "--security-opt=apparmor=unconfined",
+)
+# `find` argument shapes that signal SUID / setgid recon — used to locate
+# privilege-escalation primitives. The wrapped `find` itself is benign
+# (allowlisted MODERATE); these argument shapes elevate to HIGH.
+_FIND_SUID_RECON_PATTERNS = (
+    "-perm -4000",  # setuid bit (-4000)
+    "-perm -2000",  # setgid bit (-2000)
+    "-perm -u+s",  # setuid (symbolic)
+    "-perm -g+s",  # setgid (symbolic)
+    "-perm /4000",
+    "-perm /2000",
+)
+# DNS-recon / DNS-tunneling vectors. Real attacker techniques for
+# infiltration channels and external host enumeration. Worth at least
+# MODERATE so they're audit-logged.
+_DNS_RECON_COMMANDS = frozenset({"dig", "nslookup", "host", "whois", "drill"})
+
+# #7406: ordering for CommandRisk so chained-command detection can pick the
+# strictest risk across sub-commands. Strings are used here because the enum
+# class is defined later in this module; the caller compares via this lookup.
+_RISK_ORDER: Dict[str, int] = {
+    "safe": 0,
+    "moderate": 1,
+    "high": 2,
+    "critical": 3,
+    "forbidden": 4,
+}
+
+
+def _check_argument_aware_risk(command: str) -> Tuple["CommandRisk", List[str]] | None:
+    """#7384: detect attack vectors that base-command lookup misses.
+
+    Returns ``(risk, reasons)`` for argument-shape-elevated commands,
+    or ``None`` if no argument-aware rule fires. The caller short-circuits
+    risk assessment so the more-specific reason wins over the generic
+    base-command classification.
+    """
+    # Tokenise once; we use string membership for flag checks but a
+    # token list for first-token (DNS) detection.
+    try:
+        tokens = shlex.split(command)
+    except ValueError:
+        # Malformed quoting; let the standard path handle it.
+        return None
+    if not tokens:
+        return None
+
+    # 1. Docker escape flags — `docker run --privileged …` etc.
+    if tokens[0] == "docker":
+        flagged_docker: List[str] = []
+        # Cheap substring check for compound flags (`-v /:`, `--cap-add SYS_ADMIN`).
+        for flag in _DOCKER_ESCAPE_FLAGS:
+            if flag in command:
+                flagged_docker.append(flag)
+        # `--cap-add` may appear with `=` or as a separate arg — if any
+        # token equals it AND a sibling token is supplied, count as flag.
+        if "--cap-add" in tokens or any(t.startswith("--cap-add=") for t in tokens):
+            if "--cap-add" not in flagged_docker:
+                flagged_docker.append("--cap-add")
+        if flagged_docker:
+            return (
+                CommandRisk.FORBIDDEN,
+                [f"Docker escape flag: {flag}" for flag in flagged_docker],
+            )
+
+    # 2. `find` SUID / setgid recon.
+    if tokens[0] == "find":
+        for pattern in _FIND_SUID_RECON_PATTERNS:
+            if pattern in command:
+                return (CommandRisk.HIGH, [f"SUID/setgid recon: {pattern}"])
+
+    # 3. DNS recon — first token (no env-var prefix has reached here, so
+    # tokens[0] is the actual base command).
+    if tokens[0] in _DNS_RECON_COMMANDS:
+        return (
+            CommandRisk.MODERATE,
+            [f"DNS-recon command: {tokens[0]} (audit-logged)"],
+        )
+
+    # 4. #7406: `export VAR=value` shell-builtin form. Sibling of the
+    # prefix-form #7375 check — same dangerous-var list, different syntax.
+    # `export PATH=/x; ls` persists the var in the current shell so every
+    # subsequent command runs with the attacker-controlled PATH.
+    if tokens[0] == "export":
+        for token in tokens[1:]:
+            if "=" not in token:
+                continue
+            # Strip trailing shell separators (`;`, `&`, `&&`, etc.) that
+            # shlex.split keeps glued to the value (e.g. `SHELL=/bin/sh;`).
+            value_part = token.split("=", 1)[1].rstrip(";&|")
+            var = token.split("=", 1)[0]
+            if var in _DANGEROUS_ENV_VARS:
+                return (
+                    CommandRisk.FORBIDDEN,
+                    [f"export of dangerous env-var: {var}={value_part!r}"],
+                )
+
+    # 5. #7406: `cmd1; cmd2` chained-command separator with a high-risk
+    # right-hand side. shlex.split keeps `;` glued to the preceding token,
+    # so split on it manually and recurse on each sub-command. Take the
+    # highest risk seen across all sub-commands.
+    if any(";" in t for t in tokens):
+        # Re-split on the raw `;` separator to get the actual sub-command
+        # boundaries (shlex preserves `;` as a literal — strip it back out).
+        sub_commands = [s.strip() for s in command.split(";") if s.strip()]
+        if len(sub_commands) > 1:
+            from typing import cast
+
+            highest_risk: "CommandRisk" | None = None
+            all_reasons: List[str] = []
+            for sub in sub_commands:
+                sub_result = _check_argument_aware_risk(sub)
+                if sub_result is None:
+                    continue
+                sub_risk, sub_reasons = sub_result
+                # Take the strictest risk (FORBIDDEN > HIGH > MODERATE > SAFE).
+                if highest_risk is None or _RISK_ORDER[sub_risk.value] > _RISK_ORDER[highest_risk.value]:
+                    highest_risk = sub_risk
+                all_reasons.extend(sub_reasons)
+            if highest_risk is not None:
+                return (
+                    cast("CommandRisk", highest_risk),
+                    [f"Chained command (`;` separator): {r}" for r in all_reasons],
+                )
+
+    return None
+
+
+def _check_dangerous_env_var_prefix(command: str) -> List[str] | None:
+    """#7375: detect env-var prefix injection BEFORE base-command lookup.
+
+    Returns a list of dangerous env-var names found prefixed in the
+    command, or ``None`` if none. The caller upgrades the risk to
+    ``CommandRisk.FORBIDDEN`` since these prefixes shadow the linker /
+    interpreter / shell startup independent of the command they wrap.
+    """
+    match = _ENV_VAR_PREFIX_RE.match(command)
+    if not match:
+        return None
+    prefix = match.group(0)
+    flagged: List[str] = []
+    # Per-assignment: split by `=` to get the var name, ignore the value.
+    # We use `shlex.split` because values may contain quoted strings with
+    # whitespace (e.g. `PROMPT_COMMAND='rm -rf /'`) — naive `prefix.split()`
+    # would tokenize on space and miss the var-name extraction.
+    try:
+        tokens = shlex.split(prefix)
+    except ValueError:
+        # Malformed quoting — fall back to whitespace split; if the prefix
+        # is truly malformed it'll fail base-command validation downstream.
+        tokens = prefix.split()
+    for token in tokens:
+        if "=" not in token:
+            continue
+        var_name = token.split("=", 1)[0]
+        if var_name in _DANGEROUS_ENV_VARS:
+            flagged.append(var_name)
+    return flagged or None
+
 
 
 # #7375: env-var prefix injection — surfaced by #7367 test rot triage.
@@ -352,12 +580,12 @@ class SecureCommandExecutor:
 
     def __init__(
         self,
-        policy: Optional[SecurityPolicy] = None,
+        policy: SecurityPolicy | None = None,
         require_approval_callback=None,
         use_docker_sandbox: bool = False,
         is_admin: bool = False,
-        project_path: Optional[str] = None,
-        user_id: Optional[str] = None,
+        project_path: str | None = None,
+        user_id: str | None = None,
     ):
         """
         Initialize secure command executor
@@ -381,8 +609,8 @@ class SecureCommandExecutor:
         self.user_id = user_id
 
         # Lazy-loaded permission matcher and approval memory
-        self._permission_matcher: Optional["PermissionMatcher"] = None
-        self._approval_memory: Optional["ApprovalMemoryManager"] = None
+        self._permission_matcher: "PermissionMatcher" | None = None
+        self._approval_memory: "ApprovalMemoryManager" | None = None
 
         # Command history for audit
         self.command_history: List[Dict[str, Any]] = []
@@ -410,7 +638,7 @@ class SecureCommandExecutor:
         # Return descriptions of matched patterns for backward compatibility
         return [match[0] for match in matches]
 
-    def _get_permission_matcher(self) -> Optional["PermissionMatcher"]:
+    def _get_permission_matcher(self) -> "PermissionMatcher" | None:
         """
         Get or create the permission matcher (lazy initialization).
 
@@ -433,7 +661,7 @@ class SecureCommandExecutor:
 
         return self._permission_matcher
 
-    def _get_approval_memory(self) -> Optional["ApprovalMemoryManager"]:
+    def _get_approval_memory(self) -> "ApprovalMemoryManager" | None:
         """
         Get or create the approval memory manager (lazy initialization).
 
@@ -488,7 +716,7 @@ class SecureCommandExecutor:
 
     async def _process_permission_match(
         self, result: Any, rule: Any, command: str, tool: str
-    ) -> Tuple[Optional[str], Optional[Dict[str, Any]]]:
+    ) -> Tuple[str | None, Dict[str, Any] | None]:
         """
         Process a permission match result and return action/rule_info.
 
@@ -523,7 +751,7 @@ class SecureCommandExecutor:
 
     async def check_permission_rules(
         self, command: str, tool: str = "Bash"
-    ) -> Tuple[Optional[str], Optional[Dict[str, Any]]]:
+    ) -> Tuple[str | None, Dict[str, Any] | None]:
         """
         Check command against Claude Code-style permission rules.
 
@@ -587,7 +815,7 @@ class SecureCommandExecutor:
         command: str,
         risk_level: str,
         tool: str = "Bash",
-        comment: Optional[str] = None,
+        comment: str | None = None,
     ) -> bool:
         """
         Store a command approval in memory for future auto-approval.
@@ -647,7 +875,7 @@ class SecureCommandExecutor:
 
         return CommandRisk.SAFE, ["Safe command"]
 
-    def _check_command_category(self, base_command: str, command: str) -> Optional[tuple[CommandRisk, List[str]]]:
+    def _check_command_category(self, base_command: str, command: str) -> tuple[CommandRisk, List[str]] | None:
         """
         Check command against policy categories and return risk if matched.
 
@@ -864,7 +1092,7 @@ class SecureCommandExecutor:
         command: str,
         risk: CommandRisk,
         reasons: List[str],
-        rule_info: Optional[Dict[str, Any]] = None,
+        rule_info: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
         """
         Issue #665: Extracted from run_shell_command to reduce function length.
@@ -950,8 +1178,8 @@ class SecureCommandExecutor:
         reasons: List[str],
         log_entry: Dict[str, Any],
         force_approval: bool,
-        permission_action: Optional[str],
-    ) -> Optional[Dict[str, Any]]:
+        permission_action: str | None,
+    ) -> Dict[str, Any] | None:
         """
         Issue #665: Extracted from run_shell_command to reduce function length.
 
@@ -989,7 +1217,7 @@ class SecureCommandExecutor:
         risk: CommandRisk,
         reasons: List[str],
         log_entry: Dict[str, Any],
-        rule_info: Optional[Dict[str, Any]] = None,
+        rule_info: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
         """
         Build security info dictionary for successful command execution.
@@ -1079,7 +1307,7 @@ class SecureCommandExecutor:
         risk: CommandRisk,
         reasons: List[str],
         log_entry: Dict[str, Any],
-        rule_info: Optional[Dict[str, Any]] = None,
+        rule_info: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
         """
         Execute a command after permission/risk checks.

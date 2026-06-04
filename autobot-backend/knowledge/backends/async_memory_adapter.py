@@ -14,7 +14,7 @@ contract for tests and adapter parity.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Sequence
 
 from knowledge.backends.async_base import AsyncBaseClient, AsyncBaseCollection
 from knowledge.backends.base import Embedding, Metadata, Where, WhereDocument
@@ -32,9 +32,9 @@ class AsyncInMemoryCollection(AsyncBaseCollection):
         self,
         *,
         ids: Sequence[str],
-        documents: Optional[Sequence[str]] = None,
-        metadatas: Optional[Sequence[Metadata]] = None,
-        embeddings: Optional[Sequence[Embedding]] = None,
+        documents: Sequence[str] | None = None,
+        metadatas: Sequence[Metadata] | None = None,
+        embeddings: Sequence[Embedding] | None = None,
     ) -> None:
         self._sync.add(
             ids=ids,
@@ -47,9 +47,9 @@ class AsyncInMemoryCollection(AsyncBaseCollection):
         self,
         *,
         ids: Sequence[str],
-        documents: Optional[Sequence[str]] = None,
-        metadatas: Optional[Sequence[Metadata]] = None,
-        embeddings: Optional[Sequence[Embedding]] = None,
+        documents: Sequence[str] | None = None,
+        metadatas: Sequence[Metadata] | None = None,
+        embeddings: Sequence[Embedding] | None = None,
     ) -> None:
         self._sync.upsert(
             ids=ids,
@@ -62,9 +62,9 @@ class AsyncInMemoryCollection(AsyncBaseCollection):
         self,
         *,
         ids: Sequence[str],
-        documents: Optional[Sequence[str]] = None,
-        metadatas: Optional[Sequence[Metadata]] = None,
-        embeddings: Optional[Sequence[Embedding]] = None,
+        documents: Sequence[str] | None = None,
+        metadatas: Sequence[Metadata] | None = None,
+        embeddings: Sequence[Embedding] | None = None,
     ) -> None:
         self._sync.update(
             ids=ids,
@@ -76,12 +76,12 @@ class AsyncInMemoryCollection(AsyncBaseCollection):
     async def get(
         self,
         *,
-        ids: Optional[Sequence[str]] = None,
-        where: Optional[Where] = None,
-        where_document: Optional[WhereDocument] = None,
-        limit: Optional[int] = None,
-        offset: Optional[int] = None,
-        include: Optional[Sequence[str]] = None,
+        ids: Sequence[str] | None = None,
+        where: Where | None = None,
+        where_document: WhereDocument | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
+        include: Sequence[str] | None = None,
     ) -> Dict[str, Any]:
         return self._sync.get(
             ids=ids,
@@ -95,12 +95,12 @@ class AsyncInMemoryCollection(AsyncBaseCollection):
     async def query(
         self,
         *,
-        query_embeddings: Optional[Sequence[Embedding]] = None,
-        query_texts: Optional[Sequence[str]] = None,
+        query_embeddings: Sequence[Embedding] | None = None,
+        query_texts: Sequence[str] | None = None,
         n_results: int = 10,
-        where: Optional[Where] = None,
-        where_document: Optional[WhereDocument] = None,
-        include: Optional[Sequence[str]] = None,
+        where: Where | None = None,
+        where_document: WhereDocument | None = None,
+        include: Sequence[str] | None = None,
     ) -> Dict[str, Any]:
         return self._sync.query(
             query_embeddings=query_embeddings,
@@ -114,9 +114,9 @@ class AsyncInMemoryCollection(AsyncBaseCollection):
     async def delete(
         self,
         *,
-        ids: Optional[Sequence[str]] = None,
-        where: Optional[Where] = None,
-        where_document: Optional[WhereDocument] = None,
+        ids: Sequence[str] | None = None,
+        where: Where | None = None,
+        where_document: WhereDocument | None = None,
     ) -> None:
         self._sync.delete(ids=ids, where=where, where_document=where_document)
 
@@ -150,8 +150,8 @@ class AsyncInMemoryClient(AsyncBaseClient):
         self,
         name: str,
         *,
-        metadata: Optional[Metadata] = None,
-        embedding_function: Optional[Any] = None,
+        metadata: Metadata | None = None,
+        embedding_function: Any | None = None,
     ) -> AsyncBaseCollection:
         sync_col = self._sync.get_or_create_collection(name, metadata=metadata, embedding_function=embedding_function)
         return self._wrap(sync_col)  # type: ignore[arg-type]
@@ -164,8 +164,8 @@ class AsyncInMemoryClient(AsyncBaseClient):
         self,
         name: str,
         *,
-        metadata: Optional[Metadata] = None,
-        embedding_function: Optional[Any] = None,
+        metadata: Metadata | None = None,
+        embedding_function: Any | None = None,
     ) -> AsyncBaseCollection:
         sync_col = self._sync.create_collection(name, metadata=metadata, embedding_function=embedding_function)
         return self._wrap(sync_col)  # type: ignore[arg-type]

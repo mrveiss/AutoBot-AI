@@ -9,15 +9,15 @@ for the error handling system. Integrates with error_boundaries and error_catalo
 """
 
 import asyncio
-import logging
 from collections import defaultdict
 from dataclasses import asdict, dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from autobot_shared.error_boundaries import ErrorCategory
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Thread-safe imports
 
@@ -31,14 +31,14 @@ class ErrorMetric:
     Kept for backward compatibility.
     """
 
-    error_code: Optional[str]
+    error_code: str | None
     category: str
     component: str
     function: str
     timestamp: float
     message: str
-    trace_id: Optional[str] = None
-    user_id: Optional[str] = None
+    trace_id: str | None = None
+    user_id: str | None = None
     retry_attempted: bool = False
     resolved: bool = False
 
@@ -56,12 +56,12 @@ class ErrorStats:
     Kept for backward compatibility.
     """
 
-    error_code: Optional[str]
+    error_code: str | None
     category: str
     component: str
     total_count: int = 0
-    last_occurrence: Optional[float] = None
-    first_occurrence: Optional[float] = None
+    last_occurrence: float | None = None
+    first_occurrence: float | None = None
     hourly_counts: Dict[str, int] = field(default_factory=dict)
     retry_count: int = 0
     resolved_count: int = 0
@@ -116,13 +116,13 @@ class ErrorMetricsCollector:
 
     async def record_error(
         self,
-        error_code: Optional[str],
+        error_code: str | None,
         category: ErrorCategory,
         component: str,
         function: str,
         message: str,
-        trace_id: Optional[str] = None,
-        user_id: Optional[str] = None,
+        trace_id: str | None = None,
+        user_id: str | None = None,
         retry_attempted: bool = False,
     ) -> None:
         """
@@ -155,7 +155,7 @@ class ErrorMetricsCollector:
 
         logger.debug(f"Recorded error metric to Prometheus: {component}/{error_code or category.value}")
 
-    async def _check_alerts(self, component: str, error_code: Optional[str], current_count: int) -> None:
+    async def _check_alerts(self, component: str, error_code: str | None, current_count: int) -> None:
         """
         Check if error count exceeds alert thresholds and send notifications
 
@@ -177,7 +177,7 @@ class ErrorMetricsCollector:
     async def _send_alert_notification(
         self,
         component: str,
-        error_code: Optional[str],
+        error_code: str | None,
         current_count: int,
         threshold: int,
     ) -> None:
@@ -223,7 +223,7 @@ class ErrorMetricsCollector:
         logger.warning("mark_resolved() is deprecated. Use Prometheus labels or external tracking.")
         return False
 
-    def get_stats(self, component: Optional[str] = None) -> List[ErrorStats]:
+    def get_stats(self, component: str | None = None) -> List[ErrorStats]:
         """
         DEPRECATED (Phase 5, Issue #348): No in-memory stats available.
 
@@ -243,7 +243,7 @@ class ErrorMetricsCollector:
         )
         return []
 
-    def get_error_timeline(self, hours: int = 24, component: Optional[str] = None) -> Dict[str, List[Dict[str, Any]]]:
+    def get_error_timeline(self, hours: int = 24, component: str | None = None) -> Dict[str, List[Dict[str, Any]]]:
         """
         DEPRECATED (Phase 5, Issue #348): No in-memory timeline available.
 
@@ -313,7 +313,7 @@ class ErrorMetricsCollector:
         )
         return []
 
-    def set_alert_threshold(self, component: str, error_code: Optional[str], threshold: int) -> None:
+    def set_alert_threshold(self, component: str, error_code: str | None, threshold: int) -> None:
         """
         Set alert threshold for a component/error combination
 
@@ -361,7 +361,7 @@ class ErrorMetricsCollector:
             "alert_thresholds_configured": len(self._alert_thresholds),
         }
 
-    async def reset_stats(self, component: Optional[str] = None) -> None:
+    async def reset_stats(self, component: str | None = None) -> None:
         """
         DEPRECATED (Phase 5, Issue #348): No in-memory stats to reset.
 
@@ -399,7 +399,7 @@ def get_metrics_collector(redis_client=None) -> ErrorMetricsCollector:
 
 
 async def record_error_metric(
-    error_code: Optional[str],
+    error_code: str | None,
     category: ErrorCategory,
     component: str,
     function: str,

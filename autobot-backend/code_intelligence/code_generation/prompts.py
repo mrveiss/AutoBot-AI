@@ -8,7 +8,7 @@ Issue #381: Extracted from llm_code_generator.py god class refactoring.
 Contains PromptTemplateManager with templates for LLM-based code generation.
 """
 
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 
 from .types import PromptTemplate, RefactoringType
 
@@ -233,7 +233,7 @@ Requirements:
     }
 
     @classmethod
-    def get_template(cls, refactoring_type: RefactoringType) -> Optional[PromptTemplate]:
+    def get_template(cls, refactoring_type: RefactoringType) -> PromptTemplate | None:
         """Get the prompt template for a refactoring type."""
         return cls.TEMPLATES.get(refactoring_type)
 

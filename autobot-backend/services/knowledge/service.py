@@ -9,7 +9,7 @@ Contains the main ChatKnowledgeService class that coordinates knowledge retrieva
 """
 
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 from advanced_rag_optimizer import SearchResult
 from autobot_shared.logging_manager import get_llm_logger
@@ -97,7 +97,7 @@ class ChatKnowledgeService:
         }
     )
 
-    def __init__(self, rag_service: RAGService, enable_doc_search: bool = True):
+    def __init__(self, rag_service: RAGService, enable_doc_search: bool = True) -> None:
         """
         Initialize chat knowledge service.
 
@@ -110,7 +110,7 @@ class ChatKnowledgeService:
         self.context_enhancer = get_context_enhancer()
 
         # Issue #250: Documentation search integration
-        self.doc_searcher: Optional[DocumentationSearcher] = None
+        self.doc_searcher: DocumentationSearcher | None = None
         if enable_doc_search:
             self.doc_searcher = get_documentation_searcher()
             self.doc_searcher.initialize()
@@ -125,7 +125,7 @@ class ChatKnowledgeService:
         query: str,
         top_k: int,
         score_threshold: float,
-        categories: Optional[List[str]],
+        categories: List[str] | None,
         start_time: float,
     ) -> Tuple[str, List[Dict]]:
         """Helper for retrieve_relevant_knowledge. Ref: #1088.
@@ -170,7 +170,7 @@ class ChatKnowledgeService:
         query: str,
         top_k: int = 5,
         score_threshold: float = 0.3,
-        categories: Optional[List[str]] = None,
+        categories: List[str] | None = None,
     ) -> Tuple[str, List[Dict]]:
         """
         Retrieve relevant knowledge facts for a chat query.
@@ -314,7 +314,7 @@ class ChatKnowledgeService:
 
         return citations
 
-    def _match_category_keywords(self, query_lower: str, keywords: frozenset, category: str) -> Optional[List[str]]:
+    def _match_category_keywords(self, query_lower: str, keywords: frozenset, category: str) -> List[str] | None:
         """
         Check if query matches any keywords for a category.
 
@@ -337,7 +337,7 @@ class ChatKnowledgeService:
         self,
         intent_result: QueryIntentResult,
         query: str,
-    ) -> Optional[List[str]]:
+    ) -> List[str] | None:
         """
         Select appropriate categories based on query intent.
 
@@ -402,7 +402,7 @@ class ChatKnowledgeService:
     def _log_retrieval_start(
         self,
         intent_result: QueryIntentResult,
-        effective_categories: Optional[List[str]],
+        effective_categories: List[str] | None,
     ) -> None:
         """Log the start of smart retrieval operation.
 
@@ -425,7 +425,7 @@ class ChatKnowledgeService:
         top_k: int = 5,
         score_threshold: float = 0.3,
         force_retrieval: bool = False,
-        categories: Optional[List[str]] = None,
+        categories: List[str] | None = None,
         enable_smart_categories: bool = True,
     ) -> Tuple[str, List[Dict], QueryIntentResult]:
         """Smart knowledge retrieval with intent detection.
@@ -522,9 +522,9 @@ class ChatKnowledgeService:
         self,
         intent_result: QueryIntentResult,
         query: str,
-        categories: Optional[List[str]],
+        categories: List[str] | None,
         enable_smart_categories: bool,
-    ) -> Optional[List[str]]:
+    ) -> List[str] | None:
         """
         Determine effective categories for retrieval.
 
@@ -573,9 +573,9 @@ class ChatKnowledgeService:
         top_k: int = 5,
         score_threshold: float = 0.3,
         force_retrieval: bool = False,
-        categories: Optional[List[str]] = None,
+        categories: List[str] | None = None,
         enable_smart_categories: bool = True,
-    ) -> Tuple[str, List[Dict], QueryIntentResult, Optional[EnhancedQuery]]:
+    ) -> Tuple[str, List[Dict], QueryIntentResult, EnhancedQuery | None]:
         """Conversation-aware knowledge retrieval with context enhancement.
 
         Issue #249 Phase 3, #556, #665: Uses conversation history to enhance
@@ -737,7 +737,7 @@ class ChatKnowledgeService:
         doc_results: int = 3,
         score_threshold: float = 0.3,
         doc_threshold: float = 0.6,
-        categories: Optional[List[str]] = None,
+        categories: List[str] | None = None,
     ) -> Tuple[str, List[Dict], List[Dict[str, Any]]]:
         """
         Retrieve combined knowledge from RAG and documentation sources.

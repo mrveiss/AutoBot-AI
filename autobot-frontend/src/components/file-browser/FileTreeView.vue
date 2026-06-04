@@ -1,13 +1,13 @@
 <template>
   <div class="tree-panel">
     <div class="tree-header">
-      <h3><i class="fas fa-folder-tree"></i> {{ $t('fileBrowser.treeView.title') }}</h3>
+      <h3><Icon name="folder" /> {{ $t('fileBrowser.treeView.title') }}</h3>
       <div class="tree-controls">
-        <button @click="$emit('expand-all')" :title="$t('fileBrowser.treeView.expandAll')">
-          <i class="fas fa-expand-alt"></i>
+        <button @click="$emit('expand-all')" :title="$t('fileBrowser.treeView.expandAll')" :aria-label="$t('fileBrowser.treeView.expandAll')">
+          <Icon name="expand-alt" />
         </button>
-        <button @click="$emit('collapse-all')" :title="$t('fileBrowser.treeView.collapseAll')">
-          <i class="fas fa-compress-alt"></i>
+        <button @click="$emit('collapse-all')" :title="$t('fileBrowser.treeView.collapseAll')" :aria-label="$t('fileBrowser.treeView.collapseAll')">
+          <Icon name="compress-alt" />
         </button>
       </div>
     </div>
@@ -27,15 +27,12 @@
           @click="$emit('toggle-node', item)"
           :style="{ paddingLeft: (item.level * 20) + 'px' }"
         >
-          <i
+          <Icon
             v-if="item.is_dir"
-            :class="item.expanded ? 'fas fa-chevron-down' : 'fas fa-chevron-right'"
+            :name="item.expanded ? 'chevron-down' : 'chevron-right'"
             class="tree-toggle"
-          ></i>
-          <i
-            :class="getFileIcon(item)"
-            class="tree-icon"
-          ></i>
+          />
+          <i :class="getFileIcon(item)" class="tree-icon" />
           <span class="tree-label">{{ item.name }}</span>
         </div>
       </div>
@@ -50,6 +47,7 @@
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { getFileIcon as getFileIconUtil } from '@/utils/iconMappings'
 import EmptyState from '@/components/ui/EmptyState.vue'
 

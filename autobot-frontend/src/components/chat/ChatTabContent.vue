@@ -50,7 +50,7 @@
         <!-- Host selector header for VNC -->
         <div class="vnc-header flex justify-between items-center bg-autobot-bg-secondary text-autobot-text-primary px-4 py-2 text-sm">
           <div class="flex items-center gap-3">
-            <i class="fas fa-desktop"></i>
+            <Icon name="desktop" />
             <HostSelector
               ref="vncHostSelectorRef"
               v-model="selectedVncHost"
@@ -71,7 +71,7 @@
         <!-- Empty state when no host selected -->
         <div v-else class="flex-1 flex items-center justify-center text-autobot-text-muted">
           <div class="text-center">
-            <i class="fas fa-desktop text-5xl mb-4 opacity-50"></i>
+            <Icon name="desktop" class="text-5xl mb-4 opacity-50" />
             <p class="text-lg mb-2">{{ $t('chat.tabContent.selectVncHost') }}</p>
             <p class="text-sm text-autobot-text-muted">
               {{ $t('chat.tabContent.selectVncHostDesc') }}
@@ -112,7 +112,7 @@
       <!-- Empty state when no host selected -->
       <div v-else class="flex-1 flex items-center justify-center bg-autobot-bg-secondary text-autobot-text-muted">
         <div class="text-center">
-          <i class="fas fa-terminal text-5xl mb-4 opacity-50"></i>
+          <Icon name="terminal" class="text-5xl mb-4 opacity-50" />
           <p class="text-lg mb-2">{{ $t('chat.tabContent.selectSshHost') }}</p>
           <p class="text-sm text-autobot-text-muted">
             {{ $t('chat.tabContent.selectSshHostDesc') }}
@@ -124,6 +124,7 @@
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { ref, watch, defineAsyncComponent } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils'

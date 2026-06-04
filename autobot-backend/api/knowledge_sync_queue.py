@@ -9,7 +9,6 @@ can see what is pending, what failed, and how the worker is keeping up.
 
 from __future__ import annotations
 
-import logging
 from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, Query
@@ -17,13 +16,14 @@ from fastapi import APIRouter, Depends, Query
 from api.schemas_knowledge import KnowledgeSyncQueuePruneResponse, KnowledgeSyncQueueResponse
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from services.knowledge.sync_queue import (
     SyncStatus,
     get_document_sync_queue,
     serialize_entry_for_api,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/knowledge", tags=["knowledge-sync-queue"])
 

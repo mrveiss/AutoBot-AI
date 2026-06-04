@@ -25,14 +25,13 @@ unavailable.
 from __future__ import annotations
 
 import json
-import logging
-from typing import Optional
 
 from pydantic import BaseModel, Field
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Sentinel used for single-org deployments where no explicit org_id is passed.
 DEFAULT_ORG_ID = "__default__"
@@ -48,26 +47,26 @@ class OrgKnowledgeConfig(BaseModel):
     when resolved via ``OrgKnowledgeConfigService.get_effective()``.
     """
 
-    llm_provider: Optional[str] = Field(
+    llm_provider: str | None = Field(
         default=None,
         description="LLM provider name (ollama, openai, anthropic, ...).",
     )
-    llm_model: Optional[str] = Field(
+    llm_model: str | None = Field(
         default=None,
         description="LLM model identifier (e.g. 'qwen2.5:7b', 'gpt-4o-mini').",
     )
-    embedding_model: Optional[str] = Field(
+    embedding_model: str | None = Field(
         default=None,
         description="Embedding model identifier (e.g. 'nomic-embed-text').",
     )
-    embedding_dimension: Optional[int] = Field(
+    embedding_dimension: int | None = Field(
         default=None,
         ge=1,
         description="Optional embedding vector dimension override.",
     )
 
 
-def _key(org_id: Optional[str]) -> str:
+def _key(org_id: str | None) -> str:
     return f"{_KEY_PREFIX}{org_id or DEFAULT_ORG_ID}"
 
 
@@ -80,7 +79,7 @@ class OrgKnowledgeConfigService(AsyncRedisClientMixin):
         # Injected client (for tests) or lazy-fetched from the knowledge DB via mixin.
         self._redis = redis_client
 
-    async def get(self, org_id: Optional[str] = None) -> Optional[OrgKnowledgeConfig]:
+    async def get(self, org_id: str | None = None) -> OrgKnowledgeConfig | None:
         """Return the persisted config for ``org_id`` or None if unset."""
         redis = await self._get_redis()
         if redis is None:
@@ -100,7 +99,7 @@ class OrgKnowledgeConfigService(AsyncRedisClientMixin):
             return None
         return OrgKnowledgeConfig(**payload)
 
-    async def set(self, org_id: Optional[str], config: OrgKnowledgeConfig) -> OrgKnowledgeConfig:
+    async def set(self, org_id: str | None, config: OrgKnowledgeConfig) -> OrgKnowledgeConfig:
         """Persist ``config`` for ``org_id`` and return what was stored."""
         redis = await self._get_redis()
         if redis is None:
@@ -116,7 +115,7 @@ class OrgKnowledgeConfigService(AsyncRedisClientMixin):
         )
         return config
 
-    async def delete(self, org_id: Optional[str]) -> bool:
+    async def delete(self, org_id: str | None) -> bool:
         """Remove any persisted config for ``org_id``; return True if deleted."""
         redis = await self._get_redis()
         if redis is None:
@@ -124,7 +123,7 @@ class OrgKnowledgeConfigService(AsyncRedisClientMixin):
         deleted = await redis.delete(_key(org_id))
         return bool(deleted)
 
-    async def get_effective(self, org_id: Optional[str] = None) -> OrgKnowledgeConfig:
+    async def get_effective(self, org_id: str | None = None) -> OrgKnowledgeConfig:
         """Resolve org config, filling missing fields from SSOT defaults.
 
         The returned model always has every field populated (or at least
@@ -163,7 +162,7 @@ class OrgKnowledgeConfigService(AsyncRedisClientMixin):
 # Process-level singleton accessor
 # ---------------------------------------------------------------------------
 
-_singleton: Optional[OrgKnowledgeConfigService] = None
+_singleton: OrgKnowledgeConfigService | None = None
 
 
 def get_org_knowledge_config_service() -> OrgKnowledgeConfigService:

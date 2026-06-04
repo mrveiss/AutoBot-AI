@@ -1,21 +1,21 @@
 <template>
-  <BasePanel variant="bordered" size="medium">
+  <BasePanel variant="bordered" size="md">
     <template #header>
-      <h3><i class="fas fa-chart-bar"></i> {{ $t('manpage.integrationStatus.title') }}</h3>
+      <h3><Icon name="chart-bar" /> {{ $t('manpage.integrationStatus.title') }}</h3>
       <BaseButton
         size="sm"
         variant="outline-solid"
         @click="$emit('refresh')"
         :disabled="loading"
       >
-        <i class="fas fa-sync" :class="{ 'fa-spin': loading }"></i>
+        <Icon name="sync" />
         {{ $t('manpage.integrationStatus.refresh') }}
       </BaseButton>
     </template>
 
     <div v-if="status" class="status-info">
       <div v-if="status.status === 'not_integrated'" class="not-integrated">
-        <i class="fas fa-info-circle"></i>
+        <Icon name="info-circle" />
         <div>
           <strong>{{ $t('manpage.integrationStatus.notIntegratedTitle') }}</strong>
           <p>{{ $t('manpage.integrationStatus.notIntegratedDesc') }}</p>
@@ -23,7 +23,7 @@
       </div>
 
       <div v-else-if="status.status === 'error'" class="error-state">
-        <i class="fas fa-exclamation-circle"></i>
+        <Icon name="exclamation-circle" />
         <div>
           <strong>{{ $t('manpage.integrationStatus.errorTitle') }}</strong>
           <p>{{ status.message }}</p>
@@ -51,7 +51,7 @@
         </div>
 
         <div v-if="status.integration_date" class="integration-date">
-          <i class="fas fa-clock"></i>
+          <Icon name="clock" />
           {{ $t('manpage.integrationStatus.lastIntegrated') }} {{ formatDate(status.integration_date) }}
         </div>
 
@@ -71,7 +71,7 @@
     </div>
 
     <div v-if="loading" class="loading">
-      <i class="fas fa-spinner fa-spin"></i>
+      <Icon name="spinner" class="animate-spin" />
       {{ $t('manpage.integrationStatus.loadingStatus') }}
     </div>
   </BasePanel>
@@ -90,6 +90,7 @@
  * Issue #184: Split oversized Vue components
  */
 
+import Icon from '@/components/ui/Icon.vue'
 import BasePanel from '@/components/base/BasePanel.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import { formatDate } from '@/utils/formatHelpers'

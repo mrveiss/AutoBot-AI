@@ -16,21 +16,21 @@ This middleware complements the FastAPIInstrumentor by adding
 AutoBot-specific attributes and custom trace handling.
 """
 
-import logging
 import re
 import time
-from typing import Callable, Optional
+from typing import Callable
 
 from opentelemetry.trace import SpanKind, Status, StatusCode
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
 
+from autobot_shared.logging_manager import get_logger
 from constants.api_constants import PATH_API_HEALTH, PATH_HEALTH
 from middleware.proxy_utils import get_client_ip
 from services.tracing_service import get_tracing_service
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Pre-compiled regex for path pattern normalization
 _NUMERIC_PATH_RE = re.compile(r"/\d+")
@@ -109,7 +109,7 @@ class TracingMiddleware(BaseHTTPMiddleware):
         # Build span attributes (Issue #665: extracted helper)
         attributes = self._build_span_attributes(request, path)
 
-        response: Optional[Response] = None
+        response: Response | None = None
 
         # Use the tracing service's span context manager
         with self.tracing.span(
@@ -177,7 +177,7 @@ class TracingMiddleware(BaseHTTPMiddleware):
         pattern = _NUMERIC_PATH_RE.sub("/{id}", path)
         return pattern
 
-    def _get_client_ip(self, request: Request) -> Optional[str]:
+    def _get_client_ip(self, request: Request) -> str | None:
         """
         Extract client IP from request.
 

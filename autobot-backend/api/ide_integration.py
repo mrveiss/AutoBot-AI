@@ -20,9 +20,8 @@ import ast
 import asyncio
 import hashlib
 import json
-import logging
 import re
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Set, Tuple
 
 from fastapi import APIRouter, Request
 
@@ -43,7 +42,6 @@ from api.schemas_code import (
     IDECategoriesResponse,
     IDEConfigUpdateResponse,
     IDEConfigurationUpdate,
-    IDEHealthResponse,
     IDEPatternCategory,
     IDERulesResponse,
     IDESeveritiesResponse,
@@ -54,13 +52,15 @@ from api.schemas_code import (
 )
 from api.system_health import ComponentHealth, register_health_probe
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.singleton_factory import lazy_optional_singleton, lazy_singleton
+from autobot_shared.ssot_constants import TTL_10_SECONDS
 from models.completion_context import CompletionContext
 from services.context_analyzer import ContextAnalyzer
 from services.pattern_extractor import PatternExtractor
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Optional ML dependencies (Issue #906)
 try:
@@ -312,7 +312,7 @@ class IDEIntegrationEngine:
         # Build O(1) lookup dict for rules by ID (Issue #315)
         self._rules_by_id: Dict[str, dict] = {r["id"]: r for r in self.rules}
 
-    def _find_rule_by_id(self, rule_id: str) -> Optional[dict]:
+    def _find_rule_by_id(self, rule_id: str) -> dict | None:
         """Find a rule by its ID using O(1) lookup. (Issue #315 - extracted)"""
         return self._rules_by_id.get(rule_id)
 
@@ -743,7 +743,7 @@ class IDEIntegrationEngine:
         completions = self._rank_completions(completions, context)
         completions = completions[: request.max_completions]
 
-        _get_redis_client().setex(cache_key, 10, json.dumps([c.model_dump() for c in completions]))
+        _get_redis_client().setex(cache_key, TTL_10_SECONDS, json.dumps([c.model_dump() for c in completions]))
         elapsed_ms = (_time.time() - start_time) * 1000
         return CompletionResponse(
             completions=completions,
@@ -909,7 +909,7 @@ class IDEIntegrationEngine:
 # Global Instance
 # =============================================================================
 
-_engine: Optional[IDEIntegrationEngine] = None
+_engine: IDEIntegrationEngine | None = None
 _engine_lock = asyncio.Lock()
 
 
@@ -1084,7 +1084,7 @@ async def get_completions(request: CompletionRequest) -> CompletionResponse:
 
 @register_health_probe("ide_integration")
 async def probe_ide_integration(
-    request: Optional[Request] = None,
+    request: Request | None = None,
 ) -> ComponentHealth:
     """Issue #3333: probe registration for ide_integration module."""
     try:
@@ -1106,20 +1106,3 @@ async def probe_ide_integration(
             status="down",
             detail=f"probe error: {type(exc).__name__}",
         )
-
-
-@router.get("/health", summary="Health check", response_model=IDEHealthResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="health_check",
-    error_code_prefix="IDE_INTEGRATION",
-)
-async def health_check() -> Dict[str, Any]:
-    """Check health of the IDE integration service."""
-    engine = await get_engine()
-    return {
-        "status": "healthy",
-        "rules_loaded": len(engine.rules),
-        "disabled_rules": len(engine.disabled_rules),
-        "cache_size": len(engine.analysis_cache),
-    }

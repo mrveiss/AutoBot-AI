@@ -11,15 +11,15 @@ Related Issue: #4338 - autonomous skill extraction from conversations
 """
 
 import asyncio
-import logging
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from autobot_shared.http_client import get_http_client
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
 from services.skill_management.skill_extractor import ExtractedSkill
 from services.slm_client import get_slm_client
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class SkillProposalError(Exception):
@@ -29,7 +29,7 @@ class SkillProposalError(Exception):
 class SkillProposer:
     """Proposes extracted skills to SLM for validation and activation."""
 
-    def __init__(self, slm_client=None):
+    def __init__(self, slm_client=None) -> None:
         """Initialize skill proposer with SLM client."""
         self.slm_client = slm_client or get_slm_client()
         self.http_client = get_http_client()
@@ -38,7 +38,7 @@ class SkillProposer:
         self,
         skills: List[ExtractedSkill],
         session_id: str,
-        conversation_id: Optional[str] = None,
+        conversation_id: str | None = None,
     ) -> Dict[str, List[str]]:
         """
         Propose extracted skills to SLM.
@@ -77,7 +77,7 @@ class SkillProposer:
         self,
         skill: ExtractedSkill,
         session_id: str,
-        conversation_id: Optional[str] = None,
+        conversation_id: str | None = None,
     ) -> bool:
         """Propose a single skill to SLM and auto-validate.
 

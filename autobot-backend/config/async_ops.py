@@ -9,9 +9,9 @@ Asynchronous operations for unified config manager.
 import asyncio
 import copy
 import json
-import logging
+import logging  # stdlib: avoids deadlock — config is on the logging-manager init path (GH#7765 pattern)
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 import aiofiles
 import yaml
@@ -76,7 +76,9 @@ class AsyncOperationsMixin:
                     # Check if field name contains sensitive pattern
                     if any(pattern in key_lower for pattern in sensitive_patterns):
                         obj[key] = "***REDACTED***"
-                        logger.debug("Redacted sensitive field: %s", current_path)
+                        logger.debug(
+                            "Redacted sensitive field: %s", current_path
+                        )  # codeql[py/clear-text-logging-sensitive-data]
                     elif isinstance(value, _CONTAINER_TYPES):  # Issue #380
                         obj[key] = redact_sensitive_fields(value, current_path)
 
@@ -91,7 +93,7 @@ class AsyncOperationsMixin:
         """Get Redis cache key for config type"""
         return f"{self.settings.redis_key_prefix}{config_type}"
 
-    async def _load_from_redis_cache(self, config_type: str) -> Optional[Dict[str, Any]]:
+    async def _load_from_redis_cache(self, config_type: str) -> Dict[str, Any] | None:
         """Load config from Redis cache"""
         if not self.settings.use_redis_cache:
             return None
@@ -143,7 +145,7 @@ class AsyncOperationsMixin:
             logger.debug("Failed to save %s to Redis cache: %s", config_type, e)
 
     @with_retry(RetryConfig(max_attempts=3, base_delay=1.0, max_delay=5.0, strategy=RetryStrategy.EXPONENTIAL_BACKOFF))
-    async def _read_file_async(self, file_path: Path) -> Optional[Dict[str, Any]]:
+    async def _read_file_async(self, file_path: Path) -> Dict[str, Any] | None:
         """Read config file asynchronously with retry"""
         # Issue #358 - avoid blocking
         if not await asyncio.to_thread(file_path.exists):

@@ -7,13 +7,14 @@ Feedback API Router (Issue #905)
 Endpoints for completion feedback tracking and model improvement.
 """
 
-import logging
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 from pydantic import BaseModel, Field
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 
 router = APIRouter(tags=["feedback"])
 
@@ -50,12 +51,12 @@ class FeedbackRequest(BaseModel):
     context: str = Field(..., description="Code context before completion")
     suggestion: str = Field(..., description="Suggested completion text")
     action: str = Field(..., description="User action: 'accepted' or 'rejected'")
-    user_id: Optional[str] = Field(None, description="User identifier")
-    language: Optional[str] = Field(None, description="Programming language")
-    file_path: Optional[str] = Field(None, description="File path")
-    pattern_id: Optional[int] = Field(None, description="Pattern ID if applicable")
-    confidence_score: Optional[float] = Field(None, description="Model confidence (0-1)")
-    completion_rank: Optional[int] = Field(None, description="Position in top-k suggestions")
+    user_id: str | None = Field(None, description="User identifier")
+    language: str | None = Field(None, description="Programming language")
+    file_path: str | None = Field(None, description="File path")
+    pattern_id: int | None = Field(None, description="Pattern ID if applicable")
+    confidence_score: float | None = Field(None, description="Model confidence (0-1)")
+    completion_rank: int | None = Field(None, description="Position in top-k suggestions")
 
 
 class FeedbackResponse(BaseModel):
@@ -85,7 +86,7 @@ class RetrainRequest(BaseModel):
         default="incremental",
         description="Training mode: 'incremental' or 'full'",
     )
-    language: Optional[str] = Field(None, description="Filter by language")
+    language: str | None = Field(None, description="Filter by language")
     num_epochs: int = Field(default=5, ge=1, le=20, description="Epochs for full retrain")
 
 
@@ -148,8 +149,8 @@ async def record_feedback(request: FeedbackRequest):
 
 @router.get("/metrics", response_model=MetricsResponse)
 async def get_acceptance_metrics(
-    language: Optional[str] = Query(None, description="Filter by language"),
-    pattern_type: Optional[str] = Query(None, description="Filter by pattern type"),
+    language: str | None = Query(None, description="Filter by language"),
+    pattern_type: str | None = Query(None, description="Filter by pattern type"),
     time_window_days: int = Query(7, ge=1, le=90, description="Time window in days"),
 ):
     """
@@ -180,7 +181,7 @@ async def get_acceptance_metrics(
 @router.get("/recent")
 async def get_recent_feedback(
     limit: int = Query(50, ge=1, le=500, description="Maximum events to return"),
-    action: Optional[str] = Query(None, description="Filter by action"),
+    action: str | None = Query(None, description="Filter by action"),
 ):
     """
     Get recent feedback events.

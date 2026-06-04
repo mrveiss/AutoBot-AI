@@ -4,7 +4,7 @@
     <div class="timeline-header">
       <div class="header-content">
         <h3>
-          <i class="fas fa-clock-rotate-left"></i>
+          <Icon name="clock" />
           <span v-if="type === 'session'">{{ $t('audit.timeline.sessionTrail', { id: entityId }) }}</span>
           <span v-else>{{ $t('audit.timeline.userActivity', { id: entityId }) }}</span>
         </h3>
@@ -15,19 +15,19 @@
         :aria-label="$t('common.close')"
         @click="$emit('close')"
       >
-        <i class="fas fa-times"></i>
+        <Icon name="times" />
       </button>
     </div>
 
     <!-- Timeline Content -->
     <div class="timeline-content">
       <div v-if="loading" class="loading-state">
-        <i class="fas fa-spinner fa-spin"></i>
+        <Icon name="spinner" class="animate-spin" />
         <span>{{ $t('audit.timeline.loading') }}</span>
       </div>
 
       <div v-else-if="entries.length === 0" class="empty-state">
-        <i class="fas fa-inbox"></i>
+        <Icon name="inbox" />
         <span>{{ $t('audit.timeline.noEvents') }}</span>
       </div>
 
@@ -40,7 +40,7 @@
           <!-- Timeline Node -->
           <div class="timeline-node">
             <div :class="['node-dot', `dot-${entry.result}`]">
-              <i :class="resultIcon(entry.result)"></i>
+              <Icon :name="resultIcon(entry.result)" />
             </div>
             <div v-if="index < entries.length - 1" class="node-line"></div>
           </div>
@@ -58,24 +58,24 @@
             </div>
             <div class="entry-meta">
               <span v-if="type === 'session' && entry.user_id" class="meta-item">
-                <i class="fas fa-user"></i>
+                <Icon name="user" />
                 {{ entry.user_id }}
               </span>
               <span v-if="type === 'user' && entry.session_id" class="meta-item">
-                <i class="fas fa-fingerprint"></i>
+                <Icon name="lock" />
                 {{ truncateId(entry.session_id) }}
               </span>
               <span v-if="entry.vm_name" class="meta-item">
-                <i class="fas fa-server"></i>
+                <Icon name="server" />
                 {{ entry.vm_name }}
               </span>
               <span v-if="entry.ip_address" class="meta-item">
-                <i class="fas fa-network-wired"></i>
+                <Icon name="network-wired" />
                 {{ entry.ip_address }}
               </span>
             </div>
             <div v-if="entry.error_message" class="entry-error">
-              <i class="fas fa-exclamation-circle"></i>
+              <Icon name="exclamation-circle" />
               {{ entry.error_message }}
             </div>
             <button
@@ -83,7 +83,7 @@
               class="details-toggle"
               @click="toggleDetails(entry.id)"
             >
-              <i :class="expandedIds.has(entry.id) ? 'fas fa-chevron-up' : 'fas fa-chevron-down'"></i>
+              <Icon :name="expandedIds.has(entry.id) ? 'chevron-up' : 'chevron-down'" />
               {{ expandedIds.has(entry.id) ? $t('audit.timeline.hideDetails') : $t('audit.timeline.showDetails') }}
             </button>
             <div v-if="expandedIds.has(entry.id) && hasDetails(entry)" class="entry-details">
@@ -102,7 +102,7 @@
         </template>
       </span>
       <button class="btn btn-secondary" @click="$emit('refresh')">
-        <i class="fas fa-sync-alt" :class="{ 'fa-spin': loading }"></i>
+        <Icon name="sync-alt" />
         {{ $t('audit.timeline.refresh') }}
       </button>
     </div>
@@ -110,6 +110,7 @@
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { ref, computed } from 'vue'
 import { useExpansion } from '@/composables/useExpansion'
 import type { AuditEntry } from '@/types/audit'
@@ -164,7 +165,7 @@ function formatOperationName(operation: string): string {
 
 function resultIcon(result: string): string {
   const config = AUDIT_RESULT_CONFIG[result as keyof typeof AUDIT_RESULT_CONFIG]
-  return config?.icon || 'fas fa-question-circle'
+  return config?.icon || 'question-circle'
 }
 
 function truncateId(id: string): string {

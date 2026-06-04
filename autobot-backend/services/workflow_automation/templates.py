@@ -7,18 +7,19 @@ Workflow Templates Module
 Pre-defined workflow templates for common automation tasks.
 """
 
-import logging
 from typing import Callable, Dict, List
+
+from autobot_shared.logging_manager import get_logger
 
 from .models import WorkflowStep
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class WorkflowTemplateManager:
     """Manages workflow templates for common automation tasks"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize template manager with default workflow templates."""
         self.templates: Dict[str, Callable[[str], List[WorkflowStep]]] = {
             "system_update": self._create_system_update_workflow,

@@ -1,6 +1,6 @@
 <template>
-  <div v-if="visible" class="dialog-overlay" @click="closeDialog" tabindex="0" @keyup.enter="$event.target.click()" @keyup.space="$event.target.click()">
-    <div class="knowledge-dialog" @click.stop tabindex="0" @keyup.enter="$event.target.click()" @keyup.space="$event.target.click()">
+  <div v-if="visible" class="dialog-overlay" @click="closeDialog" tabindex="0" @keyup.enter="$event.target?.click()" @keyup.space="$event.target?.click()">
+    <div class="knowledge-dialog" @click.stop tabindex="0" @keyup.enter="$event.target?.click()" @keyup.space="$event.target?.click()">
       <!-- Header -->
       <div class="dialog-header">
         <h3 class="dialog-title">{{ $t('knowledge.persistence.title') }}</h3>
@@ -14,6 +14,9 @@
           ×
         </BaseButton>
       </div>
+
+      <!-- Load Error -->
+      <BaseAlert v-if="loadError" variant="error" :message="loadError" dismissible @dismiss="loadError = null" class="dialog-load-error" />
 
       <!-- Chat Context Info -->
       <div v-if="chatContext" class="context-info">
@@ -173,7 +176,7 @@
             {{ $t('knowledge.persistence.keepSelectedTemporarily') }}
           </BaseButton>
           <BaseButton
-            variant="danger"
+            variant="error"
             @click="applyBulkDecision('delete')"
             :disabled="!hasSelectedItems"
             class="bulk-button delete"
@@ -215,6 +218,15 @@
         </BaseButton>
       </div>
 
+      <!-- Submit Error -->
+      <BaseAlert
+        v-if="submitError"
+        variant="error"
+        :message="submitError"
+        dismissible
+        @dismiss="submitError = null"
+      />
+
       <!-- Dialog Actions -->
       <div class="dialog-actions">
         <div class="action-summary">
@@ -253,47 +265,62 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { useToast } from '@/composables/useToast';
+import { useNotificationBus } from '@/composables/useNotificationBus';
 import { useBatchSelection } from '@/composables/useBatchSelection';
 import { apiService } from '@/services/api';
 import { getApiBase } from '@/config/ssot-config';
 import { formatDateTime as formatDate } from '@/utils/formatHelpers';
 import BaseButton from '@/components/base/BaseButton.vue';
+import BaseAlert from '@/components/ui/BaseAlert.vue';
 import { createLogger } from '@/utils/debugUtils';
+
+type KnowledgeDecision = 'add_to_kb' | 'keep_temporary' | 'delete';
+
+interface PendingKnowledgeItem {
+  id: string;
+  content: string;
+  suggested_action: KnowledgeDecision;
+  created_at: string;
+  metadata?: {
+    source?: string;
+    [key: string]: unknown;
+  };
+}
+
+interface ChatContext {
+  topic?: string;
+  keywords?: string[];
+  file_count?: number;
+}
+
+interface Props {
+  visible?: boolean;
+  chatId?: string | null;
+  chatContext?: ChatContext | null;
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  visible: false,
+  chatId: null,
+  chatContext: null,
+});
+
+const emit = defineEmits<{
+  close: [];
+  'decisions-applied': [decisions: Array<{ chat_id: string; knowledge_id: string; decision: KnowledgeDecision }>];
+  'chat-compiled': [compiled: unknown];
+}>();
 
 const logger = createLogger('KnowledgePersistenceDialog');
 
 const { t } = useI18n();
+const { showToast } = useNotificationBus();
 
-// Props
-const props = defineProps({
-  visible: {
-    type: Boolean,
-    default: false
-  },
-  chatId: {
-    type: String,
-    required: false,
-    default: null
-  },
-  chatContext: {
-    type: Object,
-    default: null
-  }
-});
-
-// Emits
-const emit = defineEmits(['close', 'decisions-applied', 'chat-compiled']);
-
-// Composables
-const { showToast } = useToast();
-
-// Reactive data
-const pendingItems = ref([]);
-const itemDecisions = ref({});
+const pendingItems = ref<PendingKnowledgeItem[]>([]);
+const itemDecisions = ref<Record<string, KnowledgeDecision>>({});
 
 const {
   isSelected,
@@ -301,76 +328,78 @@ const {
   selectAll,
   clear: deselectAllItems,
   selectedItems: selectedPendingItems,
-  someSelected: hasSelectedItems,
-} = useBatchSelection(pendingItems, item => item.id);
+  selectedCount,
+  selected: selectedKeys,
+} = useBatchSelection<PendingKnowledgeItem, string>(pendingItems, item => item.id);
+
+// someSelected is false when ALL items are selected — use selectedCount > 0 so
+// bulk-action buttons remain enabled when the user selects all (GH#8395).
+const hasSelectedItems = computed(() => selectedCount.value > 0);
+
 const compileOptions = ref({
   includeSystemMessages: false,
-  title: ''
+  title: '',
 });
 const loading = ref(false);
+const submitError = ref<string | null>(null);
+const loadError = ref<string | null>(null);
 
-// Computed properties
-
-const hasDecisions = computed(() => {
-  return Object.keys(itemDecisions.value).length > 0;
-});
+const hasDecisions = computed(() => Object.keys(itemDecisions.value).length > 0);
 
 const decisionsCount = computed(() => {
-  const counts = {
+  const counts: Record<KnowledgeDecision, number> = {
     add_to_kb: 0,
     keep_temporary: 0,
-    delete: 0
+    delete: 0,
   };
 
-  Object.entries(itemDecisions.value).forEach(([itemId, decision]) => {
-    if (selectedItems.value[itemId] && decision) {
+  const selectedIds = new Set(selectedPendingItems.value.map((item: PendingKnowledgeItem) => item.id));
+  (Object.entries(itemDecisions.value) as [string, KnowledgeDecision][]).forEach(([itemId, decision]) => {
+    if (selectedIds.has(itemId) && decision) {
       counts[decision]++;
     }
   });
-
   return counts;
 });
 
-// Methods
-const loadPendingItems = async () => {
+const loadPendingItems = async (): Promise<void> => {
   try {
     loading.value = true;
+    loadError.value = null;
     // Issue #552: Fixed path to match backend (hyphen instead of underscore)
-    const response = await apiService.get(`${getApiBase()}/chat-knowledge/knowledge/pending/${props.chatId}`);
+    const response = await apiService.get(`${getApiBase()}/chat-knowledge/knowledge/pending/${props.chatId}`) as { success: boolean; pending_items: PendingKnowledgeItem[] };
 
     if (response.success) {
-      pendingItems.value = response.pending_items;
+      pendingItems.value = response.pending_items ?? [];
 
       // Initialize decisions (useBatchSelection handles selection state)
-      pendingItems.value.forEach(item => {
+      pendingItems.value.forEach((item: PendingKnowledgeItem) => {
         itemDecisions.value[item.id] = item.suggested_action || 'keep_temporary';
       });
     }
   } catch (error) {
     logger.error('Failed to load pending knowledge:', error);
-    showToast(t('knowledge.persistence.failedToLoad'), 'error');
+    loadError.value = error instanceof Error ? error.message : t('knowledge.persistence.failedToLoad');
   } finally {
     loading.value = false;
   }
 };
 
-const truncateContent = (content, maxLength) => {
+const truncateContent = (content: string, maxLength: number): string => {
   if (content.length <= maxLength) return content;
   return content.substring(0, maxLength) + '...';
 };
 
-const getSuggestionText = (action) => {
-  const suggestions = {
+const getSuggestionText = (action: KnowledgeDecision): string => {
+  const suggestions: Record<KnowledgeDecision, string> = {
     'add_to_kb': t('knowledge.persistence.suggestionAddToKb'),
     'keep_temporary': t('knowledge.persistence.suggestionKeepTemporary'),
-    'delete': t('knowledge.persistence.suggestionDelete')
+    'delete': t('knowledge.persistence.suggestionDelete'),
   };
   return suggestions[action] || '';
 };
 
-// NOTE: formatDate removed - now using formatDateTime from @/utils/formatHelpers
-
-const handleItemToggle = (item) => {
+const handleItemToggle = (item: PendingKnowledgeItem): void => {
   const wasSelected = isSelected(item);
   toggleItemSelection(item);
   if (wasSelected) {
@@ -378,33 +407,28 @@ const handleItemToggle = (item) => {
   }
 };
 
-const deselectAll = () => {
+const deselectAll = (): void => {
   deselectAllItems();
   itemDecisions.value = {};
 };
 
-const applyBulkDecision = (decision) => {
-  selectedPendingItems.value.forEach(item => {
+const applyBulkDecision = (decision: KnowledgeDecision): void => {
+  selectedPendingItems.value.forEach((item: PendingKnowledgeItem) => {
     itemDecisions.value[item.id] = decision;
   });
 };
 
-const applyAllDecisions = async () => {
+const applyAllDecisions = async (): Promise<void> => {
   try {
     loading.value = true;
-    const decisions = [];
-
-    // Collect all decisions for selected items
-    selectedPendingItems.value.forEach(item => {
-      const decision = itemDecisions.value[item.id];
-      if (decision) {
-        decisions.push({
-          chat_id: props.chatId,
+    const decisions: Array<{ chat_id: string; knowledge_id: string; decision: KnowledgeDecision }> =
+      selectedPendingItems.value
+        .filter((item: PendingKnowledgeItem) => itemDecisions.value[item.id])
+        .map((item: PendingKnowledgeItem) => ({
+          chat_id: props.chatId as string,
           knowledge_id: item.id,
-          decision: decision
-        });
-      }
-    });
+          decision: itemDecisions.value[item.id],
+        }));
 
     // Apply decisions in parallel - eliminates N+1 sequential API calls
     // Issue #552: Fixed path to match backend (hyphen instead of underscore)
@@ -415,18 +439,18 @@ const applyAllDecisions = async () => {
     );
 
     showToast(t('knowledge.persistence.decisionsApplied', { count: decisions.length }), 'success');
+    submitError.value = null;
     emit('decisions-applied', decisions);
     closeDialog();
-
   } catch (error) {
     logger.error('Failed to apply decisions:', error);
-    showToast(t('knowledge.persistence.decisionsApplyFailed'), 'error');
+    submitError.value = t('knowledge.persistence.decisionsApplyFailed');
   } finally {
     loading.value = false;
   }
 };
 
-const compileChat = async () => {
+const compileChat = async (): Promise<void> => {
   try {
     loading.value = true;
 
@@ -434,36 +458,34 @@ const compileChat = async () => {
     const response = await apiService.post(`${getApiBase()}/chat-knowledge/compile`, {
       chat_id: props.chatId,
       title: compileOptions.value.title || null,
-      include_system_messages: compileOptions.value.includeSystemMessages
-    });
+      include_system_messages: compileOptions.value.includeSystemMessages,
+    }) as { success: boolean; compiled: unknown };
 
     if (response.success) {
       showToast(t('knowledge.persistence.compiledSuccess'), 'success');
+      submitError.value = null;
       emit('chat-compiled', response.compiled);
       closeDialog();
     }
-
   } catch (error) {
     logger.error('Failed to compile chat:', error);
-    showToast(t('knowledge.persistence.compileFailed'), 'error');
+    submitError.value = t('knowledge.persistence.compileFailed');
   } finally {
     loading.value = false;
   }
 };
 
-const closeDialog = () => {
+const closeDialog = (): void => {
   emit('close');
 };
 
-// Lifecycle
 onMounted(() => {
   if (props.visible && props.chatId) {
     loadPendingItems();
   }
 });
 
-// Watchers
-watch(() => props.visible, (newVal) => {
+watch(() => props.visible, (newVal: boolean) => {
   if (newVal && props.chatId) {
     loadPendingItems();
   }

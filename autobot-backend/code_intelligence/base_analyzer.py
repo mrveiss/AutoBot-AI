@@ -11,17 +11,17 @@ Vue, Shell, YAML, etc.)
 Part of EPIC #217 - Advanced Code Intelligence Methods
 """
 
-import logging
 import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Pattern, Set
+from typing import Any, Dict, List, Pattern, Set
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.status_enums import Severity as IssueSeverity  # noqa: F401  # #6689 consolidation
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Pre-compiled regex patterns for string literal extraction
 _STRING_PATTERNS_PYTHON: List[Pattern] = [
@@ -361,7 +361,7 @@ class MultiLanguageAnalyzer:
         self,
         directory: Path,
         recursive: bool,
-        exclude_patterns: Optional[List[str]],
+        exclude_patterns: List[str] | None,
     ) -> List[Path]:
         """Collect files to analyze after applying exclusion patterns (Issue #665: extracted helper)."""
         # Default exclusions
@@ -407,7 +407,7 @@ class MultiLanguageAnalyzer:
         self,
         directory: Path,
         recursive: bool = True,
-        exclude_patterns: Optional[List[str]] = None,
+        exclude_patterns: List[str] | None = None,
     ) -> AnalysisResult:
         """Analyze all files in a directory.
 

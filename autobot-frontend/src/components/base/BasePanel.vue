@@ -20,12 +20,18 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, watchEffect } from 'vue'
+import { createLogger } from '@/utils/debugUtils'
+
+const PANEL_SIZES = ['sm', 'md', 'lg'] as const
+const PANEL_VARIANTS = ['default', 'bordered', 'elevated', 'flat', 'dark'] as const
+
+const logger = createLogger('BasePanel')
 
 interface Props {
   title?: string
   variant?: 'default' | 'bordered' | 'elevated' | 'flat' | 'dark'
-  size?: 'small' | 'medium' | 'large'
+  size?: 'sm' | 'md' | 'lg'
   loading?: boolean
   collapsible?: boolean
   collapsed?: boolean
@@ -35,7 +41,7 @@ interface Props {
 
 const props = withDefaults(defineProps<Props>(), {
   variant: 'default',
-  size: 'medium',
+  size: 'md',
   loading: false,
   collapsible: false,
   collapsed: false,
@@ -67,6 +73,17 @@ const toggleCollapse = () => {
   if (props.collapsible) {
     emit('toggle', !props.collapsed)
   }
+}
+
+if (import.meta.env.DEV) {
+  watchEffect(() => {
+    if (props.size !== undefined && !(PANEL_SIZES as readonly string[]).includes(props.size)) {
+      logger.warn(`Invalid "size" prop: "${props.size}". Expected: ${PANEL_SIZES.join(' | ')}`)
+    }
+    if (props.variant !== undefined && !(PANEL_VARIANTS as readonly string[]).includes(props.variant)) {
+      logger.warn(`Invalid "variant" prop: "${props.variant}". Expected: ${PANEL_VARIANTS.join(' | ')}`)
+    }
+  })
 }
 </script>
 
@@ -116,15 +133,15 @@ const toggleCollapse = () => {
   background-color: var(--bg-tertiary);
 }
 
-.panel-small {
+.panel-sm {
   font-size: var(--text-sm);
 }
 
-.panel-medium {
+.panel-md {
   font-size: var(--text-base);
 }
 
-.panel-large {
+.panel-lg {
   font-size: var(--text-lg);
 }
 

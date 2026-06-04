@@ -12,7 +12,7 @@ from __future__ import annotations
 import sys
 import types
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -49,7 +49,7 @@ _TS = datetime(2026, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
 
 def _entry(
     run_id: str,
-    parent_run_id: Optional[str] = None,
+    parent_run_id: str | None = None,
     score: float = 0.5,
     collection: str = "kb_synthesis",
     ran_at: str = "2026-01-01T00:00:00+00:00",
@@ -107,7 +107,7 @@ def _make_provenance_log(entries: List[Dict[str, Any]]) -> MagicMock:
     return log
 
 
-def _make_collection_factory(get_result: Optional[Dict] = None):
+def _make_collection_factory(get_result: Dict | None = None):
     """Return an async collection factory mock."""
     col = AsyncMock()
     col.get = AsyncMock(return_value=get_result or {"ids": [], "metadatas": [], "documents": []})
@@ -126,37 +126,37 @@ def _make_collection_factory(get_result: Optional[Dict] = None):
 
 
 class TestSynthesisRunFromProvenance:
-    def test_basic_fields(self):
+    def test_basic_fields(self) -> None:
         entry = _entry("run-1", score=0.8)
         run = SynthesisRun.from_provenance_entry(entry)
         assert run.run_id == "run-1"
         assert abs(run.score - 0.8) < 1e-6
         assert run.collection_name == "kb_synthesis"
 
-    def test_parent_run_id_empty_string_becomes_none(self):
+    def test_parent_run_id_empty_string_becomes_none(self) -> None:
         entry = _entry("run-1", parent_run_id="")
         run = SynthesisRun.from_provenance_entry(entry)
         assert run.parent_run_id is None
 
-    def test_parent_run_id_set(self):
+    def test_parent_run_id_set(self) -> None:
         entry = _entry("run-2", parent_run_id="run-1")
         run = SynthesisRun.from_provenance_entry(entry)
         assert run.parent_run_id == "run-1"
 
-    def test_invalid_ran_at_falls_back_to_now(self):
+    def test_invalid_ran_at_falls_back_to_now(self) -> None:
         entry = _entry("run-1")
         entry["ran_at"] = "not-a-date"
         run = SynthesisRun.from_provenance_entry(entry)
         assert run.timestamp is not None
         assert run.timestamp.tzinfo is not None
 
-    def test_naive_ran_at_gets_utc_tzinfo(self):
+    def test_naive_ran_at_gets_utc_tzinfo(self) -> None:
         entry = _entry("run-1")
         entry["ran_at"] = "2026-01-01T00:00:00"  # no tz
         run = SynthesisRun.from_provenance_entry(entry)
         assert run.timestamp.tzinfo is not None
 
-    def test_output_summary_id_from_synthesis_ids(self):
+    def test_output_summary_id_from_synthesis_ids(self) -> None:
         entry = _entry("run-x")
         entry["synthesis_ids"] = ["synth-abc"]
         run = SynthesisRun.from_provenance_entry(entry)
@@ -170,7 +170,7 @@ class TestSynthesisRunFromProvenance:
 
 class TestGetAncestors:
     @pytest.mark.asyncio
-    async def test_single_run_no_parent(self):
+    async def test_single_run_no_parent(self) -> None:
         entries = [_entry("run-1")]
         log = _make_provenance_log(entries)
         factory, _ = _make_collection_factory()
@@ -181,7 +181,7 @@ class TestGetAncestors:
         assert chain[0].run_id == "run-1"
 
     @pytest.mark.asyncio
-    async def test_chain_traversed_correctly(self):
+    async def test_chain_traversed_correctly(self) -> None:
         entries = [
             _entry("run-3", parent_run_id="run-2"),
             _entry("run-2", parent_run_id="run-1"),
@@ -195,7 +195,7 @@ class TestGetAncestors:
         assert [r.run_id for r in chain] == ["run-1", "run-2", "run-3"]
 
     @pytest.mark.asyncio
-    async def test_depth_limit_respected(self):
+    async def test_depth_limit_respected(self) -> None:
         entries = [
             _entry("run-4", parent_run_id="run-3"),
             _entry("run-3", parent_run_id="run-2"),
@@ -212,7 +212,7 @@ class TestGetAncestors:
         assert chain[-1].run_id == "run-4"
 
     @pytest.mark.asyncio
-    async def test_missing_run_returns_empty(self):
+    async def test_missing_run_returns_empty(self) -> None:
         log = _make_provenance_log([])
         factory, _ = _make_collection_factory()
         svc = LineageService(log, factory)
@@ -221,7 +221,7 @@ class TestGetAncestors:
         assert chain == []
 
     @pytest.mark.asyncio
-    async def test_cycle_protection(self):
+    async def test_cycle_protection(self) -> None:
         """Circular parent links must not cause infinite loop."""
         entries = [
             _entry("run-a", parent_run_id="run-b"),
@@ -244,7 +244,7 @@ class TestGetAncestors:
 
 class TestGetBestAncestor:
     @pytest.mark.asyncio
-    async def test_returns_highest_score(self):
+    async def test_returns_highest_score(self) -> None:
         entries = [
             _entry("run-1", score=0.3, collection="kb_synthesis"),
             _entry("run-2", score=0.9, collection="kb_synthesis"),
@@ -259,7 +259,7 @@ class TestGetBestAncestor:
         assert best.run_id == "run-2"
 
     @pytest.mark.asyncio
-    async def test_filters_by_collection(self):
+    async def test_filters_by_collection(self) -> None:
         entries = [
             _entry("run-A", score=0.99, collection="other_collection"),
             _entry("run-B", score=0.5, collection="kb_synthesis"),
@@ -273,7 +273,7 @@ class TestGetBestAncestor:
         assert best.run_id == "run-B"
 
     @pytest.mark.asyncio
-    async def test_returns_none_when_no_runs(self):
+    async def test_returns_none_when_no_runs(self) -> None:
         log = _make_provenance_log([])
         factory, _ = _make_collection_factory()
         svc = LineageService(log, factory)
@@ -282,7 +282,7 @@ class TestGetBestAncestor:
         assert best is None
 
     @pytest.mark.asyncio
-    async def test_returns_none_when_no_matching_collection(self):
+    async def test_returns_none_when_no_matching_collection(self) -> None:
         entries = [_entry("run-1", collection="other")]
         log = _make_provenance_log(entries)
         factory, _ = _make_collection_factory()
@@ -299,7 +299,7 @@ class TestGetBestAncestor:
 
 class TestGetEntityHistory:
     @pytest.mark.asyncio
-    async def test_returns_versions_sorted_ascending(self):
+    async def test_returns_versions_sorted_ascending(self) -> None:
         col_result = {
             "ids": ["e1_v2", "e1_v1"],
             "metadatas": [
@@ -318,7 +318,7 @@ class TestGetEntityHistory:
         assert history[1]["lineage_version"] == 2
 
     @pytest.mark.asyncio
-    async def test_returns_empty_when_no_history(self):
+    async def test_returns_empty_when_no_history(self) -> None:
         log = _make_provenance_log([])
         factory, _ = _make_collection_factory()  # returns empty ids
         svc = LineageService(log, factory)
@@ -327,10 +327,10 @@ class TestGetEntityHistory:
         assert history == []
 
     @pytest.mark.asyncio
-    async def test_handles_collection_error(self):
+    async def test_handles_collection_error(self) -> None:
         log = _make_provenance_log([])
 
-        async def broken_factory(name: str):
+        async def broken_factory(name: str) -> None:
             raise RuntimeError("ChromaDB unavailable")
 
         svc = LineageService(log, broken_factory)
@@ -345,7 +345,7 @@ class TestGetEntityHistory:
 
 class TestRollbackEntity:
     @pytest.mark.asyncio
-    async def test_rollback_raises_when_version_not_found(self):
+    async def test_rollback_raises_when_version_not_found(self) -> None:
         log = _make_provenance_log([])
         factory, _ = _make_collection_factory()  # empty history
         svc = LineageService(log, factory)
@@ -354,7 +354,7 @@ class TestRollbackEntity:
             await svc.rollback_entity("e1", to_version=5)
 
     @pytest.mark.asyncio
-    async def test_rollback_raises_when_no_source_collection(self):
+    async def test_rollback_raises_when_no_source_collection(self) -> None:
         col_result = {
             "ids": ["e1_v1"],
             "metadatas": [{"entity_id": "e1", "lineage_version": 1}],  # no lineage_source_collection
@@ -414,7 +414,7 @@ class TestRollbackEntity:
 
 class TestStampEntityVersion:
     @pytest.mark.asyncio
-    async def test_upserts_version_to_history_collection(self):
+    async def test_upserts_version_to_history_collection(self) -> None:
         log = _make_provenance_log([])
         factory, col = _make_collection_factory()
         svc = LineageService(log, factory)
@@ -437,10 +437,10 @@ class TestStampEntityVersion:
         assert meta["lineage_source_collection"] == "kb_synthesis"
 
     @pytest.mark.asyncio
-    async def test_swallows_collection_error(self):
+    async def test_swallows_collection_error(self) -> None:
         log = _make_provenance_log([])
 
-        async def broken_factory(name: str):
+        async def broken_factory(name: str) -> None:
             raise RuntimeError("ChromaDB unavailable")
 
         svc = LineageService(log, broken_factory)
@@ -453,7 +453,7 @@ class TestStampEntityVersion:
 # ---------------------------------------------------------------------------
 
 
-def test_get_lineage_service_singleton():
+def test_get_lineage_service_singleton() -> None:
     import services.knowledge.lineage_service as _mod
 
     _mod._lineage_service = None

@@ -12,16 +12,17 @@ parent-child relationships and path-based lookups.
 """
 
 import asyncio
-import logging
 import uuid
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List
 
 if TYPE_CHECKING:
     import aioredis
     import redis
+
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class CategoriesMixin:
@@ -51,7 +52,7 @@ class CategoriesMixin:
     # CATEGORY CRUD OPERATIONS (Issue #411)
     # =========================================================================
 
-    async def _build_category_path(self, name: str, parent_id: Optional[str]) -> tuple[Optional[str], Optional[str]]:
+    async def _build_category_path(self, name: str, parent_id: str | None) -> tuple[str | None, str | None]:
         """Build category path from name and parent (Issue #398: extracted).
 
         Returns: (path, error_message) - error_message is None if successful
@@ -63,7 +64,7 @@ class CategoriesMixin:
             return f"{parent_data.get('path', '')}/{name}", None
         return name, None
 
-    async def _store_category(self, category_id: str, category_data: Dict[str, Any], parent_id: Optional[str]) -> None:
+    async def _store_category(self, category_id: str, category_data: Dict[str, Any], parent_id: str | None) -> None:
         """Store category in Redis (Issue #398: extracted)."""
         await self.redis().hset(f"category:{category_id}", mapping=category_data)
         await self.redis().set(f"category:path:{category_data['path']}", category_id)
@@ -78,10 +79,10 @@ class CategoriesMixin:
         category_id: str,
         name: str,
         path: str,
-        parent_id: Optional[str],
-        description: Optional[str],
-        icon: Optional[str],
-        color: Optional[str],
+        parent_id: str | None,
+        description: str | None,
+        icon: str | None,
+        color: str | None,
     ) -> Dict[str, Any]:
         """Build category data dictionary for storage. Issue #620.
 
@@ -114,10 +115,10 @@ class CategoriesMixin:
     async def create_category(
         self,
         name: str,
-        parent_id: Optional[str] = None,
-        description: Optional[str] = None,
-        icon: Optional[str] = None,
-        color: Optional[str] = None,
+        parent_id: str | None = None,
+        description: str | None = None,
+        icon: str | None = None,
+        color: str | None = None,
     ) -> Dict[str, Any]:
         """Create a new category in the hierarchy (Issue #398: refactored)."""
         if not self._aioredis_client:
@@ -220,7 +221,7 @@ class CategoriesMixin:
         current: Dict[str, Any],
         new_name: str,
         updates: Dict[str, Any],
-    ) -> Optional[str]:
+    ) -> str | None:
         """Handle category rename and path update (Issue #398: extracted).
 
         Returns: error message or None if successful
@@ -247,9 +248,9 @@ class CategoriesMixin:
     def _apply_metadata_updates(
         self,
         updates: Dict[str, Any],
-        description: Optional[str],
-        icon: Optional[str],
-        color: Optional[str],
+        description: str | None,
+        icon: str | None,
+        color: str | None,
     ) -> None:
         """Apply optional metadata fields to updates dict. Issue #620."""
         if description is not None:
@@ -262,10 +263,10 @@ class CategoriesMixin:
     async def update_category(
         self,
         category_id: str,
-        name: Optional[str] = None,
-        description: Optional[str] = None,
-        icon: Optional[str] = None,
-        color: Optional[str] = None,
+        name: str | None = None,
+        description: str | None = None,
+        icon: str | None = None,
+        color: str | None = None,
     ) -> Dict[str, Any]:
         """Update category metadata (Issue #398: refactored)."""
         if not self._aioredis_client:
@@ -302,7 +303,7 @@ class CategoriesMixin:
             logger.error("Failed to update category '%s': %s", category_id, e)
             return {"success": False, "message": "Category operation failed"}
 
-    async def _reassign_category_facts(self, categories: List[str], reassign_to: Optional[str]) -> int:
+    async def _reassign_category_facts(self, categories: List[str], reassign_to: str | None) -> int:
         """Reassign facts from categories being deleted (Issue #398: extracted)."""
         count = 0
         for cat_id in categories:
@@ -336,9 +337,7 @@ class CategoriesMixin:
         await self.redis().delete(f"category:facts:{cat_id}")
         await self.redis().delete(f"category:{cat_id}")
 
-    async def _build_deletion_list(
-        self, category_id: str, recursive: bool
-    ) -> tuple[List[str], Optional[Dict[str, Any]]]:
+    async def _build_deletion_list(self, category_id: str, recursive: bool) -> tuple[List[str], Dict[str, Any] | None]:
         """Build list of categories to delete. Issue #620.
 
         Args:
@@ -366,7 +365,7 @@ class CategoriesMixin:
         self,
         category_id: str,
         recursive: bool = False,
-        reassign_to: Optional[str] = None,
+        reassign_to: str | None = None,
     ) -> Dict[str, Any]:
         """Delete a category (Issue #398: refactored)."""
         if not self._aioredis_client:
@@ -429,7 +428,7 @@ class CategoriesMixin:
 
     async def get_category_tree(
         self,
-        root_id: Optional[str] = None,
+        root_id: str | None = None,
         max_depth: int = 10,
         include_fact_counts: bool = True,
     ) -> Dict[str, Any]:
@@ -548,7 +547,7 @@ class CategoriesMixin:
     # CATEGORY-FACT OPERATIONS (Issue #411)
     # =========================================================================
 
-    async def _validate_fact_and_category(self, fact_id: str, category_id: str) -> tuple[Optional[Dict], Optional[str]]:
+    async def _validate_fact_and_category(self, fact_id: str, category_id: str) -> tuple[Dict | None, str | None]:
         """Validate fact and category exist (Issue #398: extracted).
 
         Returns: (category_data, error_message)
@@ -748,7 +747,7 @@ class CategoriesMixin:
         matching.sort(key=lambda x: x.get("path", ""))
         return matching
 
-    def _decode_category_data(self, data: dict) -> Optional[Dict[str, Any]]:
+    def _decode_category_data(self, data: dict) -> Dict[str, Any] | None:
         """Decode category data from Redis hash (helper for batched operations)."""
         if not data:
             return None
@@ -787,7 +786,7 @@ class CategoriesMixin:
     # PRIVATE HELPER METHODS (Issue #411)
     # =========================================================================
 
-    async def _get_category_data(self, category_id: str) -> Optional[Dict[str, Any]]:
+    async def _get_category_data(self, category_id: str) -> Dict[str, Any] | None:
         """Get category data from Redis hash."""
         data = await self.redis().hgetall(f"category:{category_id}")
         if not data:
@@ -869,7 +868,7 @@ class CategoriesMixin:
         current_depth: int,
         max_depth: int,
         include_fact_counts: bool,
-    ) -> Optional[Dict[str, Any]]:
+    ) -> Dict[str, Any] | None:
         """Recursively build a tree node with children. Issue #620."""
         if current_depth > max_depth:
             return None
@@ -949,7 +948,7 @@ class CategoriesMixin:
         """Remove category assignment from a fact."""
         await self.redis().hdel(f"fact:{fact_id}", "category_id")
 
-    async def _get_fact_category_id(self, fact_id: str) -> Optional[str]:
+    async def _get_fact_category_id(self, fact_id: str) -> str | None:
         """Get the category ID a fact is assigned to."""
         category_id = await self.redis().hget(f"fact:{fact_id}", "category_id")
         if category_id and isinstance(category_id, bytes):

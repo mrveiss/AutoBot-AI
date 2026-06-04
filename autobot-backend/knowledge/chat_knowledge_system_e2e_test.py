@@ -12,11 +12,12 @@ import time
 
 import aiohttp
 
+from autobot_shared.logging_manager import get_logger
 from tests.test_helpers import get_test_backend_url
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 BASE_URL = get_test_backend_url()
 

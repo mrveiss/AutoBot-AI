@@ -8,18 +8,28 @@ This module provides comprehensive API endpoints that integrate all AI Stack age
 from VM4 (uses NetworkConstants.AI_STACK_VM_IP) with the main AutoBot backend.
 """
 
-import logging
-from typing import Any, Awaitable, Callable, Dict, List, Optional
+from typing import Any, Awaitable, Callable, Dict, List
 
 from fastapi import APIRouter, Depends
-from fastapi.responses import JSONResponse
 
 from api.schemas_agent import (
     ComprehensiveResearchData,
     EnhancedKnowledgeSearchData,
     MultiAgentQueryData,
 )
-from api.schemas_ai_stack import AIStackAgentPayload, AIStackAgentsData, AIStackHealthData
+from api.schemas_ai_stack import (
+    AIStackAgentsData,
+    ClassificationResult,
+    CodeSearchResult,
+    DevelopmentSpeedupResult,
+    DocumentAnalysisResult,
+    EnhancedChatResult,
+    KnowledgeExtractionResult,
+    QueryReformulationResult,
+    RAGQueryResult,
+    SystemKnowledgeResult,
+    WebResearchResult,
+)
 from api.schemas_common import DataResponse
 from api.schemas_knowledge import (
     ContentClassificationRequest,
@@ -33,7 +43,7 @@ from api.schemas_knowledge import (
 from api.system_health import register_singleton_probe
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from autobot_shared.time_utils import utc_timestamp
+from autobot_shared.logging_manager import get_logger
 from dependencies import get_knowledge_base
 from services.ai_stack_client import AIStackError, get_ai_stack_client
 from type_defs.common import Metadata
@@ -41,7 +51,7 @@ from type_defs.common import Metadata
 # Import shared response utilities (Issue #292 - Eliminate duplicate code)
 from utils.response_helpers import create_success_response
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Type alias for agent handlers (Issue #336)
 AgentQueryHandler = Callable[[Any, str], Awaitable[Dict[str, Any]]]
@@ -67,39 +77,6 @@ router = APIRouter(tags=["ai-stack"])
 register_singleton_probe("ai_stack", get_ai_stack_client, async_getter=True)
 
 
-@router.get("/health", response_model=DataResponse[AIStackHealthData])
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="ai_stack_health_check",
-    error_code_prefix="AI_STACK_INTEGRATION",
-)
-async def ai_stack_health_check(admin_check: bool = Depends(check_admin_permission)):
-    """
-    Check AI Stack health and connectivity.
-
-    Issue #744: Requires admin authentication.
-    """
-    try:
-        ai_client = await get_ai_stack_client()
-        health_status = await ai_client.health_check()
-
-        return JSONResponse(
-            status_code=200 if health_status["status"] == "healthy" else 503,
-            content=create_success_response(health_status, "AI Stack health check completed").model_dump(),
-        )
-    except Exception as e:
-        logger.error("AI Stack health check failed: %s: %s", type(e).__name__, e)
-        return JSONResponse(
-            status_code=503,
-            content={
-                "success": False,
-                "error": "AI Stack unavailable",
-                "details": f"{type(e).__name__}: {e}",
-                "timestamp": utc_timestamp(),
-            },
-        )
-
-
 @router.get("/agents", response_model=DataResponse[AIStackAgentsData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -123,7 +100,7 @@ async def list_ai_agents(admin_check: bool = Depends(check_admin_permission)):
 # ====================================================================
 
 
-@router.post("/rag/query", response_model=DataResponse[AIStackAgentPayload])
+@router.post("/rag/query", response_model=DataResponse[RAGQueryResult])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="rag_query",
@@ -165,7 +142,7 @@ async def rag_query(
     return create_success_response(rag_result, "RAG query completed successfully")
 
 
-@router.post("/rag/reformulate", response_model=DataResponse[AIStackAgentPayload])
+@router.post("/rag/reformulate", response_model=DataResponse[QueryReformulationResult])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="reformulate_query",
@@ -173,7 +150,7 @@ async def rag_query(
 )
 async def reformulate_query(
     query: str,
-    context: Optional[str] = None,
+    context: str | None = None,
     admin_check: bool = Depends(check_admin_permission),
 ):
     """
@@ -187,7 +164,7 @@ async def reformulate_query(
     return create_success_response(result, "Query reformulated successfully")
 
 
-@router.post("/rag/analyze-documents", response_model=DataResponse[AIStackAgentPayload])
+@router.post("/rag/analyze-documents", response_model=DataResponse[DocumentAnalysisResult])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="analyze_documents",
@@ -210,7 +187,7 @@ async def analyze_documents(documents: List[Metadata], admin_check: bool = Depen
 # ====================================================================
 
 
-@router.post("/chat/enhanced", response_model=DataResponse[AIStackAgentPayload])
+@router.post("/chat/enhanced", response_model=DataResponse[EnhancedChatResult])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="enhanced_chat",
@@ -258,7 +235,7 @@ async def enhanced_chat(
 # ====================================================================
 
 
-@router.post("/knowledge/extract", response_model=DataResponse[AIStackAgentPayload])
+@router.post("/knowledge/extract", response_model=DataResponse[KnowledgeExtractionResult])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="extract_knowledge",
@@ -328,14 +305,14 @@ async def enhanced_knowledge_search(
     return create_success_response(results, "Enhanced knowledge search completed")
 
 
-@router.get("/knowledge/system", response_model=DataResponse[AIStackAgentPayload])
+@router.get("/knowledge/system", response_model=DataResponse[SystemKnowledgeResult])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_system_knowledge",
     error_code_prefix="AI_STACK_INTEGRATION",
 )
 async def get_system_knowledge(
-    knowledge_category: Optional[str] = None,
+    knowledge_category: str | None = None,
     admin_check: bool = Depends(check_admin_permission),
 ):
     """
@@ -389,7 +366,7 @@ async def comprehensive_research(request: ResearchRequest, admin_check: bool = D
     return create_success_response(results, "Comprehensive research completed successfully")
 
 
-@router.post("/research/web", response_model=DataResponse[AIStackAgentPayload])
+@router.post("/research/web", response_model=DataResponse[WebResearchResult])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="web_research",
@@ -417,7 +394,7 @@ async def web_research(
 # ====================================================================
 
 
-@router.post("/development/search-code", response_model=DataResponse[AIStackAgentPayload])
+@router.post("/development/search-code", response_model=DataResponse[CodeSearchResult])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="search_code",
@@ -439,7 +416,7 @@ async def search_code(request: KbCodeSearchRequest, admin_check: bool = Depends(
     return create_success_response(result, "Code search completed successfully")
 
 
-@router.post("/development/analyze-speedup", response_model=DataResponse[AIStackAgentPayload])
+@router.post("/development/analyze-speedup", response_model=DataResponse[DevelopmentSpeedupResult])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="analyze_development_speedup",
@@ -467,7 +444,7 @@ async def analyze_development_speedup(
 # ====================================================================
 
 
-@router.post("/classification/classify", response_model=DataResponse[AIStackAgentPayload])
+@router.post("/classification/classify", response_model=DataResponse[ClassificationResult])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="classify_content",
@@ -632,7 +609,7 @@ async def multi_agent_query(
 # ====================================================================
 
 
-@router.post("/legacy/rag-search", response_model=DataResponse[AIStackAgentPayload])
+@router.post("/legacy/rag-search", response_model=DataResponse[RAGQueryResult])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="legacy_rag_search",
@@ -652,7 +629,7 @@ async def legacy_rag_search(
     return await rag_query(request)
 
 
-@router.post("/legacy/enhanced-chat", response_model=DataResponse[AIStackAgentPayload])
+@router.post("/legacy/enhanced-chat", response_model=DataResponse[EnhancedChatResult])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="legacy_enhanced_chat",
@@ -660,7 +637,7 @@ async def legacy_rag_search(
 )
 async def legacy_enhanced_chat(
     message: str,
-    context: Optional[str] = None,
+    context: str | None = None,
     admin_check: bool = Depends(check_admin_permission),
 ):
     """

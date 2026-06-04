@@ -5,17 +5,17 @@ Analyzes codebase for performance bottlenecks, memory leaks, and processing inef
 
 import ast
 import json
-import logging
 import re
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.logging_manager import get_logger
 from constants.ttl_constants import TTL_1_HOUR
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level tuple for loop AST types
 _LOOP_TYPES = (ast.For, ast.While)
@@ -27,7 +27,7 @@ class PerformanceIssue:
 
     file_path: str
     line_number: int
-    function_name: Optional[str]
+    function_name: str | None
     issue_type: str  # memory_leak, blocking_call, inefficient_loop, etc.
     description: str
     severity: str  # critical, high, medium, low
@@ -338,7 +338,7 @@ class PerformanceAnalyzer:
 
         return []
 
-    def _analyze_loop_efficiency(self, node: ast.For, file_path: str, lines: List[str]) -> Optional[PerformanceIssue]:
+    def _analyze_loop_efficiency(self, node: ast.For, file_path: str, lines: List[str]) -> PerformanceIssue | None:
         """Analyze loop for efficiency issues"""
 
         # Check for nested loops (potential O(n²) or worse)
@@ -399,7 +399,7 @@ class PerformanceAnalyzer:
 
         return issues
 
-    def _analyze_database_call(self, node: ast.Call, file_path: str, lines: List[str]) -> Optional[PerformanceIssue]:
+    def _analyze_database_call(self, node: ast.Call, file_path: str, lines: List[str]) -> PerformanceIssue | None:
         """Analyze database calls for efficiency"""
 
         call_name = self._get_call_name(node)
@@ -429,7 +429,7 @@ class PerformanceAnalyzer:
         code_match: str,
         category: str,
         lines: List[str],
-    ) -> Optional[PerformanceIssue]:
+    ) -> PerformanceIssue | None:
         """Create a PerformanceIssue object"""
 
         # Get context
@@ -530,7 +530,7 @@ class PerformanceAnalyzer:
         else:
             return str(node.func)
 
-    def _get_containing_function(self, node: ast.AST) -> Optional[str]:
+    def _get_containing_function(self, node: ast.AST) -> str | None:
         """Get the name of the function containing this node"""
         # This would require maintaining parent references in AST
         # Simplified implementation

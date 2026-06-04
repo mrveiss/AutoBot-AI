@@ -12,7 +12,7 @@ Supports multiple SSO providers:
 import uuid
 from datetime import datetime, timezone
 from enum import Enum
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -31,6 +31,7 @@ class SSOProviderType(str, Enum):
     # Enterprise SSO
     LDAP = "ldap"
     ACTIVE_DIRECTORY = "active_directory"
+    OKTA = "okta"
     SAML = "saml"
     MICROSOFT_ENTRA = "microsoft_entra"
     GOOGLE_WORKSPACE = "google_workspace"
@@ -58,7 +59,7 @@ class SSOProvider(Base, TimestampMixin):
     )
 
     # Organization (nullable for global/social providers)
-    org_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    org_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=True,
@@ -107,7 +108,7 @@ class SSOProvider(Base, TimestampMixin):
     )
 
     # Default role for users created via this provider
-    default_role: Mapped[Optional[str]] = mapped_column(
+    default_role: Mapped[str | None] = mapped_column(
         String(100),
         nullable=True,
         default="user",
@@ -121,13 +122,13 @@ class SSOProvider(Base, TimestampMixin):
     )
 
     # Last successful sync (for LDAP/AD)
-    last_sync_at: Mapped[Optional[datetime]] = mapped_column(
+    last_sync_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
 
     # Relationships
-    organization: Mapped[Optional["Organization"]] = relationship(
+    organization: Mapped["Organization | None"] = relationship(
         "Organization",
         back_populates="sso_providers",
     )
@@ -195,7 +196,7 @@ class UserSSOLink(Base, TimestampMixin):
     )
 
     # External email (may differ from user's primary email)
-    external_email: Mapped[Optional[str]] = mapped_column(
+    external_email: Mapped[str | None] = mapped_column(
         String(255),
         nullable=True,
     )
@@ -209,7 +210,7 @@ class UserSSOLink(Base, TimestampMixin):
     )
 
     # Last login via this SSO provider
-    last_login_at: Mapped[Optional[datetime]] = mapped_column(
+    last_login_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )

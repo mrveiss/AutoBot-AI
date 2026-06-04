@@ -9,15 +9,15 @@ hybrid search, and index info — using Redis Stack 7.4.0 FT.* commands.
 Issue #2623: Transparent text-to-embedding conversion via NPU/Ollama fallback.
 """
 
-import logging
 import re
 import struct
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from type_defs.common import Metadata
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Upper bound for KNN top_k to prevent resource exhaustion (#2511)
 _MAX_TOP_K = 500
@@ -56,7 +56,7 @@ def _build_index_schema(
     vector_field: str,
     dimensions: int,
     distance_metric: str,
-    extra_fields: Optional[List[Dict[str, str]]] = None,
+    extra_fields: List[Dict[str, str]] | None = None,
 ) -> List[Any]:
     """Build FT.CREATE SCHEMA arguments for a vector index (#2511)."""
     schema: List[Any] = []
@@ -86,7 +86,7 @@ async def handle_redis_vector_create_index(
     vector_field: str = "embedding",
     dimensions: int = 1536,
     distance_metric: str = "COSINE",
-    extra_fields: Optional[List[Dict[str, str]]] = None,
+    extra_fields: List[Dict[str, str]] | None = None,
     database: str = "vectors",
 ) -> Metadata:
     """Create a RediSearch vector index using HNSW."""
@@ -123,13 +123,13 @@ async def handle_redis_vector_create_index(
 
 async def _execute_vector_query(
     query_str: str,
-    query_vector: Optional[List[float]],
-    query_text: Optional[str],
+    query_vector: List[float] | None,
+    query_text: str | None,
     index_name: str,
     top_k: int,
-    return_fields: Optional[List[str]],
+    return_fields: List[str] | None,
     database: str,
-    extra_meta: Optional[Dict[str, Any]] = None,
+    extra_meta: Dict[str, Any] | None = None,
 ) -> Metadata:
     """Shared KNN query execution for vector and hybrid search (#2511)."""
     if query_vector is None and query_text is None:
@@ -175,11 +175,11 @@ async def _execute_vector_query(
 
 
 async def handle_redis_vector_search(
-    query_vector: Optional[List[float]] = None,
-    query_text: Optional[str] = None,
+    query_vector: List[float] | None = None,
+    query_text: str | None = None,
     index_name: str = "idx:agent_memory",
     top_k: int = 10,
-    return_fields: Optional[List[str]] = None,
+    return_fields: List[str] | None = None,
     database: str = "vectors",
 ) -> Metadata:
     """Similarity search by embedding vector or text (Issue #2623)."""
@@ -197,12 +197,12 @@ async def handle_redis_vector_search(
 
 
 async def handle_redis_hybrid_search(
-    query_vector: Optional[List[float]] = None,
-    query_text: Optional[str] = None,
+    query_vector: List[float] | None = None,
+    query_text: str | None = None,
     filter_expression: str = "",
     index_name: str = "idx:agent_memory",
     top_k: int = 10,
-    return_fields: Optional[List[str]] = None,
+    return_fields: List[str] | None = None,
     database: str = "vectors",
 ) -> Metadata:
     """Vector + filter combined query (Issue #2623: accepts query_text)."""

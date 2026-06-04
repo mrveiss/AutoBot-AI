@@ -9,11 +9,11 @@ Extracted from voice_processing_system.py as part of Issue #381 god class refact
 """
 
 import asyncio
-import logging
 import re
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
+from autobot_shared.logging_manager import get_logger
 from enhanced_memory_manager_async import TaskPriority
 from task_execution_tracker import get_task_tracker
 from voice_processing.constants import (
@@ -32,7 +32,7 @@ from voice_processing.constants import (
 from voice_processing.models import VoiceCommandAnalysis
 from voice_processing.types import VoiceCommand
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class NaturalLanguageProcessor:
@@ -205,7 +205,7 @@ class NaturalLanguageProcessor:
     async def _run_analysis_pipeline(
         self,
         transcription: str,
-        context: Optional[Dict[str, Any]],
+        context: Dict[str, Any] | None,
         task_context: Any,
     ) -> VoiceCommandAnalysis:
         """Helper for analyze_voice_command. Ref: #1088.
@@ -254,7 +254,7 @@ class NaturalLanguageProcessor:
         return analysis
 
     async def analyze_voice_command(
-        self, transcription: str, context: Optional[Dict[str, Any]] = None
+        self, transcription: str, context: Dict[str, Any] | None = None
     ) -> VoiceCommandAnalysis:
         """Analyze voice command for intent and parameters"""
 
@@ -394,7 +394,7 @@ class NaturalLanguageProcessor:
         command_type: VoiceCommand,
         intent: str,
         parameters: Dict[str, Any],
-        context: Optional[Dict[str, Any]],
+        context: Dict[str, Any] | None,
     ) -> bool:
         """Determine if command needs additional context"""
 

@@ -8,21 +8,21 @@ based on the step's target property (vnc or web).
 """
 
 import asyncio
-import logging
-import os
 import time
 from typing import Any
 
 import httpx
 
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 from autobot_shared.ssot_config import config as ssot_config
 
 # TLS verification for outbound calls to internal vision/browser services.
 # Set AUTOBOT_SKIP_TLS_VERIFY=true ONLY in dev/test environments that use
 # self-signed certificates.  Production must leave this unset (#2852).
-_VERIFY_TLS = os.environ.get("AUTOBOT_SKIP_TLS_VERIFY", "").lower() != "true"
+_VERIFY_TLS = config.skip_tls_verify.lower() != "true"
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Map vision node types to their VNC API endpoints
 _VNC_ENDPOINT: dict[str, str] = {

@@ -9,15 +9,15 @@ age, and activity to enable early detection of problematic branches.
 """
 
 import asyncio
-import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import List, Optional, Tuple
+from typing import List, Tuple
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
 from autobot_shared.time_utils import now_utc, parse_utc_iso
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -37,8 +37,8 @@ class BranchMetrics:
 
     branch: str
     divergence: BranchDivergence
-    created_at: Optional[datetime] = None
-    last_activity: Optional[datetime] = None
+    created_at: datetime | None = None
+    last_activity: datetime | None = None
     days_since_activity: float = 0
     file_conflict_density: float = 0.0
     is_stale: bool = False
@@ -50,7 +50,7 @@ class BranchMetricsCollector:
 
     def __init__(
         self,
-        repo_path: Optional[str] = None,
+        repo_path: str | None = None,
         base_branch: str = "Dev_new_gui",
         stale_threshold_days: int = 30,
     ):
@@ -98,7 +98,7 @@ class BranchMetricsCollector:
         divergence.total_commits_diverged = divergence.ahead + divergence.behind
         return divergence
 
-    async def get_branch_last_activity(self, branch: str) -> Optional[datetime]:
+    async def get_branch_last_activity(self, branch: str) -> datetime | None:
         """Get last commit timestamp on branch."""
         timestamp_out, code = await self._run_git_cmd("log", "-1", "--format=%ai", branch)
 
@@ -176,7 +176,7 @@ class BranchMetricsCollector:
 
 
 async def get_unhealthy_branches(
-    repo_path: Optional[str] = None,
+    repo_path: str | None = None,
     base_branch: str = "Dev_new_gui",
     health_threshold: float = 50.0,
 ) -> List[BranchMetrics]:
@@ -187,7 +187,7 @@ async def get_unhealthy_branches(
 
 
 async def get_highly_diverged_branches(
-    repo_path: Optional[str] = None,
+    repo_path: str | None = None,
     base_branch: str = "Dev_new_gui",
     threshold: int = 20,
 ) -> List[BranchMetrics]:

@@ -13,24 +13,24 @@ Issue #358: Fixed file I/O to use proper context managers with asyncio.to_thread
 import asyncio
 import csv
 import json
-import logging
 from datetime import datetime, timezone
 from io import StringIO
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import parse_utc_iso
 
 if TYPE_CHECKING:
     import aioredis
     import redis
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # ===== Helper functions for date filtering (Issue #398: extracted) =====
 
 
-def _parse_date_bound(date_str: Optional[str], is_end_date: bool = False) -> Optional[datetime]:
+def _parse_date_bound(date_str: str | None, is_end_date: bool = False) -> datetime | None:
     """
     Parse a date string to tz-aware UTC datetime.
 
@@ -57,7 +57,7 @@ def _parse_date_bound(date_str: Optional[str], is_end_date: bool = False) -> Opt
         return None
 
 
-def _parse_fact_timestamp(timestamp_str: Any) -> Optional[datetime]:
+def _parse_fact_timestamp(timestamp_str: Any) -> datetime | None:
     """
     Parse fact timestamp to datetime.
 
@@ -136,12 +136,12 @@ class BulkOperationsMixin:
 
     async def _get_export_facts(
         self,
-        fact_ids: Optional[List[str]],
-        category: Optional[str],
-        categories: Optional[List[str]],
-        tags: Optional[List[str]],
-        date_from: Optional[str],
-        date_to: Optional[str],
+        fact_ids: List[str] | None,
+        category: str | None,
+        categories: List[str] | None,
+        tags: List[str] | None,
+        date_from: str | None,
+        date_to: str | None,
     ) -> List[Dict[str, Any]]:
         """Get and filter facts for export (Issue #398: extracted)."""
         facts = await self._get_facts_by_ids(fact_ids) if fact_ids else await self.get_all_facts()
@@ -153,13 +153,13 @@ class BulkOperationsMixin:
     async def export_facts(
         self,
         format: str = "json",
-        output_file: Optional[str] = None,
-        category: Optional[str] = None,
-        categories: Optional[List[str]] = None,
-        tags: Optional[List[str]] = None,
-        date_from: Optional[str] = None,
-        date_to: Optional[str] = None,
-        fact_ids: Optional[List[str]] = None,
+        output_file: str | None = None,
+        category: str | None = None,
+        categories: List[str] | None = None,
+        tags: List[str] | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
+        fact_ids: List[str] | None = None,
         include_embeddings: bool = False,
         include_metadata: bool = True,
         include_tags: bool = True,
@@ -183,14 +183,14 @@ class BulkOperationsMixin:
             logger.error("Export failed: %s", e)
             return {"status": "error", "message": "Bulk operation failed"}
 
-    def _apply_category_filter(self, facts: List[Dict[str, Any]], category: Optional[str]) -> List[Dict[str, Any]]:
+    def _apply_category_filter(self, facts: List[Dict[str, Any]], category: str | None) -> List[Dict[str, Any]]:
         """Filter facts by single category (legacy support)."""
         if not category:
             return facts
         return [f for f in facts if f.get("metadata", {}).get("category") == category]
 
     def _apply_categories_filter(
-        self, facts: List[Dict[str, Any]], categories: Optional[List[str]]
+        self, facts: List[Dict[str, Any]], categories: List[str] | None
     ) -> List[Dict[str, Any]]:
         """
         Filter facts by multiple categories (any match).
@@ -242,7 +242,7 @@ class BulkOperationsMixin:
 
         return result
 
-    def _apply_tags_filter(self, facts: List[Dict[str, Any]], tags: Optional[List[str]]) -> List[Dict[str, Any]]:
+    def _apply_tags_filter(self, facts: List[Dict[str, Any]], tags: List[str] | None) -> List[Dict[str, Any]]:
         """Filter facts by tags (match any)."""
         if not tags:
             return facts
@@ -256,8 +256,8 @@ class BulkOperationsMixin:
     def _apply_date_filter(
         self,
         facts: List[Dict[str, Any]],
-        date_from: Optional[str],
-        date_to: Optional[str],
+        date_from: str | None,
+        date_to: str | None,
     ) -> List[Dict[str, Any]]:
         """
         Filter facts by date range.
@@ -287,8 +287,8 @@ class BulkOperationsMixin:
     def _filter_facts_by_date_range(
         self,
         facts: List[Dict[str, Any]],
-        from_dt: Optional[datetime],
-        to_dt: Optional[datetime],
+        from_dt: datetime | None,
+        to_dt: datetime | None,
     ) -> List[Dict[str, Any]]:
         """
         Filter facts by parsed date range.
@@ -317,7 +317,7 @@ class BulkOperationsMixin:
 
         return filtered
 
-    def _decode_redis_field(self, data: dict, *keys: str) -> Optional[str]:
+    def _decode_redis_field(self, data: dict, *keys: str) -> str | None:
         """Decode a Redis field value (Issue #398: extracted)."""
         for key in keys:
             value = data.get(key.encode()) or data.get(key)
@@ -381,7 +381,7 @@ class BulkOperationsMixin:
 
         return facts
 
-    def _format_output(self, facts: List[Dict[str, Any]], format: str) -> Optional[str]:
+    def _format_output(self, facts: List[Dict[str, Any]], format: str) -> str | None:
         """Format facts based on export format."""
         formatters = {
             "json": self._format_export_json,
@@ -395,7 +395,7 @@ class BulkOperationsMixin:
         self,
         facts: List[Dict[str, Any]],
         output: str,
-        output_file: Optional[str],
+        output_file: str | None,
     ) -> Dict[str, Any]:
         """Build export result, optionally saving to file."""
         if output_file:
@@ -458,7 +458,7 @@ class BulkOperationsMixin:
 
         return "\n".join(lines)
 
-    async def _get_import_content(self, source_file: Optional[str], data: Optional[str]) -> tuple:
+    async def _get_import_content(self, source_file: str | None, data: str | None) -> tuple:
         """Get content for import from file or data (Issue #398: extracted)."""
         if source_file:
             return await asyncio.to_thread(_read_file_sync, source_file), None
@@ -553,8 +553,8 @@ class BulkOperationsMixin:
 
     async def import_facts(
         self,
-        source_file: Optional[str] = None,
-        data: Optional[str] = None,
+        source_file: str | None = None,
+        data: str | None = None,
         format: str = "json",
         skip_duplicates: bool = True,
         validate_only: bool = False,
@@ -688,7 +688,7 @@ class BulkOperationsMixin:
 
         return metadata, errors
 
-    def _normalize_fact_id(self, fact_data: Dict[str, Any]) -> Optional[str]:
+    def _normalize_fact_id(self, fact_data: Dict[str, Any]) -> str | None:
         """
         Normalize fact_id to string.
 
@@ -777,7 +777,7 @@ class BulkOperationsMixin:
         fact_data: Dict[str, Any],
         skip_duplicates: bool,
         overwrite_existing: bool,
-    ) -> Optional[Dict[str, Any]]:
+    ) -> Dict[str, Any] | None:
         """
         Handle import when fact already exists.
 
@@ -907,7 +907,7 @@ class BulkOperationsMixin:
         self,
         similarity_threshold: float = 0.95,
         use_embeddings: bool = False,
-        category: Optional[str] = None,
+        category: str | None = None,
         max_results: int = 100,
     ) -> Dict[str, Any]:
         """Find duplicate facts by hash or embedding similarity (Issue #398: refactored)."""
@@ -1315,7 +1315,7 @@ class BulkOperationsMixin:
 
     async def create_backup(
         self,
-        backup_dir: Optional[str] = None,
+        backup_dir: str | None = None,
         include_embeddings: bool = True,
         include_metadata: bool = True,
         compression: bool = True,
@@ -1360,7 +1360,7 @@ class BulkOperationsMixin:
             logger.error("Backup failed: %s", e)
             return {"status": "error", "message": "Bulk operation failed"}
 
-    def _get_backup_dir(self, backup_dir: Optional[str]) -> str:
+    def _get_backup_dir(self, backup_dir: str | None) -> str:
         """
         Get backup directory path.
 
@@ -1519,7 +1519,7 @@ class BulkOperationsMixin:
             content = await asyncio.to_thread(_read_file_sync, backup_file)
         return json.loads(content)
 
-    def _validate_backup_data(self, backup_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    def _validate_backup_data(self, backup_data: Dict[str, Any]) -> Dict[str, Any] | None:
         """
         Validate backup data format.
 
@@ -1655,7 +1655,7 @@ class BulkOperationsMixin:
         metadata: Dict[str, Any],
         overwrite_existing: bool,
         skip_duplicates: bool,
-    ) -> Optional[Dict[str, Any]]:
+    ) -> Dict[str, Any] | None:
         """
         Handle restore when fact exists.
 
@@ -1681,7 +1681,7 @@ class BulkOperationsMixin:
         fact_data: Dict[str, Any],
         content: str,
         metadata: Dict[str, Any],
-        fact_id: Optional[str],
+        fact_id: str | None,
         restore_embeddings: bool,
     ) -> Dict[str, Any]:
         """
@@ -1777,7 +1777,7 @@ class BulkOperationsMixin:
                 )
         return backups
 
-    async def list_backups(self, backup_dir: Optional[str] = None, limit: int = 50) -> Dict[str, Any]:
+    async def list_backups(self, backup_dir: str | None = None, limit: int = 50) -> Dict[str, Any]:
         """List available backups (Issue #398: refactored)."""
         import os
 

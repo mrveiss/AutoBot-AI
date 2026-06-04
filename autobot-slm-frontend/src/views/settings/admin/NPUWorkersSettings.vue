@@ -279,7 +279,7 @@ onUnmounted(() => {
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
       </svg>
       {{ error }}
-      <button @click="error = null" class="ml-auto text-red-500 hover:text-red-700">
+      <button @click="error = null" class="ml-auto text-red-500 hover:text-red-700" aria-label="Dismiss error">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
         </svg>
@@ -297,8 +297,8 @@ onUnmounted(() => {
     <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
       <div class="flex items-center justify-between mb-6">
         <div>
-          <h2 class="text-lg font-semibold text-gray-900">NPU Worker Management</h2>
-          <p class="text-sm text-gray-500 mt-1">Manage distributed NPU workers for AI processing</p>
+          <h2 class="text-lg font-semibold text-gray-900">{{ $t('settings.admin.nPUWorkersSettings.nPUWorkerManagement') }}</h2>
+          <p class="text-sm text-gray-500 mt-1">{{ $t('settings.admin.nPUWorkersSettings.manageDistributedNPUWorkers') }}</p>
         </div>
         <button
           @click="openAddModal"
@@ -307,7 +307,7 @@ onUnmounted(() => {
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
           </svg>
-          Pair Worker
+          {{ $t('settings.admin.nPUWorkersSettings.pairWorker') }}
         </button>
       </div>
 
@@ -315,19 +315,19 @@ onUnmounted(() => {
       <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div class="p-4 bg-gray-50 rounded-lg text-center">
           <p class="text-2xl font-bold text-gray-900">{{ workers.length }}</p>
-          <p class="text-sm text-gray-500">Total Workers</p>
+          <p class="text-sm text-gray-500">{{ $t('settings.admin.nPUWorkersSettings.totalWorkers') }}</p>
         </div>
         <div class="p-4 bg-green-50 rounded-lg text-center">
           <p class="text-2xl font-bold text-green-600">{{ healthyWorkers }}</p>
-          <p class="text-sm text-gray-500">Online</p>
+          <p class="text-sm text-gray-500">{{ $t('settings.admin.nPUWorkersSettings.online') }}</p>
         </div>
         <div class="p-4 bg-amber-50 rounded-lg text-center">
           <p class="text-2xl font-bold text-amber-600">{{ busyWorkers }}</p>
-          <p class="text-sm text-gray-500">Busy</p>
+          <p class="text-sm text-gray-500">{{ $t('settings.admin.nPUWorkersSettings.busy') }}</p>
         </div>
         <div class="p-4 bg-red-50 rounded-lg text-center">
           <p class="text-2xl font-bold text-red-600">{{ offlineWorkers }}</p>
-          <p class="text-sm text-gray-500">Offline</p>
+          <p class="text-sm text-gray-500">{{ $t('settings.admin.nPUWorkersSettings.offline') }}</p>
         </div>
       </div>
     </div>
@@ -338,26 +338,26 @@ onUnmounted(() => {
         <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3" />
         </svg>
-        Load Balancing Configuration
+        {{ $t('settings.admin.nPUWorkersSettings.loadBalancingConfiguration') }}
       </h3>
 
       <div class="grid md:grid-cols-2 gap-6">
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Strategy</label>
+          <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.nPUWorkersSettings.strategy') }}</label>
           <select
             v-model="loadBalancingConfig.strategy"
             class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
           >
-            <option value="round-robin">Round Robin</option>
-            <option value="least-loaded">Least Loaded</option>
-            <option value="weighted">Weighted</option>
-            <option value="priority">Priority Based</option>
+            <option value="round-robin">{{ $t('settings.admin.nPUWorkersSettings.roundRobin') }}</option>
+            <option value="least-loaded">{{ $t('settings.admin.nPUWorkersSettings.leastLoaded') }}</option>
+            <option value="weighted">{{ $t('settings.admin.nPUWorkersSettings.weighted') }}</option>
+            <option value="priority">{{ $t('settings.admin.nPUWorkersSettings.priorityBased') }}</option>
           </select>
-          <p class="text-xs text-gray-500 mt-1">Distribution strategy for task allocation</p>
+          <p class="text-xs text-gray-500 mt-1">{{ $t('settings.admin.nPUWorkersSettings.distributionStrategyForTask') }}</p>
         </div>
 
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Health Check Interval (seconds)</label>
+          <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.nPUWorkersSettings.healthCheckIntervalSeconds') }}</label>
           <input
             v-model.number="loadBalancingConfig.health_check_interval"
             type="number"
@@ -365,7 +365,7 @@ onUnmounted(() => {
             max="300"
             class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
           />
-          <p class="text-xs text-gray-500 mt-1">Seconds between health checks</p>
+          <p class="text-xs text-gray-500 mt-1">{{ $t('settings.admin.nPUWorkersSettings.secondsBetweenHealthChecks') }}</p>
         </div>
       </div>
 
@@ -382,7 +382,7 @@ onUnmounted(() => {
           <svg v-else class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
           </svg>
-          Save Configuration
+          {{ $t('settings.admin.nPUWorkersSettings.saveConfiguration') }}
         </button>
       </div>
     </div>
@@ -395,6 +395,7 @@ onUnmounted(() => {
           @click="fetchWorkers"
           :disabled="loading"
           class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-sm"
+          aria-label="Refresh workers"
         >
           <svg :class="['w-5 h-5', loading && 'animate-spin']" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -415,12 +416,12 @@ onUnmounted(() => {
         <svg class="w-12 h-12 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" />
         </svg>
-        <p class="text-gray-500 mb-4">No NPU workers registered</p>
+        <p class="text-gray-500 mb-4">{{ $t('settings.admin.nPUWorkersSettings.noNPUWorkersRegistered') }}</p>
         <button
           @click="openAddModal"
           class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
         >
-          Pair Your First Worker
+          {{ $t('settings.admin.nPUWorkersSettings.pairYourFirstWorker') }}
         </button>
       </div>
 
@@ -429,12 +430,12 @@ onUnmounted(() => {
         <table class="w-full">
           <thead>
             <tr class="border-b border-gray-200 bg-gray-50">
-              <th class="text-left py-3 px-4 text-sm font-medium text-gray-500">Worker</th>
-              <th class="text-left py-3 px-4 text-sm font-medium text-gray-500">Status</th>
-              <th class="text-left py-3 px-4 text-sm font-medium text-gray-500">Load</th>
-              <th class="text-left py-3 px-4 text-sm font-medium text-gray-500">Capabilities</th>
-              <th class="text-left py-3 px-4 text-sm font-medium text-gray-500">Last Heartbeat</th>
-              <th class="text-right py-3 px-4 text-sm font-medium text-gray-500">Actions</th>
+              <th class="text-left py-3 px-4 text-sm font-medium text-gray-500">{{ $t('settings.admin.nPUWorkersSettings.worker') }}</th>
+              <th class="text-left py-3 px-4 text-sm font-medium text-gray-500">{{ $t('settings.admin.nPUWorkersSettings.status') }}</th>
+              <th class="text-left py-3 px-4 text-sm font-medium text-gray-500">{{ $t('settings.admin.nPUWorkersSettings.load') }}</th>
+              <th class="text-left py-3 px-4 text-sm font-medium text-gray-500">{{ $t('settings.admin.nPUWorkersSettings.capabilities') }}</th>
+              <th class="text-left py-3 px-4 text-sm font-medium text-gray-500">{{ $t('settings.admin.nPUWorkersSettings.lastHeartbeat') }}</th>
+              <th class="text-right py-3 px-4 text-sm font-medium text-gray-500">{{ $t('settings.admin.nPUWorkersSettings.actions') }}</th>
             </tr>
           </thead>
           <tbody>
@@ -570,7 +571,7 @@ onUnmounted(() => {
 
         <div class="space-y-4">
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Worker Name *</label>
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.nPUWorkersSettings.workerName') }}</label>
             <input
               v-model="workerForm.name"
               type="text"
@@ -581,18 +582,18 @@ onUnmounted(() => {
 
           <div class="grid grid-cols-2 gap-4">
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">Platform *</label>
+              <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.nPUWorkersSettings.platform') }}</label>
               <select
                 v-model="workerForm.platform"
                 class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
               >
-                <option value="linux">Linux</option>
-                <option value="windows">Windows</option>
-                <option value="macos">macOS</option>
+                <option value="linux">{{ $t('settings.admin.nPUWorkersSettings.linux') }}</option>
+                <option value="windows">{{ $t('settings.admin.nPUWorkersSettings.windows') }}</option>
+                <option value="macos">{{ $t('settings.admin.nPUWorkersSettings.macOS') }}</option>
               </select>
             </div>
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">Port *</label>
+              <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.nPUWorkersSettings.port') }}</label>
               <input
                 v-model.number="workerForm.port"
                 type="number"
@@ -603,7 +604,7 @@ onUnmounted(() => {
           </div>
 
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">IP Address *</label>
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.nPUWorkersSettings.iPAddress') }}</label>
             <input
               v-model="workerForm.ip_address"
               type="text"
@@ -618,7 +619,7 @@ onUnmounted(() => {
             @click="closeModal"
             class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
           >
-            Cancel
+            {{ $t('settings.admin.nPUWorkersSettings.cancel') }}
           </button>
           <button
             @click="saveWorker"
@@ -639,16 +640,16 @@ onUnmounted(() => {
     <div v-if="deleteTarget" class="fixed inset-0 z-50 flex items-center justify-center">
       <div class="absolute inset-0 bg-black/50" @click="deleteTarget = null"></div>
       <div class="relative bg-white rounded-lg shadow-xl w-full max-w-md p-6">
-        <h3 class="text-lg font-semibold text-gray-900 mb-4">Remove Worker</h3>
+        <h3 class="text-lg font-semibold text-gray-900 mb-4">{{ $t('settings.admin.nPUWorkersSettings.removeWorker') }}</h3>
         <p class="text-gray-600 mb-6">
-          Are you sure you want to remove <strong>{{ deleteTarget.hostname }}</strong>? This action cannot be undone.
+          {{ $t('settings.admin.nPUWorkersSettings.areYouSureYou') }} <strong>{{ deleteTarget.hostname }}</strong>{{ $t('settings.admin.nPUWorkersSettings.thisActionCannotBe') }}
         </p>
         <div class="flex justify-end gap-3">
           <button
             @click="deleteTarget = null"
             class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
           >
-            Cancel
+            {{ $t('settings.admin.nPUWorkersSettings.cancel') }}
           </button>
           <button
             @click="deleteWorker"
@@ -659,7 +660,7 @@ onUnmounted(() => {
               <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
               <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
             </svg>
-            Remove
+            {{ $t('settings.admin.nPUWorkersSettings.remove') }}
           </button>
         </div>
       </div>
@@ -671,7 +672,7 @@ onUnmounted(() => {
       <div class="relative bg-white rounded-lg shadow-xl w-full max-w-lg p-6">
         <div class="flex items-center justify-between mb-4">
           <h3 class="text-lg font-semibold text-gray-900">{{ selectedWorkerMetrics.hostname }} Metrics</h3>
-          <button @click="showMetrics = false" class="text-gray-400 hover:text-gray-600">
+          <button @click="showMetrics = false" class="text-gray-400 hover:text-gray-600" aria-label="Close">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
             </svg>
@@ -681,11 +682,11 @@ onUnmounted(() => {
         <div class="space-y-4">
           <div class="grid grid-cols-2 gap-4">
             <div class="p-4 bg-gray-50 rounded-lg">
-              <p class="text-sm text-gray-500">Current Load</p>
+              <p class="text-sm text-gray-500">{{ $t('settings.admin.nPUWorkersSettings.currentLoad') }}</p>
               <p class="text-xl font-semibold text-gray-900">{{ selectedWorkerMetrics.current_load }}%</p>
             </div>
             <div class="p-4 bg-gray-50 rounded-lg">
-              <p class="text-sm text-gray-500">Status</p>
+              <p class="text-sm text-gray-500">{{ $t('settings.admin.nPUWorkersSettings.status') }}</p>
               <p class="text-xl font-semibold" :class="selectedWorkerMetrics.status === 'online' ? 'text-green-600' : 'text-gray-600'">
                 {{ selectedWorkerMetrics.status }}
               </p>
@@ -693,7 +694,7 @@ onUnmounted(() => {
           </div>
 
           <div class="p-4 bg-gray-50 rounded-lg">
-            <p class="text-sm text-gray-500 mb-2">Capabilities</p>
+            <p class="text-sm text-gray-500 mb-2">{{ $t('settings.admin.nPUWorkersSettings.capabilities') }}</p>
             <div class="flex flex-wrap gap-2">
               <span
                 v-for="cap in selectedWorkerMetrics.capabilities"
@@ -706,7 +707,7 @@ onUnmounted(() => {
           </div>
 
           <div class="p-4 bg-gray-50 rounded-lg">
-            <p class="text-sm text-gray-500">Last Heartbeat</p>
+            <p class="text-sm text-gray-500">{{ $t('settings.admin.nPUWorkersSettings.lastHeartbeat') }}</p>
             <p class="font-medium text-gray-900">{{ selectedWorkerMetrics.last_heartbeat || 'Never' }}</p>
           </div>
         </div>
@@ -716,7 +717,7 @@ onUnmounted(() => {
             @click="showMetrics = false"
             class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
           >
-            Close
+            {{ $t('settings.admin.nPUWorkersSettings.close') }}
           </button>
         </div>
       </div>

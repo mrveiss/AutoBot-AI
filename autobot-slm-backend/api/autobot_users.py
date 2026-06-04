@@ -14,7 +14,8 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from services.auth import require_admin
+from autobot_shared.auth.permissions import Permission
+from services.auth import require_permission
 from user_management.database import get_autobot_session
 from user_management.schemas.user import (
     PasswordChange,
@@ -39,7 +40,7 @@ async def get_autobot_db():
 @router.post("", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def create_autobot_user(
     user_data: UserCreate,
-    current_user: dict = Depends(require_admin),
+    current_user: dict = Depends(require_permission(Permission.ADMIN_USERS_WRITE)),
     db: AsyncSession = Depends(get_autobot_db),
 ) -> UserResponse:
     """Create a new AutoBot application user."""
@@ -66,7 +67,7 @@ async def list_autobot_users(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
     search: str = Query(None),
-    current_user: dict = Depends(require_admin),
+    current_user: dict = Depends(require_permission(Permission.ADMIN_USERS_WRITE)),
     db: AsyncSession = Depends(get_autobot_db),
 ) -> UserListResponse:
     """List AutoBot application users with pagination and search."""
@@ -86,7 +87,7 @@ async def list_autobot_users(
 @router.get("/{user_id}", response_model=UserResponse)
 async def get_autobot_user(
     user_id: uuid.UUID,
-    current_user: dict = Depends(require_admin),
+    current_user: dict = Depends(require_permission(Permission.ADMIN_USERS_WRITE)),
     db: AsyncSession = Depends(get_autobot_db),
 ) -> UserResponse:
     """Get AutoBot user by ID."""
@@ -103,7 +104,7 @@ async def get_autobot_user(
 async def update_autobot_user(
     user_id: uuid.UUID,
     updates: UserUpdate,
-    current_user: dict = Depends(require_admin),
+    current_user: dict = Depends(require_permission(Permission.ADMIN_USERS_WRITE)),
     db: AsyncSession = Depends(get_autobot_db),
 ) -> UserResponse:
     """Update AutoBot user."""
@@ -131,7 +132,7 @@ async def update_autobot_user(
 async def change_autobot_user_password(
     user_id: uuid.UUID,
     payload: PasswordChange,
-    current_user: dict = Depends(require_admin),
+    current_user: dict = Depends(require_permission(Permission.ADMIN_USERS_WRITE)),
     db: AsyncSession = Depends(get_autobot_db),
 ) -> dict:
     """Reset an AutoBot user's password (admin action — no current password required)."""
@@ -154,7 +155,7 @@ async def change_autobot_user_password(
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_autobot_user(
     user_id: uuid.UUID,
-    current_user: dict = Depends(require_admin),
+    current_user: dict = Depends(require_permission(Permission.ADMIN_USERS_WRITE)),
     db: AsyncSession = Depends(get_autobot_db),
 ) -> None:
     """Delete AutoBot user."""

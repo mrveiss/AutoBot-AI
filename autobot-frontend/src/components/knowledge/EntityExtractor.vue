@@ -2,7 +2,7 @@
   <div class="entity-extractor">
     <!-- Header -->
     <div class="extractor-header">
-      <h4><i class="fas fa-brain"></i> {{ $t('knowledge.entityExtractor.title') }}</h4>
+      <h4><Icon name="brain" /> {{ $t('knowledge.entityExtractor.title') }}</h4>
       <p class="header-description">{{ $t('knowledge.entityExtractor.description') }}</p>
     </div>
 
@@ -10,7 +10,7 @@
     <div class="input-section">
       <div class="form-group">
         <label for="conversation-id">
-          <i class="fas fa-tag"></i> {{ $t('knowledge.entityExtractor.conversationId') }}
+          <Icon name="tag" /> {{ $t('knowledge.entityExtractor.conversationId') }}
           <span class="label-hint">{{ $t('knowledge.entityExtractor.conversationIdHint') }}</span>
         </label>
         <input
@@ -24,7 +24,7 @@
 
       <div class="form-group">
         <label for="text-input">
-          <i class="fas fa-file-alt"></i> {{ $t('knowledge.entityExtractor.textContent') }}
+          <Icon name="file-alt" /> {{ $t('knowledge.entityExtractor.textContent') }}
           <span class="label-hint">{{ $t('knowledge.entityExtractor.textContentHint') }}</span>
         </label>
         <textarea
@@ -42,7 +42,7 @@
             class="text-btn"
             :disabled="isExtracting || !textInput"
           >
-            <i class="fas fa-eraser"></i> {{ $t('knowledge.entityExtractor.clear') }}
+            <Icon name="pencil-alt" /> {{ $t('knowledge.entityExtractor.clear') }}
           </button>
           <button
             type="button"
@@ -50,7 +50,7 @@
             class="text-btn"
             :disabled="isExtracting"
           >
-            <i class="fas fa-flask"></i> {{ $t('knowledge.entityExtractor.loadSample') }}
+            <Icon name="vial" /> {{ $t('knowledge.entityExtractor.loadSample') }}
           </button>
         </div>
       </div>
@@ -61,8 +61,8 @@
           class="action-btn primary"
           :disabled="isExtracting || !textInput.trim() || !conversationId.trim()"
         >
-          <i v-if="isExtracting" class="fas fa-spinner fa-spin"></i>
-          <i v-else class="fas fa-magic"></i>
+          <Icon name="spinner" class="animate-spin" v-if="isExtracting" />
+          <Icon name="magic" v-else />
           {{ isExtracting ? $t('knowledge.entityExtractor.extracting') : $t('knowledge.entityExtractor.extractEntities') }}
         </button>
       </div>
@@ -71,9 +71,9 @@
     <!-- Results Section -->
     <div v-if="extractionResult" class="results-section">
       <div class="results-header">
-        <h5><i class="fas fa-check-circle"></i> {{ $t('knowledge.entityExtractor.extractionResults') }}</h5>
+        <h5><Icon name="check-circle" /> {{ $t('knowledge.entityExtractor.extractionResults') }}</h5>
         <span class="processing-time">
-          <i class="fas fa-clock"></i>
+          <Icon name="clock" />
           {{ extractionResult.processing_time.toFixed(2) }}s
         </span>
       </div>
@@ -94,7 +94,7 @@
       </div>
 
       <div v-if="extractionResult.errors?.length" class="errors-section">
-        <h6><i class="fas fa-exclamation-triangle"></i> {{ $t('knowledge.entityExtractor.warnings') }}</h6>
+        <h6><Icon name="exclamation-triangle" /> {{ $t('knowledge.entityExtractor.warnings') }}</h6>
         <ul class="error-list">
           <li v-for="(error, idx) in extractionResult.errors" :key="idx">
             {{ error }}
@@ -104,26 +104,26 @@
 
       <div class="result-actions">
         <button @click="viewInGraph" class="action-btn">
-          <i class="fas fa-project-diagram"></i> {{ $t('knowledge.entityExtractor.viewInGraph') }}
+          <Icon name="project-diagram" /> {{ $t('knowledge.entityExtractor.viewInGraph') }}
         </button>
         <button @click="clearResults" class="action-btn">
-          <i class="fas fa-times"></i> {{ $t('knowledge.entityExtractor.clearResults') }}
+          <Icon name="times" /> {{ $t('knowledge.entityExtractor.clearResults') }}
         </button>
       </div>
     </div>
 
     <!-- Error Notification -->
     <div v-if="errorMessage" class="error-notification" role="alert">
-      <i class="fas fa-exclamation-circle"></i>
+      <Icon name="exclamation-circle" />
       <span>{{ errorMessage }}</span>
       <button @click="errorMessage = ''" class="close-btn">
-        <i class="fas fa-times"></i>
+        <Icon name="times" />
       </button>
     </div>
 
     <!-- Extraction History -->
     <div v-if="extractionHistory.length > 0" class="history-section">
-      <h5><i class="fas fa-history"></i> {{ $t('knowledge.entityExtractor.recentExtractions') }}</h5>
+      <h5><Icon name="history" /> {{ $t('knowledge.entityExtractor.recentExtractions') }}</h5>
       <div class="history-list">
         <div
           v-for="item in extractionHistory"
@@ -167,6 +167,7 @@
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
 
+import Icon from '@/components/ui/Icon.vue'
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'

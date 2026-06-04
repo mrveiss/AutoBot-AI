@@ -8,15 +8,16 @@ Issue #381: Extracted from computer_vision_system.py god class refactoring.
 Contains classifiers for UI elements, template matching, and context analysis.
 """
 
-import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import numpy as np
+
+from autobot_shared.logging_manager import get_logger
 
 from .collections import UIElementCollection
 from .types import ElementType, UIElement
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ElementClassifier:
@@ -48,7 +49,7 @@ class ElementClassifier:
             },
         }
 
-    async def classify_element(self, element_region: Optional[np.ndarray], bbox: Dict[str, int]) -> ElementType:
+    async def classify_element(self, element_region: np.ndarray | None, bbox: Dict[str, int]) -> ElementType:
         """Classify an element based on its visual features"""
         if element_region is None:
             return ElementType.UNKNOWN

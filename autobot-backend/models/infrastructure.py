@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import enum
 from datetime import datetime
-from typing import Optional
 
 from pydantic import BaseModel, Field
 
@@ -60,9 +59,9 @@ class DockerDeploymentStatus(BaseModel):
     deployment_id: str
     node_id: str
     status: str
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
-    error: Optional[str] = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    error: str | None = None
 
 
 class DeploymentCreateRequest(BaseModel):
@@ -71,7 +70,7 @@ class DeploymentCreateRequest(BaseModel):
     role_name: str
     target_nodes: list[str]
     strategy: DeploymentStrategy = DeploymentStrategy.SEQUENTIAL
-    playbook_path: Optional[str] = None
+    playbook_path: str | None = None
 
 
 class DeploymentActionResponse(BaseModel):
@@ -80,4 +79,4 @@ class DeploymentActionResponse(BaseModel):
     deployment_id: str
     action: str
     success: bool
-    message: Optional[str] = None
+    message: str | None = None

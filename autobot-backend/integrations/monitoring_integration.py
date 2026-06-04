@@ -8,12 +8,12 @@ This module provides integration classes for popular monitoring platforms,
 enabling AutoBot to query metrics, monitors, and application health data.
 """
 
-import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List
 
 import aiohttp
 
+from autobot_shared.logging_manager import get_logger
 from integrations.base import (
     BaseIntegration,
     IntegrationAction,
@@ -22,7 +22,7 @@ from integrations.base import (
     IntegrationStatus,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class DatadogIntegration(BaseIntegration):

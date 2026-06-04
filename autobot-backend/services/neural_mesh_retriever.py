@@ -12,12 +12,13 @@ Routes queries by complexity:
 
 import asyncio
 import json
-import logging
 import time
 from dataclasses import dataclass
-from typing import Any, Callable, Coroutine, Optional, Protocol
+from typing import Any, Callable, Coroutine, Protocol
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 
 # =============================================================================
 # Agentic tool registry — maps LLM-visible names to human descriptions.
@@ -95,7 +96,7 @@ class NeuralMeshRetriever:
         reranker: Any,
         classifier: Any,
         mesh_db: Any,
-        llm: Optional[Callable[..., Coroutine[Any, Any, str]]] = None,
+        llm: Callable[..., Coroutine[Any, Any, str]] | None = None,
     ) -> None:
         """Inject all dependencies.
 

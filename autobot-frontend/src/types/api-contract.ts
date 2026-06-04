@@ -526,3 +526,11 @@ export type McpHealthResponse = components['schemas']['McpHealthResponse']
 
 /** `POST /rag-feedback` response. */
 export type RagFeedbackResponse = components['schemas']['RagFeedbackResponse']
+
+// --- user-management schemas (GH#7541) ----------------------------------------
+
+/** `GET /user-management/users/{user_id}` response. */
+export type UserResponse = components['schemas']['UserResponse']
+
+/** `GET /user-management/teams/{team_id}` response. */
+export type TeamResponse = components['schemas']['TeamResponse']

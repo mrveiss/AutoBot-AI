@@ -9,11 +9,11 @@ natural language processing, and text-to-speech components.
 Extracted from voice_processing_system.py as part of Issue #381 god class refactoring.
 """
 
-import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import numpy as np
 
+from autobot_shared.logging_manager import get_logger
 from enhanced_memory_manager_async import TaskPriority
 from memory import EnhancedMemoryManager
 from task_execution_tracker import get_task_tracker
@@ -25,13 +25,13 @@ from .speech_recognition import SpeechRecognitionEngine
 from .tts_engine import TextToSpeechEngine
 from .types import VoiceCommand
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class VoiceProcessingSystem:
     """Main voice processing system coordinator"""
 
-    def __init__(self, memory_manager: Optional[EnhancedMemoryManager] = None):
+    def __init__(self, memory_manager: EnhancedMemoryManager | None = None):
         """Initialize voice processing system with speech recognition and TTS engines."""
         self.memory_manager = memory_manager or EnhancedMemoryManager()
         self.speech_recognition = SpeechRecognitionEngine()
@@ -83,7 +83,7 @@ class VoiceProcessingSystem:
         }
 
     async def process_voice_command(
-        self, audio_input: AudioInput, context: Optional[Dict[str, Any]] = None
+        self, audio_input: AudioInput, context: Dict[str, Any] | None = None
     ) -> Dict[str, Any]:
         """Complete voice command processing pipeline."""
         async with get_task_tracker().track_task(
@@ -189,7 +189,7 @@ class VoiceProcessingSystem:
         self,
         command_analysis: VoiceCommandAnalysis,
         speech_result,
-        context: Optional[Dict[str, Any]],
+        context: Dict[str, Any] | None,
     ) -> Dict[str, Any]:
         """Generate comprehensive response to voice command.
 
@@ -262,7 +262,7 @@ class VoiceProcessingSystem:
         return required_context
 
     async def _determine_next_steps(
-        self, command_analysis: VoiceCommandAnalysis, context: Optional[Dict[str, Any]]
+        self, command_analysis: VoiceCommandAnalysis, context: Dict[str, Any] | None
     ) -> List[str]:
         """Determine immediate next steps for command execution"""
         next_steps = []
@@ -280,7 +280,7 @@ class VoiceProcessingSystem:
 
         return next_steps
 
-    async def synthesize_response(self, text: str, voice_settings: Optional[Dict[str, Any]] = None) -> bytes:
+    async def synthesize_response(self, text: str, voice_settings: Dict[str, Any] | None = None) -> bytes:
         """Generate spoken response"""
 
         synthesis_request = SpeechSynthesisRequest(
@@ -293,7 +293,7 @@ class VoiceProcessingSystem:
 
         return await self.tts_engine.synthesize_speech(synthesis_request)
 
-    def get_command_history(self, limit: Optional[int] = None) -> List[Dict[str, Any]]:
+    def get_command_history(self, limit: int | None = None) -> List[Dict[str, Any]]:
         """Get recent voice command history"""
         history = self.voice_command_history
         if limit:

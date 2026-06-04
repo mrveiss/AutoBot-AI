@@ -1,8 +1,8 @@
 <template>
   <div class="stats-overview" role="region" :aria-label="$t('knowledge.stats.overview.ariaLabel')">
-    <BasePanel variant="elevated" size="small" role="article" aria-labelledby="facts-title">
+    <BasePanel variant="elevated" size="sm" role="article" aria-labelledby="facts-title">
       <div class="stat-icon facts" aria-hidden="true">
-        <i class="fas fa-lightbulb"></i>
+        <Icon name="lightbulb" />
       </div>
       <div class="stat-content">
         <h4 id="facts-title">{{ $t('knowledge.stats.overview.totalFacts') }}</h4>
@@ -13,24 +13,24 @@
       </div>
     </BasePanel>
 
-    <BasePanel variant="elevated" size="small" role="article" aria-labelledby="documents-title">
+    <BasePanel variant="elevated" size="sm" role="article" aria-labelledby="documents-title">
       <div class="stat-icon documents" aria-hidden="true">
-        <i class="fas fa-file-alt"></i>
+        <Icon name="file-alt" />
       </div>
       <div class="stat-content">
         <h4 id="documents-title">{{ $t('knowledge.stats.overview.totalDocuments') }}</h4>
         <p class="stat-value" aria-live="polite">{{ totalDocuments }}</p>
         <p class="stat-change" :class="{ 'needs-vectorization': needsVectorization }"
            :aria-label="needsVectorization ? $t('knowledge.stats.overview.notVectorizedAria') : $t('knowledge.stats.overview.vectorizedAria')">
-          <i v-if="needsVectorization" class="fas fa-exclamation-triangle" aria-hidden="true"></i>
+          <Icon name="exclamation-triangle" v-if="needsVectorization"  aria-hidden="true" />
           {{ needsVectorization ? $t('knowledge.stats.overview.notVectorized') : $t('knowledge.stats.overview.vectorizedForRag') }}
         </p>
       </div>
     </BasePanel>
 
-    <BasePanel variant="elevated" size="small" role="article" aria-labelledby="categories-title">
+    <BasePanel variant="elevated" size="sm" role="article" aria-labelledby="categories-title">
       <div class="stat-icon categories" aria-hidden="true">
-        <i class="fas fa-folder"></i>
+        <Icon name="folder" />
       </div>
       <div class="stat-content">
         <h4 id="categories-title">{{ $t('knowledge.stats.overview.categories') }}</h4>
@@ -41,9 +41,9 @@
       </div>
     </BasePanel>
 
-    <BasePanel variant="elevated" size="small">
+    <BasePanel variant="elevated" size="sm">
       <div class="stat-icon tags">
-        <i class="fas fa-tags"></i>
+        <Icon name="tags" />
       </div>
       <div class="stat-content">
         <h4>{{ $t('knowledge.stats.overview.uniqueTags') }}</h4>
@@ -54,9 +54,9 @@
       </div>
     </BasePanel>
 
-    <BasePanel variant="elevated" size="small">
+    <BasePanel variant="elevated" size="sm">
       <div class="stat-icon storage">
-        <i class="fas fa-database"></i>
+        <Icon name="database" />
       </div>
       <div class="stat-content">
         <h4>{{ $t('knowledge.stats.overview.storageUsed') }}</h4>
@@ -82,6 +82,7 @@
  * Issue #184: Split oversized Vue components
  */
 
+import Icon from '@/components/ui/Icon.vue'
 import BasePanel from '@/components/base/BasePanel.vue'
 import { formatFileSize } from '@/utils/formatHelpers'
 

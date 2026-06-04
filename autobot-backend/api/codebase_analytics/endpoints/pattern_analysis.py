@@ -10,24 +10,25 @@ Issue #1304: Migrated to shared BackgroundTaskManager.
 
 import asyncio
 import json
-import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
+from celery.result import AsyncResult
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from autobot_shared.logging_manager import get_logger
 from constants.path_constants import PATH
 from constants.threshold_constants import QueryDefaults
 from constants.ttl_constants import TIMEOUT_TASK_ANALYSIS, TTL_24_HOURS
-from utils.background_task_manager import BackgroundTaskManager
+from tasks.analytics_tasks import run_pattern_analysis, run_pattern_summary_analysis
+from utils.celery_task_status import celery_result_to_status, store_latest_task_id
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(tags=["Pattern Analysis"])
 
-# Shared background task manager (#1304)
-# Timeout raised to 1800s (30min) — batched analysis on ~2000 files needs time
-_manager = BackgroundTaskManager(redis_prefix="pattern_task:", task_timeout=TIMEOUT_TASK_ANALYSIS)
+_REDIS_PREFIX = "pattern_task:"
+_SUMMARY_REDIS_PREFIX = "patsummary_task:"
 
 # Redis key prefix for analysis checkpoints
 _CHECKPOINT_PREFIX = "pattern_checkpoint:"
@@ -42,7 +43,7 @@ class PatternAnalysisRequest(BaseModel):
         default=str(PATH.PROJECT_ROOT),
         description="Path to analyze (defaults to project root)",
     )
-    source_id: Optional[str] = Field(
+    source_id: str | None = Field(
         default=None,
         description="#1772: source_id for API consistency",
     )
@@ -59,13 +60,13 @@ class PatternAnalysisStatus(BaseModel):
     task_id: str
     status: str  # pending, running, completed, failed
     progress: float = 0.0
-    current_step: Optional[str] = None
-    started_at: Optional[str] = None
-    completed_at: Optional[str] = None
-    error: Optional[str] = None
-    reason: Optional[str] = None  # orphaned, timeout, manual (#1250)
-    result: Optional[Dict[str, Any]] = None
-    partial_results: Optional[Dict[str, Any]] = None
+    current_step: str | None = None
+    started_at: str | None = None
+    completed_at: str | None = None
+    error: str | None = None
+    reason: str | None = None  # orphaned, timeout, manual (#1250)
+    result: Dict[str, Any] | None = None
+    partial_results: Dict[str, Any] | None = None
 
 
 class PatternSummary(BaseModel):
@@ -110,7 +111,7 @@ async def _save_checkpoint(task_id: str, phase: str, batch_idx: int, partial_res
         logger.debug("Checkpoint save failed (non-fatal): %s", exc)
 
 
-async def _load_checkpoint(task_id: str) -> Optional[Dict[str, Any]]:
+async def _load_checkpoint(task_id: str) -> Dict[str, Any] | None:
     """Load analysis checkpoint from Redis."""
     redis = await _get_checkpoint_redis()
     if not redis:
@@ -135,99 +136,21 @@ async def _clear_checkpoint(task_id: str) -> None:
         pass
 
 
-async def _run_analysis(task_id: str, request: PatternAnalysisRequest) -> None:
-    """Run batched pattern analysis with checkpointing (#1304).
-
-    Processes files in batches of 50 with Redis checkpoints after each
-    batch.  Overall timeout prevents zombie tasks.
-    """
-    try:
-        from code_intelligence.pattern_analysis import CodePatternAnalyzer
-
-        await _manager.update_progress(task_id, "Initializing", 0.0)
-
-        async def _on_progress(step: str, progress: float) -> None:
-            await _manager.update_progress(task_id, step, progress)
-
-        async def _on_checkpoint(phase: str, batch_idx: int, partial: dict) -> None:
-            await _save_checkpoint(task_id, phase, batch_idx, partial)
-
-        analyzer = CodePatternAnalyzer(
-            enable_clone_detection=request.enable_clone_detection,
-            enable_anti_pattern_detection=(request.enable_anti_pattern_detection),
-            enable_regex_detection=request.enable_regex_detection,
-            enable_complexity_analysis=(request.enable_complexity_analysis),
-            similarity_threshold=request.similarity_threshold,
-        )
-
-        # Check for existing checkpoint to resume from
-        checkpoint = await _load_checkpoint(task_id)
-
-        report = await asyncio.wait_for(
-            analyzer.analyze_directory(
-                request.path,
-                progress_callback=_on_progress,
-                checkpoint_callback=_on_checkpoint,
-                resume_from=checkpoint,
-            ),
-            timeout=_ANALYSIS_TIMEOUT,
-        )
-
-        await _clear_checkpoint(task_id)
-        await _manager.complete_task(task_id, report.to_dict())
-
-    except asyncio.TimeoutError:
-        logger.error(
-            "Pattern analysis timed out after %ds for task %s",
-            _ANALYSIS_TIMEOUT,
-            task_id,
-        )
-        await _manager.fail_task(
-            task_id,
-            f"Analysis timed out after {_ANALYSIS_TIMEOUT}s",
-            reason="timeout",
-        )
-    except Exception:
-        logger.exception("Pattern analysis failed")
-        await _manager.fail_task(task_id, "Analysis failed")
-
-
 @router.post("/patterns/analyze", response_model=PatternAnalysisStatus)
-async def start_pattern_analysis(
-    request: PatternAnalysisRequest,
-    background_tasks: BackgroundTasks,
-) -> PatternAnalysisStatus:
-    """Start code pattern analysis (#208, #647, #1304)."""
-    task_id = await _manager.create_task(params=request.model_dump())
-    background_tasks.add_task(_run_analysis, task_id, request)
-    return PatternAnalysisStatus(task_id=task_id, status="pending", progress=0.0)
+async def start_pattern_analysis(request: PatternAnalysisRequest) -> PatternAnalysisStatus:
+    """Enqueue code pattern analysis as a Celery task (GH#6505, GH#8436)."""
+    celery_result = run_pattern_analysis.delay(request.model_dump())
+    prefix = f"{_REDIS_PREFIX}{request.source_id}:" if request.source_id else _REDIS_PREFIX
+    await store_latest_task_id(prefix, celery_result.id)
+    return PatternAnalysisStatus(task_id=celery_result.id, status="pending", progress=0.0)
 
 
-@router.get(
-    "/patterns/status/{task_id}",
-    response_model=PatternAnalysisStatus,
-)
+@router.get("/patterns/status/{task_id}", response_model=PatternAnalysisStatus)
 async def get_analysis_status(task_id: str) -> PatternAnalysisStatus:
-    """Get status of a pattern analysis task.
-
-    When the task is still running, loads the latest checkpoint from
-    Redis and includes partial_results so the frontend can render
-    discovered patterns incrementally.
-    """
-    task = await _manager.get_status(task_id)
+    """Get status of a pattern analysis task."""
+    task = celery_result_to_status(AsyncResult(task_id))
     if task is None:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Analysis task {task_id} not found",
-        )
-
-    # Load partial results from checkpoint while analysis is running
-    partial = None
-    if task["status"] in ("running", "pending"):
-        checkpoint = await _load_checkpoint(task_id)
-        if checkpoint and checkpoint.get("partial_results"):
-            partial = checkpoint["partial_results"]
-
+        raise HTTPException(status_code=404, detail=f"Analysis task {task_id} not found")
     return PatternAnalysisStatus(
         task_id=task_id,
         status=task["status"],
@@ -236,67 +159,60 @@ async def get_analysis_status(task_id: str) -> PatternAnalysisStatus:
         started_at=task.get("started_at"),
         completed_at=task.get("completed_at"),
         error=task.get("error"),
-        reason=task.get("reason"),
         result=task.get("result"),
-        partial_results=partial,
     )
 
 
 @router.get("/patterns/result/{task_id}")
 async def get_analysis_result(task_id: str) -> Dict[str, Any]:
     """Get full results of a completed pattern analysis."""
-    task = await _manager.get_status(task_id)
+    task = celery_result_to_status(AsyncResult(task_id))
     if task is None:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Analysis task {task_id} not found",
-        )
+        raise HTTPException(status_code=404, detail=f"Analysis task {task_id} not found")
     if task["status"] != "completed":
-        raise HTTPException(
-            status_code=400,
-            detail=f"Analysis not complete. Status: {task['status']}",
-        )
-    return task.get("result", {})
+        raise HTTPException(status_code=400, detail=f"Analysis not complete. Status: {task['status']}")
+    return task.get("result") or {}
 
 
 @router.delete("/patterns/task/{task_id}")
 async def cancel_analysis(task_id: str) -> Dict[str, str]:
-    """Cancel or delete a pattern analysis task."""
-    deleted = await _manager.delete_task(task_id)
-    if not deleted:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Analysis task {task_id} not found",
-        )
-    return {"message": f"Task {task_id} removed"}
+    """Revoke a pending/running pattern analysis task (GH#8440: async-safe)."""
+    from celery_app import celery_app
+
+    await asyncio.to_thread(celery_app.control.revoke, task_id, terminate=True)
+    return {"message": f"Task {task_id} revoked"}
 
 
 @router.get("/patterns/tasks")
 async def list_analysis_tasks() -> Dict[str, Any]:
-    """List all pattern analysis tasks (#647)."""
-    return await _manager.list_tasks()
+    """List active pattern analysis tasks (GH#8440: async-safe Celery inspect)."""
+    from celery_app import celery_app
+
+    active = await asyncio.to_thread(lambda: celery_app.control.inspect().active() or {})
+    analytics_tasks = [t for worker_tasks in active.values() for t in worker_tasks if "pattern" in t.get("name", "")]
+    return {"tasks": analytics_tasks, "count": len(analytics_tasks)}
 
 
 @router.post("/patterns/tasks/clear-stuck")
 async def clear_stuck_tasks(
-    force: bool = Query(
-        default=False,
-        description="Force clear ALL running tasks",
-    ),
+    force: bool = Query(default=False, description="Force clear ALL running tasks"),
 ) -> Dict[str, Any]:
-    """Clear stuck tasks (#647)."""
-    cleaned = await _manager.clear_stuck(force=force)
-    return {
-        "cleared_count": cleaned,
-        "message": f"Cleared {cleaned} task(s)" + (" (forced)" if force else ""),
-    }
+    """No-op: Celery handles stuck-task recovery automatically (GH#6505)."""
+    return {"cleared_count": 0, "message": "Celery handles task recovery automatically"}
 
 
 @router.post("/patterns/tasks/clear-all")
 async def clear_all_tasks() -> Dict[str, str]:
-    """Clear all tasks (#647, #1234)."""
-    count = await _manager.clear_all()
-    return {"message": f"Cleared {count} task(s)"}
+    """Revoke active analytics tasks without purging other Celery queues (GH#8438)."""
+    from celery_app import celery_app
+
+    active = await asyncio.to_thread(lambda: celery_app.control.inspect().active() or {})
+    analytics_task_ids = [
+        t["id"] for worker_tasks in active.values() for t in worker_tasks if t.get("name", "").startswith("analytics.")
+    ]
+    for task_id in analytics_task_ids:
+        await asyncio.to_thread(celery_app.control.revoke, task_id, terminate=True)
+    return {"message": f"Revoked {len(analytics_task_ids)} analytics task(s)"}
 
 
 @router.get("/patterns/summary", response_model=PatternSummary)
@@ -332,92 +248,31 @@ async def get_pattern_summary(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-# Background task manager for pattern summary (#1304)
-_summary_manager = BackgroundTaskManager(redis_prefix="patsummary_task:", task_timeout=TIMEOUT_TASK_ANALYSIS)
-
-
-async def _run_summary_analysis(task_id: str, path: str) -> None:
-    """Background worker for pattern summary (#1304)."""
-    try:
-        from code_intelligence.pattern_analysis import CodePatternAnalyzer
-
-        await _summary_manager.update_progress(task_id, "Initializing analyzer", 10.0)
-        analyzer = CodePatternAnalyzer(
-            enable_embedding_storage=False,
-        )
-
-        async def _on_progress(step: str, progress: float) -> None:
-            # Scale inner progress (0-100) to outer range (30-80)
-            scaled = 30.0 + (progress / 100.0) * 50.0
-            await _summary_manager.update_progress(task_id, step, scaled)
-
-        report = await asyncio.wait_for(
-            analyzer.analyze_directory(path, progress_callback=_on_progress),
-            timeout=_ANALYSIS_TIMEOUT,
-        )
-
-        await _summary_manager.update_progress(task_id, "Building summary", 80.0)
-        result = {
-            "total_patterns": report.total_patterns,
-            "duplicates": len(report.duplicate_patterns),
-            "regex_opportunities": len(report.regex_opportunities),
-            "complexity_hotspots": len(report.complexity_hotspots),
-            "modularization_suggestions": len(report.modularization_suggestions),
-            "potential_loc_reduction": report.potential_loc_reduction,
-            "complexity_score": report.complexity_score,
-        }
-        await _summary_manager.complete_task(task_id, result)
-    except asyncio.TimeoutError:
-        logger.error("Pattern summary timed out after %ds", _ANALYSIS_TIMEOUT)
-        await _summary_manager.fail_task(
-            task_id,
-            f"Summary timed out after {_ANALYSIS_TIMEOUT}s",
-            reason="timeout",
-        )
-    except Exception:
-        logger.exception("Pattern summary analysis failed")
-        await _summary_manager.fail_task(task_id, "Summary analysis failed")
-
-
 @router.post("/patterns/summary/analyze")
 async def start_pattern_summary_analysis(
-    background_tasks: BackgroundTasks,
-    path: str = Query(
-        default=str(PATH.PROJECT_ROOT),
-        description="Path to analyze",
-    ),
+    path: str = Query(default=str(PATH.PROJECT_ROOT), description="Path to analyze"),
 ):
-    """Start background pattern summary analysis (#1304)."""
-    task_id = await _summary_manager.create_task(params={"path": path})
-    background_tasks.add_task(_run_summary_analysis, task_id, path)
-    return {"task_id": task_id, "status": "pending"}
+    """Enqueue pattern summary analysis as a Celery task (GH#6505)."""
+    result = run_pattern_summary_analysis.delay(path)
+    await store_latest_task_id(_SUMMARY_REDIS_PREFIX, result.id)
+    return {"task_id": result.id, "status": "pending"}
 
 
 @router.get("/patterns/summary/status/{task_id}")
 async def get_pattern_summary_status(task_id: str):
-    """Get pattern summary task status (#1304)."""
-    task = await _summary_manager.get_status(task_id)
-    if task is None:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Task {task_id} not found",
-        )
-    return task
+    """Get pattern summary task status."""
+    status = celery_result_to_status(AsyncResult(task_id))
+    if status is None:
+        raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
+    return status
 
 
 @router.post("/patterns/summary/tasks/clear-stuck")
 async def clear_stuck_summary_tasks(
-    force: bool = Query(
-        default=False,
-        description="Force clear ALL running tasks",
-    ),
+    force: bool = Query(default=False, description="Force clear ALL running tasks"),
 ):
-    """Clear stuck pattern summary tasks (#1304)."""
-    cleaned = await _summary_manager.clear_stuck(force=force)
-    return {
-        "cleared_count": cleaned,
-        "message": f"Cleared {cleaned} task(s)" + (" (forced)" if force else ""),
-    }
+    """No-op: Celery handles stuck-task recovery automatically (GH#6505)."""
+    return {"cleared_count": 0, "message": "Celery handles task recovery automatically"}
 
 
 @router.get("/patterns/duplicates")
@@ -720,9 +575,9 @@ def _build_empty_patterns_response() -> Dict[str, Any]:
 
 
 def _build_chromadb_where_filter(
-    pattern_type: Optional[str],
-    severity: Optional[str],
-) -> Optional[Dict[str, Any]]:
+    pattern_type: str | None,
+    severity: str | None,
+) -> Dict[str, Any] | None:
     """
     Build ChromaDB where filter from optional parameters.
 
@@ -781,8 +636,8 @@ def _format_pattern_results(
 
 @router.get("/patterns/cached-patterns")
 async def get_cached_patterns(
-    pattern_type: Optional[str] = Query(None, description="Filter by pattern type"),
-    severity: Optional[str] = Query(None, description="Filter by severity"),
+    pattern_type: str | None = Query(None, description="Filter by pattern type"),
+    severity: str | None = Query(None, description="Filter by severity"),
     limit: int = Query(
         default=QueryDefaults.DEFAULT_PAGE_SIZE,
         ge=1,
@@ -862,7 +717,7 @@ async def clear_pattern_storage() -> Dict[str, str]:
 @router.get("/patterns/similar")
 async def search_similar_patterns_endpoint(
     code: str = Query(..., description="Code snippet to find similar patterns for"),
-    pattern_type: Optional[str] = Query(None, description="Filter by pattern type"),
+    pattern_type: str | None = Query(None, description="Filter by pattern type"),
     limit: int = Query(
         default=QueryDefaults.DEFAULT_SEARCH_LIMIT,
         ge=1,

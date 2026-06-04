@@ -14,8 +14,9 @@ import os
 import platform
 import socket
 import subprocess  # nosec B404 - required for systemctl interaction
+import time
 from datetime import datetime, timezone
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 import psutil
 
@@ -24,6 +25,9 @@ from autobot_shared.redis_client import get_redis_client
 logger = logging.getLogger(__name__)
 
 _STATE_CHANGE_CHANNEL_TEMPLATE = "autobot:services:{service}:state_change"
+
+# Subprocess-heavy service sweep is cached this long to reduce system load (#9086)
+_SERVICE_DISCOVERY_TTL = 300  # seconds
 
 
 class HealthCollector:
@@ -39,8 +43,8 @@ class HealthCollector:
 
     def __init__(
         self,
-        services: Optional[List[str]] = None,
-        ports: Optional[List[Dict]] = None,
+        services: List[str] | None = None,
+        ports: List[Dict] | None = None,
         discover_services: bool = True,
     ):
         """
@@ -58,6 +62,10 @@ class HealthCollector:
         # Tracks the last known status per service name for state-change detection.
         # Populated on first collect(); events are only published on transitions.
         self._last_known_status: Dict[str, str] = {}
+        # Cache for discover_all_services() — avoids spawning 100+ subprocesses
+        # every heartbeat (#9086)
+        self._service_cache: List[Dict] = []
+        self._service_cache_ts: float = 0.0
 
     def collect(self) -> Dict:
         """Collect all health metrics."""
@@ -86,11 +94,21 @@ class HealthCollector:
                 key = f"{host}:{port}"
                 health["ports"][key] = self.check_port(host, port)
 
-        # Discover all systemd services (for Issue #728)
+        # Discover all systemd services (for Issue #728).
+        # Result is cached for _SERVICE_DISCOVERY_TTL seconds — the sweep
+        # spawns 100+ subprocesses and must not run every heartbeat (#9086).
         if self.discover_services:
-            health["discovered_services"] = self.discover_all_services()
+            health["discovered_services"] = self._get_discovered_services()
 
         return health
+
+    def _get_discovered_services(self) -> List[Dict]:
+        """Return cached service list, refreshing when TTL has expired."""
+        now = time.monotonic()
+        if now - self._service_cache_ts >= _SERVICE_DISCOVERY_TTL:
+            self._service_cache = self.discover_all_services()
+            self._service_cache_ts = now
+        return self._service_cache
 
     def check_service(self, service_name: str) -> Dict:
         """Check systemd service status."""
@@ -165,7 +183,7 @@ class HealthCollector:
         self._detect_and_publish_state_changes(services)
         return services
 
-    def _run_systemctl_list_units(self) -> Optional[str]:
+    def _run_systemctl_list_units(self) -> str | None:
         """Run systemctl list-units command. Issue #620."""
         result = subprocess.run(  # nosec B607 - systemctl is trusted
             [
@@ -186,7 +204,7 @@ class HealthCollector:
             return None
         return result.stdout
 
-    def _parse_service_line(self, line: str) -> Optional[Dict]:
+    def _parse_service_line(self, line: str) -> Dict | None:
         """Parse a single line of systemctl output. Issue #620."""
         if not line.strip():
             return None
@@ -361,7 +379,7 @@ class HealthCollector:
                 error_context=svc.get("error_message", ""),
             )
 
-    def is_healthy(self, thresholds: Optional[Dict] = None) -> bool:
+    def is_healthy(self, thresholds: Dict | None = None) -> bool:
         """Quick health check against thresholds."""
         defaults = {
             "cpu_percent": 90,

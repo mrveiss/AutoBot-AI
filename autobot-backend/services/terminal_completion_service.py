@@ -6,13 +6,15 @@ Terminal completion service using bash compgen for authentic completion.
 """
 
 import asyncio
-import logging
 import os
 import shlex
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import List
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
+
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -27,9 +29,7 @@ class CompletionResult:
 class TerminalCompletionService:
     """Bash-like tab completion using compgen subprocess."""
 
-    async def get_completions(
-        self, text: str, cursor_pos: int, cwd: str, env: Optional[dict] = None
-    ) -> CompletionResult:
+    async def get_completions(self, text: str, cursor_pos: int, cwd: str, env: dict | None = None) -> CompletionResult:
         """
         Get completions based on context.
 
@@ -104,7 +104,7 @@ class TerminalCompletionService:
         expanded_prefix = os.path.expanduser(prefix)
         safe_prefix = shlex.quote(expanded_prefix)
         cmd = f"compgen -f -- {safe_prefix} 2>/dev/null"
-        completions = await self._run_compgen(cmd, {"HOME": os.environ.get("HOME", "")}, cwd)
+        completions = await self._run_compgen(cmd, {"HOME": config.home}, cwd)
 
         result = []
         for c in completions:
@@ -115,7 +115,7 @@ class TerminalCompletionService:
                 result.append(c)
         return result
 
-    async def _run_compgen(self, cmd: str, env: dict, cwd: Optional[str] = None) -> List[str]:
+    async def _run_compgen(self, cmd: str, env: dict, cwd: str | None = None) -> List[str]:
         """Run compgen command and return results."""
         try:
             proc = await asyncio.create_subprocess_shell(

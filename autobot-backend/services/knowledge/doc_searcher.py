@@ -8,8 +8,10 @@ Issue #381: Extracted from chat_knowledge_service.py god class refactoring.
 Contains DocumentationSearcher for AutoBot documentation search integration.
 """
 
+from __future__ import annotations
+
 import re
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List
 
 from autobot_shared.logging_manager import get_llm_logger
 from autobot_shared.singleton_factory import lazy_singleton
@@ -49,7 +51,7 @@ class DocumentationSearcher:
         r"\b(how do i|how to|what is|where is)\b",
     ]
 
-    def __init__(self, collection_name: str = "autobot_docs"):
+    def __init__(self, collection_name: str = "autobot_docs") -> None:
         """
         Initialize the documentation searcher.
 
@@ -60,8 +62,8 @@ class DocumentationSearcher:
         # Backend-agnostic handles (#5062, #5194). Resolved in ``initialize()``
         # to a ``BaseClient`` / ``BaseCollection``; the concrete production
         # backend is ChromaDB today.
-        self._client: Optional["BaseClient"] = None
-        self._collection: Optional["BaseCollection"] = None
+        self._client: "BaseClient" | None = None
+        self._collection: "BaseCollection" | None = None
         self._embed_model = None
         self._initialized = False
         self._doc_patterns = [re.compile(p, re.IGNORECASE) for p in self.DOC_QUERY_PATTERNS]
@@ -130,7 +132,7 @@ class DocumentationSearcher:
 
         return False
 
-    def _query_chromadb(self, embedding: List[float], n_results: int) -> Optional[Dict[str, Any]]:
+    def _query_chromadb(self, embedding: List[float], n_results: int) -> Dict[str, Any] | None:
         """Query ChromaDB collection with embedding.
 
         Args:

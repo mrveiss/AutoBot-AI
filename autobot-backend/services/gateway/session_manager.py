@@ -9,17 +9,17 @@ Manages session isolation, context persistence, and lifecycle.
 """
 
 import asyncio
-import logging
 from datetime import timedelta
-from typing import Dict, List, Optional
+from typing import Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
 from constants.threshold_constants import TimingConstants
 
 from .config import GatewayConfig
 from .types import ChannelType, GatewaySession, SessionStatus
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class SessionManager:
@@ -33,7 +33,7 @@ class SessionManager:
     - Rate limiting (per-session token bucket)
     """
 
-    def __init__(self, config: GatewayConfig):
+    def __init__(self, config: GatewayConfig) -> None:
         """
         Initialize the session manager.
 
@@ -43,7 +43,7 @@ class SessionManager:
         self.config = config
         self._sessions: Dict[str, GatewaySession] = {}
         self._user_sessions: Dict[str, List[str]] = {}  # user_id -> [session_ids]
-        self._cleanup_task: Optional[asyncio.Task] = None
+        self._cleanup_task: asyncio.Task | None = None
         self._lock = asyncio.Lock()
 
     async def start(self) -> None:
@@ -67,7 +67,7 @@ class SessionManager:
         self,
         user_id: str,
         channel: ChannelType,
-        metadata: Optional[Dict] = None,
+        metadata: Dict | None = None,
     ) -> GatewaySession:
         """
         Create a new session.
@@ -121,15 +121,15 @@ class SessionManager:
             )
             return session
 
-    async def get_session(self, session_id: str) -> Optional[GatewaySession]:
+    async def get_session(self, session_id: str) -> GatewaySession | None:
         """Get session by ID."""
         return self._sessions.get(session_id)
 
     async def update_session(
         self,
         session_id: str,
-        status: Optional[SessionStatus] = None,
-        context: Optional[Dict] = None,
+        status: SessionStatus | None = None,
+        context: Dict | None = None,
     ) -> bool:
         """
         Update session status and/or context.

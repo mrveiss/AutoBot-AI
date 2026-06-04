@@ -1,0 +1,45 @@
+{
+  "category": "infrastructure",
+  "patterns": [
+    {
+      "type": "service_count",
+      "pattern": "(\\d+)\\s+(uvicorn|gunicorn|celery|redis|postgresql|worker|process|thread)s?",
+      "description": "Numeric claims about service instances"
+    },
+    {
+      "type": "service_mention",
+      "pattern": "\\b(Redis|PostgreSQL|ChromaDB|Celery|FastAPI|Uvicorn|Nginx|Docker|Kubernetes|Ansible)\\b",
+      "description": "Infrastructure service mentions"
+    },
+    {
+      "type": "port_binding",
+      "pattern": "port\\s+(\\d+)|:(\\d{4,5})\\b",
+      "description": "Port number claims"
+    },
+    {
+      "type": "database",
+      "pattern": "database\\s+(\\w+)|\\b(main|knowledge|prompts|analytics)\\s+database",
+      "description": "Database name claims"
+    },
+    {
+      "type": "storage",
+      "pattern": "\\b(vector store|embedding|cache|session store|persistent storage)\\b",
+      "description": "Storage mechanism claims"
+    }
+  ],
+  "keywords": [
+    "Redis",
+    "PostgreSQL",
+    "ChromaDB",
+    "Celery",
+    "FastAPI",
+    "Uvicorn",
+    "worker",
+    "process",
+    "thread",
+    "port",
+    "database",
+    "cache",
+    "storage"
+  ]
+}

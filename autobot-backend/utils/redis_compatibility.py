@@ -8,7 +8,6 @@ Provides backward compatibility for existing code while transitioning to async R
 
 import threading
 import warnings
-from typing import Optional, Union
 
 from redis.exceptions import RedisError
 
@@ -71,7 +70,7 @@ class RedisCompatibilityWrapper:
 
     # Async methods (preferred)
 
-    async def aget(self, key: str) -> Optional[str]:
+    async def aget(self, key: str) -> str | None:
         """Async get value by key"""
         try:
             db = await self._get_async_db()
@@ -83,9 +82,9 @@ class RedisCompatibilityWrapper:
     async def aset(
         self,
         key: str,
-        value: Union[str, bytes, int, float],
-        ex: Optional[int] = None,
-        px: Optional[int] = None,
+        value: str | bytes | int | float,
+        ex: int | None = None,
+        px: int | None = None,
         nx: bool = False,
         xx: bool = False,
     ) -> bool:
@@ -133,7 +132,7 @@ class RedisCompatibilityWrapper:
             logger.error("Redis attl failed for key '%s': %s", key, e)
             raise
 
-    async def ahget(self, name: str, key: str) -> Optional[str]:
+    async def ahget(self, name: str, key: str) -> str | None:
         """Async get hash field value"""
         try:
             db = await self._get_async_db()
@@ -142,7 +141,7 @@ class RedisCompatibilityWrapper:
             logger.error("Redis ahget failed for hash '%s', key '%s': %s", name, key, e)
             raise
 
-    async def ahset(self, name: str, key: str, value: Union[str, bytes, int, float]) -> int:
+    async def ahset(self, name: str, key: str, value: str | bytes | int | float) -> int:
         """Async set hash field value"""
         try:
             db = await self._get_async_db()
@@ -181,7 +180,7 @@ class RedisCompatibilityWrapper:
 
     # Sync methods (deprecated but supported for compatibility)
 
-    def get(self, key: str) -> Optional[str]:
+    def get(self, key: str) -> str | None:
         """Sync get value by key (DEPRECATED - use aget)"""
         self._show_deprecation_warning("get")
         client = self._get_sync_client()
@@ -190,9 +189,9 @@ class RedisCompatibilityWrapper:
     def set(
         self,
         key: str,
-        value: Union[str, bytes, int, float],
-        ex: Optional[int] = None,
-        px: Optional[int] = None,
+        value: str | bytes | int | float,
+        ex: int | None = None,
+        px: int | None = None,
         nx: bool = False,
         xx: bool = False,
     ) -> bool:
@@ -225,13 +224,13 @@ class RedisCompatibilityWrapper:
         client = self._get_sync_client()
         return client.ttl(key)
 
-    def hget(self, name: str, key: str) -> Optional[str]:
+    def hget(self, name: str, key: str) -> str | None:
         """Sync get hash field value (DEPRECATED - use ahget)"""
         self._show_deprecation_warning("hget")
         client = self._get_sync_client()
         return client.hget(name, key)
 
-    def hset(self, name: str, key: str, value: Union[str, bytes, int, float]) -> int:
+    def hset(self, name: str, key: str, value: str | bytes | int | float) -> int:
         """Sync set hash field value (DEPRECATED - use ahset)"""
         self._show_deprecation_warning("hset")
         client = self._get_sync_client()

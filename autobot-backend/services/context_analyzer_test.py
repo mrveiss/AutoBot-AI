@@ -13,13 +13,13 @@ from services.context_analyzer import ContextAnalyzer
 
 SAMPLE_CODE = """
 import logging
-from typing import List, Optional
+from typing import List
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class Calculator:
-    def __init__(self):
+    def __init__(self) -> None:
         self.history = []
 
     def add(self, a: int, b: int) -> int:
@@ -35,7 +35,7 @@ class Calculator:
 
 
 @patch("services.context_analyzer.get_redis_client")
-def test_context_analyzer_initialization(mock_redis):
+def test_context_analyzer_initialization(mock_redis) -> None:
     """Test ContextAnalyzer initialization."""
     mock_redis.return_value = MagicMock()
     analyzer = ContextAnalyzer()
@@ -46,7 +46,7 @@ def test_context_analyzer_initialization(mock_redis):
 
 
 @patch("services.context_analyzer.get_redis_client")
-def test_analyze_file_level_context(mock_redis):
+def test_analyze_file_level_context(mock_redis) -> None:
     """Test file-level context extraction."""
     mock_redis.return_value = MagicMock()
     analyzer = ContextAnalyzer()
@@ -60,7 +60,7 @@ def test_analyze_file_level_context(mock_redis):
 
 
 @patch("services.context_analyzer.get_redis_client")
-def test_analyze_function_level_context(mock_redis):
+def test_analyze_function_level_context(mock_redis) -> None:
     """Test function-level context extraction."""
     mock_redis.return_value = MagicMock()
     analyzer = ContextAnalyzer()
@@ -75,7 +75,7 @@ def test_analyze_function_level_context(mock_redis):
 
 
 @patch("services.context_analyzer.get_redis_client")
-def test_analyze_block_level_context(mock_redis):
+def test_analyze_block_level_context(mock_redis) -> None:
     """Test block-level context extraction."""
     mock_redis.return_value = MagicMock()
     analyzer = ContextAnalyzer()
@@ -90,7 +90,7 @@ def test_analyze_block_level_context(mock_redis):
 
 
 @patch("services.context_analyzer.get_redis_client")
-def test_analyze_line_level_context(mock_redis):
+def test_analyze_line_level_context(mock_redis) -> None:
     """Test line-level context extraction."""
     mock_redis.return_value = MagicMock()
     analyzer = ContextAnalyzer()
@@ -106,7 +106,7 @@ def test_analyze_line_level_context(mock_redis):
 
 
 @patch("services.context_analyzer.get_redis_client")
-def test_analyze_semantic_context(mock_redis):
+def test_analyze_semantic_context(mock_redis) -> None:
     """Test semantic context analysis."""
     mock_redis.return_value = MagicMock()
     analyzer = ContextAnalyzer()
@@ -119,7 +119,7 @@ def test_analyze_semantic_context(mock_redis):
 
 
 @patch("services.context_analyzer.get_redis_client")
-def test_analyze_dependencies(mock_redis):
+def test_analyze_dependencies(mock_redis) -> None:
     """Test dependency analysis."""
     mock_redis.return_value = MagicMock()
     analyzer = ContextAnalyzer()
@@ -132,7 +132,7 @@ def test_analyze_dependencies(mock_redis):
 
 
 @patch("services.context_analyzer.get_redis_client")
-def test_analyze_with_syntax_error(mock_redis):
+def test_analyze_with_syntax_error(mock_redis) -> None:
     """Test analysis with syntax error."""
     mock_redis.return_value = MagicMock()
     analyzer = ContextAnalyzer()
@@ -146,7 +146,7 @@ def test_analyze_with_syntax_error(mock_redis):
 
 
 @patch("services.context_analyzer.get_redis_client")
-def test_context_caching(mock_redis):
+def test_context_caching(mock_redis) -> None:
     """Test context caching to Redis."""
     mock_redis_client = MagicMock()
     mock_redis.return_value = mock_redis_client
@@ -160,7 +160,7 @@ def test_context_caching(mock_redis):
 
 
 @patch("services.context_analyzer.get_redis_client")
-def test_context_id_generation(mock_redis):
+def test_context_id_generation(mock_redis) -> None:
     """Test unique context ID generation."""
     mock_redis.return_value = MagicMock()
     analyzer = ContextAnalyzer()
@@ -173,7 +173,7 @@ def test_context_id_generation(mock_redis):
 
 
 @patch("services.context_analyzer.get_redis_client")
-def test_analyze_partial_statement(mock_redis):
+def test_analyze_partial_statement(mock_redis) -> None:
     """Test partial statement extraction."""
     mock_redis.return_value = MagicMock()
     analyzer = ContextAnalyzer()
@@ -186,7 +186,7 @@ def test_analyze_partial_statement(mock_redis):
 
 
 @patch("services.context_analyzer.get_redis_client")
-def test_analyze_class_context(mock_redis):
+def test_analyze_class_context(mock_redis) -> None:
     """Test context within class definition."""
     mock_redis.return_value = MagicMock()
     analyzer = ContextAnalyzer()
@@ -198,7 +198,7 @@ def test_analyze_class_context(mock_redis):
 
 
 @patch("services.context_analyzer.get_redis_client")
-def test_performance_target(mock_redis):
+def test_performance_target(mock_redis) -> None:
     """Test analysis completes within performance target."""
     import time
 

@@ -17,7 +17,7 @@
       debug:
         msg:
           - "🔧 Configuring Redis Service Management"
-          - "Host: {{ inventory_hostname }} ({{ ansible_facts['default_ipv4'].address }})"
+          - "Host: {{ inventory_hostname }} ({{ ansible_facts['default_ipv4'].address | default(ansible_host) }})"
           - "User: {{ autobot_user }}"
           - "Service: {{ redis_service_name }}"
           - "Sudoers file: {{ sudoers_file }}"

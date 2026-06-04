@@ -8,8 +8,7 @@ Issue #4342: Expose error health status, circuit breaker status, error budgets.
 Allows monitoring of system resilience and graceful degradation state.
 """
 
-import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from fastapi import APIRouter, HTTPException, Request
 
@@ -18,24 +17,24 @@ from api.schemas_workflows import (
     CircuitBreakerStatusResponse,
     ErrorBudgetResetResponse,
     ErrorBudgetStatusResponse,
-    ResilienceHealthResponse,
 )
-from api.system_health import ComponentHealth, register_health_probe
+from api.system_health import ComponentHealth, KnownProbes, register_health_probe
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from services.resilience.circuit_breaker_manager import (
     get_circuit_breaker_manager,
 )
 from services.resilience.error_budget import get_error_budget_tracker
 from services.resilience.fallback_manager import get_fallback_manager
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api/resilience", tags=["resilience"])
 
 
-@register_health_probe("error_resilience")
+@register_health_probe(KnownProbes.ERROR_RESILIENCE)
 async def probe_error_resilience(
-    request: Optional[Request] = None,
+    request: Request | None = None,
 ) -> ComponentHealth:
     """Issue #3333 / #6907: probe reflects actual breaker + budget state.
 
@@ -76,35 +75,6 @@ async def probe_error_resilience(
             status="down",
             detail=f"probe error: {type(exc).__name__}",
         )
-
-
-@router.get("/health", response_model=ResilienceHealthResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_resilience_health",
-    error_code_prefix="ERROR_RESILIENCE",
-)
-async def get_resilience_health() -> Dict[str, Any]:
-    """
-    Get overall system resilience health.
-
-    Returns:
-        Dictionary with circuit breaker status, error budgets, fallback chains
-    """
-    try:
-        cb_manager = get_circuit_breaker_manager()
-        budget_tracker = get_error_budget_tracker()
-        fallback_manager = get_fallback_manager()
-
-        return {
-            "status": "operational",
-            "circuit_breakers": cb_manager.get_status(),
-            "error_budgets": budget_tracker.get_status(),
-            "fallback_chains": fallback_manager.get_status(),
-        }
-    except Exception as e:
-        logger.error("Error fetching resilience health: %s", type(e).__name__)
-        raise HTTPException(status_code=500, detail="Failed to get resilience health")
 
 
 @router.get("/circuit-breakers", response_model=CircuitBreakerStatusResponse)

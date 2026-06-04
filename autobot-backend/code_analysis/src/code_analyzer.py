@@ -6,20 +6,20 @@ Analyzes codebase for duplicate functions and refactoring opportunities
 import ast
 import hashlib
 import json
-import logging
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Set
 
 import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
 from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.logging_manager import get_logger
 from constants.ttl_constants import TTL_1_HOUR
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level tuples for AST node type checks
 _FUNCTION_DEF_TYPES = (ast.FunctionDef, ast.AsyncFunctionDef)
@@ -38,11 +38,11 @@ class CodeFunction:
     source_code: str
     ast_hash: str
     signature: str
-    docstring: Optional[str]
+    docstring: str | None
     imports: List[str]
     calls: List[str]
     complexity: int
-    embedding: Optional[np.ndarray] = None
+    embedding: np.ndarray | None = None
 
 
 @dataclass
@@ -175,7 +175,7 @@ class CodeAnalyzer:
             logger.error(f"Error extracting functions from {file_path}: {e}")
             return []
 
-    def _extract_function_info(self, node: ast.AST, source: str, file_path: str) -> Optional[CodeFunction]:
+    def _extract_function_info(self, node: ast.AST, source: str, file_path: str) -> CodeFunction | None:
         """Extract detailed information about a function"""
 
         try:
@@ -187,7 +187,7 @@ class CodeAnalyzer:
 
             # Generate AST hash for exact duplicate detection
             ast_dump = ast.dump(node, annotate_fields=False)
-            ast_hash = hashlib.md5(ast_dump.encode()).hexdigest()
+            ast_hash = hashlib.md5(ast_dump.encode(), usedforsecurity=False).hexdigest()
 
             # Extract signature
             args = []
@@ -555,7 +555,7 @@ from utils.{module_name}_utils import {func.name}
             except Exception as e:
                 logger.warning(f"Failed to clear cache: {e}")
 
-    async def get_cached_results(self) -> Optional[Dict[str, Any]]:
+    async def get_cached_results(self) -> Dict[str, Any] | None:
         """Get cached analysis results"""
         await self._ensure_redis()
         if self.redis_client:

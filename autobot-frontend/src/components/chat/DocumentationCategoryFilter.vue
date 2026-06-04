@@ -2,7 +2,7 @@
   <div class="doc-category-filter">
     <div class="filter-header">
       <h4 class="filter-title">
-        <i class="fas fa-filter" aria-hidden="true"></i>
+        <Icon name="filter" />
         {{ $t('chat.docFilter.categories') }}
       </h4>
       <button
@@ -16,12 +16,12 @@
     </div>
 
     <div v-if="isLoading" class="loading-state">
-      <i class="fas fa-spinner fa-spin" aria-hidden="true"></i>
+      <Icon name="spinner" class="animate-spin" />
       <span>{{ $t('chat.docFilter.loadingCategories') }}</span>
     </div>
 
     <div v-else-if="error" class="error-state">
-      <i class="fas fa-exclamation-triangle" aria-hidden="true"></i>
+      <Icon name="exclamation-triangle" />
       <span>{{ error }}</span>
       <button class="retry-btn" @click="$emit('retry')">{{ $t('common.retry') }}</button>
     </div>
@@ -40,7 +40,7 @@
         :title="category.description"
       >
         <span class="category-icon">
-          <i :class="getCategoryIcon(category.id)" aria-hidden="true"></i>
+          <Icon :name="getCategoryIcon(category.id)" />
         </span>
         <span class="category-name">{{ category.name }}</span>
         <span class="category-count">{{ category.count }}</span>
@@ -90,6 +90,7 @@
  * Issue #165: Chat Documentation UI Integration
  */
 
+import Icon from '@/components/ui/Icon.vue'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
@@ -126,19 +127,19 @@ const emit = defineEmits<Emits>()
 
 // Category icon mapping
 const categoryIcons: Record<string, string> = {
-  architecture: 'fas fa-project-diagram',
-  developer: 'fas fa-code',
-  api: 'fas fa-plug',
-  troubleshooting: 'fas fa-wrench',
-  deployment: 'fas fa-rocket',
-  security: 'fas fa-shield-alt',
-  features: 'fas fa-star',
-  testing: 'fas fa-vial',
-  workflow: 'fas fa-sitemap',
-  guides: 'fas fa-book',
-  implementation: 'fas fa-cogs',
-  agents: 'fas fa-robot',
-  general: 'fas fa-file-alt'
+  architecture: 'project-diagram',
+  developer: 'code',
+  api: 'plug',
+  troubleshooting: 'wrench',
+  deployment: 'rocket',
+  security: 'shield-alt',
+  features: 'star',
+  testing: 'vial',
+  workflow: 'sitemap',
+  guides: 'book',
+  implementation: 'cogs',
+  agents: 'robot',
+  general: 'file-alt'
 }
 
 // Developer-focused categories

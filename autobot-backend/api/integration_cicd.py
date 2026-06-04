@@ -4,8 +4,7 @@
 
 """CI/CD integration API endpoints."""
 
-import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
@@ -24,6 +23,7 @@ from api.schemas_workflows import (
 )
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from integrations.base import IntegrationConfig
 from integrations.cicd_integration import (
     CircleCIIntegration,
@@ -31,7 +31,7 @@ from integrations.cicd_integration import (
     JenkinsIntegration,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(
     tags=["integrations-cicd"],
@@ -114,7 +114,7 @@ async def list_pipelines(
     provider: CICDProvider,
     base_url: str = Query(..., description="CI/CD service base URL"),
     credentials: str = Query(..., description="JSON-encoded credentials"),
-    project_id: Optional[str] = Query(None, description="Project/job identifier"),
+    project_id: str | None = Query(None, description="Project/job identifier"),
 ) -> Dict[str, Any]:
     """List pipelines or jobs for a provider.
 
@@ -159,8 +159,8 @@ async def get_pipeline_status(
     pipeline_id: str,
     base_url: str = Query(..., description="CI/CD service base URL"),
     credentials: str = Query(..., description="JSON-encoded credentials"),
-    job_name: Optional[str] = Query(None, description="Job name (Jenkins only)"),
-    project_id: Optional[str] = Query(None, description="Project ID (GitLab only)"),
+    job_name: str | None = Query(None, description="Job name (Jenkins only)"),
+    project_id: str | None = Query(None, description="Project ID (GitLab only)"),
 ) -> Dict[str, Any]:
     """Get status of a specific pipeline.
 
@@ -203,7 +203,7 @@ async def trigger_pipeline(
     request: PipelineTriggerRequest,
     base_url: str = Query(..., description="CI/CD service base URL"),
     credentials: str = Query(..., description="JSON-encoded credentials"),
-    project_id: Optional[str] = Query(None, description="Project ID (GitLab only)"),
+    project_id: str | None = Query(None, description="Project ID (GitLab only)"),
 ) -> Dict[str, Any]:
     """Trigger a pipeline or build.
 
@@ -246,7 +246,7 @@ async def get_pipeline_logs(
     pipeline_id: str,
     base_url: str = Query(..., description="CI/CD service base URL"),
     credentials: str = Query(..., description="JSON-encoded credentials"),
-    job_name: Optional[str] = Query(None, description="Job name (Jenkins only)"),
+    job_name: str | None = Query(None, description="Job name (Jenkins only)"),
 ) -> Dict[str, Any]:
     """Get logs for a pipeline or build.
 
@@ -321,8 +321,8 @@ def _create_integration(provider: CICDProvider, base_url: str, credentials: Dict
 def _build_status_params(
     provider: CICDProvider,
     pipeline_id: str,
-    job_name: Optional[str],
-    project_id: Optional[str],
+    job_name: str | None,
+    project_id: str | None,
 ) -> Dict[str, Any]:
     """Build status query parameters.
 
@@ -374,7 +374,7 @@ def _get_status_action(provider: CICDProvider) -> str:
 def _build_trigger_params(
     provider: CICDProvider,
     pipeline_id: str,
-    project_id: Optional[str],
+    project_id: str | None,
     parameters: Dict[str, Any],
 ) -> Dict[str, Any]:
     """Build trigger parameters.

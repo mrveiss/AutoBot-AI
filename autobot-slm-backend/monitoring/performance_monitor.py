@@ -16,7 +16,7 @@ import traceback
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import aiofiles
 import aiohttp
@@ -84,9 +84,9 @@ class SystemMetrics:
     network_sent_mb: float
     network_recv_mb: float
     process_count: int
-    gpu_utilization: Optional[float] = None
-    gpu_memory_used: Optional[float] = None
-    npu_utilization: Optional[float] = None
+    gpu_utilization: float | None = None
+    gpu_memory_used: float | None = None
+    npu_utilization: float | None = None
 
 
 @dataclass
@@ -96,10 +96,10 @@ class ServiceMetrics:
     timestamp: str
     service_name: str
     response_time: float
-    status_code: Optional[int]
+    status_code: int | None
     is_healthy: bool
-    error_message: Optional[str] = None
-    custom_metrics: Optional[Dict[str, Any]] = None
+    error_message: str | None = None
+    custom_metrics: Dict[str, Any] | None = None
 
 
 @dataclass
@@ -113,7 +113,7 @@ class DatabaseMetrics:
     memory_usage_mb: float
     operations_per_second: float
     error_count: int = 0
-    database_size_mb: Optional[float] = None
+    database_size_mb: float | None = None
 
 
 @dataclass
@@ -217,7 +217,7 @@ class PerformanceMonitor:
             self.logger.error(f"Error collecting system metrics: {e}")
             raise
 
-    async def get_gpu_metrics(self) -> tuple[Optional[float], Optional[float]]:
+    async def get_gpu_metrics(self) -> tuple[float | None, float | None]:
         """Get GPU utilization and memory usage."""
         try:
             # Check for NVIDIA GPU (RTX 4070) using async subprocess
@@ -242,7 +242,7 @@ class PerformanceMonitor:
             pass
         return None, None
 
-    async def get_npu_metrics(self) -> Optional[float]:
+    async def get_npu_metrics(self) -> float | None:
         """Get NPU utilization (Intel AI Boost chip).
 
         Returns the NPU utilization percentage when Intel NPU monitoring tools are

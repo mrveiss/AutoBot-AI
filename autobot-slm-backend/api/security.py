@@ -11,7 +11,7 @@ and security policy management. Related to Issue #728.
 import logging
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import List, Optional
+from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
@@ -60,18 +60,18 @@ async def create_audit_log(
     db: AsyncSession,
     category: str,
     action: str,
-    user_id: Optional[str] = None,
-    username: Optional[str] = None,
-    ip_address: Optional[str] = None,
-    resource_type: Optional[str] = None,
-    resource_id: Optional[str] = None,
-    description: Optional[str] = None,
-    request_method: Optional[str] = None,
-    request_path: Optional[str] = None,
-    response_status: Optional[int] = None,
+    user_id: str | None = None,
+    username: str | None = None,
+    ip_address: str | None = None,
+    resource_type: str | None = None,
+    resource_id: str | None = None,
+    description: str | None = None,
+    request_method: str | None = None,
+    request_path: str | None = None,
+    response_status: int | None = None,
     success: bool = True,
-    error_message: Optional[str] = None,
-    extra_data: Optional[dict] = None,
+    error_message: str | None = None,
+    extra_data: dict | None = None,
 ) -> AuditLog:
     """Create an audit log entry."""
     log = AuditLog(
@@ -231,12 +231,12 @@ async def get_security_overview(
 async def list_audit_logs(
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(get_current_user)],
-    category: Optional[str] = Query(None, description="Filter by category"),
-    username: Optional[str] = Query(None, description="Filter by username"),
-    action: Optional[str] = Query(None, description="Filter by action"),
-    success: Optional[bool] = Query(None, description="Filter by success status"),
-    since: Optional[datetime] = Query(None, description="Filter events after this time"),
-    until: Optional[datetime] = Query(None, description="Filter events before this time"),
+    category: str | None = Query(None, description="Filter by category"),
+    username: str | None = Query(None, description="Filter by username"),
+    action: str | None = Query(None, description="Filter by action"),
+    success: bool | None = Query(None, description="Filter by success status"),
+    since: datetime | None = Query(None, description="Filter events after this time"),
+    until: datetime | None = Query(None, description="Filter events before this time"),
     page: int = Query(1, ge=1),
     per_page: int = Query(50, ge=1, le=200),
 ) -> AuditLogListResponse:
@@ -376,14 +376,14 @@ async def _get_security_event_aggregates(db: AsyncSession) -> dict:
 async def list_security_events(
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(get_current_user)],
-    event_type: Optional[str] = Query(None, description="Filter by event type"),
-    severity: Optional[str] = Query(None, description="Filter by severity"),
-    acknowledged: Optional[bool] = Query(None, description="Filter by acknowledged status"),
-    resolved: Optional[bool] = Query(None, description="Filter by resolved status"),
-    source_ip: Optional[str] = Query(None, description="Filter by source IP"),
-    node_id: Optional[str] = Query(None, description="Filter by node ID"),
-    since: Optional[datetime] = Query(None),
-    until: Optional[datetime] = Query(None),
+    event_type: str | None = Query(None, description="Filter by event type"),
+    severity: str | None = Query(None, description="Filter by severity"),
+    acknowledged: bool | None = Query(None, description="Filter by acknowledged status"),
+    resolved: bool | None = Query(None, description="Filter by resolved status"),
+    source_ip: str | None = Query(None, description="Filter by source IP"),
+    node_id: str | None = Query(None, description="Filter by node ID"),
+    since: datetime | None = Query(None),
+    until: datetime | None = Query(None),
     page: int = Query(1, ge=1),
     per_page: int = Query(50, ge=1, le=200),
 ) -> SecurityEventListResponse:
@@ -617,9 +617,9 @@ async def resolve_security_event(
 async def list_security_policies(
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(get_current_user)],
-    category: Optional[str] = Query(None),
-    status_filter: Optional[str] = Query(None, alias="status"),
-    is_enforced: Optional[bool] = Query(None),
+    category: str | None = Query(None),
+    status_filter: str | None = Query(None, alias="status"),
+    is_enforced: bool | None = Query(None),
     page: int = Query(1, ge=1),
     per_page: int = Query(50, ge=1, le=200),
 ) -> SecurityPolicyListResponse:
@@ -828,15 +828,15 @@ class CertificateReport(BaseModel):
     """Incoming cert report from Ansible after deployment."""
 
     node_id: str
-    subject: Optional[str] = None
-    issuer: Optional[str] = None
-    serial_number: Optional[str] = None
-    fingerprint: Optional[str] = None
-    not_before: Optional[str] = None
-    not_after: Optional[str] = None
+    subject: str | None = None
+    issuer: str | None = None
+    serial_number: str | None = None
+    fingerprint: str | None = None
+    not_before: str | None = None
+    not_after: str | None = None
 
 
-def _parse_openssl_date(raw: Optional[str]) -> Optional[datetime]:
+def _parse_openssl_date(raw: str | None) -> datetime | None:
     """Parse openssl date strings like 'Jan  1 00:00:00 2025 GMT'."""
     if not raw:
         return None
@@ -854,7 +854,7 @@ def _parse_openssl_date(raw: Optional[str]) -> Optional[datetime]:
         return None
 
 
-def _days_until(dt: Optional[datetime]) -> Optional[int]:
+def _days_until(dt: datetime | None) -> int | None:
     """Return days until datetime from now (negative = already expired)."""
     if dt is None:
         return None
@@ -865,8 +865,8 @@ def _days_until(dt: Optional[datetime]) -> Optional[int]:
 async def list_certificates(
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(get_current_user)],
-    node_id: Optional[str] = Query(None, description="Filter by node"),
-    status_filter: Optional[str] = Query(None, alias="status"),
+    node_id: str | None = Query(None, description="Filter by node"),
+    status_filter: str | None = Query(None, alias="status"),
 ) -> List[CertificateResponse]:
     """List all fleet node certificates with expiry status."""
     query = select(Certificate)

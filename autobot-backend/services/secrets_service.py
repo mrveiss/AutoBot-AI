@@ -7,19 +7,20 @@ Handles secure storage, retrieval, and management of secrets with dual-scope sup
 """
 
 import json
-import logging
 import sqlite3
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List
 from uuid import uuid4
 
 from cryptography.fernet import Fernet
 
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 from autobot_shared.time_utils import now_utc, parse_utc_iso
 from config.manager import get_config_manager as _get_config_manager
 from type_defs.common import Metadata
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Canonical singleton; avoids routing through config/__init__ lazy alias (Issue #3829)
 config_manager = _get_config_manager()
@@ -35,7 +36,7 @@ _INSERT_SECRET_SQL = (
 class SecretsService:
     """Service for managing secrets with encryption and scope isolation"""
 
-    def __init__(self, db_path: str = None, encryption_key: Optional[str] = None):
+    def __init__(self, db_path: str = None, encryption_key: str | None = None) -> None:
         """Initialize the secrets service with encryption"""
         if db_path is None:
             # Use centralized path management for default path
@@ -53,12 +54,12 @@ class SecretsService:
         # Initialize database
         self._init_database()
 
-    def _ensure_db_directory(self):
+    def _ensure_db_directory(self) -> None:
         """Ensure the database directory exists"""
         db_dir = Path(self.db_path).parent
         db_dir.mkdir(parents=True, exist_ok=True)
 
-    def _init_encryption(self, encryption_key: Optional[str] = None):
+    def _init_encryption(self, encryption_key: str | None = None) -> None:
         """Initialize encryption with provided or generated key"""
         if encryption_key:
             self.cipher = Fernet(encryption_key.encode())
@@ -67,9 +68,9 @@ class SecretsService:
             # 1. Environment variable (direct)
             # 2. Config manager (may map from env)
             # 3. Key file in data directory
-            import os
+            pass
 
-            env_key = os.getenv("AUTOBOT_SECRETS_KEY")
+            env_key = config.secrets_key
             if not env_key:
                 env_key = config_manager.get("security.secrets_key", None)
             if not env_key:
@@ -90,7 +91,7 @@ class SecretsService:
                     "Generated new encryption key. Set AUTOBOT_SECRETS_KEY environment variable for persistence."
                 )
 
-    def _init_database(self):
+    def _init_database(self) -> None:
         """Initialize the SQLite database with secrets table"""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
@@ -102,7 +103,7 @@ class SecretsService:
         conn.commit()
         conn.close()
 
-    def _create_secrets_table(self, cursor: sqlite3.Cursor):
+    def _create_secrets_table(self, cursor: sqlite3.Cursor) -> None:
         """Create the secrets table if it doesn't exist"""
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS secrets (
@@ -125,13 +126,13 @@ class SecretsService:
             )
         """)
 
-    def _create_secrets_indexes(self, cursor: sqlite3.Cursor):
+    def _create_secrets_indexes(self, cursor: sqlite3.Cursor) -> None:
         """Create indexes for the secrets table"""
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_secrets_scope ON secrets(scope)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_secrets_chat_id ON secrets(chat_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_secrets_name ON secrets(name)")
 
-    def _create_audit_table(self, cursor: sqlite3.Cursor):
+    def _create_audit_table(self, cursor: sqlite3.Cursor) -> None:
         """Create the audit log table if it doesn't exist"""
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS secrets_audit (
@@ -191,13 +192,13 @@ class SecretsService:
             "created_by": row[10],
         }
 
-    def _is_secret_expired(self, expires_at: Optional[str]) -> bool:
+    def _is_secret_expired(self, expires_at: str | None) -> bool:
         """Check if a secret has expired"""
         if not expires_at:
             return False
         return parse_utc_iso(expires_at) < now_utc()
 
-    def _update_access_tracking(self, cursor: sqlite3.Cursor, secret_id: str, accessed_by: Optional[str]):
+    def _update_access_tracking(self, cursor: sqlite3.Cursor, secret_id: str, accessed_by: str | None) -> None:
         """Update access count and audit log for a secret"""
         cursor.execute(
             """
@@ -214,12 +215,12 @@ class SecretsService:
         self,
         secret_id: str,
         name: str,
-        description: Optional[str],
+        description: str | None,
         secret_type: str,
         scope: str,
-        chat_id: Optional[str],
+        chat_id: str | None,
         now: str,
-        expires_at: Optional[str],
+        expires_at: str | None,
     ) -> dict:
         """Build secret result dict. Helper for create_secret. Ref: #1088."""
         return {
@@ -239,11 +240,11 @@ class SecretsService:
         secret_type: str,
         value: str,
         scope: str = "general",
-        chat_id: Optional[str] = None,
-        description: Optional[str] = None,
-        expires_at: Optional[str] = None,
-        metadata: Optional[Dict] = None,
-        created_by: Optional[str] = None,
+        chat_id: str | None = None,
+        description: str | None = None,
+        expires_at: str | None = None,
+        metadata: Dict | None = None,
+        created_by: str | None = None,
     ) -> Metadata:
         """Create a new secret with encryption"""
         secret_id = str(uuid4())
@@ -296,11 +297,11 @@ class SecretsService:
 
     def _build_get_secret_query(
         self,
-        secret_id: Optional[str],
-        name: Optional[str],
+        secret_id: str | None,
+        name: str | None,
         scope: str,
-        chat_id: Optional[str],
-    ) -> tuple[Optional[str], List]:
+        chat_id: str | None,
+    ) -> tuple[str | None, List]:
         """Build query and params for get_secret. Returns (query, params) or (None, [])."""
         base_query = """
             SELECT id, name, description, secret_type, encrypted_value,
@@ -324,13 +325,13 @@ class SecretsService:
 
     def get_secret(
         self,
-        secret_id: Optional[str] = None,
-        name: Optional[str] = None,
+        secret_id: str | None = None,
+        name: str | None = None,
         scope: str = "general",
-        chat_id: Optional[str] = None,
+        chat_id: str | None = None,
         include_value: bool = False,
-        accessed_by: Optional[str] = None,
-    ) -> Optional[Metadata]:
+        accessed_by: str | None = None,
+    ) -> Metadata | None:
         """Get a secret by ID or name with optional value decryption"""
         query, params = self._build_get_secret_query(secret_id, name, scope, chat_id)
         if query is None:
@@ -366,9 +367,9 @@ class SecretsService:
 
     def _build_list_secrets_query(
         self,
-        scope: Optional[str],
-        chat_id: Optional[str],
-        secret_type: Optional[str],
+        scope: str | None,
+        chat_id: str | None,
+        secret_type: str | None,
         include_expired: bool,
     ) -> tuple[str, List]:
         """Build query and params for list_secrets."""
@@ -396,9 +397,9 @@ class SecretsService:
 
     def list_secrets(
         self,
-        scope: Optional[str] = None,
-        chat_id: Optional[str] = None,
-        secret_type: Optional[str] = None,
+        scope: str | None = None,
+        chat_id: str | None = None,
+        secret_type: str | None = None,
         include_expired: bool = False,
     ) -> List[Metadata]:
         """List secrets based on filters"""
@@ -415,11 +416,11 @@ class SecretsService:
 
     def _build_update_params(
         self,
-        name: Optional[str],
-        description: Optional[str],
-        value: Optional[str],
-        expires_at: Optional[str],
-        metadata: Optional[Dict],
+        name: str | None,
+        description: str | None,
+        value: str | None,
+        expires_at: str | None,
+        metadata: Dict | None,
     ) -> tuple[List[str], List]:
         """Build update clauses and params for update_secret."""
         updates: List[str] = []
@@ -446,12 +447,12 @@ class SecretsService:
     def update_secret(
         self,
         secret_id: str,
-        name: Optional[str] = None,
-        description: Optional[str] = None,
-        value: Optional[str] = None,
-        expires_at: Optional[str] = None,
-        metadata: Optional[Dict] = None,
-        updated_by: Optional[str] = None,
+        name: str | None = None,
+        description: str | None = None,
+        value: str | None = None,
+        expires_at: str | None = None,
+        metadata: Dict | None = None,
+        updated_by: str | None = None,
     ) -> bool:
         """Update an existing secret"""
         updates, params = self._build_update_params(name, description, value, expires_at, metadata)
@@ -482,7 +483,7 @@ class SecretsService:
         self,
         secret_id: str,
         hard_delete: bool = False,
-        deleted_by: Optional[str] = None,
+        deleted_by: str | None = None,
     ) -> bool:
         """Delete or deactivate a secret"""
         conn = sqlite3.connect(self.db_path)
@@ -512,8 +513,8 @@ class SecretsService:
         secret_id: str,
         from_scope: str,
         to_scope: str,
-        target_chat_id: Optional[str] = None,
-        transferred_by: Optional[str] = None,
+        target_chat_id: str | None = None,
+        transferred_by: str | None = None,
     ) -> bool:
         """Transfer a secret between scopes"""
         conn = sqlite3.connect(self.db_path)
@@ -556,8 +557,8 @@ class SecretsService:
         self,
         chat_id: str,
         action: str = "delete",  # "delete", "transfer", "export"
-        target_chat_id: Optional[str] = None,
-        cleaned_by: Optional[str] = None,
+        target_chat_id: str | None = None,
+        cleaned_by: str | None = None,
     ) -> Metadata:
         """Clean up secrets when a chat is deleted"""
         conn = sqlite3.connect(self.db_path)
@@ -604,9 +605,9 @@ class SecretsService:
         cursor: sqlite3.Cursor,
         secret_id: str,
         action: str,
-        performed_by: Optional[str] = None,
-        details: Optional[Dict] = None,
-    ):
+        performed_by: str | None = None,
+        details: Dict | None = None,
+    ) -> None:
         """Add an audit log entry"""
         cursor.execute(
             """
@@ -623,7 +624,7 @@ class SecretsService:
             ),
         )
 
-    def get_audit_log(self, secret_id: Optional[str] = None, limit: int = 100) -> List[Metadata]:
+    def get_audit_log(self, secret_id: str | None = None, limit: int = 100) -> List[Metadata]:
         """Get audit log entries"""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()

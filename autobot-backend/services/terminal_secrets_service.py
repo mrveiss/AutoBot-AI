@@ -19,6 +19,7 @@ Related Issues:
 
 Usage:
     from services.terminal_secrets_service import get_terminal_secrets_service
+from autobot_shared.logging_manager import get_logger
 
     service = get_terminal_secrets_service()
 
@@ -30,14 +31,14 @@ Usage:
 """
 
 import asyncio
-import logging
 import os
 import subprocess  # nosec B404 - Required for SSH key validation
 import tempfile
 import threading
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.path_validator import validate_relative_path
 from autobot_shared.singleton_factory import lazy_singleton
 from services.agent_secrets_integration import (
@@ -45,7 +46,7 @@ from services.agent_secrets_integration import (
     get_agent_secrets_integration,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -55,7 +56,7 @@ class SSHKeyInfo:
     secret_id: str
     name: str
     key_path: str  # Temporary file path for the key
-    fingerprint: Optional[str] = None
+    fingerprint: str | None = None
     added_to_agent: bool = False
     passphrase_required: bool = False
 
@@ -65,11 +66,11 @@ class SessionKeyState:
     """Tracks SSH keys for a terminal session."""
 
     session_id: str
-    chat_id: Optional[str] = None
+    chat_id: str | None = None
     keys: List[SSHKeyInfo] = field(default_factory=list)
-    agent_socket: Optional[str] = None
-    agent_pid: Optional[int] = None
-    temp_dir: Optional[str] = None
+    agent_socket: str | None = None
+    agent_pid: int | None = None
+    temp_dir: str | None = None
 
 
 class TerminalSecretsService:
@@ -80,7 +81,7 @@ class TerminalSecretsService:
     for terminal sessions that need credential access.
     """
 
-    def __init__(self, agent_secrets: Optional[AgentSecretsIntegration] = None):
+    def __init__(self, agent_secrets: AgentSecretsIntegration | None = None) -> None:
         """Initialize terminal secrets service.
 
         Args:
@@ -98,7 +99,7 @@ class TerminalSecretsService:
             self._agent_secrets = get_agent_secrets_integration()
         return self._agent_secrets
 
-    def _create_session_state(self, session_id: str, chat_id: Optional[str]) -> SessionKeyState:
+    def _create_session_state(self, session_id: str, chat_id: str | None) -> SessionKeyState:
         """Helper for setup_ssh_keys. Ref: #1088."""
         state = SessionKeyState(session_id=session_id, chat_id=chat_id)
         safe_id = "".join(c if c.isalnum() or c in "-_" else "_" for c in session_id)  # codeql[py/path-injection]
@@ -120,7 +121,7 @@ class TerminalSecretsService:
             "session_id": session_id,
         }
 
-    def _filter_keys_by_name(self, ssh_keys: List[Dict], specific_key_names: Optional[List[str]]) -> List[Dict]:
+    def _filter_keys_by_name(self, ssh_keys: List[Dict], specific_key_names: List[str] | None) -> List[Dict]:
         """
         Filter SSH keys by specific names if provided.
 
@@ -164,9 +165,9 @@ class TerminalSecretsService:
     async def setup_ssh_keys(
         self,
         session_id: str,
-        chat_id: Optional[str] = None,
+        chat_id: str | None = None,
         include_general: bool = True,
-        specific_key_names: Optional[List[str]] = None,
+        specific_key_names: List[str] | None = None,
     ) -> Dict[str, any]:
         """Setup SSH keys for a terminal session.
 
@@ -289,7 +290,7 @@ class TerminalSecretsService:
             # If check fails, assume passphrase may be needed
             return True
 
-    async def _get_key_fingerprint(self, key_path: str) -> Optional[str]:
+    async def _get_key_fingerprint(self, key_path: str) -> str | None:
         """Get the fingerprint of an SSH key.
 
         Args:
@@ -316,7 +317,7 @@ class TerminalSecretsService:
             logger.debug("Could not get key fingerprint: %s", e)
             return None
 
-    def _find_key_by_name(self, session_state: SessionKeyState, key_name: str) -> Optional[SSHKeyInfo]:
+    def _find_key_by_name(self, session_state: SessionKeyState, key_name: str) -> SSHKeyInfo | None:
         """
         Find an SSH key by name in session state.
 
@@ -356,7 +357,7 @@ class TerminalSecretsService:
         self,
         key_path: str,
         env: dict,
-        passphrase: Optional[str] = None,
+        passphrase: str | None = None,
     ) -> subprocess.CompletedProcess:
         """
         Run ssh-add command with the given environment.
@@ -385,7 +386,7 @@ class TerminalSecretsService:
         self,
         session_id: str,
         key_name: str,
-        passphrase: Optional[str] = None,
+        passphrase: str | None = None,
     ) -> bool:
         """Add an SSH key to ssh-agent for a session. Ref: #1088."""
         with self._sessions_lock:
@@ -467,7 +468,7 @@ class TerminalSecretsService:
             for k in session_state.keys
         ]
 
-    def get_key_path(self, session_id: str, key_name: str) -> Optional[str]:
+    def get_key_path(self, session_id: str, key_name: str) -> str | None:
         """Get the file path for an SSH key in a session.
 
         Used when executing ssh/scp commands that need the key file path.
@@ -538,7 +539,7 @@ class TerminalSecretsService:
         except Exception as e:
             logger.error("Error during session key cleanup: %s", e)
 
-    def detect_ssh_command(self, command: str) -> Optional[Dict[str, any]]:
+    def detect_ssh_command(self, command: str) -> Dict[str, any] | None:
         """Detect if a command requires SSH and extract connection details.
 
         Args:

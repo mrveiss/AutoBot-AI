@@ -23,8 +23,10 @@ import os
 import subprocess
 import sys
 
+from autobot_shared.logging_manager import get_logger
+
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _ENV_PREFIX = "AUTOBOT_EXP_"
 _EXTRA_PREFIX = "AUTOBOT_EXP_EXTRA_"
@@ -47,7 +49,7 @@ def _build_train_args() -> list[str]:
     """Translate AUTOBOT_EXP_* env vars into train.py CLI flags."""
     args: list[str] = []
     for env_key, flag in _PARAM_MAP.items():
-        value = os.environ.get(f"{_ENV_PREFIX}{env_key}")
+        value = os.environ.get(f"{_ENV_PREFIX}{env_key}")  # ssot-config-exempt: dynamic env var name (f-string)
         if value is not None:
             args.append(f"--{flag}={value}")
     for key, value in os.environ.items():

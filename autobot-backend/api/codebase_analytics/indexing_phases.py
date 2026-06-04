@@ -6,6 +6,7 @@ Core indexing phase orchestration.
 
 Issue #2364: Extracted from scanner.py to separate phase-level orchestration
 from the top-level do_indexing_with_progress entry point.
+from autobot_shared.logging_manager import get_logger
 
 Public functions
 ----------------
@@ -16,9 +17,9 @@ Public functions
 """
 
 import asyncio
-import logging
-from typing import Callable, Optional
+from typing import Callable
 
+from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import TimingConstants
 
 from .chromadb_storage import (
@@ -28,7 +29,7 @@ from .chromadb_storage import (
     _store_hardcodes_to_redis,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def _create_progress_updater(
@@ -62,7 +63,7 @@ async def _init_chromadb_with_retry(
     task_id: str,
     update_progress,
     update_phase,
-    source_id: Optional[str] = None,
+    source_id: str | None = None,
 ):
     """Initialise ChromaDB collection with one retry on failure.
 
@@ -90,7 +91,7 @@ async def _scan_and_log_analysis(
     update_stats,
     code_collection,
     scan_codebase_fn,
-    source_id: Optional[str] = None,
+    source_id: str | None = None,
 ):
     """Run codebase scan and log result counts.
 
@@ -137,7 +138,7 @@ async def _store_analysis_batches(
     update_stats,
     tasks_lock: asyncio.Lock,
     indexing_tasks: dict,
-    source_id: Optional[str] = None,
+    source_id: str | None = None,
 ) -> int:
     """Prepare and store analysis batches to ChromaDB, then persist hardcodes.
 
@@ -182,7 +183,7 @@ async def _run_indexing_phases(
     scan_codebase_fn,
     tasks_lock: asyncio.Lock,
     indexing_tasks: dict,
-    source_id: Optional[str] = None,
+    source_id: str | None = None,
 ):
     """Execute the core indexing phases: init → scan → store → hardcodes.
 

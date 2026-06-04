@@ -16,6 +16,7 @@ dependencies = [
     "pydantic>=2.0.0",
     "cryptography>=46.0.7",
     "python-multipart>=0.0.26",
+    "idna>=3.15",
 ]
 
 [project.scripts]

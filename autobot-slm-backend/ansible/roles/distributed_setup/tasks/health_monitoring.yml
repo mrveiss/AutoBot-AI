@@ -29,9 +29,9 @@
 - name: Enable and start health monitoring timer
   systemd:
     name: autobot-health-monitor.timer
-    enabled: yes
+    enabled: true
     state: started
-    daemon_reload: yes
+    daemon_reload: true
   when: create_systemd_services
 
 - name: Create health check status directory

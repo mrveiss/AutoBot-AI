@@ -10,15 +10,15 @@ Part of Issue #872 - Session Collaboration API (#608 Phase 3).
 
 import asyncio
 import json
-import logging
 from collections import defaultdict
 from typing import Dict, List, Set
 
 from fastapi import WebSocket, WebSocketDisconnect
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import utc_timestamp
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class PresenceManager:

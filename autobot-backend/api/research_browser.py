@@ -7,19 +7,21 @@ Handles browser automation for research tasks with user interaction support
 """
 
 import asyncio
-import logging
 import os
-from datetime import datetime, timezone
-from typing import Optional
 
 import aiofiles
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
-from api.schemas_code import ResearchBrowserHealthResponse
 from api.schemas_common import DataResponse
 from api.schemas_workflows import (
+    BrowserInfoData,
     BrowserResearchRequest,
+    BrowserSessionActionData,
+    BrowserSessionCleanupData,
+    BrowserSessionListData,
+    BrowserSessionStatusData,
+    ChatBrowserSessionData,
     CreateChatBrowserRequest,
     NavigationRequest,
     SessionAction,
@@ -27,11 +29,11 @@ from api.schemas_workflows import (
 from api.system_health import ComponentHealth, register_health_probe
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from autobot_shared.ssot_config import config as ssot_config
+from autobot_shared.logging_manager import get_logger
 from config.manager import get_config_manager
 from constants.error_constants import ERR_SESSION_NOT_FOUND
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #1009: Graceful fallback when playwright is not installed
 try:
@@ -61,7 +63,7 @@ def _require_browser():
 
 @register_health_probe("research_browser")
 async def probe_research_browser(
-    request: Optional[Request] = None,
+    request: Request | None = None,
 ) -> ComponentHealth:
     """Issue #3333: probe registration for research_browser module.
 
@@ -85,35 +87,7 @@ async def probe_research_browser(
         )
 
 
-@router.get("/health", response_model=ResearchBrowserHealthResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="health_check",
-    error_code_prefix="RESEARCH_BROWSER",
-)
-async def health_check():
-    """Health check endpoint for research browser service"""
-    if not _BROWSER_AVAILABLE:
-        return {
-            "status": "unavailable",
-            "service": "research_browser",
-            "detail": "playwright not installed",
-            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
-        }
-
-    status = "healthy" if get_research_browser_manager else "not_initialized"
-
-    browser_service_url = ssot_config.browser_service_url
-
-    return {
-        "status": status,
-        "service": "research_browser",
-        "browser_service_url": browser_service_url,
-        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
-    }
-
-
-@router.post("/url", response_model=DataResponse)
+@router.post("/url", response_model=DataResponse[BrowserSessionStatusData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="research_url",
@@ -129,7 +103,7 @@ async def research_url(request: BrowserResearchRequest):
     return JSONResponse(status_code=200, content=result)
 
 
-@router.post("/session/action", response_model=DataResponse)
+@router.post("/session/action", response_model=DataResponse[BrowserSessionActionData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="handle_session_action",
@@ -177,7 +151,7 @@ async def handle_session_action(request: SessionAction):
     return JSONResponse(status_code=200, content=result)
 
 
-@router.get("/session/{session_id}/status", response_model=DataResponse)
+@router.get("/session/{session_id}/status", response_model=DataResponse[BrowserSessionStatusData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_session_status",
@@ -250,7 +224,7 @@ async def download_mhtml(session_id: str, filename: str):
     )
 
 
-@router.delete("/session/{session_id}", response_model=DataResponse)
+@router.delete("/session/{session_id}", response_model=DataResponse[BrowserSessionCleanupData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="cleanup_session",
@@ -267,7 +241,7 @@ async def cleanup_session(session_id: str):
     )
 
 
-@router.get("/sessions", response_model=DataResponse)
+@router.get("/sessions", response_model=DataResponse[BrowserSessionListData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_sessions",
@@ -297,7 +271,7 @@ async def list_sessions():
     )
 
 
-@router.post("/session/{session_id}/navigate", response_model=DataResponse)
+@router.post("/session/{session_id}/navigate", response_model=DataResponse[BrowserSessionStatusData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="navigate_session",
@@ -316,7 +290,7 @@ async def navigate_session(session_id: str, request: NavigationRequest):
 
 
 # Browser integration endpoints for frontend
-@router.get("/browser/{session_id}", response_model=DataResponse)
+@router.get("/browser/{session_id}", response_model=DataResponse[BrowserInfoData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_browser_info",
@@ -413,7 +387,7 @@ def _get_browser_actions() -> list:
 # These endpoints tie browser sessions to chat conversations like terminal
 
 
-@router.post("/chat-session", response_model=DataResponse)
+@router.post("/chat-session", response_model=DataResponse[ChatBrowserSessionData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_or_create_chat_browser_session",
@@ -475,7 +449,7 @@ async def get_or_create_chat_browser_session(request: CreateChatBrowserRequest):
     )
 
 
-@router.get("/chat-session/{conversation_id}", response_model=DataResponse)
+@router.get("/chat-session/{conversation_id}", response_model=DataResponse[ChatBrowserSessionData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_chat_browser_session",
@@ -526,7 +500,7 @@ async def get_chat_browser_session(conversation_id: str):
     )
 
 
-@router.delete("/chat-session/{conversation_id}", response_model=DataResponse)
+@router.delete("/chat-session/{conversation_id}", response_model=DataResponse[BrowserSessionCleanupData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="delete_chat_browser_session",

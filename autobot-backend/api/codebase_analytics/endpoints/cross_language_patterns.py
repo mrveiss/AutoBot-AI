@@ -13,16 +13,15 @@ Provides endpoints to:
 """
 
 import asyncio
-import logging
-from typing import Optional
 
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from code_intelligence.cross_language_patterns import CrossLanguagePatternDetector
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter()
 
@@ -50,7 +49,7 @@ def _get_detector() -> CrossLanguagePatternDetector:
 async def run_cross_language_analysis(
     use_llm: bool = True,
     use_cache: bool = True,
-    source_id: Optional[str] = None,
+    source_id: str | None = None,
 ) -> JSONResponse:
     """
     Run full cross-language pattern analysis.
@@ -321,8 +320,8 @@ async def get_semantic_matches(
     error_code_prefix="CODEBASE",
 )
 async def get_patterns_by_category(
-    category: Optional[str] = None,
-    severity: Optional[str] = None,
+    category: str | None = None,
+    severity: str | None = None,
     limit: int = 100,
 ) -> JSONResponse:
     """

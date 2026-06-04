@@ -14,7 +14,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -49,6 +49,7 @@ from models.schemas import (
     ScheduleResponse,
     ScheduleRunResponse,
     ScheduleUpdate,
+    SelfUpdateResponse,
 )
 from services.auth import get_current_user
 from services.code_distributor import get_code_distributor
@@ -79,9 +80,9 @@ class NodeSyncState:
     ssh_user: str
     ssh_port: int
     status: str = "pending"  # pending, syncing, success, failed
-    message: Optional[str] = None
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
+    message: str | None = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
 
 
 @dataclass
@@ -95,7 +96,7 @@ class FleetSyncJob:
     nodes: Dict[str, NodeSyncState] = field(default_factory=dict)
     status: str = "pending"  # pending, running, completed, failed
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    completed_at: Optional[datetime] = None
+    completed_at: datetime | None = None
 
 
 # In-memory tracking for running asyncio tasks only (not job state)
@@ -174,9 +175,9 @@ async def _persist_fleet_sync_job(
 async def _update_job_status_db(
     job_id: str,
     *,
-    status: Optional[str] = None,
-    completed_at: Optional[datetime] = None,
-    failure_reason: Optional[str] = None,
+    status: str | None = None,
+    completed_at: datetime | None = None,
+    failure_reason: str | None = None,
 ) -> None:
     """Update fleet sync job status in DB (#1707, #1980)."""
     from services.database import db_service
@@ -207,10 +208,10 @@ async def _update_node_state_db(
     job_id: str,
     node_id: str,
     *,
-    status: Optional[str] = None,
-    message: Optional[str] = None,
-    started_at: Optional[datetime] = None,
-    completed_at: Optional[datetime] = None,
+    status: str | None = None,
+    message: str | None = None,
+    started_at: datetime | None = None,
+    completed_at: datetime | None = None,
 ) -> None:
     """Update a single node's sync state in DB (#1707)."""
     from services.database import db_service
@@ -240,7 +241,7 @@ async def _update_node_state_db(
 
 async def _load_job_status_from_db(
     job_id: str,
-) -> Optional[FleetSyncJobStatus]:
+) -> FleetSyncJobStatus | None:
     """Load fleet sync job status from DB (#1707)."""
     from services.database import db_service
 
@@ -438,11 +439,9 @@ async def resolve_drift(
     """
     Resync a single component from code_source/ to /opt/autobot/<component>/ (#7149).
 
-    Drives the same `_rsync_component_local()` used by SLM self-sync — pulls
-    files from the local code_source checkout and overwrites the deployed copy.
-    Used by the CodeSyncView "Resync from Source" button to clear drift in one
-    click (instead of forcing the user to find the SLM self-node and trigger a
-    full /nodes/{id}/sync).
+    Uses `_rsync_component_local()` to pull files from the local code_source
+    checkout and overwrite the deployed copy.  Used by the CodeSyncView
+    "Resync from Source" button to clear drift in one click.
 
     Body:
         component: Sub-directory under /opt/autobot/. Must be in ALLOWED_COMPONENTS.
@@ -666,7 +665,7 @@ async def _rsync_component_local(
 
     Used when source_ip matches the SLM server's own IP — no SSH needed.
     """
-    cmd = ["rsync", "-avz", "--delete"]
+    cmd = ["rsync", "-avz", "--delete", "--no-group", "--no-owner"]
     for exc in excludes:
         cmd.append(f"--exclude={exc}")
     cmd.append(f"{source_path}/{component}/")
@@ -808,7 +807,7 @@ async def _install_slm_pip_dependencies() -> None:
 
 async def _fetch_code_source_connection_info(
     db_service,
-) -> Optional[Tuple[str, str, str]]:
+) -> Tuple[str, str, str] | None:
     """Helper for _sync_slm_from_code_source. Ref: #1088, #1209.
 
     Read code source connection details from DB.
@@ -1054,22 +1053,88 @@ async def sync_node(
     is_slm_server = bool(slm_own_ip) and node.ip_address == slm_own_ip
 
     if is_slm_server and request.restart:
-        # SLM server cannot self-sync via the Ansible playbook because
-        # ansible.posix.synchronize runs rsync FROM the controller (SLM server),
-        # but the source path ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source} only exists on the dev  # noqa
-        # machine. Instead, pull code FROM the code source node directly (#913).
-        logger.info("SLM self-sync: pulling from code source (fire-and-forget)")
-        asyncio.create_task(_sync_slm_from_code_source(node_id))
+        # Use Ansible to update all deployed roles on this machine (#9073).
+        # Covers backend, frontend, shared, agent, plugins, workers, etc.
+        logger.info("SLM self-update via Ansible: queuing (fire-and-forget)")
+        asyncio.create_task(_ansible_self_update(node_id))
         return NodeSyncResponse(
             success=True,
             message=(
-                "SLM update queued: pulling from code source + restarting services. " "Check backend health in ~30s."
+                "SLM update queued: Ansible will update all roles on this machine and restart services. "
+                "Check backend health in ~60s."
             ),
             node_id=node_id,
         )
 
     # Normal execution - wait for result with progress updates
     return await _execute_node_playbook(executor, node, node_id, request, progress_callback, db)
+
+
+async def _ansible_self_update(node_id: str) -> None:
+    """Run update-all-nodes.yml against this machine to update all deployed roles (#9073).
+
+    Covers every role Ansible knows about (backend, frontend, shared, agent,
+    plugins, npu-worker, browser-worker, etc.) — not just the SLM components.
+    Fire-and-forget: the SLM service restarts mid-run so this coroutine dies;
+    callers must poll health rather than await a result.
+
+    Issue #9224: Update node version in DB after successful sync.
+    """
+    executor = get_playbook_executor()
+    limit = ["localhost", node_id]
+    try:
+        result = await executor.execute_playbook(
+            playbook_name="update-all-nodes.yml",
+            limit=limit,
+        )
+        if not result["success"]:
+            logger.error("Ansible full-machine update failed for %s: %s", node_id, result["output"][:500])
+        else:
+            logger.info("Ansible full-machine update complete for %s", node_id)
+            # Update node version in DB (Issue #9224)
+            await _update_fleet_node_version(node_id)
+    except Exception as exc:
+        logger.error("Ansible full-machine update error for %s: %s", node_id, exc)
+
+
+@router.post("/self-update", response_model=SelfUpdateResponse)
+async def self_update(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+) -> SelfUpdateResponse:
+    """Trigger an Ansible-based update of the SLM server itself (#9073).
+
+    Looks up the SLM's own node record by matching the external_url IP,
+    then runs update-all-nodes.yml against it as a fire-and-forget task
+    (the service restarts mid-run, so the caller should poll health).
+    Returns immediately with a queued message.
+    """
+    slm_own_ip = urlparse(settings.external_url).hostname or ""
+    if not slm_own_ip:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Cannot determine SLM IP from external_url setting",
+        )
+
+    result = await db.execute(select(Node).where(Node.ip_address == slm_own_ip))
+    slm_node = result.scalar_one_or_none()
+    if not slm_node:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No node found with IP {slm_own_ip} — ensure this server is registered",
+        )
+
+    logger.info("Full machine update via Ansible: queuing for node %s", slm_node.node_id)
+    asyncio.create_task(_ansible_self_update(slm_node.node_id))
+
+    return SelfUpdateResponse(
+        success=True,
+        message=(
+            "Full update queued: Ansible will update all roles on this machine"
+            " and restart services. Check backend health in ~60s."
+        ),
+        node_id=slm_node.node_id,
+    )
 
 
 async def _sync_regular_nodes(executor, job: FleetSyncJob, regular_nodes: list) -> None:
@@ -1135,7 +1200,23 @@ async def _sync_slm_self_node(executor, job: FleetSyncJob, slm_self_node: NodeSy
         await _update_job_status_db(job.job_id, status=pre_status, completed_at=datetime.now(timezone.utc))
         # Fire-and-forget — restart kills this process,
         # but all nodes are already done and persisted.
-        await _sync_slm_from_code_source(slm_self_node.node_id)
+        # Detect topology: local vs remote code source (#9195)
+        from services.database import db_service
+
+        conn_info = await _fetch_code_source_connection_info(db_service)
+        if conn_info:
+            source_ip, _, _ = conn_info
+            from autobot_shared.network_utils import is_local_ip
+
+            is_local_source = is_local_ip(source_ip)
+            if is_local_source:
+                await _ansible_self_update(slm_self_node.node_id)
+            else:
+                await _sync_slm_from_code_source(slm_self_node.node_id)
+        else:
+            # No code source — fall back to Ansible
+            await _ansible_self_update(slm_self_node.node_id)
+
         slm_self_node.status = "success"
         slm_self_node.completed_at = datetime.now(timezone.utc)
     else:
@@ -1156,7 +1237,7 @@ async def _run_fleet_sync_job(job: FleetSyncJob) -> None:
     # Separate SLM self-node from regular nodes (#1209)
     slm_own_ip = urlparse(settings.external_url).hostname or ""
     regular_nodes: list[NodeSyncState] = []
-    slm_self_node: Optional[NodeSyncState] = None
+    slm_self_node: NodeSyncState | None = None
 
     for ns in job.nodes.values():
         if slm_own_ip and ns.ip_address == slm_own_ip:
@@ -1171,7 +1252,7 @@ async def _run_fleet_sync_job(job: FleetSyncJob) -> None:
             slm_self_node.node_id,
         )
 
-    failure_reason: Optional[str] = None
+    failure_reason: str | None = None
     try:
         await _sync_regular_nodes(executor, job, regular_nodes)
 
@@ -1206,7 +1287,7 @@ async def _sync_single_node(
     executor,
     node_state: NodeSyncState,
     restart: bool,
-    job_id: Optional[str] = None,
+    job_id: str | None = None,
 ) -> None:
     """Sync a single node using Ansible playbook and update its state.
 
@@ -1292,7 +1373,7 @@ async def _update_fleet_node_version(node_id: str) -> None:
 class MarkSyncedRequest(BaseModel):
     """Request to mark a node as synced without running rsync."""
 
-    version: Optional[str] = None  # commit hash; defaults to slm_agent_latest_commit
+    version: str | None = None  # commit hash; defaults to slm_agent_latest_commit
 
 
 class MarkSyncedResponse(BaseModel):
@@ -1959,7 +2040,7 @@ async def _get_active_commit(db: AsyncSession) -> str:
     return source.last_known_commit
 
 
-async def _get_role_nodes(db: AsyncSession, role_name: str, node_ids: Optional[List[str]] = None) -> List[NodeRole]:
+async def _get_role_nodes(db: AsyncSession, role_name: str, node_ids: List[str] | None = None) -> List[NodeRole]:
     """Get NodeRole records, optionally filtered by node_ids.
 
     Helper for sync_role (Issue #665).
@@ -2024,7 +2105,7 @@ async def sync_role(
     role_name: str,
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(get_current_user)],
-    node_ids: Optional[List[str]] = None,
+    node_ids: List[str] | None = None,
     restart: bool = True,
 ) -> dict:
     """

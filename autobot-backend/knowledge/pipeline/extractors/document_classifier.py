@@ -7,14 +7,15 @@ Document Classifier - Classifies documents by type using heuristics.
 Issue #759: Knowledge Pipeline Foundation - Extract, Cognify, Load (ECL).
 """
 
-import logging
 import re
 from typing import Any, AsyncIterator, Dict
+
+from autobot_shared.logging_manager import get_logger
 
 from ..base import BaseExtractor, PipelineContext
 from ..registry import TaskRegistry
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @TaskRegistry.register_extractor("classify_document")

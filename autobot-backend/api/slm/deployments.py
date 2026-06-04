@@ -23,12 +23,12 @@ Related to Issue #3407.
 
 from __future__ import annotations
 
-import logging
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from auth_middleware import get_current_user
+from autobot_shared.logging_manager import get_logger
 from models.infrastructure import (
     DeploymentActionResponse,
     DeploymentCreateRequest,
@@ -45,7 +45,7 @@ from services.slm.deployment_bridge import (
 )
 from services.slm_client import get_slm_client
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(
     prefix="/slm/deployments",
@@ -170,7 +170,7 @@ async def create_deployment(
 
 @router.get("", summary="List active deployments")
 async def list_deployments(
-    status_filter: Optional[str] = Query(None),
+    status_filter: str | None = Query(None),
     orch: DeploymentCoordinator = Depends(_require_orchestrator),
 ) -> Any:
     """Return active deployments, optionally filtered by status string."""

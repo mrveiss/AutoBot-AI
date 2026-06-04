@@ -203,9 +203,7 @@ class KnowledgeConsistencyVerifier:
                                     len(kb_vec),
                                 )
                                 return False
-                            logger.info(
-                                "✅ --deep: chunker vector shape verified (dim=%s)", len(kb_vec)
-                            )
+                            logger.info("✅ --deep: chunker vector shape verified (dim=%s)", len(kb_vec))
                         except Exception as exc:
                             self.warnings.append(f"--deep chunker vector check failed: {exc}")
                             logger.warning("--deep chunker vector check failed: %s", exc)

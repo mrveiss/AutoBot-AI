@@ -1,8 +1,4 @@
 # AutoBot - AI-Powered Automation Platform
-import uuid
-
-# Copyright (c) 2025 mrveiss
-# Author: mrveiss
 """
 Summarization Agent - Specialized for document and text summarization.
 
@@ -10,10 +6,11 @@ Handles text summarization with configurable length, key point extraction,
 and structured summary generation.
 """
 
-import logging
-import threading
-from typing import Any, Dict, List, Optional
+import uuid
+from typing import Any, Dict, List
 
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import (
     get_agent_endpoint_explicit,
     get_agent_model_explicit,
@@ -25,7 +22,11 @@ from services.llm_service import get_llm_service
 from .base_agent import AgentRequest
 from .standardized_agent import ActionHandler, StandardizedAgent
 
-logger = logging.getLogger(__name__)
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+
+
+logger = get_logger(__name__)
 
 
 class SummarizationAgent(StandardizedAgent):
@@ -94,7 +95,7 @@ class SummarizationAgent(StandardizedAgent):
         )
         return await self.process_query(prompt)
 
-    async def process_query(self, request_text: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async def process_query(self, request_text: str, context: Dict[str, Any] | None = None) -> Dict[str, Any]:
         """Process a summarization query using the vLLM-optimised API (Issue #3389)."""
         try:
             logger.info("Summarization Agent processing: %s...", request_text[:50])
@@ -160,15 +161,5 @@ class SummarizationAgent(StandardizedAgent):
         return str(response)
 
 
-_summarization_agent_instance = None
-_summarization_agent_lock = threading.Lock()
-
-
-def get_summarization_agent() -> SummarizationAgent:
-    """Get the singleton Summarization Agent instance (thread-safe)."""
-    global _summarization_agent_instance
-    if _summarization_agent_instance is None:
-        with _summarization_agent_lock:
-            if _summarization_agent_instance is None:
-                _summarization_agent_instance = SummarizationAgent()
-    return _summarization_agent_instance
+get_summarization_agent = lazy_singleton(SummarizationAgent)
+"""Get the singleton Summarization Agent instance (thread-safe)."""

@@ -7,12 +7,11 @@ Handles Playwright browser automation for research tasks with user interaction s
 """
 
 import asyncio
-import logging
 import os
 import tempfile
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 import aiofiles
 
@@ -27,12 +26,13 @@ try:
 except ImportError:
     Browser = BrowserContext = Page = async_playwright = None  # type: ignore[assignment]
     PLAYWRIGHT_AVAILABLE = False
+from autobot_shared.logging_manager import get_logger
 from constants.security_constants import SecurityConstants
 from constants.threshold_constants import TimingConstants
 from source_attribution import SourceType, track_source
 from utils.display_utils import get_playwright_config
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 config = get_config_manager()
 
@@ -136,9 +136,9 @@ class ResearchBrowserSession:
         """Initialize research browser session with IDs."""
         self.session_id = session_id
         self.conversation_id = conversation_id
-        self.browser: Optional[Browser] = None
-        self.context: Optional[BrowserContext] = None
-        self.page: Optional[Page] = None
+        self.browser: Browser | None = None
+        self.context: BrowserContext | None = None
+        self.page: Page | None = None
         self.created_at = datetime.now(tz=timezone.utc)
         self.last_activity = datetime.now(tz=timezone.utc)
         self.status = "initializing"  # initializing, active, waiting_for_user, error, closed
@@ -227,7 +227,7 @@ class ResearchBrowserSession:
 
         await self.page.add_init_script(_JS_INTERACTION_DETECTION)
 
-    async def _check_interaction_required(self, url: str) -> Optional[Dict[str, Any]]:
+    async def _check_interaction_required(self, url: str) -> Dict[str, Any] | None:
         """
         Check if user interaction is required after navigation.
 
@@ -325,7 +325,7 @@ class ResearchBrowserSession:
             logger.error("Content extraction failed for session %s: %s", self.session_id, e)
             return {"success": False, "error": "Content extraction failed"}
 
-    async def save_mhtml(self) -> Optional[str]:
+    async def save_mhtml(self) -> str | None:
         """Save current page as MHTML file"""
         if not self.page:
             return None
@@ -447,18 +447,18 @@ class ResearchBrowserManager:
             logger.error(f"Failed to create research session for conversation {conversation_id}")
             return None
 
-    def get_session(self, session_id: str) -> Optional[ResearchBrowserSession]:
+    def get_session(self, session_id: str) -> ResearchBrowserSession | None:
         """Get a research session by ID"""
         return self.sessions.get(session_id)
 
-    def get_session_by_conversation(self, conversation_id: str) -> Optional[ResearchBrowserSession]:
+    def get_session_by_conversation(self, conversation_id: str) -> ResearchBrowserSession | None:
         """Get the research session for a conversation"""
         session_id = self.conversation_sessions.get(conversation_id)
         if session_id:
             return self.sessions.get(session_id)
         return None
 
-    async def _get_or_create_session(self, conversation_id: str) -> Optional[ResearchBrowserSession]:
+    async def _get_or_create_session(self, conversation_id: str) -> ResearchBrowserSession | None:
         """
         Get existing session or create a new one for the conversation.
 

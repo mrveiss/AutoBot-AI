@@ -2,7 +2,7 @@
 <template>
   <div class="graph-explorer">
     <div class="explorer-header">
-      <h4><i class="fas fa-project-diagram"></i> {{ $t('knowledge.graph.explorer.title') }}</h4>
+      <h4><Icon name="project-diagram" /> {{ $t('knowledge.graph.explorer.title') }}</h4>
       <p class="header-description">
         {{ $t('knowledge.graph.explorer.description') }}
       </p>
@@ -11,7 +11,7 @@
     <!-- Search Bar -->
     <div class="search-section">
       <div class="search-bar">
-        <i class="fas fa-search search-icon"></i>
+        <Icon name="search" class="search-icon" />
         <input
           v-model="searchQuery"
           type="text"
@@ -25,7 +25,7 @@
           :disabled="loading || !searchQuery.trim()"
           @click="handleSearch"
         >
-          <i :class="loading ? 'fas fa-spinner fa-spin' : 'fas fa-search'"></i>
+          <i :class="loading ? 'fas fa-spinner fa-spin' : 'search'"></i>
         </button>
       </div>
 
@@ -54,13 +54,13 @@
 
     <!-- Error State -->
     <div v-if="error" class="error-banner">
-      <i class="fas fa-exclamation-triangle"></i>
+      <Icon name="exclamation-triangle" />
       <span>{{ error }}</span>
     </div>
 
     <!-- Loading State -->
     <div v-if="loading" class="loading-state">
-      <i class="fas fa-spinner fa-spin"></i>
+      <Icon name="spinner" class="animate-spin" />
       <span>{{ $t('knowledge.graph.explorer.searching') }}</span>
     </div>
 
@@ -69,7 +69,7 @@
       v-else-if="hasSearched && entities.length === 0"
       class="empty-state"
     >
-      <i class="fas fa-search"></i>
+      <Icon name="search" />
       <p>{{ $t('knowledge.graph.explorer.noResults') }}</p>
     </div>
 
@@ -100,11 +100,11 @@
         </p>
         <div class="entity-meta">
           <span class="confidence-score">
-            <i class="fas fa-bullseye"></i>
+            <Icon name="bullseye" />
             {{ (entity.confidence * 100).toFixed(0) }}%
           </span>
           <span class="source-count">
-            <i class="fas fa-file-alt"></i>
+            <Icon name="file-alt" />
             {{ $t('knowledge.graph.explorer.sourcesCount', { count: entity.source_document_ids.length }) }}
           </span>
         </div>
@@ -126,6 +126,7 @@
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
 
+import Icon from '@/components/ui/Icon.vue'
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import {

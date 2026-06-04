@@ -1,23 +1,29 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
-import logging
+
+"""
+Redis health, connection-status, and configuration endpoints.
+
+Exposes diagnostic routes for inspecting Redis connectivity, memory usage,
+and runtime configuration without direct redis-cli access.
+"""
 
 from fastapi import APIRouter, HTTPException
 
 from api.schemas_system import (
     RedisConfigResponse,
     RedisConnectionStatusResponse,
-    RedisHealthResponse,
 )
 from api.system_health import register_redis_probe
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from services.config_service import ConfigService
 from utils.connection_utils import ConnectionTester
 
 router = APIRouter()
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @router.get("/config", response_model=RedisConfigResponse)
@@ -90,30 +96,3 @@ async def test_redis_connection():
 
 
 register_redis_probe("redis", database="main")
-
-
-@router.get("/health", response_model=RedisHealthResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_redis_health",
-    error_code_prefix="REDIS",
-)
-async def get_redis_health():
-    """Get Redis health status for frontend health checks"""
-    try:
-        result = ConnectionTester.test_redis_connection()
-        return {
-            "status": "healthy" if result.get("status") == "connected" else "unhealthy",
-            "redis_status": result.get("status"),
-            "message": result.get("message"),
-            "host": result.get("host"),
-            "port": result.get("port"),
-            "redis_search_module_loaded": result.get("redis_search_module_loaded", False),
-        }
-    except Exception:
-        logger.error("Redis health check failed: %s", "Internal server error")
-        return {
-            "status": "unhealthy",
-            "redis_status": "disconnected",
-            "message": "Failed to check Redis health",
-        }

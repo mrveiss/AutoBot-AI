@@ -11,7 +11,7 @@ Part of Issue #381 - God Class Refactoring
 
 import time
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from .types import ModalityType, ProcessingIntent
 
@@ -40,5 +40,5 @@ class ProcessingResult:
     confidence: float
     result_data: Any
     processing_time: float
-    error_message: Optional[str] = None
+    error_message: str | None = None
     metadata: Dict[str, Any] = field(default_factory=dict)

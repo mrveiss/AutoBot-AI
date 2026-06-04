@@ -14,15 +14,15 @@ Supports:
 """
 
 import json
-import logging
 import time
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 
 from .models import DecisionContext, InterventionOutcome
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class CounterfactualReasoner:
@@ -93,7 +93,7 @@ class CounterfactualReasoner:
         decision_option: str,
         context: DecisionContext,
         redis: Any,
-    ) -> Optional[InterventionOutcome]:
+    ) -> InterventionOutcome | None:
         """Predict based on execution history (what happened before?).
 
         Queries similar past decisions and aggregates their outcomes.
@@ -171,7 +171,7 @@ class CounterfactualReasoner:
         decision_option: str,
         context: DecisionContext,
         redis: Any,
-    ) -> Optional[InterventionOutcome]:
+    ) -> InterventionOutcome | None:
         """Predict based on causal knowledge (if/then relationships).
 
         Uses causal patterns stored in Redis (from Tier 2 RAG or manual rules).

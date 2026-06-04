@@ -4,6 +4,13 @@
 # AutoBot Agents Package
 
 # Import available agent classes
+"""
+AutoBot specialized agents package.
+
+Exports factory functions for all domain-specific agent types (KB librarian,
+research, chat, classification, code generation, and more).
+"""
+
 from .kb_librarian_agent import get_kb_librarian
 from .librarian_assistant import get_librarian_assistant
 

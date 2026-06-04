@@ -29,16 +29,17 @@ Usage:
 
 import asyncio
 import json
-import logging
 from pathlib import Path
-from typing import Dict, List, Optional, Union
+from typing import Dict, List
 
 import aiofiles
 import numpy as np
 from docx import Document as DocxDocument
 from pypdf import PdfReader
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 
 # Module-level constants for O(1) lookups (Issue #326)
 DOCX_EXTENSIONS = {".docx", ".doc"}
@@ -92,7 +93,7 @@ class DocumentExtractor:
     }
 
     @staticmethod
-    async def extract_from_pdf(file_path: Union[str, Path]) -> str:
+    async def extract_from_pdf(file_path: str | Path) -> str:
         """
         Extract text from PDF file using pypdf
 
@@ -142,7 +143,7 @@ class DocumentExtractor:
         return await asyncio.to_thread(extract_sync)
 
     @staticmethod
-    async def extract_from_docx(file_path: Union[str, Path]) -> str:
+    async def extract_from_docx(file_path: str | Path) -> str:
         """
         Extract text from DOCX file using python-docx
 
@@ -188,7 +189,7 @@ class DocumentExtractor:
         return await asyncio.to_thread(extract_sync)
 
     @staticmethod
-    async def extract_from_text(file_path: Union[str, Path], encoding: str = "utf-8") -> str:
+    async def extract_from_text(file_path: str | Path, encoding: str = "utf-8") -> str:
         """
         Extract text from plain text file with proper UTF-8 encoding
 
@@ -226,7 +227,7 @@ class DocumentExtractor:
             raise
 
     @staticmethod
-    async def extract_from_file(file_path: Union[str, Path]) -> str:
+    async def extract_from_file(file_path: str | Path) -> str:
         """
         Route to appropriate extraction method based on file extension
 
@@ -281,7 +282,7 @@ class DocumentExtractor:
         directory_path: Path,
         file_types: List[str],
         glob_pattern: str,
-        max_files: Optional[int],
+        max_files: int | None,
     ) -> List[Path]:
         """Sync helper for collecting files (Issue #281 - extracted helper)."""
         result_files = []
@@ -312,10 +313,10 @@ class DocumentExtractor:
 
     @staticmethod
     async def extract_from_directory(
-        directory_path: Union[str, Path],
-        file_types: Optional[List[str]] = None,
+        directory_path: str | Path,
+        file_types: List[str] | None = None,
         recursive: bool = True,
-        max_files: Optional[int] = None,
+        max_files: int | None = None,
     ) -> Dict[Path, str]:
         """
         Extract text from all supported documents in a directory.
@@ -381,7 +382,7 @@ class DocumentExtractor:
         return all_extensions
 
     @staticmethod
-    def is_supported_format(file_path: Union[str, Path]) -> bool:
+    def is_supported_format(file_path: str | Path) -> bool:
         """
         Check if file format is supported
 
@@ -400,16 +401,16 @@ class DocumentExtractor:
 
 
 # Convenience functions for backward compatibility
-async def extract_pdf_text(file_path: Union[str, Path]) -> str:
+async def extract_pdf_text(file_path: str | Path) -> str:
     """Convenience function for PDF extraction"""
     return await DocumentExtractor.extract_from_pdf(file_path)
 
 
-async def extract_docx_text(file_path: Union[str, Path]) -> str:
+async def extract_docx_text(file_path: str | Path) -> str:
     """Convenience function for DOCX extraction"""
     return await DocumentExtractor.extract_from_docx(file_path)
 
 
-async def extract_text_file(file_path: Union[str, Path]) -> str:
+async def extract_text_file(file_path: str | Path) -> str:
     """Convenience function for text file extraction"""
     return await DocumentExtractor.extract_from_text(file_path)

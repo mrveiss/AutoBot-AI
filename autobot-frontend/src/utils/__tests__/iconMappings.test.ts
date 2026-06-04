@@ -9,17 +9,7 @@ import { describe, it, expect } from 'vitest'
 // Issue #156 Fix: Import only exported members from iconMappings
 import {
   getStatusIcon,
-  getFileIcon,
-  getPlatformIcon,
-  getDocumentTypeIcon,
-  getFileIconByMimeType,
-  getStatusColorClass,
-  getStatusIconWithColor,
-  normalizeServiceStatus,
-  type StatusType,
-  type FileType,
-  type DocumentType,
-  type PlatformType
+  normalizeServiceStatus
 } from '../iconMappings'
 
 describe('iconMappings utility', () => {
@@ -87,8 +77,8 @@ describe('iconMappings utility', () => {
   // ========================================
 
   // Issue #156 Fix: Removed tests for non-existent functions (getConnectionIcon, getActionIcon, getIcon, iconMappings object)
-  // The current API only exports: getFileIcon, getStatusIcon, getPlatformIcon, getDocumentTypeIcon,
-  // getFileIconByMimeType, getStatusColorClass, getStatusIconWithColor, normalizeServiceStatus
+  // The current API only exports:  getStatusIcon,
+  //    normalizeServiceStatus
   // Tests for these additional functions should be added as needed
 
   // ========================================

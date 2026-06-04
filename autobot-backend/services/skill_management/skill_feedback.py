@@ -9,17 +9,18 @@ provide refinement recommendations.
 """
 
 import json
-import logging
 from collections import Counter
 from datetime import timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
+from autobot_shared.ssot_constants import TTL_90_DAYS
 from autobot_shared.time_utils import now_utc
 
 from .skill_metrics import SkillMetrics
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class SkillFeedbackAnalyzer(AsyncRedisClientMixin):
@@ -35,7 +36,7 @@ class SkillFeedbackAnalyzer(AsyncRedisClientMixin):
         skill_id: str,
         action: str,
         rating: int,
-        feedback_text: Optional[str] = None,
+        feedback_text: str | None = None,
     ) -> None:
         """Log user feedback for a skill invocation.
 
@@ -61,7 +62,7 @@ class SkillFeedbackAnalyzer(AsyncRedisClientMixin):
 
             key = f"skill_feedback:{skill_id}:{now.strftime('%Y-%m-%d')}"
             await redis.lpush(key, json.dumps(feedback_entry, default=str))
-            await redis.expire(key, 90 * 86400)  # Keep 90 days
+            await redis.expire(key, TTL_90_DAYS)  # Keep 90 days
 
             logger.debug("Logged feedback for %s: rating=%d", skill_id, rating)
 

@@ -81,18 +81,14 @@ class KbEventPlugin(BasePlugin):
 
     async def _on_message_received(self, *, session_id: str, message: str, **_: Any) -> None:
         """Audit-log incoming chat messages."""
-        self._event_counts["on_message_received"] = (
-            self._event_counts.get("on_message_received", 0) + 1
-        )
+        self._event_counts["on_message_received"] = self._event_counts.get("on_message_received", 0) + 1
         self._logger.info(
             "KbEventPlugin[on_message_received] session=%s message_len=%d",
             session_id,
             len(message),
         )
 
-    async def _on_kb_search(
-        self, *, session_id: str, query: str, context_length: int, **_: Any
-    ) -> None:
+    async def _on_kb_search(self, *, session_id: str, query: str, context_length: int, **_: Any) -> None:
         """Audit-log knowledge base searches."""
         self._event_counts["on_kb_search"] = self._event_counts.get("on_kb_search", 0) + 1
         self._logger.info(
@@ -102,13 +98,9 @@ class KbEventPlugin(BasePlugin):
             context_length,
         )
 
-    async def _on_agent_complete(
-        self, *, session_id: str, iteration: int, response: str, **_: Any
-    ) -> None:
+    async def _on_agent_complete(self, *, session_id: str, iteration: int, response: str, **_: Any) -> None:
         """Audit-log completed agent (LLM) iterations."""
-        self._event_counts["on_agent_complete"] = (
-            self._event_counts.get("on_agent_complete", 0) + 1
-        )
+        self._event_counts["on_agent_complete"] = self._event_counts.get("on_agent_complete", 0) + 1
         self._logger.info(
             "KbEventPlugin[on_agent_complete] session=%s iteration=%d response_len=%d",
             session_id,

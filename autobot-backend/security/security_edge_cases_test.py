@@ -178,7 +178,7 @@ class TestSecurityEdgeCases:
 
         #7384 sub-fix #2: original assertion ``not auth_result.get("authenticated", False)``
         was test rot — it expected a dict-shaped return but
-        ``authenticate_user`` returns ``Optional[str]`` (role name on
+        ``authenticate_user`` returns ``str | None`` (role name on
         success, ``None`` on refusal). The actual contract is "refused
         auth → returns ``None``"; rewriting the assertion to match the
         real production contract resolves the rot without changing the

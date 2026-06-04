@@ -1,15 +1,15 @@
 <template>
   <div class="stats-actions">
     <button @click="$emit('export')" class="action-btn">
-      <i class="fas fa-download"></i>
+      <Icon name="download" />
       {{ $t('knowledge.stats.actions.exportStatistics') }}
     </button>
     <button @click="$emit('optimize')" class="action-btn">
-      <i class="fas fa-compress"></i>
+      <Icon name="compress" />
       {{ $t('knowledge.stats.actions.optimizeDatabase') }}
     </button>
     <button @click="$emit('generate-report')" class="action-btn primary">
-      <i class="fas fa-file-chart-line"></i>
+      <Icon name="file-chart-line" />
       {{ $t('knowledge.stats.actions.generateReport') }}
     </button>
   </div>
@@ -27,6 +27,7 @@
  *
  * Issue #184: Split oversized Vue components
  */
+import Icon from '@/components/ui/Icon.vue'
 
 interface Emits {
   (e: 'export'): void

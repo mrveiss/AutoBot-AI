@@ -9,8 +9,7 @@ Provides endpoints for testing connections, sending messages, and
 listing channels/guilds.
 """
 
-import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
@@ -22,6 +21,7 @@ from api.schemas_workflows import (
 )
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from integrations.base import IntegrationConfig, IntegrationHealth
 from integrations.communication_integration import (
     DiscordIntegration,
@@ -29,7 +29,7 @@ from integrations.communication_integration import (
     TeamsIntegration,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(
     tags=["integrations-communication"],
@@ -110,8 +110,8 @@ async def list_providers() -> List[CommProviderInfo]:
 async def list_channels(
     provider: str,
     token: str,
-    guild_id: Optional[str] = None,
-    team_id: Optional[str] = None,
+    guild_id: str | None = None,
+    team_id: str | None = None,
 ) -> Dict[str, Any]:
     """List channels/teams for the specified provider."""
     provider_lower = provider.lower()

@@ -57,6 +57,11 @@ The pipeline uses these GitHub repository secrets:
 - `CODECOV_TOKEN`: For coverage reporting (optional)
 
 ### Branch Protection
+
+**`Dev_new_gui` required status checks (enforced):**
+- `smoke-test` — startup import smoke test
+- `code-quality` — Black, isort, flake8, bandit, autoflake, mypy, and custom regression guards
+
 Recommended branch protection rules for `main`:
 - Require status checks to pass
 - Require branches to be up to date

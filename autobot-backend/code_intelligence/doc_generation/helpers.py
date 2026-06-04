@@ -13,7 +13,9 @@ Part of Issue #381 god class refactoring - extracted from DocGenerator.
 import ast
 import os
 import re
-from typing import FrozenSet, List, Optional, Tuple, Union
+from typing import FrozenSet, List, Tuple
+
+from autobot_shared.logging_manager import get_logger
 
 # Issue #380: Module-level frozenset for enum base class checking
 ENUM_BASE_CLASSES: FrozenSet[str] = frozenset({"Enum", "IntEnum", "StrEnum"})
@@ -78,7 +80,7 @@ STDLIB_MODULES = frozenset(
 README_NAMES = ["README.md", "README.rst", "README.txt", "README"]
 
 
-def get_node_name(node: Optional[ast.AST]) -> str:
+def get_node_name(node: ast.AST | None) -> str:
     """Get the name representation of an AST node.
 
     Args:
@@ -108,7 +110,7 @@ def get_node_name(node: Optional[ast.AST]) -> str:
     return str(type(node).__name__)
 
 
-def get_node_value(node: Optional[ast.AST]) -> str:
+def get_node_value(node: ast.AST | None) -> str:
     """Get the value representation of an AST node.
 
     Args:
@@ -135,7 +137,7 @@ def get_node_value(node: Optional[ast.AST]) -> str:
     return "..."
 
 
-def extract_imports(node: Union[ast.Import, ast.ImportFrom]) -> List[str]:
+def extract_imports(node: ast.Import | ast.ImportFrom) -> List[str]:
     """Extract import statements from AST node.
 
     Args:
@@ -271,9 +273,9 @@ class PackageContentCache:
             package_path: Path to package directory
         """
         self.package_path = package_path
-        self._init_content: Optional[str] = None
-        self._setup_content: Optional[str] = None
-        self._readme_content: Optional[str] = None
+        self._init_content: str | None = None
+        self._setup_content: str | None = None
+        self._readme_content: str | None = None
         self._loaded = False
 
     def _ensure_loaded(self) -> None:
@@ -312,7 +314,7 @@ class PackageContentCache:
 
         self._loaded = True
 
-    def extract_version(self) -> Optional[str]:
+    def extract_version(self) -> str | None:
         """Extract version from pre-loaded content."""
         self._ensure_loaded()
 
@@ -330,7 +332,7 @@ class PackageContentCache:
 
         return None
 
-    def extract_author(self) -> Optional[str]:
+    def extract_author(self) -> str | None:
         """Extract author from pre-loaded content."""
         self._ensure_loaded()
 
@@ -342,12 +344,12 @@ class PackageContentCache:
         return None
 
     @property
-    def readme_content(self) -> Optional[str]:
+    def readme_content(self) -> str | None:
         """Get pre-loaded README content."""
         self._ensure_loaded()
         return self._readme_content
 
-    def get_all_metadata(self) -> Tuple[Optional[str], Optional[str], Optional[str]]:
+    def get_all_metadata(self) -> Tuple[str | None, str | None, str | None]:
         """Get all metadata in one call.
 
         Returns:
@@ -357,7 +359,7 @@ class PackageContentCache:
         return self.extract_version(), self.extract_author(), self._readme_content
 
 
-def extract_package_metadata(package_path: str) -> Tuple[Optional[str], Optional[str]]:
+def extract_package_metadata(package_path: str) -> Tuple[str | None, str | None]:
     """Extract version and author from package in single file read.
 
     Issue #623: Consolidates extract_version and extract_author to avoid
@@ -373,7 +375,7 @@ def extract_package_metadata(package_path: str) -> Tuple[Optional[str], Optional
     return cache.extract_version(), cache.extract_author()
 
 
-def extract_version(package_path: str) -> Optional[str]:
+def extract_version(package_path: str) -> str | None:
     """Extract version from package.
 
     Args:
@@ -386,7 +388,7 @@ def extract_version(package_path: str) -> Optional[str]:
     return cache.extract_version()
 
 
-def extract_author(package_path: str) -> Optional[str]:
+def extract_author(package_path: str) -> str | None:
     """Extract author from package.
 
     Args:
@@ -399,7 +401,7 @@ def extract_author(package_path: str) -> Optional[str]:
     return cache.extract_author()
 
 
-def load_readme_content(package_path: str) -> Optional[str]:
+def load_readme_content(package_path: str) -> str | None:
     """Load README content if available.
 
     Args:
@@ -412,7 +414,7 @@ def load_readme_content(package_path: str) -> Optional[str]:
     return cache.readme_content
 
 
-def validate_module_path(file_path: str) -> Optional[str]:
+def validate_module_path(file_path: str) -> str | None:
     """Validate module path exists and is a Python file.
 
     Args:
@@ -421,9 +423,8 @@ def validate_module_path(file_path: str) -> Optional[str]:
     Returns:
         Absolute path if valid, None otherwise
     """
-    import logging
 
-    logger = logging.getLogger(__name__)
+    logger = get_logger(__name__)
 
     abs_path = os.path.abspath(file_path)
 
@@ -438,7 +439,7 @@ def validate_module_path(file_path: str) -> Optional[str]:
     return abs_path
 
 
-def read_and_parse_module(file_path: str) -> Optional[Tuple[str, ast.Module]]:
+def read_and_parse_module(file_path: str) -> Tuple[str, ast.Module] | None:
     """Read and parse a Python module.
 
     Args:
@@ -447,9 +448,8 @@ def read_and_parse_module(file_path: str) -> Optional[Tuple[str, ast.Module]]:
     Returns:
         Tuple of (source, ast) or None on error
     """
-    import logging
 
-    logger = logging.getLogger(__name__)
+    logger = get_logger(__name__)
 
     try:
         with open(file_path, "r", encoding="utf-8") as f:
@@ -466,7 +466,7 @@ def read_and_parse_module(file_path: str) -> Optional[Tuple[str, ast.Module]]:
         return None
 
 
-def build_signature(node: Union[ast.FunctionDef, ast.AsyncFunctionDef]) -> str:
+def build_signature(node: ast.FunctionDef | ast.AsyncFunctionDef) -> str:
     """Build function signature string.
 
     Args:
@@ -499,7 +499,7 @@ def build_signature(node: Union[ast.FunctionDef, ast.AsyncFunctionDef]) -> str:
     return signature
 
 
-def is_method(node: Union[ast.FunctionDef, ast.AsyncFunctionDef]) -> bool:
+def is_method(node: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
     """Check if a function is a method (has self/cls parameter).
 
     Args:

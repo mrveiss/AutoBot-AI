@@ -84,26 +84,26 @@ onMounted(async () => {
 <template>
   <main
     id="main-content"
-    class="min-h-screen bg-linear-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4"
+    class="min-h-screen bg-slate-900 flex items-center justify-center p-4"
     aria-label="Login page"
   >
     <div class="w-full max-w-md">
       <!-- Logo/Header -->
       <div class="text-center mb-8">
         <div
-          class="inline-flex items-center justify-center w-16 h-16 rounded-xl bg-linear-to-br from-primary-500 to-primary-600 shadow-lg mb-4"
+          class="inline-flex items-center justify-center w-16 h-16 rounded-xl bg-primary-600 shadow-lg mb-4"
           aria-hidden="true"
         >
           <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" />
           </svg>
         </div>
-        <h1 class="text-2xl font-bold text-white">Service Lifecycle Manager</h1>
-        <p class="text-slate-400 mt-1">Sign in to your admin account</p>
+        <h1 class="text-2xl font-bold text-white">{{ $t('loginView.serviceLifecycleManager') }}</h1>
+        <p class="text-slate-400 mt-1">{{ $t('loginView.signInToYour') }}</p>
       </div>
 
       <!-- Login Form -->
-      <div class="bg-white rounded-2xl shadow-xl p-8">
+      <div class="bg-white rounded-xl shadow-lg p-8">
         <!-- Standard Login Form -->
         <form
           v-if="!authStore.mfaPending"
@@ -114,7 +114,7 @@ onMounted(async () => {
           <!-- Username -->
           <div>
             <label for="username" class="block text-sm font-medium text-gray-700 mb-1">
-              Username
+              {{ $t('loginView.username') }}
             </label>
             <div class="relative">
               <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none" aria-hidden="true">
@@ -138,7 +138,7 @@ onMounted(async () => {
           <!-- Password -->
           <div>
             <label for="password" class="block text-sm font-medium text-gray-700 mb-1">
-              Password
+              {{ $t('loginView.password') }}
             </label>
             <div class="relative">
               <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none" aria-hidden="true">
@@ -188,7 +188,7 @@ onMounted(async () => {
           <button
             type="submit"
             :disabled="authStore.loading"
-            class="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-linear-to-r from-primary-600 to-primary-700 text-white font-medium rounded-lg hover:from-primary-700 hover:to-primary-800 focus:ring-4 focus:ring-primary-300 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            class="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-primary-600 text-white font-medium rounded-lg hover:bg-primary-700 focus:ring-4 focus:ring-primary-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <svg v-if="authStore.loading" class="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24" aria-hidden="true">
               <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
@@ -204,12 +204,12 @@ onMounted(async () => {
             <svg class="w-12 h-12 text-primary-600 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
             </svg>
-            <h2 class="text-lg font-semibold text-gray-900">Two-Factor Authentication</h2>
-            <p class="text-sm text-gray-500">Enter the code from your authenticator app</p>
+            <h2 class="text-lg font-semibold text-gray-900">{{ $t('loginView.twoFactorAuthentication') }}</h2>
+            <p class="text-sm text-gray-500">{{ $t('loginView.enterTheCodeFrom') }}</p>
           </div>
 
           <div>
-            <label for="mfa-code" class="sr-only">Authentication code</label>
+            <label for="mfa-code" class="sr-only">{{ $t('loginView.authenticationCode') }}</label>
             <input
               id="mfa-code"
               v-model="mfaCode"
@@ -231,7 +231,7 @@ onMounted(async () => {
           <button
             @click="handleMFAVerify"
             :disabled="authStore.loading || mfaCode.length < 6"
-            class="w-full py-2.5 px-4 bg-linear-to-r from-primary-600 to-primary-700 text-white font-medium rounded-lg hover:from-primary-700 hover:to-primary-800 disabled:opacity-50"
+            class="w-full py-2.5 px-4 bg-primary-600 text-white font-medium rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50"
           >
             {{ authStore.loading ? 'Verifying...' : 'Verify' }}
           </button>
@@ -241,7 +241,7 @@ onMounted(async () => {
             type="button"
             class="w-full py-2 text-sm text-gray-500 hover:text-gray-700"
           >
-            Back to login
+            {{ $t('loginView.backToLogin') }}
           </button>
         </div>
 
@@ -252,7 +252,7 @@ onMounted(async () => {
               <div class="w-full border-t border-gray-300"></div>
             </div>
             <div class="relative flex justify-center text-sm">
-              <span class="px-3 bg-white text-gray-400">Or continue with</span>
+              <span class="px-3 bg-white text-gray-400">{{ $t('loginView.orContinueWith') }}</span>
             </div>
           </div>
 
@@ -279,10 +279,10 @@ onMounted(async () => {
         <!-- Footer (Issue #1017: admin recovery guidance) -->
         <div class="mt-6 pt-6 border-t border-gray-200 space-y-2">
           <p class="text-center text-sm text-gray-500">
-            AutoBot Service Lifecycle Manager
+            {{ $t('loginView.autoBotServiceLifecycleManager') }}
           </p>
           <p class="text-center text-xs text-gray-400">
-            Locked out? Run <code class="bg-gray-100 px-1 py-0.5 rounded-sm text-gray-500">autobot-admin reset-password</code> on the server or contact your system administrator.
+            {{ $t('loginView.lockedOutRun') }} <code class="bg-gray-100 px-1 py-0.5 rounded-sm text-gray-500">{{ $t('loginView.autobotAdminResetPassword') }}</code> {{ $t('loginView.onTheServerOr') }}
           </p>
         </div>
       </div>

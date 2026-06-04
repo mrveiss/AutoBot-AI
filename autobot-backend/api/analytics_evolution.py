@@ -15,15 +15,21 @@ Features:
 
 import asyncio
 import json
-import logging
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from api.analytics_shared import resolve_source_or_404 as _resolve_source_or_404
 from api.schemas_analytics import (
+    AnalyticsEvolutionExportResponse,
+    AnalyticsEvolutionPatternSnapshotResponse,
+    AnalyticsEvolutionPatternsResponse,
+    AnalyticsEvolutionSnapshotResponse,
+    AnalyticsEvolutionSummaryResponse,
+    AnalyticsEvolutionTimelineResponse,
+    AnalyticsEvolutionTrendsResponse,
     DateRangeParams,
     EvolutionAnalysisRequest,
     EvolutionAnalysisResponse,
@@ -33,12 +39,13 @@ from api.schemas_analytics import (
 from api.schemas_common import DataResponse
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.redis_utils import decode_redis_value as _decode_redis_value
 from autobot_shared.security.path_validator import validate_path
 from autobot_shared.time_utils import parse_utc_iso
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 router = APIRouter(tags=["code-evolution", "analytics"])  # Prefix set in router_registry
 
 
@@ -52,7 +59,7 @@ METRICS_PREFIX = f"{EVOLUTION_PREFIX}metrics:"
 PATTERNS_PREFIX = f"{EVOLUTION_PREFIX}patterns:"
 
 
-def _build_evolution_prefixes(source_id: Optional[str]) -> tuple[str, str, str]:
+def _build_evolution_prefixes(source_id: str | None) -> tuple[str, str, str]:
     """Return (evolution_prefix, snapshot_prefix, patterns_prefix) scoped to source_id.
 
     Issue #3441: When source_id is provided, all Redis keys are namespaced as
@@ -279,7 +286,7 @@ async def store_pattern_snapshot(snapshot: PatternSnapshot) -> bool:
         return False
 
 
-def _parse_date_range(start_date: Optional[str], end_date: Optional[str]) -> tuple:
+def _parse_date_range(start_date: str | None, end_date: str | None) -> tuple:
     """Parse date range to timestamps (Issue #398: extracted)."""
     start_ts = (
         parse_utc_iso(start_date).timestamp()
@@ -315,7 +322,7 @@ def _build_timeline_response(timeline: list, start_date: str, end_date: str, gra
     }
 
 
-@router.get("/timeline", response_model=DataResponse)
+@router.get("/timeline", response_model=DataResponse[AnalyticsEvolutionTimelineResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_evolution_timeline",
@@ -329,7 +336,7 @@ async def get_evolution_timeline(
         description="Comma-separated metrics",
     ),
     admin_check: bool = Depends(check_admin_permission),
-    source_id: Optional[str] = Query(None, description="Project source ID to scope analysis"),
+    source_id: str | None = Query(None, description="Project source ID to scope analysis"),
 ):
     """Get code evolution timeline (Issue #398: refactored).
 
@@ -388,18 +395,18 @@ async def get_evolution_timeline(
         )
 
 
-@router.get("/patterns", response_model=DataResponse)
+@router.get("/patterns", response_model=DataResponse[AnalyticsEvolutionPatternsResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_pattern_evolution",
     error_code_prefix="ANALYTICS_EVOLUTION",
 )
 async def get_pattern_evolution(
-    pattern_type: Optional[str] = Query(None, description="Filter by pattern type (e.g., god_class, long_method)"),
-    start_date: Optional[str] = Query(None, description="Start date (ISO format)"),
-    end_date: Optional[str] = Query(None, description="End date (ISO format)"),
+    pattern_type: str | None = Query(None, description="Filter by pattern type (e.g., god_class, long_method)"),
+    start_date: str | None = Query(None, description="Start date (ISO format)"),
+    end_date: str | None = Query(None, description="End date (ISO format)"),
     admin_check: bool = Depends(check_admin_permission),
-    source_id: Optional[str] = Query(None, description="Project source ID to scope analysis"),
+    source_id: str | None = Query(None, description="Project source ID to scope analysis"),
 ):
     """
     Get pattern evolution data (Issue #315: depth 6→3).
@@ -495,7 +502,7 @@ def _fetch_trend_snapshots_sync(
     return results
 
 
-def _calculate_metric_trend(snapshots: List[Dict], metric: str) -> Optional[Dict]:
+def _calculate_metric_trend(snapshots: List[Dict], metric: str) -> Dict | None:
     """Calculate trend data for a single metric (Issue #398: extracted)."""
     values = [s.get(metric, 0) for s in snapshots if metric in s]
     if len(values) < 2:
@@ -544,7 +551,7 @@ def _build_trends_success_response(trends: dict, days: int, snapshot_count: int)
     }
 
 
-@router.get("/trends", response_model=DataResponse)
+@router.get("/trends", response_model=DataResponse[AnalyticsEvolutionTrendsResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_quality_trends",
@@ -553,7 +560,7 @@ def _build_trends_success_response(trends: dict, days: int, snapshot_count: int)
 async def get_quality_trends(
     days: int = Query(30, description="Number of days to analyze", ge=1, le=365),
     admin_check: bool = Depends(check_admin_permission),
-    source_id: Optional[str] = Query(None, description="Project source ID to scope analysis"),
+    source_id: str | None = Query(None, description="Project source ID to scope analysis"),
 ):
     """Get quality trend analysis (Issue #398: refactored).
 
@@ -611,7 +618,7 @@ async def get_quality_trends(
         )
 
 
-@router.post("/snapshot", response_model=DataResponse)
+@router.post("/snapshot", response_model=DataResponse[AnalyticsEvolutionSnapshotResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="record_quality_snapshot",
@@ -648,7 +655,7 @@ async def record_quality_snapshot(
         )
 
 
-@router.post("/pattern-snapshot", response_model=DataResponse)
+@router.post("/pattern-snapshot", response_model=DataResponse[AnalyticsEvolutionPatternSnapshotResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="record_pattern_snapshot",
@@ -685,7 +692,7 @@ async def record_pattern_snapshot(
         )
 
 
-def _parse_export_date_range(start_date: Optional[str], end_date: Optional[str]) -> tuple:
+def _parse_export_date_range(start_date: str | None, end_date: str | None) -> tuple:
     """Parse export date range with defaults (Issue #398: extracted)."""
     start_ts = parse_utc_iso(start_date).timestamp() if start_date else 0
     end_ts = parse_utc_iso(end_date).timestamp() if end_date else datetime.now(tz=timezone.utc).timestamp()
@@ -752,7 +759,7 @@ def _generate_json_export_response(timeline_data: list) -> JSONResponse:
     )
 
 
-@router.get("/export", response_model=DataResponse)
+@router.get("/export", response_model=DataResponse[AnalyticsEvolutionExportResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="export_evolution_data",
@@ -760,8 +767,8 @@ def _generate_json_export_response(timeline_data: list) -> JSONResponse:
 )
 async def export_evolution_data(
     format: str = Query("json", description="Export format: json, csv"),
-    start_date: Optional[str] = Query(None, description="Start date (ISO format)"),
-    end_date: Optional[str] = Query(None, description="End date (ISO format)"),
+    start_date: str | None = Query(None, description="Start date (ISO format)"),
+    end_date: str | None = Query(None, description="End date (ISO format)"),
     admin_check: bool = Depends(check_admin_permission),
 ):
     """Export evolution data in JSON or CSV format (Issue #398: refactored, #543: no demo data).
@@ -809,7 +816,7 @@ async def export_evolution_data(
         )
 
 
-@router.get("/summary", response_model=DataResponse)
+@router.get("/summary", response_model=DataResponse[AnalyticsEvolutionSummaryResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_evolution_summary",
@@ -817,7 +824,7 @@ async def export_evolution_data(
 )
 async def get_evolution_summary(
     admin_check: bool = Depends(check_admin_permission),
-    source_id: Optional[str] = Query(None, description="Project source ID to scope analysis"),
+    source_id: str | None = Query(None, description="Project source ID to scope analysis"),
 ):
     """
     Get a summary of code evolution including key statistics.
@@ -955,9 +962,7 @@ def _create_demo_data_point(current: datetime, start: datetime, base_score: floa
     }
 
 
-def _generate_demo_timeline(
-    start_date: Optional[str], end_date: Optional[str], granularity: str
-) -> List[Dict[str, Any]]:
+def _generate_demo_timeline(start_date: str | None, end_date: str | None, granularity: str) -> List[Dict[str, Any]]:
     """Generate demo timeline data for visualization testing (Issue #398: refactored).
 
     TEST ONLY - Not used in production responses (Issue #543).

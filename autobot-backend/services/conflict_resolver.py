@@ -26,9 +26,7 @@ Architecture:
 All I/O is async-first; no blocking operations.
 """
 
-import logging
 import time
-from typing import Optional
 
 from api.knowledge_grounding_models import (
     Claim,
@@ -41,9 +39,11 @@ from api.knowledge_grounding_models import (
     ReviewTicketPriority,
     ReviewTicketStatus,
 )
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
+from autobot_shared.ssot_constants import TTL_90_DAYS
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Redis database for conflict resolution data
 _REDIS_DATABASE = "analytics"
@@ -165,7 +165,7 @@ class ConflictResolver(AsyncRedisClientMixin):
         self,
         kb_fact: KBFact,
         agent_claim: Claim,
-        research_result: Optional[ResearchResult] = None,
+        research_result: ResearchResult | None = None,
     ) -> ResolvedClaim:
         """Resolve conflict between KB fact and agent claim.
 
@@ -335,7 +335,7 @@ class ConflictResolver(AsyncRedisClientMixin):
             # For now: log to Redis for audit
             key = f"kb_updates:{kb_fact.source_id}"
             await redis.lpush(key, str(update_record))
-            await redis.expire(key, 86400 * 90)  # Keep 90 days
+            await redis.expire(key, TTL_90_DAYS)  # Keep 90 days
 
             logger.info(f"KB update recorded: {key}")
             return True
@@ -434,7 +434,7 @@ class ConflictResolver(AsyncRedisClientMixin):
         resolution: ResolvedClaim,
         resolved_by: str,
         notes: str = "",
-    ) -> Optional[ReviewTicket]:
+    ) -> ReviewTicket | None:
         """Mark a review ticket as resolved by human decision.
 
         Updates ticket status to RESOLVED and persists the human's
@@ -487,7 +487,7 @@ class ConflictResolver(AsyncRedisClientMixin):
             logger.error(f"Failed to resolve review ticket: {e}", exc_info=True)
             return None
 
-    async def dismiss_review_ticket(self, ticket_id: str, dismissed_by: str, notes: str = "") -> Optional[ReviewTicket]:
+    async def dismiss_review_ticket(self, ticket_id: str, dismissed_by: str, notes: str = "") -> ReviewTicket | None:
         """Mark a review ticket as dismissed (false conflict).
 
         Updates ticket status to DISMISSED and records why the conflict

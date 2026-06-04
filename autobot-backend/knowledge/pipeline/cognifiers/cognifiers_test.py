@@ -16,10 +16,10 @@ from uuid import uuid4
 
 import pytest
 
-# Mock llm_interface_pkg before importing cognifiers
-_mock_llm = ModuleType("llm_interface_pkg")
+# Mock llm_shared before importing cognifiers
+_mock_llm = ModuleType("llm_shared")
 _mock_llm.LLMInterface = MagicMock
-sys.modules["llm_interface_pkg"] = _mock_llm
+sys.modules["llm_shared"] = _mock_llm
 
 # Mock autobot_shared.redis_client before importing cognifiers
 _mock_shared = ModuleType("autobot_shared")

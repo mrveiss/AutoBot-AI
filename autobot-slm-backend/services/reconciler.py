@@ -14,7 +14,7 @@ import logging
 import ssl
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -74,7 +74,7 @@ class ReconcilerService:
 
     def __init__(self):
         self._running = False
-        self._task: Optional[asyncio.Task] = None
+        self._task: asyncio.Task | None = None
         # Default: 3 missed heartbeats = unhealthy
         self._heartbeat_timeout = settings.heartbeat_interval * settings.unhealthy_threshold
         # Track remediation attempts per node: {node_id: {"count": int, "last_attempt": datetime}}
@@ -293,7 +293,7 @@ class ReconcilerService:
 
                 await self._remediate_node(db, node)
 
-    def _check_remediation_limits(self, node_id: str, now: datetime) -> tuple[bool, Optional[str], dict]:
+    def _check_remediation_limits(self, node_id: str, now: datetime) -> tuple[bool, str | None, dict]:
         """Check if remediation can proceed based on cooldown and attempt limits.
 
         Helper for _remediate_node (Issue #665).
@@ -784,7 +784,7 @@ class ReconcilerService:
 
     async def _find_recent_deployment_for_rollback(
         self, db: AsyncSession, node: Node, cutoff: datetime
-    ) -> Optional[Deployment]:
+    ) -> Deployment | None:
         """Find recent deployment eligible for rollback.
 
         Helper for _check_node_for_rollback (Issue #665).
@@ -1011,7 +1011,7 @@ class ReconcilerService:
                     node.status,
                 )
 
-    async def _find_node_by_id_or_hostname(self, db: AsyncSession, node_id: str) -> Optional[Node]:
+    async def _find_node_by_id_or_hostname(self, db: AsyncSession, node_id: str) -> Node | None:
         """Find node by node_id or fallback to hostname.
 
         Helper for update_node_heartbeat (Issue #665).
@@ -1032,9 +1032,9 @@ class ReconcilerService:
         cpu_percent: float,
         memory_percent: float,
         disk_percent: float,
-        agent_version: Optional[str] = None,
-        os_info: Optional[str] = None,
-        extra_data: Optional[dict] = None,
+        agent_version: str | None = None,
+        os_info: str | None = None,
+        extra_data: dict | None = None,
     ) -> None:
         """Update basic metrics and optional fields.
 
@@ -1130,10 +1130,10 @@ class ReconcilerService:
         cpu_percent: float,
         memory_percent: float,
         disk_percent: float,
-        agent_version: Optional[str] = None,
-        os_info: Optional[str] = None,
-        extra_data: Optional[dict] = None,
-    ) -> Optional[Node]:
+        agent_version: str | None = None,
+        os_info: str | None = None,
+        extra_data: dict | None = None,
+    ) -> Node | None:
         """Update a node's heartbeat and health metrics."""
         node = await self._find_node_by_id_or_hostname(db, node_id)
         if not node:
@@ -1319,7 +1319,7 @@ class ReconcilerService:
         cpu_percent: float,
         memory_percent: float,
         disk_percent: float,
-        extra_data: Optional[dict] = None,
+        extra_data: dict | None = None,
     ) -> str:
         """Calculate node status based on health metrics and services.
 
@@ -1453,7 +1453,7 @@ class ReconcilerService:
                     threshold,
                 )
 
-    def _cert_days_remaining(self, cert_path: str) -> Optional[int]:
+    def _cert_days_remaining(self, cert_path: str) -> int | None:
         """
         Return days until a PEM cert expires, or None if unreadable.
 

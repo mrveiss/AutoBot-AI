@@ -53,28 +53,28 @@
             @click="viewMode = 'network'"
             :title="$t('charts.callGraph.networkView')"
           >
-            <i class="fas fa-project-diagram"></i>
+            <Icon name="project-diagram" />
           </button>
           <button
             :class="{ active: viewMode === 'list' }"
             @click="viewMode = 'list'"
             :title="$t('charts.callGraph.listView')"
           >
-            <i class="fas fa-list"></i>
+            <Icon name="list" />
           </button>
           <button
             :class="{ active: viewMode === 'stats' }"
             @click="viewMode = 'stats'"
             :title="$t('charts.callGraph.clusterView')"
           >
-            <i class="fas fa-circle-nodes"></i>
+            <Icon name="circle" />
           </button>
           <button
             :class="{ active: viewMode === 'orphaned' }"
             @click="viewMode = 'orphaned'"
             :title="$t('charts.callGraph.orphanedView')"
           >
-            <i class="fas fa-unlink"></i>
+            <Icon name="unlink" />
           </button>
         </div>
       </div>
@@ -116,22 +116,22 @@
         </div>
         <div ref="cytoscapeContainer" class="cytoscape-container"></div>
         <div class="network-controls">
-          <button @click="zoomIn" :title="$t('charts.callGraph.controls.zoomIn')">
-            <i class="fas fa-plus"></i>
+          <button @click="zoomIn" :title="$t('charts.callGraph.controls.zoomIn')" :aria-label="$t('charts.callGraph.controls.zoomIn')">
+            <Icon name="plus" />
           </button>
           <span class="zoom-level">{{ Math.round(zoomLevel * 100) }}%</span>
-          <button @click="zoomOut" :title="$t('charts.callGraph.controls.zoomOut')">
-            <i class="fas fa-minus"></i>
+          <button @click="zoomOut" :title="$t('charts.callGraph.controls.zoomOut')" :aria-label="$t('charts.callGraph.controls.zoomOut')">
+            <Icon name="minus" />
           </button>
-          <button @click="fitGraph" :title="$t('charts.callGraph.controls.fitToView')">
-            <i class="fas fa-expand"></i>
+          <button @click="fitGraph" :title="$t('charts.callGraph.controls.fitToView')" :aria-label="$t('charts.callGraph.controls.fitToView')">
+            <Icon name="expand" />
           </button>
-          <button @click="toggleLayout" :title="$t('charts.callGraph.controls.toggleLayout')">
-            <i class="fas fa-th"></i>
+          <button @click="toggleLayout" :title="$t('charts.callGraph.controls.toggleLayout')" :aria-label="$t('charts.callGraph.controls.toggleLayout')">
+            <Icon name="th" />
           </button>
           <span class="control-separator">|</span>
-          <button @click="toggleFullscreen" :title="isFullscreen ? $t('charts.callGraph.controls.exitFullscreen') : $t('charts.callGraph.controls.fullscreen')">
-            <i :class="isFullscreen ? 'fas fa-compress' : 'fas fa-expand-arrows-alt'"></i>
+          <button @click="toggleFullscreen" :title="isFullscreen ? $t('charts.callGraph.controls.exitFullscreen') : $t('charts.callGraph.controls.fullscreen')" :aria-label="isFullscreen ? $t('charts.callGraph.controls.exitFullscreen') : $t('charts.callGraph.controls.fullscreen')">
+            <Icon :name="isFullscreen ? 'compress' : 'expand-arrows-alt'" />
           </button>
         </div>
 
@@ -140,8 +140,8 @@
           <div class="detail-header">
             <span v-if="selectedNodeInfo.isAsync" class="async-badge">async</span>
             <span class="detail-name">{{ selectedNodeInfo.name }}</span>
-            <button class="close-btn" @click="selectedNodeInfo = null" :title="$t('charts.callGraph.controls.close')">
-              <i class="fas fa-times"></i>
+            <button class="close-btn" @click="selectedNodeInfo = null" :title="$t('charts.callGraph.controls.close')" :aria-label="$t('charts.callGraph.controls.close')">
+              <Icon name="times" />
             </button>
           </div>
           <div class="detail-content">
@@ -203,7 +203,7 @@
             <!-- Expanded details -->
             <div v-if="expandedFuncs.has(node.id)" class="func-details">
               <div class="func-location">
-                <i class="fas fa-file-code"></i>
+                <Icon name="file-code" />
                 {{ node.file }}:{{ node.line }}
               </div>
 
@@ -256,7 +256,7 @@
       <!-- Stats/Cluster view (network visualization) -->
       <div v-show="viewMode === 'stats'" class="cluster-view">
         <div class="graph-info">
-          <i class="fas fa-info-circle"></i>
+          <Icon name="info-circle" />
           <span>{{ $t('charts.callGraph.cluster.description') }}</span>
         </div>
         <div class="cluster-legend">
@@ -266,18 +266,18 @@
         </div>
         <div ref="clusterContainer" class="cluster-container"></div>
         <div class="network-controls cluster-controls">
-          <button @click="zoomInCluster" :title="$t('charts.callGraph.controls.zoomIn')">
-            <i class="fas fa-plus"></i>
+          <button @click="zoomInCluster" :title="$t('charts.callGraph.controls.zoomIn')" :aria-label="$t('charts.callGraph.controls.zoomIn')">
+            <Icon name="plus" />
           </button>
           <span class="zoom-level">{{ Math.round(clusterZoomLevel * 100) }}%</span>
-          <button @click="zoomOutCluster" :title="$t('charts.callGraph.controls.zoomOut')">
-            <i class="fas fa-minus"></i>
+          <button @click="zoomOutCluster" :title="$t('charts.callGraph.controls.zoomOut')" :aria-label="$t('charts.callGraph.controls.zoomOut')">
+            <Icon name="minus" />
           </button>
-          <button @click="fitClusterGraph" :title="$t('charts.callGraph.controls.fitToView')">
-            <i class="fas fa-expand"></i>
+          <button @click="fitClusterGraph" :title="$t('charts.callGraph.controls.fitToView')" :aria-label="$t('charts.callGraph.controls.fitToView')">
+            <Icon name="expand" />
           </button>
-          <button @click="toggleClusterLayout" :title="$t('charts.callGraph.controls.toggleLayout')">
-            <i class="fas fa-th"></i>
+          <button @click="toggleClusterLayout" :title="$t('charts.callGraph.controls.toggleLayout')" :aria-label="$t('charts.callGraph.controls.toggleLayout')">
+            <Icon name="th" />
           </button>
         </div>
       </div>
@@ -285,7 +285,7 @@
       <!-- Orphaned Functions view -->
       <div v-show="viewMode === 'orphaned'" class="orphaned-view">
         <div class="graph-info warning">
-          <i class="fas fa-exclamation-triangle"></i>
+          <Icon name="exclamation-triangle" />
           <span>{{ $t('charts.callGraph.orphaned.description') }}</span>
         </div>
 
@@ -321,10 +321,10 @@
               </div>
               <div class="orphaned-item-details">
                 <span class="detail-module" :title="func.module">
-                  <i class="fas fa-cube"></i> {{ truncateModule(func.module || '') }}
+                  <Icon name="cube" /> {{ truncateModule(func.module || '') }}
                 </span>
                 <span class="detail-file" :title="func.file">
-                  <i class="fas fa-file-code"></i> {{ truncateFile(func.file) }}:{{ func.line }}
+                  <Icon name="file-code" /> {{ truncateFile(func.file) }}:{{ func.line }}
                 </span>
               </div>
             </div>
@@ -337,7 +337,7 @@
 
         <!-- Empty state -->
         <div v-else class="orphaned-empty">
-          <i class="fas fa-check-circle"></i>
+          <Icon name="check-circle" />
           <span v-if="orphanedSearch || orphanedModuleFilter">{{ $t('charts.callGraph.orphaned.noMatch') }}</span>
           <span v-else>{{ $t('charts.callGraph.orphaned.allConnected') }}</span>
         </div>
@@ -347,6 +347,7 @@
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useExpansion } from '@/composables/useExpansion'
 import { useI18n } from 'vue-i18n'

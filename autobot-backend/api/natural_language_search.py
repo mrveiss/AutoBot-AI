@@ -15,11 +15,10 @@ Features:
 - Integration with existing semantic search
 """
 
-import logging
 import re
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 from fastapi import APIRouter, HTTPException, Request
 
@@ -28,7 +27,6 @@ from api.schemas_knowledge import (
     NLDomainsResponse,
     NLIntentsResponse,
     NLQuerySuggestionsResponse,
-    NLSearchHealthResponse,
     NLSearchRequest,
     NLSearchResponse,
     ParsedQueryResponse,
@@ -36,8 +34,9 @@ from api.schemas_knowledge import (
 )
 from api.system_health import ComponentHealth, register_health_probe
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Pre-compiled regex patterns for query parsing and code analysis
 _NON_WORD_CHARS_RE = re.compile(r"[^\w\s\-_]")
@@ -366,7 +365,7 @@ INTENT_QUERY_TEMPLATES: Dict[QueryIntent, str] = {
 }
 
 
-def _generate_intent_query(intent: QueryIntent, entity: str) -> Optional[str]:
+def _generate_intent_query(intent: QueryIntent, entity: str) -> str | None:
     """Generate query for intent using dispatch table (Issue #336 - extracted helper)."""
     template = INTENT_QUERY_TEMPLATES.get(intent)
     if template:
@@ -1235,7 +1234,7 @@ async def list_supported_domains():
 
 @register_health_probe("natural_language_search")
 async def probe_natural_language_search(
-    request: Optional[Request] = None,
+    request: Request | None = None,
 ) -> ComponentHealth:
     """Issue #3333: probe registration for the NL search code explainer."""
     try:
@@ -1256,35 +1255,3 @@ async def probe_natural_language_search(
             status="down",
             detail=f"probe error: {type(exc).__name__}",
         )
-
-
-@router.get("/health", response_model=NLSearchHealthResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="health_check",
-    error_code_prefix="NATURAL_LANGUAGE_SEARCH",
-)
-async def health_check():
-    """Health check endpoint.
-
-    Deprecated: Use /api/system/health for system-wide health checks.
-    This per-module endpoint will be removed in a future release. (#3333)
-    """
-    logger.warning(
-        "Deprecated health endpoint called: /api/health (natural_language_search) — "
-        "use /api/system/health instead (#3333)"
-    )
-    return {
-        "status": "healthy",
-        "service": "natural-language-search",
-        "deprecated": True,
-        "use_instead": "/api/system/health",
-        "features": [
-            "query_parsing",
-            "intent_classification",
-            "domain_detection",
-            "query_suggestions",
-            "code_explanations",
-        ],
-        "llm_available": _code_explainer.llm_available,
-    }

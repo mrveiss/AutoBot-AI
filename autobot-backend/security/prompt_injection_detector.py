@@ -13,15 +13,15 @@ This module provides comprehensive prompt injection detection for:
 - Shell metacharacter detection
 """
 
-import logging
 import re
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Pre-compiled regex patterns for sanitize_input()
 # These are called on every input sanitization, so pre-compilation is important

@@ -1,8 +1,4 @@
 # AutoBot - AI-Powered Automation Platform
-import uuid
-
-# Copyright (c) 2025 mrveiss
-# Author: mrveiss
 """
 Translation Agent - Specialized for multi-language translation support.
 
@@ -10,10 +6,11 @@ Handles text translation between languages with context-aware processing
 and automatic language detection.
 """
 
-import logging
-import threading
-from typing import Any, Dict, List, Optional
+import uuid
+from typing import Any, Dict, List
 
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import (
     get_agent_endpoint_explicit,
     get_agent_model_explicit,
@@ -25,7 +22,11 @@ from services.llm_service import get_llm_service
 from .base_agent import AgentRequest
 from .standardized_agent import ActionHandler, StandardizedAgent
 
-logger = logging.getLogger(__name__)
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+
+
+logger = get_logger(__name__)
 
 
 class TranslationAgent(StandardizedAgent):
@@ -96,7 +97,7 @@ class TranslationAgent(StandardizedAgent):
         )
         return await self.process_query(prompt)
 
-    async def process_query(self, request_text: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async def process_query(self, request_text: str, context: Dict[str, Any] | None = None) -> Dict[str, Any]:
         """Process a translation query using the vLLM-optimised API (Issue #3389)."""
         try:
             logger.info("Translation Agent processing: %s...", request_text[:50])
@@ -162,15 +163,5 @@ class TranslationAgent(StandardizedAgent):
         return str(response)
 
 
-_translation_agent_instance = None
-_translation_agent_lock = threading.Lock()
-
-
-def get_translation_agent() -> TranslationAgent:
-    """Get the singleton Translation Agent instance (thread-safe)."""
-    global _translation_agent_instance
-    if _translation_agent_instance is None:
-        with _translation_agent_lock:
-            if _translation_agent_instance is None:
-                _translation_agent_instance = TranslationAgent()
-    return _translation_agent_instance
+get_translation_agent = lazy_singleton(TranslationAgent)
+"""Get the singleton Translation Agent instance (thread-safe)."""

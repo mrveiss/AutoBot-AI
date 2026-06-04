@@ -14,19 +14,20 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
 import re
 import tempfile
 import time
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Dict, List, Sequence, Tuple
+
+from autobot_shared.logging_manager import get_logger
 
 from .config import AutoResearchConfig
 from .models import Experiment, ExperimentResult, ExperimentState, ExperimentTask, ScorerResult
 from .parser import ExperimentOutputParser
 from .store import ExperimentStore
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Allowlist pattern for extra hyperparameter keys — alphanumeric + underscore only
 _EXTRA_KEY_PATTERN = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
@@ -221,17 +222,17 @@ class ExperimentRunner:
 
     def __init__(
         self,
-        config: Optional[AutoResearchConfig] = None,
-        store: Optional[ExperimentStore] = None,
-        parser: Optional[ExperimentOutputParser] = None,
-    ):
+        config: AutoResearchConfig | None = None,
+        store: ExperimentStore | None = None,
+        parser: ExperimentOutputParser | None = None,
+    ) -> None:
         self.config = config or AutoResearchConfig()
         self.store = store or ExperimentStore(self.config)
         self.parser = parser or ExperimentOutputParser()
         self._running: bool = False
         self._lock = asyncio.Lock()
-        self._current_process: Optional[asyncio.subprocess.Process] = None
-        self._current_container_name: Optional[str] = None
+        self._current_process: asyncio.subprocess.Process | None = None
+        self._current_container_name: str | None = None
 
     def build_task_inference_params(
         self, task: ExperimentTask, experiment: Experiment

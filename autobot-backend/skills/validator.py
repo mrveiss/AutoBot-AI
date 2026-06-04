@@ -9,16 +9,16 @@ Checks: SKILL.md frontmatter, Python syntax, MCP server starts.
 """
 
 import ast
-import logging
 import re
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 import yaml
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _TEST_TIMEOUT: float = config.timeout.skill_test
 
@@ -36,7 +36,7 @@ class ValidationResult:
 class SkillValidator:
     """Validates skill packages by checking syntax and optionally running the MCP server."""
 
-    async def validate(self, skill_md: str, skill_py: Optional[str] = None) -> ValidationResult:
+    async def validate(self, skill_md: str, skill_py: str | None = None) -> ValidationResult:
         """Run all validation checks and return a ValidationResult.
 
         Checks manifest, Python syntax, and MCP server startup (if skill_py provided).

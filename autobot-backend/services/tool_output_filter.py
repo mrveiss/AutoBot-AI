@@ -16,7 +16,6 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
-import logging
 import os
 import re
 from pathlib import Path
@@ -24,7 +23,9 @@ from typing import Any, Protocol, runtime_checkable
 
 import yaml
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 
 _DEFAULT_CONFIG = os.path.join(os.path.dirname(__file__), "..", "config", "tool_output_filters.yaml")
 _TEE_DIR = Path.home() / ".local" / "share" / "autobot" / "tee"
@@ -258,7 +259,7 @@ def tee_and_hint(raw: str, slug: str, exit_code: int, mode: str = "failures") ->
     if len(raw) <= 500:
         return None
     safe_slug = re.sub(r"[^\w-]", "_", slug)[:60]
-    checksum = hashlib.md5(raw.encode("utf-8")).hexdigest()[:8]  # noqa: S324
+    checksum = hashlib.md5(raw.encode("utf-8"), usedforsecurity=False).hexdigest()[:8]  # nosec B324 - noqa: S324
     filename = f"{safe_slug}.{checksum}.txt"
     try:
         _TEE_DIR.mkdir(parents=True, exist_ok=True)

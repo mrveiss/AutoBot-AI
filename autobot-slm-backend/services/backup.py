@@ -8,12 +8,14 @@ Handles backup execution, verification, and restore operations
 for stateful services (Redis, PostgreSQL, etc).
 """
 
+from __future__ import annotations
+
 import asyncio
 import hashlib
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, Optional, Tuple
+from typing import Dict, Tuple
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -34,7 +36,7 @@ class BackupService:
         # Ensure backup directory exists
         BACKUP_STORAGE_DIR.mkdir(parents=True, exist_ok=True)
 
-    async def _mark_backup_in_progress(self, db: AsyncSession, backup_id: str) -> Optional["Backup"]:
+    async def _mark_backup_in_progress(self, db: AsyncSession, backup_id: str) -> "Backup" | None:
         """Mark backup as in_progress and return record. Helper for execute_redis_backup. Ref: #1088."""
         result = await db.execute(select(Backup).where(Backup.backup_id == backup_id))
         backup = result.scalar_one_or_none()
@@ -357,7 +359,7 @@ class BackupService:
             logger.error("SSH command execution error: %s", e)
             return False, "Command execution failed"
 
-    async def _calculate_checksum(self, path: Path) -> Optional[str]:
+    async def _calculate_checksum(self, path: Path) -> str | None:
         """Calculate SHA256 checksum of a file."""
         if not path.exists():
             return None
@@ -417,7 +419,7 @@ class BackupService:
 
     async def _get_rdb_file_info(
         self, host: str, ssh_user: str, ssh_port: int, rdb_path: str
-    ) -> Tuple[int, Optional[str]]:
+    ) -> Tuple[int, str | None]:
         """Get RDB file size and checksum from remote host.
 
         Helper for execute_redis_backup (Issue #665).
@@ -489,7 +491,7 @@ class BackupService:
         copy_success: bool,
         backup_path: Path,
         size_bytes: int,
-        remote_checksum: Optional[str],
+        remote_checksum: str | None,
         host: str,
         copy_error: str = "",
     ) -> Tuple[bool, str]:

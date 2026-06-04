@@ -4,7 +4,6 @@ import MessageStatus from './MessageStatus.vue';
 const meta = {
   title: 'Components/UI/MessageStatus',
   component: MessageStatus,
-  tags: ['autodocs'],
   argTypes: {
     status: {
       control: 'select',

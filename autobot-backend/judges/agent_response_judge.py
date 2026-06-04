@@ -9,14 +9,14 @@ This judge assesses agent outputs to improve system reliability and user experie
 """
 
 import json
-import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from constants import AgentThresholds
 
 from . import BaseLLMJudge, JudgmentDimension, JudgmentResult
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class AgentResponseJudge(BaseLLMJudge):
@@ -35,8 +35,8 @@ class AgentResponseJudge(BaseLLMJudge):
         response: Dict[str, Any],
         agent_type: str,
         context: Dict[str, Any],
-        expected_capabilities: Optional[List[str]] = None,
-        user_satisfaction: Optional[float] = None,
+        expected_capabilities: List[str] | None = None,
+        user_satisfaction: float | None = None,
     ) -> JudgmentResult:
         """
         Evaluate an agent's response quality
@@ -82,7 +82,7 @@ class AgentResponseJudge(BaseLLMJudge):
         response: Any,
         agent_context: Dict[str, Any],
         expected_capabilities: List[str],
-        user_satisfaction: Optional[float],
+        user_satisfaction: float | None,
     ) -> str:
         """Issue #665: Extracted from _prepare_judgment_prompt to reduce function length."""
         satisfaction_str = user_satisfaction if user_satisfaction else "Not provided"
@@ -176,7 +176,7 @@ Focus on practical assessment that helps improve agent performance and user expe
         subject: Any,
         criteria: List[JudgmentDimension],
         context: Dict[str, Any],
-        alternatives: Optional[List[Any]] = None,
+        alternatives: List[Any] | None = None,
         **kwargs,
     ) -> str:
         """Prepare the prompt for agent response evaluation."""

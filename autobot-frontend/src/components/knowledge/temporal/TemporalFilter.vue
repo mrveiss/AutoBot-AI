@@ -1,7 +1,7 @@
 <!-- AutoBot - Knowledge Graph Pipeline (Issue #759) -->
 <template>
   <div class="temporal-filter">
-    <h5><i class="fas fa-filter"></i> {{ $t('knowledge.temporal.filter.title') }}</h5>
+    <h5><Icon name="filter" /> {{ $t('knowledge.temporal.filter.title') }}</h5>
 
     <!-- Date Range -->
     <div class="filter-group">
@@ -62,10 +62,10 @@
     <!-- Actions -->
     <div class="filter-actions">
       <button class="filter-btn secondary" @click="resetFilters">
-        <i class="fas fa-undo"></i> {{ $t('knowledge.temporal.filter.reset') }}
+        <Icon name="undo" /> {{ $t('knowledge.temporal.filter.reset') }}
       </button>
       <button class="filter-btn primary" @click="applyFilters">
-        <i class="fas fa-search"></i> {{ $t('knowledge.temporal.filter.search') }}
+        <Icon name="search" /> {{ $t('knowledge.temporal.filter.search') }}
       </button>
     </div>
   </div>
@@ -76,6 +76,7 @@
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
 
+import Icon from '@/components/ui/Icon.vue'
 import { reactive, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 

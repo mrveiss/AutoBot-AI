@@ -12,21 +12,21 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
 
 from .config import AutoResearchConfig
 from .models import Experiment, ExperimentState, ExperimentStats
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ExperimentStore(AsyncRedisClientMixin):
     """Persist and query experiments across Redis and ChromaDB."""
 
-    def __init__(self, config: Optional[AutoResearchConfig] = None):
+    def __init__(self, config: AutoResearchConfig | None = None) -> None:
         self.config = config or AutoResearchConfig()
         self._redis_database = self.config.redis_database
         self._chromadb_collection = None
@@ -49,7 +49,7 @@ class ExperimentStore(AsyncRedisClientMixin):
     async def save_experiment(
         self,
         experiment: Experiment,
-        old_state: Optional[ExperimentState] = None,
+        old_state: ExperimentState | None = None,
     ) -> None:
         """Persist experiment to Redis (always) and ChromaDB (if completed)."""
         redis = await self._get_redis()
@@ -200,7 +200,7 @@ class ExperimentStore(AsyncRedisClientMixin):
                 break
         return meta
 
-    async def get_experiment(self, experiment_id: str) -> Optional[Experiment]:
+    async def get_experiment(self, experiment_id: str) -> Experiment | None:
         """Retrieve a single experiment by ID."""
         redis = await self._get_redis()
         data = await redis.hget(
@@ -250,7 +250,7 @@ class ExperimentStore(AsyncRedisClientMixin):
         self,
         limit: int = 50,
         offset: int = 0,
-        state: Optional[ExperimentState] = None,
+        state: ExperimentState | None = None,
     ) -> List[Experiment]:
         """List experiments, most recent first."""
         redis = await self._get_redis()
@@ -316,7 +316,7 @@ class ExperimentStore(AsyncRedisClientMixin):
         )
         logger.info("Baseline val_bpb set to %s", val_bpb)
 
-    async def get_baseline(self) -> Optional[float]:
+    async def get_baseline(self) -> float | None:
         """Get the current baseline val_bpb."""
         redis = await self._get_redis()
         val = await redis.get(self._redis_key("baseline_val_bpb"))

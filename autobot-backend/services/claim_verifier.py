@@ -24,7 +24,7 @@ import json
 import time
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 from autobot_shared.logging_manager import get_llm_logger
 from autobot_shared.redis_client import get_async_redis_client
@@ -82,9 +82,9 @@ class ResearchResult:
     """Result from research agent investigation."""
 
     claim: str
-    fact: Optional[str]
+    fact: str | None
     status: ResearchStatus
-    url: Optional[str] = None
+    url: str | None = None
     confidence: float = 0.0
     timestamp: float = field(default_factory=time.time)
     research_time_ms: float = 0.0
@@ -97,8 +97,8 @@ class VerifiedClaim:
     original: Claim
     verified_as: VerificationStatus
     source: str  # "knowledge_base", "kb_rag", "research_agent"
-    source_text: Optional[str] = None
-    source_url: Optional[str] = None
+    source_text: str | None = None
+    source_url: str | None = None
     confidence: float = 0.0
     timestamp: float = field(default_factory=time.time)
     requires_human_review: bool = False
@@ -131,7 +131,7 @@ class ClaimVerifier:
     3. CONTRADICTS claims return to ConflictResolver (not handled here)
     """
 
-    def __init__(self, knowledge_base: Any, research_agent_service: Optional[Any] = None):
+    def __init__(self, knowledge_base: Any, research_agent_service: Any | None = None) -> None:
         """
         Initialize claim verifier.
 
@@ -150,7 +150,7 @@ class ClaimVerifier:
         claim_hash = hashlib.sha256(claim.claim_text.encode("utf-8")).hexdigest()
         return f"{_CACHE_KEY_PREFIX}:{claim_hash}"
 
-    async def _get_from_cache(self, cache_key: str) -> Optional[VerifiedClaim]:
+    async def _get_from_cache(self, cache_key: str) -> VerifiedClaim | None:
         """Get verified claim from cache if not expired."""
         async with self._cache_lock:
             if cache_key in self._cache:
@@ -210,7 +210,7 @@ class ClaimVerifier:
             requires_human_review=data.get("requires_human_review", False),
         )
 
-    async def kb_rag_search(self, claim: str) -> Optional[RAGResult]:
+    async def kb_rag_search(self, claim: str) -> RAGResult | None:
         """
         Search knowledge base via RAG for evidence.
 
@@ -288,7 +288,7 @@ class ClaimVerifier:
             logger.error("KB RAG search failed: %s", e)
             return None
 
-    async def research_agent_lookup(self, claim: str) -> Optional[ResearchResult]:
+    async def research_agent_lookup(self, claim: str) -> ResearchResult | None:
         """
         Delegate claim investigation to research agent.
 

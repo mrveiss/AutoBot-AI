@@ -8,12 +8,12 @@ Provides endpoints for zero-downtime deployments with role borrowing.
 """
 
 import logging
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
 
+from autobot_shared.auth.permissions import Permission
 from models.schemas import (
     BlueGreenActionResponse,
     BlueGreenCreate,
@@ -23,7 +23,7 @@ from models.schemas import (
     RolePurgeRequest,
     RolePurgeResponse,
 )
-from services.auth import get_current_user, require_admin
+from services.auth import get_current_user, require_permission
 from services.blue_green import blue_green_service
 from services.database import get_db
 
@@ -47,7 +47,7 @@ DeploymentIdPath = Annotated[
 async def list_deployments(
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(get_current_user)],
-    status_filter: Optional[str] = Query(None, alias="status"),
+    status_filter: str | None = Query(None, alias="status"),
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
 ) -> BlueGreenListResponse:
@@ -66,7 +66,7 @@ async def list_deployments(
 async def create_deployment(
     data: BlueGreenCreate,
     db: Annotated[AsyncSession, Depends(get_db)],
-    current_user: Annotated[dict, Depends(require_admin)],
+    current_user: Annotated[dict, Depends(require_permission(Permission.ADMIN_SYSTEM))],
 ) -> BlueGreenResponse:
     """Create a new blue-green deployment (admin only).
 
@@ -147,7 +147,7 @@ async def get_deployment(
 async def switch_traffic(
     bg_deployment_id: DeploymentIdPath,
     db: Annotated[AsyncSession, Depends(get_db)],
-    _: Annotated[dict, Depends(require_admin)],
+    _: Annotated[dict, Depends(require_permission(Permission.ADMIN_SYSTEM))],
 ) -> BlueGreenActionResponse:
     """Manually trigger traffic switch from blue to green (admin only).
 
@@ -174,7 +174,7 @@ async def switch_traffic(
 async def rollback_deployment(
     bg_deployment_id: DeploymentIdPath,
     db: Annotated[AsyncSession, Depends(get_db)],
-    _: Annotated[dict, Depends(require_admin)],
+    _: Annotated[dict, Depends(require_permission(Permission.ADMIN_SYSTEM))],
 ) -> BlueGreenActionResponse:
     """Rollback a blue-green deployment (admin only).
 
@@ -201,7 +201,7 @@ async def rollback_deployment(
 async def cancel_deployment(
     bg_deployment_id: DeploymentIdPath,
     db: Annotated[AsyncSession, Depends(get_db)],
-    _: Annotated[dict, Depends(require_admin)],
+    _: Annotated[dict, Depends(require_permission(Permission.ADMIN_SYSTEM))],
 ) -> BlueGreenActionResponse:
     """Cancel a pending blue-green deployment (admin only)."""
     success, message = await blue_green_service.cancel(db, bg_deployment_id)
@@ -225,7 +225,7 @@ async def cancel_deployment(
 async def retry_deployment(
     bg_deployment_id: DeploymentIdPath,
     db: Annotated[AsyncSession, Depends(get_db)],
-    current_user: Annotated[dict, Depends(require_admin)],
+    current_user: Annotated[dict, Depends(require_permission(Permission.ADMIN_SYSTEM))],
 ) -> BlueGreenActionResponse:
     """Retry a failed blue-green deployment (admin only).
 
@@ -255,7 +255,7 @@ async def retry_deployment(
 async def stop_monitoring(
     bg_deployment_id: DeploymentIdPath,
     db: Annotated[AsyncSession, Depends(get_db)],
-    _: Annotated[dict, Depends(require_admin)],
+    _: Annotated[dict, Depends(require_permission(Permission.ADMIN_SYSTEM))],
 ) -> BlueGreenActionResponse:
     """Stop post-deployment health monitoring and complete the deployment (admin only).
 
@@ -283,7 +283,7 @@ async def stop_monitoring(
 async def purge_roles(
     data: RolePurgeRequest,
     db: Annotated[AsyncSession, Depends(get_db)],
-    _: Annotated[dict, Depends(require_admin)],
+    _: Annotated[dict, Depends(require_permission(Permission.ADMIN_SYSTEM))],
 ) -> RolePurgeResponse:
     """Purge roles from a node (admin only).
 

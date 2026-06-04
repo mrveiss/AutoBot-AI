@@ -6,12 +6,14 @@ Singleton HTTP Client Manager
 Provides efficient aiohttp client session management to prevent resource exhaustion
 """
 
+from __future__ import annotations
+
 import asyncio
 import hashlib
 import hmac
 import logging
 import time
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 import aiohttp
 from aiohttp import ClientSession, ClientTimeout, TCPConnector
@@ -27,8 +29,8 @@ class HTTPClientManager:
     Prevents creating new ClientSession for each request which causes resource exhaustion.
     """
 
-    _instance: Optional["HTTPClientManager"] = None
-    _session: Optional[ClientSession] = None
+    _instance: "HTTPClientManager" | None = None
+    _session: ClientSession | None = None
     _lock = asyncio.Lock()
 
     def __new__(cls):
@@ -37,12 +39,12 @@ class HTTPClientManager:
             cls._instance = super(HTTPClientManager, cls).__new__(cls)
         return cls._instance
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the HTTP client manager."""
         if not hasattr(self, "_initialized"):
             self._initialized = True
             self._session = None
-            self._connector = None
+            self._connector: TCPConnector | None = None
             self._closed = False
             self._request_count = 0
             self._error_count = 0
@@ -53,7 +55,7 @@ class HTTPClientManager:
             self._pool_max = 200  # Maximum pool size
             self._current_pool_size = 100  # Start at default
             self._pool_adjustment_interval = TimingConstants.STANDARD_TIMEOUT  # Adjust every 60s
-            self._last_adjustment_time = 0
+            self._last_adjustment_time: float = 0.0
             self._active_requests = 0  # Track concurrent requests
             self._pending_pool_recreation = False  # Issue #352: Track deferred recreation
 
@@ -73,9 +75,10 @@ class HTTPClientManager:
                 if self._session is None or self._session.closed:
                     await self._create_session()
 
+        assert self._session is not None  # _create_session() always sets it
         return self._session
 
-    async def _create_session(self):
+    async def _create_session(self) -> None:
         """Create a new aiohttp ClientSession with optimized settings."""
         # Close existing session if any
         if self._session and not self._session.closed:
@@ -154,7 +157,7 @@ class HTTPClientManager:
             logger.info("Recreating session with new pool size")
             await self._create_session()
 
-    async def _adjust_pool_size(self):
+    async def _adjust_pool_size(self) -> None:
         """
         Dynamically adjust connection pool size based on usage patterns.
 
@@ -227,7 +230,7 @@ class HTTPClientManager:
             logger.error("HTTP request failed: %s", e)
             raise
 
-    async def decrement_active(self):
+    async def decrement_active(self) -> None:
         """
         Decrement active request counter and potentially trigger deferred pool recreation.
 
@@ -300,7 +303,7 @@ class HTTPClientManager:
             response.raise_for_status()
             return await response.json()
 
-    async def close(self):
+    async def close(self) -> None:
         """Close the HTTP client session and cleanup resources."""
         async with self._lock:
             if self._session and not self._session.closed:
@@ -337,7 +340,7 @@ class HTTPClientManager:
         """Async context manager entry."""
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
+    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
         """Async context manager exit."""
         await self.close()
 
@@ -345,7 +348,7 @@ class HTTPClientManager:
 # Global singleton instance (thread-safe)
 import threading
 
-_http_client: Optional[HTTPClientManager] = None
+_http_client: HTTPClientManager | None = None
 _http_client_lock = threading.Lock()
 
 
@@ -365,7 +368,7 @@ def get_http_client() -> HTTPClientManager:
     return _http_client
 
 
-async def close_http_client():
+async def close_http_client() -> None:
     """Close the global HTTP client and cleanup resources."""
     global _http_client
     if _http_client:
@@ -418,7 +421,7 @@ def sign_request(
 
 
 # Example usage patterns for migration
-async def example_usage():
+async def example_usage() -> None:
     """Example of how to use the HTTP client manager."""
 
     # Get the singleton client

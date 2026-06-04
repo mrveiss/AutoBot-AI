@@ -19,14 +19,14 @@ INSTALLATION:
 4. Deploy to production after validation
 """
 
-import logging
 from typing import Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from enhanced_security_layer import EnhancedSecurityLayer
 from security.prompt_injection_detector import get_prompt_injection_detector
 from security.secure_llm_command_parser import get_secure_llm_parser
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class SecureIntelligentAgentMixin:

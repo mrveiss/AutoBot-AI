@@ -1,6 +1,4 @@
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
-# Author: mrveiss
 """
 Agent Terminal API - Chat Terminal with Command Approval Workflow
 
@@ -225,8 +223,7 @@ See Also:
 - docs/architecture/TERMINAL_ARCHITECTURE_DIAGRAM.md - System architecture
 """
 
-import logging
-from typing import Dict, Optional
+from typing import Dict
 
 from fastapi import APIRouter, Depends, HTTPException
 
@@ -260,23 +257,26 @@ from api.schemas_terminal import (
 )
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 from constants.error_constants import ERR_SESSION_NOT_FOUND
 from services.agent_terminal import AgentSessionState, AgentTerminalService
 from services.command_approval_manager import AgentRole
 from services.command_execution_queue import get_command_queue
 
-logger = logging.getLogger(__name__)
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+
+
+logger = get_logger(__name__)
 
 # Create router
 router = APIRouter(prefix="/agent-terminal", tags=["agent-terminal"])
 
-
 # Dependency for AgentTerminalService
 # CRITICAL: Use singleton pattern to maintain sessions across requests
 
-_agent_terminal_service_instance: Optional[AgentTerminalService] = None
-
+_agent_terminal_service_instance: AgentTerminalService | None = None
 
 # Thread-safe lock for singleton
 import threading
@@ -369,8 +369,8 @@ async def create_agent_terminal_session(
 )
 async def list_agent_terminal_sessions(
     current_user: dict = Depends(get_current_user),
-    agent_id: Optional[str] = None,
-    conversation_id: Optional[str] = None,
+    agent_id: str | None = None,
+    conversation_id: str | None = None,
     service: AgentTerminalService = Depends(get_agent_terminal_service),
 ):
     """

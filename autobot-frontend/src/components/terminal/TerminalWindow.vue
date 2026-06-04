@@ -1196,7 +1196,7 @@ export default {
 
       // Remove ANSI escape sequences
       content = content
-        .replace(/\x1b\[([0-9]{1,2}(;[0-9]{1,2})?)?[mGK]/g, '')
+        .replace(/\u001b\[([0-9]{1,2}(;[0-9]{1,2})?)?[mGK]/g, '')
         .replace(/\r\n/g, '\n')
         .replace(/\r/g, '\n');
 
@@ -1545,7 +1545,7 @@ export default {
 }
 
 .control-button.danger:hover:not(:disabled) {
-  background-color: #dc3545;
+  background-color: var(--color-danger);
 }
 
 .terminal-status-bar {
@@ -1575,20 +1575,20 @@ export default {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background-color: #dc3545;
+  background-color: var(--color-danger);
 }
 
 .connection-status.connected .status-dot {
-  background-color: #28a745;
+  background-color: var(--color-success);
 }
 
 .connection-status.connecting .status-dot {
-  background-color: #ffc107;
+  background-color: var(--color-warning);
   animation: pulse 1s infinite;
 }
 
 .connection-status.error .status-dot {
-  background-color: #dc3545;
+  background-color: var(--color-error);
   animation: flash 0.5s infinite;
 }
 
@@ -1620,11 +1620,11 @@ export default {
 }
 
 .line-warning {
-  color: #ffc107;
+  color: var(--color-warning);
 }
 
 .line-success {
-  color: #28a745;
+  color: var(--color-success);
 }
 
 .line-command {
@@ -1714,14 +1714,14 @@ export default {
 }
 
 .footer-button.workflow-test {
-  background-color: #17a2b8;
-  border-color: #138496;
-  color: white;
+  background-color: var(--color-info);
+  border-color: var(--color-info-hover);
+  color: var(--text-on-primary);
   font-weight: 600;
 }
 
 .footer-button.workflow-test:hover {
-  background-color: #138496;
+  background-color: var(--color-info-hover);
 }
 
 /* Modal styles */
@@ -1750,7 +1750,7 @@ export default {
 
 .modal-content h3 {
   margin-top: var(--spacing-0);
-  color: #ffc107;
+  color: var(--color-warning);
 }
 
 .modal-actions {
@@ -1770,78 +1770,78 @@ export default {
 }
 
 .btn-primary {
-  background-color: #007acc;
-  color: white;
+  background-color: var(--color-primary);
+  color: var(--text-on-primary);
 }
 
 .btn-primary:hover {
-  background-color: #005999;
+  background-color: var(--color-primary-hover);
 }
 
 .btn-secondary {
-  background-color: #6c757d;
-  color: white;
+  background-color: var(--color-secondary);
+  color: var(--text-on-primary);
 }
 
 .btn-secondary:hover {
-  background-color: #5a6268;
+  background-color: var(--color-secondary-hover);
 }
 
 .btn-danger {
-  background-color: #dc3545;
-  color: white;
+  background-color: var(--color-danger);
+  color: var(--text-on-error);
 }
 
 .btn-danger:hover {
-  background-color: #c82333;
+  background-color: var(--color-danger-hover);
 }
 
 /* Emergency control button styles */
 .control-button.emergency-kill {
-  background-color: #dc3545;
-  color: white;
+  background-color: var(--color-error);
+  color: var(--text-on-error);
   font-weight: bold;
-  border-color: #c82333;
+  border-color: var(--color-error-hover);
 }
 
 .control-button.emergency-kill:hover:not(:disabled) {
-  background-color: #c82333;
-  border-color: #bd2130;
+  background-color: var(--color-error-hover);
+  border-color: var(--color-error-dark);
   transform: translateY(-1px);
-  box-shadow: 0 2px 4px rgba(220, 53, 69, 0.3);
+  box-shadow: 0 2px 4px var(--color-error-bg);
 }
 
 .control-button.interrupt {
-  background-color: #ffc107;
-  color: #212529;
-  border-color: #e0a800;
+  background-color: var(--color-warning);
+  color: var(--text-on-warning);
+  border-color: var(--color-warning-hover);
 }
 
 .control-button.interrupt:hover:not(:disabled) {
-  background-color: #e0a800;
-  border-color: #d39e00;
+  background-color: var(--color-warning-hover);
+  border-color: var(--color-warning-dark);
 }
 
 .control-button.takeover {
-  background-color: #17a2b8;
-  color: white;
-  border-color: #138496;
+  background-color: var(--color-info);
+  color: var(--text-on-primary);
+  border-color: var(--color-info-hover);
   font-weight: 600;
 }
 
 .control-button.takeover:hover:not(:disabled) {
-  background-color: #138496;
-  border-color: #0c7084;
+  background-color: var(--color-info-hover);
+  border-color: var(--color-info-dark);
 }
 
 .control-button.takeover.active {
-  background-color: #28a745;
-  border-color: #1e7e34;
+  background-color: var(--color-success);
+  border-color: var(--color-success-hover);
   animation: pulse-success 2s infinite;
 }
 
 .control-button.takeover.active:hover {
-  background-color: #218838;
+  background-color: var(--color-success-hover);
 }
 
 /* Command confirmation modal styles */
@@ -1871,8 +1871,8 @@ export default {
 }
 
 .confirmation-modal.emergency {
-  border-color: #dc3545;
-  box-shadow: 0 10px 30px rgba(220, 53, 69, 0.3);
+  border-color: var(--color-danger);
+  box-shadow: 0 10px 30px var(--color-danger-bg);
 }
 
 .modal-header {
@@ -1884,7 +1884,7 @@ export default {
 
 .modal-title {
   margin: var(--spacing-0);
-  color: #ffc107;
+  color: var(--color-warning);
   font-size: var(--text-lg);
   font-weight: 600;
   display: flex;
@@ -1923,7 +1923,7 @@ export default {
   background-color: #000;
   padding: var(--spacing-3);
   border-radius: var(--radius-md);
-  border-left: 4px solid #ffc107;
+  border-left: 4px solid var(--color-warning);
   white-space: pre-wrap;
   word-break: break-all;
 }
@@ -1941,15 +1941,15 @@ export default {
 }
 
 .risk-level.low {
-  background-color: rgba(40, 167, 69, 0.2);
-  color: #28a745;
-  border: 1px solid #28a745;
+  background-color: var(--color-success-bg);
+  color: var(--color-success);
+  border: 1px solid var(--color-success);
 }
 
 .risk-level.moderate {
-  background-color: rgba(255, 193, 7, 0.2);
-  color: #ffc107;
-  border: 1px solid #ffc107;
+  background-color: var(--color-warning-bg);
+  color: var(--color-warning);
+  border: 1px solid var(--color-warning);
 }
 
 .risk-level.high {
@@ -1959,9 +1959,9 @@ export default {
 }
 
 .risk-level.critical {
-  background-color: rgba(220, 53, 69, 0.3);
-  color: #ff4757;
-  border: 1px solid #dc3545;
+  background-color: var(--color-danger-bg);
+  color: var(--color-error-light);
+  border: 1px solid var(--color-danger);
   animation: pulse-danger 2s infinite;
 }
 
@@ -2042,20 +2042,20 @@ export default {
 }
 
 .line-command.high {
-  border-left: 3px solid #ffc107;
-  background-color: rgba(255, 193, 7, 0.1);
+  border-left: 3px solid var(--color-warning);
+  background-color: var(--color-warning-bg);
 }
 
 .line-command.critical {
-  border-left: 3px solid #dc3545;
-  background-color: rgba(220, 53, 69, 0.1);
+  border-left: 3px solid var(--color-danger);
+  background-color: var(--color-danger-bg);
 }
 
 /* Workflow Step Modal Styles */
 .confirmation-modal.workflow-step {
   max-width: 700px;
-  border-color: #17a2b8;
-  box-shadow: 0 10px 30px rgba(23, 162, 184, 0.3);
+  border-color: var(--color-info);
+  box-shadow: 0 10px 30px var(--color-info-bg);
 }
 
 .workflow-step-info {
@@ -2063,8 +2063,8 @@ export default {
 }
 
 .step-counter {
-  background-color: #17a2b8;
-  color: white;
+  background-color: var(--color-info);
+  color: var(--text-on-primary);
   padding: var(--spacing-2) var(--spacing-4);
   border-radius: var(--radius-2xl);
   display: inline-block;
@@ -2077,7 +2077,7 @@ export default {
 
 .step-description h4 {
   margin: var(--spacing-0) var(--spacing-0) var(--spacing-2) var(--spacing-0);
-  color: #17a2b8;
+  color: var(--color-info);
   font-size: var(--text-base);
   font-weight: 600;
 }
@@ -2094,12 +2094,12 @@ export default {
   border-radius: var(--radius-lg);
   padding: var(--spacing-4);
   margin-top: var(--spacing-5);
-  border-left: 4px solid #17a2b8;
+  border-left: 4px solid var(--color-info);
 }
 
 .option-info p {
   margin: var(--spacing-0) var(--spacing-0) var(--spacing-3) var(--spacing-0);
-  color: #17a2b8;
+  color: var(--color-info);
   font-weight: 600;
 }
 
@@ -2125,51 +2125,51 @@ export default {
 }
 
 .btn-success {
-  background-color: #28a745;
-  color: white;
-  border: 1px solid #1e7e34;
+  background-color: var(--color-success);
+  color: var(--text-on-success);
+  border: 1px solid var(--color-success-hover);
 }
 
 .btn-success:hover {
-  background-color: #218838;
-  border-color: #1c7430;
+  background-color: var(--color-success-hover);
+  border-color: var(--color-success-dark);
 }
 
 .btn-warning {
-  background-color: #ffc107;
-  color: #212529;
-  border: 1px solid #e0a800;
+  background-color: var(--color-warning);
+  color: var(--text-on-warning);
+  border: 1px solid var(--color-warning-hover);
 }
 
 .btn-warning:hover {
-  background-color: #e0a800;
-  border-color: #d39e00;
+  background-color: var(--color-warning-hover);
+  border-color: var(--color-warning-dark);
 }
 
 /* Animation for active automation state */
 @keyframes pulse-success {
   0%, 100% {
-    box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.4);
+    box-shadow: 0 0 0 0 var(--color-success-bg);
   }
   50% {
-    box-shadow: 0 0 0 8px rgba(40, 167, 69, 0);
+    box-shadow: 0 0 0 8px transparent;
   }
 }
 
 /* Terminal line styles for automation */
 .line-automated_command {
-  color: #17a2b8;
+  color: var(--color-info);
   font-weight: 500;
-  background-color: rgba(23, 162, 184, 0.1);
-  border-left: 3px solid #17a2b8;
+  background-color: var(--color-info-bg);
+  border-left: 3px solid var(--color-info);
   padding-left: var(--spacing-2);
 }
 
 .line-manual_command {
-  color: #28a745;
+  color: var(--color-success);
   font-weight: 500;
-  background-color: rgba(40, 167, 69, 0.1);
-  border-left: 3px solid #28a745;
+  background-color: var(--color-success-bg);
+  border-left: 3px solid var(--color-success);
   padding-left: var(--spacing-2);
 }
 

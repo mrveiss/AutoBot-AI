@@ -11,7 +11,7 @@ Related to Issue #728.
 import asyncio
 import logging
 from datetime import datetime, timezone
-from typing import Dict, Optional, Tuple
+from typing import Dict, Tuple
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
@@ -180,7 +180,7 @@ async def _run_ansible_get_logs(
     node: Node,
     service_name: str,
     lines: int = 100,
-    since: Optional[str] = None,
+    since: str | None = None,
 ) -> Tuple[bool, str]:
     """
     Fetch service logs via SSH and journalctl.
@@ -315,8 +315,8 @@ async def list_node_services(
     node_id: str,
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(get_current_user)],
-    status_filter: Optional[str] = Query(None, alias="status"),
-    search: Optional[str] = Query(None),
+    status_filter: str | None = Query(None, alias="status"),
+    search: str | None = Query(None),
     page: int = Query(1, ge=1),
     per_page: int = Query(50, ge=1, le=200),
 ) -> ServiceListResponse:
@@ -595,7 +595,7 @@ async def stop_service(
     )
 
 
-async def _perform_port_aware_restart(node: Node, service_name: str, port: Optional[int]) -> Tuple[bool, str]:
+async def _perform_port_aware_restart(node: Node, service_name: str, port: int | None) -> Tuple[bool, str]:
     """Perform port-aware restart sequence.
 
     Helper for restart_service (Issue #665).
@@ -703,7 +703,7 @@ async def get_service_logs(
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(get_current_user)],
     lines: int = Query(100, ge=1, le=1000),
-    since: Optional[str] = Query(None, description="Time period, e.g. '1h', '30m'"),
+    since: str | None = Query(None, description="Time period, e.g. '1h', '30m'"),
 ) -> ServiceLogsResponse:
     """Get logs for a service on a node."""
     node = await _get_node_or_404(db, node_id)
@@ -793,7 +793,7 @@ def _build_restart_response(
 async def _get_restart_services(
     db: AsyncSession,
     node_id: str,
-    request: Optional[RestartAllServicesRequest],
+    request: RestartAllServicesRequest | None,
     excluded: list,
 ) -> tuple[list, list]:
     """Query and separate services into non-SLM and SLM lists.
@@ -936,7 +936,7 @@ async def restart_all_node_services(
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(get_current_user)],
     background_tasks: BackgroundTasks,
-    request: Optional[RestartAllServicesRequest] = None,
+    request: RestartAllServicesRequest | None = None,
 ) -> RestartAllServicesResponse:
     """
     Restart all services on a node in ordered sequence.

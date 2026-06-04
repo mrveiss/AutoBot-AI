@@ -1,12 +1,20 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
+"""
+OS-level integration helpers: shell commands, Markdown conversion.
+
+Provides utilities for executing system commands, reading platform info,
+and converting HTML/Markdown content via the optional markdownify dep.
+"""
+
 import json
-import logging
 import os
 import platform
 import subprocess  # nosec B404 - required for system commands
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
+
+from autobot_shared.logging_manager import get_logger
 
 # #7166: markdownify is an optional dependency. Hard-import made the whole
 # module unimportable in any environment that didn't install it (any module
@@ -20,7 +28,7 @@ globals().update(optional_import("markdownify", ["markdownify"]))
 md = markdownify  # type: ignore[name-defined]  # noqa: F821 — populated by optional_import
 
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Performance optimization: O(1) lookup for valid service actions (Issue #326)
 VALID_SERVICE_ACTIONS = {"start", "stop", "restart"}
@@ -306,7 +314,7 @@ class SystemIntegration:
         # enhancements (e.g., direct API calls instead of shell)
         return self._run_command([command], shell=True)  # nosec B604 - internal command execution
 
-    def get_process_info(self, process_name: Optional[str] = None, pid: Optional[int] = None) -> Dict[str, Any]:
+    def get_process_info(self, process_name: str | None = None, pid: int | None = None) -> Dict[str, Any]:
         """
         Retrieves information about running processes.
         If no arguments, lists all processes.

@@ -22,8 +22,7 @@ for conflict resolution and stats.
 Rate limiting: 50 req/min per user for ground-response, 100 req/min for verify-claim.
 """
 
-import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 
@@ -39,13 +38,14 @@ from api.schemas_knowledge import (
 )
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import QueryDefaults
 from services.grounded_agent import (
     Claim,
     get_grounded_agent,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(
     tags=["knowledge-grounding"],
@@ -223,7 +223,7 @@ async def list_conflicts(
         pattern="^(pending|resolved|inconclusive)$",
         description="Filter by resolution status",
     ),
-    severity: Optional[str] = Query(
+    severity: str | None = Query(
         None,
         pattern="^(low|medium|high)$",
         description="Filter by severity",

@@ -9,18 +9,16 @@ Issue #52 - Enhanced Computer Vision for GUI Automation
 Author: mrveiss
 """
 
-import logging
-from typing import Optional
-
 from fastapi import APIRouter, Depends, HTTPException
 
 from api.system_health import register_singleton_probe
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from computer_vision_system import ElementType, InteractionType, ScreenAnalyzer
 
 router = APIRouter(tags=["vision", "gui-automation"])
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Global screen analyzer instance (thread-safe)
 import threading
@@ -41,7 +39,7 @@ from api.schemas_system import (
     VisionStatusResponse,
 )
 
-_screen_analyzer: Optional[ScreenAnalyzer] = None
+_screen_analyzer: ScreenAnalyzer | None = None
 _screen_analyzer_lock = threading.Lock()
 
 
@@ -59,49 +57,6 @@ def get_screen_analyzer() -> ScreenAnalyzer:
 
 # API Endpoints
 register_singleton_probe("vision", get_screen_analyzer)
-
-
-@router.get("/health", response_model=VisionHealthResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="vision_health_check",
-    error_code_prefix="VISION",
-)
-async def vision_health_check(
-    current_user: dict = Depends(get_current_user),
-):
-    """
-    Health check for computer vision service.
-
-    Issue #744: Requires authenticated user.
-    """
-    try:
-        analyzer = get_screen_analyzer()
-        # Verify analyzer is properly initialized
-        analyzer_ready = analyzer is not None
-        return VisionHealthResponse(
-            status="healthy" if analyzer_ready else "degraded",
-            analyzer_ready=analyzer_ready,
-            capabilities=[
-                "screen_capture",
-                "element_detection",
-                "ocr_text_extraction",
-                "template_matching",
-                "context_analysis",
-                "multimodal_processing",
-            ],
-            element_types_supported=[e.value for e in ElementType],
-            interaction_types_supported=[i.value for i in InteractionType],
-        )
-    except Exception as e:
-        logger.error("Vision health check failed: %s", e)
-        return VisionHealthResponse(
-            status="unhealthy",
-            analyzer_ready=False,
-            capabilities=[],
-            element_types_supported=[],
-            interaction_types_supported=[],
-        )
 
 
 @router.post("/analyze", response_model=ScreenAnalysisResponse)
@@ -276,7 +231,7 @@ async def extract_text_ocr(
     error_code_prefix="VISION",
 )
 async def get_automation_opportunities(
-    session_id: Optional[str] = None,
+    session_id: str | None = None,
     current_user: dict = Depends(get_current_user),
 ):
     """
@@ -362,7 +317,7 @@ async def get_interaction_types(
     error_code_prefix="VISION",
 )
 async def get_layout_analysis(
-    session_id: Optional[str] = None,
+    session_id: str | None = None,
     current_user: dict = Depends(get_current_user),
 ):
     """

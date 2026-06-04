@@ -16,18 +16,17 @@ Related Issues: #59 (Advanced Analytics & Business Intelligence)
 """
 
 import asyncio
-import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import Optional
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import RedisDatabase
 from autobot_shared.redis_mixin import AsyncRedisClientLockedMixin
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.time_utils import now_utc, utc_timestamp
 from constants.ttl_constants import TTL_24_HOURS, TTL_30_DAYS, TTL_90_DAYS
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -36,10 +35,10 @@ class UserEvent:
 
     event_type: str  # page_view, click, search, api_call, etc.
     feature: str  # chat, knowledge, tools, monitoring, etc.
-    user_id: Optional[str] = None
-    session_id: Optional[str] = None
+    user_id: str | None = None
+    session_id: str | None = None
     timestamp: datetime = field(default_factory=now_utc)
-    duration_ms: Optional[int] = None
+    duration_ms: int | None = None
     metadata: dict = field(default_factory=dict)
 
     def to_tracking_dict(self) -> dict:
@@ -166,7 +165,7 @@ class UserBehaviorAnalytics(AsyncRedisClientLockedMixin):
             logger.error("Failed to track user event: %s", e)
             return False
 
-    async def get_feature_metrics(self, feature: Optional[str] = None) -> dict:
+    async def get_feature_metrics(self, feature: str | None = None) -> dict:
         """
         Get aggregated metrics for features.
 
@@ -323,7 +322,7 @@ class UserBehaviorAnalytics(AsyncRedisClientLockedMixin):
             logger.error("Failed to get daily stats: %s", e)
             return {"error": "Failed to retrieve daily stats", "daily_stats": {}}
 
-    def _process_feature_stats(self, stats: dict, unique_users: int, unique_sessions: int, feat: str) -> Optional[dict]:
+    def _process_feature_stats(self, stats: dict, unique_users: int, unique_sessions: int, feat: str) -> dict | None:
         """Process feature stats from Redis (Issue #665: extracted helper).
 
         Args:

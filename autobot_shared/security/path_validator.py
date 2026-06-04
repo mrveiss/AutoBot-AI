@@ -18,17 +18,17 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Optional, Sequence, Union
+from typing import Sequence
 
 _DEFAULT_ALLOWED_ROOTS: tuple[str, ...] = (
     "/opt/autobot",
-    "/tmp",
+    "/tmp",  # nosec B108 - test/controlled code uses tmpdir intentionally
 )
 
 
 def validate_path(
     user_path: str,
-    allowed_roots: Optional[Sequence[str]] = None,
+    allowed_roots: Sequence[str] | None = None,
     *,
     must_exist: bool = False,
 ) -> Path:
@@ -79,7 +79,7 @@ def validate_path(
 
 def validate_relative_path(
     user_segment: str,
-    base_dir: Union[str, Path],
+    base_dir: str | Path,
     *,
     must_exist: bool = False,
 ) -> Path:

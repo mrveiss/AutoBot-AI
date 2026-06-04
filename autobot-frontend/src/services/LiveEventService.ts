@@ -14,12 +14,13 @@ import { createLogger } from '@/utils/debugUtils'
 import config from '@/config/ssot-config'
 import { buildAuthenticatedWsUrl } from '@/utils/buildAuthenticatedWsUrl'
 import { useUserStore } from '@/stores/useUserStore'
+import type { ConnectionState } from '@/services/GlobalWebSocketService'
 
-export type LiveEventConnectionState =
-  | 'disconnected'
-  | 'connecting'
-  | 'connected'
-  | 'error'
+// (#6488) Canonical type lives in GlobalWebSocketService; re-export under the
+// old name so existing callers that import LiveEventConnectionState continue to
+// compile without changes.
+export type { ConnectionState }
+export type LiveEventConnectionState = ConnectionState
 export type LiveEventCallback = (event: LiveEvent) => void
 
 /** Parsed live event received from the server */

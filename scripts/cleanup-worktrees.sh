@@ -11,7 +11,7 @@
 #   2. Local branches (any prefix) for closed issues
 #   3. Remote branches for closed issues (squash-merge aware)
 #
-# Fixes: #2508
+# Fixes: #7104, #2508
 
 set -euo pipefail
 
@@ -174,7 +174,7 @@ local_branches=$(git -C "$REPO_ROOT" branch | sed 's/^[* +]*//' | grep -v "${BAS
 if [ -n "$local_branches" ]; then
     while IFS= read -r branch; do
         [ -z "$branch" ] && continue
-        issue_number=$(echo "$branch" | grep -oP '\d{4,}' | head -1)
+        issue_number=$(echo "$branch" | grep -oP '\d{4,}' | head -1) || true
         [ -z "$issue_number" ] && continue
 
         issue_state=$(gh issue view "$issue_number" --json state --jq '.state' 2>/dev/null) || true
@@ -204,7 +204,7 @@ remote_branches=$(git -C "$REPO_ROOT" branch -r | sed 's|^ *origin/||' \
 if [ -n "$remote_branches" ]; then
     while IFS= read -r branch; do
         [ -z "$branch" ] && continue
-        issue_number=$(echo "$branch" | grep -oP '\d{4,}' | head -1)
+        issue_number=$(echo "$branch" | grep -oP '\d{4,}' | head -1) || true
         [ -z "$issue_number" ] && continue
 
         issue_state=$(gh issue view "$issue_number" --json state --jq '.state' 2>/dev/null) || true

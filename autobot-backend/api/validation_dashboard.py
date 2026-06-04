@@ -6,13 +6,13 @@ Validation Dashboard API for AutoBot
 Provides endpoints for real-time validation dashboard and reports
 """
 
-import logging
+from __future__ import annotations
+
 import os
 
 # Import the dashboard generator
 import sys
 from datetime import datetime, timezone
-from typing import Optional
 
 import aiofiles
 from fastapi import APIRouter, BackgroundTasks
@@ -49,6 +49,8 @@ except ImportError as e:
     ValidationDashboardGenerator = _MissingDep("ValidationDashboardGenerator", e)  # type: ignore[assignment]
     import_error = str(e)
 
+from autobot_shared.logging_manager import get_logger
+
 # Import LLM judges for validation enhancement
 try:
     from judges.agent_response_judge import AgentResponseJudge
@@ -59,7 +61,7 @@ except ImportError:
     VALIDATION_JUDGES_AVAILABLE = False
 
 router = APIRouter()
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Thread-safe global singletons
 import threading
@@ -78,8 +80,8 @@ _validation_judges_lock = threading.Lock()
 
 
 def _try_create_dashboard_generator() -> (
-    Optional[ValidationDashboardGenerator]
-):  # #6794: _MissingDep handles Optional[stub] safely
+    ValidationDashboardGenerator | None
+):  # #6794: _MissingDep handles stub | None safely
     """Try to create dashboard generator, return None on failure. (Issue #315 - extracted)"""
     try:
         generator = ValidationDashboardGenerator()
@@ -94,9 +96,7 @@ def _try_create_dashboard_generator() -> (
     return None
 
 
-def get_dashboard_generator() -> (
-    Optional[ValidationDashboardGenerator]
-):  # #6794: _MissingDep handles Optional[stub] safely
+def get_dashboard_generator() -> ValidationDashboardGenerator | None:  # #6794: _MissingDep handles stub | None safely
     """Get or create dashboard generator instance (thread-safe)"""
     global _dashboard_generator
 
@@ -113,7 +113,7 @@ def get_dashboard_generator() -> (
     return _dashboard_generator
 
 
-def _try_create_validation_judges() -> Optional[Metadata]:
+def _try_create_validation_judges() -> Metadata | None:
     """Try to create validation judges, return None on failure. (Issue #315 - extracted)"""
     try:
         judges = {
@@ -129,7 +129,7 @@ def _try_create_validation_judges() -> Optional[Metadata]:
     return None
 
 
-def get_validation_judges() -> Optional[Metadata]:
+def get_validation_judges() -> Metadata | None:
     """Get or create validation judges instance (thread-safe)"""
     global _validation_judges
 

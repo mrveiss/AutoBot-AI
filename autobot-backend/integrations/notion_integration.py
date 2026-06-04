@@ -18,12 +18,12 @@ Supported actions:
 - update_page       — update page properties
 """
 
-import logging
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import aiohttp
 
+from autobot_shared.logging_manager import get_logger
 from integrations.base import (
     BaseIntegration,
     IntegrationAction,
@@ -32,7 +32,7 @@ from integrations.base import (
     IntegrationStatus,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _NOTION_API_BASE = "https://api.notion.com/v1"
 _NOTION_VERSION = "2022-06-28"
@@ -301,7 +301,7 @@ class NotionIntegration(BaseIntegration):
         self,
         method: str,
         endpoint: str,
-        json_data: Optional[Dict[str, Any]] = None,
+        json_data: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
         """Make an authenticated request to the Notion API."""
         url = "%s%s" % (self._base_url, endpoint)

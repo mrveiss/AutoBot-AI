@@ -2,9 +2,15 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 
+"""
+REST endpoints for chat session lifecycle management.
+
+Exposes CRUD operations over persistent chat sessions, delegating
+storage to the chat_history subsystem.
+"""
+
 import json
-import logging
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from fastapi import APIRouter, Depends, Request, Response
 from fastapi.responses import JSONResponse
@@ -33,23 +39,23 @@ from api.schemas_common import DataResponse
 from auth_middleware import get_auth_middleware, get_current_user
 from autobot_memory_graph import AutoBotMemoryGraph
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 
 # Import session lifecycle hooks (Issue #4260)
 from chat_workflow.session_handler import _emit_session_create, _emit_session_destroy
+
+# Import shared exception classes (Issue #292 - Eliminate duplicate code)
+from exceptions import get_exceptions_lazy
 
 # CRITICAL SECURITY FIX: Import session ownership validation
 from security.session_ownership import validate_session_ownership
 
 # Issue #6559: Wire audit_record into session create/delete/export endpoints
-from services.audit import AuditAction, audit_record
+from services.audit.unified_audit import AuditAction, audit_record  # GH#8290 Phase 2
 from type_defs.common import Metadata
-
-# Import shared exception classes (Issue #292 - Eliminate duplicate code)
-from utils.chat_exceptions import get_exceptions_lazy
 
 # Import reusable chat utilities
 from utils.chat_utils import (
-    create_chat_response,
     create_error_response,
     generate_chat_session_id,
     generate_request_id,
@@ -57,13 +63,14 @@ from utils.chat_utils import (
     log_chat_event,
     validate_chat_session_id,
 )
+from utils.response_helpers import create_success_response
 
 # ====================================================================
 # Router Configuration
 # ====================================================================
 
 router = APIRouter(tags=["chat-sessions"])
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Performance optimization: O(1) lookup for valid export formats (Issue #326)
 VALID_EXPORT_FORMATS = {"json", "txt", "csv"}
@@ -347,7 +354,7 @@ async def get_session_messages(
     messages = await _fetch_session_messages_or_raise(chat_history_manager, session_id, per_page)
     total_count = await chat_history_manager.get_session_message_count(session_id)
 
-    return create_chat_response(
+    return create_success_response(
         data={
             "messages": messages,
             "session_id": session_id,
@@ -369,8 +376,8 @@ async def get_session_messages(
 async def list_sessions(
     request: Request,
     current_user: dict = Depends(get_current_user),
-    scope: Optional[str] = None,
-    team_id: Optional[str] = None,
+    scope: str | None = None,
+    team_id: str | None = None,
 ):
     """List chat sessions with optional org/team/shared scope filtering (#684, #689).
 
@@ -419,7 +426,7 @@ async def list_sessions(
     if len(sessions) == 0:
         response_data["intentional_empty"] = True
 
-    return create_chat_response(
+    return create_success_response(
         data=response_data,
         message="Sessions retrieved successfully",
         request_id=request_id,
@@ -460,7 +467,7 @@ async def _list_scoped_sessions(
     request_id: str,
     chat_history_manager,
     scope: str,
-    team_id: Optional[str],
+    team_id: str | None,
 ):
     """List sessions scoped to org or team.
 
@@ -516,7 +523,7 @@ async def _list_org_sessions(
     org_id = user_data.get("org_id")
     user_role = user_data.get("role", "")
     if not org_id:
-        return create_chat_response(
+        return create_success_response(
             data={"sessions": [], "count": 0, "scope": "org"},
             message="User has no organization",
             request_id=request_id,
@@ -536,7 +543,7 @@ async def _list_org_sessions(
     filtered = [s for s in all_sessions if s.get("id") in session_ids]
     filtered.sort(key=lambda x: x.get("lastModified", ""), reverse=True)
 
-    return create_chat_response(
+    return create_success_response(
         data={
             "sessions": filtered,
             "count": len(filtered),
@@ -563,7 +570,7 @@ async def _list_team_sessions(
     filtered = [s for s in all_sessions if s.get("id") in session_ids]
     filtered.sort(key=lambda x: x.get("lastModified", ""), reverse=True)
 
-    return create_chat_response(
+    return create_success_response(
         data={
             "sessions": filtered,
             "count": len(filtered),
@@ -586,7 +593,7 @@ async def _list_shared_sessions(
     """
     user_data = get_auth_middleware().get_user_from_request(request)
     if not user_data:
-        return create_chat_response(
+        return create_success_response(
             data={"sessions": [], "count": 0, "scope": "shared"},
             message="Authentication required",
             request_id=request_id,
@@ -602,7 +609,7 @@ async def _list_shared_sessions(
     session_ids = set(await validator.get_shared_sessions(user_id))
 
     if not session_ids:
-        return create_chat_response(
+        return create_success_response(
             data={"sessions": [], "count": 0, "scope": "shared"},
             message="No shared sessions",
             request_id=request_id,
@@ -612,7 +619,7 @@ async def _list_shared_sessions(
     filtered = [s for s in all_sessions if s.get("id") in session_ids]
     filtered.sort(key=lambda x: x.get("lastModified", ""), reverse=True)
 
-    return create_chat_response(
+    return create_success_response(
         data={
             "sessions": filtered,
             "count": len(filtered),
@@ -624,9 +631,9 @@ async def _list_shared_sessions(
 
 
 async def _register_session_ownership(
-    user_data: Optional[dict],
+    user_data: dict | None,
     session_id: str,
-    team_id: Optional[str],
+    team_id: str | None,
 ) -> None:
     """Register session ownership with org/team indices in Redis.
 
@@ -653,7 +660,7 @@ async def _track_session_in_memory_graph(
     request: Request,
     session_id: str,
     session_title: str,
-    user_data: Optional[dict],
+    user_data: dict | None,
     request_id: str,
 ) -> None:
     """
@@ -669,7 +676,7 @@ async def _track_session_in_memory_graph(
         user_data: Authenticated user data
         request_id: Request tracking ID
     """
-    memory_graph: Optional[AutoBotMemoryGraph] = getattr(request.app.state, "memory_graph", None)
+    memory_graph: AutoBotMemoryGraph | None = getattr(request.app.state, "memory_graph", None)
     if not memory_graph or not user_data:
         return
 
@@ -792,7 +799,7 @@ async def create_session(session_data: SessionCreate, request: Request):
         outcome="success",
     )
 
-    return create_chat_response(
+    return create_success_response(
         data=session,
         message="Session created successfully",
         request_id=request_id,
@@ -853,7 +860,7 @@ async def update_session(
         {"title": session_data.title, "request_id": request_id},
     )
 
-    return create_chat_response(
+    return create_success_response(
         data=updated_session,
         message="Session updated successfully",
         request_id=request_id,
@@ -865,7 +872,7 @@ async def update_session(
 # =============================================================================
 
 
-def _validate_delete_session_params(session_id: str, file_action: str, file_options: Optional[str]) -> dict:
+def _validate_delete_session_params(session_id: str, file_action: str, file_options: str | None) -> dict:
     """Validate and parse delete_session parameters.
 
     Issue #281: Extracted from delete_session for better organization.
@@ -1053,7 +1060,7 @@ def _process_kb_deletion_result(result: dict, kb_cleanup_result: dict) -> None:
         kb_cleanup_result["cleanup_error"] = f"{len(result['errors'])} errors during cleanup"
 
 
-def _log_kb_cleanup_result(session_id: str, kb_cleanup_result: dict, errors: Optional[List] = None) -> None:
+def _log_kb_cleanup_result(session_id: str, kb_cleanup_result: dict, errors: List | None = None) -> None:
     """
     Log KB cleanup results appropriately based on outcome.
 
@@ -1261,7 +1268,7 @@ def _build_delete_session_response(
     Returns:
         Success response with deletion details
     """
-    return create_chat_response(
+    return create_success_response(
         data={
             "session_id": session_id,
             "deleted": True,
@@ -1286,7 +1293,7 @@ async def delete_session(
     request: Request,
     ownership: Dict = Depends(validate_session_ownership),  # SECURITY: Validate ownership
     file_action: str = "delete",
-    file_options: Optional[str] = None,
+    file_options: str | None = None,
 ):
     """
     Delete a chat session with comprehensive cleanup.
@@ -1467,7 +1474,7 @@ async def _clear_and_restore_session(chat_manager, session_id: str, messages_to_
     operation="reset_chat",
     error_code_prefix="CHAT_SESSIONS",
 )
-async def reset_chat(request: Request, reset_request: Optional[ChatResetRequest] = None):
+async def reset_chat(request: Request, reset_request: ChatResetRequest | None = None):
     """
     Reset the current chat session.
 
@@ -1505,7 +1512,7 @@ async def reset_chat(request: Request, reset_request: Optional[ChatResetRequest]
         },
     )
 
-    return create_chat_response(
+    return create_success_response(
         data={
             "session_id": session_id,
             "reset": True,
@@ -1522,7 +1529,7 @@ async def reset_chat(request: Request, reset_request: Optional[ChatResetRequest]
 # ====================================================================
 
 
-def _get_memory_graph_or_none(request: Request) -> Optional[AutoBotMemoryGraph]:
+def _get_memory_graph_or_none(request: Request) -> AutoBotMemoryGraph | None:
     """
     Get memory graph from app state or None if unavailable.
 
@@ -1540,12 +1547,12 @@ def _create_activity_unavailable_response(
     Issue #665: Extracted helper for unavailable response.
     """
     if is_batch:
-        return create_chat_response(
+        return create_success_response(
             data={"total": activity_count, "stored": 0, "failed": activity_count},
             message="Activities received but memory graph unavailable",
             request_id=request_id,
         )
-    return create_chat_response(
+    return create_success_response(
         data={"activity_id": None, "stored": False},
         message="Activity received but memory graph unavailable",
         request_id=request_id,
@@ -1666,7 +1673,7 @@ async def add_session_activity(
             },
         )
 
-        return create_chat_response(
+        return create_success_response(
             data={
                 "activity_id": activity_data.activity_id,
                 "entity_id": activity_entity.get("entity_id"),
@@ -1679,7 +1686,7 @@ async def add_session_activity(
 
     except Exception as graph_error:
         logger.warning("[%s] Failed to store activity: %s", request_id, graph_error)
-        return create_chat_response(
+        return create_success_response(
             data={"activity_id": activity_data.activity_id, "stored": False},
             message="Activity received but storage failed",
             request_id=request_id,
@@ -1734,7 +1741,7 @@ async def add_session_activities_batch(
         },
     )
 
-    return create_chat_response(
+    return create_success_response(
         data={
             "total": total_activities,
             "stored": result["stored_count"],
@@ -1763,7 +1770,7 @@ async def _fetch_activities_from_graph(
             user_id=user_id,
             limit=limit,
         )
-        return create_chat_response(
+        return create_success_response(
             data={
                 "activities": activities,
                 "total": len(activities),
@@ -1778,7 +1785,7 @@ async def _fetch_activities_from_graph(
             request_id,
             graph_error,
         )
-        return create_chat_response(
+        return create_success_response(
             data={"activities": [], "total": 0},
             message="Failed to retrieve activities",
             request_id=request_id,
@@ -1795,8 +1802,8 @@ async def get_session_activities(
     session_id: str,
     request: Request,
     ownership: Dict = Depends(validate_session_ownership),
-    activity_type: Optional[str] = None,
-    user_id: Optional[str] = None,
+    activity_type: str | None = None,
+    user_id: str | None = None,
     limit: int = 100,
 ):
     """
@@ -1820,10 +1827,10 @@ async def get_session_activities(
         raise ValidationError("Invalid session ID format")
 
     # Get memory graph from app state
-    memory_graph: Optional[AutoBotMemoryGraph] = getattr(request.app.state, "memory_graph", None)
+    memory_graph: AutoBotMemoryGraph | None = getattr(request.app.state, "memory_graph", None)
 
     if not memory_graph:
-        return create_chat_response(
+        return create_success_response(
             data={"activities": [], "total": 0},
             message="Memory graph unavailable",
             request_id=request_id,
@@ -1842,7 +1849,7 @@ async def _share_session_facts(
     session_id: str,
     share_with: list[str],
     shared_by: str,
-    knowledge_facts: Optional[list[str]],
+    knowledge_facts: list[str] | None,
 ) -> Dict:
     """Share KB facts from a session with other users.
 
@@ -1903,7 +1910,7 @@ async def share_session(
             share_data.knowledge_facts,
         )
 
-    return create_chat_response(
+    return create_success_response(
         data={
             "session_id": session_id,
             "shared_with": share_data.share_with,
@@ -1946,7 +1953,7 @@ async def get_share_preview(
                     }
                 )
 
-    return create_chat_response(
+    return create_success_response(
         data={
             "session_id": session_id,
             "fact_count": len(facts),
@@ -1988,7 +1995,7 @@ async def clear_session_checkpoints(
 
         await delete_thread_checkpoints(session_id)
         logger.info("Cleared checkpoints for session %s (#1482)", session_id)
-        return create_chat_response(
+        return create_success_response(
             data={"session_id": session_id},
             message=f"Checkpoints cleared for session {session_id}",
         )

@@ -11,19 +11,19 @@ Uses OpenSSL via subprocess for certificate operations.
 Inspired by oVirt's ovirt-engine-pki-ca-create and ovirt-engine-pki-enroll.
 """
 
-import logging
 import os
 import subprocess  # nosec B404 - Required for PKI certificate generation
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import List, Tuple
 
+from autobot_shared.logging_manager import get_logger
 from pki.config import VM_DEFINITIONS, CertificateStatus, TLSConfig, VMCertificateInfo
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
-def _run_openssl_command(cmd: List[str], operation: str, context: str = "") -> Tuple[bool, Optional[str]]:
+def _run_openssl_command(cmd: List[str], operation: str, context: str = "") -> Tuple[bool, str | None]:
     """
     Execute an OpenSSL command with error handling.
 
@@ -36,7 +36,7 @@ def _run_openssl_command(cmd: List[str], operation: str, context: str = "") -> T
         context: Additional context (e.g., VM name)
 
     Returns:
-        Tuple of (success: bool, error_message: Optional[str])
+        Tuple of (success: bool, error_message: str | None)
     """
     try:
         subprocess.run(cmd, check=True, capture_output=True)
@@ -207,7 +207,7 @@ class CertificateGenerator:
     - Certificate validation
     """
 
-    def __init__(self, config: Optional[TLSConfig] = None):
+    def __init__(self, config: TLSConfig | None = None):
         """Initialize generator with configuration."""
         self.config = config or TLSConfig()
 
@@ -420,7 +420,7 @@ class CertificateGenerator:
         logger.info(f"Certificate renewed for {vm_info.name} (key preserved): {cert_path}")
         return True
 
-    def _parse_certificate_output(self, output: str) -> Tuple[Optional[str], Optional[str], Optional[str]]:
+    def _parse_certificate_output(self, output: str) -> Tuple[str | None, str | None, str | None]:
         """
         Parse OpenSSL x509 output for subject, issuer, and expiry date.
 
@@ -446,7 +446,7 @@ class CertificateGenerator:
 
         return subject, issuer, expires_at
 
-    def _calculate_expiry_info(self, expires_at: Optional[str]) -> Tuple[Optional[int], bool]:
+    def _calculate_expiry_info(self, expires_at: str | None) -> Tuple[int | None, bool]:
         """
         Calculate days until expiry and renewal status from expiry date string.
 

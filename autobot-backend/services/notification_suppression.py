@@ -5,15 +5,15 @@ Automatically suppresses CI/CD failure notifications to reduce inbox clutter.
 Implements multi-tiered filtering for actionable vs. noise notifications.
 """
 
-import logging
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import List, Optional
+from typing import List
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import parse_utc_iso
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class NotificationReason(str, Enum):
@@ -34,7 +34,7 @@ class NotificationFilter:
     reason: NotificationReason
     action: str  # "archive", "keep", "review"
     description: str
-    max_age_days: Optional[int] = None  # Archive if older than N days
+    max_age_days: int | None = None  # Archive if older than N days
 
 
 class NotificationSuppressionConfig:
@@ -80,7 +80,7 @@ class NotificationSuppressionConfig:
         ),
     ]
 
-    def __init__(self, filters: Optional[List[NotificationFilter]] = None):
+    def __init__(self, filters: List[NotificationFilter] | None = None) -> None:
         """Initialize with custom or default filters."""
         self.filters = filters or self.DEFAULT_FILTERS
         self._filter_map = {f.reason: f for f in self.filters}
@@ -100,7 +100,7 @@ class NotificationSuppressionConfig:
 
         return filter_config.action == "archive"
 
-    def get_filter(self, reason: NotificationReason) -> Optional[NotificationFilter]:
+    def get_filter(self, reason: NotificationReason) -> NotificationFilter | None:
         """Get filter configuration for a reason."""
         return self._filter_map.get(reason)
 
@@ -108,7 +108,7 @@ class NotificationSuppressionConfig:
 class NotificationSuppressionManager:
     """Manager for suppressing CI notifications via GitHub API."""
 
-    def __init__(self, config: Optional[NotificationSuppressionConfig] = None):
+    def __init__(self, config: NotificationSuppressionConfig | None = None) -> None:
         """Initialize with suppression configuration."""
         self.config = config or NotificationSuppressionConfig()
         self.suppressed_count = 0

@@ -9,7 +9,7 @@
         class="reconnect-btn"
         @click="connect"
       >
-        <i class="fas fa-sync-alt"></i> Reconnect
+        <Icon name="sync-alt" /> Reconnect
       </button>
     </div>
 
@@ -19,6 +19,7 @@
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'

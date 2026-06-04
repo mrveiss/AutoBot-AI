@@ -8,10 +8,10 @@ Issue #759: Knowledge Pipeline Foundation - Extract, Cognify, Load (ECL).
 Issue #2025: Dual-mode entity extraction — LLM + NLP (Neural Mesh RAG Phase 2).
 """
 
-import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 from uuid import UUID
 
+from autobot_shared.logging_manager import get_logger
 from knowledge.pipeline.base import BaseCognifier, PipelineContext
 from knowledge.pipeline.cognifiers.llm_utils import parse_llm_json_response
 from knowledge.pipeline.models.chunk import ProcessedChunk
@@ -19,7 +19,7 @@ from knowledge.pipeline.models.entity import Entity, EntityType
 from knowledge.pipeline.registry import TaskRegistry
 from services.llm_service import get_llm_service
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # spaCy NER label → EntityType mapping (Issue #2025)
 _SPACY_LABEL_MAP: Dict[str, str] = {
@@ -72,7 +72,7 @@ class EntityExtractor(BaseCognifier):
         self.mode = mode
         self.nlp_threshold = nlp_threshold
         self.llm = get_llm_service()
-        self._nlp_model: Optional[Any] = None
+        self._nlp_model: Any | None = None
 
     def _get_nlp(self) -> Any:
         """
@@ -101,7 +101,7 @@ class EntityExtractor(BaseCognifier):
             return self.mode
         return "nlp" if len(chunks) > self.nlp_threshold else "llm"
 
-    def _nlp_extract(self, chunks: List[ProcessedChunk], document_id: Optional[UUID]) -> List[Entity]:
+    def _nlp_extract(self, chunks: List[ProcessedChunk], document_id: UUID | None) -> List[Entity]:
         """
         Extract entities from chunks using spaCy NER + noun phrases (Issue #2025).
 
@@ -130,7 +130,7 @@ class EntityExtractor(BaseCognifier):
         self,
         doc: Any,
         chunk: ProcessedChunk,
-        document_id: Optional[UUID],
+        document_id: UUID | None,
         seen: Dict[str, Entity],
     ) -> None:
         """Add spaCy NER spans to the seen map (Issue #2025)."""
@@ -149,7 +149,7 @@ class EntityExtractor(BaseCognifier):
         self,
         doc: Any,
         chunk: ProcessedChunk,
-        document_id: Optional[UUID],
+        document_id: UUID | None,
         seen: Dict[str, Entity],
     ) -> None:
         """Add spaCy noun-phrase chunks to the seen map (Issue #2025)."""
@@ -169,7 +169,7 @@ class EntityExtractor(BaseCognifier):
         entity_type: str,
         confidence: float,
         chunk: ProcessedChunk,
-        document_id: Optional[UUID],
+        document_id: UUID | None,
         seen: Dict[str, Entity],
     ) -> None:
         """Insert or update an entity in the seen map by canonical name (Issue #2025)."""

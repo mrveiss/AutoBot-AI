@@ -12,7 +12,7 @@ import hashlib
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 
 class PatternType(Enum):
@@ -145,7 +145,7 @@ class CrossLanguagePattern:
     normalized_representation: str = ""
 
     # Vector embedding for semantic search
-    embedding: Optional[List[float]] = None
+    embedding: List[float] | None = None
     embedding_model: str = ""
 
     # Metadata
@@ -222,8 +222,8 @@ class ValidationDuplication:
 
     duplication_id: str
     validation_type: str  # "email", "phone", "required", "range", "regex", etc.
-    python_location: Optional[PatternLocation] = None
-    typescript_location: Optional[PatternLocation] = None
+    python_location: PatternLocation | None = None
+    typescript_location: PatternLocation | None = None
     python_code: str = ""
     typescript_code: str = ""
     similarity_score: float = 0.0
@@ -253,8 +253,8 @@ class APIContractMismatch:
     endpoint_path: str
     http_method: str
     mismatch_type: str  # "missing_endpoint", "orphaned_endpoint", "method_mismatch", "param_mismatch"
-    backend_location: Optional[PatternLocation] = None
-    frontend_location: Optional[PatternLocation] = None
+    backend_location: PatternLocation | None = None
+    frontend_location: PatternLocation | None = None
     backend_definition: str = ""
     frontend_call: str = ""
     severity: PatternSeverity = PatternSeverity.CRITICAL

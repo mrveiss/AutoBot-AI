@@ -7,21 +7,21 @@
         @click="manageTab = 'upload'"
         :class="['manage-tab-btn', { active: manageTab === 'upload' }]"
       >
-        <i class="fas fa-upload mr-2"></i>{{ $t('knowledge.entries.uploadTab') }}
+        <Icon name="upload" class="mr-2" />{{ $t('knowledge.entries.uploadTab') }}
       </BaseButton>
       <BaseButton
         variant="ghost"
         @click="manageTab = 'manage'"
         :class="['manage-tab-btn', { active: manageTab === 'manage' }]"
       >
-        <i class="fas fa-edit mr-2"></i>{{ $t('knowledge.entries.manageTab') }}
+        <Icon name="edit" class="mr-2" />{{ $t('knowledge.entries.manageTab') }}
       </BaseButton>
       <BaseButton
         variant="ghost"
         @click="manageTab = 'advanced'"
         :class="['manage-tab-btn', { active: manageTab === 'advanced' }]"
       >
-        <i class="fas fa-cog mr-2"></i>{{ $t('knowledge.entries.advancedTab') }}
+        <Icon name="cog" class="mr-2" />{{ $t('knowledge.entries.advancedTab') }}
       </BaseButton>
     </div>
 
@@ -51,7 +51,7 @@
     <!-- Search Bar -->
     <div class="entries-header">
       <div class="search-box">
-        <i class="fas fa-search search-icon"></i>
+        <Icon name="search" class="search-icon" />
         <input
           v-model="searchQuery"
           type="text"
@@ -144,7 +144,7 @@
 
     <!-- Entries list -->
     <div v-if="store.isLoading" class="loading-state">
-      <i class="fas fa-spinner fa-spin"></i>
+      <Icon name="spinner" class="animate-spin" />
       <p>{{ $t('knowledge.entries.loadingEntries') }}</p>
     </div>
 
@@ -206,7 +206,7 @@
             </td>
             <td>
               <span class="type-badge">
-                <i :class="getDocumentTypeIcon(entry.type)"></i>
+                <Icon :name="getDocumentTypeIcon(entry.type)" />
                 {{ entry.type }}
               </span>
             </td>
@@ -228,8 +228,9 @@
                 @click="viewEntry(entry)"
                 class="icon-btn"
                 :title="$t('knowledge.entries.viewBtn')"
+                :aria-label="$t('knowledge.entries.viewBtn')"
               >
-                <i class="fas fa-eye"></i>
+                <Icon name="eye" />
               </BaseButton>
               <BaseButton
                 variant="ghost"
@@ -237,8 +238,9 @@
                 @click="editEntry(entry)"
                 class="icon-btn"
                 :title="$t('knowledge.entries.editBtn')"
+                :aria-label="$t('knowledge.entries.editBtn')"
               >
-                <i class="fas fa-edit"></i>
+                <Icon name="edit" />
               </BaseButton>
               <BaseButton
                 variant="ghost"
@@ -246,8 +248,9 @@
                 @click="deleteEntry(entry)"
                 class="icon-btn danger"
                 :title="$t('knowledge.entries.deleteBtn')"
+                :aria-label="$t('knowledge.entries.deleteBtn')"
               >
-                <i class="fas fa-trash"></i>
+                <Icon name="trash" />
               </BaseButton>
             </td>
           </tr>
@@ -266,7 +269,7 @@
           :disabled="currentPage === 1"
           class="page-btn"
         >
-          <i class="fas fa-chevron-left"></i>
+          <Icon name="chevron-left" />
         </BaseButton>
 
         <span class="page-info">
@@ -280,7 +283,7 @@
           :disabled="currentPage === totalPages"
           class="page-btn"
         >
-          <i class="fas fa-chevron-right"></i>
+          <Icon name="chevron-right" />
         </BaseButton>
       </div>
     </div>
@@ -289,7 +292,7 @@
     <BaseModal
       v-model="showDialog"
       :title="dialogMode === 'view' ? $t('knowledge.entries.viewEntry') : $t('knowledge.entries.editEntry')"
-      size="large"
+      size="lg"
       scrollable
     >
       <div v-if="currentEntry && dialogMode === 'view'" class="view-mode">
@@ -307,7 +310,7 @@
           <div class="meta-item">
             <label>{{ $t('knowledge.entries.typeViewLabel') }}</label>
             <span class="type-badge">
-              <i :class="getDocumentTypeIcon(currentEntry.type)"></i>
+              <Icon :name="getDocumentTypeIcon(currentEntry.type)" />
               {{ currentEntry.type }}
             </span>
           </div>
@@ -399,7 +402,7 @@
           variant="primary"
           @click="switchToEdit"
         >
-          <i class="fas fa-edit"></i>
+          <Icon name="edit" />
           {{ $t('knowledge.entries.editBtn') }}
         </BaseButton>
         <BaseButton
@@ -431,6 +434,7 @@
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, reactive, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useKnowledgeStore } from '@/stores/useKnowledgeStore'

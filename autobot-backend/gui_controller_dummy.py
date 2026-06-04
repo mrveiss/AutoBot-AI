@@ -2,11 +2,19 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 # src/gui_controller_dummy.py
-import asyncio
-import logging
-from typing import Any, Dict, Optional, Tuple
+"""
+No-op GUI controller used when pyautogui is unavailable.
 
-logger = logging.getLogger(__name__)
+Drops all GUI automation calls silently, allowing the backend to start
+in headless or server environments without a display.
+"""
+
+import asyncio
+from typing import Any, Dict, Tuple
+
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 
 
 class GUIController:
@@ -22,7 +30,7 @@ class GUIController:
             "Initializing Dummy GUIController for Linux environment. " "GUI automation features will be skipped."
         )
 
-    async def _screenshot(self, region: Optional[Tuple[int, int, int, int]] = None) -> Any:
+    async def _screenshot(self, region: Tuple[int, int, int, int] | None = None) -> Any:
         """Return None as screenshot is not supported in dummy controller."""
         logger.debug("Dummy GUIController: _screenshot skipped.")
         await asyncio.sleep(0)

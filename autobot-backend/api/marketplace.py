@@ -10,7 +10,6 @@ Issue #1803 - Plugin and agent marketplace: package, share, and install extensio
 """
 
 import json
-import logging
 from enum import Enum
 from typing import Any, Optional
 
@@ -27,6 +26,7 @@ from api.schemas_workflows import (
 )
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.ssot_config import config
 
@@ -54,14 +54,21 @@ class CatalogSort(str, Enum):
     NEWEST = "newest"
 
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter()
 
 # Redis keys for marketplace data
 _CATALOG_KEY = "marketplace:catalog"
 _CATALOG_TTL = 3600  # 1 hour
-_INSTALLED_KEY = "marketplace:installed"  # Set of installed plugin names
+# #7366: per-source installed SETs — marketplace:installed:{source_id}
+# Legacy flat key retained only for one-shot migration on first read.
+_INSTALLED_KEY_PREFIX = "marketplace:installed:"
+_LEGACY_INSTALLED_KEY = "marketplace:installed"
+
+
+def _installed_key(source_id: str) -> str:
+    return f"{_INSTALLED_KEY_PREFIX}{source_id}"
 
 
 def _plugin_source_url(slug: str) -> str:
@@ -211,7 +218,7 @@ def _remote_plugin_to_entry(plugin: dict[str, Any], source_name: str) -> dict[st
     }
 
 
-def _safe_remote_plugin_to_entry(plugin: Any, source_name: str) -> Optional[dict[str, Any]]:
+def _safe_remote_plugin_to_entry(plugin: Any, source_name: str) -> dict[str, Any] | None:
     """Per-item wrapper that turns one bad plugin into a logged skip.
 
     #6525: pre-fix, ``[_remote_plugin_to_entry(p, ...) for p in remote_plugins]``
@@ -431,12 +438,37 @@ async def list_categories() -> dict[str, list[str]]:
 # ---------------------------------------------------------------------------
 
 
+async def _migrate_legacy_installed(redis: Any) -> None:
+    """#7366: one-shot migration — move flat marketplace:installed into the
+    builtin-source-namespaced key and delete the legacy key."""
+    try:
+        members = await redis.smembers(_LEGACY_INSTALLED_KEY)
+        if not members:
+            return
+        decoded = [m.decode() if isinstance(m, bytes) else m for m in members]
+        dest = _installed_key(BUILTIN_SOURCE_ID)
+        await redis.sadd(dest, *decoded)
+        await redis.delete(_LEGACY_INSTALLED_KEY)
+        logger.info("Marketplace: migrated %d legacy installed entries to %s", len(decoded), dest)
+    except Exception as exc:
+        logger.warning("Marketplace: legacy installed migration failed (non-fatal): %s", exc)
+
+
 async def _get_installed() -> set[str]:
-    """Return the set of installed plugin names from Redis."""
+    """Return merged set of installed plugin names across all sources.
+
+    #7366: scans marketplace:installed:{source_id} keys and unions their
+    members. Runs the legacy-key migration on first call after upgrade.
+    """
     try:
         redis = await get_async_redis_client(database="main")
-        members = await redis.smembers(_INSTALLED_KEY)
-        return {m.decode() if isinstance(m, bytes) else m for m in members}
+        await _migrate_legacy_installed(redis)
+        names: set[str] = set()
+        async for key in redis.scan_iter(match=f"{_INSTALLED_KEY_PREFIX}*"):
+            key_str = key.decode() if isinstance(key, bytes) else key
+            members = await redis.smembers(key_str)
+            names.update(m.decode() if isinstance(m, bytes) else m for m in members)
+        return names
     except Exception as exc:
         logger.warning("Marketplace: Redis read of installed set failed: %s", exc)
         return set()
@@ -490,7 +522,8 @@ async def install_plugin(
 
     try:
         redis = await get_async_redis_client(database="main")
-        await redis.sadd(_INSTALLED_KEY, body.plugin_name)
+        # #7366: write to per-source key so same name from different sources is stored separately
+        await redis.sadd(_installed_key(body.source_id), body.plugin_name)
         # Bump download counter in cached catalog — only meaningful for the
         # built-in catalog (remote catalogs are read-only). Skip otherwise.
         if body.source_id == BUILTIN_SOURCE_ID:
@@ -520,11 +553,18 @@ async def install_plugin(
     operation="uninstall_plugin",
     error_code_prefix="MARKETPLACE",
 )
-async def uninstall_plugin(plugin_name: str) -> dict[str, str]:
+async def uninstall_plugin(
+    plugin_name: str,
+    source_id: str = Query(
+        default=BUILTIN_SOURCE_ID,
+        description=f"Marketplace source id; '{BUILTIN_SOURCE_ID}' or a user-added source UUID (#7366)",
+    ),
+) -> dict[str, str]:
     """
     Remove a marketplace plugin from the installed set.
 
     Issue #1803: Plugin and agent marketplace.
+    Issue #7366: source_id param targets the correct per-source key.
     """
     installed = await _get_installed()
     if plugin_name not in installed:
@@ -535,7 +575,8 @@ async def uninstall_plugin(plugin_name: str) -> dict[str, str]:
 
     try:
         redis = await get_async_redis_client(database="main")
-        await redis.srem(_INSTALLED_KEY, plugin_name)
+        # #7366: remove from the specific source key
+        await redis.srem(_installed_key(source_id), plugin_name)
     except Exception as exc:
         logger.error("Marketplace: uninstall failed for %s: %s", plugin_name, exc)
         raise HTTPException(
@@ -543,5 +584,5 @@ async def uninstall_plugin(plugin_name: str) -> dict[str, str]:
             detail="Failed to remove plugin installation",
         ) from exc
 
-    logger.info("Marketplace: uninstalled plugin %s", plugin_name)
+    logger.info("Marketplace: uninstalled plugin %s from source %s", plugin_name, source_id)
     return {"status": "uninstalled", "plugin": plugin_name}

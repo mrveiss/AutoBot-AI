@@ -14,7 +14,10 @@ import { useRoute, useRouter } from 'vue-router'
 import { useSlmApi } from '@/composables/useSlmApi'
 import { useFleetStore } from '@/stores/fleet'
 import { formatDateTime } from '@/composables/useTimezone'
+import { useToast } from '@/composables/useToast'
 import type { Backup, BackupRequest, Replication, ReplicationRequest } from '@/types/slm'
+
+const { showToast } = useToast()
 
 const api = useSlmApi()
 const fleetStore = useFleetStore()
@@ -107,7 +110,7 @@ async function handleRestore(backupId: string): Promise<void> {
     await api.restoreBackup(backupId)
     await fetchBackups()
   } catch (e) {
-    alert(`Restore failed: ${e instanceof Error ? e.message : 'Unknown error'}`)
+    showToast(`Restore failed: ${e instanceof Error ? e.message : 'Unknown error'}`, 'error')
   }
 }
 
@@ -127,7 +130,7 @@ async function fetchReplications(): Promise<void> {
 async function handleCreateReplication(): Promise<void> {
   if (!newReplication.value.source_node_id || !newReplication.value.target_node_id) return
   if (newReplication.value.source_node_id === newReplication.value.target_node_id) {
-    alert('Source and target nodes must be different')
+    showToast('Source and target nodes must be different', 'error')
     return
   }
 
@@ -155,7 +158,7 @@ async function handlePromoteReplica(replicationId: string): Promise<void> {
     await api.promoteReplica(replicationId)
     await fetchReplications()
   } catch (e) {
-    alert(`Promote failed: ${e instanceof Error ? e.message : 'Unknown error'}`)
+    showToast(`Promote failed: ${e instanceof Error ? e.message : 'Unknown error'}`, 'error')
   }
 }
 
@@ -220,9 +223,9 @@ function getNodeHostname(nodeId: string): string {
     <!-- Header -->
     <div class="flex items-center justify-between mb-6">
       <div>
-        <h1 class="text-2xl font-bold text-gray-900">Stateful Services</h1>
+        <h1 class="text-2xl font-bold text-gray-900">{{ $t('backupsView.statefulServices') }}</h1>
         <p class="text-sm text-gray-500 mt-1">
-          Manage backups and replications for Redis and other stateful services
+          {{ $t('backupsView.manageBackupsAndReplications') }}
         </p>
       </div>
     </div>
@@ -239,7 +242,7 @@ function getNodeHostname(nodeId: string): string {
               : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300',
           ]"
         >
-          Backups
+          {{ $t('backupsView.backups') }}
           <span class="ml-2 py-0.5 px-2 rounded-full text-xs bg-gray-100 text-gray-600">
             {{ backups.length }}
           </span>
@@ -253,7 +256,7 @@ function getNodeHostname(nodeId: string): string {
               : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300',
           ]"
         >
-          Replications
+          {{ $t('backupsView.replications') }}
           <span class="ml-2 py-0.5 px-2 rounded-full text-xs bg-gray-100 text-gray-600">
             {{ replications.length }}
           </span>
@@ -265,7 +268,7 @@ function getNodeHostname(nodeId: string): string {
     <div v-if="activeTab === 'backups'">
       <!-- Backups Header -->
       <div class="flex items-center justify-between mb-4">
-        <h2 class="text-lg font-semibold text-gray-800">Backup History</h2>
+        <h2 class="text-lg font-semibold text-gray-800">{{ $t('backupsView.backupHistory') }}</h2>
         <button
           @click="showCreateBackupDialog = true"
           class="btn btn-primary flex items-center gap-2"
@@ -273,7 +276,7 @@ function getNodeHostname(nodeId: string): string {
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
           </svg>
-          Create Backup
+          {{ $t('backupsView.createBackup') }}
         </button>
       </div>
 
@@ -282,13 +285,13 @@ function getNodeHostname(nodeId: string): string {
         <table class="min-w-full divide-y divide-gray-200">
           <thead class="bg-gray-50">
             <tr>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Backup ID</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Node</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Service</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Size</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Created</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('backupsView.backupID') }}</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('backupsView.node') }}</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('backupsView.service') }}</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('backupsView.size') }}</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('backupsView.status') }}</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('backupsView.created') }}</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('backupsView.actions') }}</th>
             </tr>
           </thead>
           <tbody class="bg-white divide-y divide-gray-200">
@@ -319,14 +322,14 @@ function getNodeHostname(nodeId: string): string {
                   @click="handleRestore(backup.backup_id)"
                   class="text-blue-600 hover:text-blue-800 font-medium"
                 >
-                  Restore
+                  {{ $t('backupsView.restore') }}
                 </button>
                 <span v-else class="text-gray-400">-</span>
               </td>
             </tr>
             <tr v-if="backups.length === 0 && !isLoadingBackups">
               <td colspan="7" class="px-6 py-12 text-center text-gray-500">
-                No backups yet. Click "Create Backup" to get started.
+                {{ $t('backupsView.noBackupsYetClick') }}
               </td>
             </tr>
           </tbody>
@@ -343,7 +346,7 @@ function getNodeHostname(nodeId: string): string {
     <div v-if="activeTab === 'replications'">
       <!-- Replications Header -->
       <div class="flex items-center justify-between mb-4">
-        <h2 class="text-lg font-semibold text-gray-800">Active Replications</h2>
+        <h2 class="text-lg font-semibold text-gray-800">{{ $t('backupsView.activeReplications') }}</h2>
         <button
           @click="showCreateReplicationDialog = true"
           class="btn btn-primary flex items-center gap-2"
@@ -351,7 +354,7 @@ function getNodeHostname(nodeId: string): string {
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
           </svg>
-          Start Replication
+          {{ $t('backupsView.startReplication') }}
         </button>
       </div>
 
@@ -361,13 +364,13 @@ function getNodeHostname(nodeId: string): string {
           <thead class="bg-gray-50">
             <tr>
               <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">ID</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Source</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Target</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Service</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Lag</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Started</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('backupsView.source') }}</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('backupsView.target') }}</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('backupsView.service') }}</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('backupsView.status') }}</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('backupsView.lag') }}</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('backupsView.started') }}</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('backupsView.actions') }}</th>
             </tr>
           </thead>
           <tbody class="bg-white divide-y divide-gray-200">
@@ -405,14 +408,14 @@ function getNodeHostname(nodeId: string): string {
                   @click="handlePromoteReplica(repl.replication_id)"
                   class="text-blue-600 hover:text-blue-800 font-medium"
                 >
-                  Promote
+                  {{ $t('backupsView.promote') }}
                 </button>
                 <span v-else class="text-gray-400">-</span>
               </td>
             </tr>
             <tr v-if="replications.length === 0 && !isLoadingReplications">
               <td colspan="8" class="px-6 py-12 text-center text-gray-500">
-                No active replications. Click "Start Replication" to set up data replication.
+                {{ $t('backupsView.noActiveReplicationsClick') }}
               </td>
             </tr>
           </tbody>
@@ -433,17 +436,17 @@ function getNodeHostname(nodeId: string): string {
     >
       <div class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
         <div class="px-6 py-4 border-b border-gray-200">
-          <h3 class="text-lg font-semibold text-gray-900">Create Backup</h3>
+          <h3 class="text-lg font-semibold text-gray-900">{{ $t('backupsView.createBackup') }}</h3>
         </div>
         <div class="px-6 py-4 space-y-4">
           <!-- Node Selection -->
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Node</label>
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('backupsView.node') }}</label>
             <select
               v-model="newBackup.node_id"
               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
             >
-              <option value="">Select a node...</option>
+              <option value="">{{ $t('backupsView.selectANode') }}</option>
               <option v-for="opt in nodeOptions" :key="opt.value" :value="opt.value">
                 {{ opt.label }}
               </option>
@@ -452,7 +455,7 @@ function getNodeHostname(nodeId: string): string {
 
           <!-- Service Type Selection -->
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Service Type</label>
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('backupsView.serviceType') }}</label>
             <select
               v-model="newBackup.service_type"
               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
@@ -468,7 +471,7 @@ function getNodeHostname(nodeId: string): string {
             @click="showCreateBackupDialog = false"
             class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
           >
-            Cancel
+            {{ $t('backupsView.cancel') }}
           </button>
           <button
             @click="handleCreateBackup"
@@ -476,7 +479,7 @@ function getNodeHostname(nodeId: string): string {
             class="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
             <div v-if="isCreatingBackup" class="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></div>
-            Create Backup
+            {{ $t('backupsView.createBackup') }}
           </button>
         </div>
       </div>
@@ -490,17 +493,17 @@ function getNodeHostname(nodeId: string): string {
     >
       <div class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
         <div class="px-6 py-4 border-b border-gray-200">
-          <h3 class="text-lg font-semibold text-gray-900">Start Replication</h3>
+          <h3 class="text-lg font-semibold text-gray-900">{{ $t('backupsView.startReplication') }}</h3>
         </div>
         <div class="px-6 py-4 space-y-4">
           <!-- Source Node Selection -->
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Source Node (Primary)</label>
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('backupsView.sourceNodePrimary') }}</label>
             <select
               v-model="newReplication.source_node_id"
               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
             >
-              <option value="">Select source node...</option>
+              <option value="">{{ $t('backupsView.selectSourceNode') }}</option>
               <option v-for="opt in nodeOptions" :key="opt.value" :value="opt.value">
                 {{ opt.label }}
               </option>
@@ -509,12 +512,12 @@ function getNodeHostname(nodeId: string): string {
 
           <!-- Target Node Selection -->
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Target Node (Replica)</label>
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('backupsView.targetNodeReplica') }}</label>
             <select
               v-model="newReplication.target_node_id"
               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
             >
-              <option value="">Select target node...</option>
+              <option value="">{{ $t('backupsView.selectTargetNode') }}</option>
               <option
                 v-for="opt in nodeOptions"
                 :key="opt.value"
@@ -528,7 +531,7 @@ function getNodeHostname(nodeId: string): string {
 
           <!-- Service Type Selection -->
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Service Type</label>
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('backupsView.serviceType') }}</label>
             <select
               v-model="newReplication.service_type"
               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
@@ -542,7 +545,7 @@ function getNodeHostname(nodeId: string): string {
           <!-- Info Box -->
           <div class="bg-blue-50 border border-blue-200 rounded-md p-3">
             <p class="text-sm text-blue-700">
-              Replication will configure the replica to continuously sync data from the primary node.
+              {{ $t('backupsView.replicationWillConfigureThe') }}
             </p>
           </div>
         </div>
@@ -551,7 +554,7 @@ function getNodeHostname(nodeId: string): string {
             @click="showCreateReplicationDialog = false"
             class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
           >
-            Cancel
+            {{ $t('backupsView.cancel') }}
           </button>
           <button
             @click="handleCreateReplication"
@@ -559,7 +562,7 @@ function getNodeHostname(nodeId: string): string {
             class="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
             <div v-if="isCreatingReplication" class="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></div>
-            Start Replication
+            {{ $t('backupsView.startReplication') }}
           </button>
         </div>
       </div>

@@ -354,7 +354,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useToast } from '@/composables/useToast'
+import { useNotificationBus } from '@/composables/useNotificationBus'
 import api from '@/services/api'
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
@@ -414,7 +414,7 @@ interface Hotspot {
 }
 
 // State
-const { showToast } = useToast()
+const { showToast } = useNotificationBus()
 const loading = ref(false)
 const selectedPath = ref('')
 const lastResult = ref<AnalysisResult | null>(null)

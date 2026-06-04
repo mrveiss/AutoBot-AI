@@ -13,8 +13,7 @@ Routes:
   POST   /api/triggers/webhook/{trigger_id} — receive an external webhook event
 """
 
-import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 
@@ -26,6 +25,7 @@ from api.schemas_workflows import (
 )
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from services.trigger_service import (
     TriggerConfig,
     TriggerDefinition,
@@ -33,7 +33,7 @@ from services.trigger_service import (
     TriggerType,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(tags=["triggers"])
 
@@ -41,7 +41,7 @@ router = APIRouter(tags=["triggers"])
 # Singleton service — initialised lazily; launcher wired by lifespan caller
 # ---------------------------------------------------------------------------
 
-_service: Optional[TriggerService] = None
+_service: TriggerService | None = None
 
 
 def get_trigger_service() -> TriggerService:
@@ -99,7 +99,7 @@ async def create_trigger(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)  # user-facing validation error
         ) from exc
 
-    webhook_url: Optional[str] = None
+    webhook_url: str | None = None
     if request.trigger_type == TriggerType.WEBHOOK:
         webhook_url = service.get_webhook_url_path(trigger_id)
 
@@ -123,7 +123,7 @@ async def create_trigger(
     error_code_prefix="TRIGGERS",
 )
 async def list_triggers(
-    workflow_id: Optional[str] = None,
+    workflow_id: str | None = None,
     current_user: dict = Depends(get_current_user),
 ) -> TriggerListResponse:
     """
@@ -188,7 +188,7 @@ async def delete_trigger(
 async def receive_webhook(
     trigger_id: str,
     request: Request,
-    x_autobot_signature: Optional[str] = Header(default=None, alias="X-AutoBot-Signature"),
+    x_autobot_signature: str | None = Header(default=None, alias="X-AutoBot-Signature"),
 ) -> Dict[str, str]:
     """
     Entry point for external webhook events.

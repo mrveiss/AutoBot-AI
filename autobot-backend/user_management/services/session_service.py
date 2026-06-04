@@ -9,14 +9,13 @@ Issue #635.
 """
 
 import hashlib
-import logging
 import uuid
-from typing import Optional
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from constants.ttl_constants import TTL_24_HOURS
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class SessionService:
@@ -70,7 +69,7 @@ class SessionService:
 
         return await redis_client.sismember(key, token_hash)
 
-    async def invalidate_user_sessions(self, user_id: uuid.UUID, except_token: Optional[str] = None) -> int:
+    async def invalidate_user_sessions(self, user_id: uuid.UUID, except_token: str | None = None) -> int:
         """
         Invalidate all sessions for a user except the current one.
 

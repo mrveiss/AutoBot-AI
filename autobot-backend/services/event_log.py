@@ -5,19 +5,31 @@
 
 Stores structured compliance events in a Redis sorted set keyed by Unix
 timestamp.  All writes are fire-and-forget — callers are never blocked.
+
+.. deprecated::
+    Use ``services.audit.unified_audit`` directly (GH#8290 Phase 2).
+    This module will be removed in Phase 3 once all callers are migrated.
 """
 
+import warnings
+
+warnings.warn(
+    "services.event_log is deprecated (GH#8290). " "Import from services.audit.unified_audit instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)
+
 import json
-import logging
 import time
 import uuid
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from autobot_shared.fire_and_forget import run_redis_write
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 EVENT_LOG_KEY = "autobot:event_log"
 EVENT_LOG_TTL_SECONDS = 90 * 24 * 3600  # 90-day default retention
@@ -38,11 +50,11 @@ class EventType(str, Enum):
 
 async def _write_event(
     event_type: EventType,
-    user_id: Optional[str],
-    resource_type: Optional[str],
-    resource_id: Optional[str],
+    user_id: str | None,
+    resource_type: str | None,
+    resource_id: str | None,
     metadata: Dict[str, Any],
-    ip_address: Optional[str],
+    ip_address: str | None,
 ) -> None:
     """Write a single compliance event to the Redis sorted set."""
     redis = await get_async_redis_client(database="main")
@@ -67,11 +79,11 @@ async def _write_event(
 
 def emit(
     event_type: EventType,
-    user_id: Optional[str] = None,
-    resource_type: Optional[str] = None,
-    resource_id: Optional[str] = None,
-    metadata: Optional[Dict[str, Any]] = None,
-    ip_address: Optional[str] = None,
+    user_id: str | None = None,
+    resource_type: str | None = None,
+    resource_id: str | None = None,
+    metadata: Dict[str, Any] | None = None,
+    ip_address: str | None = None,
 ) -> None:
     """Fire-and-forget compliance event emission.
 
@@ -92,10 +104,10 @@ def emit(
 
 
 async def query_events(
-    user_id: Optional[str] = None,
-    event_type: Optional[str] = None,
-    from_ts: Optional[float] = None,
-    to_ts: Optional[float] = None,
+    user_id: str | None = None,
+    event_type: str | None = None,
+    from_ts: float | None = None,
+    to_ts: float | None = None,
     limit: int = 100,
     offset: int = 0,
 ) -> List[Dict[str, Any]]:

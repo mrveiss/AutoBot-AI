@@ -8,12 +8,13 @@ Defines the abstract interface for platform-specific message adapters.
 All platform adapters (Slack, Discord, WhatsApp, Teams, Web) inherit from this.
 """
 
-import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any, Dict
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -48,10 +49,10 @@ class BaseAdapter(ABC):
     and back, handling platform-specific quirks and rate limiting.
     """
 
-    def __init__(self, platform_name: str):
+    def __init__(self, platform_name: str) -> None:
         """Initialize adapter for a specific platform."""
         self.platform_name = platform_name
-        self.logger = logging.getLogger(f"{__name__}.{platform_name}")
+        self.logger = get_logger(f"{__name__}.{platform_name}")
 
     @abstractmethod
     async def normalize_message(self, raw_message: Dict[str, Any]) -> UnifiedMessage:

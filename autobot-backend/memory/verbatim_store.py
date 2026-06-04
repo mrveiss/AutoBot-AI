@@ -19,12 +19,13 @@ Design decisions:
 """
 
 import asyncio
-import logging
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 
 _COLLECTION_NAME = "autobot_verbatim"
 _DEFAULT_LIMIT = 10
@@ -75,8 +76,8 @@ class VerbatimStore:
         turn: int,
         role: str,
         text: str,
-        timestamp: Optional[datetime] = None,
-        user_id: Optional[str] = None,
+        timestamp: datetime | None = None,
+        user_id: str | None = None,
     ) -> str:
         """Store a single conversation chunk.
 
@@ -124,7 +125,7 @@ class VerbatimStore:
     async def search(
         self,
         query: str,
-        session_filter: Optional[str] = None,
+        session_filter: str | None = None,
         limit: int = _DEFAULT_LIMIT,
     ) -> List[Dict[str, Any]]:
         """Search verbatim chunks via ChromaDB's built-in vector + BM25 path.
@@ -147,7 +148,7 @@ class VerbatimStore:
         if limit <= 0:
             raise ValueError("limit must be positive")
 
-        where: Optional[Dict[str, Any]] = None
+        where: Dict[str, Any] | None = None
         if session_filter:
             where = {"session_id": {"$eq": session_filter}}
 
@@ -215,7 +216,7 @@ class VerbatimStore:
 # ---------------------------------------------------------------------------
 # Module-level singleton (lazy, no constructor arguments needed)
 # ---------------------------------------------------------------------------
-_store: Optional[VerbatimStore] = None
+_store: VerbatimStore | None = None
 _store_lock = asyncio.Lock()
 
 

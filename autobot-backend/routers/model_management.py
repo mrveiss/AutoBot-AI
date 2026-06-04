@@ -7,22 +7,23 @@ Model Management API Router (Issue #904)
 Endpoints for training, deploying, and serving code completion models.
 """
 
-import logging
 import threading
 import time
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+from autobot_shared.db_session import session_scope
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
 from autobot_shared.time_utils import now_utc
 from models.ml_model import MLModel
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(tags=["ml-models"])
 
@@ -33,7 +34,7 @@ _db_init_lock = threading.Lock()
 
 
 def _get_session():
-    """Return a new SQLAlchemy session, creating the engine on first call.
+    """Return canonical session context manager, creating the engine on first call (GH#7441).
 
     Deferred from module level to avoid DB connection at import time (Issue #940).
     Thread-safe: uses _db_init_lock to prevent double-initialization (#2846).
@@ -48,7 +49,7 @@ def _get_session():
                 )
                 _engine = create_engine(db_url)
                 _SessionLocal = sessionmaker(bind=_engine)
-    return _SessionLocal()
+    return session_scope(_SessionLocal)
 
 
 def _get_trainer_class():
@@ -62,7 +63,7 @@ def _get_trainer_class():
 # Both the async activate_model endpoint and the thread-pool background task write
 # these globals; threading.Lock is required (asyncio.Lock is not thread-safe).
 _active_model = None
-_active_version: Optional[str] = None
+_active_version: str | None = None
 _model_lock = threading.Lock()
 
 
@@ -74,11 +75,11 @@ _model_lock = threading.Lock()
 class TrainRequest(BaseModel):
     """Request to trigger model training."""
 
-    language: Optional[str] = Field(None, description="Filter training data by language")
-    pattern_type: Optional[str] = Field(None, description="Filter training data by pattern type")
+    language: str | None = Field(None, description="Filter training data by language")
+    pattern_type: str | None = Field(None, description="Filter training data by pattern type")
     num_epochs: int = Field(default=10, ge=1, le=100)
     batch_size: int = Field(default=32, ge=1, le=256)
-    notes: Optional[str] = Field(None, description="Training notes")
+    notes: str | None = Field(None, description="Training notes")
 
 
 class TrainResponse(BaseModel):
@@ -95,9 +96,9 @@ class ModelResponse(BaseModel):
     id: int
     version: str
     model_type: str
-    language: Optional[str]
-    pattern_type: Optional[str]
-    metrics: Dict[str, Optional[float]]
+    language: str | None
+    pattern_type: str | None
+    metrics: Dict[str, float | None]
     is_active: bool
     created_at: str
 
@@ -204,8 +205,8 @@ async def train_model(request: TrainRequest, background_tasks: BackgroundTasks):
 
 @router.get("/models", response_model=ModelListResponse)
 async def list_models(
-    language: Optional[str] = Query(None),
-    is_active: Optional[bool] = Query(None),
+    language: str | None = Query(None),
+    is_active: bool | None = Query(None),
 ):
     """
     List all trained models.

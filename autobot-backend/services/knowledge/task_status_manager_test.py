@@ -34,7 +34,7 @@ class TestTaskStatusManager:
     """Tests for TaskStatusManager."""
 
     @pytest.mark.asyncio
-    async def test_create_task(self, sample_task_id, mock_redis_client):
+    async def test_create_task(self, sample_task_id, mock_redis_client) -> None:
         """Test creating a new task status."""
         with patch("services.knowledge.task_status_manager.get_redis_client", return_value=mock_redis_client):
             status = await TaskStatusManager.create_task(
@@ -57,7 +57,7 @@ class TestTaskStatusManager:
             assert sample_task_id in args[0][0]  # Key should contain task_id
 
     @pytest.mark.asyncio
-    async def test_update_task_status(self, sample_task_id, mock_redis_client):
+    async def test_update_task_status(self, sample_task_id, mock_redis_client) -> None:
         """Test updating task status during execution."""
         with patch("services.knowledge.task_status_manager.get_redis_client", return_value=mock_redis_client):
             # Create initial task
@@ -78,7 +78,7 @@ class TestTaskStatusManager:
             assert status.items_processed == 50
 
     @pytest.mark.asyncio
-    async def test_complete_task(self, sample_task_id, mock_redis_client):
+    async def test_complete_task(self, sample_task_id, mock_redis_client) -> None:
         """Test marking task as completed."""
         with patch("services.knowledge.task_status_manager.get_redis_client", return_value=mock_redis_client):
             status = await TaskStatusManager.complete_task(
@@ -95,7 +95,7 @@ class TestTaskStatusManager:
             assert status.error is None
 
     @pytest.mark.asyncio
-    async def test_fail_task(self, sample_task_id, mock_redis_client):
+    async def test_fail_task(self, sample_task_id, mock_redis_client) -> None:
         """Test marking task as failed."""
         with patch("services.knowledge.task_status_manager.get_redis_client", return_value=mock_redis_client):
             error_msg = "Connection timeout"
@@ -109,7 +109,7 @@ class TestTaskStatusManager:
             assert status.progress_percent == 0
 
     @pytest.mark.asyncio
-    async def test_get_task_not_found(self, sample_task_id, mock_redis_client):
+    async def test_get_task_not_found(self, sample_task_id, mock_redis_client) -> None:
         """Test retrieving non-existent task."""
         mock_redis_client.get.return_value = None
 
@@ -119,7 +119,7 @@ class TestTaskStatusManager:
             assert status is None
 
     @pytest.mark.asyncio
-    async def test_get_task_found(self, sample_task_id, mock_redis_client):
+    async def test_get_task_found(self, sample_task_id, mock_redis_client) -> None:
         """Test retrieving existing task."""
         import json
 
@@ -146,7 +146,7 @@ class TestTaskStatusManager:
             assert status.progress_percent == 50
 
     @pytest.mark.asyncio
-    async def test_delete_task(self, sample_task_id, mock_redis_client):
+    async def test_delete_task(self, sample_task_id, mock_redis_client) -> None:
         """Test deleting task status."""
         with patch("services.knowledge.task_status_manager.get_redis_client", return_value=mock_redis_client):
             result = await TaskStatusManager.delete_task(sample_task_id)
@@ -155,7 +155,7 @@ class TestTaskStatusManager:
             mock_redis_client.delete.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_task_status_dataclass(self):
+    async def test_task_status_dataclass(self) -> None:
         """Test TaskStatusRecord dataclass."""
         status = TaskStatusRecord(
             task_id="test-123",
@@ -170,7 +170,7 @@ class TestTaskStatusManager:
         assert status.updated_at is not None
 
     @pytest.mark.asyncio
-    async def test_redis_save_error_handling(self, sample_task_id):
+    async def test_redis_save_error_handling(self, sample_task_id) -> None:
         """Test error handling when Redis save fails."""
         mock_redis_client = MagicMock()
         mock_redis_client.setex.side_effect = Exception("Redis connection failed")
@@ -186,7 +186,7 @@ class TestTaskStatusManager:
             assert result is False
 
     @pytest.mark.asyncio
-    async def test_get_redis_key_format(self, sample_task_id):
+    async def test_get_redis_key_format(self, sample_task_id) -> None:
         """Test that Redis key format is correct."""
         key = TaskStatusManager._get_redis_key(sample_task_id)
 

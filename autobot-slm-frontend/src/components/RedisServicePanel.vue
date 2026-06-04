@@ -178,8 +178,8 @@ onUnmounted(() => {
           </svg>
         </div>
         <div>
-          <h3 class="text-base font-semibold text-gray-900">Redis Service</h3>
-          <p class="text-xs text-gray-500">In-memory data store</p>
+          <h3 class="text-base font-semibold text-gray-900">{{ $t('redisServicePanel.redisService') }}</h3>
+          <p class="text-xs text-gray-500">{{ $t('redisServicePanel.inMemoryDataStore') }}</p>
         </div>
         <!-- Status badge -->
         <div v-if="redisStatus && !isLoading" class="flex items-center gap-1.5">
@@ -193,7 +193,7 @@ onUnmounted(() => {
             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
           </svg>
-          Checking…
+          {{ $t('redisServicePanel.checking') }}
         </div>
       </div>
 
@@ -203,6 +203,7 @@ onUnmounted(() => {
         :disabled="isLoading || isActionInProgress"
         class="p-1.5 text-gray-400 hover:text-gray-600 disabled:opacity-40 transition-colors"
         title="Refresh status"
+        aria-label="Refresh status"
       >
         <svg :class="['w-4 h-4', isLoading ? 'animate-spin' : '']" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -214,7 +215,7 @@ onUnmounted(() => {
     <!-- Success / Error banners -->
     <div v-if="successMessage" class="px-4 py-2 bg-green-50 border-b border-green-100 text-sm text-green-700 flex items-center justify-between">
       <span>{{ successMessage }}</span>
-      <button @click="successMessage = null" class="text-green-500 hover:text-green-700">
+      <button @click="successMessage = null" class="text-green-500 hover:text-green-700" aria-label="Dismiss">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
         </svg>
@@ -222,7 +223,7 @@ onUnmounted(() => {
     </div>
     <div v-if="errorMessage" class="px-4 py-2 bg-red-50 border-b border-red-100 text-sm text-red-700 flex items-center justify-between">
       <span>{{ errorMessage }}</span>
-      <button @click="errorMessage = null" class="text-red-500 hover:text-red-700">
+      <button @click="errorMessage = null" class="text-red-500 hover:text-red-700" aria-label="Dismiss">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
         </svg>
@@ -232,25 +233,25 @@ onUnmounted(() => {
     <!-- Metrics grid -->
     <div class="grid grid-cols-2 sm:grid-cols-4 gap-px bg-gray-100 border-b border-gray-200">
       <div class="bg-white px-4 py-3">
-        <div class="text-xs text-gray-500 mb-0.5">Uptime</div>
+        <div class="text-xs text-gray-500 mb-0.5">{{ $t('redisServicePanel.uptime') }}</div>
         <div class="text-sm font-semibold text-gray-900">
           {{ redisStatus ? formatUptime(redisStatus.uptime_seconds) : '-' }}
         </div>
       </div>
       <div class="bg-white px-4 py-3">
-        <div class="text-xs text-gray-500 mb-0.5">Memory Used</div>
+        <div class="text-xs text-gray-500 mb-0.5">{{ $t('redisServicePanel.memoryUsed') }}</div>
         <div class="text-sm font-semibold text-gray-900">
           {{ redisStatus ? formatBytes(redisStatus.memory_used_bytes) : '-' }}
         </div>
       </div>
       <div class="bg-white px-4 py-3">
-        <div class="text-xs text-gray-500 mb-0.5">Peak Memory</div>
+        <div class="text-xs text-gray-500 mb-0.5">{{ $t('redisServicePanel.peakMemory') }}</div>
         <div class="text-sm font-semibold text-gray-900">
           {{ redisStatus ? formatBytes(redisStatus.memory_peak_bytes) : '-' }}
         </div>
       </div>
       <div class="bg-white px-4 py-3">
-        <div class="text-xs text-gray-500 mb-0.5">Clients</div>
+        <div class="text-xs text-gray-500 mb-0.5">{{ $t('redisServicePanel.clients') }}</div>
         <div class="text-sm font-semibold text-gray-900">
           {{ redisStatus?.connected_clients ?? '-' }}
         </div>
@@ -274,7 +275,7 @@ onUnmounted(() => {
         <svg v-else class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
           <path d="M8 5v14l11-7z" />
         </svg>
-        Start
+        {{ $t('redisServicePanel.start') }}
       </button>
 
       <!-- Stop -->
@@ -292,7 +293,7 @@ onUnmounted(() => {
         <svg v-else class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
           <rect x="6" y="6" width="12" height="12" />
         </svg>
-        Stop
+        {{ $t('redisServicePanel.stop') }}
       </button>
 
       <!-- Restart -->
@@ -311,7 +312,7 @@ onUnmounted(() => {
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
             d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
         </svg>
-        Restart
+        {{ $t('redisServicePanel.restart') }}
       </button>
 
       <!-- Last checked -->
@@ -325,23 +326,22 @@ onUnmounted(() => {
       <div v-if="showStopConfirm" class="fixed inset-0 z-50 flex items-center justify-center p-4">
         <div class="absolute inset-0 bg-black/50" @click="cancelStop"></div>
         <div class="relative bg-white rounded-lg shadow-xl max-w-sm w-full p-6">
-          <h3 class="text-base font-semibold text-gray-900 mb-2">Stop Redis service?</h3>
+          <h3 class="text-base font-semibold text-gray-900 mb-2">{{ $t('redisServicePanel.stopRedisService') }}</h3>
           <p class="text-sm text-gray-600 mb-5">
-            Stopping Redis will interrupt all active connections and may cause data loss for
-            in-flight operations. AutoBot services will become unavailable until Redis is restarted.
+            {{ $t('redisServicePanel.stoppingRedisWillInterrupt') }}
           </p>
           <div class="flex justify-end gap-3">
             <button
               @click="cancelStop"
               class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
             >
-              Cancel
+              {{ $t('redisServicePanel.cancel') }}
             </button>
             <button
               @click="confirmStop"
               class="px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700"
             >
-              Stop Redis
+              {{ $t('redisServicePanel.stopRedis') }}
             </button>
           </div>
         </div>

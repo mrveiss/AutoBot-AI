@@ -9,11 +9,12 @@ import re
 import uuid
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
 from api.schemas_common import SuccessDataResponse, SuccessMessageResponse
+from api.system_health import HealthStatus
 from constants.threshold_constants import RetryConfig
 from services.audit_logger import AuditResult
 from services.feature_flags import EnforcementMode
@@ -35,13 +36,14 @@ class SystemFrontendConfigResponse(BaseModel):
 class SystemHealthResponse(BaseModel):
     """Response for GET /health and GET /system/health.
 
-    Shape varies between healthy/degraded/unhealthy paths — extra fields
-    (cpu_percent, memory_percent, services, etc.) are allowed through.
+    Issue #6909: status uses probe vocabulary ("ok"/"degraded"/"down") — the
+    legacy "healthy"/"unhealthy" mapping was removed. Extra fields
+    (cpu_percent, memory_percent, probes, etc.) are allowed through.
     """
 
     model_config = {"extra": "allow"}
 
-    status: str
+    status: HealthStatus
     timestamp: str
 
 
@@ -165,8 +167,7 @@ class FeatureFlagStatusResponse(BaseModel):
     """Response for GET /feature-flags/status."""
 
     success: bool
-    data: Optional[Any] = None
-
+    data: Any | None = None
 
 class FeatureFlagEnforcementModeResponse(SuccessDataResponse):
     """Response for PUT /feature-flags/enforcement-mode."""
@@ -314,10 +315,10 @@ class SecretsStatusResponse(BaseModel):
 
     status: str
     service: str
-    total_secrets: Optional[int] = None
-    storage_backend: Optional[str] = None
-    encryption_enabled: Optional[bool] = None
-    error: Optional[str] = None
+    total_secrets: int | None = None
+    storage_backend: str | None = None
+    encryption_enabled: bool | None = None
+    error: str | None = None
     timestamp: str
 
 
@@ -336,7 +337,7 @@ class LogForwardingDestinationItem(BaseModel):
     model_config = {"extra": "allow"}
 
     healthy: bool
-    last_error: Optional[str] = None
+    last_error: str | None = None
     sent_count: int
     failed_count: int
 
@@ -356,7 +357,7 @@ class FileViewResponse(BaseModel):
     """Response for GET /files/view/{path} — file info + optional text content."""
 
     file_info: Any
-    content: Optional[str] = None
+    content: str | None = None
     is_text: bool
 
 
@@ -372,11 +373,10 @@ class FilePreviewResponse(BaseModel):
 
     type: str
     url: str
-    content: Optional[str] = None
-    mime_type: Optional[str] = None
-    size: Optional[int] = None
-    name: Optional[str] = None
-
+    content: str | None = None
+    mime_type: str | None = None
+    size: int | None = None
+    name: str | None = None
 
 class FileDeleteResponse(BaseModel):
     """Response for DELETE /files/delete.
@@ -519,9 +519,9 @@ class RedisConfigResponse(BaseModel):
 
     model_config = {"extra": "allow"}
 
-    type: Optional[str] = None
-    host: Optional[str] = None
-    port: Optional[int] = None
+    type: str | None = None
+    host: str | None = None
+    port: int | None = None
 
 
 class RedisConnectionStatusResponse(BaseModel):
@@ -534,32 +534,23 @@ class RedisConnectionStatusResponse(BaseModel):
     model_config = {"extra": "allow"}
 
     status: str
-    message: Optional[str] = None
+    message: str | None = None
 
 
 class RedisHealthResponse(BaseModel):
     """Response for GET /health in redis.py."""
 
     status: str
-    redis_status: Optional[str] = None
-    message: Optional[str] = None
-    host: Optional[str] = None
-    port: Optional[int] = None
+    redis_status: str | None = None
+    message: str | None = None
+    host: str | None = None
+    port: int | None = None
     redis_search_module_loaded: bool = False
 
 
 # ---------------------------------------------------------------------------
 # services.py schemas  (Issue #5990)
 # ---------------------------------------------------------------------------
-
-
-class ServicesHealthDeprecatedResponse(BaseModel):
-    """Response for GET /health (deprecated) in services.py."""
-
-    status: str
-    deprecated: bool
-    use_instead: str
-    timestamp: Any
 
 
 class ServicesHealthAggregateResponse(BaseModel):
@@ -581,7 +572,7 @@ class VisionElementItem(BaseModel):
     bbox: Any
     center_point: List[float]
     confidence: float
-    text_content: Optional[str] = None
+    text_content: str | None = None
     possible_interactions: List[str]
 
 
@@ -600,8 +591,7 @@ class VisionOCRResponse(BaseModel):
     region_specified: bool
     text_regions: List[Any]
     total_text_regions: int
-    region: Optional[Dict[str, Any]] = None
-
+    region: Dict[str, Any] | None = None
 
 class VisionAutomationOpportunitiesResponse(BaseModel):
     """Response for GET /vision/automation-opportunities."""
@@ -667,12 +657,12 @@ class VisionStatusResponse(BaseModel):
 
     model_config = {"extra": "allow"}
 
-    timestamp: Optional[float] = None
-    overall_status: Optional[str] = None
-    total_services: Optional[int] = None
-    healthy_services: Optional[int] = None
-    degraded_services: Optional[int] = None
-    critical_services: Optional[int] = None
+    timestamp: float | None = None
+    overall_status: str | None = None
+    total_services: int | None = None
+    healthy_services: int | None = None
+    degraded_services: int | None = None
+    critical_services: int | None = None
 
 
 class VMStatusItem(BaseModel):
@@ -682,7 +672,7 @@ class VMStatusItem(BaseModel):
     ip: str
     status: str
     services: List[Any] = []
-    last_check: Optional[Any] = None
+    last_check: Any | None = None
 
 
 class ServicesVMsStatusResponse(BaseModel):
@@ -720,8 +710,8 @@ class WakeWordGetConfigResponse(BaseModel):
     cooldown_seconds: float
     max_false_positive_rate: float
     adaptive_threshold: bool
-    noise_tolerance: Optional[float] = None
-    max_cpu_percent: Optional[float] = None
+    noise_tolerance: float | None = None
+    max_cpu_percent: float | None = None
 
 
 class WakeWordStatsResponse(BaseModel):
@@ -869,9 +859,9 @@ class InfrastructureHostItem(BaseModel):
     name: str
     host: str
     ssh_port: int
-    vnc_port: Optional[int] = None
+    vnc_port: int | None = None
     username: str
-    os: Optional[str] = None
+    os: str | None = None
     description: str
     capabilities: List[str]
 
@@ -933,7 +923,7 @@ class OverseerStatusResponse(BaseModel):
     """Response for GET /status/{session_id} in overseer_handlers.py."""
 
     active: bool
-    summary: Optional[Any] = None
+    summary: Any | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -947,7 +937,7 @@ class ProjectStateHealthResponse(BaseModel):
     status: str
     current_phase: str
     overall_completion: float
-    timestamp: Optional[str] = None
+    timestamp: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -1014,11 +1004,11 @@ class PermissionMemoryStatsResponse(BaseModel):
     """Response for GET /permissions/memory/stats."""
 
     enabled: bool
-    redis_available: Optional[bool] = None
-    total_project_user_combinations: Optional[int] = None
-    ttl_seconds: Optional[int] = None
-    ttl_days: Optional[int] = None
-    error: Optional[str] = None
+    redis_available: bool | None = None
+    total_project_user_combinations: int | None = None
+    ttl_seconds: int | None = None
+    ttl_days: int | None = None
+    error: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -1069,7 +1059,7 @@ class ApprovalRecordResponse(BaseModel):
     user_id: str
     created_at: float
     original_command: str
-    comment: Optional[str] = None
+    comment: str | None = None
 
 
 class ProjectApprovalsResponse(BaseModel):
@@ -1093,8 +1083,8 @@ class CheckCommandRequest(BaseModel):
 
 class CheckCommandResponse(BaseModel):
     result: str
-    pattern: Optional[str] = None
-    description: Optional[str] = None
+    pattern: str | None = None
+    description: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -1130,10 +1120,10 @@ class MacroListResponse(BaseModel):
 class VncQualityMetricsResponse(BaseModel):
     vnc_running: bool
     timestamp: str
-    vnc_port_reachable: Optional[bool] = None
-    latency_ms: Optional[float] = None
-    websockify_running: Optional[bool] = None
-    websockify_processes: Optional[int] = None
+    vnc_port_reachable: bool | None = None
+    latency_ms: float | None = None
+    websockify_running: bool | None = None
+    websockify_processes: int | None = None
 
 
 class VncDesktopContextResponse(BaseModel):
@@ -1153,9 +1143,9 @@ class VncFindImageResponse(BaseModel):
     status: str
     found: bool
     message: str
-    x: Optional[int] = None
-    y: Optional[int] = None
-    confidence: Optional[float] = None
+    x: int | None = None
+    y: int | None = None
+    confidence: float | None = None
 
 
 class WaitForTextResponse(BaseModel):
@@ -1168,15 +1158,15 @@ class WaitForImageResponse(BaseModel):
     status: str
     found: bool
     message: str
-    x: Optional[int] = None
-    y: Optional[int] = None
-    confidence: Optional[float] = None
+    x: int | None = None
+    y: int | None = None
+    confidence: float | None = None
 
 
 class RestoreStateResponse(BaseModel):
     status: str
     message: str
-    state: Optional[Dict[str, Any]] = None
+    state: Dict[str, Any] | None = None
 
 
 class SessionActionLogResponse(BaseModel):
@@ -1194,7 +1184,7 @@ class SessionScreenshotsResponse(BaseModel):
 class SessionScreenshotSaveResponse(BaseModel):
     status: str
     message: str
-    screenshot_path: Optional[str] = None
+    screenshot_path: str | None = None
 
 
 class MouseClickRequest(BaseModel):
@@ -1362,28 +1352,28 @@ class SchedulerBatchScheduleResponse(BaseModel):
 
 class ScheduleWorkflowRequest(BaseModel):
     user_message: str
-    scheduled_time: Union[str, datetime]
+    scheduled_time: str | datetime
     priority: str = "normal"
     complexity: str = "simple"
-    template_id: Optional[str] = None
-    variables: Optional[Metadata] = None
+    template_id: str | None = None
+    variables: Metadata | None = None
     auto_approve: bool = False
-    tags: Optional[List[str]] = None
-    dependencies: Optional[List[str]] = None
-    user_id: Optional[str] = None
+    tags: List[str] | None = None
+    dependencies: List[str] | None = None
+    user_id: str | None = None
     estimated_duration_minutes: int = 30
     timeout_minutes: int = 120
     max_retries: int = RetryConfig.DEFAULT_RETRIES
 
 
 class RescheduleRequest(BaseModel):
-    new_scheduled_time: Union[str, datetime]
-    new_priority: Optional[str] = None
+    new_scheduled_time: str | datetime
+    new_priority: str | None = None
 
 
 class QueueControlRequest(BaseModel):
     action: str
-    value: Optional[int] = None
+    value: int | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -1404,7 +1394,7 @@ class ServicesSummaryResponse(BaseModel):
 class MonitoringActionResponse(BaseModel):
     status: str
     message: str
-    collection_interval: Optional[float] = None
+    collection_interval: float | None = None
 
 
 class CurrentMetricsResponse(BaseModel):
@@ -1418,7 +1408,7 @@ class ThresholdUpdateResponse(BaseModel):
     threshold_key: str
     new_value: float
     comparison: str
-    old_value: Optional[float] = None
+    old_value: float | None = None
 
 
 class TestPerformanceResponse(BaseModel):
@@ -1428,10 +1418,10 @@ class TestPerformanceResponse(BaseModel):
 
 
 class ClaudeApiDetails(BaseModel):
-    rate_limit_remaining: Optional[float] = None
-    requests_per_minute: Optional[float] = None
-    p95_latency_seconds: Optional[float] = None
-    failure_rate: Optional[float] = None
+    rate_limit_remaining: float | None = None
+    requests_per_minute: float | None = None
+    p95_latency_seconds: float | None = None
+    failure_rate: float | None = None
 
 
 class ClaudeApiStatusResponse(BaseModel):
@@ -1441,9 +1431,9 @@ class ClaudeApiStatusResponse(BaseModel):
 
 
 class GitHubApiDetails(BaseModel):
-    rate_limit_remaining: Optional[float] = None
-    total_operations: Optional[float] = None
-    p95_latency_seconds: Optional[float] = None
+    rate_limit_remaining: float | None = None
+    total_operations: float | None = None
+    p95_latency_seconds: float | None = None
 
 
 class GitHubStatusResponse(BaseModel):
@@ -1510,7 +1500,7 @@ class OptimizationRecommendation(BaseModel):
 
 
 class MetricsQuery(BaseModel):
-    categories: Optional[List[str]] = Field(None, description="Metric categories to include")
+    categories: List[str] | None = Field(None, description="Metric categories to include")
     time_range_minutes: int = Field(10, ge=1, le=1440, description="Time range in minutes")
     include_trends: bool = Field(True, description="Include trend analysis")
     include_alerts: bool = Field(True, description="Include recent alerts")
@@ -1549,10 +1539,10 @@ class VncStatusMcpResponse(BaseModel):
     success: bool
     vnc_type: str
     accessible: bool
-    endpoint: Optional[str] = None
-    status_code: Optional[int] = None
+    endpoint: str | None = None
+    status_code: int | None = None
     message: str
-    error: Optional[str] = None
+    error: str | None = None
 
 
 class VncObservationMcpResponse(BaseModel):
@@ -1561,7 +1551,7 @@ class VncObservationMcpResponse(BaseModel):
     duration_seconds: int
     observation_count: int
     observations: List[Dict[str, Any]]
-    last_check: Optional[str] = None
+    last_check: str | None = None
     message: str
 
 
@@ -1603,18 +1593,18 @@ class DesktopScreenshotMcpResponse(BaseModel):
     success: bool
     message: str
     action: str
-    image_data: Optional[str] = None
-    format: Optional[str] = None
+    image_data: str | None = None
+    format: str | None = None
 
 
 class DesktopObserveStateMcpResponse(BaseModel):
     success: bool
     action: str
     timestamp: str
-    resolution: Optional[str] = None
-    active_window: Optional[str] = None
-    screenshot: Optional[str] = None
-    screenshot_format: Optional[str] = None
+    resolution: str | None = None
+    active_window: str | None = None
+    screenshot: str | None = None
+    screenshot_format: str | None = None
 
 
 class DesktopMouseClickRequest(BaseModel):
@@ -1642,13 +1632,13 @@ class DesktopObserveStateRequest(BaseModel):
 
 class CacheStatsResponse(BaseModel):
     status: str
-    total_cache_keys: Optional[int] = None
-    total_hits: Optional[int] = None
-    total_misses: Optional[int] = None
-    global_hit_rate: Optional[str] = None
-    memory_usage: Optional[str] = None
-    configured_data_types: Optional[List[str]] = None
-    data_type_stats: Optional[Dict[str, Dict]] = None
+    total_cache_keys: int | None = None
+    total_hits: int | None = None
+    total_misses: int | None = None
+    global_hit_rate: str | None = None
+    memory_usage: str | None = None
+    configured_data_types: List[str] | None = None
+    data_type_stats: Dict[str, Dict] | None = None
 
 
 class CacheWarmingRequest(BaseModel):
@@ -1661,14 +1651,14 @@ class RedisDbInfo(BaseModel):
     key_count: int
     memory_usage: str
     connected: bool
-    error: Optional[str] = None
+    error: str | None = None
 
 
 class RedisClearEntry(BaseModel):
     name: str
     database: int
     keys_cleared: int
-    error: Optional[str] = None
+    error: str | None = None
 
 
 class RedisStatsResponse(BaseModel):
@@ -1690,9 +1680,9 @@ class CacheClearTypeResponse(BaseModel):
 
 class CacheConfigResponse(BaseModel):
     status: str
-    message: Optional[str] = None
+    message: str | None = None
     config: Dict[str, Any]
-    source: Optional[str] = None
+    source: str | None = None
 
 
 class CacheWarmupResponse(BaseModel):
@@ -1712,7 +1702,7 @@ class InvalidateCacheResponse(BaseModel):
     success: bool
     data_type: str
     key_pattern: str
-    user_id: Optional[str] = None
+    user_id: str | None = None
     deleted_count: int
 
 
@@ -1724,11 +1714,11 @@ class ClearAllResponse(BaseModel):
 
 class CacheHealthResponse(BaseModel):
     status: str
-    redis_status: Optional[str] = None
-    total_keys: Optional[int] = None
-    memory_usage: Optional[str] = None
-    global_hit_rate: Optional[str] = None
-    error: Optional[str] = None
+    redis_status: str | None = None
+    total_keys: int | None = None
+    memory_usage: str | None = None
+    global_hit_rate: str | None = None
+    error: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -1738,24 +1728,24 @@ class CacheHealthResponse(BaseModel):
 
 class BrowserNavigateRequest(BaseModel):
     url: str = Field(..., description="URL to navigate to")
-    wait_until: Optional[str] = Field("load", description="Wait condition: 'load', 'domcontentloaded', 'networkidle'")
-    timeout: Optional[int] = Field(30000, description="Timeout in milliseconds")
+    wait_until: str | None = Field("load", description="Wait condition: 'load', 'domcontentloaded', 'networkidle'")
+    timeout: int | None = Field(30000, description="Timeout in milliseconds")
 
 
 class BrowserClickRequest(BaseModel):
     selector: str = Field(..., description="CSS selector for element to click")
-    timeout: Optional[int] = Field(5000, description="Timeout in milliseconds")
+    timeout: int | None = Field(5000, description="Timeout in milliseconds")
 
 
 class BrowserFillRequest(BaseModel):
     selector: str = Field(..., description="CSS selector for input field")
     value: str = Field(..., description="Value to fill")
-    timeout: Optional[int] = Field(5000, description="Timeout in milliseconds")
+    timeout: int | None = Field(5000, description="Timeout in milliseconds")
 
 
 class BrowserScreenshotRequest(BaseModel):
-    selector: Optional[str] = Field(None, description="CSS selector for element (full page if omitted)")
-    full_page: Optional[bool] = Field(False, description="Capture full scrollable page")
+    selector: str | None = Field(None, description="CSS selector for element (full page if omitted)")
+    full_page: bool | None = Field(False, description="Capture full scrollable page")
 
 
 class BrowserEvaluateRequest(BaseModel):
@@ -1764,8 +1754,8 @@ class BrowserEvaluateRequest(BaseModel):
 
 class BrowserWaitForSelectorRequest(BaseModel):
     selector: str = Field(..., description="CSS selector to wait for")
-    timeout: Optional[int] = Field(30000, description="Timeout in milliseconds")
-    state: Optional[str] = Field("visible", description="State: 'attached', 'detached', 'visible', 'hidden'")
+    timeout: int | None = Field(30000, description="Timeout in milliseconds")
+    state: str | None = Field("visible", description="State: 'attached', 'detached', 'visible', 'hidden'")
 
 
 class BrowserGetTextRequest(BaseModel):
@@ -1790,7 +1780,7 @@ class BrowserNavigateResponse(BaseModel):
     success: bool
     action: str
     url: str
-    result: Optional[Any] = None
+    result: Any | None = None
     timestamp: str
 
 
@@ -1798,7 +1788,7 @@ class BrowserClickResponse(BaseModel):
     success: bool
     action: str
     selector: str
-    result: Optional[Any] = None
+    result: Any | None = None
     timestamp: str
 
 
@@ -1807,16 +1797,16 @@ class BrowserFillResponse(BaseModel):
     action: str
     selector: str
     value_length: int
-    result: Optional[Any] = None
+    result: Any | None = None
     timestamp: str
 
 
 class BrowserScreenshotResponse(BaseModel):
     success: bool
     action: str
-    selector: Optional[str] = None
-    full_page: Optional[bool] = None
-    base64_image: Optional[str] = None
+    selector: str | None = None
+    full_page: bool | None = None
+    base64_image: str | None = None
     mime_type: str
     timestamp: str
 
@@ -1825,7 +1815,7 @@ class BrowserEvaluateResponse(BaseModel):
     success: bool
     action: str
     script_preview: str
-    result: Optional[Any] = None
+    result: Any | None = None
     timestamp: str
 
 
@@ -1833,8 +1823,8 @@ class BrowserWaitForSelectorResponse(BaseModel):
     success: bool
     action: str
     selector: str
-    state: Optional[str] = None
-    result: Optional[Any] = None
+    state: str | None = None
+    result: Any | None = None
     timestamp: str
 
 
@@ -1842,7 +1832,7 @@ class BrowserGetTextResponse(BaseModel):
     success: bool
     action: str
     selector: str
-    text: Optional[str] = None
+    text: str | None = None
     timestamp: str
 
 
@@ -1851,7 +1841,7 @@ class BrowserGetAttributeResponse(BaseModel):
     action: str
     selector: str
     attribute: str
-    value: Optional[str] = None
+    value: str | None = None
     timestamp: str
 
 
@@ -1860,7 +1850,7 @@ class BrowserSelectResponse(BaseModel):
     action: str
     selector: str
     value: str
-    result: Optional[Any] = None
+    result: Any | None = None
     timestamp: str
 
 
@@ -1868,7 +1858,7 @@ class BrowserHoverResponse(BaseModel):
     success: bool
     action: str
     selector: str
-    result: Optional[Any] = None
+    result: Any | None = None
     timestamp: str
 
 
@@ -1882,37 +1872,69 @@ class BrowserMcpStatusResponse(BaseModel):
     timestamp: str
 
 
+class BrowserPageSnapshotRequest(BaseModel):
+    """Request for POST /browser/mcp/page_snapshot (#5136 Phase 1)."""
+
+    session_id: str
+
+
+class BrowserPageSnapshotResponse(BaseModel):
+    """Response for POST /browser/mcp/page_snapshot (#5136 Phase 1)."""
+
+    success: bool
+    action: str
+    session_id: str
+    accessibility_text: str
+    timestamp: str
+
+
+class BrowserInterceptApiRequest(BaseModel):
+    """Request for POST /browser/mcp/intercept_api (#5136 Phase 1)."""
+
+    session_id: str
+
+
+class BrowserInterceptApiResponse(BaseModel):
+    """Response for POST /browser/mcp/intercept_api (#5136 Phase 1)."""
+
+    success: bool
+    action: str
+    session_id: str
+    requests: List[Dict[str, Any]]
+    timestamp: str
+
+
 # ---------------------------------------------------------------------------
 # settings.py schemas (#6042)
 # ---------------------------------------------------------------------------
 
 
 class SaveSettingsResponse(BaseModel):
-    status: Optional[str] = None
-    message: Optional[str] = None
-    success: Optional[bool] = None
+    status: str | None = None
+    message: str | None = None
+    success: bool | None = None
 
 
 class ClearCacheResponse(BaseModel):
     status: str
     message: str
-    available_endpoints: Optional[dict] = None
+    available_endpoints: dict | None = None
 
 
 class SettingsTaskQueuedResponse(BaseModel):
     task_id: str
     status: str
     message: str
-    dry_run: Optional[bool] = None
+    dry_run: bool | None = None
 
 
 class SettingsTaskStatusResponse(BaseModel):
     task_id: str
     status: str
-    message: Optional[str] = None
-    progress: Optional[Any] = None
-    result: Optional[Any] = None
-    error: Optional[str] = None
+    message: str | None = None
+    progress: Any | None = None
+    result: Any | None = None
+    error: str | None = None
 
 
 class RBACStatusResponse(BaseModel):
@@ -1926,7 +1948,7 @@ class WorkerStatusResponse(BaseModel):
 
 
 class UpdateStatusResponse(BaseModel):
-    last_update: Optional[str] = None
+    last_update: str | None = None
     marker_exists: bool
     message: str
 
@@ -1951,7 +1973,7 @@ class RBACInitRequest(BaseModel):
 
 class SystemUpdateRequest(BaseModel):
     update_type: str = "dependencies"
-    target_groups: Optional[list] = None
+    target_groups: list | None = None
     dry_run: bool = False
     force_update: bool = False
 
@@ -2004,12 +2026,12 @@ class LogFwdDestinationCreate(BaseModel):
         description="Destination type: seq, elasticsearch, loki, syslog, webhook, file",
     )
     enabled: bool = Field(True, description="Whether the destination is enabled")
-    url: Optional[str] = Field(None, description="URL/host for the destination")
-    api_key: Optional[str] = Field(None, description="API key for authentication")
-    username: Optional[str] = Field(None, description="Username for authentication")
-    password: Optional[str] = Field(None, description="Password for authentication")
-    index: Optional[str] = Field("autobot-logs", description="Index name (Elasticsearch)")
-    file_path: Optional[str] = Field(None, description="File path (file destination)")
+    url: str | None = Field(None, description="URL/host for the destination")
+    api_key: str | None = Field(None, description="API key for authentication")
+    username: str | None = Field(None, description="Username for authentication")
+    password: str | None = Field(None, description="Password for authentication")
+    index: str | None = Field("autobot-logs", description="Index name (Elasticsearch)")
+    file_path: str | None = Field(None, description="File path (file destination)")
     min_level: str = Field("Information", description="Minimum log level to forward")
     batch_size: int = Field(10, ge=1, le=1000, description="Batch size for sending")
     batch_timeout: float = Field(5.0, ge=0.1, le=60.0, description="Batch timeout in seconds")
@@ -2019,40 +2041,40 @@ class LogFwdDestinationCreate(BaseModel):
     target_hosts: List[str] = Field(default_factory=list, description="Target hosts for per_host scope")
     syslog_protocol: str = Field("udp", description="Syslog protocol: udp, tcp, tcp_tls")
     ssl_verify: bool = Field(True, description="Verify SSL certificates for TLS")
-    ssl_ca_cert: Optional[str] = Field(None, description="Path to CA certificate")
-    ssl_client_cert: Optional[str] = Field(None, description="Path to client certificate")
-    ssl_client_key: Optional[str] = Field(None, description="Path to client key")
+    ssl_ca_cert: str | None = Field(None, description="Path to CA certificate")
+    ssl_client_cert: str | None = Field(None, description="Path to client certificate")
+    ssl_client_key: str | None = Field(None, description="Path to client key")
 
 
 class LogFwdDestinationUpdate(BaseModel):
-    enabled: Optional[bool] = None
-    url: Optional[str] = None
-    api_key: Optional[str] = None
-    username: Optional[str] = None
-    password: Optional[str] = None
-    index: Optional[str] = None
-    file_path: Optional[str] = None
-    min_level: Optional[str] = None
-    batch_size: Optional[int] = None
-    batch_timeout: Optional[float] = None
-    retry_count: Optional[int] = None
-    retry_delay: Optional[float] = None
-    scope: Optional[str] = None
-    target_hosts: Optional[List[str]] = None
-    syslog_protocol: Optional[str] = None
-    ssl_verify: Optional[bool] = None
-    ssl_ca_cert: Optional[str] = None
-    ssl_client_cert: Optional[str] = None
-    ssl_client_key: Optional[str] = None
+    enabled: bool | None = None
+    url: str | None = None
+    api_key: str | None = None
+    username: str | None = None
+    password: str | None = None
+    index: str | None = None
+    file_path: str | None = None
+    min_level: str | None = None
+    batch_size: int | None = None
+    batch_timeout: float | None = None
+    retry_count: int | None = None
+    retry_delay: float | None = None
+    scope: str | None = None
+    target_hosts: List[str] | None = None
+    syslog_protocol: str | None = None
+    ssl_verify: bool | None = None
+    ssl_ca_cert: str | None = None
+    ssl_client_cert: str | None = None
+    ssl_client_key: str | None = None
 
 
 class LogFwdDestinationResponse(BaseModel):
     name: str
     type: str
     enabled: bool
-    url: Optional[str]
-    index: Optional[str]
-    file_path: Optional[str]
+    url: str | None
+    index: str | None
+    file_path: str | None
     min_level: str
     batch_size: int
     batch_timeout: float
@@ -2061,7 +2083,7 @@ class LogFwdDestinationResponse(BaseModel):
     syslog_protocol: str
     ssl_verify: bool
     healthy: bool
-    last_error: Optional[str]
+    last_error: str | None
     sent_count: int
     failed_count: int
 
@@ -2078,7 +2100,7 @@ class LogFwdCreateUpdateResponse(BaseModel):
 class LogFwdTestResponse(BaseModel):
     name: str
     healthy: bool
-    last_error: Optional[str] = None
+    last_error: str | None = None
     message: str
 
 
@@ -2094,7 +2116,7 @@ class LogFwdDestinationStatusItem(BaseModel):
     type: str
     enabled: bool
     healthy: bool
-    last_error: Optional[str] = None
+    last_error: str | None = None
     sent_count: int
     failed_count: int
     scope: str
@@ -2121,7 +2143,7 @@ class LogFwdDestinationTypesResponse(BaseModel):
 
 class LogFwdKnownHostItem(BaseModel):
     hostname: str
-    ip: Optional[str] = None
+    ip: str | None = None
     description: str
 
 
@@ -2141,21 +2163,21 @@ class LogFwdAutoStartResponse(BaseModel):
 class CreateAssessmentRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
     target: str = Field(..., min_length=1, description="Target IP, CIDR, or hostname")
-    scope: Optional[list[str]] = Field(None)
+    scope: list[str] | None = Field(None)
     training_mode: bool = Field(False)
-    metadata: Optional[dict[str, Any]] = None
+    metadata: dict[str, Any] | None = None
 
 
 class AdvancePhaseRequest(BaseModel):
     reason: str = Field("", description="Reason for phase transition")
-    target_phase: Optional[str] = Field(None)
+    target_phase: str | None = Field(None)
 
 
 class AddHostRequest(BaseModel):
     ip: str = Field(..., description="Host IP address")
-    hostname: Optional[str] = None
+    hostname: str | None = None
     status: str = Field("up")
-    metadata: Optional[dict[str, Any]] = None
+    metadata: dict[str, Any] | None = None
 
 
 class AddPortRequest(BaseModel):
@@ -2163,30 +2185,30 @@ class AddPortRequest(BaseModel):
     port: int = Field(..., ge=1, le=65535)
     protocol: str = Field("tcp")
     state: str = Field("open")
-    service: Optional[str] = None
-    version: Optional[str] = None
+    service: str | None = None
+    version: str | None = None
 
 
 class AddVulnerabilityRequest(BaseModel):
     host_ip: str = Field(..., description="Affected host IP")
-    cve_id: Optional[str] = None
+    cve_id: str | None = None
     title: str = Field("")
     severity: str = Field("unknown")
     description: str = ""
-    affected_service: Optional[str] = None
-    affected_port: Optional[int] = None
-    metadata: Optional[dict[str, Any]] = None
+    affected_service: str | None = None
+    affected_port: int | None = None
+    metadata: dict[str, Any] | None = None
 
 
 class AddFindingRequest(BaseModel):
     finding_type: str = Field(..., description="Type of finding")
     description: str = ""
-    data: Optional[dict[str, Any]] = None
+    data: dict[str, Any] | None = None
 
 
 class ParseToolOutputRequest(BaseModel):
     output: str = Field(..., min_length=1, description="Raw tool output")
-    tool: Optional[str] = Field(None, description="Tool name (auto-detect if not provided)")
+    tool: str | None = Field(None, description="Tool name (auto-detect if not provided)")
 
 
 class RecoverErrorRequest(BaseModel):
@@ -2223,11 +2245,11 @@ class URLCheckResponse(BaseModel):
     url: str
     overall_score: float
     threat_level: str
-    virustotal_score: Optional[float] = None
-    urlvoid_score: Optional[float] = None
+    virustotal_score: float | None = None
+    urlvoid_score: float | None = None
     sources_checked: int
     cached: bool
-    message: Optional[str] = None
+    message: str | None = None
 
 
 class ThreatIntelStatusResponse(BaseModel):
@@ -2254,16 +2276,16 @@ class TerminalCreateSessionRequest(BaseModel):
     agent_role: str = Field(
         ..., description="Role of the agent (chat_agent, automation_agent, system_agent, admin_agent)"
     )
-    conversation_id: Optional[str] = Field(None, description="Chat conversation ID to link")
+    conversation_id: str | None = Field(None, description="Chat conversation ID to link")
     host: str = Field("main", description="Target host (main, frontend, npu-worker, redis, ai-stack, browser)")
-    metadata: Optional[Dict] = Field(None, description="Additional session metadata")
+    metadata: Dict | None = Field(None, description="Additional session metadata")
 
 
 class TerminalExecuteCommandRequest(BaseModel):
     """Request to execute command in agent session"""
 
     command: str = Field(..., description="Command to execute")
-    description: Optional[str] = Field(None, description="Description of what command does")
+    description: str | None = Field(None, description="Description of what command does")
     force_approval: bool = Field(False, description="Force user approval even for safe commands")
 
 
@@ -2271,19 +2293,19 @@ class TerminalApproveCommandRequest(BaseModel):
     """Request to approve/deny pending command"""
 
     approved: bool = Field(..., description="Whether command is approved")
-    user_id: Optional[str] = Field(None, description="User who made the decision")
-    comment: Optional[str] = Field(None, description="Optional comment or reason for the decision")
+    user_id: str | None = Field(None, description="User who made the decision")
+    comment: str | None = Field(None, description="Optional comment or reason for the decision")
     auto_approve_future: bool = Field(False, description="Auto-approve similar commands in the future")
     remember_for_project: bool = Field(False, description="Remember approval for this project")
-    project_path: Optional[str] = Field(None, description="Project path for approval memory")
+    project_path: str | None = Field(None, description="Project path for approval memory")
 
 
 class TerminalToolApprovalRequest(BaseModel):
     """Request to approve/deny a pending agent tool (event-stream level approval)."""
 
     approved: bool = Field(..., description="Whether the tool execution is approved")
-    comment: Optional[str] = Field(None, description="Optional reason for the decision")
-    task_id: Optional[str] = Field(None, description="Task ID from the APPROVAL_REQUIRED event")
+    comment: str | None = Field(None, description="Optional reason for the decision")
+    task_id: str | None = Field(None, description="Task ID from the APPROVAL_REQUIRED event")
 
 
 class TerminalInterruptRequest(BaseModel):
@@ -2295,10 +2317,10 @@ class TerminalInterruptRequest(BaseModel):
 class TerminalHostSelectionRequest(BaseModel):
     """Request for agent to select an infrastructure host"""
 
-    agent_session_id: Optional[str] = Field(None, description="Agent terminal session ID")
-    command: Optional[str] = Field(None, description="Command to execute on host")
-    purpose: Optional[str] = Field(None, description="Purpose of the SSH action")
-    preferred_host_id: Optional[str] = Field(None, description="Preferred host ID if any")
+    agent_session_id: str | None = Field(None, description="Agent terminal session ID")
+    command: str | None = Field(None, description="Command to execute on host")
+    purpose: str | None = Field(None, description="Purpose of the SSH action")
+    preferred_host_id: str | None = Field(None, description="Preferred host ID if any")
     allow_auto_select: bool = Field(True, description="Allow auto-selection if default host is set")
 
 
@@ -2307,9 +2329,9 @@ class TerminalHostSelectionResponse(BaseModel):
 
     request_id: str = Field(..., description="Unique request ID for tracking")
     status: str = Field(..., description="pending_selection, selected, or cancelled")
-    selected_host_id: Optional[str] = Field(None, description="Selected host ID")
-    selected_host_name: Optional[str] = Field(None, description="Selected host name")
-    connection_info: Optional[Dict] = Field(None, description="Connection details (host, port, username)")
+    selected_host_id: str | None = Field(None, description="Selected host ID")
+    selected_host_name: str | None = Field(None, description="Selected host name")
+    connection_info: Dict | None = Field(None, description="Connection details (host, port, username)")
 
 
 class HeartbeatConfigRequest(BaseModel):
@@ -2321,26 +2343,61 @@ class HeartbeatConfigRequest(BaseModel):
 
 
 class HeartbeatConfigResponse(BaseModel):
-    """Response for agent heartbeat config / runtime state."""
+    """Response for agent heartbeat config / runtime state (GH#6476)."""
 
     agent_id: str
     heartbeat_enabled: bool
+    status: str
+    paused_reason: str | None = None
+    paused_at: str | None = None
+    paused_by: str | None = None
+    error_detail: str | None = None
+    error_at: str | None = None
+    error_code: str | None = None
     heartbeat_interval_seconds: int
     max_run_duration_seconds: int
-    current_task_id: Optional[str]
-    last_heartbeat_at: Optional[str]
-    session_params: Optional[Dict[str, Any]]
-    extra: Optional[Dict[str, Any]]
-    created_at: Optional[str]
-    updated_at: Optional[str]
+    current_task_id: str | None
+    last_heartbeat_at: str | None
+    session_params: Dict[str, Any] | None
+    extra: Dict[str, Any] | None
+    created_at: str | None
+    updated_at: str | None
+
+
+class AgentPauseRequest(BaseModel):
+    """Request body for POST /heartbeat/{agent_id}/pause (GH#6476)."""
+
+    reason: str | None = None
+    paused_by: str | None = None
+
+
+class AgentResumeRequest(BaseModel):
+    """Request body for POST /heartbeat/{agent_id}/resume (GH#6476)."""
+
+
+class AgentTerminateRequest(BaseModel):
+    """Request body for POST /heartbeat/{agent_id}/terminate (GH#6476)."""
+
+    reason: str | None = None
+
+
+class AgentErrorRequest(BaseModel):
+    """Request body for POST /heartbeat/{agent_id}/error (MVA-1411)."""
+
+    error_detail: str | None = None
+    error_code: str | None = None
+
+
+class AgentRecoverRequest(BaseModel):
+    """Request body for POST /heartbeat/{agent_id}/recover (MVA-1411)."""
 
 
 class WakeupRequestCreate(BaseModel):
     """Request body to queue a wakeup for an agent."""
 
     priority: int = 0
-    context: Optional[Dict[str, Any]] = None
-    reason: Optional[str] = None
+    context: Dict[str, Any] | None = None
+    reason: str | None = None
 
 
 class WakeupRequestResponse(BaseModel):
@@ -2349,11 +2406,12 @@ class WakeupRequestResponse(BaseModel):
     id: str
     agent_id: str
     priority: int
-    context: Optional[Dict[str, Any]]
-    reason: Optional[str]
+    context: Dict[str, Any] | None
+    reason: str | None
     consumed: bool
-    consumed_at: Optional[str]
-    created_at: Optional[str]
+    consumed_at: str | None
+    created_at: str | None
+    merged_count: int = 0
 
 
 class RunEventResponse(BaseModel):
@@ -2361,8 +2419,8 @@ class RunEventResponse(BaseModel):
 
     id: str
     event_type: str
-    message: Optional[str]
-    payload: Optional[Dict[str, Any]]
+    message: str | None
+    payload: Dict[str, Any] | None
     occurred_at: str
 
 
@@ -2373,15 +2431,15 @@ class HeartbeatRunResponse(BaseModel):
     agent_id: str
     status: str
     trigger: str
-    wakeup_context: Optional[Dict[str, Any]]
-    started_at: Optional[str]
-    finished_at: Optional[str]
-    tokens_used: Optional[int]
-    cost_usd: Optional[float]
-    model: Optional[str]
-    provider: Optional[str]
-    error_message: Optional[str]
-    created_at: Optional[str]
+    wakeup_context: Dict[str, Any] | None
+    started_at: str | None
+    finished_at: str | None
+    tokens_used: int | None
+    cost_usd: float | None
+    model: str | None
+    provider: str | None
+    error_message: str | None
+    created_at: str | None
     events: List[RunEventResponse] = []
 
 
@@ -2394,26 +2452,26 @@ class StreamingSessionRequest(BaseModel):
 class StreamingSessionResponse(BaseModel):
     session_id: str
     vnc_port: int
-    novnc_port: Optional[int]
+    novnc_port: int | None
     display: str
     vnc_url: str
-    web_url: Optional[str]
+    web_url: str | None
     websocket_endpoint: str
 
 
 class TakeoverRequest(BaseModel):
     trigger: str
     reason: str
-    requesting_agent: Optional[str] = None
-    affected_tasks: Optional[List[str]] = None
+    requesting_agent: str | None = None
+    affected_tasks: List[str] | None = None
     priority: str = "HIGH"
-    timeout_minutes: Optional[int] = None
+    timeout_minutes: int | None = None
     auto_approve: bool = False
 
 
 class TakeoverApprovalRequest(BaseModel):
     human_operator: str
-    takeover_scope: Optional[Metadata] = None
+    takeover_scope: Metadata | None = None
 
 
 class TakeoverActionRequest(BaseModel):
@@ -2432,26 +2490,26 @@ class SystemMonitoringResponse(BaseModel):
 class ScreenAnalysisRequest(BaseModel):
     """Request for screen analysis"""
 
-    session_id: Optional[str] = Field(None, description="Optional session ID for context")
+    session_id: str | None = Field(None, description="Optional session ID for context")
     include_multimodal: bool = Field(True, description="Include multi-modal analysis")
 
 
 class ElementDetectionRequest(BaseModel):
     """Request for element detection"""
 
-    element_type: Optional[str] = Field(None, description="Filter by element type")
+    element_type: str | None = Field(None, description="Filter by element type")
     min_confidence: float = Field(0.5, ge=0.0, le=1.0, description="Minimum confidence threshold")
-    session_id: Optional[str] = None
+    session_id: str | None = None
 
 
 class OCRRequest(BaseModel):
     """Request for OCR text extraction"""
 
-    region: Optional[Dict[str, int]] = Field(
+    region: Dict[str, int] | None = Field(
         None,
         description=("Region to extract text from {x, y, width, height}. If None," "analyzes full screen."),
     )
-    session_id: Optional[str] = None
+    session_id: str | None = None
 
 
 class ElementInteractionRequest(BaseModel):
@@ -2459,7 +2517,7 @@ class ElementInteractionRequest(BaseModel):
 
     element_id: str = Field(..., description="ID of element to interact with")
     interaction_type: str = Field(..., description="Type of interaction to perform")
-    parameters: Optional[Metadata] = Field(None, description="Additional interaction parameters")
+    parameters: Metadata | None = Field(None, description="Additional interaction parameters")
 
 
 class UIElementResponse(BaseModel):
@@ -2486,7 +2544,7 @@ class ScreenAnalysisResponse(BaseModel):
     automation_opportunities: List[Metadata]
     context_analysis: Metadata
     confidence_score: float
-    multimodal_analysis: Optional[List[Metadata]] = None
+    multimodal_analysis: List[Metadata] | None = None
 
 
 class VisionHealthResponse(BaseModel):
@@ -2609,7 +2667,7 @@ class SingleMessageResponse(BaseModel):
     """Response for GET /{msg_id}."""
 
     success: bool
-    message: Optional[ServiceMessageResponse] = None
+    message: ServiceMessageResponse | None = None
 
 
 class CorrelationChainResponse(BaseModel):
@@ -2641,7 +2699,7 @@ class ProjectStatus(BaseModel):
     completed_phases: int
     active_phases: int
     overall_completion: float
-    next_suggested_phase: Optional[str]
+    next_suggested_phase: str | None
     phases: Dict[str, PhaseStatus]
 
 
@@ -2672,8 +2730,8 @@ class ServiceStatus(BaseModel):
     name: str
     status: str = Field(..., description="Service status: healthy, warning, error")
     message: str = Field(..., description="Status description")
-    last_check: Optional[datetime] = None
-    response_time_ms: Optional[float] = None
+    last_check: datetime | None = None
+    response_time_ms: float | None = None
 
 
 class SystemInfo(BaseModel):
@@ -2693,7 +2751,7 @@ class VMStatus(BaseModel):
     ip: str
     status: str = Field(..., description="VM status: online, offline, unknown")
     services: List[str] = Field(default_factory=list)
-    last_check: Optional[datetime] = None
+    last_check: datetime | None = None
 
 
 class ServicesResponse(BaseModel):
@@ -2738,10 +2796,10 @@ class ProcessThoughtRequest(BaseModel):
     total_thoughts: int = Field(..., ge=1, description="Expected total number of thoughts")
     next_thought_needed: bool = Field(..., description="Whether more thoughts will follow")
     stage: ThinkingStage = Field(..., description="Cognitive stage for this thought")
-    tags: Optional[List[str]] = Field(None, description="Keywords or categories for this thought")
-    axioms_used: Optional[List[str]] = Field(None, description="Fundamental principles applied")
-    assumptions_challenged: Optional[List[str]] = Field(None, description="Assumptions being questioned")
-    session_id: Optional[str] = Field("default", description="Thinking session identifier")
+    tags: List[str] | None = Field(None, description="Keywords or categories for this thought")
+    axioms_used: List[str] | None = Field(None, description="Fundamental principles applied")
+    assumptions_challenged: List[str] | None = Field(None, description="Assumptions being questioned")
+    session_id: str | None = Field("default", description="Thinking session identifier")
 
     def to_thought_record(self) -> Metadata:
         """Convert request to thought record for storage."""
@@ -2777,13 +2835,13 @@ class ProcessThoughtRequest(BaseModel):
 class GenerateSummaryRequest(BaseModel):
     """Request model for generating thinking summary."""
 
-    session_id: Optional[str] = Field("default", description="Session to summarize")
+    session_id: str | None = Field("default", description="Session to summarize")
 
 
 class ClearHistoryRequest(BaseModel):
     """Request model for clearing thinking history."""
 
-    session_id: Optional[str] = Field("default", description="Session to clear")
+    session_id: str | None = Field("default", description="Session to clear")
 
 
 # ---------------------------------------------------------------------------
@@ -2794,13 +2852,13 @@ class ClearHistoryRequest(BaseModel):
 class AuditQueryRequest(BaseModel):
     """Audit log query parameters."""
 
-    start_time: Optional[datetime] = Field(None, description="Start of time range")
-    end_time: Optional[datetime] = Field(None, description="End of time range")
-    operation: Optional[str] = Field(None, description="Filter by operation type")
-    user_id: Optional[str] = Field(None, description="Filter by user")
-    session_id: Optional[str] = Field(None, description="Filter by session")
-    vm_name: Optional[str] = Field(None, description="Filter by VM source")
-    result: Optional[AuditResult] = Field(None, description="Filter by result")
+    start_time: datetime | None = Field(None, description="Start of time range")
+    end_time: datetime | None = Field(None, description="End of time range")
+    operation: str | None = Field(None, description="Filter by operation type")
+    user_id: str | None = Field(None, description="Filter by user")
+    session_id: str | None = Field(None, description="Filter by session")
+    vm_name: str | None = Field(None, description="Filter by VM source")
+    result: AuditResult | None = Field(None, description="Filter by result")
     limit: int = Field(100, ge=1, le=1000, description="Maximum entries to return")
     offset: int = Field(0, ge=0, description="Pagination offset")
 
@@ -2840,7 +2898,7 @@ class AlertAnnotations(BaseModel):
 
     summary: str
     description: str
-    recommendation: Optional[str] = None
+    recommendation: str | None = None
 
 
 class AlertLabels(BaseModel):
@@ -2849,8 +2907,8 @@ class AlertLabels(BaseModel):
     alertname: str
     severity: str
     component: str
-    resource: Optional[str] = None
-    service: Optional[str] = None
+    resource: str | None = None
+    service: str | None = None
 
 
 class AlertInstance(BaseModel):
@@ -2860,7 +2918,7 @@ class AlertInstance(BaseModel):
     labels: Dict[str, str]
     annotations: Dict[str, str]
     startsAt: str
-    endsAt: Optional[str] = None
+    endsAt: str | None = None
     generatorURL: str
     fingerprint: str
 
@@ -2891,18 +2949,18 @@ class FileInfo(BaseModel):
     name: str
     path: str
     is_directory: bool
-    size: Optional[int] = None
-    mime_type: Optional[str] = None
+    size: int | None = None
+    mime_type: str | None = None
     last_modified: datetime
     permissions: str
-    extension: Optional[str] = None
+    extension: str | None = None
 
 
 class DirectoryListing(BaseModel):
     """Directory listing response model."""
 
     current_path: str
-    parent_path: Optional[str] = None
+    parent_path: str | None = None
     files: List[FileInfo]
     total_files: int
     total_directories: int
@@ -2914,8 +2972,8 @@ class FilesAPIUploadResponse(BaseModel):
 
     success: bool
     message: str
-    file_info: Optional[FileInfo] = None
-    upload_id: Optional[str] = None
+    file_info: FileInfo | None = None
+    upload_id: str | None = None
 
 
 class FileOperation(BaseModel):
@@ -2958,7 +3016,7 @@ class StorageStats(BaseModel):
     total_files: int
     total_directories: int
     categories: List[StorageCategory]
-    last_cleanup: Optional[str] = None
+    last_cleanup: str | None = None
 
 
 class StorageCleanupRequest(BaseModel):
@@ -3000,7 +3058,7 @@ class ProjectStatusResponse(BaseModel):
     completed_phases: int
     active_phases: int
     overall_completion: float
-    next_suggested_phase: Optional[str]
+    next_suggested_phase: str | None
     phases: Dict[str, PhaseStatusItem]
 
 
@@ -3053,16 +3111,16 @@ class ServiceOperationResponse(BaseModel):
     duration_seconds: float
     timestamp: datetime
     new_status: str = Field(..., description="New service status: running, stopped, failed, unknown")
-    error: Optional[str] = None
+    error: str | None = None
 
 
 class ServiceStatusResponse(BaseModel):
     """Service status response."""
 
     status: str = Field(..., description="Service status: running, stopped, failed, unknown")
-    pid: Optional[int] = None
-    uptime_seconds: Optional[float] = None
-    memory_mb: Optional[float] = None
+    pid: int | None = None
+    uptime_seconds: float | None = None
+    memory_mb: float | None = None
     last_check: datetime
 
 
@@ -3073,7 +3131,7 @@ class HealthStatusResponse(BaseModel):
     service_running: bool
     connectivity: bool
     response_time_ms: float
-    last_successful_command: Optional[datetime] = None
+    last_successful_command: datetime | None = None
     error_count_last_hour: int = 0
     recommendations: list = Field(default_factory=list)
 
@@ -3090,7 +3148,7 @@ class SpawnRequest(BaseModel):
     command: str = Field(..., description="Executable path or name")
     args: List[str] = Field(default_factory=list, description="Command arguments")
     timeout_seconds: int = Field(default=300, ge=1, le=86400)
-    task_id: Optional[str] = Field(default=None, description="Optional parent task ID")
+    task_id: str | None = Field(default=None, description="Optional parent task ID")
 
 
 class SignalRequest(BaseModel):
@@ -3116,7 +3174,7 @@ class FailureAnalysisRequest(BaseModel):
     """Request to analyze a task failure."""
 
     task_id: str
-    error_description: Optional[str] = None
+    error_description: str | None = None
 
 
 class FailureAnalysisResponse(BaseModel):
@@ -3140,28 +3198,28 @@ class HealthCheckResponse(BaseModel):
 class SemanticCacheConfigUpdate(BaseModel):
     """Request body for semantic cache config update."""
 
-    similarity_threshold: Optional[float] = None
-    max_collection_size: Optional[int] = None
-    response_ttl: Optional[int] = None
-    enabled: Optional[bool] = None
+    similarity_threshold: float | None = None
+    max_collection_size: int | None = None
+    response_ttl: int | None = None
+    enabled: bool | None = None
 
 
 class SufficiencyConfigUpdate(BaseModel):
     """Request body for sufficiency evaluator config update."""
 
-    enabled: Optional[bool] = None
-    keyword_threshold: Optional[float] = None
-    enable_llm_pass: Optional[bool] = None
-    llm_timeout: Optional[float] = None
+    enabled: bool | None = None
+    keyword_threshold: float | None = None
+    enable_llm_pass: bool | None = None
+    llm_timeout: float | None = None
 
 
 class TopicCacheConfigUpdate(BaseModel):
     """Request body for topic cache config update."""
 
-    similarity_threshold: Optional[float] = None
-    max_topics: Optional[int] = None
-    ttl: Optional[int] = None
-    enabled: Optional[bool] = None
+    similarity_threshold: float | None = None
+    max_topics: int | None = None
+    ttl: int | None = None
+    enabled: bool | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -3225,9 +3283,9 @@ class SecretType(str, Enum):
     """Secret type enumeration."""
 
     SSH_KEY = "ssh_key"
-    PASSWORD = "password"  # nosec B105 - enum value
-    API_KEY = "api_key"
-    TOKEN = "token"  # nosec B105 - enum value
+    PASSWORD = "password"  # nosec B105 - enum value  # nosemgrep: autobot-hardcoded-secret-key  # nosemgrep
+    API_KEY = "api_key"  # nosemgrep: autobot-hardcoded-secret-key  # nosemgrep
+    TOKEN = "token"  # nosec B105 - enum value  # nosemgrep: autobot-hardcoded-secret-key  # nosemgrep
     CERTIFICATE = "certificate"
     DATABASE_URL = "database_url"
     INFRASTRUCTURE_HOST = "infrastructure_host"
@@ -3241,12 +3299,12 @@ class SecretModel(BaseModel):
     name: str
     type: SecretType
     scope: SecretScope
-    chat_id: Optional[str] = None
-    description: Optional[str] = ""
+    chat_id: str | None = None
+    description: str | None = ""
     tags: List[str] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=datetime.now)
     updated_at: datetime = Field(default_factory=datetime.now)
-    expires_at: Optional[datetime] = None
+    expires_at: datetime | None = None
     metadata: Metadata = Field(default_factory=dict)
 
 
@@ -3257,13 +3315,13 @@ class SecretCreateRequest(BaseModel):
     type: SecretType
     scope: SecretScope
     value: str = Field(..., min_length=1, max_length=65536)
-    chat_id: Optional[str] = Field(None, max_length=128)
-    description: Optional[str] = Field("", max_length=1024)
+    chat_id: str | None = Field(None, max_length=128)
+    description: str | None = Field("", max_length=1024)
     tags: List[str] = Field(default_factory=list)
-    expires_at: Optional[datetime] = None
+    expires_at: datetime | None = None
     metadata: Metadata = Field(default_factory=dict)
-    owner_id: Optional[str] = Field(None, max_length=128, description="Owner user ID")
-    org_id: Optional[str] = Field(None, max_length=128, description="Organization ID for org-level secrets")
+    owner_id: str | None = Field(None, max_length=128, description="Owner user ID")
+    org_id: str | None = Field(None, max_length=128, description="Organization ID for org-level secrets")
     team_ids: List[str] = Field(default_factory=list, description="Team IDs for group-level secrets")
     shared_with: List[str] = Field(default_factory=list, description="User IDs to share with")
 
@@ -3272,7 +3330,7 @@ class SecretCreateRequest(BaseModel):
     def validate_name(cls, v: str) -> str:
         return _validate_secret_name(v)
 
-    def to_secret_model(self, secret_id: Optional[str] = None) -> "SecretModel":
+    def to_secret_model(self, secret_id: str | None = None) -> "SecretModel":
         """Convert request to SecretModel."""
         return SecretModel(
             id=secret_id or str(uuid.uuid4()),
@@ -3299,15 +3357,15 @@ class SecretCreateRequest(BaseModel):
 class SecretUpdateRequest(BaseModel):
     """Request model for updating secrets."""
 
-    name: Optional[str] = Field(None, min_length=1, max_length=256)
-    description: Optional[str] = Field(None, max_length=1024)
-    tags: Optional[List[str]] = None
-    expires_at: Optional[datetime] = None
-    metadata: Optional[Metadata] = None
+    name: str | None = Field(None, min_length=1, max_length=256)
+    description: str | None = Field(None, max_length=1024)
+    tags: List[str] | None = None
+    expires_at: datetime | None = None
+    metadata: Metadata | None = None
 
     @field_validator("name")
     @classmethod
-    def validate_name(cls, v: Optional[str]) -> Optional[str]:
+    def validate_name(cls, v: str | None) -> str | None:
         if v is not None:
             return _validate_secret_name(v)
         return v
@@ -3318,7 +3376,7 @@ class SecretTransferRequest(BaseModel):
 
     secret_ids: List[str]
     target_scope: SecretScope
-    target_chat_id: Optional[str] = None
+    target_chat_id: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -3437,13 +3495,13 @@ class ConfigRevisionResponse(BaseModel):
     id: str
     entity_type: str
     entity_id: str
-    before_config: Optional[Dict[str, Any]] = None
+    before_config: Dict[str, Any] | None = None
     after_config: Dict[str, Any]
     changed_keys: List[str] = Field(default_factory=list)
     source: str
     created_by: str
-    created_at: Optional[str] = None
-    updated_at: Optional[str] = None
+    created_at: str | None = None
+    updated_at: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -3483,7 +3541,7 @@ class StartupMessage(BaseModel):
     progress: int  # 0-100
     timestamp: str
     icon: str
-    details: Optional[str] = None
+    details: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -3497,8 +3555,8 @@ class VncProxyStatusResponse(BaseModel):
     vnc_type: str
     endpoint: str
     accessible: bool
-    status: Optional[int] = None
-    error: Optional[str] = None
+    status: int | None = None
+    error: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -3517,4 +3575,453 @@ class OnboardingStatus(BaseModel):
     """Response model for GET /api/onboarding/status."""
 
     preset_applied: bool
-    preset_name: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# security_assessment.py response data schemas (GH #6509)
+# ---------------------------------------------------------------------------
+
+
+class AssessmentData(BaseModel):
+    """Assessment entity from SecurityWorkflowManager.to_dict()."""
+
+    model_config = {"extra": "allow"}
+    id: str
+    name: str
+    target: str
+    phase: str
+    training_mode: bool = False
+    hosts: List[Dict[str, Any]] = Field(default_factory=list)
+    findings: List[Dict[str, Any]] = Field(default_factory=list)
+    actions: List[Dict[str, Any]] = Field(default_factory=list)
+    created_at: str | None = None
+    updated_at: str | None = None
+
+
+class AssessmentListData(BaseModel):
+    """Response data for list_assessments."""
+
+    assessments: List[Dict[str, Any]]
+    count: int
+
+
+class AssessmentPhaseData(BaseModel):
+    """Response data for get_current_phase."""
+
+    current_phase: str
+    description: str = ""
+    available_actions: List[str] = Field(default_factory=list)
+    valid_transitions: List[str] = Field(default_factory=list)
+    training_mode: bool = False
+
+
+class AssessmentFindingsData(BaseModel):
+    """Response data for get_findings."""
+
+    findings: List[Dict[str, Any]]
+    vulnerabilities: List[Dict[str, Any]]
+    total_findings: int
+    total_vulnerabilities: int
+
+
+class ParseToolOutputData(BaseModel):
+    """Response data for parse_and_store_tool_output."""
+
+    tool: str
+    scan_type: str | None = None
+    hosts_added: int
+    ports_added: int
+    vulnerabilities_added: int
+    parsed_data: Dict[str, Any] = Field(default_factory=dict)
+
+
+class AssessmentPhaseDefinitionsData(BaseModel):
+    """Response data for get_phase_definitions."""
+
+    phases: Dict[str, Any]
+    transitions: Dict[str, Any]
+
+
+# ---------------------------------------------------------------------------
+# secrets.py response data schemas (GH #6509)
+# ---------------------------------------------------------------------------
+
+
+class SecretCreatedData(BaseModel):
+    """Response data for create_secret and update_secret."""
+
+    status: str
+    message: str
+    secret: Dict[str, Any]
+
+
+class SecretsListData(BaseModel):
+    """Response data for list_secrets."""
+
+    secrets: List[Dict[str, Any]]
+    total_count: int
+    filters: Dict[str, Any] = Field(default_factory=dict)
+
+
+class SecretTypesData(BaseModel):
+    """Response data for get_secret_types."""
+
+    types: List[Dict[str, str]]
+    scopes: List[Dict[str, str]]
+
+
+class SecretsStatsData(BaseModel):
+    """Response data for get_secrets_stats."""
+
+    total_secrets: int
+    by_scope: Dict[str, int]
+    by_type: Dict[str, int]
+    by_chat: Dict[str, int] = Field(default_factory=dict)
+    expired_count: int
+
+
+class SecretTransferData(BaseModel):
+    """Response data for transfer_secrets."""
+
+    status: str
+    message: str
+    result: Dict[str, Any]
+
+
+class ChatSecretsDeleteData(BaseModel):
+    """Response data for delete_chat_secrets."""
+
+    status: str
+    message: str
+    result: Dict[str, Any]
+
+
+# ---------------------------------------------------------------------------
+# security.py response data schemas (GH #6509)
+# ---------------------------------------------------------------------------
+
+
+class PendingApprovalsData(BaseModel):
+    """Response data for get_pending_approvals."""
+
+    success: bool = True
+    pending_approvals: List[Dict[str, Any]]
+    count: int
+
+
+class CommandHistoryData(BaseModel):
+    """Response data for get_command_history."""
+
+    success: bool = True
+    command_history: List[Dict[str, Any]]
+    count: int
+
+
+class AuditLogData(BaseModel):
+    """Response data for get_audit_log."""
+
+    success: bool = True
+    audit_entries: List[Dict[str, Any]]
+    count: int
+    preset_name: str | None = None
+
+
+# ---------------------------------------------------------------------------
+# project_state.py schemas (GH #6509 Batch D)
+# ---------------------------------------------------------------------------
+
+
+class ProjectStateValidateResponse(BaseModel):
+    """Response for POST /validate."""
+
+    success: bool
+    message: str = ""
+    results: Dict[str, Any] = Field(default_factory=dict)
+
+
+class ProjectStateReportResponse(BaseModel):
+    """Response for GET /report."""
+
+    success: bool
+    report: str = ""
+    generated_at: str | None = None
+
+
+class ProjectStatePhasesResponse(BaseModel):
+    """Response for GET /phases."""
+
+    success: bool
+    current_phase: str = ""
+    phases: Dict[str, Any] = Field(default_factory=dict)
+
+
+class ProjectStateActivatePhaseResponse(BaseModel):
+    """Response for POST /phase/{phase_id}/activate."""
+
+    success: bool
+    message: str = ""
+    current_phase: str = ""
+
+
+class ProjectStateAutoProgressResponse(BaseModel):
+    """Response for POST /auto-progress."""
+
+    success: bool
+    message: str = ""
+    progression_result: Any = None
+
+
+# ---------------------------------------------------------------------------
+# gpu_monitoring.py schemas (GH #6509 Batch D)
+# ---------------------------------------------------------------------------
+
+
+class GPUEfficiencyResponse(BaseModel):
+    """Response for GET /efficiency."""
+
+    success: bool
+    efficiency: Dict[str, Any] = Field(default_factory=dict)
+
+
+class GPUCapabilitiesResponse(BaseModel):
+    """Response for GET /capabilities."""
+
+    success: bool
+    capabilities: Dict[str, Any] = Field(default_factory=dict)
+
+
+class GPUBenchmarkResponse(BaseModel):
+    """Response for POST /benchmark."""
+
+    success: bool
+    benchmark: Dict[str, Any] = Field(default_factory=dict)
+
+
+class GPUOptimizeResponse(BaseModel):
+    """Response for POST /optimize."""
+
+    success: bool
+    optimization: Dict[str, Any] = Field(default_factory=dict)
+
+
+class GPUConfigUpdateResponse(BaseModel):
+    """Response for PATCH /config."""
+
+    success: bool
+    updated_keys: List[str] = Field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
+# auth.py / audit.py / hot_reload.py / startup.py / process_management.py /
+# captcha.py / models.py / llm_providers.py / security_assessment.py schemas
+# (GH #6509 Batch E)
+# ---------------------------------------------------------------------------
+
+
+class AuthLogoutData(BaseModel):
+    """Response data for POST /auth/logout."""
+
+    success: bool = True
+    message: str = ""
+
+
+class AuthRefreshData(BaseModel):
+    """Response data for POST /auth/refresh."""
+
+    success: bool = True
+    token: str = ""
+    expiresIn: int = 0
+
+
+class AuditCleanupData(BaseModel):
+    """Response data for POST /audit/cleanup."""
+
+    success: bool = True
+    message: str = ""
+    days_retained: int = 0
+
+
+class AuditOperationsData(BaseModel):
+    """Response data for GET /audit/operations."""
+
+    success: bool = True
+    categories: Dict[str, List[str]] = Field(default_factory=dict)
+    total_operations: int = 0
+
+
+class HotReloadStatusData(BaseModel):
+    """Response data for POST /hot-reload/start and /stop."""
+
+    success: bool = True
+    message: str = ""
+
+
+class StartupPhaseUpdateData(BaseModel):
+    """Response data for POST /startup/phase."""
+
+    success: bool = True
+    phase: str = ""
+    progress: int = 0
+    error: str | None = None
+
+
+class ProcessStatusData(BaseModel):
+    """Response data for GET /processes/{process_id}."""
+
+    process_id: str = ""
+    status: str = ""
+    command: str | None = None
+    log_excerpt: str | None = None
+    log_path: str | None = None
+    started_at: str | None = None
+    finished_at: str | None = None
+
+
+class ProcessSignalData(BaseModel):
+    """Response data for POST /processes/{process_id}/signal."""
+
+    process_id: str = ""
+    signal: str = ""
+    delivered: bool = False
+
+
+class AgentProcessesData(BaseModel):
+    """Response data for GET /agents/{agent_id}/processes."""
+
+    agent_id: str = ""
+    processes: List[Dict[str, Any]] = Field(default_factory=list)
+    total: int = 0
+
+
+class CaptchaPendingData(BaseModel):
+    """Response data for GET /captcha/pending."""
+
+    success: bool = True
+    pending_captchas: List[Any] = Field(default_factory=list)
+    count: int = 0
+    timestamp: str = ""
+
+
+class ModelsAvailableData(BaseModel):
+    """Response data for GET /models/available."""
+
+    models: List[Dict[str, Any]] = Field(default_factory=list)
+
+
+class LLMProviderSwitchData(BaseModel):
+    """Response data for POST /llm/switch."""
+
+    success: bool = True
+    provider: str = ""
+    model: str = ""
+
+
+class LLMProviderListData(BaseModel):
+    """Response data for GET /llm/providers."""
+
+    active_provider: str = ""
+    providers: List[Dict[str, Any]] = Field(default_factory=list)
+
+
+class LLMProviderTestData(BaseModel):
+    """Response data for POST /llm/providers/{provider_name}/test."""
+
+    provider: str = ""
+    available: bool = False
+    error: str | None = None
+
+
+class AssessmentMutationData(BaseModel):
+    """Response data for assessment mutation endpoints (delete/add host/port/vulnerability/finding)."""
+
+    success: bool = True
+    message: str = ""
+    request_id: str = ""
+
+
+# ---------------------------------------------------------------------------
+# Telegram Bot (MVA-2074)
+# ---------------------------------------------------------------------------
+
+
+class TelegramWebhookUpdate(BaseModel):
+    """Telegram webhook update object."""
+
+    update_id: int
+    message: Optional[Dict[str, Any]] = None
+    edited_message: Optional[Dict[str, Any]] = None
+    channel_post: Optional[Dict[str, Any]] = None
+    edited_channel_post: Optional[Dict[str, Any]] = None
+    callback_query: Optional[Dict[str, Any]] = None
+
+
+class TelegramBotConfigRequest(BaseModel):
+    """Request to configure Telegram bot."""
+
+    bot_token: str = Field(..., description="Telegram Bot API token")
+    webhook_url: Optional[str] = Field(None, description="Webhook URL (optional)")
+
+
+class TelegramBotConfigResponse(BaseModel):
+    """Response for Telegram bot configuration."""
+
+    status: str
+    message: str
+    webhook_url: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# Execution Snapshot schemas (GH#4458, MVA-2227)
+# ---------------------------------------------------------------------------
+
+
+class CreateSnapshotRequest(BaseModel):
+    """Request for POST /execution/snapshots."""
+
+    container_id: str = Field(..., description="Docker container ID to snapshot")
+    session_id: str = Field("", description="Optional agent session identifier")
+
+
+class SnapshotMetadata(BaseModel):
+    """Snapshot metadata returned by list/create endpoints."""
+
+    snapshot_id: str
+    session_id: str
+    container_id: str
+    image_name: str
+    created_at: str
+    size_bytes: int
+    labels: Dict[str, str] = Field(default_factory=dict)
+    user_id: str = ""
+
+
+class CreateSnapshotResponse(BaseModel):
+    """Response for POST /execution/snapshots."""
+
+    success: bool
+    snapshot: SnapshotMetadata
+    message: str = ""
+
+
+class SnapshotListResponse(BaseModel):
+    """Response for GET /execution/snapshots."""
+
+    success: bool
+    snapshots: List[SnapshotMetadata]
+    count: int
+
+
+class RestoreSnapshotResponse(BaseModel):
+    """Response for POST /execution/snapshots/{id}/restore."""
+
+    success: bool
+    container_id: str = Field(..., description="ID of the restored container")
+    snapshot_id: str
+    message: str = ""
+
+
+class DeleteSnapshotResponse(BaseModel):
+    """Response for DELETE /execution/snapshots/{id}."""
+
+    success: bool
+    message: str

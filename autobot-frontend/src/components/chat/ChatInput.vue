@@ -22,13 +22,13 @@
         />
         <BaseButton
           v-if="upload.error"
-          variant="danger"
+          variant="error"
           size="xs"
           @click="retryUpload(upload.id)"
           class="retry-upload-btn"
           :aria-label="$t('chat.input.retryUpload')"
         >
-          <i class="fas fa-redo" aria-hidden="true"></i>
+          <Icon name="redo" />
         </BaseButton>
       </div>
     </div>
@@ -37,7 +37,7 @@
     <div v-if="attachedFiles.length > 0" class="attached-files mb-4">
       <div class="attached-files-header">
         <h4 class="text-sm font-medium text-autobot-text-secondary">
-          <i class="fas fa-paperclip me-1" aria-hidden="true"></i>
+          <Icon name="paperclip" class="me-1" />
           {{ $t('chat.input.filesAttached', { count: attachedFiles.length }) }}
         </h4>
         <BaseButton variant="ghost" size="sm" @click="clearAllFiles" class="text-red-600 hover:text-red-800">
@@ -52,7 +52,7 @@
           class="attached-file-item"
         >
           <div class="file-icon">
-            <i :class="getFileIcon(file.type)"></i>
+            <Icon :name="getFileIcon(file.type)" />
           </div>
           <div class="file-info">
             <span class="file-name">{{ file.name }}</span>
@@ -65,7 +65,7 @@
             class="remove-file-btn"
             :aria-label="$t('chat.input.removeFile')"
           >
-            <i class="fas fa-times" aria-hidden="true"></i>
+            <Icon name="times" />
           </BaseButton>
         </div>
       </div>
@@ -119,7 +119,7 @@
                 class="knowledge-checkbox sr-only"
                 :disabled="isDisabled"
               />
-              <i class="fas fa-brain" aria-hidden="true"></i>
+              <Icon name="brain" />
               <span class="toggle-label">KB</span>
             </label>
 
@@ -130,9 +130,36 @@
               :title="$t('chat.input.overseerMode')"
               @click.prevent="toggleOverseer"
             >
-              <i class="fas fa-sitemap" aria-hidden="true"></i>
+              <Icon name="sitemap" />
               <span class="toggle-label">{{ $t('chat.input.overseerLabel') }}</span>
             </label>
+
+            <!-- GH#8993: Thinking Mode Toggle -->
+            <label
+              class="thinking-toggle"
+              :class="{ 'active': thinkingEnabled }"
+              :title="thinkingEnabled ? $t('chat.input.thinkingOn', 'Extended thinking ON') : $t('chat.input.thinkingOff', 'Extended thinking OFF')"
+              @click.prevent="toggleThinking"
+            >
+              <span class="thinking-icon">🧠</span>
+              <span class="toggle-label">{{ thinkingEnabled ? $t('chat.input.thinkingOnLabel', 'Think') : $t('chat.input.thinkingOffLabel', 'Think') }}</span>
+            </label>
+
+            <!-- GH#8993: Budget Slider (only visible when thinking is ON) -->
+            <div v-if="thinkingEnabled" class="thinking-budget">
+              <label class="budget-label sr-only">{{ $t('chat.input.thinkingBudget', 'Thinking budget') }}</label>
+              <div class="budget-steps">
+                <button
+                  v-for="step in BUDGET_STEPS"
+                  :key="step"
+                  type="button"
+                  class="budget-step"
+                  :class="{ 'active': thinkingBudget === step }"
+                  @click="setThinkingBudget(step)"
+                  :title="`${BUDGET_STEP_LABELS[step]} tokens`"
+                >{{ BUDGET_STEP_LABELS[step] }}</button>
+              </div>
+            </div>
 
             <!-- Vertical Divider after toggles -->
             <div class="action-divider"></div>
@@ -146,7 +173,7 @@
               :disabled="isDisabled"
               :aria-label="$t('chat.input.attachFile')"
             >
-              <i class="fas fa-paperclip" aria-hidden="true"></i>
+              <Icon name="paperclip" />
             </BaseButton>
 
             <!-- Vision Analysis Button (#1242) -->
@@ -158,8 +185,26 @@
               :disabled="isDisabled"
               :aria-label="$t('chat.input.analyzeImage')"
             >
-              <i class="fas fa-eye" aria-hidden="true"></i>
+              <Icon name="eye" />
             </BaseButton>
+
+            <!-- Preset Management Button (#8596) -->
+            <BaseButton
+              variant="ghost"
+              size="xs"
+              @click="showPresetsModal = true"
+              class="action-btn"
+              :disabled="isDisabled"
+              :aria-label="$t('chat.input.managePresets')"
+            >
+              <Icon name="bookmark" />
+            </BaseButton>
+
+            <!-- MVA-2167: MCP Prompt Template Picker -->
+            <McpPromptPicker
+              :disabled="isDisabled"
+              @insert="handlePromptInsert"
+            />
 
             <!-- Voice Input Button -->
             <BaseButton
@@ -171,7 +216,20 @@
               :disabled="isDisabled"
               :aria-label="$t('chat.input.voiceInput')"
             >
-              <i :class="isVoiceRecording ? 'fas fa-stop' : 'fas fa-microphone'" aria-hidden="true"></i>
+              <Icon :name="isVoiceRecording ? 'stop' : 'microphone'" />
+            </BaseButton>
+
+            <!-- GH#9015: Image Generation Button -->
+            <BaseButton
+              variant="ghost"
+              size="xs"
+              @click="showImageGenModal = true"
+              class="action-btn"
+              :disabled="isDisabled || imageGenerating"
+              :aria-label="$t('chat.input.generateImage', 'Generate image')"
+              :title="$t('chat.input.generateImage', 'Generate image')"
+            >
+              <Icon :name="imageGenerating ? 'spinner' : 'image'" />
             </BaseButton>
 
             <!-- Emoji Button -->
@@ -183,7 +241,7 @@
               :disabled="isDisabled"
               :aria-label="$t('chat.input.addEmoji')"
             >
-              <i class="fas fa-smile" aria-hidden="true"></i>
+              <Icon name="user" />
             </BaseButton>
 
             <!-- Vertical Divider + Quick Actions Toggle (#1569) -->
@@ -195,7 +253,7 @@
               :aria-label="showQuickActions ? 'Hide quick actions' : 'Show quick actions'"
               @click="showQuickActions = !showQuickActions"
             >
-              <i class="fas fa-ellipsis-h"></i>
+              <Icon name="ellipsis-h" />
             </BaseButton>
 
             <!-- Quick Actions (#1569: togglable) -->
@@ -210,7 +268,7 @@
                 :disabled="isDisabled"
                 :aria-label="action.description"
               >
-                <i :class="action.icon"></i>
+                <Icon :name="action.icon" />
                 <span class="action-label">{{ action.label }}</span>
               </BaseButton>
             </template>
@@ -228,10 +286,10 @@
           :aria-label="isSending ? $t('chat.input.sending') : canSend ? $t('chat.input.sendMessage') : $t('chat.input.enterMessage')"
         >
           <div v-if="!isSending && messageQueueLength > 0" class="queue-indicator">
-            <i class="fas fa-paper-plane" aria-hidden="true"></i>
+            <Icon name="paper-plane" />
             <span class="queue-count">{{ messageQueueLength }}</span>
           </div>
-          <i v-else-if="!isSending" class="fas fa-paper-plane" aria-hidden="true"></i>
+          <Icon name="paper-plane" v-else-if="!isSending"  aria-hidden="true" />
         </BaseButton>
       </div>
 
@@ -239,7 +297,7 @@
       <div class="input-status-bar">
         <div class="status-left">
           <span v-if="isTypingIndicatorVisible" class="typing-indicator">
-            <i class="fas fa-keyboard" aria-hidden="true"></i>
+            <Icon name="keyboard" />
             {{ $t('chat.input.typing') }}
           </span>
           <span v-if="characterCount > 0" class="character-count" :class="{ 'warning': isNearLimit }">
@@ -249,7 +307,7 @@
 
         <div class="status-right">
           <span v-if="isVoiceRecording" class="voice-status">
-            <i class="fas fa-circle text-red-500 animate-pulse" aria-hidden="true"></i>
+            <Icon name="circle" class="text-red-500 animate-pulse" />
             {{ $t('chat.input.recording') }}
           </span>
           <span class="keyboard-hint">{{ $t('chat.input.keyboardHint') }}</span>
@@ -262,7 +320,7 @@
       <div class="emoji-header">
         <span class="emoji-title">{{ $t('chat.input.addEmoji') }}</span>
         <BaseButton variant="ghost" size="xs" @click="showEmojiPicker = false" class="close-emoji-btn" :aria-label="$t('chat.input.closeEmojiPicker')">
-          <i class="fas fa-times" aria-hidden="true"></i>
+          <Icon name="times" />
         </BaseButton>
       </div>
       <div class="emoji-grid">
@@ -294,10 +352,80 @@
       @close="showVisionModal = false"
       @send-to-chat="handleVisionSendToChat"
     />
+
+    <!-- GH#4449: Slash command preset autocomplete dropdown -->
+    <SlashCommandDropdown
+      :show="showSlashDropdown"
+      :suggestions="slashSuggestions"
+      :selected-index="slashSelectedIndex"
+      :anchor-el="messageInput ?? null"
+      @select="applySlashPreset"
+      @update:selected-index="setSlashIndex"
+    />
+
+    <!-- Preset Management Modal (#8596) -->
+    <PresetManagementModal
+      v-model="showPresetsModal"
+      @close="showPresetsModal = false"
+    />
+
+    <!-- GH#9015: Image Generation Modal -->
+    <Teleport to="body">
+      <div
+        v-if="showImageGenModal"
+        class="image-gen-overlay"
+        @click.self="showImageGenModal = false"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Generate image"
+      >
+        <div class="image-gen-dialog">
+          <h3 class="image-gen-title">
+            <Icon name="image" />
+            {{ $t('chat.input.generateImageTitle', 'Generate Image') }}
+          </h3>
+          <label class="image-gen-label" for="image-gen-prompt">
+            {{ $t('chat.input.imagePromptLabel', 'Describe the image') }}
+          </label>
+          <textarea
+            id="image-gen-prompt"
+            v-model="imagePrompt"
+            class="image-gen-prompt"
+            :placeholder="$t('chat.input.imagePromptPlaceholder', 'A futuristic city at sunset with neon lights...')"
+            rows="3"
+            autofocus
+            @keydown.ctrl.enter="submitImageGeneration"
+          />
+          <div class="image-gen-provider">
+            <label class="image-gen-label">{{ $t('chat.input.imageProvider', 'Provider') }}</label>
+            <div class="provider-options">
+              <label v-for="p in (['dalle', 'flux', 'stable_diffusion'] as const)" :key="p" class="provider-option">
+                <input type="radio" :value="p" v-model="imageProvider" />
+                <span>{{ { dalle: 'DALL·E 3', flux: 'Flux', stable_diffusion: 'Stable Diffusion' }[p] }}</span>
+              </label>
+            </div>
+          </div>
+          <div class="image-gen-actions">
+            <button class="image-gen-cancel" @click="showImageGenModal = false">
+              {{ $t('common.cancel', 'Cancel') }}
+            </button>
+            <button
+              class="image-gen-submit"
+              @click="submitImageGeneration"
+              :disabled="!imagePrompt.trim() || imageGenerating"
+            >
+              <Icon :name="imageGenerating ? 'spinner' : 'magic'" />
+              {{ imageGenerating ? $t('chat.input.generating', 'Generating…') : $t('chat.input.generate', 'Generate') }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, nextTick, onMounted, onUnmounted, inject, watch, type Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useChatStore } from '@/stores/useChatStore'
@@ -305,13 +433,20 @@ import { useChatController } from '@/models/controllers'
 import ProgressBar from '@/components/ui/ProgressBar.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import VisionAnalysisModal from './VisionAnalysisModal.vue'
+import PresetManagementModal from './PresetManagementModal.vue'
 import TranslationShortcutPanel from './TranslationShortcutPanel.vue'
+import SlashCommandDropdown from './SlashCommandDropdown.vue'
+import McpPromptPicker from './McpPromptPicker.vue'
 import { formatFileSize } from '@/utils/formatHelpers'
 import { getFileIconByMimeType } from '@/utils/iconMappings'
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
 import type { MultiModalResponse } from '@/utils/VisionMultimodalApiClient'
 import { useVoiceOutput } from '@/composables/useVoiceOutput'
+import { useSlashCommands } from '@/composables/useSlashCommands'
+import type { SlashCommandPreset } from '@/types/api'
+import { useImageGeneration } from '@/composables/useImageGeneration'
+import { useThinkingMode, BUDGET_STEPS, BUDGET_STEP_LABELS } from '@/composables/useThinkingMode'
 
 const { t } = useI18n()
 const logger = createLogger('ChatInput')
@@ -327,13 +462,38 @@ const submitOverseerQuery = inject<(query: string) => Promise<boolean>>('submitO
 const store = useChatStore()
 const controller = useChatController()
 
+const messageText = ref('')
+
+// GH#4449: Slash command preset autocomplete
+const {
+  suggestions: slashSuggestions,
+  showDropdown: showSlashDropdown,
+  selectedIndex: slashSelectedIndex,
+  onInput: onSlashInput,
+  moveUp: slashMoveUp,
+  moveDown: slashMoveDown,
+  applyPreset,
+  confirmSelection,
+  setSelectedIndex,
+  close: closeSlashDropdown,
+  fetchPresets,
+} = useSlashCommands(messageText)
+
+const applySlashPreset = (preset: SlashCommandPreset) => {
+  messageText.value = applyPreset(preset)
+  closeSlashDropdown()
+}
+
+const setSlashIndex = (idx: number) => {
+  setSelectedIndex(idx)
+}
+
 // Refs
 const messageInput = ref<HTMLTextAreaElement>()
 const fileInput = ref<HTMLInputElement>()
 const emojiPicker = ref<HTMLElement>()
 
 // State
-const messageText = ref('')
 const attachedFiles = ref<File[]>([])
 const isInputFocused = ref(false)
 const isVoiceRecording = ref(false)
@@ -341,6 +501,7 @@ const isSending = ref(false)
 const showEmojiPicker = ref(false)
 const showVisionModal = ref(false)
 const showTranslatePanel = ref(false)
+const showPresetsModal = ref(false)
 
 // Issue #249: Knowledge-Enhanced Chat (RAG) toggle
 const useKnowledge = ref(true) // Default enabled
@@ -363,16 +524,52 @@ const typingDebounceTimer = ref<number | null>(null)
 const maxCharacters = 4000
 const maxFileSize = 10 * 1024 * 1024 // 10MB
 
+// GH#9015: Image generation
+const { generating: imageGenerating, generateImage } = useImageGeneration()
+
+// GH#8993: Thinking mode
+const { enabled: thinkingEnabled, budgetTokens: thinkingBudget, load: loadThinkingPrefs, toggle: toggleThinking, setBudget: setThinkingBudget } = useThinkingMode(() => store.currentSessionId)
+const showImageGenModal = ref(false)
+const imagePrompt = ref('')
+const imageProvider = ref<'dalle' | 'flux' | 'stable_diffusion'>('dalle')
+
+const submitImageGeneration = async () => {
+  if (!imagePrompt.value.trim()) return
+  showImageGenModal.value = false
+  const result = await generateImage({ prompt: imagePrompt.value.trim(), provider: imageProvider.value })
+  imagePrompt.value = ''
+  if (result) {
+    store.addMessage({
+      content: result.success ? '' : (result.error ?? 'Image generation failed'),
+      sender: 'assistant',
+      status: 'sent',
+      type: 'image',
+      metadata: result.success
+        ? {
+            display_type: 'image',
+            image_payload: {
+              images: result.images,
+              provider: result.provider,
+              model: result.model,
+              prompt: result.prompt,
+              size: result.size,
+            },
+          }
+        : {},
+    })
+  }
+}
+
 // Issue #1569: Quick actions visibility toggle with localStorage persistence
 const showQuickActions = ref(localStorage.getItem('autobot_showQuickActions') !== 'false')
 watch(showQuickActions, (val) => localStorage.setItem('autobot_showQuickActions', String(val)))
 
 // Quick actions
 const quickActions = computed(() => [
-  { id: 'help', label: t('chat.input.help'), icon: 'fas fa-question-circle', description: t('chat.input.helpDesc') },
-  { id: 'summarize', label: t('chat.input.summarize'), icon: 'fas fa-compress', description: t('chat.input.summarizeDesc') },
-  { id: 'translate', label: t('agent.translate'), icon: 'fas fa-language', description: t('chat.input.translateDesc') },
-  { id: 'explain', label: t('chat.input.explain'), icon: 'fas fa-lightbulb', description: t('chat.input.explainDesc') },
+  { id: 'help', label: t('chat.input.help'), icon: 'question-circle', description: t('chat.input.helpDesc') },
+  { id: 'summarize', label: t('chat.input.summarize'), icon: 'compress', description: t('chat.input.summarizeDesc') },
+  { id: 'translate', label: t('agent.translate'), icon: 'language', description: t('chat.input.translateDesc') },
+  { id: 'explain', label: t('chat.input.explain'), icon: 'lightbulb', description: t('chat.input.explainDesc') },
 ])
 
 // Common emojis
@@ -417,6 +614,34 @@ const isTypingIndicatorVisible = computed(() => {
 
 // Methods
 const handleKeydown = (event: KeyboardEvent) => {
+  // GH#4449: Slash command dropdown keyboard navigation
+  if (showSlashDropdown.value) {
+    if (event.key === 'ArrowDown') {
+      event.preventDefault()
+      slashMoveDown()
+      return
+    }
+    if (event.key === 'ArrowUp') {
+      event.preventDefault()
+      slashMoveUp()
+      return
+    }
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      closeSlashDropdown()
+      return
+    }
+    if (event.key === 'Tab' || (event.key === 'Enter' && !event.shiftKey)) {
+      const preset = confirmSelection()
+      if (preset) {
+        event.preventDefault()
+        messageText.value = applyPreset(preset)
+        closeSlashDropdown()
+        return
+      }
+    }
+  }
+
   if (event.key === 'Enter' && canSend.value) {
     // Shift+Enter creates new line, Enter sends message
     if (!event.shiftKey) {
@@ -447,6 +672,9 @@ const handleInput = (event: Event) => {
 
   // Update typing indicator
   updateTypingIndicator()
+
+  // GH#4449: slash command autocomplete
+  onSlashInput()
 }
 
 const sendMessage = async () => {
@@ -499,7 +727,9 @@ const sendMessage = async () => {
           size: f.size,
           data: f // In real implementation, would upload file first
         })) : undefined,
-        use_knowledge: useKnowledge.value  // Issue #249: RAG toggle
+        use_knowledge: useKnowledge.value,  // Issue #249: RAG toggle
+        // GH#8993: extended thinking parameters
+        ...(thinkingEnabled.value ? { thinking_enabled: true, thinking_budget_tokens: thinkingBudget.value } : {}),
       })
     }
 
@@ -744,6 +974,16 @@ const handleTranslationResult = (payload: {
   })
 }
 
+// MVA-2167: Handle MCP prompt template insertion
+const handlePromptInsert = (text: string) => {
+  messageText.value = text
+  nextTick(() => {
+    if (messageInput.value) {
+      messageInput.value.focus()
+    }
+  })
+}
+
 const resetTextareaHeight = () => {
   nextTick(() => {
     if (messageInput.value) {
@@ -759,13 +999,13 @@ const getFileIcon = (type: string): string => {
 
   // Add color classes based on MIME type
   const colorMap: Record<string, string> = {
-    'fas fa-image': 'text-green-600',
-    'fas fa-video': 'text-blue-600',
-    'fas fa-music': 'text-purple-600',
-    'fas fa-file-pdf': 'text-red-600',
-    'fas fa-file-word': 'text-blue-600',
-    'fas fa-file-excel': 'text-green-600',
-    'fas fa-file-alt': 'text-autobot-text-secondary'
+    'image': 'text-green-600',
+    'video': 'text-blue-600',
+    'music': 'text-purple-600',
+    'file-pdf': 'text-red-600',
+    'file-word': 'text-blue-600',
+    'file-excel': 'text-green-600',
+    'file-alt': 'text-autobot-text-secondary'
   }
 
   const color = colorMap[icon] || 'text-autobot-text-secondary'
@@ -911,6 +1151,12 @@ onMounted(() => {
   nextTick(() => {
     messageInput.value?.focus()
   })
+
+  // GH#4449: preload presets for instant autocomplete
+  fetchPresets()
+
+  // GH#8993: load thinking preferences for current session
+  loadThinkingPrefs()
 })
 
 onUnmounted(() => {
@@ -1060,6 +1306,48 @@ onUnmounted(() => {
   @apply text-xs font-medium;
 }
 
+/* GH#8993: Thinking Mode Toggle */
+.thinking-toggle {
+  @apply flex items-center gap-1 px-2 py-1 rounded cursor-pointer transition-all duration-200 text-autobot-text-muted;
+}
+
+.thinking-toggle:hover {
+  @apply bg-autobot-bg-tertiary text-autobot-text-secondary;
+}
+
+.thinking-toggle.active {
+  @apply bg-amber-100 text-amber-700;
+}
+
+.thinking-toggle .thinking-icon {
+  @apply text-sm leading-none;
+}
+
+.thinking-toggle .toggle-label {
+  @apply text-xs font-medium;
+}
+
+/* GH#8993: Budget step selector */
+.thinking-budget {
+  @apply flex items-center;
+}
+
+.budget-steps {
+  @apply flex items-center gap-0.5;
+}
+
+.budget-step {
+  @apply px-1.5 py-0.5 text-xs rounded cursor-pointer transition-colors duration-150 text-autobot-text-muted border border-transparent;
+}
+
+.budget-step:hover {
+  @apply bg-autobot-bg-tertiary text-autobot-text-secondary;
+}
+
+.budget-step.active {
+  @apply bg-amber-100 text-amber-700 border-amber-300 font-medium;
+}
+
 .action-label {
   @apply hidden sm:inline text-xs;
 }
@@ -1207,4 +1495,118 @@ onUnmounted(() => {
 }
 
 /* Focus states for accessibility handled by BaseButton */
+
+/* GH#9015: Image generation modal */
+.image-gen-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.image-gen-dialog {
+  background: var(--color-surface, #fff);
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+  width: 100%;
+  max-width: 480px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+}
+
+.image-gen-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--color-text, #111827);
+  margin: 0;
+}
+
+.image-gen-label {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--color-text-muted, #6b7280);
+}
+
+.image-gen-prompt {
+  width: 100%;
+  padding: 0.625rem 0.75rem;
+  border: 1px solid var(--color-border, #e5e7eb);
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  resize: none;
+  font-family: inherit;
+  color: var(--color-text, #111827);
+  background: var(--color-surface, #fff);
+}
+
+.image-gen-prompt:focus {
+  outline: 2px solid var(--color-primary, #3b82f6);
+  outline-offset: 1px;
+}
+
+.provider-options {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-top: 0.25rem;
+}
+
+.provider-option {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.8125rem;
+  cursor: pointer;
+  color: var(--color-text, #111827);
+}
+
+.image-gen-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+.image-gen-cancel {
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--color-border, #e5e7eb);
+  border-radius: 0.5rem;
+  background: transparent;
+  font-size: 0.875rem;
+  cursor: pointer;
+  color: var(--color-text-muted, #6b7280);
+}
+
+.image-gen-submit {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.5rem 1.25rem;
+  background: var(--color-primary, #3b82f6);
+  color: white;
+  border: none;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.image-gen-submit:hover:not(:disabled) {
+  background: var(--color-primary-dark, #2563eb);
+}
+
+.image-gen-submit:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 </style>

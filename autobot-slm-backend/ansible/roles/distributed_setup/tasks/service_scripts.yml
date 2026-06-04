@@ -56,6 +56,6 @@
 - name: Enable coordinator service
   systemd:
     name: autobot-coordinator
-    enabled: yes
-    daemon_reload: yes
+    enabled: true
+    daemon_reload: true
   when: create_systemd_services and inventory_hostname == groups['slm_server'][0]

@@ -1,10 +1,10 @@
 <template>
-  <BasePanel variant="bordered" size="medium">
+  <BasePanel variant="bordered" size="md">
     <h4>{{ $t('knowledge.stats.recentActivity.title') }}</h4>
     <div class="activity-timeline">
       <div v-for="activity in activities" :key="activity.id" class="activity-item">
         <div class="activity-icon" :class="activity.type">
-          <i :class="getActivityIcon(activity.type)"></i>
+          <Icon :name="getActivityIcon(activity.type)" />
         </div>
         <div class="activity-content">
           <p class="activity-description">{{ activity.description }}</p>
@@ -32,6 +32,7 @@
  *
  * Issue #184: Split oversized Vue components
  */
+import Icon from '@/components/ui/Icon.vue'
 
 import BasePanel from '@/components/base/BasePanel.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
@@ -52,12 +53,12 @@ defineProps<Props>()
 
 const getActivityIcon = (type: string): string => {
   const icons: Record<string, string> = {
-    created: 'fas fa-plus-circle',
-    updated: 'fas fa-edit',
-    deleted: 'fas fa-trash',
-    imported: 'fas fa-download'
+    created: 'plus-circle',
+    updated: 'edit',
+    deleted: 'trash',
+    imported: 'download'
   }
-  return icons[type] || 'fas fa-circle'
+  return icons[type] || 'circle'
 }
 </script>
 

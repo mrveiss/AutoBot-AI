@@ -8,16 +8,18 @@ Provides cross-platform display resolution detection for optimal
 Playwright viewport configuration based on the current environment.
 """
 
-import logging
 import os
 import subprocess
 import sys
-from typing import Dict, Optional, Tuple
+from typing import Dict, Tuple
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
+
+logger = get_logger(__name__)
 
 
-def _parse_resolution_from_part(part: str, delimiter: str = "x") -> Optional[Tuple[int, int]]:
+def _parse_resolution_from_part(part: str, delimiter: str = "x") -> Tuple[int, int] | None:
     """Parse resolution from a string part like '1920x1080' (Issue #315 - extracted helper)."""
     if delimiter not in part:
         return None
@@ -34,7 +36,7 @@ def _find_resolution_in_output(
     output: str,
     line_filter: callable,
     part_filter: callable,
-) -> Optional[Tuple[int, int]]:
+) -> Tuple[int, int] | None:
     """Find resolution in subprocess output (Issue #315 - extracted helper)."""
     for line in output.split("\n"):
         if not line_filter(line):
@@ -53,7 +55,7 @@ class DisplayDetector:
 
     def __init__(self):
         """Initialize display detector with cache and fallback resolution."""
-        self.cached_resolution: Optional[Tuple[int, int]] = None
+        self.cached_resolution: Tuple[int, int] | None = None
         self.fallback_resolution = (1920, 1080)
 
     def get_primary_display_resolution(self) -> Tuple[int, int]:
@@ -111,7 +113,7 @@ class DisplayDetector:
 
         return self.fallback_resolution
 
-    def _try_xrandr(self) -> Optional[Tuple[int, int]]:
+    def _try_xrandr(self) -> Tuple[int, int] | None:
         """Try to get resolution using xrandr (X11) (Issue #315 - refactored)."""
         try:
             result = subprocess.run(["xrandr", "--query"], capture_output=True, text=True, timeout=5)
@@ -130,7 +132,7 @@ class DisplayDetector:
         ):
             return None
 
-    def _try_xdpyinfo(self) -> Optional[Tuple[int, int]]:
+    def _try_xdpyinfo(self) -> Tuple[int, int] | None:
         """Try to get resolution using xdpyinfo (X11) (Issue #315 - refactored)."""
         try:
             result = subprocess.run(["xdpyinfo"], capture_output=True, text=True, timeout=5)
@@ -150,7 +152,7 @@ class DisplayDetector:
         ):
             return None
 
-    def _try_wayland_resolution(self) -> Optional[Tuple[int, int]]:
+    def _try_wayland_resolution(self) -> Tuple[int, int] | None:
         """Try to get resolution on Wayland (Issue #315 - refactored)."""
         try:
             # Try wlr-randr (for wlroots-based compositors)
@@ -170,7 +172,7 @@ class DisplayDetector:
         ):
             return None
 
-    def _try_framebuffer_resolution(self) -> Optional[Tuple[int, int]]:
+    def _try_framebuffer_resolution(self) -> Tuple[int, int] | None:
         """Try to get resolution from framebuffer info"""
         try:
             with open("/sys/class/graphics/fb0/virtual_size", "r", encoding="utf-8") as f:
@@ -182,13 +184,13 @@ class DisplayDetector:
         except (IOError, ValueError, FileNotFoundError):
             return None
 
-    def _try_environment_vars(self) -> Optional[Tuple[int, int]]:
+    def _try_environment_vars(self) -> Tuple[int, int] | None:
         """Try to get resolution from environment variables"""
         # Check for VNC or remote desktop environment variables
         if "DISPLAY_WIDTH" in os.environ and "DISPLAY_HEIGHT" in os.environ:
             try:
-                width = int(os.environ["DISPLAY_WIDTH"])
-                height = int(os.environ["DISPLAY_HEIGHT"])
+                width = int(config.display_width)
+                height = int(config.display_height)
                 return (width, height)
             except ValueError as e:
                 logger.debug("Invalid DISPLAY_WIDTH/HEIGHT values: %s", e)
@@ -196,7 +198,7 @@ class DisplayDetector:
         # Check for common VNC variables
         if "VNC_RESOLUTION" in os.environ:
             try:
-                resolution = os.environ["VNC_RESOLUTION"]
+                resolution = config.vnc_resolution
                 if "x" in resolution:
                     width, height = resolution.split("x")
                     return (int(width), int(height))
@@ -223,7 +225,7 @@ class DisplayDetector:
         except (subprocess.TimeoutExpired, subprocess.SubprocessError, ValueError):
             return self.fallback_resolution
 
-    def _parse_macos_resolution_output(self, output: str) -> Optional[Tuple[int, int]]:
+    def _parse_macos_resolution_output(self, output: str) -> Tuple[int, int] | None:
         """Parse macOS system_profiler output for resolution (Issue #315 - extracted)."""
         for line in output.split("\n"):
             if "Resolution:" not in line:

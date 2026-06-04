@@ -4,8 +4,8 @@
 
 - name: "Deploy AutoBot Role"
   hosts: "{{ target_host | default('all') }}"
-  gather_facts: yes
-  become: yes
+  gather_facts: true
+  become: true
 
   vars:
     deploy_timestamp: "{{ ansible_facts['date_time'].iso8601 }}"

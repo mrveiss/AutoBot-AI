@@ -12,20 +12,20 @@ human review for top candidates, val_bpb for AutoResearch.
 from __future__ import annotations
 
 import json
-import logging
 import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Dict, Optional
+from typing import TYPE_CHECKING, Any, Dict
 
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
 
 if TYPE_CHECKING:
     from services.llm_service import LLMService
 
+from autobot_shared.logging_manager import get_logger
 from constants.ttl_constants import TTL_24_HOURS
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Validation pattern for Redis key components — alphanumeric, hyphens, underscores
 _KEY_COMPONENT_PATTERN = re.compile(r"^[a-zA-Z0-9_-]{1,64}$")
@@ -70,7 +70,7 @@ class PromptScorer(ABC):
         self,
         prompt_output: str,
         context: Dict[str, Any],
-        subset_fraction: Optional[float] = None,
+        subset_fraction: float | None = None,
     ) -> ScorerResult:
         """Score a prompt variant's output.
 
@@ -116,7 +116,7 @@ class ValBpbScorer(PromptScorer):
         self,
         prompt_output: str,
         context: Dict[str, Any],
-        subset_fraction: Optional[float] = None,
+        subset_fraction: float | None = None,
     ) -> ScorerResult:
         # subset_fraction is informational for this scorer; full experiment
         # is always required to get a valid val_bpb reading.
@@ -206,7 +206,7 @@ class LLMJudgeScorer(PromptScorer):
         self,
         prompt_output: str,
         context: Dict[str, Any],
-        subset_fraction: Optional[float] = None,
+        subset_fraction: float | None = None,
     ) -> ScorerResult:
         # subset_fraction: LLMJudgeScorer evaluates a single output text so
         # sub-sampling is not applicable; parameter accepted for interface compat.
@@ -302,7 +302,7 @@ class HumanReviewScorer(AsyncRedisClientMixin, PromptScorer):
         self,
         prompt_output: str,
         context: Dict[str, Any],
-        subset_fraction: Optional[float] = None,
+        subset_fraction: float | None = None,
     ) -> ScorerResult:
         # subset_fraction: HumanReviewScorer queues the variant for a human;
         # sub-sampling does not apply — parameter accepted for interface compat.

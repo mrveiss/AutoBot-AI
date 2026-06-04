@@ -12,13 +12,14 @@ together weaken.  The topology is queried at routing time to bias agent
 selection toward historically effective collaborations.
 """
 
-import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from itertools import combinations
-from typing import Optional, Protocol, runtime_checkable
+from typing import Protocol, runtime_checkable
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 
 # Hebbian learning rate: how much each outcome shifts the weight.
 _LEARNING_RATE: float = 0.1
@@ -33,7 +34,7 @@ class AgentConnection:
     id: str
     from_agent: str
     to_agent: str
-    task_type: Optional[str]  # None means the connection applies to all task types
+    task_type: str | None  # None means the connection applies to all task types
     weight: float
     co_success_count: int
     co_failure_count: int
@@ -51,7 +52,7 @@ class AgentTopologyDB(Protocol):
     async def get_agent_connections(
         self,
         from_agent: str,
-        task_type: Optional[str],
+        task_type: str | None,
         min_weight: float,
         limit: int,
     ) -> list[AgentConnection]:
@@ -59,7 +60,7 @@ class AgentTopologyDB(Protocol):
         ...
 
     async def get_or_create_agent_connection(
-        self, from_agent: str, to_agent: str, task_type: Optional[str]
+        self, from_agent: str, to_agent: str, task_type: str | None
     ) -> AgentConnection:
         """Fetch the connection or create it with a neutral starting weight."""
         ...
@@ -68,9 +69,9 @@ class AgentTopologyDB(Protocol):
         self,
         connection_id: str,
         weight: float,
-        co_success_count: Optional[int] = None,
-        co_failure_count: Optional[int] = None,
-        last_updated: Optional[datetime] = None,
+        co_success_count: int | None = None,
+        co_failure_count: int | None = None,
+        last_updated: datetime | None = None,
     ) -> None:
         """Persist updated weight, counter, and timestamp fields (#2213)."""
         ...
@@ -78,7 +79,7 @@ class AgentTopologyDB(Protocol):
     async def record_agent_task(
         self,
         agent_id: str,
-        task_type: Optional[str],
+        task_type: str | None,
         workflow_id: str,
         success: bool,
     ) -> None:
@@ -112,7 +113,7 @@ class AgentTopology:
     async def get_collaborators(
         self,
         agent_id: str,
-        task_type: Optional[str] = None,
+        task_type: str | None = None,
         min_weight: float = 0.3,
         limit: int = 5,
     ) -> list[AgentConnection]:
@@ -139,7 +140,7 @@ class AgentTopology:
         self,
         workflow_id: str,
         agents: list[str],
-        task_type: Optional[str],
+        task_type: str | None,
         success: bool,
     ) -> None:
         """Update connection weights after a multi-agent workflow completes.
@@ -164,7 +165,7 @@ class AgentTopology:
         self,
         workflow_id: str,
         agents: list[str],
-        task_type: Optional[str],
+        task_type: str | None,
         success: bool,
     ) -> None:
         """Persist per-agent task history and emit a summary log entry.
@@ -185,7 +186,7 @@ class AgentTopology:
         self,
         from_agent: str,
         to_agent: str,
-        task_type: Optional[str],
+        task_type: str | None,
         success: bool,
     ) -> None:
         """Apply one Hebbian update to a single agent pair.
@@ -236,3 +237,101 @@ class AgentTopology:
             inactive_days,
         )
         return deleted
+
+
+class InMemoryTopologyDB:
+    """Minimal in-memory implementation of AgentTopologyDB.
+
+    Issue #6821: Used as the default backing store when no persistent DB is
+    configured, so that AgentTopology can be instantiated without a real
+    database connection.  All data is local to the process and lost on restart.
+    """
+
+    def __init__(self) -> None:
+        self._connections: dict[str, AgentConnection] = {}
+        self._task_history: list[dict] = []
+
+    def _connection_key(self, from_agent: str, to_agent: str, task_type: str | None) -> str:
+        return f"{from_agent}::{to_agent}::{task_type}"
+
+    async def get_agent_connections(
+        self,
+        from_agent: str,
+        task_type: str | None,
+        min_weight: float,
+        limit: int,
+    ) -> list[AgentConnection]:
+        results = [
+            c
+            for c in self._connections.values()
+            if c.from_agent == from_agent
+            and c.weight >= min_weight
+            and (task_type is None or c.task_type is None or c.task_type == task_type)
+        ]
+        results.sort(key=lambda c: c.weight, reverse=True)
+        return results[:limit]
+
+    async def get_or_create_agent_connection(
+        self, from_agent: str, to_agent: str, task_type: str | None
+    ) -> AgentConnection:
+        key = self._connection_key(from_agent, to_agent, task_type)
+        if key not in self._connections:
+            self._connections[key] = AgentConnection(
+                id=key,
+                from_agent=from_agent,
+                to_agent=to_agent,
+                task_type=task_type,
+                weight=0.5,
+                co_success_count=0,
+                co_failure_count=0,
+            )
+        return self._connections[key]
+
+    async def update_agent_connection(
+        self,
+        connection_id: str,
+        weight: float,
+        co_success_count: int | None = None,
+        co_failure_count: int | None = None,
+        last_updated: datetime | None = None,
+    ) -> None:
+        conn = self._connections.get(connection_id)
+        if conn is None:
+            return
+        conn.weight = weight
+        if co_success_count is not None:
+            conn.co_success_count = co_success_count
+        if co_failure_count is not None:
+            conn.co_failure_count = co_failure_count
+        conn.last_updated = last_updated or datetime.now(tz=timezone.utc)
+
+    async def record_agent_task(
+        self,
+        agent_id: str,
+        task_type: str | None,
+        workflow_id: str,
+        success: bool,
+    ) -> None:
+        self._task_history.append(
+            {
+                "agent_id": agent_id,
+                "task_type": task_type,
+                "workflow_id": workflow_id,
+                "success": success,
+                "recorded_at": datetime.now(tz=timezone.utc),
+            }
+        )
+
+    async def delete_weak_connections(
+        self,
+        min_weight: float,
+        inactive_since: datetime,
+    ) -> int:
+        to_delete = [
+            key
+            for key, conn in self._connections.items()
+            if conn.weight < min_weight and conn.last_updated < inactive_since
+        ]
+        for key in to_delete:
+            del self._connections[key]
+        return len(to_delete)

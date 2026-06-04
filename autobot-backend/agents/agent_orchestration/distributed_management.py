@@ -8,24 +8,45 @@ Issue #381: Extracted from agent_orchestrator.py god class refactoring.
 Contains distributed agent registration, health monitoring, and lifecycle management.
 """
 
+from __future__ import annotations
+
 import asyncio
-import logging
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Tuple
 
 from constants.threshold_constants import TimingConstants, WorkStealingConfig
+from services.task_claim import claim_task, is_claim_alive, release_claim, renew_claim
 
+from .state_persistence import (
+    delete_task_state,
+    delete_task_timing_state,
+    load_task_state,
+    persist_task_assigned,
+    persist_task_progress,
+    persist_task_reassignment,
+)
 from .types import CircuitState, DistributedAgentInfo
 
 if TYPE_CHECKING:
     from agents.base_agent import AgentHealth, BaseAgent
+
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class DistributedAgentManager:
-    """Manages distributed agent lifecycle and health monitoring."""
+    """Manages distributed agent lifecycle and health monitoring.
+
+    Scope (#6828): dynamic registration with circuit-breaker health checks and
+    work-stealing (#2109, #4694).  This is the **distributed-runtime** registry
+    — it handles multi-node agent membership and task reassignment.  It does
+    not hold database state or static capability profiles.  See also:
+    - orchestration.agent_registry.AgentRegistry — static profile/capability registry
+    - agents.agent_client.AgentRegistry — health-tracking runtime registry
+    - services.agent_registry_service.AgentRegistryService — DB-backed CRUD
+    """
 
     def __init__(
         self,
@@ -37,6 +58,7 @@ class DistributedAgentManager:
         progress_ttl_seconds: int = WorkStealingConfig.PROGRESS_TTL_SECONDS,
         circuit_failure_threshold: int = 3,
         circuit_recovery_timeout_seconds: int = 300,
+        deployment_id: str = "autobot",
     ):
         """
         Initialize the distributed agent manager.
@@ -57,7 +79,7 @@ class DistributedAgentManager:
         self.distributed_agents: Dict[str, DistributedAgentInfo] = {}
         self.builtin_distributed_agents = builtin_agents
         self.health_check_interval = health_check_interval
-        self.health_monitor_task: Optional[asyncio.Task] = None
+        self.health_monitor_task: asyncio.Task | None = None
         self.is_running = False
 
         # Work-stealing configuration (Issue #2109)
@@ -70,14 +92,17 @@ class DistributedAgentManager:
         self.circuit_failure_threshold = circuit_failure_threshold
         self.circuit_recovery_timeout_seconds = circuit_recovery_timeout_seconds
 
-        # task_id -> assigned_at (UTC) — set when add_active_task is called
+        # Redis-scoped deployment identifier (Issue #6479)
+        self._deployment_id = deployment_id
+
+        # task_id -> assigned_at (UTC) — write-through cache; persisted in Redis (#6479)
         self._task_assigned_at: Dict[str, datetime] = {}
-        # task_id -> last_progress_at (UTC) — updated via report_task_progress
+        # task_id -> last_progress_at (UTC) — write-through cache; persisted in Redis (#6479)
         self._task_last_progress: Dict[str, datetime] = {}
-        # task_id -> reassignment_count
+        # task_id -> reassignment_count — write-through cache; persisted in Redis (#6479)
         self._task_reassignment_count: Dict[str, int] = {}
 
-    async def start(self, event_emitter: Optional[Any] = None) -> bool:
+    async def start(self, event_emitter: Any | None = None) -> bool:
         """Start distributed agent management.
 
         Args:
@@ -94,6 +119,9 @@ class DistributedAgentManager:
         try:
             self.is_running = True
 
+            # Rehydrate stale-detection state from Redis so grace periods survive restarts.
+            await self._rehydrate_from_redis()
+
             # Initialize built-in distributed agents
             await self._initialize_distributed_agents()
 
@@ -107,6 +135,20 @@ class DistributedAgentManager:
             logger.error("Failed to start distributed mode: %s", e)
             self.is_running = False
             return False
+
+    async def _rehydrate_from_redis(self) -> None:
+        """Populate in-memory dicts from Redis on startup (Issue #6479)."""
+        assigned, progress, reassign = await load_task_state(self._deployment_id)
+        self._task_assigned_at.update(assigned)
+        self._task_last_progress.update(progress)
+        self._task_reassignment_count.update(reassign)
+        total = len(assigned)
+        if total:
+            logger.info(
+                "Distributed manager rehydrated %d task(s) from Redis (deployment=%s)",
+                total,
+                self._deployment_id,
+            )
 
     async def stop(self) -> None:
         """Stop distributed agent management."""
@@ -181,7 +223,7 @@ class DistributedAgentManager:
 
     async def _check_single_agent_health(
         self, agent_id: str, agent_info: DistributedAgentInfo
-    ) -> Tuple[str, Optional["AgentHealth"], Optional[Exception]]:
+    ) -> Tuple[str, "AgentHealth" | None, Exception | None]:
         """Check health of single agent (Issue #334 - extracted helper)."""
         try:
             health = await agent_info.agent.health_check()
@@ -192,8 +234,8 @@ class DistributedAgentManager:
     def _process_health_result(
         self,
         agent_id: str,
-        health: Optional["AgentHealth"],
-        error: Optional[Exception],
+        health: "AgentHealth" | None,
+        error: Exception | None,
     ) -> None:
         """Process a single health check result and update circuit breaker state.
 
@@ -288,7 +330,7 @@ class DistributedAgentManager:
             agent_id, health, error = result
             self._process_health_result(agent_id, health, error)
 
-    async def _health_monitor_loop(self, event_emitter: Optional[Any] = None) -> None:
+    async def _health_monitor_loop(self, event_emitter: Any | None = None) -> None:
         """Background health monitoring for distributed agents.
 
         Each cycle:
@@ -354,39 +396,67 @@ class DistributedAgentManager:
 
         return available
 
-    def get_agent_info(self, agent_id: str) -> Optional[DistributedAgentInfo]:
+    def get_agent_info(self, agent_id: str) -> DistributedAgentInfo | None:
         """Get info for a specific agent."""
         return self.distributed_agents.get(agent_id)
 
-    def add_active_task(self, agent_id: str, task_id: str) -> None:
-        """Add an active task to an agent and record its assignment timestamp.
+    async def add_active_task(self, agent_id: str, task_id: str) -> bool:
+        """Add an active task to an agent if the atomic Redis claim is granted.
+
+        Returns True when the claim was granted and the task was added.
+        Returns False when another agent already holds the claim — the caller
+        must not proceed with the task (double-pickup guard, GH#6468).
 
         Issue #2109: records assigned_at for stale-detection.
+        Issue #6479: persists assigned_at to Redis (write-through cache).
+        Issue #6468: atomic claim via Redis SET NX EX.
         """
+        claimed = await claim_task(task_id, agent_id)
+        if not claimed:
+            logger.warning(
+                "add_active_task: task %s already claimed by another agent — agent %s skipping",
+                task_id,
+                agent_id,
+            )
+            return False
+
         if agent_id in self.distributed_agents:
             self.distributed_agents[agent_id].active_tasks.add(task_id)
-            self._task_assigned_at[task_id] = now_utc()
+            assigned_at = now_utc()
+            self._task_assigned_at[task_id] = assigned_at
+            await persist_task_assigned(self._deployment_id, task_id, assigned_at)
+        return True
 
-    def remove_active_task(self, agent_id: str, task_id: str) -> None:
+    async def remove_active_task(self, agent_id: str, task_id: str) -> None:
         """Remove an active task from an agent and clean up tracking state.
 
         Issue #2109: clears assigned_at / progress / reassignment metadata.
+        Issue #6479: deletes Redis hash entries for the task.
+        Issue #6468: releases the atomic Redis claim.
         """
         if agent_id in self.distributed_agents:
             self.distributed_agents[agent_id].active_tasks.discard(task_id)
         self._task_assigned_at.pop(task_id, None)
         self._task_last_progress.pop(task_id, None)
         self._task_reassignment_count.pop(task_id, None)
+        await delete_task_state(self._deployment_id, task_id)
+        await release_claim(task_id, agent_id)
 
-    def report_task_progress(self, task_id: str) -> None:
+    async def report_task_progress(self, task_id: str, agent_id: str = "") -> None:
         """Record that a task has made progress, resetting its stale timer.
 
-        Call this from the agent when partial results arrive so the
-        work-stealer does not reclaim an actively-running task.
+        Also renews the Redis claim TTL so the task is not freed while the
+        agent is actively working.
 
         Issue #2109: progress-protection guard rail.
+        Issue #6479: persists last_progress to Redis.
+        Issue #6468: renews claim TTL on each progress heartbeat.
         """
-        self._task_last_progress[task_id] = now_utc()
+        progress_at = now_utc()
+        self._task_last_progress[task_id] = progress_at
+        await persist_task_progress(self._deployment_id, task_id, progress_at)
+        if agent_id:
+            await renew_claim(task_id, agent_id)
 
     # ------------------------------------------------------------------
     # Work-stealing helpers (Issue #2109)
@@ -395,12 +465,15 @@ class DistributedAgentManager:
     def _is_task_stale(self, task_id: str, now: datetime) -> bool:
         """Return True when a task has exceeded the stale timeout.
 
-        Guards:
+        Guards (checked in order):
         - grace period: task assigned less than grace_period_seconds ago → not stale
-        - progress protection: task reported progress within progress_ttl_seconds → not stale
         - max reassignments exceeded → not stale (stop trying)
+        - progress protection: task reported progress within progress_ttl_seconds → not stale
+        - falls through to time-based check (age >= stale_task_timeout_seconds)
 
         Issue #2109.
+        Issue #6468: Redis claim TTL expiry is checked asynchronously via
+        _collect_stale_tasks to supplement in-memory timestamps.
         """
         assigned_at = self._task_assigned_at.get(task_id)
         if assigned_at is None:
@@ -421,15 +494,31 @@ class DistributedAgentManager:
 
         return age_seconds >= self.stale_task_timeout_seconds
 
-    def _collect_stale_tasks(self, now: datetime) -> List[Tuple[str, str]]:
+    async def _collect_stale_tasks(self, now: datetime) -> List[Tuple[str, str]]:
         """Return list of (agent_id, task_id) pairs where the task is stale.
 
+        A task is stale when either:
+        - its in-memory timestamps breach the timeout thresholds, or
+        - its Redis claim key has expired (agent died without releasing).
+
         Issue #2109: extracted helper keeps _detect_stale_tasks short.
+        Issue #6468: Redis claim TTL expiry supplements in-memory timestamps.
         """
         stale: List[Tuple[str, str]] = []
         for agent_id, agent_info in self.distributed_agents.items():
             for task_id in list(agent_info.active_tasks):
                 if self._is_task_stale(task_id, now):
+                    stale.append((agent_id, task_id))
+                    continue
+                # Also reclaim tasks whose Redis claim key has expired but
+                # whose in-memory timestamp has not yet breached the threshold
+                # (e.g. agent crashed mid-grace-period).
+                if not await is_claim_alive(task_id):
+                    logger.info(
+                        "task_claim: Redis claim expired for task=%s agent=%s — marking stale",
+                        task_id,
+                        agent_id,
+                    )
                     stale.append((agent_id, task_id))
         return stale
 
@@ -437,7 +526,7 @@ class DistributedAgentManager:
         self,
         source_agent_id: str,
         task_id: str,
-        event_emitter: Optional[Any] = None,
+        event_emitter: Any | None = None,
     ) -> bool:
         """Remove task from stale agent, mark agent degraded, emit event.
 
@@ -462,6 +551,10 @@ class DistributedAgentManager:
         self._task_reassignment_count[task_id] = count
         self._task_assigned_at.pop(task_id, None)
         self._task_last_progress.pop(task_id, None)
+        # Persist incremented count; clear only timing entries so count survives
+        # the next add_active_task call (Issue #6479).
+        await persist_task_reassignment(self._deployment_id, task_id, count)
+        await delete_task_timing_state(self._deployment_id, task_id)
 
         # Mark source agent degraded in its health record so the router
         # prefers other agents until the next successful health check.
@@ -496,7 +589,7 @@ class DistributedAgentManager:
 
         return True
 
-    async def _detect_and_steal_stale_tasks(self, event_emitter: Optional[Any] = None) -> int:
+    async def _detect_and_steal_stale_tasks(self, event_emitter: Any | None = None) -> int:
         """Scan all active tasks and steal those that are stale.
 
         Returns the number of tasks reassigned in this cycle.
@@ -504,7 +597,7 @@ class DistributedAgentManager:
         Issue #2109: called once per health-monitor cycle.
         """
         now = now_utc()
-        stale_pairs = self._collect_stale_tasks(now)
+        stale_pairs = await self._collect_stale_tasks(now)
         if not stale_pairs:
             return 0
 

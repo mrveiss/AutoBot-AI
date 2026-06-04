@@ -33,13 +33,15 @@ from typing import Any, Dict, List
 
 import aiohttp
 
+from autobot_shared.logging_manager import get_logger
+
 # Import canonical Redis client pattern
 from autobot_shared.redis_client import get_redis_client
 from constants.network_constants import NetworkConstants, ServiceURLs
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -290,7 +292,7 @@ class AsyncBaselineTest:
         fail_count = 0
 
         # Create temp directory for test files
-        test_dir = Path("/tmp/autobot_baseline_test")
+        test_dir = Path("/tmp/autobot_baseline_test")  # nosec B108 - test/controlled code uses tmpdir intentionally
         test_dir.mkdir(parents=True, exist_ok=True)
 
         async def mixed_io_operation(redis_client, op_id):

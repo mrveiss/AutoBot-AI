@@ -8,13 +8,17 @@ Issue #658: Implements Agent Zero's extension pattern where extensions
 can hook into 22 lifecycle points to modify agent behavior.
 """
 
-import logging
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.plugin_sdk.extension_manifest import ExtensionManifest
 from extensions.hooks import HookPoint
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
+
+# Re-export so callers that do `from extensions.base import ExtensionManifest` still work.
+__all__ = ["ExtensionManifest", "Extension", "HookContext"]
 
 
 @dataclass
@@ -44,7 +48,7 @@ class HookContext:
 
     session_id: str = ""
     message: str = ""
-    agent_id: Optional[str] = None
+    agent_id: str | None = None
     data: Dict[str, Any] = field(default_factory=dict)
 
     def set(self, key: str, value: Any) -> None:
@@ -91,7 +95,7 @@ class HookContext:
         """
         return key in self.data
 
-    def remove(self, key: str) -> Optional[Any]:
+    def remove(self, key: str) -> Any | None:
         """
         Remove and return a value from context data.
 
@@ -131,7 +135,7 @@ class Extension:
             name = "my_extension"
             priority = 50  # Run before default (100)
 
-            async def on_before_tool_execute(self, ctx: HookContext) -> Optional[bool]:
+            async def on_before_tool_execute(self, ctx: HookContext) -> bool | None:
                 # Return False to cancel tool execution
                 if ctx.get("tool_name") == "dangerous_tool":
                     return False
@@ -139,14 +143,25 @@ class Extension:
     """
 
     name: str = "base"
+    version: str = "0.0.0"
+    description: str = ""
     priority: int = 100
     enabled: bool = True
+
+    @property
+    def manifest(self) -> "ExtensionManifest":
+        """Return an ExtensionManifest derived from this extension's class attributes."""
+        return ExtensionManifest(
+            name=self.name,
+            version=self.version,
+            description=self.description,
+        )
 
     async def on_hook(
         self,
         hook: HookPoint,
         context: HookContext,
-    ) -> Optional[Any]:
+    ) -> Any | None:
         """
         Dispatch to specific hook method.
 
@@ -184,7 +199,7 @@ class Extension:
 
     # ========== Message Preparation Hooks ==========
 
-    async def on_before_message_process(self, ctx: HookContext) -> Optional[None]:
+    async def on_before_message_process(self, ctx: HookContext) -> None | None:
         """
         Called at the start of message handling.
 
@@ -210,7 +225,7 @@ class Extension:
             None (modify ctx.data directly)
         """
 
-    async def on_after_prompt_build(self, ctx: HookContext) -> Optional[str]:
+    async def on_after_prompt_build(self, ctx: HookContext) -> str | None:
         """
         Called after prompt is built and before being sent to the LLM.
 
@@ -225,7 +240,7 @@ class Extension:
 
     # ========== LLM Interaction Hooks ==========
 
-    async def on_before_llm_call(self, ctx: HookContext) -> Optional[bool]:
+    async def on_before_llm_call(self, ctx: HookContext) -> bool | None:
         """
         Called before calling the LLM.
 
@@ -238,7 +253,7 @@ class Extension:
             False to cancel LLM call, None to continue
         """
 
-    async def on_during_llm_streaming(self, ctx: HookContext) -> Optional[str]:
+    async def on_during_llm_streaming(self, ctx: HookContext) -> str | None:
         """
         Called for each streaming chunk from LLM.
 
@@ -251,7 +266,7 @@ class Extension:
             Modified chunk or None to keep unchanged
         """
 
-    async def on_after_llm_response(self, ctx: HookContext) -> Optional[str]:
+    async def on_after_llm_response(self, ctx: HookContext) -> str | None:
         """
         Called after full response is received.
 
@@ -266,7 +281,7 @@ class Extension:
 
     # ========== Tool Execution Hooks ==========
 
-    async def on_before_tool_parse(self, ctx: HookContext) -> Optional[str]:
+    async def on_before_tool_parse(self, ctx: HookContext) -> str | None:
         """
         Called before parsing tool calls from response.
 
@@ -279,7 +294,7 @@ class Extension:
             Modified response or None to keep unchanged
         """
 
-    async def on_before_tool_execute(self, ctx: HookContext) -> Optional[bool]:
+    async def on_before_tool_execute(self, ctx: HookContext) -> bool | None:
         """
         Called before each tool execution.
 
@@ -292,7 +307,7 @@ class Extension:
             False to cancel execution, None to continue
         """
 
-    async def on_after_tool_execute(self, ctx: HookContext) -> Optional[Any]:
+    async def on_after_tool_execute(self, ctx: HookContext) -> Any | None:
         """
         Called after tool execution completes.
 
@@ -305,7 +320,7 @@ class Extension:
             Modified result or None to keep unchanged
         """
 
-    async def on_tool_error(self, ctx: HookContext) -> Optional[Any]:
+    async def on_tool_error(self, ctx: HookContext) -> Any | None:
         """
         Called when a tool throws an error.
 
@@ -320,7 +335,7 @@ class Extension:
 
     # ========== Continuation Loop Hooks ==========
 
-    async def on_before_continuation(self, ctx: HookContext) -> Optional[bool]:
+    async def on_before_continuation(self, ctx: HookContext) -> bool | None:
         """
         Called before LLM continuation iteration.
 
@@ -333,7 +348,7 @@ class Extension:
             False to stop loop, None to continue
         """
 
-    async def on_after_continuation(self, ctx: HookContext) -> Optional[None]:
+    async def on_after_continuation(self, ctx: HookContext) -> None | None:
         """
         Called after each continuation iteration.
 
@@ -346,7 +361,7 @@ class Extension:
             None
         """
 
-    async def on_loop_complete(self, ctx: HookContext) -> Optional[None]:
+    async def on_loop_complete(self, ctx: HookContext) -> None | None:
         """
         Called when message loop completes.
 
@@ -361,7 +376,7 @@ class Extension:
 
     # ========== Error Handling Hooks ==========
 
-    async def on_repairable_error(self, ctx: HookContext) -> Optional[str]:
+    async def on_repairable_error(self, ctx: HookContext) -> str | None:
         """
         Called when a repairable error occurs.
 
@@ -374,7 +389,7 @@ class Extension:
             Modified suggestion or None to keep unchanged
         """
 
-    async def on_critical_error(self, ctx: HookContext) -> Optional[None]:
+    async def on_critical_error(self, ctx: HookContext) -> None | None:
         """
         Called when a critical error occurs.
 
@@ -389,7 +404,7 @@ class Extension:
 
     # ========== Response Hooks ==========
 
-    async def on_before_response_send(self, ctx: HookContext) -> Optional[str]:
+    async def on_before_response_send(self, ctx: HookContext) -> str | None:
         """
         Called before sending response via WebSocket.
 
@@ -402,7 +417,7 @@ class Extension:
             Modified response or None to keep unchanged
         """
 
-    async def on_after_response_send(self, ctx: HookContext) -> Optional[None]:
+    async def on_after_response_send(self, ctx: HookContext) -> None | None:
         """
         Called after response is sent.
 
@@ -417,7 +432,7 @@ class Extension:
 
     # ========== Session Lifecycle Hooks ==========
 
-    async def on_session_create(self, ctx: HookContext) -> Optional[None]:
+    async def on_session_create(self, ctx: HookContext) -> None | None:
         """
         Called when a new session is created.
 
@@ -430,7 +445,7 @@ class Extension:
             None
         """
 
-    async def on_session_destroy(self, ctx: HookContext) -> Optional[None]:
+    async def on_session_destroy(self, ctx: HookContext) -> None | None:
         """
         Called when a session is destroyed.
 
@@ -445,7 +460,7 @@ class Extension:
 
     # ========== Knowledge Integration Hooks ==========
 
-    async def on_before_rag_query(self, ctx: HookContext) -> Optional[str]:
+    async def on_before_rag_query(self, ctx: HookContext) -> str | None:
         """
         Called before querying knowledge base.
 
@@ -458,7 +473,7 @@ class Extension:
             Modified query or None to keep unchanged
         """
 
-    async def on_after_rag_results(self, ctx: HookContext) -> Optional[List[Dict[str, Any]]]:
+    async def on_after_rag_results(self, ctx: HookContext) -> List[Dict[str, Any]] | None:
         """
         Called after RAG results are retrieved.
 
@@ -473,7 +488,7 @@ class Extension:
 
     # ========== Approval Flow Hooks ==========
 
-    async def on_approval_required(self, ctx: HookContext) -> Optional[bool]:
+    async def on_approval_required(self, ctx: HookContext) -> bool | None:
         """
         Called when tool requires user approval.
 
@@ -486,7 +501,7 @@ class Extension:
             True to auto-approve, None for normal flow
         """
 
-    async def on_approval_received(self, ctx: HookContext) -> Optional[None]:
+    async def on_approval_received(self, ctx: HookContext) -> None | None:
         """
         Called when user approval is received.
 
@@ -501,7 +516,7 @@ class Extension:
 
     # ========== Prompt Pipeline Hooks (Issue #3405) ==========
 
-    async def on_system_prompt_ready(self, ctx: HookContext) -> Optional[str]:
+    async def on_system_prompt_ready(self, ctx: HookContext) -> str | None:
         """
         Called after the system prompt is built.
 
@@ -516,7 +531,7 @@ class Extension:
             Modified system prompt str or None to keep unchanged
         """
 
-    async def on_full_prompt_ready(self, ctx: HookContext) -> Optional[str]:
+    async def on_full_prompt_ready(self, ctx: HookContext) -> str | None:
         """
         Called after the full prompt (system + knowledge + conversation) is built.
 

@@ -9,20 +9,20 @@ Issue #873 - Activity Tracking Integration Hooks (#608 Phase 5)
 Integration hooks for tracking browser automation activities.
 """
 
-import logging
 import uuid
-from typing import Any, Optional
+from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.logging_manager import get_logger
 from utils.activity_tracker import track_browser_activity
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def _build_browser_action_metadata(
-    status_code: Optional[int],
-    redirect_url: Optional[str],
+    status_code: int | None,
+    redirect_url: str | None,
 ) -> dict[str, Any]:
     """Helper for track_browser_action. Ref: #1088."""
     metadata: dict[str, Any] = {}
@@ -38,10 +38,10 @@ async def _invoke_browser_activity_tracker(
     user_id: uuid.UUID,
     url: str,
     action: str,
-    session_id: Optional[str],
-    selector: Optional[str],
-    input_value: Optional[str],
-    secrets_used: Optional[list[uuid.UUID]],
+    session_id: str | None,
+    selector: str | None,
+    input_value: str | None,
+    secrets_used: list[uuid.UUID] | None,
     metadata: dict[str, Any],
 ) -> uuid.UUID:
     """Helper for track_browser_action. Ref: #1088."""
@@ -72,12 +72,12 @@ async def track_browser_action(
     user_id: uuid.UUID,
     url: str,
     action: str,
-    session_id: Optional[str] = None,
-    selector: Optional[str] = None,
-    input_value: Optional[str] = None,
-    secrets_used: Optional[list[uuid.UUID]] = None,
-    status_code: Optional[int] = None,
-    redirect_url: Optional[str] = None,
+    session_id: str | None = None,
+    selector: str | None = None,
+    input_value: str | None = None,
+    secrets_used: list[uuid.UUID] | None = None,
+    status_code: int | None = None,
+    redirect_url: str | None = None,
 ) -> uuid.UUID:
     """
     Track browser automation action.
@@ -127,8 +127,8 @@ async def track_browser_navigation(
     db: AsyncSession,
     user_id: uuid.UUID,
     url: str,
-    session_id: Optional[str] = None,
-    status_code: Optional[int] = None,
+    session_id: str | None = None,
+    status_code: int | None = None,
 ) -> uuid.UUID:
     """
     Track browser navigation (page load).
@@ -158,8 +158,8 @@ async def track_form_submission(
     user_id: uuid.UUID,
     url: str,
     form_selector: str,
-    session_id: Optional[str] = None,
-    secrets_used: Optional[list[uuid.UUID]] = None,
+    session_id: str | None = None,
+    secrets_used: list[uuid.UUID] | None = None,
 ) -> uuid.UUID:
     """
     Track form submission.
@@ -191,7 +191,7 @@ async def track_element_click(
     user_id: uuid.UUID,
     url: str,
     selector: str,
-    session_id: Optional[str] = None,
+    session_id: str | None = None,
 ) -> uuid.UUID:
     """
     Track element click.

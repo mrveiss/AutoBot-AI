@@ -43,15 +43,15 @@ Usage:
 
 import hashlib
 import json
-import logging
 import time
 from dataclasses import asdict, dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.ssot_config import config
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Redis key prefix for approval memory
 REDIS_KEY_PREFIX = "autobot:approval_memory"
@@ -67,7 +67,7 @@ class ApprovalRecord:
     user_id: str  # User who approved
     created_at: float  # Unix timestamp
     original_command: str  # Original command that was approved
-    comment: Optional[str] = None  # Optional approval comment
+    comment: str | None = None  # Optional approval comment
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
@@ -115,9 +115,9 @@ class ApprovalMemoryManager:
 
     def __init__(
         self,
-        ttl: Optional[int] = None,
-        enabled: Optional[bool] = None,
-    ):
+        ttl: int | None = None,
+        enabled: bool | None = None,
+    ) -> None:
         """
         Initialize approval memory manager.
 
@@ -247,7 +247,7 @@ class ApprovalMemoryManager:
         user_id: str,
         risk_level: str,
         tool: str = "Bash",
-        comment: Optional[str] = None,
+        comment: str | None = None,
     ) -> bool:
         """
         Store an approval for future auto-approval.
@@ -397,7 +397,7 @@ class ApprovalMemoryManager:
             logger.error(f"Failed to get project approvals: {e}")
             return []
 
-    async def clear_project_approvals(self, project_path: str, user_id: Optional[str] = None) -> bool:
+    async def clear_project_approvals(self, project_path: str, user_id: str | None = None) -> bool:
         """
         Clear approval memory for a project.
 
@@ -542,7 +542,7 @@ class ApprovalMemoryManager:
 
 
 # Singleton instance for easy access
-_memory_instance: Optional[ApprovalMemoryManager] = None
+_memory_instance: ApprovalMemoryManager | None = None
 
 
 def get_approval_memory() -> ApprovalMemoryManager:

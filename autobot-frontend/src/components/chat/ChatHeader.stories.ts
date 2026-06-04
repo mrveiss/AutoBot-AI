@@ -4,7 +4,6 @@ import ChatHeader from './ChatHeader.vue';
 const meta = {
   title: 'Components/Chat/ChatHeader',
   component: ChatHeader,
-  tags: ['autodocs'],
   argTypes: {
     currentSessionTitle: {
       control: 'text',

@@ -1,7 +1,7 @@
 <template>
   <div ref="container" class="graph3d-container">
     <div v-if="isEmpty" class="graph3d-empty">
-      <i class="fas fa-project-diagram"></i>
+      <Icon name="project-diagram" />
       <p>{{ $t('knowledge.graph.noEntities3D') }}</p>
     </div>
   </div>
@@ -28,6 +28,7 @@
 // Copyright (c) 2026 mrveiss
 // Author: mrveiss
 
+import Icon from '@/components/ui/Icon.vue'
 import { ref, shallowRef, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import ForceGraph3D, { type ForceGraph3DInstance } from '3d-force-graph'
 import SpriteText from 'three-spritetext'

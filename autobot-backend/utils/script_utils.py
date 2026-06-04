@@ -9,7 +9,7 @@ Eliminates code duplication across deployment, backup, and monitoring scripts
 
 import sys
 from datetime import datetime, timezone
-from typing import FrozenSet, Optional
+from typing import FrozenSet
 
 # Issue #380: Module-level frozenset for confirmation responses
 _CONFIRM_TRUE_RESPONSES: FrozenSet[str] = frozenset({"y", "yes", "true", "1"})
@@ -81,7 +81,7 @@ class ScriptFormatter:
             print(f"   {key}: {value}")  # noqa: print
 
     @staticmethod
-    def print_error(message: str, exit_code: Optional[int] = None):
+    def print_error(message: str, exit_code: int | None = None):
         """
         Print formatted error message and optionally exit.
 
@@ -213,7 +213,7 @@ def print_step(step: str, status: str = "info"):
     ScriptFormatter.print_step(step, status)
 
 
-def print_error(message: str, exit_code: Optional[int] = None):
+def print_error(message: str, exit_code: int | None = None):
     """Legacy compatibility function"""
     ScriptFormatter.print_error(message, exit_code)
 

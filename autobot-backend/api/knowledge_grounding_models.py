@@ -23,7 +23,7 @@ Models:
 import time
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import List, Optional
+from typing import List
 from uuid import uuid4
 
 
@@ -147,7 +147,7 @@ class Claim:
     claim_text: str
     source: str
     confidence: float = 0.5
-    timestamp: Optional[float] = None
+    timestamp: float | None = None
     metadata: dict = field(default_factory=dict)
 
     def __post_init__(self):
@@ -174,7 +174,7 @@ class ResearchResult:
     fact_text: str
     source: str
     confidence: float
-    timestamp: Optional[float] = None
+    timestamp: float | None = None
     source_type: str = "research"
     evidence: List[str] = field(default_factory=list)
 
@@ -206,9 +206,9 @@ class ResolvedClaim:
     claim: str
     source: str
     confidence: float
-    kb_fact: Optional[KBFact] = None
-    research_result: Optional[ResearchResult] = None
-    agent_claim: Optional[Claim] = None
+    kb_fact: KBFact | None = None
+    research_result: ResearchResult | None = None
+    agent_claim: Claim | None = None
     update_kb: bool = False
     requires_human_review: bool = False
     reasoning: str = ""
@@ -242,7 +242,7 @@ class Conflict:
     agent_says: Claim
     kb_confidence: float
     agent_confidence: float
-    research_says: Optional[ResearchResult] = None
+    research_says: ResearchResult | None = None
     research_confidence: float = 0.0
     created_at: float = field(default_factory=time.time)
     conflict_id: str = field(default_factory=lambda: str(uuid4()))
@@ -290,9 +290,9 @@ class ReviewTicket:
     conflict: Conflict
     priority: ReviewTicketPriority
     status: ReviewTicketStatus = ReviewTicketStatus.PENDING
-    resolution: Optional[ResolvedClaim] = None
-    resolved_by: Optional[str] = None
-    resolved_at: Optional[float] = None
+    resolution: ResolvedClaim | None = None
+    resolved_by: str | None = None
+    resolved_at: float | None = None
     notes: str = ""
     created_at: float = field(default_factory=time.time)
 

@@ -9,11 +9,11 @@ analysis tools to provide comprehensive code pattern detection.
 """
 
 import asyncio
-import logging
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Set
 
+from autobot_shared.logging_manager import get_logger
 from utils.io_executor import get_analytics_executor
 
 from .complexity_analyzer import ComplexityAnalyzer
@@ -30,7 +30,7 @@ from .types import (
     PatternType,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Try to import fingerprinting and anti-pattern detection
 try:
@@ -104,7 +104,7 @@ class CodePatternAnalyzer:
         enable_complexity_analysis: bool,
         enable_embedding_storage: bool,
         similarity_threshold: float,
-        exclude_dirs: Optional[Set[str]],
+        exclude_dirs: Set[str] | None,
     ) -> None:
         """Initialize feature flags and configuration settings. Issue #620."""
         self.enable_clone_detection = enable_clone_detection and FINGERPRINTING_AVAILABLE
@@ -145,7 +145,7 @@ class CodePatternAnalyzer:
         enable_complexity_analysis: bool = True,
         enable_embedding_storage: bool = True,
         similarity_threshold: float = 0.8,
-        exclude_dirs: Optional[Set[str]] = None,
+        exclude_dirs: Set[str] | None = None,
         cc_threshold: int = 10,
         mi_threshold: float = 50,
     ):
@@ -266,9 +266,9 @@ class CodePatternAnalyzer:
     async def analyze_directory(
         self,
         directory: str,
-        progress_callback: Optional[Any] = None,
-        checkpoint_callback: Optional[Any] = None,
-        resume_from: Optional[Dict[str, Any]] = None,
+        progress_callback: Any | None = None,
+        checkpoint_callback: Any | None = None,
+        resume_from: Dict[str, Any] | None = None,
     ) -> PatternAnalysisReport:
         """Analyze a directory for code patterns using batched processing.
 
@@ -367,7 +367,7 @@ class CodePatternAnalyzer:
     def _apply_resume_checkpoint(
         self,
         report: PatternAnalysisReport,
-        resume_from: Optional[Dict[str, Any]],
+        resume_from: Dict[str, Any] | None,
         total_batches: int,
     ) -> int:
         """Restore partial results from a checkpoint and return start batch.
@@ -397,7 +397,7 @@ class CodePatternAnalyzer:
         start_batch: int,
         report: PatternAnalysisReport,
         progress_fn: Any,
-        checkpoint_callback: Optional[Any],
+        checkpoint_callback: Any | None,
         file_count: int,
     ) -> None:
         """Run per-file analyzers in batches with checkpointing.
@@ -723,7 +723,7 @@ class CodePatternAnalyzer:
             report.modularization_suggestions.extend(result.get("modularization", []))
             report.other_patterns.extend(result.get("other_patterns", []))
 
-    def _clone_group_to_duplicate(self, group) -> Optional[DuplicatePattern]:
+    def _clone_group_to_duplicate(self, group) -> DuplicatePattern | None:
         """Convert CloneGroup to DuplicatePattern.
 
         Args:
@@ -790,7 +790,7 @@ class CodePatternAnalyzer:
         }
         return pattern.pattern_type.value.lower() in modularization_types
 
-    def _to_modularization_suggestion(self, pattern) -> Optional[ModularizationSuggestion]:
+    def _to_modularization_suggestion(self, pattern) -> ModularizationSuggestion | None:
         """Convert anti-pattern to modularization suggestion.
 
         Args:
@@ -831,7 +831,7 @@ class CodePatternAnalyzer:
             ],
         )
 
-    def _anti_pattern_to_code_pattern(self, pattern) -> Optional[CodePattern]:
+    def _anti_pattern_to_code_pattern(self, pattern) -> CodePattern | None:
         """Convert anti-pattern to generic CodePattern.
 
         Args:
@@ -873,7 +873,7 @@ class CodePatternAnalyzer:
             confidence=0.7,
         )
 
-    async def _prepare_duplicate_pattern_for_storage(self, dup: DuplicatePattern) -> Optional[Dict[str, Any]]:
+    async def _prepare_duplicate_pattern_for_storage(self, dup: DuplicatePattern) -> Dict[str, Any] | None:
         """Prepare a duplicate pattern for ChromaDB storage. Issue #620.
 
         Args:
@@ -897,7 +897,7 @@ class CodePatternAnalyzer:
             },
         }
 
-    async def _prepare_regex_pattern_for_storage(self, regex_opp: Any) -> Optional[Dict[str, Any]]:
+    async def _prepare_regex_pattern_for_storage(self, regex_opp: Any) -> Dict[str, Any] | None:
         """Prepare a regex opportunity pattern for ChromaDB storage. Issue #620.
 
         Args:

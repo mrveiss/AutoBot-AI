@@ -7,16 +7,16 @@ MeshSeeder — creates structural and semantic edges in the mesh graph (#1994, #
 Part of Neural Mesh RAG Phase 2, Task 2.4.
 """
 
-import logging
 from itertools import combinations
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 import numpy as np
 
+from autobot_shared.logging_manager import get_logger
 from knowledge.pipeline.base import BaseLoader, PipelineContext
 from knowledge.pipeline.registry import TaskRegistry
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _EdgeDict = Dict[str, Any]
 
@@ -25,7 +25,7 @@ _EdgeDict = Dict[str, Any]
 class MeshSeeder(BaseLoader):
     """Seeds the mesh graph with structural, entity-based, and typed relationship edges."""
 
-    def __init__(self, db: Optional[Any] = None, similarity_threshold: float = 0.82) -> None:
+    def __init__(self, db: Any | None = None, similarity_threshold: float = 0.82) -> None:
         """
         Initialize MeshSeeder.
 
@@ -49,7 +49,7 @@ class MeshSeeder(BaseLoader):
         chunks = context.chunks or []
         entities = context.entities or []
         relationships = context.relationships or []
-        embeddings: Optional[np.ndarray] = context.metadata.get("embeddings")
+        embeddings: np.ndarray | None = context.metadata.get("embeddings")
 
         nodes = self._build_node_list(chunks)
         edges: List[_EdgeDict] = []
@@ -197,7 +197,7 @@ class MeshSeeder(BaseLoader):
     def _build_similar_to_edges(
         self,
         nodes: List[Dict[str, Any]],
-        embeddings: Optional[np.ndarray] = None,
+        embeddings: np.ndarray | None = None,
     ) -> List[_EdgeDict]:
         """Create SIMILAR_TO edges for chunk pairs with cosine similarity >= threshold (#2049)."""
         if embeddings is None or len(embeddings) < 2:

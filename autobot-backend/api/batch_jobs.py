@@ -13,13 +13,12 @@ Issue #1287: Consolidated from batch.py — legacy batch optimization endpoints
 
 import asyncio
 import json
-import logging
 import os
 import uuid
 from datetime import datetime, timezone
-from typing import Dict, List, Optional
+from typing import Dict, List
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from api.schemas_workflows import (
     APIBatchRequest,
@@ -40,13 +39,14 @@ from api.schemas_workflows import (
     BatchTemplate,
     BatchTemplateDeleteResponse,
 )
-from api.system_health import ComponentHealth, register_health_probe
+from api.system_health import register_redis_probe
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.models.pagination import PaginationParams
-from autobot_shared.redis_client import get_async_redis_client, get_redis_client
+from autobot_shared.redis_client import get_redis_client
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 router = APIRouter(tags=["batch-jobs", "management"])
 
 
@@ -150,8 +150,8 @@ async def create_batch_job(
     error_code_prefix="BATCH_JOBS",
 )
 async def list_batch_jobs(
-    status: Optional[BatchJobStatus] = Query(None, description="Filter by status"),
-    job_type: Optional[BatchJobType] = Query(None, description="Filter by type"),
+    status: BatchJobStatus | None = Query(None, description="Filter by status"),
+    job_type: BatchJobType | None = Query(None, description="Filter by type"),
     pagination: PaginationParams = Depends(),
     current_user: dict = Depends(get_current_user),
 ):
@@ -574,86 +574,13 @@ async def delete_batch_schedule(
 # =============================================================================
 
 
-@register_health_probe("batch_jobs")
-async def probe_batch_jobs(
-    request: Optional[Request] = None,
-) -> ComponentHealth:
-    """Issue #6902: probe with rich data so the frontend can read
-    ``probes[name=batch_jobs].data.redis_connected`` from /api/system/health.
-
-    Mirrors the legacy /api/batch-jobs/health response keys.
-    """
-    try:
-        client = await get_async_redis_client(database="main")
-        if client is None:
-            return ComponentHealth(
-                name="batch_jobs",
-                status="down",
-                detail="redis client unavailable",
-                data={"redis_connected": False, "service": "batch_jobs_manager"},
-            )
-        redis_connected = True
-        try:
-            await client.ping()
-        except Exception:
-            redis_connected = False
-        return ComponentHealth(
-            name="batch_jobs",
-            status="ok" if redis_connected else "degraded",
-            detail=None if redis_connected else "redis ping failed",
-            data={
-                "redis_connected": redis_connected,
-                "service": "batch_jobs_manager",
-            },
-        )
-    except Exception as exc:
-        return ComponentHealth(
-            name="batch_jobs",
-            status="down",
-            detail=f"probe error: {type(exc).__name__}",
-            data={"redis_connected": False, "service": "batch_jobs_manager"},
-        )
-
-
-@router.get("/health", response_model=BatchJobsHealthResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_batch_jobs_health",
-    error_code_prefix="BATCH_JOBS",
+# Issue #6914: re-migrated from hand-written probe to one-liner now that
+# register_redis_probe accepts data_callback for module-specific fields.
+register_redis_probe(
+    "batch_jobs",
+    database="main",
+    data_callback=lambda ok: {"redis_connected": ok, "service": "batch_jobs_manager"},
 )
-async def get_batch_jobs_health(
-    current_user: dict = Depends(get_current_user),
-):
-    """
-    Get batch jobs service health status.
-
-    Issue #744: Requires authenticated user.
-
-    Returns:
-        dict: Service health information
-    """
-    redis_client = get_redis_client(database="main")
-    redis_healthy = redis_client is not None
-
-    if redis_healthy:
-        try:
-            redis_client.ping()
-        except Exception as e:
-            logger.warning("Redis ping failed: %s", e)
-            redis_healthy = False
-
-    return {
-        "status": "healthy" if redis_healthy else "degraded",
-        "service": "batch_jobs_manager",
-        "redis_connected": redis_healthy,
-        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
-        "capabilities": [
-            "job_management",
-            "template_management",
-            "schedule_management",
-            "log_tracking",
-        ],
-    }
 
 
 # =============================================================================

@@ -11,14 +11,13 @@ The router delegates every request to AutoBotMCPServer.handle_request(),
 which handles auth, rate limiting, and tool dispatch internally.
 """
 
-import logging
-
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
+from autobot_shared.logging_manager import get_logger
 from mcp.autobot_server import AutoBotMCPServer
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(tags=["mcp", "autobot-mcp"])
 
@@ -71,6 +70,8 @@ async def mcp_tool_call(request: Request) -> JSONResponse:
         code = response["error"].get("code", -32000)
         if code == -32001:
             status = 401
+        elif code == -32003:
+            status = 403
         elif code == -32029:
             status = 429
 

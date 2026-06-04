@@ -7,15 +7,15 @@ Unit tests for SummarySearchService with mocked ChromaDB.
 Issue #1075: Test coverage for summary search and drill-down.
 """
 
-import logging
 from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
 
+from autobot_shared.logging_manager import get_logger
 from knowledge.summary_search import SummarySearchService
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # --- Fixtures ---

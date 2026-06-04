@@ -19,10 +19,11 @@ Design:
   itself is async only to be compatible with the async call sites.
 """
 
-import logging
 from typing import Any
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 
 # Fire snapshot when estimated context usage exceeds this fraction.
 CONTEXT_LIMIT_THRESHOLD: float = 0.85
@@ -119,7 +120,7 @@ async def on_pre_compact(
         usage,
         CONTEXT_LIMIT_THRESHOLD,
         session_id,
-        model_name,
+        model_name,  # codeql[py/clear-text-logging-sensitive-data]
     )
 
     # Build a compact snapshot from the last N messages.

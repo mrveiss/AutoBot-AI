@@ -58,9 +58,9 @@ const errorStats = ref<ErrorStats | null>(null)
 interface MonitoringError {
   id: string
   level: string
-  component: string
   message: string
   timestamp: string
+  resolved: boolean
 }
 
 const recentErrors = ref<MonitoringError[]>([])
@@ -212,8 +212,8 @@ onUnmounted(() => {
           </svg>
         </div>
         <div>
-          <h1 class="text-2xl font-bold text-gray-900">Admin Monitoring</h1>
-          <p class="text-sm text-gray-500">AutoBot system health and error tracking</p>
+          <h1 class="text-2xl font-bold text-gray-900">{{ $t('monitoring.admin.adminMonitoringView.adminMonitoring') }}</h1>
+          <p class="text-sm text-gray-500">{{ $t('monitoring.admin.adminMonitoringView.autoBotSystemHealthAnd') }}</p>
         </div>
       </div>
 
@@ -233,7 +233,7 @@ onUnmounted(() => {
           <svg class="w-4 h-4" :class="{ 'animate-spin': loading }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
           </svg>
-          Refresh
+          {{ $t('monitoring.admin.adminMonitoringView.refresh') }}
         </button>
       </div>
     </div>
@@ -268,7 +268,7 @@ onUnmounted(() => {
       <!-- System Resources -->
       <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
         <div class="flex items-center justify-between mb-2">
-          <span class="text-sm text-gray-500">CPU Usage</span>
+          <span class="text-sm text-gray-500">{{ $t('monitoring.admin.adminMonitoringView.cPUUsage') }}</span>
           <span :class="[
             'text-lg font-bold',
             (systemHealth?.cpu_percent ?? 0) > 80 ? 'text-red-600' :
@@ -291,7 +291,7 @@ onUnmounted(() => {
 
       <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
         <div class="flex items-center justify-between mb-2">
-          <span class="text-sm text-gray-500">Memory Usage</span>
+          <span class="text-sm text-gray-500">{{ $t('monitoring.admin.adminMonitoringView.memoryUsage') }}</span>
           <span :class="[
             'text-lg font-bold',
             (systemHealth?.memory_percent ?? 0) > 80 ? 'text-red-600' :
@@ -314,7 +314,7 @@ onUnmounted(() => {
 
       <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
         <div class="flex items-center justify-between mb-2">
-          <span class="text-sm text-gray-500">Disk Usage</span>
+          <span class="text-sm text-gray-500">{{ $t('monitoring.admin.adminMonitoringView.diskUsage') }}</span>
           <span :class="[
             'text-lg font-bold',
             (systemHealth?.disk_percent ?? 0) > 90 ? 'text-red-600' :
@@ -338,7 +338,7 @@ onUnmounted(() => {
       <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
         <div class="flex items-center justify-between">
           <div>
-            <p class="text-sm text-gray-500">Total Errors (24h)</p>
+            <p class="text-sm text-gray-500">{{ $t('monitoring.admin.adminMonitoringView.totalErrors24h') }}</p>
             <p class="text-2xl font-bold text-gray-900">{{ errorStats?.last_24h || 0 }}</p>
           </div>
           <div class="p-3 bg-red-100 rounded-lg">
@@ -359,7 +359,7 @@ onUnmounted(() => {
             <svg class="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            Recent Errors
+            {{ $t('monitoring.admin.adminMonitoringView.recentErrors') }}
           </h2>
         </div>
         <div class="p-6">
@@ -367,7 +367,7 @@ onUnmounted(() => {
             <svg class="w-12 h-12 mx-auto text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            No recent errors
+            {{ $t('monitoring.admin.adminMonitoringView.noRecentErrors') }}
           </div>
           <div v-else class="space-y-3">
             <div
@@ -381,7 +381,6 @@ onUnmounted(() => {
                     <span :class="['px-2 py-0.5 text-xs font-medium rounded-sm', getErrorLevelClass(err.level)]">
                       {{ err.level }}
                     </span>
-                    <span class="text-xs text-gray-500">{{ err.component }}</span>
                   </div>
                   <p class="text-sm text-gray-900 font-medium">{{ err.message }}</p>
                   <p class="text-xs text-gray-500 mt-1">{{ formatDate(err.timestamp) }}</p>
@@ -397,7 +396,7 @@ onUnmounted(() => {
         <!-- Error Breakdown -->
         <div class="bg-white rounded-lg shadow-xs border border-gray-200">
           <div class="px-6 py-4 border-b border-gray-200">
-            <h2 class="text-lg font-semibold text-gray-900">Error Breakdown</h2>
+            <h2 class="text-lg font-semibold text-gray-900">{{ $t('monitoring.admin.adminMonitoringView.errorBreakdown') }}</h2>
           </div>
           <div class="p-6">
             <div v-if="errorStats?.by_level?.length" class="space-y-3">
@@ -413,7 +412,7 @@ onUnmounted(() => {
               </div>
             </div>
             <div v-else class="text-center py-4 text-gray-500 text-sm">
-              No error data available
+              {{ $t('monitoring.admin.adminMonitoringView.noErrorDataAvailable') }}
             </div>
           </div>
         </div>
@@ -421,7 +420,7 @@ onUnmounted(() => {
         <!-- Services Status -->
         <div class="bg-white rounded-lg shadow-xs border border-gray-200">
           <div class="px-6 py-4 border-b border-gray-200">
-            <h2 class="text-lg font-semibold text-gray-900">Services</h2>
+            <h2 class="text-lg font-semibold text-gray-900">{{ $t('monitoring.admin.adminMonitoringView.services') }}</h2>
           </div>
           <div class="p-6">
             <div v-if="systemHealth?.services?.length" class="space-y-2">
@@ -442,7 +441,7 @@ onUnmounted(() => {
               </div>
             </div>
             <div v-else class="text-center py-4 text-gray-500 text-sm">
-              No service data available
+              {{ $t('monitoring.admin.adminMonitoringView.noServiceDataAvailable') }}
             </div>
           </div>
         </div>

@@ -8,13 +8,13 @@ This module provides strongly-typed configuration management using Pydantic Sett
 replacing the manual config handling with validated, type-safe configuration models.
 """
 
-import logging
 import os
-from typing import Dict, List, Optional
+from typing import Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from type_defs.common import Metadata
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 import yaml
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -41,11 +41,11 @@ class LLMSettings(BaseSettings):
     ollama_base_url: str = Field(default=ServiceURLs.OLLAMA_LOCAL, description="Ollama base URL")
 
     # OpenAI configuration (optional)
-    openai_api_key: Optional[str] = Field(default=None, description="OpenAI API key")
+    openai_api_key: str | None = Field(default=None, description="OpenAI API key")
     openai_model: str = Field(default=OPENAI_GPT35_TURBO, description="OpenAI model")
 
     # HuggingFace configuration (optional)
-    huggingface_api_key: Optional[str] = Field(default=None, description="HuggingFace API key")
+    huggingface_api_key: str | None = Field(default=None, description="HuggingFace API key")
     huggingface_model: str = Field(default="microsoft/DialoGPT-medium", description="HuggingFace model")
 
     model_config = SettingsConfigDict(env_prefix="AUTOBOT_", case_sensitive=False)
@@ -58,7 +58,7 @@ class RedisSettings(BaseSettings):
     host: str = Field(default="localhost", description="Redis server host")
     port: int = Field(default=NetworkConstants.REDIS_PORT, description="Redis server port")
     db: int = Field(default=1, description="Redis database number")
-    password: Optional[str] = Field(default=None, description="Redis password")
+    password: str | None = Field(default=None, description="Redis password")
 
     @field_validator("port")
     @classmethod

@@ -14,16 +14,16 @@ Extracted from performance_monitor.py as part of Issue #381 refactoring.
 """
 
 import asyncio
-import logging
 import os
 import time
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import aiohttp
 import psutil
 
 from autobot_shared.http_client import get_http_client
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config as _ssot
 from constants.network_constants import NetworkConstants
 from utils.performance_monitoring.hardware import HardwareDetector
@@ -36,7 +36,7 @@ from utils.performance_monitoring.metrics import (
 )
 from utils.performance_monitoring.types import AUTOBOT_PROCESS_KEYWORDS
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class GPUCollector:
@@ -46,7 +46,7 @@ class GPUCollector:
         """Initialize GPU collector."""
         self.gpu_available = gpu_available
 
-    def _parse_metric_value(self, parts: List[str], index: int, as_int: bool = False) -> Optional[Any]:
+    def _parse_metric_value(self, parts: List[str], index: int, as_int: bool = False) -> Any | None:
         """Parse GPU metric value from nvidia-smi output."""
         if index >= len(parts):
             return None
@@ -70,7 +70,7 @@ class GPUCollector:
         power_throttling = (parts[15] == "Active" or parts[17] == "Active") if len(parts) > 17 else False
         return thermal_throttling, power_throttling
 
-    def _build_metrics(self, parts: List[str]) -> Optional[GPUMetrics]:
+    def _build_metrics(self, parts: List[str]) -> GPUMetrics | None:
         """Build GPUMetrics from parsed nvidia-smi output."""
         if len(parts) < 8:
             return None
@@ -100,7 +100,7 @@ class GPUCollector:
             power_throttling=power_throttling,
         )
 
-    async def collect(self) -> Optional[GPUMetrics]:
+    async def collect(self) -> GPUMetrics | None:
         """Collect comprehensive GPU performance metrics."""
         if not self.gpu_available:
             return None
@@ -168,7 +168,7 @@ class NPUCollector:
         except Exception:
             return {}
 
-    async def collect(self) -> Optional[NPUMetrics]:
+    async def collect(self) -> NPUMetrics | None:
         """Collect Intel NPU performance metrics."""
         if not self.npu_available:
             return None
@@ -409,7 +409,7 @@ class ServiceCollector:
         except Exception:
             return "offline"
 
-    async def _collect_single_service(self, service_config: Dict[str, Any]) -> Optional[ServicePerformanceMetrics]:
+    async def _collect_single_service(self, service_config: Dict[str, Any]) -> ServicePerformanceMetrics | None:
         """Collect metrics for a single service."""
         try:
             service_name = service_config["name"]
@@ -509,7 +509,7 @@ class MultiModalCollector:
         """Initialize multimodal collector."""
         self.redis_client = redis_client
 
-    async def collect(self) -> Optional[MultiModalMetrics]:
+    async def collect(self) -> MultiModalMetrics | None:
         """Collect multi-modal AI processing performance metrics."""
         try:
             if self.redis_client:

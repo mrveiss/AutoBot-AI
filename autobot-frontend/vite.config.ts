@@ -63,6 +63,12 @@ export default defineConfig(({ mode }) => {
     },
     css: { devSourcemap: true, postcss: './postcss.config.js' },
     resolve: {
+      // preserveSymlinks: true resolves modules relative to the symlink path
+      // (node_modules/@autobot/terminal) not the real path (../../autobot-plugins/…).
+      // Without this, rolldown walks up from the real plugin path and misses
+      // pinia/vue in the frontend's node_modules. Required for file: workspace
+      // packages (same fix applied to slm-frontend in #8482 / MVA-893).
+      preserveSymlinks: true,
       alias: { '@': fileURLToPath(new URL('./src', import.meta.url)), 'vue': 'vue/dist/vue.esm-bundler.js' }
     },
     server: {

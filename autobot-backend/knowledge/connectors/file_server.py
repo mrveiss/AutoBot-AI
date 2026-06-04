@@ -12,12 +12,12 @@ PDF and DOCX are logged as warnings and skipped (future extension point).
 import asyncio
 import fnmatch
 import hashlib
-import logging
 import mimetypes
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import List, Optional
+from typing import List
 
+from autobot_shared.logging_manager import get_logger
 from knowledge.connectors.base import AbstractConnector
 from knowledge.connectors.models import (
     ChangeInfo,
@@ -27,7 +27,7 @@ from knowledge.connectors.models import (
 )
 from knowledge.connectors.registry import ConnectorRegistry
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # File extensions this connector can read as plain text
 _SUPPORTED_EXTENSIONS = {
@@ -67,6 +67,21 @@ class FileServerConnector(AbstractConnector):
     connector_type = "file_server"
     # Issue #4421: zero-config — needs only a mount point, no credentials.
     tier = 0
+
+    @classmethod
+    def output_schema(cls) -> dict:
+        """Issue #8147: JSONSchema for FileServerConnector ContentResult.metadata."""
+        return {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string"},
+                "name": {"type": "string"},
+                "relative_path": {"type": "string"},
+                "extension": {"type": "string"},
+                "connector_id": {"type": "string"},
+            },
+            "required": ["path", "name", "extension"],
+        }
 
     def __init__(self, config: ConnectorConfig) -> None:
         super().__init__(config)
@@ -111,11 +126,11 @@ class FileServerConnector(AbstractConnector):
         """Scan base_path recursively and return a SourceInfo per matching file."""
         return await asyncio.to_thread(self._scan_files_sync)
 
-    async def fetch_content(self, source_id: str) -> Optional[ContentResult]:
+    async def fetch_content(self, source_id: str) -> ContentResult | None:
         """Read and return file content for *source_id* (which is the file path)."""
         return await asyncio.to_thread(self._read_file_sync, source_id)
 
-    async def detect_changes(self, since: Optional[datetime] = None) -> List[ChangeInfo]:
+    async def detect_changes(self, since: datetime | None = None) -> List[ChangeInfo]:
         """Compare current file mtimes against *since* and report changes."""
         sources = await self.discover_sources()
         changes: List[ChangeInfo] = []
@@ -215,7 +230,7 @@ class FileServerConnector(AbstractConnector):
         logger.debug("Scanned %d sources from %s", len(sources), self._base_path)
         return sources
 
-    def _read_file_sync(self, source_id: str) -> Optional[ContentResult]:
+    def _read_file_sync(self, source_id: str) -> ContentResult | None:
         """Blocking file read — run via asyncio.to_thread (Issue #1254)."""
         # source_id is a hash; we must scan to find the matching path
         sources = self._scan_files_sync()

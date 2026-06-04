@@ -9,19 +9,18 @@ Issue #873 - Activity Tracking Integration Hooks (#608 Phase 5)
 Integration hooks for tracking file system operation activities.
 """
 
-import logging
 import uuid
 from pathlib import Path
-from typing import Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.logging_manager import get_logger
 from utils.activity_tracker import track_file_activity
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
-def _resolve_file_type(path: str) -> Optional[str]:
+def _resolve_file_type(path: str) -> str | None:
     """Helper for track_file_operation. Ref: #1088."""
     file_type = None
     try:
@@ -38,10 +37,10 @@ async def _call_track_file_activity(
     user_id: uuid.UUID,
     operation: str,
     path: str,
-    session_id: Optional[str],
-    new_path: Optional[str],
-    file_type: Optional[str],
-    size_bytes: Optional[int],
+    session_id: str | None,
+    new_path: str | None,
+    file_type: str | None,
+    size_bytes: int | None,
 ) -> uuid.UUID:
     """Helper for track_file_operation. Ref: #1088."""
     try:
@@ -70,9 +69,9 @@ async def track_file_operation(
     user_id: uuid.UUID,
     operation: str,
     path: str,
-    session_id: Optional[str] = None,
-    new_path: Optional[str] = None,
-    size_bytes: Optional[int] = None,
+    session_id: str | None = None,
+    new_path: str | None = None,
+    size_bytes: int | None = None,
 ) -> uuid.UUID:
     """
     Track file system operation.
@@ -119,8 +118,8 @@ async def track_file_upload(
     user_id: uuid.UUID,
     path: str,
     size_bytes: int,
-    session_id: Optional[str] = None,
-    mime_type: Optional[str] = None,
+    session_id: str | None = None,
+    mime_type: str | None = None,
 ) -> uuid.UUID:
     """
     Track file upload operation.
@@ -161,7 +160,7 @@ async def track_file_download(
     db: AsyncSession,
     user_id: uuid.UUID,
     path: str,
-    session_id: Optional[str] = None,
+    session_id: str | None = None,
 ) -> uuid.UUID:
     """
     Track file download operation.

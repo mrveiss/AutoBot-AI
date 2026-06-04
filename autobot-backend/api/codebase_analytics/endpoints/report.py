@@ -10,15 +10,15 @@ Includes:
 """
 
 import asyncio
-import logging
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Set, Tuple
 
 from fastapi import APIRouter
 from fastapi.responses import PlainTextResponse
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from code_intelligence.bug_predictor import BugPredictor, PredictionResult
 
 # Issue #244: Cross-Language Pattern Detection
@@ -58,7 +58,7 @@ from .shared import (
     resolve_source_root,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter()
 
@@ -203,7 +203,7 @@ def _generate_category_section(
     problems: List[Dict],
     category: str,
     section_title: str,
-    note: Optional[str] = None,
+    note: str | None = None,
 ) -> List[str]:
     """
     Generate markdown section for a category of problems.
@@ -590,7 +590,7 @@ def _generate_most_used_section(analysis: APIEndpointAnalysis) -> List[str]:
 
 
 def _generate_api_endpoint_section(
-    analysis: Optional[APIEndpointAnalysis],
+    analysis: APIEndpointAnalysis | None,
 ) -> List[str]:
     """
     Generate the API Endpoint Analysis section for the report (Issue #527).
@@ -724,7 +724,7 @@ def _shorten_path(path: str, max_length: int = 50) -> str:
 
 
 def _generate_duplicate_code_section(
-    analysis: Optional[DuplicateAnalysis],
+    analysis: DuplicateAnalysis | None,
 ) -> List[str]:
     """
     Generate the Duplicate Code Analysis section for the report (Issue #528).
@@ -1119,7 +1119,7 @@ def _generate_pattern_recommendations(report: PatternAnalysisReport) -> List[str
 
 
 def _generate_pattern_analysis_section(
-    report: Optional[PatternAnalysisReport],
+    report: PatternAnalysisReport | None,
 ) -> List[str]:
     """
     Generate the Code Pattern Analysis section for the report (Issue #208).
@@ -1153,7 +1153,7 @@ def _generate_pattern_analysis_section(
 
 
 def _generate_cross_language_section(
-    analysis: Optional[CrossLanguageAnalysis],
+    analysis: CrossLanguageAnalysis | None,
 ) -> List[str]:
     """
     Generate the Cross-Language Pattern Analysis section for the report (Issue #244).
@@ -1214,8 +1214,8 @@ def _generate_cross_language_section(
 
 
 def _fetch_problems_from_chromadb(
-    source_id: Optional[str] = None,
-    source_root: Optional[Path] = None,
+    source_id: str | None = None,
+    source_root: Path | None = None,
 ) -> List[Dict]:
     """
     Fetch code problems from ChromaDB collection.
@@ -1312,7 +1312,7 @@ def _build_analysis_task_list(
     return tasks
 
 
-def _get_empty_analysis_result() -> Dict[str, Optional[object]]:
+def _get_empty_analysis_result() -> Dict[str, object | None]:
     """
     Return empty analysis result dictionary.
 
@@ -1334,7 +1334,7 @@ async def _run_parallel_analyses(
     include_cross_language_analysis: bool,
     include_pattern_analysis: bool,
     use_semantic: bool,
-) -> Dict[str, Optional[object]]:
+) -> Dict[str, object | None]:
     """
     Run multiple code analyses in parallel.
 
@@ -1388,11 +1388,11 @@ def _build_empty_report_header() -> List[str]:
 
 
 def _check_has_analyses(
-    api_endpoint_analysis: Optional[APIEndpointAnalysis],
-    duplicate_analysis: Optional[DuplicateAnalysis],
-    cross_language_analysis: Optional[CrossLanguageAnalysis],
-    pattern_analysis: Optional[PatternAnalysisReport],
-    bug_prediction: Optional[PredictionResult],
+    api_endpoint_analysis: APIEndpointAnalysis | None,
+    duplicate_analysis: DuplicateAnalysis | None,
+    cross_language_analysis: CrossLanguageAnalysis | None,
+    pattern_analysis: PatternAnalysisReport | None,
+    bug_prediction: PredictionResult | None,
 ) -> bool:
     """
     Check if any analyses have meaningful results.
@@ -1409,11 +1409,11 @@ def _check_has_analyses(
 
 
 def _generate_empty_report_with_analyses(
-    api_endpoint_analysis: Optional[APIEndpointAnalysis],
-    duplicate_analysis: Optional[DuplicateAnalysis],
-    cross_language_analysis: Optional[CrossLanguageAnalysis],
-    pattern_analysis: Optional[PatternAnalysisReport],
-    bug_prediction: Optional[PredictionResult],
+    api_endpoint_analysis: APIEndpointAnalysis | None,
+    duplicate_analysis: DuplicateAnalysis | None,
+    cross_language_analysis: CrossLanguageAnalysis | None,
+    pattern_analysis: PatternAnalysisReport | None,
+    bug_prediction: PredictionResult | None,
 ) -> str:
     """
     Generate report when no code issues are detected but analyses are available.
@@ -1448,7 +1448,7 @@ def _generate_empty_report_with_analyses(
     return "\n".join(lines)
 
 
-async def _get_cross_language_analysis() -> Optional[CrossLanguageAnalysis]:
+async def _get_cross_language_analysis() -> CrossLanguageAnalysis | None:
     """
     Get cross-language pattern analysis for the project (Issue #244).
 
@@ -1481,7 +1481,7 @@ async def _get_cross_language_analysis() -> Optional[CrossLanguageAnalysis]:
         return None
 
 
-async def _get_pattern_analysis() -> Optional[PatternAnalysisReport]:
+async def _get_pattern_analysis() -> PatternAnalysisReport | None:
     """
     Get code pattern analysis for the project (Issue #208).
 
@@ -1522,7 +1522,7 @@ async def _get_pattern_analysis() -> Optional[PatternAnalysisReport]:
         return None
 
 
-async def _get_duplicate_analysis() -> Optional[DuplicateAnalysis]:
+async def _get_duplicate_analysis() -> DuplicateAnalysis | None:
     """
     Get duplicate code analysis for the project (Issue #528).
 
@@ -1560,7 +1560,7 @@ async def _get_duplicate_analysis() -> Optional[DuplicateAnalysis]:
         return None
 
 
-async def _get_api_endpoint_analysis() -> Optional[APIEndpointAnalysis]:
+async def _get_api_endpoint_analysis() -> APIEndpointAnalysis | None:
     """
     Get API endpoint analysis for the project (Issue #527).
 
@@ -1584,10 +1584,10 @@ async def _get_api_endpoint_analysis() -> Optional[APIEndpointAnalysis]:
 
 
 async def _get_bug_prediction(
-    project_root: Optional[str] = None,
+    project_root: str | None = None,
     limit: int = BUG_PREDICTION_FILE_LIMIT,
     use_semantic: bool = False,
-) -> Optional[PredictionResult]:
+) -> PredictionResult | None:
     """
     Get bug prediction data for the project (Issue #505).
 
@@ -1770,7 +1770,7 @@ def _format_correlation_table(
 
 def _build_correlation_section(
     problems: List[Dict],
-    prediction: Optional[PredictionResult],
+    prediction: PredictionResult | None,
 ) -> List[str]:
     """
     Build cross-reference section showing files with both issues AND high risk.
@@ -1834,10 +1834,10 @@ def _insert_correlation_into_bug_risk(
 
 
 def _build_analysis_sections(
-    api_endpoint_analysis: Optional[APIEndpointAnalysis],
-    duplicate_analysis: Optional[DuplicateAnalysis],
-    cross_language_analysis: Optional[CrossLanguageAnalysis],
-    pattern_analysis: Optional[PatternAnalysisReport],
+    api_endpoint_analysis: APIEndpointAnalysis | None,
+    duplicate_analysis: DuplicateAnalysis | None,
+    cross_language_analysis: CrossLanguageAnalysis | None,
+    pattern_analysis: PatternAnalysisReport | None,
 ) -> List[str]:
     """
     Build all analysis sections for the report.
@@ -1875,7 +1875,7 @@ def _build_analysis_sections(
 
 
 def _build_bug_prediction_section(
-    bug_prediction: Optional[PredictionResult],
+    bug_prediction: PredictionResult | None,
     problems: List[Dict],
 ) -> List[str]:
     """
@@ -1901,12 +1901,12 @@ def _build_bug_prediction_section(
 
 def _generate_markdown_report(
     problems: List[Dict],
-    analyzed_path: Optional[str] = None,
-    bug_prediction: Optional[PredictionResult] = None,
-    api_endpoint_analysis: Optional[APIEndpointAnalysis] = None,
-    duplicate_analysis: Optional[DuplicateAnalysis] = None,
-    cross_language_analysis: Optional[CrossLanguageAnalysis] = None,
-    pattern_analysis: Optional[PatternAnalysisReport] = None,
+    analyzed_path: str | None = None,
+    bug_prediction: PredictionResult | None = None,
+    api_endpoint_analysis: APIEndpointAnalysis | None = None,
+    duplicate_analysis: DuplicateAnalysis | None = None,
+    cross_language_analysis: CrossLanguageAnalysis | None = None,
+    pattern_analysis: PatternAnalysisReport | None = None,
 ) -> str:
     """
     Generate a Markdown report from problems list.
@@ -2007,7 +2007,7 @@ async def generate_analysis_report(
     include_pattern_analysis: bool = True,
     quick: bool = False,
     use_semantic: bool = False,
-    source_id: Optional[str] = None,
+    source_id: str | None = None,
 ):
     """
     Generate a code analysis report from the indexed data.

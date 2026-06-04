@@ -177,7 +177,7 @@ onUnmounted(() => {
       <div class="text-4xl mb-4">⚠️</div>
       <p class="text-gray-700 mb-4">{{ error }}</p>
       <button @click="retry" class="btn btn-primary">
-        Retry
+        {{ $t('monitoring.grafanaDashboard.retry') }}
       </button>
     </div>
 
@@ -197,19 +197,19 @@ onUnmounted(() => {
     <!-- Controls -->
     <div class="controls" v-if="showControls && !loading && !error">
       <select v-model="selectedTimeRange" @change="updateTimeRange" class="select-sm">
-        <option value="now-15m">Last 15 minutes</option>
-        <option value="now-1h">Last 1 hour</option>
-        <option value="now-6h">Last 6 hours</option>
-        <option value="now-1d">Last 24 hours</option>
-        <option value="now-7d">Last 7 days</option>
+        <option value="now-15m">{{ $t('monitoring.grafanaDashboard.last15Minutes') }}</option>
+        <option value="now-1h">{{ $t('monitoring.grafanaDashboard.last1Hour') }}</option>
+        <option value="now-6h">{{ $t('monitoring.grafanaDashboard.last6Hours') }}</option>
+        <option value="now-1d">{{ $t('monitoring.grafanaDashboard.last24Hours') }}</option>
+        <option value="now-7d">{{ $t('monitoring.grafanaDashboard.last7Days') }}</option>
       </select>
 
       <select v-model="selectedRefresh" @change="updateRefresh" class="select-sm">
-        <option value="5s">Refresh: 5s</option>
-        <option value="10s">Refresh: 10s</option>
-        <option value="30s">Refresh: 30s</option>
-        <option value="1m">Refresh: 1m</option>
-        <option value="off">Refresh: Off</option>
+        <option value="5s">{{ $t('monitoring.grafanaDashboard.refresh5s') }}</option>
+        <option value="10s">{{ $t('monitoring.grafanaDashboard.refresh10s') }}</option>
+        <option value="30s">{{ $t('monitoring.grafanaDashboard.refresh30s') }}</option>
+        <option value="1m">{{ $t('monitoring.grafanaDashboard.refresh1m') }}</option>
+        <option value="off">{{ $t('monitoring.grafanaDashboard.refreshOff') }}</option>
       </select>
 
       <button

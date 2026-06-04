@@ -10,11 +10,11 @@ for debugging and monitoring purposes.
 
 import logging
 import time
-from typing import Optional
 
+from autobot_shared.logging_manager import get_logger
 from extensions.base import Extension, HookContext
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class LoggingExtension(Extension):
@@ -50,7 +50,7 @@ class LoggingExtension(Extension):
         self.include_data = False
         self._session_start_times: dict = {}
 
-    async def on_before_message_process(self, ctx: HookContext) -> Optional[None]:
+    async def on_before_message_process(self, ctx: HookContext) -> None | None:
         """Log message processing start."""
         message_preview = ctx.message[:100] if ctx.message else "(empty)"
         if len(ctx.message) > 100:
@@ -71,7 +71,7 @@ class LoggingExtension(Extension):
 
         return None
 
-    async def on_after_prompt_build(self, ctx: HookContext) -> Optional[str]:
+    async def on_after_prompt_build(self, ctx: HookContext) -> str | None:
         """Log prompt building."""
         prompt = ctx.get("prompt", "")
         logger.log(
@@ -82,7 +82,7 @@ class LoggingExtension(Extension):
         )
         return None  # Don't modify prompt
 
-    async def on_before_llm_call(self, ctx: HookContext) -> Optional[bool]:
+    async def on_before_llm_call(self, ctx: HookContext) -> bool | None:
         """Log LLM call start."""
         model = ctx.get("model", "unknown")
         logger.log(
@@ -93,7 +93,7 @@ class LoggingExtension(Extension):
         )
         return None  # Don't cancel
 
-    async def on_after_llm_response(self, ctx: HookContext) -> Optional[str]:
+    async def on_after_llm_response(self, ctx: HookContext) -> str | None:
         """Log LLM response received."""
         response = ctx.get("response", "")
         logger.log(
@@ -104,7 +104,7 @@ class LoggingExtension(Extension):
         )
         return None  # Don't modify response
 
-    async def on_before_tool_execute(self, ctx: HookContext) -> Optional[bool]:
+    async def on_before_tool_execute(self, ctx: HookContext) -> bool | None:
         """Log tool execution start."""
         tool_name = ctx.get("tool_name", "unknown")
         logger.log(
@@ -120,7 +120,7 @@ class LoggingExtension(Extension):
 
         return None  # Don't cancel
 
-    async def on_after_tool_execute(self, ctx: HookContext) -> Optional[None]:
+    async def on_after_tool_execute(self, ctx: HookContext) -> None | None:
         """Log tool execution complete."""
         tool_name = ctx.get("tool_name", "unknown")
         success = ctx.get("success", True)
@@ -137,7 +137,7 @@ class LoggingExtension(Extension):
         )
         return None
 
-    async def on_tool_error(self, ctx: HookContext) -> Optional[None]:
+    async def on_tool_error(self, ctx: HookContext) -> None | None:
         """Log tool errors."""
         tool_name = ctx.get("tool_name", "unknown")
         error = ctx.get("error", "unknown error")
@@ -150,7 +150,7 @@ class LoggingExtension(Extension):
         )
         return None
 
-    async def on_repairable_error(self, ctx: HookContext) -> Optional[str]:
+    async def on_repairable_error(self, ctx: HookContext) -> str | None:
         """Log repairable errors."""
         error = ctx.get("error", "")
         suggestion = ctx.get("suggestion", "")
@@ -163,7 +163,7 @@ class LoggingExtension(Extension):
         )
         return None  # Don't modify suggestion
 
-    async def on_critical_error(self, ctx: HookContext) -> Optional[None]:
+    async def on_critical_error(self, ctx: HookContext) -> None | None:
         """Log critical errors."""
         error = ctx.get("error", "")
 
@@ -174,7 +174,7 @@ class LoggingExtension(Extension):
         )
         return None
 
-    async def on_loop_complete(self, ctx: HookContext) -> Optional[None]:
+    async def on_loop_complete(self, ctx: HookContext) -> None | None:
         """Log message loop completion with timing."""
         session_id = ctx.session_id or "no-session"
         start_time = self._session_start_times.pop(session_id, None)
@@ -196,7 +196,7 @@ class LoggingExtension(Extension):
 
         return None
 
-    async def on_session_create(self, ctx: HookContext) -> Optional[None]:
+    async def on_session_create(self, ctx: HookContext) -> None | None:
         """Log session creation."""
         logger.log(
             self.log_level,
@@ -205,7 +205,7 @@ class LoggingExtension(Extension):
         )
         return None
 
-    async def on_session_destroy(self, ctx: HookContext) -> Optional[None]:
+    async def on_session_destroy(self, ctx: HookContext) -> None | None:
         """Log session destruction."""
         logger.log(
             self.log_level,
@@ -219,7 +219,7 @@ class LoggingExtension(Extension):
 
         return None
 
-    async def on_before_rag_query(self, ctx: HookContext) -> Optional[str]:
+    async def on_before_rag_query(self, ctx: HookContext) -> str | None:
         """Log RAG query."""
         query = ctx.get("query", "")
         logger.log(
@@ -230,7 +230,7 @@ class LoggingExtension(Extension):
         )
         return None
 
-    async def on_after_rag_results(self, ctx: HookContext) -> Optional[None]:
+    async def on_after_rag_results(self, ctx: HookContext) -> None | None:
         """Log RAG results."""
         results = ctx.get("results", [])
         logger.log(
@@ -241,7 +241,7 @@ class LoggingExtension(Extension):
         )
         return None
 
-    async def on_approval_required(self, ctx: HookContext) -> Optional[bool]:
+    async def on_approval_required(self, ctx: HookContext) -> bool | None:
         """Log approval requests."""
         tool_name = ctx.get("tool_name", "unknown")
         logger.log(
@@ -252,7 +252,7 @@ class LoggingExtension(Extension):
         )
         return None  # Don't auto-approve
 
-    async def on_approval_received(self, ctx: HookContext) -> Optional[None]:
+    async def on_approval_received(self, ctx: HookContext) -> None | None:
         """Log approval received."""
         tool_name = ctx.get("tool_name", "unknown")
         approved = ctx.get("approved", False)

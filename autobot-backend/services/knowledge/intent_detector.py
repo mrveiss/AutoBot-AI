@@ -9,9 +9,10 @@ Contains QueryKnowledgeIntentDetector for smart RAG triggering.
 """
 
 import re
-from typing import Optional
 
 from autobot_shared.singleton_factory import lazy_singleton
+
+from .types import QueryIntentResult, QueryKnowledgeIntent
 
 from .types import QueryIntentResult, QueryKnowledgeIntent
 
@@ -64,14 +65,14 @@ class QueryKnowledgeIntentDetector:
         r"```",  # Code blocks in message
     ]
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the detector with compiled query intent classification patterns."""
         self._knowledge_re = [re.compile(p, re.IGNORECASE) for p in self.KNOWLEDGE_PATTERNS]
         self._command_re = [re.compile(p, re.IGNORECASE) for p in self.COMMAND_PATTERNS]
         self._conversational_re = [re.compile(p, re.IGNORECASE) for p in self.CONVERSATIONAL_PATTERNS]
         self._code_gen_re = [re.compile(p, re.IGNORECASE) for p in self.CODE_GENERATION_PATTERNS]
 
-    def _check_pattern_match(self, patterns: list, query_lower: str) -> Optional[QueryIntentResult]:
+    def _check_pattern_match(self, patterns: list, query_lower: str) -> QueryIntentResult | None:
         """
         Check if query matches any pattern in a list and return corresponding result.
 

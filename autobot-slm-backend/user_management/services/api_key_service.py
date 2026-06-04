@@ -13,7 +13,6 @@ import logging
 import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Optional
 
 from sqlalchemy import select
 
@@ -40,8 +39,8 @@ class APIKeyService(BaseService):
         user_id: uuid.UUID,
         name: str,
         scopes: list,
-        description: Optional[str] = None,
-        expires_days: Optional[int] = None,
+        description: str | None = None,
+        expires_days: int | None = None,
     ) -> tuple:
         """Create a new API key."""
         plaintext_key = self._generate_key()
@@ -63,13 +62,13 @@ class APIKeyService(BaseService):
         result = await self.session.execute(query)
         return list(result.scalars().all())
 
-    async def get_key(self, key_id: uuid.UUID, user_id: uuid.UUID) -> Optional[APIKey]:
+    async def get_key(self, key_id: uuid.UUID, user_id: uuid.UUID) -> APIKey | None:
         """Get an API key by ID (scoped to user)."""
         query = select(APIKey).where(APIKey.id == key_id, APIKey.user_id == user_id)
         result = await self.session.execute(query)
         return result.scalar_one_or_none()
 
-    async def validate_key(self, plaintext_key: str) -> Optional[APIKey]:
+    async def validate_key(self, plaintext_key: str) -> APIKey | None:
         """Validate an API key and record usage (#2083).
 
         Tries HMAC-SHA256 hash first; falls back to legacy SHA-256 for
@@ -91,7 +90,7 @@ class APIKeyService(BaseService):
         await self.session.flush()
         return api_key
 
-    async def _try_legacy_hash(self, plaintext_key: str) -> Optional[APIKey]:
+    async def _try_legacy_hash(self, plaintext_key: str) -> APIKey | None:
         """Check legacy SHA-256 hash and migrate to HMAC (#2083)."""
         legacy_hash = self._hash_key_legacy(plaintext_key)
         query = select(APIKey).where(APIKey.key_hash == legacy_hash)
@@ -117,8 +116,8 @@ class APIKeyService(BaseService):
         self,
         key_id: uuid.UUID,
         user_id: uuid.UUID,
-        name: Optional[str] = None,
-        description: Optional[str] = None,
+        name: str | None = None,
+        description: str | None = None,
     ) -> APIKey:
         """Update API key metadata."""
         api_key = await self.get_key(key_id, user_id)
@@ -161,7 +160,7 @@ class APIKeyService(BaseService):
         return hashlib.sha256(key.encode()).hexdigest()
 
     @staticmethod
-    def _calculate_expiration(expires_days: Optional[int]) -> Optional[datetime]:
+    def _calculate_expiration(expires_days: int | None) -> datetime | None:
         """Calculate expiration datetime."""
         if expires_days is None:
             return None
@@ -173,9 +172,9 @@ class APIKeyService(BaseService):
         key_hash: str,
         key_prefix: str,
         name: str,
-        description: Optional[str],
+        description: str | None,
         scopes: list,
-        expires_at: Optional[datetime],
+        expires_at: datetime | None,
     ) -> APIKey:
         """Build APIKey instance."""
         return APIKey(

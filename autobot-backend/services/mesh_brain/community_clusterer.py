@@ -11,10 +11,11 @@ graspologic is lazy-imported to avoid numba JIT startup overhead on every
 process start. The import only occurs when cluster_graph() is called.
 """
 
-import logging
 from typing import Any
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 
 _MAX_COMMUNITY_FRACTION = 0.25
 _MIN_SPLIT_SIZE = 10

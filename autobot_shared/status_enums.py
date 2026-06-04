@@ -240,6 +240,38 @@ class HealthStatus(Enum):
     STOPPING = "stopping"
 
 
+class AgentStatus(Enum):
+    """
+    Canonical operational health state of a running agent (#7504).
+
+    Replaces the local class in agents/base_agent.py. Distinct from
+    AgentLifecycleStatus which tracks registry/DB lifecycle.
+    """
+
+    HEALTHY = "healthy"
+    DEGRADED = "degraded"
+    UNHEALTHY = "unhealthy"
+    OFFLINE = "offline"
+
+
+class AgentLifecycleStatus(str, Enum):
+    """
+    Registry/lifecycle state of an agent record (#7504, #1754).
+
+    Replaces the local AgentStatus class in models/agent.py. str-subclass
+    so SQLAlchemy can coerce directly to/from the column string value.
+    """
+
+    ACTIVE = "active"
+    INACTIVE = "inactive"
+    ARCHIVED = "archived"
+
+
+# Task priority — canonical alias for Priority covering agent/task scheduling.
+# Replaces local TaskPriority classes in services/agents/subagent_task.py,
+# utils/task_queue.py, and orchestrator.py (#7504).
+TaskPriority = Priority
+
 __all__ = [
     "TaskStatus",
     "JobStatus",
@@ -247,7 +279,10 @@ __all__ = [
     "Severity",
     "RiskLevel",
     "Priority",
+    "TaskPriority",
     "LLMProvider",
     "OperationOutcome",
     "HealthStatus",
+    "AgentStatus",
+    "AgentLifecycleStatus",
 ]

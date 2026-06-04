@@ -3,13 +3,13 @@
   <div class="document-overview">
     <!-- Loading -->
     <div v-if="loading" class="loading-state">
-      <i class="fas fa-spinner fa-spin"></i>
+      <Icon name="spinner" class="animate-spin" />
       <span>{{ $t('knowledge.summaries.overview.loading') }}</span>
     </div>
 
     <!-- Error -->
     <div v-else-if="error" class="error-banner">
-      <i class="fas fa-exclamation-triangle"></i>
+      <Icon name="exclamation-triangle" />
       <span>{{ error }}</span>
     </div>
 
@@ -18,16 +18,16 @@
       <!-- Document Header -->
       <div class="overview-header">
         <h4>
-          <i class="fas fa-file-alt"></i>
+          <Icon name="file-alt" />
           {{ overview.title || $t('knowledge.summaries.overview.title') }}
         </h4>
         <div class="header-stats">
           <span class="header-stat">
-            <i class="fas fa-circle"></i>
+            <Icon name="circle" />
             {{ $t('knowledge.summaries.overview.entitiesCount', { count: overview.entity_count }) }}
           </span>
           <span class="header-stat">
-            <i class="fas fa-clock"></i>
+            <Icon name="clock" />
             {{ $t('knowledge.summaries.overview.eventsCount', { count: overview.event_count }) }}
           </span>
         </div>
@@ -78,7 +78,7 @@
         class="sections-list"
       >
         <h5>
-          <i class="fas fa-layer-group"></i>
+          <Icon name="layer-group" />
           {{ $t('knowledge.summaries.overview.sections', { count: overview.section_summaries.length }) }}
         </h5>
 
@@ -119,7 +119,7 @@
               class="drill-down-btn"
               @click="$emit('drill-down', section.id)"
             >
-              <i class="fas fa-search-plus"></i>
+              <Icon name="search-plus" />
               {{ $t('knowledge.summaries.overview.drillDown') }}
             </button>
           </div>
@@ -129,7 +129,7 @@
 
     <!-- No Data -->
     <div v-else class="empty-state">
-      <i class="fas fa-file-alt"></i>
+      <Icon name="file-alt" />
       <p>{{ $t('knowledge.summaries.overview.emptyState') }}</p>
     </div>
   </div>
@@ -140,6 +140,7 @@
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
 
+import Icon from '@/components/ui/Icon.vue'
 import { ref, onMounted, watch } from 'vue'
 import {
   useKnowledgeGraph,

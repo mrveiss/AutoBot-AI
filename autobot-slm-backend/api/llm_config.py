@@ -10,7 +10,7 @@ Config is stored in the Setting table and pushed to fleet nodes via Ansible.
 
 import json
 import logging
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
@@ -18,8 +18,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
 
+from autobot_shared.auth.permissions import Permission
 from models.database import Node, Setting
-from services.auth import require_admin
+from services.auth import require_permission
 from services.database import get_db
 from services.encryption import decrypt_data, encrypt_data
 from services.playbook_executor import get_playbook_executor
@@ -49,7 +50,7 @@ class LLMConfig(BaseModel):
     active_provider: str = "ollama"
     providers: List[LLMProviderConfig] = []
     # Ollama server settings (pushed via Ansible)
-    ollama_host: str = "0.0.0.0"
+    ollama_host: str = "0.0.0.0"  # nosec B104 - intentional bind to all interfaces for service/test
     ollama_port: int = 11434
     gpu_models: List[str] = []
     cpu_models: List[str] = []
@@ -82,13 +83,13 @@ class LLMTestResponse(BaseModel):
     success: bool
     message: str
     provider: str
-    latency_ms: Optional[float] = None
+    latency_ms: float | None = None
 
 
 class LLMApplyRequest(BaseModel):
     """Request to push LLM config to fleet nodes."""
 
-    node_ids: Optional[List[str]] = None
+    node_ids: List[str] | None = None
 
 
 class LLMApplyResponse(BaseModel):
@@ -97,7 +98,7 @@ class LLMApplyResponse(BaseModel):
     success: bool
     message: str
     node_count: int
-    output: Optional[str] = None
+    output: str | None = None
 
 
 def _mask_api_key(key: str) -> str:
@@ -143,7 +144,9 @@ async def _load_llm_config(db: AsyncSession) -> LLMConfig:
     return LLMConfig(
         active_provider=rows.get("llm_active_provider", "ollama"),
         providers=providers,
-        ollama_host=rows.get("llm_ollama_host", "0.0.0.0"),
+        ollama_host=rows.get(
+            "llm_ollama_host", "0.0.0.0"
+        ),  # nosec B104 - intentional bind to all interfaces for service/test
         ollama_port=int(rows.get("llm_ollama_port", "11434")),
         gpu_models=gpu_models,
         cpu_models=cpu_models,
@@ -171,7 +174,7 @@ async def _upsert_setting(db: AsyncSession, key: str, value: str, desc: str) -> 
 @router.get("", response_model=LLMConfigResponse)
 async def get_llm_config(
     db: Annotated[AsyncSession, Depends(get_db)],
-    _: Annotated[dict, Depends(require_admin)],
+    _: Annotated[dict, Depends(require_permission(Permission.ADMIN_CONFIG_READ))],
 ) -> LLMConfigResponse:
     """Get current LLM configuration (admin only).
 
@@ -188,7 +191,7 @@ async def get_llm_config(
 async def save_llm_config(
     config: LLMConfig,
     db: Annotated[AsyncSession, Depends(get_db)],
-    _: Annotated[dict, Depends(require_admin)],
+    _: Annotated[dict, Depends(require_permission(Permission.ADMIN_CONFIG_WRITE))],
 ) -> LLMConfigResponse:
     """Save LLM configuration (admin only).
 
@@ -292,7 +295,7 @@ async def _test_cloud_provider(provider: str, endpoint: str, api_key: str) -> LL
 @router.post("/test", response_model=LLMTestResponse)
 async def test_llm_connection(
     request: LLMTestRequest,
-    _: Annotated[dict, Depends(require_admin)],
+    _: Annotated[dict, Depends(require_permission(Permission.ADMIN_CONFIG_READ))],
 ) -> LLMTestResponse:
     """Test LLM provider connection (admin only)."""
     provider = request.provider.lower()
@@ -313,14 +316,14 @@ async def test_llm_connection(
 async def apply_llm_config(
     request: LLMApplyRequest,
     db: Annotated[AsyncSession, Depends(get_db)],
-    _: Annotated[dict, Depends(require_admin)],
+    _: Annotated[dict, Depends(require_permission(Permission.ADMIN_CONFIG_WRITE))],
 ) -> LLMApplyResponse:
     """Push LLM config to fleet nodes via Ansible (admin only)."""
     config = await _load_llm_config(db)
 
     # Resolve target nodes
     node_count = 0
-    limit: Optional[List[str]] = None
+    limit: List[str] | None = None
     if request.node_ids:
         node_result = await db.execute(select(Node).where(Node.node_id.in_(request.node_ids)))
         nodes = node_result.scalars().all()

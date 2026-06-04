@@ -9,11 +9,11 @@ Handles system operations, shell commands, and system administration tasks.
 """
 
 import json
-import logging
 import re
 import shlex
-from typing import Any, Dict, FrozenSet, List, Optional
+from typing import Any, Dict, FrozenSet, List
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import (
     get_agent_endpoint_explicit,
@@ -24,9 +24,10 @@ from constants.threshold_constants import LLMDefaults
 from services.llm_service import get_llm_service
 
 from .base_agent import AgentRequest
+from .payloads import AgentStatus, CommandPayload
 from .standardized_agent import StandardizedAgent
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level frozenset for dangerous rm flags
 _DANGEROUS_RM_FLAGS: FrozenSet[str] = frozenset({"-r", "-rf", "-f"})
@@ -177,7 +178,7 @@ class EnhancedSystemCommandsAgent(StandardizedAgent):
         """Return list of capabilities this agent supports."""
         return self.capabilities.copy()
 
-    def _build_command_messages(self, request: str, context: Optional[Dict[str, Any]]) -> List[Dict[str, str]]:
+    def _build_command_messages(self, request: str, context: Dict[str, Any] | None) -> List[Dict[str, str]]:
         """Build messages for command generation (Issue #398: extracted)."""
         system_prompt = self._get_system_commands_prompt()
         if context:
@@ -188,25 +189,32 @@ class EnhancedSystemCommandsAgent(StandardizedAgent):
         return messages
 
     def _build_command_payload(self, command_info: Dict[str, Any]) -> Dict[str, Any]:
-        """Build the system-commands-specific payload dict.
+        """Build the system-commands-specific payload dict (#6650, #6703).
 
-        Returned as the ``result`` field of the AgentResponse the base class
-        ``StandardizedAgent._build_success_response`` constructs (#6650). The
-        prior name shadowed the base method with an incompatible signature,
-        so any AI Stack ``/agents/system_commands/process`` request would
-        crash with a TypeError. (Issue #398: extracted.)
+        Constructs a typed CommandPayload then returns model_dump() so the
+        public API contract (Dict[str, Any]) is unchanged.
         """
-        return {
-            "status": "success" if command_info.get("is_safe", False) else "warning",
-            **command_info,
-            "agent_type": "system_commands",
-            "model_used": self.model_name,
-            "metadata": {
+        status = AgentStatus.SUCCESS if command_info.get("is_safe", False) else AgentStatus.WARNING
+        return CommandPayload(
+            status=status,
+            agent_type="system_commands",
+            model_used=self.model_name,
+            command=command_info.get("command", ""),
+            explanation=command_info.get("explanation", ""),
+            is_safe=command_info.get("is_safe", False),
+            security_concerns=command_info.get("security_concerns", []),
+            suggested_alternatives=command_info.get("suggested_alternatives", []),
+            metadata={
                 "agent": "EnhancedSystemCommandsAgent",
                 "security_checked": True,
                 "validation_level": "strict",
             },
-        }
+            **{
+                k: v
+                for k, v in command_info.items()
+                if k not in {"command", "explanation", "is_safe", "security_concerns", "suggested_alternatives"}
+            },
+        ).model_dump()
 
     def _build_error_response(self, error: Exception) -> Dict[str, Any]:
         """Build error response (Issue #398: extracted)."""
@@ -220,7 +228,7 @@ class EnhancedSystemCommandsAgent(StandardizedAgent):
             "model_used": self.model_name,
         }
 
-    async def process_command_request(self, request: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async def process_command_request(self, request: str, context: Dict[str, Any] | None = None) -> Dict[str, Any]:
         """Process a command request (Issue #398: refactored)."""
         try:
             logger.info("System Commands Agent processing: %s...", request[:50])
@@ -356,7 +364,7 @@ and suggest alternatives."""
 
         return text.strip()
 
-    def _check_dangerous_patterns(self, command: str) -> Optional[Dict[str, Any]]:
+    def _check_dangerous_patterns(self, command: str) -> Dict[str, Any] | None:
         """Check command against dangerous patterns (Issue #398: extracted)."""
         for pattern in self.dangerous_patterns:
             if re.search(pattern, command, re.IGNORECASE):
@@ -405,14 +413,14 @@ and suggest alternatives."""
                 "recommended_action": "reject",
             }
 
-    def _try_extract_message_content(self, response: Dict) -> Optional[str]:
+    def _try_extract_message_content(self, response: Dict) -> str | None:
         """Try to extract content from message dict (Issue #334 - extracted helper)."""
         if "message" not in response or not isinstance(response["message"], dict):
             return None
         content = response["message"].get("content")
         return content.strip() if content else None
 
-    def _try_extract_choices_content(self, response: Dict) -> Optional[str]:
+    def _try_extract_choices_content(self, response: Dict) -> str | None:
         """Try to extract content from choices list (Issue #334 - extracted helper)."""
         if "choices" not in response or not isinstance(response["choices"], list):
             return None

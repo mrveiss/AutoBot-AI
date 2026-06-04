@@ -7,13 +7,12 @@ Resource Factory - Centralized management of expensive shared resources
 Provides singleton-like behavior with app.state integration for optimal performance
 """
 
-import logging
-
 from fastapi import Request
 
+from autobot_shared.logging_manager import get_logger
 from constants.network_constants import NetworkConstants
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ResourceFactory:

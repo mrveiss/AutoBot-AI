@@ -63,6 +63,19 @@ export const routes: RouteRecordRaw[] = [
       isPublic: true
     }
   },
+  // GH#8996: public shared conversation view (no auth required)
+  {
+    path: '/shared/:token',
+    name: 'shared-chat',
+    component: () => import('@/views/SharedChatView.vue'),
+    meta: {
+      title: 'Shared Conversation',
+      hideInNav: true,
+      hideFooter: true,
+      requiresAuth: false,
+      isPublic: true
+    }
+  },
   {
     path: '/dashboard',
     redirect: '/home'
@@ -187,6 +200,16 @@ export const routes: RouteRecordRaw[] = [
         }
       },
       {
+        // MVA-2167: MCP Resource Browser
+        path: 'mcp-resources',
+        name: 'knowledge-mcp-resources',
+        component: () => import('@/components/knowledge/McpResourceBrowser.vue'),
+        meta: {
+          title: 'MCP Resources',
+          parent: 'knowledge'
+        }
+      },
+      {
         path: 'connectors',
         name: 'knowledge-connectors',
         component: () => import('@/components/knowledge/connectors/ConnectorManager.vue'),
@@ -211,6 +234,16 @@ export const routes: RouteRecordRaw[] = [
         component: () => import('@/components/knowledge/WebResearchSettings.vue'),
         meta: {
           title: 'Web Research Settings',
+          parent: 'knowledge'
+        }
+      },
+      {
+        // MVA-344: 4-tab web research panel (Fetch Page / Crawl Site / Find Pages / Get Data)
+        path: 'web-research',
+        name: 'knowledge-web-research',
+        component: () => import('@/components/knowledge/WebResearchPanel.vue'),
+        meta: {
+          title: 'Web Research',
           parent: 'knowledge'
         }
       },
@@ -318,6 +351,10 @@ export const routes: RouteRecordRaw[] = [
     // Child routes render inside WorkflowBuilderView's <router-view /> (#2368)
     children: [
       {
+        path: '',
+        redirect: '/automation/overview'
+      },
+      {
         path: 'browser-automation',
         name: 'browser-automation',
         component: () => import('@/views/BrowserAutomationView.vue'),
@@ -325,6 +362,16 @@ export const routes: RouteRecordRaw[] = [
           title: 'Browser Automation',
           icon: 'fas fa-globe',
           description: 'Control browser workers and automate web tasks',
+          requiresAuth: true
+        }
+      },
+      // GH#8750: URL-routed sections — rendered inline in WorkflowBuilderView via route.params.section
+      {
+        path: ':section',
+        name: 'automation-section',
+        component: { render: () => null },
+        meta: {
+          sectionRoute: true,
           requiresAuth: true
         }
       }
@@ -544,7 +591,8 @@ export const routes: RouteRecordRaw[] = [
       title: 'Preferences',
       icon: 'fas fa-sliders-h',
       description: 'Customize your AutoBot experience',
-      requiresAuth: true
+      requiresAuth: true,
+      hideInNav: true,
     }
   },
   // Issue #4492: Home serves custom dashboard — renamed from /custom-dashboard
@@ -674,6 +722,18 @@ export const routes: RouteRecordRaw[] = [
       },
     ],
   },
+  // MVA-360: Live Canvas — route always registered (preserves bookmarks/direct nav);
+  // nav item gated by VITE_FEATURE_CANVAS via navItems.ts (GH#8758)
+  {
+    path: '/canvas',
+    name: 'canvas',
+    component: () => import('@/views/CanvasView.vue'),
+    meta: {
+      title: 'Canvas',
+      requiresAuth: true,
+      hideInNav: true,
+    },
+  },
   // Issue #3201: AutoResearch Experiment Dashboard
   {
     path: '/experiments',
@@ -684,6 +744,20 @@ export const routes: RouteRecordRaw[] = [
       icon: 'BeakerIcon',
       description: 'AutoResearch experiment dashboard',
       requiresAuth: true,
+      hideInNav: true,
+    },
+  },
+  // Issue #6590: Virtual LLM API Keys admin view
+  {
+    path: '/admin/llm-keys',
+    name: 'llm-api-keys',
+    component: () => import('@/views/LLMApiKeysView.vue'),
+    meta: {
+      title: 'LLM API Keys',
+      description: 'Manage virtual LLM API keys with per-key budgets',
+      requiresAuth: true,
+      admin: true,
+      hideInNav: true,
     },
   },
   // Issue #1801: Admin User Management
@@ -697,6 +771,45 @@ export const routes: RouteRecordRaw[] = [
       description: 'Manage users, roles, and account status',
       requiresAuth: true,
       admin: true,
+    },
+  },
+  // Issue #7773: Sandbox file inspector — wires useFileSandbox() into admin UI
+  {
+    path: '/admin/sandbox',
+    name: 'admin-sandbox',
+    component: () => import('@/views/AdminSandboxView.vue'),
+    meta: {
+      title: 'Sandbox Inspector',
+      description: 'Browse code-execution sandbox files',
+      requiresAuth: true,
+      admin: true,
+      hideInNav: true,
+    },
+  },
+  // Issue #7513: Host inventory admin view
+  {
+    path: '/admin/hosts',
+    name: 'admin-hosts',
+    component: () => import('@/views/Admin/HostsView.vue'),
+    meta: {
+      title: 'Host Inventory',
+      description: 'Manage multi-host role deployment',
+      requiresAuth: true,
+      admin: true,
+      hideInNav: true,
+    },
+  },
+  // GH#6470: Budget policy management (admin-only)
+  {
+    path: '/admin/budget-policies',
+    name: 'budget-policies',
+    component: () => import('@/views/BudgetPolicies.vue'),
+    meta: {
+      title: 'Budget Policies',
+      description: 'Manage agent spend thresholds and auto-pause rules',
+      requiresAuth: true,
+      admin: true,
+      hideInNav: true,
     },
   },
   // /desktop removed from nav — noVNC is accessible via the Chat tab's noVNC tab.
@@ -783,7 +896,8 @@ export const routes: RouteRecordRaw[] = [
       title: 'Plugin Manager',
       icon: 'fas fa-puzzle-piece',
       description: 'Browse, install, and manage AutoBot plugins',
-      requiresAuth: true
+      requiresAuth: true,
+      hideInNav: true,
     },
     children: [
       // Issue #1803: Marketplace as sub-route of plugins
@@ -804,6 +918,13 @@ export const routes: RouteRecordRaw[] = [
     path: '/marketplace',
     redirect: '/plugins/marketplace'
   },
+  // GH#8250: LLC Company Portability — export template/snapshot, import preview + execute
+  {
+    path: '/llc/portability',
+    name: 'llc-portability',
+    component: () => import('@/views/llc/CompanyPortabilityView.vue'),
+    meta: { title: 'Company Portability', requiresAuth: true, hideInNav: true },
+  },
   // Issue #729: Secrets stays in autobot-vue - user functionality for chat/agent credentials
   {
     path: '/secrets',
@@ -813,7 +934,8 @@ export const routes: RouteRecordRaw[] = [
       title: 'Secrets Manager',
       icon: 'fas fa-key',
       description: 'Manage API keys and secrets for chat and agent access',
-      requiresAuth: true
+      requiresAuth: true,
+      hideInNav: true,
     },
     children: [
       {
@@ -826,6 +948,38 @@ export const routes: RouteRecordRaw[] = [
         }
       }
     ]
+  },
+  // Issue #8247: LLC Phase 6 — Company Dashboard, Org Chart, Goal Tree, Sub-Company Tree
+  {
+    path: '/llc/dashboard',
+    name: 'llc-dashboard',
+    component: () => import('@/views/llc/CompanyDashboard.vue'),
+    meta: { title: 'Company Dashboard', requiresAuth: true, llcScope: true },
+  },
+  {
+    path: '/llc/org-chart',
+    name: 'llc-org-chart',
+    component: () => import('@/views/llc/OrgChart.vue'),
+    meta: { title: 'Org Chart', requiresAuth: true, llcScope: true, hideInNav: true },
+  },
+  {
+    path: '/llc/goals',
+    name: 'llc-goals',
+    component: () => import('@/views/llc/GoalTree.vue'),
+    meta: { title: 'Goal Tree', requiresAuth: true, llcScope: true, hideInNav: true },
+  },
+  {
+    path: '/llc/companies',
+    name: 'llc-companies',
+    component: () => import('@/views/llc/SubCompanyTree.vue'),
+    meta: { title: 'Company Hierarchy', requiresAuth: true, llcScope: true, hideInNav: true },
+  },
+  // GH#9164: Company Creation Wizard with Template Browser
+  {
+    path: '/llc/companies/create',
+    name: 'llc-company-create',
+    component: () => import('@/views/llc/CompanyCreationWizard.vue'),
+    meta: { title: 'Create Company', requiresAuth: true, llcScope: true, hideInNav: true, hideFooter: true },
   },
   // Issue #4465: Usage moved under /analytics/usage
   { path: '/usage', redirect: '/analytics/usage' },
@@ -840,6 +994,42 @@ export const routes: RouteRecordRaw[] = [
       isPublic: true
     }
   },
+  // GH#8248: LLC Frontend — Backlog, Sprint Board, Kanban Board, Work Item Detail
+  {
+    path: '/llc/companies/:companyId/backlog',
+    name: 'llc-backlog',
+    component: () => import('@/views/llc/BacklogView.vue'),
+    meta: {
+      title: 'Backlog',
+      requiresAuth: true,
+      hideInNav: true,
+    }
+  },
+  {
+    path: '/llc/companies/:companyId/boards/:boardId/sprint',
+    name: 'llc-sprint-board',
+    component: () => import('@/views/llc/SprintBoardView.vue'),
+    meta: {
+      title: 'Sprint Board',
+      requiresAuth: true,
+      hideInNav: true,
+    }
+  },
+  {
+    path: '/llc/companies/:companyId/boards/:boardId/kanban',
+    name: 'llc-kanban-board',
+    component: () => import('@/views/llc/KanbanBoardView.vue'),
+    meta: {
+      title: 'Kanban Board',
+      requiresAuth: true,
+      hideInNav: true,
+    }
+  },
+  // LLC module routes — GH#8249 (companyId added via GH#8550)
+  { path: '/llc/companies/:companyId/approvals', name: 'llc-approvals', component: () => import('@/views/llc/ApprovalsInbox.vue'), props: true, meta: { title: 'Approvals Inbox', requiresAuth: true } },
+  { path: '/llc/companies/:companyId/costs', name: 'llc-costs', component: () => import('@/views/llc/CostDashboard.vue'), props: true, meta: { title: 'Cost Dashboard', requiresAuth: true } },
+  { path: '/llc/companies/:companyId/heartbeat', name: 'llc-heartbeat', component: () => import('@/views/llc/HeartbeatMonitor.vue'), props: true, meta: { title: 'Heartbeat Monitor', requiresAuth: true } },
+  { path: '/llc/companies/:companyId/ceo-chat', name: 'llc-ceo-chat', component: () => import('@/views/llc/CeoChatView.vue'), props: true, meta: { title: 'CEO Chat', requiresAuth: true } },
   {
     path: '/:pathMatch(.*)*',
     name: 'not-found',

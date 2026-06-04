@@ -3,18 +3,18 @@
     <!-- Header -->
     <div class="flex items-center justify-between p-3 border-b border-autobot-border shrink-0">
       <div class="flex items-center gap-2">
-        <i class="fas fa-folder text-autobot-text-secondary"></i>
+        <Icon name="folder" class="text-autobot-text-secondary" />
         <h3 class="text-sm font-semibold text-autobot-text-primary">{{ $t('chat.filePanel.title') }}</h3>
       </div>
       <div class="flex items-center gap-1">
-        <button @click="showCreateDialog = true" class="action-btn" :title="$t('chat.filePanel.newFile')">
-          <i class="fas fa-plus text-xs"></i>
+        <button @click="showCreateDialog = true" class="action-btn" :title="$t('chat.filePanel.newFile')" :aria-label="$t('chat.filePanel.newFile')">
+          <Icon name="plus" class="text-xs" />
         </button>
-        <button @click="viewMode = viewMode === 'list' ? 'grid' : 'list'" class="action-btn" :title="viewMode === 'list' ? $t('chat.filePanel.gridView') : $t('chat.filePanel.listView')">
-          <i :class="viewMode === 'list' ? 'fas fa-th' : 'fas fa-list'" class="text-xs"></i>
+        <button @click="viewMode = viewMode === 'list' ? 'grid' : 'list'" class="action-btn" :title="viewMode === 'list' ? $t('chat.filePanel.gridView') : $t('chat.filePanel.listView')" :aria-label="viewMode === 'list' ? $t('chat.filePanel.gridView') : $t('chat.filePanel.listView')">
+          <Icon :name="viewMode === 'list' ? 'th' : 'list'" />
         </button>
-        <button @click="$emit('close')" class="action-btn" :title="$t('chat.filePanel.closePanel')">
-          <i class="fas fa-times text-xs"></i>
+        <button @click="$emit('close')" class="action-btn" :title="$t('chat.filePanel.closePanel')" :aria-label="$t('chat.filePanel.closePanel')">
+          <Icon name="times" class="text-xs" />
         </button>
       </div>
     </div>
@@ -27,7 +27,7 @@
       </div>
       <!-- Search -->
       <div class="relative">
-        <i class="fas fa-search absolute left-2 top-1/2 -translate-y-1/2 text-autobot-text-muted text-xs"></i>
+        <Icon name="search" class="absolute left-2 top-1/2 -translate-y-1/2 text-autobot-text-muted text-xs" />
         <input
           v-model="searchQuery"
           type="text"
@@ -46,7 +46,7 @@
           :class="sortField === opt.field ? 'bg-autobot-bg-tertiary text-autobot-primary' : 'text-autobot-text-muted hover:bg-autobot-bg-secondary'"
         >
           {{ opt.label }}
-          <i v-if="sortField === opt.field" :class="sortDirection === 'asc' ? 'fas fa-sort-up' : 'fas fa-sort-down'" class="text-xs ml-0.5"></i>
+          <i v-if="sortField === opt.field" :class="sortDirection === 'asc' ? 'sort-up' : 'sort-down'" class="text-xs ml-0.5"></i>
         </button>
       </div>
       <!-- Bulk actions -->
@@ -75,7 +75,7 @@
         @dragleave.prevent="isDragging = false"
         @drop.prevent="handleDrop"
       >
-        <i class="fas fa-cloud-upload-alt text-2xl mb-1" :class="isDragging ? 'text-autobot-primary' : 'text-autobot-text-muted'"></i>
+        <Icon name="cloud-upload-alt" class="text-2xl mb-1" />
         <p class="text-xs text-autobot-text-secondary">
           {{ isDragging ? $t('chat.filePanel.dropFiles') : $t('chat.filePanel.clickOrDrag') }}
         </p>
@@ -107,15 +107,16 @@
     <!-- Error Display -->
     <div v-if="error" class="px-3 py-2 bg-red-50 border-b border-red-200 shrink-0">
       <div class="flex items-start gap-2">
-        <i class="fas fa-exclamation-circle text-red-500 text-sm mt-0.5"></i>
+        <Icon name="exclamation-circle" class="text-red-500 text-sm mt-0.5" />
         <div class="flex-1 min-w-0">
           <p class="text-xs text-red-700">{{ error }}</p>
         </div>
         <button
           @click="clearError"
           class="text-red-400 hover:text-red-600 transition-colors shrink-0"
+          :aria-label="$t('common.dismiss')"
         >
-          <i class="fas fa-times text-xs"></i>
+          <Icon name="times" class="text-xs" />
         </button>
       </div>
     </div>
@@ -132,7 +133,7 @@
 
       <!-- Loading State -->
       <div v-if="loading && !hasFiles" class="text-center py-8">
-        <i class="fas fa-spinner fa-spin text-2xl text-autobot-text-muted mb-2"></i>
+        <Icon name="spinner" class="animate-spin text-2xl text-autobot-text-muted mb-2" />
         <p class="text-xs text-autobot-text-secondary">{{ $t('chat.filePanel.loadingFiles') }}</p>
       </div>
 
@@ -157,7 +158,7 @@
 
           <!-- File Icon -->
           <div class="file-icon shrink-0">
-            <i :class="getFileIcon(file.mime_type)" class="text-autobot-text-secondary text-lg"></i>
+            <Icon :name="getFileIcon(file.mime_type)" />
           </div>
 
           <!-- File Info -->
@@ -170,8 +171,8 @@
                 @keyup.escape="renamingFileId = null"
                 class="w-full text-xs px-1 py-0.5 border border-autobot-primary rounded focus:outline-none"
               />
-              <button @click="handleRename" class="action-btn" :title="$t('common.save')">
-                <i class="fas fa-check text-xs text-green-600"></i>
+              <button @click="handleRename" class="action-btn" :title="$t('common.save')" :aria-label="$t('common.save')">
+                <Icon name="check" class="text-xs text-green-600" />
               </button>
             </div>
             <p v-else class="text-xs font-medium text-autobot-text-primary truncate" :title="file.filename">
@@ -185,7 +186,7 @@
             <StatusBadge
               v-if="file.file_type === 'generated'"
               variant="primary"
-              size="small"
+              size="sm"
               class="mt-1"
             >
               {{ $t('chat.filePanel.aiGenerated') }}
@@ -199,30 +200,34 @@
               @click="handlePreview(file.file_id)"
               class="action-btn"
               :title="$t('chat.filePanel.preview')"
+              :aria-label="$t('chat.filePanel.preview')"
             >
-              <i class="fas fa-eye text-xs"></i>
+              <Icon name="eye" class="text-xs" />
             </button>
             <button
               v-if="isEditable(file.mime_type)"
               @click="startEdit(file.file_id, file.filename)"
               class="action-btn"
               :title="$t('common.edit')"
+              :aria-label="$t('common.edit')"
             >
-              <i class="fas fa-edit text-xs"></i>
+              <Icon name="edit" class="text-xs" />
             </button>
             <button
               @click="handleDownload(file.file_id, file.filename)"
               class="action-btn"
               :title="$t('chat.filePanel.download')"
+              :aria-label="$t('chat.filePanel.download')"
             >
-              <i class="fas fa-download text-xs"></i>
+              <Icon name="download" class="text-xs" />
             </button>
             <button
               @click="handleDelete(file.file_id, file.filename)"
               class="action-btn text-red-400 hover:text-red-600"
               :title="$t('common.delete')"
+              :aria-label="$t('common.delete')"
             >
-              <i class="fas fa-trash text-xs"></i>
+              <Icon name="trash" class="text-xs" />
             </button>
           </div>
         </div>
@@ -238,18 +243,18 @@
         @click.stop
       >
         <button v-if="isPreviewable(contextMenu.mimeType)" @click="handlePreview(contextMenu.fileId); closeContextMenu()"
-          class="ctx-menu-item"><i class="fas fa-eye w-4"></i> {{ $t('chat.filePanel.preview') }}</button>
+          class="ctx-menu-item"><Icon name="eye" class="w-4" /> {{ $t('chat.filePanel.preview') }}</button>
         <button v-if="isEditable(contextMenu.mimeType)" @click="startEdit(contextMenu.fileId, contextMenu.filename)"
-          class="ctx-menu-item"><i class="fas fa-edit w-4"></i> {{ $t('common.edit') }}</button>
+          class="ctx-menu-item"><Icon name="edit" class="w-4" /> {{ $t('common.edit') }}</button>
         <button @click="startRename(contextMenu.fileId, contextMenu.filename)"
-          class="ctx-menu-item"><i class="fas fa-i-cursor w-4"></i> {{ $t('chat.filePanel.rename') }}</button>
+          class="ctx-menu-item"><Icon name="pencil-alt" class="w-4" /> {{ $t('chat.filePanel.rename') }}</button>
         <button @click="handleCopy(contextMenu.fileId)"
-          class="ctx-menu-item"><i class="fas fa-copy w-4"></i> {{ $t('chat.filePanel.duplicate') }}</button>
+          class="ctx-menu-item"><Icon name="copy" class="w-4" /> {{ $t('chat.filePanel.duplicate') }}</button>
         <button @click="handleDownload(contextMenu.fileId, contextMenu.filename); closeContextMenu()"
-          class="ctx-menu-item"><i class="fas fa-download w-4"></i> {{ $t('chat.filePanel.download') }}</button>
+          class="ctx-menu-item"><Icon name="download" class="w-4" /> {{ $t('chat.filePanel.download') }}</button>
         <div class="border-t border-autobot-border my-1"></div>
         <button @click="handleDelete(contextMenu.fileId, contextMenu.filename); closeContextMenu()"
-          class="ctx-menu-item text-red-600 hover:bg-red-50"><i class="fas fa-trash w-4"></i> {{ $t('common.delete') }}</button>
+          class="ctx-menu-item text-red-600 hover:bg-red-50"><Icon name="trash" class="w-4" /> {{ $t('common.delete') }}</button>
       </div>
     </Teleport>
 
@@ -284,7 +289,7 @@
         <div class="bg-autobot-bg-card rounded-lg shadow-xl w-[480px] max-h-[80vh] flex flex-col p-4">
           <div class="flex items-center justify-between mb-3">
             <h4 class="text-sm font-semibold text-autobot-text-primary truncate">{{ editingFileName }}</h4>
-            <button @click="editingFileId = null" class="action-btn"><i class="fas fa-times text-xs"></i></button>
+            <button @click="editingFileId = null" class="action-btn" :aria-label="$t('common.close')"><Icon name="times" class="text-xs" /></button>
           </div>
           <textarea
             v-model="editingContent"
@@ -301,6 +306,7 @@
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useConversationFiles, type SortField } from '@/composables/useConversationFiles'

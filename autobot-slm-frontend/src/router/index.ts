@@ -23,14 +23,14 @@ const router = createRouter({
       path: '/login',
       name: 'login',
       component: () => import('@/views/LoginView.vue'),
-      meta: { title: 'Login', public: true }
+      meta: { title: 'Login', requiresAuth: false }
     },
     {
       // Issue #576: SSO callback handler for OAuth2/SAML redirects
       path: '/sso-callback',
       name: 'sso-callback',
       component: () => import('@/views/SSOCallbackView.vue'),
-      meta: { title: 'SSO Login', public: true },
+      meta: { title: 'SSO Login', requiresAuth: false },
     },
     {
       // Issue #1294: Setup wizard — guided first-run fleet configuration
@@ -257,6 +257,13 @@ const router = createRouter({
           component: () => import('@/views/settings/admin/LLMSettings.vue'),
           meta: { title: 'LLM Configuration', parent: 'settings', admin: true }
         },
+        {
+          // MVA-1735: SSO/OIDC provider configuration
+          path: 'admin/sso',
+          name: 'settings-admin-sso',
+          component: () => import('@/views/settings/admin/SSOSettings.vue'),
+          meta: { title: 'SSO / OIDC', parent: 'settings', admin: true }
+        },
       ]
     },
     {
@@ -470,8 +477,8 @@ const router = createRouter({
 router.beforeEach(async (to, _from) => {
   const authStore = useAuthStore()
 
-  // Public routes don't need auth
-  if (to.meta.public) {
+  // Public routes don't need auth (requiresAuth: false)
+  if (to.meta.requiresAuth === false) {
     // If already authenticated, redirect to home
     if (authStore.isAuthenticated && to.name === 'login') {
       return { name: 'fleet' }

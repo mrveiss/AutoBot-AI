@@ -14,7 +14,7 @@ import os
 import re
 import shutil
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Callable, Dict, List
 
 from services.ansible_secrets import fetch_deploy_secrets
 from services.provision_progress import TaskProgressTracker
@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 class PlaybookExecutor:
     """Execute Ansible playbooks programmatically."""
 
-    def __init__(self, ansible_dir: Optional[Path] = None):
+    def __init__(self, ansible_dir: Path | None = None):
         """
         Initialize playbook executor.
 
@@ -77,7 +77,7 @@ class PlaybookExecutor:
         task_name = re.sub(r"\s*\(#\d+\)\s*$", "", task_name)
         return task_name.strip()
 
-    def _parse_play1_task(self, task_name: str) -> Optional[Dict[str, str]]:
+    def _parse_play1_task(self, task_name: str) -> Dict[str, str] | None:
         """
         Parse Play 1 (SLM) task name for progress.
 
@@ -104,7 +104,7 @@ class PlaybookExecutor:
             return {"stage": "slm_complete", "message": "SLM server update complete ✓"}
         return None
 
-    def _parse_play2_task(self, task_name: str) -> Optional[Dict[str, str]]:
+    def _parse_play2_task(self, task_name: str) -> Dict[str, str] | None:
         """
         Parse Play 2 (Infrastructure) task name for progress.
 
@@ -133,7 +133,7 @@ class PlaybookExecutor:
             return {"stage": "node_complete", "message": "Node update complete ✓"}
         return None
 
-    def _parse_play_line(self, line: str) -> Optional[Dict[str, str]]:
+    def _parse_play_line(self, line: str) -> Dict[str, str] | None:
         """
         Parse PLAY line for overall progress.
 
@@ -153,7 +153,7 @@ class PlaybookExecutor:
             return {"stage": "complete", "message": "Fleet update complete ✓"}
         return None
 
-    def _parse_progress(self, line: str) -> Optional[Dict[str, str]]:
+    def _parse_progress(self, line: str) -> Dict[str, str] | None:
         """
         Parse Ansible output line for progress updates (Issue #880, #2829).
 
@@ -213,11 +213,11 @@ class PlaybookExecutor:
     def _build_ansible_command(
         self,
         playbook_path: Path,
-        limit: Optional[List[str]],
-        tags: Optional[List[str]],
-        extra_vars: Optional[Dict[str, str]],
+        limit: List[str] | None,
+        tags: List[str] | None,
+        extra_vars: Dict[str, str] | None,
         check_mode: bool,
-        inventory_path: Optional[Path] = None,
+        inventory_path: Path | None = None,
     ) -> List[str]:
         """
         Build Ansible command with parameters.
@@ -243,7 +243,7 @@ class PlaybookExecutor:
     async def _stream_playbook_output(
         self,
         process: asyncio.subprocess.Process,
-        progress_callback: Optional[callable],
+        progress_callback: Callable | None,
     ) -> List[str]:
         """
         Stream and parse playbook output for progress (Issue #880, #3033).
@@ -257,7 +257,7 @@ class PlaybookExecutor:
         previous one is cancelled, so heartbeats are scoped per task.
         """
         output_lines = []
-        current_tracker: Optional[TaskProgressTracker] = None
+        current_tracker: TaskProgressTracker | None = None
 
         async def _stop_current_tracker() -> None:
             nonlocal current_tracker
@@ -407,7 +407,7 @@ class PlaybookExecutor:
         self,
         cmd: List[str],
         env: Dict[str, str],
-        progress_callback: Optional[callable],
+        progress_callback: Callable | None,
     ) -> Dict[str, any]:
         """
         Launch ansible-playbook subprocess and collect output. Ref: #1088.
@@ -428,12 +428,12 @@ class PlaybookExecutor:
     async def execute_playbook(
         self,
         playbook_name: str,
-        limit: Optional[List[str]] = None,
-        tags: Optional[List[str]] = None,
-        extra_vars: Optional[Dict[str, str]] = None,
+        limit: List[str] | None = None,
+        tags: List[str] | None = None,
+        extra_vars: Dict[str, str] | None = None,
         check_mode: bool = False,
-        progress_callback: Optional[callable] = None,
-        inventory_path: Optional[Path] = None,
+        progress_callback: Callable | None = None,
+        inventory_path: Path | None = None,
     ) -> Dict[str, any]:
         """
         Execute an Ansible playbook with optional progress updates (Issue #880).
@@ -502,7 +502,7 @@ class PlaybookExecutor:
 
 
 # Singleton instance
-_playbook_executor: Optional[PlaybookExecutor] = None
+_playbook_executor: PlaybookExecutor | None = None
 
 
 def get_playbook_executor() -> PlaybookExecutor:

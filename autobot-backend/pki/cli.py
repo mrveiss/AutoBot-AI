@@ -16,6 +16,7 @@ Usage:
 
     # From setup.py
     from pki.cli import run_pki_setup
+from autobot_shared.logging_manager import get_logger
     run_or_schedule(run_pki_setup())
 """
 
@@ -24,7 +25,9 @@ import logging
 import sys
 from pathlib import Path
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -36,7 +39,7 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 async def run_pki_setup(

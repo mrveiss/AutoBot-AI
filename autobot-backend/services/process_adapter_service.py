@@ -25,20 +25,20 @@ Boundary with long_running_operations (#1751):
 """
 
 import asyncio
-import logging
 import os
 import signal as signal_module
 import uuid
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
 from constants.threshold_constants import TimingConstants
 from models.process_run import ProcessRun, ProcessRunStatus
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _LOG_DIR = "/var/log/autobot/processes"
 _LOG_EXCERPT_MAX = 8 * 1024  # 8 KB
@@ -67,7 +67,7 @@ class ProcessAdapterService:
         self._running_counts: Dict[str, int] = {}
         self._queue: asyncio.Queue = asyncio.Queue()
         self._processes: Dict[str, asyncio.subprocess.Process] = {}
-        self._dispatcher_task: Optional[asyncio.Task] = None
+        self._dispatcher_task: asyncio.Task | None = None
 
     async def start(self) -> None:
         """Launch the background queue dispatcher (#1406)."""
@@ -89,9 +89,9 @@ class ProcessAdapterService:
         self,
         agent_id: str,
         command: str,
-        args: Optional[List[str]] = None,
+        args: List[str] | None = None,
         timeout_seconds: int = _DEFAULT_TIMEOUT,
-        task_id: Optional[str] = None,
+        task_id: str | None = None,
     ) -> str:
         """
         Create a ProcessRun row and schedule the subprocess (#1406).
@@ -103,7 +103,7 @@ class ProcessAdapterService:
         logger.info("Process %s queued for agent %s", run_id, agent_id)
         return str(run_id)
 
-    async def get_process_status(self, process_id: str) -> Optional[Dict[str, Any]]:
+    async def get_process_status(self, process_id: str) -> Dict[str, Any] | None:
         """Return current status dict for process_id, or None if not found (#1406)."""
         async with self._session_factory() as session:
             row = await session.get(ProcessRun, uuid.UUID(process_id))
@@ -135,7 +135,7 @@ class ProcessAdapterService:
     async def get_agent_processes(
         self,
         agent_id: str,
-        status_filter: Optional[str] = None,
+        status_filter: str | None = None,
         limit: int = 20,
     ) -> List[Dict[str, Any]]:
         """Return recent ProcessRun records for agent_id (#1406)."""
@@ -167,7 +167,7 @@ class ProcessAdapterService:
         self._running_counts[agent_id] = self._running_counts.get(agent_id, 0) + 1
         asyncio.create_task(self._run_process(run_id, agent_id), name=f"proc-{run_id}")
 
-    async def _fetch_agent_id(self, run_id: uuid.UUID) -> Optional[str]:
+    async def _fetch_agent_id(self, run_id: uuid.UUID) -> str | None:
         """Load agent_id for a run. Helper (#1406)."""
         async with self._session_factory() as session:
             row = await session.get(ProcessRun, run_id)
@@ -231,8 +231,8 @@ class ProcessAdapterService:
         self,
         run_id: uuid.UUID,
         status: str,
-        exit_code: Optional[int],
-        sig_name: Optional[str],
+        exit_code: int | None,
+        sig_name: str | None,
         excerpt: str,
         log_path: str,
     ) -> None:
@@ -265,7 +265,7 @@ class ProcessAdapterService:
         command: str,
         args: List[str],
         timeout_seconds: int,
-        task_id: Optional[str],
+        task_id: str | None,
     ) -> uuid.UUID:
         """Insert a QUEUED ProcessRun row and return its UUID (#1406)."""
         run_id = uuid.uuid4()
@@ -317,7 +317,7 @@ async def _persist_log(run_id: uuid.UUID, stdout: bytes, stderr: bytes) -> tuple
 async def _query_agent_runs(
     session: AsyncSession,
     agent_id: str,
-    status_filter: Optional[str],
+    status_filter: str | None,
     limit: int,
 ) -> List[ProcessRun]:
     """Query ProcessRun rows for agent_id with optional status filter (#1406)."""

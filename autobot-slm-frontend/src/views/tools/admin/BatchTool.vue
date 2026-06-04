@@ -249,7 +249,7 @@ onUnmounted(() => {
       <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
         <div class="flex items-center justify-between">
           <div>
-            <p class="text-sm text-gray-500">Total Jobs</p>
+            <p class="text-sm text-gray-500">{{ $t('tools.admin.batchTool.totalJobs') }}</p>
             <p class="text-2xl font-bold text-gray-900">{{ stats.total_jobs }}</p>
           </div>
           <div class="p-3 bg-gray-100 rounded-lg">
@@ -263,7 +263,7 @@ onUnmounted(() => {
       <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
         <div class="flex items-center justify-between">
           <div>
-            <p class="text-sm text-gray-500">Running</p>
+            <p class="text-sm text-gray-500">{{ $t('tools.admin.batchTool.running') }}</p>
             <p class="text-2xl font-bold text-blue-600">{{ stats.running_jobs }}</p>
           </div>
           <div class="p-3 bg-blue-100 rounded-lg">
@@ -277,7 +277,7 @@ onUnmounted(() => {
       <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
         <div class="flex items-center justify-between">
           <div>
-            <p class="text-sm text-gray-500">Completed</p>
+            <p class="text-sm text-gray-500">{{ $t('tools.admin.batchTool.completed') }}</p>
             <p class="text-2xl font-bold text-green-600">{{ stats.completed_jobs }}</p>
           </div>
           <div class="p-3 bg-green-100 rounded-lg">
@@ -291,7 +291,7 @@ onUnmounted(() => {
       <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
         <div class="flex items-center justify-between">
           <div>
-            <p class="text-sm text-gray-500">Failed</p>
+            <p class="text-sm text-gray-500">{{ $t('tools.admin.batchTool.failed') }}</p>
             <p class="text-2xl font-bold text-red-600">{{ stats.failed_jobs }}</p>
           </div>
           <div class="p-3 bg-red-100 rounded-lg">
@@ -311,12 +311,12 @@ onUnmounted(() => {
             v-model="filterStatus"
             class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
           >
-            <option value="all">All Status</option>
-            <option value="pending">Pending</option>
-            <option value="running">Running</option>
-            <option value="completed">Completed</option>
-            <option value="failed">Failed</option>
-            <option value="cancelled">Cancelled</option>
+            <option value="all">{{ $t('tools.admin.batchTool.allStatus') }}</option>
+            <option value="pending">{{ $t('tools.admin.batchTool.pending') }}</option>
+            <option value="running">{{ $t('tools.admin.batchTool.running') }}</option>
+            <option value="completed">{{ $t('tools.admin.batchTool.completed') }}</option>
+            <option value="failed">{{ $t('tools.admin.batchTool.failed') }}</option>
+            <option value="cancelled">{{ $t('tools.admin.batchTool.cancelled') }}</option>
           </select>
 
           <button
@@ -327,7 +327,7 @@ onUnmounted(() => {
             <svg class="w-4 h-4" :class="{ 'animate-spin': loading }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
-            Refresh
+            {{ $t('tools.admin.batchTool.refresh') }}
           </button>
         </div>
 
@@ -338,19 +338,19 @@ onUnmounted(() => {
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
           </svg>
-          Create Job
+          {{ $t('tools.admin.batchTool.createJob') }}
         </button>
       </div>
     </div>
 
     <!-- Issue #1092: Backend unavailable banner with retry -->
     <div v-if="!backendAvailable" class="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-lg flex items-center justify-between">
-      <span class="text-amber-800">AutoBot backend unreachable. Polling paused.</span>
+      <span class="text-amber-800">{{ $t('tools.admin.batchTool.autoBotBackendUnreachablePolling') }}</span>
       <button
         @click="resumePolling"
         class="px-3 py-1.5 text-sm bg-amber-600 text-white rounded-lg hover:bg-amber-700"
       >
-        Retry
+        {{ $t('tools.admin.batchTool.retry') }}
       </button>
     </div>
 
@@ -365,14 +365,14 @@ onUnmounted(() => {
         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
       </svg>
-      <p class="mt-4 text-gray-600">Loading jobs...</p>
+      <p class="mt-4 text-gray-600">{{ $t('tools.admin.batchTool.loadingJobs') }}</p>
     </div>
 
     <div v-else-if="filteredJobs.length === 0" class="text-center py-12 bg-white rounded-lg shadow-xs border border-gray-200">
       <svg class="w-12 h-12 mx-auto text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
       </svg>
-      <p class="mt-4 text-gray-600">No batch jobs found</p>
+      <p class="mt-4 text-gray-600">{{ $t('tools.admin.batchTool.noBatchJobsFound') }}</p>
     </div>
 
     <div v-else class="space-y-4">
@@ -398,21 +398,21 @@ onUnmounted(() => {
               @click="cancelJob(job.id)"
               class="px-3 py-1.5 text-xs bg-red-100 text-red-700 rounded-lg hover:bg-red-200"
             >
-              Cancel
+              {{ $t('tools.admin.batchTool.cancel') }}
             </button>
             <button
               v-if="job.status === 'failed'"
               @click="retryJob(job.id)"
               class="px-3 py-1.5 text-xs bg-amber-100 text-amber-700 rounded-lg hover:bg-amber-200"
             >
-              Retry
+              {{ $t('tools.admin.batchTool.retry') }}
             </button>
             <button
               v-if="job.status !== 'running'"
               @click="deleteJob(job.id)"
               class="px-3 py-1.5 text-xs text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg"
             >
-              Delete
+              {{ $t('tools.admin.batchTool.delete') }}
             </button>
           </div>
         </div>
@@ -420,7 +420,7 @@ onUnmounted(() => {
         <!-- Progress Bar -->
         <div class="mb-4">
           <div class="flex items-center justify-between text-sm text-gray-600 mb-1">
-            <span>Progress</span>
+            <span>{{ $t('tools.admin.batchTool.progress') }}</span>
             <span>{{ job.processed_items }} / {{ job.total_items }} items ({{ job.progress.toFixed(0) }}%)</span>
           </div>
           <div class="w-full bg-gray-200 rounded-full h-2">
@@ -434,19 +434,19 @@ onUnmounted(() => {
         <!-- Job Details -->
         <div class="grid grid-cols-4 gap-4 text-sm">
           <div>
-            <p class="text-gray-500">Created</p>
+            <p class="text-gray-500">{{ $t('tools.admin.batchTool.created') }}</p>
             <p class="text-gray-900">{{ formatDate(job.created_at) }}</p>
           </div>
           <div>
-            <p class="text-gray-500">Started</p>
+            <p class="text-gray-500">{{ $t('tools.admin.batchTool.started') }}</p>
             <p class="text-gray-900">{{ formatDate(job.started_at) }}</p>
           </div>
           <div>
-            <p class="text-gray-500">Duration</p>
+            <p class="text-gray-500">{{ $t('tools.admin.batchTool.duration') }}</p>
             <p class="text-gray-900">{{ formatDuration(job.started_at, job.completed_at) }}</p>
           </div>
           <div>
-            <p class="text-gray-500">Failed Items</p>
+            <p class="text-gray-500">{{ $t('tools.admin.batchTool.failedItems') }}</p>
             <p :class="job.failed_items > 0 ? 'text-red-600' : 'text-gray-900'">{{ job.failed_items }}</p>
           </div>
         </div>
@@ -462,8 +462,8 @@ onUnmounted(() => {
     <div v-if="showCreateModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
       <div class="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4 p-6">
         <div class="flex items-center justify-between mb-6">
-          <h3 class="text-lg font-semibold text-gray-900">Create Batch Job</h3>
-          <button @click="showCreateModal = false" class="text-gray-400 hover:text-gray-600">
+          <h3 class="text-lg font-semibold text-gray-900">{{ $t('tools.admin.batchTool.createBatchJob') }}</h3>
+          <button @click="showCreateModal = false" class="text-gray-400 hover:text-gray-600" aria-label="Close">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
             </svg>
@@ -472,7 +472,7 @@ onUnmounted(() => {
 
         <div class="space-y-4">
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Job Name</label>
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('tools.admin.batchTool.jobName') }}</label>
             <input
               v-model="newJob.name"
               type="text"
@@ -482,15 +482,15 @@ onUnmounted(() => {
           </div>
 
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Job Type</label>
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('tools.admin.batchTool.jobType') }}</label>
             <select
               v-model="newJob.type"
               class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
             >
-              <option value="file_processing">File Processing</option>
-              <option value="data_export">Data Export</option>
-              <option value="report_generation">Report Generation</option>
-              <option value="cleanup">Cleanup</option>
+              <option value="file_processing">{{ $t('tools.admin.batchTool.fileProcessing') }}</option>
+              <option value="data_export">{{ $t('tools.admin.batchTool.dataExport') }}</option>
+              <option value="report_generation">{{ $t('tools.admin.batchTool.reportGeneration') }}</option>
+              <option value="cleanup">{{ $t('tools.admin.batchTool.cleanup') }}</option>
             </select>
           </div>
         </div>
@@ -500,7 +500,7 @@ onUnmounted(() => {
             @click="showCreateModal = false"
             class="px-4 py-2 text-gray-700 hover:text-gray-900"
           >
-            Cancel
+            {{ $t('tools.admin.batchTool.cancel') }}
           </button>
           <button
             @click="createJob"

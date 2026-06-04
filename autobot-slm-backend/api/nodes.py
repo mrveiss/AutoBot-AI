@@ -14,7 +14,7 @@ import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import List, Optional
+from typing import List
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from pydantic import BaseModel
@@ -141,7 +141,7 @@ async def _process_role_report(db: AsyncSession, node_id: str, role_report: dict
     await db.flush()
 
 
-async def _handle_enrollment_started(db: AsyncSession, node_id: str, ssh_password: Optional[str]) -> None:
+async def _handle_enrollment_started(db: AsyncSession, node_id: str, ssh_password: str | None) -> None:
     """
     Create event and broadcast for enrollment started.
 
@@ -389,7 +389,7 @@ async def _get_service_counts(db: AsyncSession, node_ids: list[str]) -> dict[str
 async def list_nodes(
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(get_current_user)],
-    status_filter: Optional[str] = Query(None, alias="status"),
+    status_filter: str | None = Query(None, alias="status"),
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
 ) -> NodeListResponse:
@@ -955,7 +955,7 @@ async def provision_node_roles(
     node_id: str,
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(get_current_user)],
-    role_names: Optional[List[str]] = None,
+    role_names: List[str] | None = None,
 ) -> dict:
     """
     Provision assigned roles on a node using Ansible playbooks.
@@ -1024,7 +1024,12 @@ async def remove_role_from_node(
     if service_name:
         ansible_result = await _run_role_removal(node_id, role_name, service_name, backup, target_path)
         if not ansible_result["success"]:
-            logger.error("Role removal failed for node %s role %s: %s", node_id, role_name, ansible_result["output"])
+            logger.error(
+                "Role removal failed for node %s role %s: %s",
+                node_id,
+                role_name,
+                ansible_result["output"],
+            )
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Role removal failed",
@@ -1593,7 +1598,7 @@ async def _check_ip_conflict(
             )
 
 
-async def _prepare_node_extra_data(node_data: NodeCreate) -> Optional[dict]:
+async def _prepare_node_extra_data(node_data: NodeCreate) -> dict | None:
     """Prepare extra_data dict with encrypted password if needed.
 
     Helper for replace_node (Issue #665).
@@ -1839,7 +1844,7 @@ async def node_heartbeat(
             status="ok",
             update_available=update_available,
             latest_version=latest_version if update_available else None,
-            update_url=(f"/api/nodes/{node_id}/code-package" if update_available else None),
+            update_url=(f"/api/nodes/{node_id}/package" if update_available else None),
         )
 
     except HTTPException:
@@ -1865,7 +1870,7 @@ class NodeHealthResponse(BaseModel):
     cpu_percent: float
     memory_percent: float
     disk_percent: float
-    last_heartbeat: Optional[str] = None
+    last_heartbeat: str | None = None
     services: List[dict] = []
 
 
@@ -1903,7 +1908,7 @@ async def enroll_node(
     node_id: str,
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(get_current_user)],
-    enroll_request: Optional[EnrollRequest] = None,
+    enroll_request: EnrollRequest | None = None,
 ):
     """
     Start node enrollment process.
@@ -2286,8 +2291,8 @@ async def get_node_events(
     node_id: str,
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(get_current_user)],
-    event_type: Optional[str] = Query(None, alias="type"),
-    severity: Optional[str] = Query(None),
+    event_type: str | None = Query(None, alias="type"),
+    severity: str | None = Query(None),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
 ) -> NodeEventListResponse:

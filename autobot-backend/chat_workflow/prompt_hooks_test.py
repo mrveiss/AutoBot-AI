@@ -13,8 +13,6 @@ Tests verify:
 5. Extension errors do not crash the pipeline
 """
 
-from typing import Optional
-
 import pytest
 
 from chat_workflow.llm_handler import _emit_full_prompt_ready, _emit_system_prompt_ready
@@ -28,11 +26,11 @@ class _SystemPromptWatcher(Extension):
 
     name = "test_system_prompt_watcher"
 
-    def __init__(self, return_value: Optional[str] = None) -> None:
+    def __init__(self, return_value: str | None = None) -> None:
         self._return_value = return_value
-        self.captured_system_prompt: Optional[str] = None
+        self.captured_system_prompt: str | None = None
 
-    async def on_system_prompt_ready(self, ctx: HookContext) -> Optional[str]:
+    async def on_system_prompt_ready(self, ctx: HookContext) -> str | None:
         self.captured_system_prompt = ctx.get("system_prompt")
         return self._return_value
 
@@ -42,13 +40,13 @@ class _FullPromptWatcher(Extension):
 
     name = "test_full_prompt_watcher"
 
-    def __init__(self, return_value: Optional[str] = None) -> None:
+    def __init__(self, return_value: str | None = None) -> None:
         self._return_value = return_value
-        self.captured_prompt: Optional[str] = None
-        self.captured_llm_params: Optional[dict] = None
-        self.captured_context: Optional[dict] = None
+        self.captured_prompt: str | None = None
+        self.captured_llm_params: dict | None = None
+        self.captured_context: dict | None = None
 
-    async def on_full_prompt_ready(self, ctx: HookContext) -> Optional[str]:
+    async def on_full_prompt_ready(self, ctx: HookContext) -> str | None:
         self.captured_prompt = ctx.get("prompt")
         self.captured_llm_params = ctx.get("llm_params")
         self.captured_context = ctx.get("context")
@@ -60,7 +58,7 @@ class _ErrorExtension(Extension):
 
     name = "test_error_extension"
 
-    async def on_full_prompt_ready(self, ctx: HookContext) -> Optional[str]:
+    async def on_full_prompt_ready(self, ctx: HookContext) -> str | None:
         raise RuntimeError("simulated extension failure")
 
 

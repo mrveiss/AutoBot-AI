@@ -2,93 +2,14 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
-Test endpoint for Knowledge Base functionality
-This bypasses cached instances and creates fresh knowledge base for testing
+Backward-compatibility shim — real implementation moved to knowledge_eval.py.
+This file is excluded from Docker images by .dockerignore (*_test.py pattern).
+The live router is registered from api.knowledge_eval; this shim keeps test
+imports of `from api import knowledge_test` working in the test suite.
 """
 
-import asyncio
-import logging
-
-from fastapi import APIRouter
-
-from api.schemas_common import DataResponse
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from constants.threshold_constants import TimingConstants
-
-router = APIRouter()
-logger = logging.getLogger(__name__)
-
-
-@router.get("/test/fresh_stats", response_model=DataResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_fresh_kb_stats",
-    error_code_prefix="KNOWLEDGE_TEST",
+from api.knowledge_eval import (  # noqa: F401
+    get_fresh_kb_stats,
+    router,
+    test_rebuild_search_index,
 )
-async def get_fresh_kb_stats():
-    """Get knowledge base stats using a fresh instance (bypasses cache)"""
-    try:
-        # Import here to get fresh instance
-        from knowledge_base import KnowledgeBase
-
-        logger.info("Creating fresh knowledge base instance for testing")
-
-        # Create fresh knowledge base instance
-        kb = KnowledgeBase()
-
-        # Wait for initialization
-        await asyncio.sleep(TimingConstants.SERVICE_STARTUP_DELAY)
-
-        # Get stats
-        stats = await kb.get_stats()
-
-        logger.info(f"Fresh KB stats: {stats}")
-
-        return {"source": "fresh_instance", "stats": stats, "success": True}
-
-    except Exception:
-        logger.error("Error getting fresh KB stats")
-        return {
-            "source": "fresh_instance",
-            "error": "Internal server error",
-            "success": False,
-        }
-
-
-@router.post("/test/rebuild_index", response_model=DataResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="test_rebuild_search_index",
-    error_code_prefix="KNOWLEDGE_TEST",
-)
-async def test_rebuild_search_index():
-    """Test rebuilding the search index"""
-    try:
-        from knowledge_base import KnowledgeBase
-
-        logger.info("Creating fresh knowledge base for index rebuild")
-
-        # Create fresh knowledge base instance
-        kb = KnowledgeBase()
-
-        # Wait for initialization
-        await asyncio.sleep(TimingConstants.SERVICE_STARTUP_DELAY)
-
-        # Attempt to rebuild search index
-        result = await kb.rebuild_search_index()
-
-        logger.info(f"Index rebuild result: {result}")
-
-        return {
-            "operation": "rebuild_search_index",
-            "result": result,
-            "success": result.get("status") == "success",
-        }
-
-    except Exception:
-        logger.error("Error rebuilding search index")
-        return {
-            "operation": "rebuild_search_index",
-            "error": "Internal server error",
-            "success": False,
-        }

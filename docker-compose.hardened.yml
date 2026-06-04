@@ -1,0 +1,185 @@
+# AutoBot — Hardened docker-compose overlay for production deployments.
+# Issue #6596
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.hardened.yml \
+#     --env-file docker/.env.docker up -d
+#
+# What this overlay adds on top of the base compose:
+#   • read_only: true on all writable-root services (backend, worker, slm, redis, postgres, chromadb)
+#   • Additional tmpfs mounts required when read_only is enabled
+#   • Docker Secrets replace plain-text env-var credentials (Postgres password,
+#     SLM admin password)
+#   • PID-namespace limit (deploy.resources.limits.pids) on all services to cap fork-bomb risk
+#   • Tighter resource limits (half the base allocation, tunable per operator)
+#
+# Secret files must be created by the operator before first `up`:
+#   mkdir -p secrets/
+#   echo -n "$(openssl rand -hex 32)" > secrets/postgres_password.txt
+#   echo -n "$(openssl rand -hex 32)" > secrets/slm_admin_password.txt
+#   echo -n "your-jwt-secret"          > secrets/slm_jwt_secret.txt
+#   chmod 600 secrets/*.txt
+#
+# Postgres natively reads POSTGRES_PASSWORD_FILE.
+# The SLM service reads SLM_ADMIN_PASSWORD_FILE and SLM_JWT_SECRET_FILE
+# via autobot_shared.secret_file_utils (see docs/developer/secrets.md).
+#
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+
+secrets:
+  postgres_password:
+    file: ./secrets/postgres_password.txt
+  slm_admin_password:
+    file: ./secrets/slm_admin_password.txt
+  slm_jwt_secret:
+    file: ./secrets/slm_jwt_secret.txt
+
+services:
+  # ── Data layer: make filesystems read-only ────────────────────────────────
+
+  autobot-redis:
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/run
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+          cpus: '0.75'
+          pids: 128
+
+  autobot-postgres:
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/run/postgresql
+    secrets:
+      - postgres_password
+    environment:
+      # Override plain-text password with a file-based secret.
+      # Postgres reads POSTGRES_PASSWORD_FILE natively.
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      POSTGRES_PASSWORD: ""          # clear the base env var
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+          cpus: '0.75'
+          pids: 256
+
+  autobot-chromadb:
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/run
+      - /chroma/.chroma  # ChromaDB 0.5.23 writes migration/metadata state here on startup
+    # NOTE: /chroma/chroma is NOT in tmpfs — it is already writable via the
+    # chroma_data named volume in the base compose (named volumes always override
+    # read_only: true; adding a second mount at the same path is rejected by
+    # Docker Compose with a conflict error).
+    #
+    # /chroma/.chroma is a sibling directory that ChromaDB creates for internal
+    # state (distinct from the persist_directory at /chroma/chroma). Without this
+    # tmpfs the process hits EROFS on first write under read_only: true.
+    # Mounting /chroma as tmpfs would shadow /chroma/chromadb/log_config.yml
+    # (the regression introduced by PR #8912 that caused GH#8913).
+    #
+    # ChromaDB 0.5.23 log_config.yml defines a RotatingFileHandler writing to
+    # /chroma/chroma.log.  Under read_only: true that path is not writable and
+    # not covered by any volume or tmpfs above, so uvicorn crashes before the
+    # health-check endpoint comes up.  Override the command to drop the
+    # --log-config flag; uvicorn then falls back to stdout-only logging.
+    command: >
+      uvicorn chromadb.app:app
+      --workers 1
+      --host 0.0.0.0
+      --port 8000
+      --proxy-headers
+      --log-level warning
+      --timeout-keep-alive 30
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+          cpus: '0.75'
+          pids: 128
+
+  # ── Application layer ─────────────────────────────────────────────────────
+
+  autobot-backend:
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /app/autobot-backend/.cache:mode=1777
+      - /app/autobot-backend/logs:mode=1777  # logging_manager creates logs/backup dirs on init
+    deploy:
+      resources:
+        limits:
+          memory: 1536M
+          cpus: '1.5'
+          pids: 256
+
+  autobot-worker:
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /app/autobot-backend/.cache:mode=1777
+      - /app/autobot-backend/logs:mode=1777  # logging_manager creates logs/backup dirs on init
+    deploy:
+      resources:
+        limits:
+          memory: 1536M
+          cpus: '1.5'
+          pids: 256
+
+  autobot-slm:
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/run
+      - /app/data/tmp:mode=1777
+    secrets:
+      - slm_admin_password
+      - slm_jwt_secret
+    environment:
+      # The SLM service reads *_FILE variants via autobot_shared.secret_file_utils.
+      SLM_ADMIN_PASSWORD_FILE: /run/secrets/slm_admin_password
+      SLM_JWT_SECRET_FILE: /run/secrets/slm_jwt_secret
+      SLM_ADMIN_PASSWORD: ""         # clear the plain-text env var
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+          cpus: '0.75'
+          pids: 256
+
+  autobot-frontend:
+    # read_only + tmpfs already set in base compose
+    deploy:
+      resources:
+        limits:
+          pids: 64
+
+  # ── Optional services ─────────────────────────────────────────────────────
+
+  autobot-prometheus:
+    read_only: true
+    tmpfs:
+      - /tmp
+    deploy:
+      resources:
+        limits:
+          pids: 128
+
+  autobot-grafana:
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/run
+    deploy:
+      resources:
+        limits:
+          pids: 128

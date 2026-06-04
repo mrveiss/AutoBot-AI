@@ -7,12 +7,12 @@ Voice Transcription Skill (Issue #731)
 Transcribe audio and video files to text using Whisper-compatible models.
 """
 
-import logging
 from typing import Any, Dict
 
+from autobot_shared.logging_manager import get_logger
 from skills.base_skill import BaseSkill, SkillConfigField, SkillManifest
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class VoiceTranscriptionSkill(BaseSkill):

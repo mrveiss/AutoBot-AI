@@ -7,10 +7,11 @@ Task Registry for ECL Knowledge Pipeline.
 Issue #759: Knowledge Pipeline Foundation - Extract, Cognify, Load (ECL).
 """
 
-import logging
 from typing import Any, Callable, Dict, Type
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 
 
 class TaskRegistry:

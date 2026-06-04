@@ -18,20 +18,20 @@ Features:
 """
 
 import asyncio
-import logging
 import re
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import aiofiles
 
+from autobot_shared.logging_manager import get_logger
 from constants.path_constants import PATH
 from constants.threshold_constants import TimingConstants
 from knowledge_base_factory import get_knowledge_base
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Performance optimization: O(1) lookup for file type and metadata filtering (Issue #326)
 JAVASCRIPT_LANGUAGE_TYPES = {"javascript", "typescript"}
@@ -71,13 +71,13 @@ class IndexingProgress:
     successful_files: int = 0
     failed_files: int = 0
     total_chunks: int = 0
-    start_time: Optional[datetime] = None
-    end_time: Optional[datetime] = None
+    start_time: datetime | None = None
+    end_time: datetime | None = None
     current_file: str = ""
     current_category: str = ""
     errors: List[str] = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Initialize errors list if not provided."""
         if self.errors is None:
             self.errors = []
@@ -121,7 +121,7 @@ class FileInfo:
 class CodeChunker:
     """Intelligent code-aware chunking for different file types"""
 
-    def __init__(self, max_chunk_size: int = 2000, overlap_size: int = 200):
+    def __init__(self, max_chunk_size: int = 2000, overlap_size: int = 200) -> None:
         """Initialize code chunker with configurable size limits and overlap."""
         self.max_chunk_size = max_chunk_size
         self.overlap_size = overlap_size
@@ -132,7 +132,7 @@ class CodeChunker:
         chunk_type: str,
         start_line: int,
         end_line: int,
-    ) -> Optional[Dict[str, Any]]:
+    ) -> Dict[str, Any] | None:
         """
         Create a chunk dictionary from lines if content is not empty.
 
@@ -572,7 +572,7 @@ class CodebaseIndexingService:
             "infrastructure": ["ansible/", "terraform/", "k8s/", "kubernetes/"],
         }
 
-    def __init__(self, root_path: str = str(PATH.PROJECT_ROOT)):
+    def __init__(self, root_path: str = str(PATH.PROJECT_ROOT)) -> None:
         """Initialize codebase indexing service with root path and file patterns."""
         self.root_path = Path(root_path)
         self.chunker = CodeChunker()
@@ -661,7 +661,7 @@ class CodebaseIndexingService:
 
         return files
 
-    async def _read_file_content(self, file_path: Path) -> Optional[str]:
+    async def _read_file_content(self, file_path: Path) -> str | None:
         """Read file content with error handling"""
         try:
             # Try UTF-8 first
@@ -863,7 +863,7 @@ class CodebaseIndexingService:
             for error in self.progress.errors[:10]:
                 logger.warning("  - %s", error)
 
-    async def index_codebase(self, batch_size: int = 10, max_files: Optional[int] = None) -> IndexingProgress:
+    async def index_codebase(self, batch_size: int = 10, max_files: int | None = None) -> IndexingProgress:
         """Index the entire codebase with progress tracking"""
         logger.info("Starting codebase indexing for: %s", self.root_path)
 
@@ -975,7 +975,7 @@ class CodebaseIndexingService:
 # Global service instance (thread-safe)
 import threading
 
-_indexing_service: Optional[CodebaseIndexingService] = None
+_indexing_service: CodebaseIndexingService | None = None
 _indexing_service_lock = threading.Lock()
 
 
@@ -991,7 +991,7 @@ def get_indexing_service() -> CodebaseIndexingService:
 
 
 # Convenience functions
-async def index_autobot_codebase(max_files: Optional[int] = None, batch_size: int = 10) -> IndexingProgress:
+async def index_autobot_codebase(max_files: int | None = None, batch_size: int = 10) -> IndexingProgress:
     """Index the AutoBot codebase"""
     service = get_indexing_service()
     return await service.index_codebase(batch_size=batch_size, max_files=max_files)

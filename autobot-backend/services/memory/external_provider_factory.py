@@ -3,13 +3,12 @@
 # Author: mrveiss
 """External Provider Factory (Issue #4344)"""
 
-import logging
 from enum import Enum
-from typing import Optional
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ProviderType(str, Enum):
@@ -24,7 +23,7 @@ class ExternalProviderFactory:
 
     _instance = None
     _external_provider = None
-    _provider_type: Optional[ProviderType] = None
+    _provider_type: ProviderType | None = None
 
     def __new__(cls):
         if cls._instance is None:
@@ -56,7 +55,7 @@ class ExternalProviderFactory:
         return cls._external_provider
 
     @classmethod
-    def _get_configured_provider(cls) -> Optional[ProviderType]:
+    def _get_configured_provider(cls) -> ProviderType | None:
         try:
             provider_name = getattr(config, "external_memory_provider", None)
             if provider_name:

@@ -73,7 +73,7 @@ def _make_manager(workflow: ActiveWorkflow | None = None) -> MagicMock:
 
 class TestExportWorkflow:
     @pytest.mark.asyncio
-    async def test_exports_active_workflow(self):
+    async def test_exports_active_workflow(self) -> None:
         wf = _make_workflow()
         manager = _make_manager(wf)
         serializer = WorkflowSerializer(manager)
@@ -88,7 +88,7 @@ class TestExportWorkflow:
         assert doc.steps[0].command == "echo hello"
 
     @pytest.mark.asyncio
-    async def test_exports_completed_workflow(self):
+    async def test_exports_completed_workflow(self) -> None:
         wf = _make_workflow(workflow_id="wf-done")
         manager = MagicMock()
         manager.active_workflows = {}
@@ -101,7 +101,7 @@ class TestExportWorkflow:
         assert doc.workflow_id == "wf-done"
 
     @pytest.mark.asyncio
-    async def test_returns_none_for_unknown_workflow(self):
+    async def test_returns_none_for_unknown_workflow(self) -> None:
         manager = _make_manager()
         serializer = WorkflowSerializer(manager)
 
@@ -110,7 +110,7 @@ class TestExportWorkflow:
         assert doc is None
 
     @pytest.mark.asyncio
-    async def test_export_metadata_contains_owner(self):
+    async def test_export_metadata_contains_owner(self) -> None:
         wf = _make_workflow()
         manager = _make_manager(wf)
         serializer = WorkflowSerializer(manager)
@@ -120,7 +120,7 @@ class TestExportWorkflow:
         assert doc.metadata.get("original_owner_id") == "owner-1"
 
     @pytest.mark.asyncio
-    async def test_to_dict_is_json_serialisable(self):
+    async def test_to_dict_is_json_serialisable(self) -> None:
         wf = _make_workflow()
         manager = _make_manager(wf)
         serializer = WorkflowSerializer(manager)
@@ -159,59 +159,59 @@ class TestValidateImport:
     def _serializer(self) -> WorkflowSerializer:
         return WorkflowSerializer(MagicMock())
 
-    def test_valid_document_has_no_issues(self):
+    def test_valid_document_has_no_issues(self) -> None:
         issues = self._serializer().validate_import(self._valid_payload())
         assert issues == []
 
-    def test_wrong_schema_version_reported(self):
+    def test_wrong_schema_version_reported(self) -> None:
         payload = self._valid_payload()
         payload["schema_version"] = "99.0"
         issues = self._serializer().validate_import(payload)
         assert any("schema_version" in i for i in issues)
 
-    def test_missing_name_reported(self):
+    def test_missing_name_reported(self) -> None:
         payload = self._valid_payload()
         del payload["name"]
         issues = self._serializer().validate_import(payload)
         assert any("name" in i for i in issues)
 
-    def test_missing_steps_reported(self):
+    def test_missing_steps_reported(self) -> None:
         payload = self._valid_payload()
         del payload["steps"]
         issues = self._serializer().validate_import(payload)
         assert any("steps" in i for i in issues)
 
-    def test_non_list_steps_reported(self):
+    def test_non_list_steps_reported(self) -> None:
         payload = self._valid_payload()
         payload["steps"] = "not a list"
         issues = self._serializer().validate_import(payload)
         assert any("steps" in i for i in issues)
 
-    def test_step_missing_command_reported(self):
+    def test_step_missing_command_reported(self) -> None:
         payload = self._valid_payload()
         payload["steps"][0].pop("command")
         issues = self._serializer().validate_import(payload)
         assert any("command" in i for i in issues)
 
-    def test_step_bad_risk_level_reported(self):
+    def test_step_bad_risk_level_reported(self) -> None:
         payload = self._valid_payload()
         payload["steps"][0]["risk_level"] = "galaxy-brained"
         issues = self._serializer().validate_import(payload)
         assert any("risk_level" in i for i in issues)
 
-    def test_invalid_automation_mode_reported(self):
+    def test_invalid_automation_mode_reported(self) -> None:
         payload = self._valid_payload()
         payload["automation_mode"] = "turbo_mode"
         issues = self._serializer().validate_import(payload)
         assert any("automation_mode" in i for i in issues)
 
-    def test_step_bad_timeout_reported(self):
+    def test_step_bad_timeout_reported(self) -> None:
         payload = self._valid_payload()
         payload["steps"][0]["timeout_seconds"] = -5
         issues = self._serializer().validate_import(payload)
         assert any("timeout_seconds" in i for i in issues)
 
-    def test_non_dict_payload_reported(self):
+    def test_non_dict_payload_reported(self) -> None:
         issues = self._serializer().validate_import("not a dict")  # type: ignore[arg-type]
         assert any("JSON object" in i for i in issues)
 
@@ -242,7 +242,7 @@ class TestImportWorkflow:
         }
 
     @pytest.mark.asyncio
-    async def test_creates_new_workflow_on_valid_payload(self):
+    async def test_creates_new_workflow_on_valid_payload(self) -> None:
         manager = MagicMock()
         manager.active_workflows = {}
         manager.completed_workflows = {}
@@ -258,7 +258,7 @@ class TestImportWorkflow:
         assert call_kwargs.kwargs["owner_id"] == "user-1"
 
     @pytest.mark.asyncio
-    async def test_returns_none_on_invalid_payload(self):
+    async def test_returns_none_on_invalid_payload(self) -> None:
         manager = MagicMock()
         manager.active_workflows = {}
         manager.completed_workflows = {}
@@ -295,7 +295,7 @@ class TestImportWorkflow:
         assert captured_steps["steps"][0].command == "apt update"
 
     @pytest.mark.asyncio
-    async def test_uses_provided_session_id(self):
+    async def test_uses_provided_session_id(self) -> None:
         manager = MagicMock()
         manager.active_workflows = {}
         manager.completed_workflows = {}
@@ -322,7 +322,7 @@ class TestShareWorkflow:
         return sharing, manager
 
     @pytest.mark.asyncio
-    async def test_returns_share_id_for_public_share(self):
+    async def test_returns_share_id_for_public_share(self) -> None:
         sharing, manager = self._make_sharing()
         mock_redis = AsyncMock()
         with patch(
@@ -335,7 +335,7 @@ class TestShareWorkflow:
         mock_redis.setex.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_returns_share_id_for_targeted_share(self):
+    async def test_returns_share_id_for_targeted_share(self) -> None:
         sharing, _ = self._make_sharing()
         mock_redis = AsyncMock()
         with patch(
@@ -352,20 +352,20 @@ class TestShareWorkflow:
         mock_redis.set.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_returns_none_when_no_target_or_public(self):
+    async def test_returns_none_when_no_target_or_public(self) -> None:
         sharing, _ = self._make_sharing()
         share_id = await sharing.share_workflow(workflow_id="wf-test", owner_id="owner-1")
         assert share_id is None
 
     @pytest.mark.asyncio
-    async def test_returns_none_when_redis_unavailable(self):
+    async def test_returns_none_when_redis_unavailable(self) -> None:
         sharing, _ = self._make_sharing()
         with patch("services.workflow_sharing_service.get_async_redis_client", new=AsyncMock(return_value=None)):
             share_id = await sharing.share_workflow(workflow_id="wf-test", owner_id="owner-1", public=True)
         assert share_id is None
 
     @pytest.mark.asyncio
-    async def test_returns_none_when_workflow_not_found(self):
+    async def test_returns_none_when_workflow_not_found(self) -> None:
         manager = MagicMock()
         manager.active_workflows = {}
         manager.completed_workflows = {}
@@ -383,7 +383,7 @@ class TestShareWorkflow:
 
 class TestUnshareWorkflow:
     @pytest.mark.asyncio
-    async def test_deletes_existing_share(self):
+    async def test_deletes_existing_share(self) -> None:
         sharing = WorkflowSharingService(MagicMock())
         share_id = str(uuid.uuid4())
         record = json.dumps({"workflow_id": "wf-test"})
@@ -400,7 +400,7 @@ class TestUnshareWorkflow:
         mock_redis.delete.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_returns_false_when_share_not_found(self):
+    async def test_returns_false_when_share_not_found(self) -> None:
         sharing = WorkflowSharingService(MagicMock())
         mock_redis = AsyncMock()
         mock_redis.get.return_value = None
@@ -414,7 +414,7 @@ class TestUnshareWorkflow:
         assert result is False
 
     @pytest.mark.asyncio
-    async def test_returns_false_when_redis_unavailable(self):
+    async def test_returns_false_when_redis_unavailable(self) -> None:
         sharing = WorkflowSharingService(MagicMock())
         with patch("services.workflow_sharing_service.get_async_redis_client", new=AsyncMock(return_value=None)):
             result = await sharing.unshare_workflow("any-share")
@@ -447,7 +447,7 @@ class TestListShared:
         )
 
     @pytest.mark.asyncio
-    async def test_returns_public_shares_to_any_user(self):
+    async def test_returns_public_shares_to_any_user(self) -> None:
         sharing = WorkflowSharingService(MagicMock())
         share_id = "share-pub-1"
         record = self._build_record(share_id, public=True)
@@ -467,7 +467,7 @@ class TestListShared:
         assert "workflow" not in shares[0]
 
     @pytest.mark.asyncio
-    async def test_returns_targeted_share_to_target_user(self):
+    async def test_returns_targeted_share_to_target_user(self) -> None:
         sharing = WorkflowSharingService(MagicMock())
         share_id = "share-target-1"
         record = self._build_record(share_id, target_user_id="user-2")
@@ -485,7 +485,7 @@ class TestListShared:
         assert len(shares) == 1
 
     @pytest.mark.asyncio
-    async def test_hides_targeted_share_from_other_user(self):
+    async def test_hides_targeted_share_from_other_user(self) -> None:
         sharing = WorkflowSharingService(MagicMock())
         share_id = "share-priv-1"
         record = self._build_record(share_id, target_user_id="user-2")
@@ -503,7 +503,7 @@ class TestListShared:
         assert shares == []
 
     @pytest.mark.asyncio
-    async def test_returns_empty_when_redis_unavailable(self):
+    async def test_returns_empty_when_redis_unavailable(self) -> None:
         sharing = WorkflowSharingService(MagicMock())
         with patch("services.workflow_sharing_service.get_async_redis_client", new=AsyncMock(return_value=None)):
             shares = await sharing.list_shared(user_id="anyone")
@@ -545,7 +545,7 @@ class TestCloneWorkflow:
         }
 
     @pytest.mark.asyncio
-    async def test_clones_shared_workflow(self):
+    async def test_clones_shared_workflow(self) -> None:
         export_doc = self._valid_export_doc()
         sharing = self._make_sharing_with_export(export_doc)
         share_id = "share-abc"
@@ -571,7 +571,7 @@ class TestCloneWorkflow:
         assert new_id == "wf-cloned"
 
     @pytest.mark.asyncio
-    async def test_returns_none_when_share_not_found(self):
+    async def test_returns_none_when_share_not_found(self) -> None:
         sharing = self._make_sharing_with_export({})
         mock_redis = AsyncMock()
         mock_redis.get = AsyncMock(return_value=None)
@@ -585,7 +585,7 @@ class TestCloneWorkflow:
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_returns_none_when_redis_unavailable(self):
+    async def test_returns_none_when_redis_unavailable(self) -> None:
         sharing = self._make_sharing_with_export({})
         with patch("services.workflow_sharing_service.get_async_redis_client", new=AsyncMock(return_value=None)):
             result = await sharing.clone_workflow("any-share", new_owner_id="u")
@@ -598,13 +598,13 @@ class TestCloneWorkflow:
 
 
 class TestHelpers:
-    def test_strip_workflow_payload_removes_workflow_key(self):
+    def test_strip_workflow_payload_removes_workflow_key(self) -> None:
         record = {"share_id": "s1", "name": "Test", "workflow": {"steps": []}}
         stripped = _strip_workflow_payload(record)
         assert "workflow" not in stripped
         assert stripped["share_id"] == "s1"
 
-    def test_strip_workflow_payload_no_mutation(self):
+    def test_strip_workflow_payload_no_mutation(self) -> None:
         record = {"share_id": "s2", "workflow": {"steps": []}}
         _strip_workflow_payload(record)
         assert "workflow" in record  # original is unchanged

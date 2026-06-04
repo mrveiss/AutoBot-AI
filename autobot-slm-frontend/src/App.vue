@@ -14,12 +14,16 @@ import { onMounted, watch, computed } from 'vue'
 import { RouterView, useRoute } from 'vue-router'
 import Sidebar from '@/components/common/Sidebar.vue'
 import SkipLink from '@/components/common/SkipLink.vue'
+import ToastContainer from '@/components/common/ToastContainer.vue'
 import UpdateNotification from '@/components/UpdateNotification.vue'
 import { useFleetStore } from '@/stores/fleet'
 import { useAuthStore } from '@/stores/auth'
 import { useSlmWebSocket } from '@/composables/useSlmWebSocket'
 import { useHighContrast, useDarkMode } from '@/composables/useAccessibility'
 import { ensureTimezone } from '@/composables/useTimezone'
+import { provideToast } from '@/composables/useToast'
+
+provideToast()
 
 const route = useRoute()
 const fleetStore = useFleetStore()
@@ -78,6 +82,8 @@ onMounted(async () => {
 <template>
   <!-- Issue #754: Skip link for keyboard navigation -->
   <SkipLink />
+  <!-- Canonical toast notification container (GH#7449) -->
+  <ToastContainer />
 
   <!-- Login page - no sidebar -->
   <template v-if="isLoginPage">

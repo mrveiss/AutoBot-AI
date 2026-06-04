@@ -348,7 +348,7 @@ class TestDeploymentResponseFormat:
 
     def test_response_includes_steps(self, client, mock_orchestrator, sample_context):
         """Test response includes deployment steps."""
-        from datetime import datetime
+        from autobot_shared.datetime_utils import datetime_now
 
         sample_context.steps = [
             DeploymentStep(
@@ -356,8 +356,8 @@ class TestDeploymentResponseFormat:
                 node_id="node-1",
                 node_name="test-node",
                 description="Draining node",
-                started_at=datetime.utcnow(),
-                completed_at=datetime.utcnow(),
+                started_at=datetime_now(),
+                completed_at=datetime_now(),
                 success=True,
             )
         ]

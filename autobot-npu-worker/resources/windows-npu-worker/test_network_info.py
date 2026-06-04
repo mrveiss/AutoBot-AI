@@ -15,7 +15,7 @@ from gui.utils.network_info import (
     get_platform_info,
     get_primary_ip,
     format_connection_info_box,
-    get_registration_config
+    get_registration_config,
 )
 
 
@@ -35,7 +35,7 @@ def test_network_detection():
     print(f"\n✓ Found {len(interfaces)} network interface(s):\n")
 
     for i, iface in enumerate(interfaces, 1):
-        primary = " ★ PRIMARY" if iface.get('is_primary') else ""
+        primary = " ★ PRIMARY" if iface.get("is_primary") else ""
         print(f"  {i}. {iface['type']:15} ({iface['interface']})")
         print(f"     IP: {iface['ip']}{primary}")
         print()
@@ -57,8 +57,8 @@ def test_platform_info():
     print(f"  Machine:   {info.get('machine', 'Unknown')}")
     print(f"  Processor: {info.get('processor', 'Unknown')}")
 
-    npu_detected = info.get('npu_detected', False)
-    npu_devices = info.get('npu_devices', [])
+    npu_detected = info.get("npu_detected", False)
+    npu_devices = info.get("npu_devices", [])
 
     if npu_detected:
         print(f"  NPU:       ✓ Detected ({len(npu_devices)} device(s))")
@@ -99,12 +99,7 @@ def test_connection_info_box():
     interfaces = get_network_interfaces()
     platform_info = get_platform_info()
 
-    box = format_connection_info_box(
-        worker_id=worker_id,
-        port=port,
-        interfaces=interfaces,
-        platform_info=platform_info
-    )
+    box = format_connection_info_box(worker_id=worker_id, port=port, interfaces=interfaces, platform_info=platform_info)
 
     print("\n✓ Generated Connection Info Box:\n")
     print(box)

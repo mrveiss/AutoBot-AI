@@ -10,22 +10,22 @@ including logging, retry mechanisms, and error recovery strategies.
 
 import asyncio
 import functools
-import logging
 import threading
 import time
 import traceback
 from contextlib import contextmanager
-from typing import Any, Callable, Optional, Type, TypeVar
+from typing import Any, Callable, Type, TypeVar
 
+from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import TimingConstants
 from exceptions import AutoBotError, InternalError
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 T = TypeVar("T")
 
 
-def log_error(error: Exception, context: Optional[str] = None, include_traceback: bool = True) -> None:
+def log_error(error: Exception, context: str | None = None, include_traceback: bool = True) -> None:
     """
     Log an error with appropriate context and detail level.
 
@@ -53,9 +53,9 @@ def log_error(error: Exception, context: Optional[str] = None, include_traceback
 
 def with_error_handling(
     default_return: Any = None,
-    context: Optional[str] = None,
+    context: str | None = None,
     reraise: bool = False,
-    error_types: Optional[tuple] = None,
+    error_types: tuple | None = None,
 ):
     """
     Decorator for consistent error handling.
@@ -113,7 +113,7 @@ def _handle_retry_attempt(
     attempt: int,
     max_attempts: int,
     func_name: str,
-    on_retry: Optional[Callable[[Exception, int], None]],
+    on_retry: Callable[[Exception, int], None] | None,
 ) -> None:
     """Handle logging and callback for retry attempt. Issue #620."""
     if on_retry:
@@ -151,7 +151,7 @@ def _process_retry_exception(
     attempt: int,
     max_attempts: int,
     func_name: str,
-    on_retry: Optional[Callable[[Exception, int], None]],
+    on_retry: Callable[[Exception, int], None] | None,
     current_delay: float,
     backoff: float,
 ) -> tuple:
@@ -188,7 +188,7 @@ def _create_sync_retry_wrapper(
     delay: float,
     backoff: float,
     exceptions: tuple,
-    on_retry: Optional[Callable[[Exception, int], None]],
+    on_retry: Callable[[Exception, int], None] | None,
 ) -> Callable[..., T]:
     """Create synchronous retry wrapper for a function. Issue #620."""
 
@@ -222,7 +222,7 @@ def _create_async_retry_wrapper(
     delay: float,
     backoff: float,
     exceptions: tuple,
-    on_retry: Optional[Callable[[Exception, int], None]],
+    on_retry: Callable[[Exception, int], None] | None,
 ) -> Callable[..., T]:
     """Create asynchronous retry wrapper for a function. Issue #620."""
 
@@ -255,7 +255,7 @@ def retry(
     delay: float = 1.0,
     backoff: float = 2.0,
     exceptions: tuple = (Exception,),
-    on_retry: Optional[Callable[[Exception, int], None]] = None,
+    on_retry: Callable[[Exception, int], None] | None = None,
 ):
     """Decorator for retrying functions with exponential backoff. Issue #620.
 
@@ -392,7 +392,7 @@ def _build_autobot_error_response(error: AutoBotError) -> dict:
     return response
 
 
-def safe_api_error(error: Exception, request_id: Optional[str] = None) -> dict:
+def safe_api_error(error: Exception, request_id: str | None = None) -> dict:
     """
     Convert an exception to a safe API error response.
 

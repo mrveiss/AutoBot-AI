@@ -19,5 +19,8 @@
 @import './themes/dark.css';
 @import './themes/light.css';
 
+/* Accent colors - Custom accent color presets (Issue #8988) */
+@import './themes/accents.css';
+
 /* Global component patterns — shared UI classes for all views (Issue #901) */
 @import './components.css';

@@ -37,7 +37,7 @@
   # (#2872) Intentional: legacy service may already be stopped/disabled;
   # this is cleanup of a previous service name (#917).
   failed_when: false
-  become: yes
+  become: true
   tags: ['slm_agent', 'cleanup']
 
 - name: "SLM Agent | Remove legacy autobot-agent.service unit file"
@@ -45,9 +45,31 @@
     path: /etc/systemd/system/autobot-agent.service
     state: absent
   when: legacy_agent_unit.stat.exists
-  become: yes
+  become: true
   notify: Reload systemd
   tags: ['slm_agent', 'cleanup']
+
+- name: "SLM Agent | Add agent user to systemd-journal group for log access"
+  ansible.builtin.user:
+    name: "{{ slm_agent_user }}"
+    groups: systemd-journal
+    append: true
+  become: true
+  tags: ['slm_agent', 'setup']
+
+- name: "SLM Agent | Ensure ansible.log is readable by agent user (GH#8925-2)"
+  ansible.builtin.acl:
+    path: /var/log/autobot/ansible.log
+    entity: "{{ slm_agent_user }}"
+    etype: user
+    permissions: r
+    state: present
+  become: true
+  # (#2872) Intentional: file may not exist yet on first provisioning;
+  # ACL is applied if/when the file is created. On systems without ACL
+  # support, the task is skipped gracefully.
+  failed_when: false
+  tags: ['slm_agent', 'setup']
 
 - name: "SLM Agent | Create agent directories"
   file:
@@ -61,7 +83,7 @@
     - "{{ slm_agent_dir }}/slm"
     - "{{ slm_agent_dir }}/slm/agent"
     - "{{ slm_agent_data_dir }}"
-  become: yes
+  become: true
   tags: ['slm_agent', 'directories']
 
 # Issue #741: Version tracking - Get git commit and deploy version.json
@@ -91,7 +113,7 @@
     owner: "{{ slm_agent_user }}"
     group: "{{ slm_agent_group }}"
     mode: '0644'
-  become: yes
+  become: true
   tags: ['slm_agent', 'version']
 
 - name: "SLM Agent | Install Python dependencies"
@@ -100,7 +122,7 @@
     state: present
     executable: pip3
     extra_args: "--break-system-packages"
-  become: yes
+  become: true
   environment:
     PIP_DEFAULT_TIMEOUT: "120"
   timeout: 300  # Issue #2835: prevent indefinite hang on dependency resolution
@@ -117,7 +139,7 @@
     owner: "{{ slm_agent_user }}"
     group: "{{ slm_agent_group }}"
     mode: '0644'
-  become: yes
+  become: true
   notify: Restart SLM agent
   tags: ['slm_agent', 'deploy']
 
@@ -128,7 +150,7 @@
     owner: "{{ slm_agent_user }}"
     group: "{{ slm_agent_group }}"
     mode: '0644'
-  become: yes
+  become: true
   notify: Restart SLM agent
   tags: ['slm_agent', 'deploy']
 
@@ -139,7 +161,7 @@
     owner: "{{ slm_agent_user }}"
     group: "{{ slm_agent_group }}"
     mode: '0644'
-  become: yes
+  become: true
   notify: Restart SLM agent
   tags: ['slm_agent', 'deploy']
 
@@ -150,7 +172,7 @@
     owner: "{{ slm_agent_user }}"
     group: "{{ slm_agent_group }}"
     mode: '0644'
-  become: yes
+  become: true
   notify: Restart SLM agent
   tags: ['slm_agent', 'deploy']
 
@@ -162,7 +184,7 @@
     owner: "{{ slm_agent_user }}"
     group: "{{ slm_agent_group }}"
     mode: '0644'
-  become: yes
+  become: true
   notify: Restart SLM agent
   tags: ['slm_agent', 'deploy']
 
@@ -174,7 +196,7 @@
     owner: "{{ slm_agent_user }}"
     group: "{{ slm_agent_group }}"
     mode: '0644'
-  become: yes
+  become: true
   notify: Restart SLM agent
   tags: ['slm_agent', 'deploy']
 
@@ -185,7 +207,7 @@
     owner: "{{ slm_agent_user }}"
     group: "{{ slm_agent_group }}"
     mode: '0644'
-  become: yes
+  become: true
   notify: Restart SLM agent
   tags: ['slm_agent', 'deploy']
 
@@ -196,7 +218,7 @@
     owner: "{{ slm_agent_user }}"
     group: "{{ slm_agent_group }}"
     mode: '0640'
-  become: yes
+  become: true
   notify: Restart SLM agent
   tags: ['slm_agent', 'config']
 
@@ -208,7 +230,7 @@
     owner: "{{ slm_agent_user }}"
     group: "{{ slm_agent_group }}"
     mode: '0644'
-  become: yes
+  become: true
   tags: ['slm_agent', 'deploy', 'role-meta']
 
 - name: "SLM Agent | Deploy systemd service unit"
@@ -218,7 +240,7 @@
     owner: root
     group: root
     mode: '0644'
-  become: yes
+  become: true
   notify:
     - Reload systemd
     - Restart SLM agent
@@ -231,17 +253,17 @@
     port: "{{ slm_agent_api_port | default('8444') }}"
     proto: tcp
     comment: "SLM Agent API"
-  become: yes
+  become: true
   when: slm_agent_api_port is defined
   tags: ['slm_agent', 'firewall']
 
 - name: "SLM Agent | Enable and start service"
   systemd:
     name: slm-agent
-    enabled: yes
+    enabled: true
     state: started
-    daemon_reload: yes
-  become: yes
+    daemon_reload: true
+  become: true
   tags: ['slm_agent', 'service']
 
 - name: "SLM Agent | Wait for agent to start"
@@ -253,7 +275,7 @@
   systemd:
     name: slm-agent
   register: slm_agent_status
-  become: yes
+  become: true
   tags: ['slm_agent', 'verify']
 
 # General fleet monitoring - node_exporter on every managed node (#945)

@@ -14,14 +14,14 @@ Part of the modular autobot_memory_graph package (Issue #716).
 Secret management is in secrets.py module.
 """
 
-import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import utc_timestamp
 
 from .core import VALID_ACTIVITY_TYPES, AutoBotMemoryGraphCore
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class UserSessionMixin:
@@ -41,7 +41,7 @@ class UserSessionMixin:
         self: AutoBotMemoryGraphCore,
         user_id: str,
         username: str,
-        metadata: Optional[Dict[str, Any]],
+        metadata: Dict[str, Any] | None,
     ) -> Dict[str, Any]:
         """Build metadata dictionary for a user entity. Issue #620."""
         user_metadata = metadata or {}
@@ -59,7 +59,7 @@ class UserSessionMixin:
         self: AutoBotMemoryGraphCore,
         user_id: str,
         username: str,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
         """Create or get a user entity. Issue #620."""
         self.ensure_initialized()
@@ -88,8 +88,8 @@ class UserSessionMixin:
         self: AutoBotMemoryGraphCore,
         session_id: str,
         owner_id: str,
-        collaborators: Optional[List[str]],
-        metadata: Optional[Dict[str, Any]],
+        collaborators: List[str] | None,
+        metadata: Dict[str, Any] | None,
     ) -> Dict[str, Any]:
         """Issue #665: Build metadata dictionary for a chat session entity."""
         session_metadata = metadata or {}
@@ -126,7 +126,7 @@ class UserSessionMixin:
     async def _create_collaborator_relations(
         self: AutoBotMemoryGraphCore,
         entity_id: str,
-        collaborators: Optional[List[str]],
+        collaborators: List[str] | None,
     ) -> None:
         """Issue #665: Create collaborator relationships for multi-user sessions."""
         if not collaborators:
@@ -143,9 +143,9 @@ class UserSessionMixin:
         self: AutoBotMemoryGraphCore,
         session_id: str,
         owner_id: str,
-        title: Optional[str] = None,
-        collaborators: Optional[List[str]] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        title: str | None = None,
+        collaborators: List[str] | None = None,
+        metadata: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
         """Create a chat session entity with user ownership tracking.
 
@@ -193,8 +193,8 @@ class UserSessionMixin:
         self: AutoBotMemoryGraphCore,
         session_id: str,
         user_id: str,
-        secrets_used: Optional[List[str]],
-        metadata: Optional[Dict[str, Any]],
+        secrets_used: List[str] | None,
+        metadata: Dict[str, Any] | None,
     ) -> Dict[str, Any]:
         """Issue #665: Build metadata dictionary for an activity entity."""
         activity_metadata = metadata or {}
@@ -231,7 +231,7 @@ class UserSessionMixin:
         entity_id: str,
         user_id: str,
         activity_type: str,
-        secrets_used: Optional[List[str]],
+        secrets_used: List[str] | None,
     ) -> None:
         """Issue #665: Create secret usage relationships and audit trail."""
         if not secrets_used:
@@ -255,8 +255,8 @@ class UserSessionMixin:
         session_id: str,
         user_id: str,
         content: str,
-        secrets_used: Optional[List[str]] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        secrets_used: List[str] | None = None,
+        metadata: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
         """Create an activity entity within a chat session.
 
@@ -347,8 +347,8 @@ class UserSessionMixin:
     def _activity_matches_filters(
         self: AutoBotMemoryGraphCore,
         activity: Dict[str, Any],
-        activity_types: Optional[List[str]],
-        user_id: Optional[str],
+        activity_types: List[str] | None,
+        user_id: str | None,
     ) -> bool:
         """
         Check if an activity matches the provided filters.
@@ -374,8 +374,8 @@ class UserSessionMixin:
     async def _fetch_and_filter_activities(
         self: AutoBotMemoryGraphCore,
         session_id: str,
-        activity_types: Optional[List[str]],
-        user_id: Optional[str],
+        activity_types: List[str] | None,
+        user_id: str | None,
         limit: int,
     ) -> List[Dict[str, Any]]:
         """
@@ -414,8 +414,8 @@ class UserSessionMixin:
     async def get_session_activities(
         self: AutoBotMemoryGraphCore,
         session_id: str,
-        activity_types: Optional[List[str]] = None,
-        user_id: Optional[str] = None,
+        activity_types: List[str] | None = None,
+        user_id: str | None = None,
         limit: int = 100,
     ) -> List[Dict[str, Any]]:
         """

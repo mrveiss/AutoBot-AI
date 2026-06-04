@@ -3,24 +3,22 @@
 # Author: mrveiss
 """Redis TTL and async timeout constants (all values in seconds).
 
-Issue #3529: Centralized TTL/timeout constants to replace raw integer
-literals across the codebase, eliminating magic numbers in Redis expire
-calls and async task timeouts.
+MIGRATION (Issue #GH7440):
+    This module re-exports from autobot_shared.ssot_constants for backward compatibility.
+    Import directly from autobot_shared.ssot_constants for new code.
 """
 
-# Redis TTL values
-TTL_5_MINUTES = 300  # 5 minutes
-TTL_1_HOUR = 3_600  # 1 hour
-TTL_24_HOURS = 86_400
-TTL_7_DAYS = 86_400 * 7
-TTL_30_DAYS = 86_400 * 30
-TTL_90_DAYS = 86_400 * 90
-
-TTL_365_DAYS = 86_400 * 365
-
-TTL_WORKING_MEMORY_DEFAULT = 3_600  # 1 hour — session-scoped working memory
-
-# HTTP / async task timeouts (float for aiohttp.ClientTimeout compatibility)
-TIMEOUT_HTTP_DEFAULT: float = 60.0
-TIMEOUT_HTTP_LONG: float = 120.0
-TIMEOUT_TASK_ANALYSIS = 1_800
+from autobot_shared.ssot_constants import (  # noqa: F401,F403
+    TIMEOUT_HTTP_DEFAULT,
+    TIMEOUT_HTTP_LONG,
+    TIMEOUT_TASK_ANALYSIS,
+    TTL_1_HOUR,
+    TTL_5_MINUTES,
+    TTL_7_DAYS,
+    TTL_10_SECONDS,
+    TTL_24_HOURS,
+    TTL_30_DAYS,
+    TTL_90_DAYS,
+    TTL_365_DAYS,
+    TTL_WORKING_MEMORY_DEFAULT,
+)

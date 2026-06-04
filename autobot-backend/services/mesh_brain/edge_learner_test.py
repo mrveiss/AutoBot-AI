@@ -60,7 +60,7 @@ class TestEdgeLearnerOnRetrieval:
     """Tests for EdgeLearner.on_retrieval()."""
 
     @pytest.mark.asyncio
-    async def test_on_retrieval_reinforces_existing_edge(self):
+    async def test_on_retrieval_reinforces_existing_edge(self) -> None:
         """update_edge is called with EMA-updated weight for an existing edge."""
         db = _make_db_mock()
         edge = _existing_edge(weight=0.6, co_access_count=2)
@@ -73,7 +73,7 @@ class TestEdgeLearnerOnRetrieval:
         db.update_edge.assert_awaited_once_with("edge-1", weight=pytest.approx(expected_weight), co_access_count=3)
 
     @pytest.mark.asyncio
-    async def test_on_retrieval_creates_edge_above_threshold(self):
+    async def test_on_retrieval_creates_edge_above_threshold(self) -> None:
         """create_edge is called once co_access_count reaches creation_threshold."""
         db = _make_db_mock()
         db.get_edge = AsyncMock(return_value=None)
@@ -91,7 +91,7 @@ class TestEdgeLearnerOnRetrieval:
         )
 
     @pytest.mark.asyncio
-    async def test_on_retrieval_skips_creation_below_threshold(self):
+    async def test_on_retrieval_skips_creation_below_threshold(self) -> None:
         """create_edge is NOT called when co_access_count is below threshold."""
         db = _make_db_mock()
         db.get_edge = AsyncMock(return_value=None)
@@ -103,7 +103,7 @@ class TestEdgeLearnerOnRetrieval:
         db.create_edge.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_on_retrieval_updates_access_counts(self):
+    async def test_on_retrieval_updates_access_counts(self) -> None:
         """update_access_count is called with the top-5 IDs."""
         db = _make_db_mock()
         ids = ["A", "B", "C", "D", "E"]
@@ -114,7 +114,7 @@ class TestEdgeLearnerOnRetrieval:
         db.update_access_count.assert_awaited_once_with(ids)
 
     @pytest.mark.asyncio
-    async def test_on_retrieval_processes_top_5_only(self):
+    async def test_on_retrieval_processes_top_5_only(self) -> None:
         """Only combinations of the first 5 IDs are reinforced, not all 10."""
         db = _make_db_mock()
         ids = [str(i) for i in range(10)]
@@ -128,7 +128,7 @@ class TestEdgeLearnerOnRetrieval:
         db.update_access_count.assert_awaited_once_with(ids[:5])
 
     @pytest.mark.asyncio
-    async def test_on_retrieval_handles_json_string_ids(self):
+    async def test_on_retrieval_handles_json_string_ids(self) -> None:
         """ranked_ids supplied as a JSON string is parsed before processing."""
         db = _make_db_mock()
         ids = ["P", "Q", "R"]
@@ -139,7 +139,7 @@ class TestEdgeLearnerOnRetrieval:
         db.update_access_count.assert_awaited_once_with(ids)
 
     @pytest.mark.asyncio
-    async def test_on_retrieval_skips_single_result(self):
+    async def test_on_retrieval_skips_single_result(self) -> None:
         """A single ID produces no combinations, so no reinforcement occurs."""
         db = _make_db_mock()
 
@@ -156,7 +156,7 @@ class TestEdgeLearnerConsumeFeedbackStream:
     """Tests for EdgeLearner.consume_feedback_stream()."""
 
     @pytest.mark.asyncio
-    async def test_consume_feedback_stream_processes_all_entries(self):
+    async def test_consume_feedback_stream_processes_all_entries(self) -> None:
         """All stream entries are passed to on_retrieval and processed count returned."""
         db = _make_db_mock()
         redis = make_async_redis(xrange=[])
@@ -177,7 +177,7 @@ class TestEdgeLearnerConsumeFeedbackStream:
         assert db.update_access_count.await_count == 2
 
     @pytest.mark.asyncio
-    async def test_consume_feedback_stream_uses_today_by_default(self):
+    async def test_consume_feedback_stream_uses_today_by_default(self) -> None:
         """consume_feedback_stream builds stream key from today's date when date_key is None."""
         from datetime import datetime, timezone
 
@@ -193,7 +193,7 @@ class TestEdgeLearnerConsumeFeedbackStream:
         redis.xrange.assert_awaited_once_with(expected_key, min="0-0", count=100)
 
     @pytest.mark.asyncio
-    async def test_cursor_persists_between_calls_no_duplicate_processing(self):
+    async def test_cursor_persists_between_calls_no_duplicate_processing(self) -> None:
         """Second call uses exclusive cursor — no re-processing. Fix: #2102."""
         db = _make_db_mock()
         redis = make_async_redis(xrange=[])
@@ -222,7 +222,7 @@ class TestEdgeLearnerConsumeFeedbackStream:
         db.update_access_count.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_cursor_advances_when_new_entries_arrive(self):
+    async def test_cursor_advances_when_new_entries_arrive(self) -> None:
         """New entries after cursor are consumed. Fix: #2102."""
         db = _make_db_mock()
         redis = make_async_redis(xrange=[])
@@ -274,7 +274,7 @@ class TestEWCPrevention:
     """Tests for EWC++ catastrophic forgetting prevention (#2097)."""
 
     @pytest.mark.asyncio
-    async def test_ewc_no_effect_when_lambda_zero(self):
+    async def test_ewc_no_effect_when_lambda_zero(self) -> None:
         """ewc_lambda=0 produces identical weight update to original EMA formula."""
         db = _make_db_mock()
         edge = _existing_edge(weight=0.6, co_access_count=2)
@@ -291,7 +291,7 @@ class TestEWCPrevention:
         db.update_edge.assert_awaited_once_with("edge-1", weight=pytest.approx(expected_weight), co_access_count=3)
 
     @pytest.mark.asyncio
-    async def test_ewc_dampens_high_importance_edges(self):
+    async def test_ewc_dampens_high_importance_edges(self) -> None:
         """High-importance edge resists drift: final weight is between current and proposed."""
         db = _make_db_mock()
         current_weight = 0.6
@@ -312,7 +312,7 @@ class TestEWCPrevention:
         assert current_weight < final_weight < proposed
 
     @pytest.mark.asyncio
-    async def test_ewc_allows_update_on_low_importance_edges(self):
+    async def test_ewc_allows_update_on_low_importance_edges(self) -> None:
         """Low-importance edges (importance≈0) update almost to the full proposed weight."""
         db = _make_db_mock()
         current_weight = 0.6
@@ -332,7 +332,7 @@ class TestEWCPrevention:
         assert final_weight == pytest.approx(proposed)
 
     @pytest.mark.asyncio
-    async def test_ewc_consolidation_interval(self):
+    async def test_ewc_consolidation_interval(self) -> None:
         """consolidate_weights is called once after ewc_consolidation_interval updates."""
         db = _make_db_mock()
         edge = _existing_edge(weight=0.6, co_access_count=0)
@@ -350,7 +350,7 @@ class TestEWCPrevention:
 
         consolidation_calls = []
 
-        async def _fake_consolidate():
+        async def _fake_consolidate() -> None:
             consolidation_calls.append(1)
 
         learner.consolidate_weights = _fake_consolidate  # type: ignore[method-assign]
@@ -362,7 +362,7 @@ class TestEWCPrevention:
         assert len(consolidation_calls) == 1
 
     @pytest.mark.asyncio
-    async def test_update_importance_increases_on_success(self):
+    async def test_update_importance_increases_on_success(self) -> None:
         """update_importance increments importance toward 1.0 on success."""
         db = _make_db_mock()
         learner = _make_ewc_learner(db, make_async_redis(xrange=[]))
@@ -375,7 +375,7 @@ class TestEWCPrevention:
         after_second = learner._importance["edge-1"]
         assert after_second > after_first
 
-    def test_update_importance_decays_on_failure(self):
+    def test_update_importance_decays_on_failure(self) -> None:
         """update_importance decays toward 0 on non-success."""
         db = _make_db_mock()
         learner = _make_ewc_learner(db, make_async_redis(xrange=[]))
@@ -385,7 +385,7 @@ class TestEWCPrevention:
         assert learner._importance["edge-1"] == pytest.approx(0.5 * 0.95)
 
     @pytest.mark.asyncio
-    async def test_reference_weights_populated_after_update(self):
+    async def test_reference_weights_populated_after_update(self) -> None:
         """_reference_weights is populated with final weight after _update_existing_edge."""
         db = _make_db_mock()
         edge = _existing_edge(weight=0.6, co_access_count=2)
@@ -400,7 +400,7 @@ class TestEWCPrevention:
         assert stored == pytest.approx(call_kwargs["weight"])
 
     @pytest.mark.asyncio
-    async def test_update_importance_called_on_reinforcement(self):
+    async def test_update_importance_called_on_reinforcement(self) -> None:
         """update_importance(success=True) is called for each reinforced edge (#2546)."""
         db = _make_db_mock()
         edge = _existing_edge(weight=0.6, co_access_count=2)
@@ -424,7 +424,7 @@ class TestEWCRedisPersistence:
     """Tests for EWC++ state load/save via Redis (#2546)."""
 
     @pytest.mark.asyncio
-    async def test_load_ewc_state_restores_reference_weights(self):
+    async def test_load_ewc_state_restores_reference_weights(self) -> None:
         """_load_ewc_state() populates _reference_weights from Redis hash."""
         db = _make_db_mock()
         redis = make_async_redis(xrange=[])
@@ -445,7 +445,7 @@ class TestEWCRedisPersistence:
         }
 
     @pytest.mark.asyncio
-    async def test_load_ewc_state_restores_importance(self):
+    async def test_load_ewc_state_restores_importance(self) -> None:
         """_load_ewc_state() populates _importance from Redis hash."""
         db = _make_db_mock()
         redis = make_async_redis(xrange=[])
@@ -466,7 +466,7 @@ class TestEWCRedisPersistence:
         }
 
     @pytest.mark.asyncio
-    async def test_load_ewc_state_called_only_once(self):
+    async def test_load_ewc_state_called_only_once(self) -> None:
         """_load_ewc_state() is idempotent — Redis is not queried on subsequent calls."""
         db = _make_db_mock()
         redis = make_async_redis(xrange=[])
@@ -482,7 +482,7 @@ class TestEWCRedisPersistence:
         assert redis.hgetall.await_count == first_call_count
 
     @pytest.mark.asyncio
-    async def test_save_ewc_state_persists_reference_weights(self):
+    async def test_save_ewc_state_persists_reference_weights(self) -> None:
         """_save_ewc_state() writes reference weights to Redis hash via hset mapping."""
         db = _make_db_mock()
         redis = make_async_redis(xrange=[])
@@ -499,7 +499,7 @@ class TestEWCRedisPersistence:
         )
 
     @pytest.mark.asyncio
-    async def test_save_ewc_state_persists_importance(self):
+    async def test_save_ewc_state_persists_importance(self) -> None:
         """_save_ewc_state() writes importance scores to Redis hash via hset mapping."""
         db = _make_db_mock()
         redis = make_async_redis(xrange=[])
@@ -516,7 +516,7 @@ class TestEWCRedisPersistence:
         )
 
     @pytest.mark.asyncio
-    async def test_consolidate_weights_calls_save_ewc_state(self):
+    async def test_consolidate_weights_calls_save_ewc_state(self) -> None:
         """consolidate_weights() triggers _save_ewc_state() — persisting to Redis (#2546)."""
         db = _make_db_mock()
         redis = make_async_redis(xrange=[])
@@ -533,7 +533,7 @@ class TestEWCRedisPersistence:
         assert EdgeLearner.EWC_IMPORTANCE_KEY in hset_keys
 
     @pytest.mark.asyncio
-    async def test_load_ewc_state_tolerates_redis_failure_on_weights(self):
+    async def test_load_ewc_state_tolerates_redis_failure_on_weights(self) -> None:
         """Redis failure loading reference weights is logged and does not raise (#2546)."""
         db = _make_db_mock()
         redis = make_async_redis(xrange=[])
@@ -548,7 +548,7 @@ class TestEWCRedisPersistence:
         assert learner._ewc_state_loaded is True
 
     @pytest.mark.asyncio
-    async def test_load_ewc_state_tolerates_redis_failure_on_importance(self):
+    async def test_load_ewc_state_tolerates_redis_failure_on_importance(self) -> None:
         """Redis failure loading importance is logged and does not raise (#2546)."""
         db = _make_db_mock()
         redis = make_async_redis(xrange=[])
@@ -564,7 +564,7 @@ class TestEWCRedisPersistence:
         assert learner._ewc_state_loaded is True
 
     @pytest.mark.asyncio
-    async def test_save_ewc_state_tolerates_redis_failure(self):
+    async def test_save_ewc_state_tolerates_redis_failure(self) -> None:
         """Redis failure during save is logged and does not raise (#2546)."""
         db = _make_db_mock()
         redis = make_async_redis(xrange=[])

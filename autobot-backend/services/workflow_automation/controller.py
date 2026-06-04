@@ -7,23 +7,23 @@ Workflow Controller Module
 Handles workflow control actions (pause, resume, cancel, approve, skip).
 """
 
-import logging
 from datetime import datetime, timezone
 from typing import Dict
 
+from autobot_shared.logging_manager import get_logger
 from monitoring.prometheus_metrics import get_metrics_manager
 
 from .executor import WorkflowExecutor
 from .messaging import WorkflowMessenger
 from .models import ActiveWorkflow, WorkflowControlRequest
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class WorkflowController:
     """Handles workflow control actions from user"""
 
-    def __init__(self, messenger: WorkflowMessenger, executor: WorkflowExecutor):
+    def __init__(self, messenger: WorkflowMessenger, executor: WorkflowExecutor) -> None:
         """Initialize controller with messenger and executor components."""
         self.messenger = messenger
         self.executor = executor

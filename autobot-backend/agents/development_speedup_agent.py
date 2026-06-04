@@ -8,24 +8,26 @@ Advanced code analysis using NPU worker and Redis for development acceleration.
 Focuses on finding duplicates, patterns, optimization opportunities, and code quality improvements.
 """
 
+from __future__ import annotations
+
 import ast
 import asyncio
 import hashlib
 import json
-import logging
 import os
 import re
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 import aiofiles
 
 from agents.npu_code_search_agent import get_npu_code_search
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level tuple for import statement prefixes
 _IMPORT_PREFIXES = ("import ", "from ")
@@ -93,7 +95,7 @@ class DevelopmentSpeedupAgent:
 
     def __init__(self):
         """Initialize the development speedup agent"""
-        self.logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
+        self.logger = get_logger(f"{__name__}.{self.__class__.__name__}")
 
         # NPU code search agent (lazy initialization)
         self.npu_code_search = get_npu_code_search()
@@ -299,7 +301,7 @@ class DevelopmentSpeedupAgent:
             },
         ]
 
-    async def _search_single_pattern(self, pattern_config: Dict[str, str]) -> Optional[CodePattern]:
+    async def _search_single_pattern(self, pattern_config: Dict[str, str]) -> CodePattern | None:
         """Search for a single pattern and return result (Issue #398: extracted)."""
         try:
             results = await self.npu_code_search.search_code(
@@ -339,7 +341,7 @@ class DevelopmentSpeedupAgent:
             "high_priority_issues": high_priority,
         }
 
-    def _extract_module_name(self, import_line: str) -> Optional[str]:
+    def _extract_module_name(self, import_line: str) -> str | None:
         """Extract module name from import statement (Issue #334 - extracted helper)."""
         if not import_line.startswith(_IMPORT_PREFIXES):
             return None
@@ -363,7 +365,7 @@ class DevelopmentSpeedupAgent:
                 self.logger.error("Error analyzing import %s: %s", result.content, e)
         return import_stats
 
-    async def _check_unused_import(self, result) -> Optional[Dict[str, Any]]:
+    async def _check_unused_import(self, result) -> Dict[str, Any] | None:
         """Check if import is unused (Issue #334 - extracted helper)."""
         import_line = result.content.strip()
         if not import_line.startswith("import "):
@@ -573,7 +575,7 @@ class DevelopmentSpeedupAgent:
 
         return patterns
 
-    def _check_function_length(self, node: ast.FunctionDef, file_path: str) -> Optional["RefactoringOpportunity"]:
+    def _check_function_length(self, node: ast.FunctionDef, file_path: str) -> "RefactoringOpportunity" | None:
         """Check if function is too long (Issue #334 - extracted helper)."""
         if not hasattr(node, "end_lineno") or not node.end_lineno:
             return None

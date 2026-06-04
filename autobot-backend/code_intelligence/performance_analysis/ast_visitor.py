@@ -9,8 +9,9 @@ Contains the AST visitor that analyzes code for performance patterns.
 """
 
 import ast
-import logging
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Set
+
+from autobot_shared.logging_manager import get_logger
 
 from .patterns import (
     BLOCKING_IO_OPERATIONS,
@@ -30,7 +31,7 @@ from .types import (
     PerformanceSeverity,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class PerformanceASTVisitor(ast.NodeVisitor):
@@ -43,7 +44,7 @@ class PerformanceASTVisitor(ast.NodeVisitor):
         self.findings: List[PerformanceIssue] = []
         self.loop_depth = 0
         self.async_context = False
-        self.current_function: Optional[str] = None
+        self.current_function: str | None = None
         self.loop_stack: List[ast.AST] = []
         self.function_calls_in_loop: List[tuple] = []
         self.awaits_in_function: List[ast.Await] = []
@@ -645,7 +646,7 @@ class PerformanceASTVisitor(ast.NodeVisitor):
             return True
         return False
 
-    def _get_call_name(self, node: ast.Call) -> Optional[str]:
+    def _get_call_name(self, node: ast.Call) -> str | None:
         """Get the name of a function call."""
         if isinstance(node.func, ast.Name):
             return node.func.id
@@ -660,7 +661,7 @@ class PerformanceASTVisitor(ast.NodeVisitor):
             return ".".join(reversed(parts))
         return None
 
-    def _get_call_module(self, node: ast.Call) -> Optional[str]:
+    def _get_call_module(self, node: ast.Call) -> str | None:
         """Get the module of a function call."""
         if isinstance(node.func, ast.Attribute):
             if isinstance(node.func.value, ast.Name):

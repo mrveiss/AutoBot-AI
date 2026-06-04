@@ -35,13 +35,8 @@ server {
     ssl_session_cache shared:SSL:10m;
     ssl_session_timeout 1d;
 
-    # Security headers
-    add_header X-Frame-Options "SAMEORIGIN" always;
-    add_header X-Content-Type-Options "nosniff" always;
-    add_header X-XSS-Protection "1; mode=block" always;
-    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
-    # Issue #1015: Content Security Policy
-    add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' wss://$host; frame-ancestors 'none'; base-uri 'self'; form-action 'self';" always;
+    # Security headers (#6842: DRY — single source of truth in snippet)
+    include /etc/nginx/snippets/autobot-security-headers-strict.conf;
 
     # Issue #1090: Allow SLM agent event sync payloads (typically 1.5-2MB)
     client_max_body_size 10m;
@@ -280,6 +275,30 @@ server {
         proxy_set_header Host $host;
     }
 
+    # FastAPI OpenAPI docs (#6843 — without these, the SPA fallback serves
+    # index.html for /openapi.json /docs /redoc instead of the spec).
+    # Use `=` for /openapi.json (exact match) so it can't shadow real routes;
+    # `^~` for /docs and /redoc so prefix match takes priority over the SPA
+    # catch-all.
+    location = /openapi.json {
+        proxy_pass http://{{ slm_backend_host }}:{{ slm_backend_port }};
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+    location ^~ /docs {
+        proxy_pass http://{{ slm_backend_host }}:{{ slm_backend_port }};
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+    location ^~ /redoc {
+        proxy_pass http://{{ slm_backend_host }}:{{ slm_backend_port }};
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
 {% endif %}
 
     # Grafana Live WebSocket (must be before the general /grafana/ block)
@@ -294,12 +313,8 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_read_timeout 3600;
 
-        # Issue #1160: Override server-level security headers for Grafana iframe embedding.
-        # nginx add_header in location replaces parent context headers, so all headers re-declared.
-        add_header X-Content-Type-Options "nosniff" always;
-        add_header X-XSS-Protection "1; mode=block" always;
-        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
-        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' wss://$host; frame-ancestors 'self'; base-uri 'self';" always;
+        # #6842: DRY — headers in snippet; frame-ancestors 'self' allows dashboard embedding.
+        include /etc/nginx/snippets/autobot-security-headers-iframe-host.conf;
     }
 
     # Grafana reverse proxy (monitoring dashboards)
@@ -312,13 +327,8 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
 
-        # Issue #1160: Override server-level security headers for Grafana iframe embedding.
-        # nginx add_header in location replaces parent context headers, so all headers re-declared.
-        # frame-ancestors 'self' allows the SLM admin (same origin) to embed Grafana dashboards.
-        add_header X-Content-Type-Options "nosniff" always;
-        add_header X-XSS-Protection "1; mode=block" always;
-        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
-        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' wss://$host; frame-ancestors 'self'; base-uri 'self';" always;
+        # #6842: DRY — headers in snippet; frame-ancestors 'self' allows dashboard embedding.
+        include /etc/nginx/snippets/autobot-security-headers-iframe-host.conf;
 {% if grafana_enable_cors | default(false) %}
 
         # CORS headers for external Grafana iframe embedding
@@ -384,7 +394,9 @@ server {
         try_files $uri $uri/ /slm/index.html;
 
         # Prevent index.html from being cached so new deployments are picked up
+        # #7737: child location replaces server-level add_header — re-include snippet
         location ~* /slm/index\.html$ {
+            include /etc/nginx/snippets/autobot-security-headers-strict.conf;
             add_header Cache-Control "no-cache, no-store, must-revalidate" always;
             add_header Pragma "no-cache" always;
         }
@@ -396,6 +408,8 @@ server {
         root {{ frontend_dist_dir }};
         try_files $uri $uri/ /index.html;
 
+        # #6842: include strict security headers (nginx add_header in location replaces server-level)
+        include /etc/nginx/snippets/autobot-security-headers-strict.conf;
         add_header Cache-Control "no-cache, no-store, must-revalidate";
         add_header Pragma "no-cache";
         add_header Cross-Origin-Opener-Policy "same-origin" always;

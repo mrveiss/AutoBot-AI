@@ -417,11 +417,11 @@ function handleReset() {
 }
 
 .color-btn[data-color="teal"] .color-preview {
-  background: #0d9488;
+  background: var(--color-primary);
 }
 
 .color-btn[data-color="emerald"] .color-preview {
-  background: #10b981;
+  background: var(--color-success);
 }
 
 .color-btn[data-color="blue"] .color-preview {

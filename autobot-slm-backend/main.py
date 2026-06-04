@@ -39,12 +39,14 @@ from api import (
     mfa_router,
     monitoring_router,
     node_config_router,
+    node_rdp_router,
     node_tls_router,
     node_vnc_router,
     nodes_execution_router,
     nodes_router,
     npu_router,
     orchestration_router,
+    rdp_router,
     secrets_router,
     security_router,
     services_router,
@@ -124,6 +126,7 @@ async def _run_migrations():
     from migrations.runner import run_migrations_async
 
     try:
+        logger.info("Starting database migrations")
         results = await run_migrations_async()
         for name, success, message in results:
             if success:
@@ -133,8 +136,10 @@ async def _run_migrations():
                 raise RuntimeError(f"Migration failed: {name}")
         if results:
             logger.info("Applied %d migration(s)", len(results))
+        else:
+            logger.info("All migrations already applied")
     except Exception as e:
-        logger.error("Migration error: %s", e)
+        logger.error("Migration error: %s", e, exc_info=True)
         raise
 
 
@@ -154,16 +159,45 @@ async def lifespan(app: FastAPI):
 
     # Validate that the two Base MetaData objects share no tablenames (#1878).
     # Must run before create_all / migrations so conflicts are caught immediately.
-    _check_tablename_collisions()
+    try:
+        logger.info("Checking for table name collisions")
+        _check_tablename_collisions()
+        logger.info("Table collision check passed")
+    except Exception as e:
+        logger.error("Table collision check failed: %s", e, exc_info=True)
+        raise
 
     # Create base tables first, then apply incremental migrations
-    await db_service.initialize()
-    await _init_user_management_tables()
-    await _run_migrations()
-    await _ensure_admin_user()
-    await _seed_default_roles()
-    await _seed_default_agents()
-    await _ensure_local_node()
+    try:
+        logger.info("Initializing database connection")
+        await db_service.initialize()
+        logger.info("Database initialized")
+    except Exception as e:
+        logger.error("Database initialization failed: %s", e, exc_info=True)
+        raise
+
+    try:
+        logger.info("Initializing user management tables")
+        await _init_user_management_tables()
+        logger.info("User management tables initialized")
+    except Exception as e:
+        logger.error("User management table initialization failed: %s", e, exc_info=True)
+        raise
+
+    try:
+        await _run_migrations()
+    except Exception:
+        logger.error("Database migrations failed during startup", exc_info=True)
+        raise
+
+    try:
+        await _ensure_admin_user()
+        await _seed_default_roles()
+        await _seed_default_agents()
+        await _ensure_local_node()
+    except Exception as e:
+        logger.error("Data seeding failed: %s", e, exc_info=True)
+        raise
 
     # Reconcile stale fleet sync jobs from prior crash (#1729)
     try:
@@ -404,6 +438,8 @@ app.include_router(errors_router, prefix="/api")
 app.include_router(events_router, prefix="/api")
 app.include_router(external_agents_router, prefix="/api")
 app.include_router(websocket_router, prefix="/api")
+app.include_router(node_rdp_router, prefix="/api")
+app.include_router(rdp_router, prefix="/api")
 app.include_router(node_vnc_router, prefix="/api")
 app.include_router(vnc_router, prefix="/api")
 app.include_router(node_tls_router, prefix="/api")

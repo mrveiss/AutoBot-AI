@@ -12,15 +12,15 @@
   <div class="setup-wizard">
     <!-- Header -->
     <div class="wizard-header">
-      <h1>AutoBot Setup Wizard</h1>
-      <p class="subtitle">Configure your fleet in a few easy steps</p>
+      <h1>{{ $t('setupWizardView.autoBotSetupWizard') }}</h1>
+      <p class="subtitle">{{ $t('setupWizardView.configureYourFleetIn') }}</p>
       <div class="header-actions">
         <button
           v-if="currentStep !== 'complete'"
           class="skip-btn"
           @click="skipWizard"
         >
-          Skip Setup
+          {{ $t('setupWizardView.skipSetup') }}
         </button>
         <button
           class="close-btn"
@@ -57,28 +57,27 @@
     <div class="step-content">
       <!-- Welcome -->
       <div v-if="currentStep === 'welcome'" class="step-panel">
-        <h2>Welcome to AutoBot</h2>
+        <h2>{{ $t('setupWizardView.welcomeToAutoBot') }}</h2>
         <p>
-          Your SLM (Service Lifecycle Manager) is up and running. This wizard
-          will guide you through adding and configuring your fleet nodes.
+          {{ $t('setupWizardView.yourSLMServiceLifecycle') }}
         </p>
         <div class="info-box">
-          <h3>What you'll need:</h3>
+          <h3>{{ $t('setupWizardView.whatYouLlNeed') }}</h3>
           <ul>
-            <li>IP addresses of your fleet VMs</li>
-            <li>SSH access credentials (key or password)</li>
-            <li>Knowledge of which services each node should run</li>
+            <li>{{ $t('setupWizardView.iPAddressesOfYour') }}</li>
+            <li>{{ $t('setupWizardView.sSHAccessCredentialsKey') }}</li>
+            <li>{{ $t('setupWizardView.knowledgeOfWhichServices') }}</li>
           </ul>
         </div>
         <button class="btn-primary" @click="completeStep('welcome')">
-          Get Started
+          {{ $t('setupWizardView.getStarted') }}
         </button>
       </div>
 
       <!-- Add Nodes -->
       <div v-if="currentStep === 'add_nodes'" class="step-panel">
-        <h2>Add Fleet Nodes</h2>
-        <p>Add the VMs that will form your AutoBot fleet.</p>
+        <h2>{{ $t('setupWizardView.addFleetNodes') }}</h2>
+        <p>{{ $t('setupWizardView.addTheVMsThat') }}</p>
 
         <div class="nodes-list" v-if="nodes.length > 0">
           <div v-for="node in nodes" :key="node.node_id" class="node-card">
@@ -92,13 +91,13 @@
             >{{ node.status }}</span>
           </div>
         </div>
-        <p v-else class="empty-state">No nodes added yet.</p>
+        <p v-else class="empty-state">{{ $t('setupWizardView.noNodesAddedYet') }}</p>
 
         <div class="add-node-form">
-          <h3>Add a Node</h3>
+          <h3>{{ $t('setupWizardView.addANode') }}</h3>
           <div class="form-row">
             <label class="field">
-              <span class="field-label">Hostname</span>
+              <span class="field-label">{{ $t('setupWizardView.hostname') }}</span>
               <input
                 v-model="newNode.hostname"
                 placeholder="e.g. frontend-01"
@@ -106,7 +105,7 @@
               />
             </label>
             <label class="field">
-              <span class="field-label">IP Address</span>
+              <span class="field-label">{{ $t('setupWizardView.iPAddress') }}</span>
               <input
                 v-model="newNode.ip_address"
                 placeholder="e.g. 10.0.0.21"
@@ -116,7 +115,7 @@
           </div>
           <div class="form-row">
             <label class="field">
-              <span class="field-label">SSH User</span>
+              <span class="field-label">{{ $t('setupWizardView.sSHUser') }}</span>
               <input
                 v-model="newNode.ssh_user"
                 placeholder="default: autobot"
@@ -124,10 +123,10 @@
               />
             </label>
             <label class="field">
-              <span class="field-label">Auth Method</span>
+              <span class="field-label">{{ $t('setupWizardView.authMethod') }}</span>
               <select v-model="newNode.auth_method">
-                <option value="key">SSH Key</option>
-                <option value="password">Password</option>
+                <option value="key">{{ $t('setupWizardView.sSHKey') }}</option>
+                <option value="password">{{ $t('setupWizardView.password') }}</option>
               </select>
             </label>
           </div>
@@ -135,7 +134,7 @@
             v-if="newNode.auth_method === 'password'"
             class="field full-width"
           >
-            <span class="field-label">SSH Password</span>
+            <span class="field-label">{{ $t('setupWizardView.sSHPassword') }}</span>
             <input
               v-model="newNode.ssh_password"
               type="password"
@@ -153,14 +152,14 @@
           @click="completeStep('add_nodes')"
           :disabled="nodes.length === 0"
         >
-          Continue
+          {{ $t('setupWizardView.continue') }}
         </button>
       </div>
 
       <!-- Test Connections -->
       <div v-if="currentStep === 'test_connections'" class="step-panel">
-        <h2>Test Connections</h2>
-        <p>Verify SSH connectivity to all nodes before proceeding.</p>
+        <h2>{{ $t('setupWizardView.testConnections') }}</h2>
+        <p>{{ $t('setupWizardView.verifySSHConnectivityTo') }}</p>
 
         <div class="nodes-list">
           <div v-for="node in nodes" :key="node.node_id" class="node-card">
@@ -183,14 +182,14 @@
           @click="completeStep('test_connections')"
           :disabled="!allConnectionsTested"
         >
-          Continue
+          {{ $t('setupWizardView.continue') }}
         </button>
       </div>
 
       <!-- Enroll Agents -->
       <div v-if="currentStep === 'enroll_agents'" class="step-panel">
-        <h2>Enroll SLM Agents</h2>
-        <p>Deploy the SLM monitoring agent to each node.</p>
+        <h2>{{ $t('setupWizardView.enrollSLMAgents') }}</h2>
+        <p>{{ $t('setupWizardView.deployTheSLMMonitoring') }}</p>
 
         <div class="nodes-list">
           <div v-for="node in nodes" :key="node.node_id" class="node-card">
@@ -213,21 +212,21 @@
           @click="completeStep('enroll_agents')"
           :disabled="!allNodesEnrolled"
         >
-          Continue
+          {{ $t('setupWizardView.continue') }}
         </button>
       </div>
 
       <!-- Assign Roles -->
       <div v-if="currentStep === 'assign_roles'" class="step-panel">
-        <h2>Assign Roles</h2>
-        <p>Choose which services each node should run.</p>
+        <h2>{{ $t('setupWizardView.assignRoles') }}</h2>
+        <p>{{ $t('setupWizardView.chooseWhichServicesEach') }}</p>
 
         <div class="role-assignment" v-for="node in nodes" :key="node.node_id">
           <h3>{{ node.hostname }} ({{ node.ip_address }})</h3>
 
           <!-- Core Services (required) — grouped by deployment category (#1350, #3192) -->
           <div class="role-section">
-            <span class="section-header">Core Services</span>
+            <span class="section-header">{{ $t('setupWizardView.coreServices') }}</span>
             <div
               v-for="group in groupedRolesForNode(node.node_id, requiredRoles)"
               :key="group.label"
@@ -265,7 +264,7 @@
 
           <!-- Optional Services — grouped by deployment category (#1350, #3192) -->
           <div class="role-section" v-if="rolesForNode(node.node_id, optionalRoles).length">
-            <span class="section-header optional-header">Optional Services</span>
+            <span class="section-header optional-header">{{ $t('setupWizardView.optionalServices') }}</span>
             <div
               v-for="group in groupedRolesForNode(node.node_id, optionalRoles)"
               :key="group.label"
@@ -308,7 +307,7 @@
             v-if="node.node_id === '00-SLM-Manager' && node.detected_roles.some(r => SLM_ROLES.includes(r))"
             class="infra-roles-row"
           >
-            <span class="infra-label">SLM Services:</span>
+            <span class="infra-label">{{ $t('setupWizardView.sLMServices') }}</span>
             <span
               v-for="slm in SLM_ROLES.filter(r => node.detected_roles.includes(r))"
               :key="slm"
@@ -324,7 +323,7 @@
             v-if="(nodeRoles[node.node_id] || []).some(r => !INFRA_ROLES.includes(r) && !SLM_ROLES.includes(r))"
             class="infra-roles-row"
           >
-            <span class="infra-label">Auto-deployed:</span>
+            <span class="infra-label">{{ $t('setupWizardView.autoDeployed') }}</span>
             <span
               v-for="infra in INFRA_ROLES"
               :key="infra"
@@ -342,20 +341,19 @@
 
       <!-- Configure Secrets / API Keys (#3079) -->
       <div v-if="currentStep === 'configure_secrets'" class="step-panel">
-        <h2>API Keys &amp; Tokens</h2>
+        <h2>{{ $t('setupWizardView.aPIKeysAmpTokens') }}</h2>
         <p>
-          Some services require API keys or license acceptance to download gated models.
-          These are optional &mdash; you can skip this step and configure them later.
+          {{ $t('setupWizardView.someServicesRequireAPI') }}
         </p>
 
         <div class="secrets-form">
           <div class="secret-entry">
-            <h3>HuggingFace Token</h3>
+            <h3>{{ $t('setupWizardView.huggingFaceToken') }}</h3>
             <p class="secret-desc">
-              Required for TTS voice cloning (Pocket TTS uses a gated model).
-              <a href="https://huggingface.co/SWivid/F5-TTS" target="_blank" rel="noopener">Accept license</a>
+              {{ $t('setupWizardView.requiredForTTSVoice') }}
+              <a href="https://huggingface.co/SWivid/F5-TTS" target="_blank" rel="noopener">{{ $t('setupWizardView.acceptLicense') }}</a>
               then
-              <a href="https://huggingface.co/settings/tokens" target="_blank" rel="noopener">create a token</a>.
+              <a href="https://huggingface.co/settings/tokens" target="_blank" rel="noopener">{{ $t('setupWizardView.createAToken') }}</a>.
             </p>
             <input
               v-model="secretValues.hf_token"
@@ -367,7 +365,7 @@
         </div>
 
         <div v-if="secretsSaved" class="info-box success-box">
-          Secrets saved. They will be injected during provisioning.
+          {{ $t('setupWizardView.secretsSavedTheyWill') }}
         </div>
 
         <button class="btn-secondary" @click="saveSecrets" :disabled="savingSecrets">
@@ -380,10 +378,9 @@
 
       <!-- Provision Fleet -->
       <div v-if="currentStep === 'provision_fleet'" class="step-panel">
-        <h2>Provision Fleet</h2>
+        <h2>{{ $t('setupWizardView.provisionFleet') }}</h2>
         <p>
-          Deploy all assigned services to your fleet nodes via Ansible.
-          This may take several minutes.
+          {{ $t('setupWizardView.deployAllAssignedServices') }}
         </p>
 
         <!-- Phase & status bar -->
@@ -441,14 +438,14 @@
           class="btn-primary"
           @click="completeStep('provision_fleet')"
         >
-          Continue
+          {{ $t('setupWizardView.continue') }}
         </button>
       </div>
 
       <!-- Verify Health -->
       <div v-if="currentStep === 'verify_health'" class="step-panel">
-        <h2>Verify Fleet Health</h2>
-        <p>Checking that all services are running correctly.</p>
+        <h2>{{ $t('setupWizardView.verifyFleetHealth') }}</h2>
+        <p>{{ $t('setupWizardView.checkingThatAllServices') }}</p>
 
         <div v-if="fleetHealth" class="health-summary">
           <div
@@ -474,17 +471,17 @@
           @click="completeStep('verify_health')"
           :disabled="!fleetHealth || !fleetHealth.ready"
         >
-          Continue
+          {{ $t('setupWizardView.continue') }}
         </button>
       </div>
 
       <!-- Complete -->
       <div v-if="currentStep === 'complete'" class="step-panel complete-panel">
         <div class="success-icon">&#10003;</div>
-        <h2>Setup Complete!</h2>
-        <p>Your AutoBot fleet is configured and ready to use.</p>
+        <h2>{{ $t('setupWizardView.setupComplete') }}</h2>
+        <p>{{ $t('setupWizardView.yourAutoBotFleetIs') }}</p>
         <button class="btn-primary" @click="goToDashboard">
-          Go to Dashboard
+          {{ $t('setupWizardView.goToDashboard') }}
         </button>
       </div>
     </div>

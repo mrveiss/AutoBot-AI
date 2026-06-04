@@ -5,9 +5,11 @@
 Analytics, cost, budget, usage, and metrics schemas.
 """
 
+from __future__ import annotations
+
 from datetime import datetime
 from enum import Enum
-from typing import Annotated, Any, Dict, List, Optional
+from typing import Annotated, Any, Dict, List
 
 from fastapi import Query
 from pydantic import BaseModel, Field
@@ -35,22 +37,19 @@ class MetricsWorkflowResponse(BaseModel):
 
     success: bool
     workflow_id: str
-    metrics: Optional[Any] = None
-
+    metrics: Any | None = None
 
 class MetricsPerformanceSummaryResponse(BaseModel):
     """Response for GET /performance/summary."""
 
     success: bool
-    performance_summary: Optional[Any] = None
-
+    performance_summary: Any | None = None
 
 class MetricsSystemCurrentResponse(BaseModel):
     """Response for GET /system/current."""
 
     success: bool
-    system_metrics: Optional[Any] = None
-
+    system_metrics: Any | None = None
 
 class MetricsSystemHistoryResponse(BaseModel):
     """Response for GET /system/history."""
@@ -65,24 +64,21 @@ class MetricsSystemSummaryResponse(BaseModel):
     """Response for GET /system/summary."""
 
     success: bool
-    resource_summary: Optional[Any] = None
-
+    resource_summary: Any | None = None
 
 class MetricsExportResponse(BaseModel):
     """Response for GET /export/workflow and GET /export/system."""
 
     success: bool
     format: str
-    data: Optional[Any] = None
-
+    data: Any | None = None
 
 class MetricsMonitoringStartResponse(BaseModel):
     """Response for POST /system/monitoring/start."""
 
     success: bool
     message: str
-    collection_interval: Optional[Any] = None
-
+    collection_interval: Any | None = None
 
 class MetricsMonitoringStopResponse(SuccessMessageResponse):
     """Response for POST /system/monitoring/stop."""
@@ -388,7 +384,7 @@ class AnalyticsCodeIndexResponse(BaseModel):
 
     status: str
     request: Dict[str, Any]
-    results: Optional[Any] = None
+    results: Any | None = None
     cached_for_reuse: bool
 
 
@@ -441,7 +437,7 @@ class AnalyticsCodeQualityScoreResponse(BaseModel):
     grade: str
     quality_factors: Dict[str, Any]
     recommendations: List[Any]
-    last_analysis: Optional[str] = None
+    last_analysis: str | None = None
     codebase_metrics: Dict[str, Any]
 
 
@@ -735,10 +731,10 @@ class PerformanceSummaryResponse(BaseModel):
 
     total_analyses: int
     average_score: float
-    common_issues: Optional[List[Any]] = None
+    common_issues: List[Any] | None = None
     patterns_enabled: int
-    average_issues: Optional[float] = None
-    total_patterns: Optional[int] = None
+    average_issues: float | None = None
+    total_patterns: int | None = None
 
 
 class PerformanceCategoriesResponse(BaseModel):
@@ -811,13 +807,13 @@ class CostTrackingRecordResponse(BaseModel):
     output_tokens: int
     cost_usd: float
     timestamp: str
-    session_id: Optional[str] = None
-    user_id: Optional[str] = None
-    agent_id: Optional[str] = None
-    endpoint: Optional[str] = None
-    latency_ms: Optional[float] = None
+    session_id: str | None = None
+    user_id: str | None = None
+    agent_id: str | None = None
+    endpoint: str | None = None
+    latency_ms: float | None = None
     success: bool = True
-    error_message: Optional[str] = None
+    error_message: str | None = None
     metadata: Dict[str, Any] = {}
 
 
@@ -1078,7 +1074,7 @@ class CommunicationPattern(BaseModel):
 class CodeAnalysisRequest(BaseModel):
     """Code analysis request model"""
 
-    target_path: Optional[str] = Field(default_factory=lambda: str(PATH.PROJECT_ROOT))
+    target_path: str | None = Field(default_factory=lambda: str(PATH.PROJECT_ROOT))
     analysis_type: str = Field(default="full", description="full, incremental, or communication_chains")
     include_metrics: bool = True
 
@@ -1118,15 +1114,15 @@ class BugPredictionAnalysisResponse(BaseModel):
 
     model_config = {"extra": "allow"}
 
-    status: Optional[str] = None  # "success" or "no_data"
-    timestamp: Optional[str] = None
-    total_files: Optional[int] = None
-    analyzed_files: Optional[int] = None
-    high_risk_count: Optional[int] = None
-    files: Optional[List["FileRisk"]] = None  # type: ignore[name-defined]
-    from_cache: Optional[bool] = None
+    status: str | None = None  # "success" or "no_data"
+    timestamp: str | None = None
+    total_files: int | None = None
+    analyzed_files: int | None = None
+    high_risk_count: int | None = None
+    files: List[FileRisk] | None = None  # type: ignore[name-defined]
+    from_cache: bool | None = None
     # no_data shape
-    message: Optional[str] = None
+    message: str | None = None
 
 
 class BugPredictionCachedResponse(BaseModel):
@@ -1137,14 +1133,14 @@ class BugPredictionCachedResponse(BaseModel):
 
     model_config = {"extra": "allow"}
 
-    status: Optional[str] = None
-    timestamp: Optional[str] = None
-    total_files: Optional[int] = None
-    analyzed_files: Optional[int] = None
-    high_risk_count: Optional[int] = None
-    files: Optional[List["FileRisk"]] = None  # type: ignore[name-defined]
-    from_cache: Optional[bool] = None
-    message: Optional[str] = None
+    status: str | None = None
+    timestamp: str | None = None
+    total_files: int | None = None
+    analyzed_files: int | None = None
+    high_risk_count: int | None = None
+    files: List[FileRisk] | None = None  # type: ignore[name-defined]
+    from_cache: bool | None = None
+    message: str | None = None
 
 
 class BugPredictionHighRiskResponse(BaseModel):
@@ -1152,11 +1148,11 @@ class BugPredictionHighRiskResponse(BaseModel):
 
     model_config = {"extra": "allow"}
 
-    status: Optional[str] = None
-    timestamp: Optional[str] = None
-    files: Optional[List["FileRisk"]] = None  # type: ignore[name-defined]
-    high_risk_count: Optional[int] = None
-    message: Optional[str] = None
+    status: str | None = None
+    timestamp: str | None = None
+    files: List[FileRisk] | None = None  # type: ignore[name-defined]
+    high_risk_count: int | None = None
+    message: str | None = None
 
 
 class BugPredictionFileResponse(BaseModel):
@@ -1164,10 +1160,10 @@ class BugPredictionFileResponse(BaseModel):
 
     model_config = {"extra": "allow"}
 
-    status: Optional[str] = None
-    timestamp: Optional[str] = None
-    file: Optional["FileRisk"] = None  # type: ignore[name-defined]
-    message: Optional[str] = None
+    status: str | None = None
+    timestamp: str | None = None
+    file: FileRisk | None = None  # type: ignore[name-defined]
+    message: str | None = None
 
 
 class BugPredictionHeatmapResponse(BaseModel):
@@ -1211,7 +1207,7 @@ class CodeGenerationValidateResponse(BaseModel):
     is_valid: bool
     errors: List[str]
     warnings: List[str]
-    ast_info: Optional[Metadata] = None
+    ast_info: Metadata | None = None
     language: str
 
 
@@ -1479,10 +1475,10 @@ class CheckResult(BaseModel):
     severity: CheckSeverity
     passed: bool
     message: str
-    file: Optional[str] = None
-    line: Optional[int] = None
-    snippet: Optional[str] = None
-    suggestion: Optional[str] = None
+    file: str | None = None
+    line: int | None = None
+    snippet: str | None = None
+    suggestion: str | None = None
 
 
 class CommitCheckResult(BaseModel):
@@ -1529,9 +1525,9 @@ class HookStatus(BaseModel):
     """Status of installed hooks."""
 
     installed: bool
-    path: Optional[str] = None
-    version: Optional[str] = None
-    last_run: Optional[str] = None
+    path: str | None = None
+    version: str | None = None
+    last_run: str | None = None
     config: HookConfig
 
 
@@ -1555,7 +1551,7 @@ class HookInstallResponse(BaseModel):
 
     success: bool
     message: str
-    path: Optional[str] = None
+    path: str | None = None
 
 
 class CommonIssueItem(BaseModel):
@@ -1573,8 +1569,8 @@ class PrecommitSummaryResponse(BaseModel):
     pass_rate: float
     average_duration_ms: float
     common_issues: List[CommonIssueItem]
-    checks_enabled: Optional[int] = None
-    total_checks: Optional[int] = None
+    checks_enabled: int | None = None
+    total_checks: int | None = None
 
 
 class PrecommitCategoryItem(BaseModel):
@@ -1595,7 +1591,7 @@ class ErrorMonitoringDataResponse(BaseModel):
     """Generic envelope for endpoints returning {"status": str, "data": Any}."""
 
     status: str
-    data: Optional[Any] = None
+    data: Any | None = None
 
 
 class ErrorMonitoringClearResponse(BaseModel):
@@ -1610,8 +1606,8 @@ class ErrorMonitoringTestErrorResponse(BaseModel):
 
     status: str
     message: str
-    error_caught: Optional[str] = None
-    error_type: Optional[str] = None
+    error_caught: str | None = None
+    error_type: str | None = None
 
 
 class ErrorMonitoringResolveResponse(BaseModel):
@@ -1645,7 +1641,7 @@ class TestErrorRequest(BaseModel):
 
 class AlertThresholdRequest(BaseModel):
     component: str
-    error_code: Optional[str] = None
+    error_code: str | None = None
     threshold: int
 
 
@@ -1680,11 +1676,11 @@ class RumPageMetrics(BaseModel):
     """Page performance metrics from frontend."""
 
     page: str
-    load_time_seconds: Optional[float] = None
-    fcp_seconds: Optional[float] = None
-    lcp_seconds: Optional[float] = None
-    tti_seconds: Optional[float] = None
-    dom_loaded_seconds: Optional[float] = None
+    load_time_seconds: float | None = None
+    fcp_seconds: float | None = None
+    lcp_seconds: float | None = None
+    tti_seconds: float | None = None
+    dom_loaded_seconds: float | None = None
 
 
 class RumApiCallMetric(BaseModel):
@@ -1696,7 +1692,7 @@ class RumApiCallMetric(BaseModel):
     latency_seconds: float
     is_slow: bool = False
     is_timeout: bool = False
-    error_type: Optional[str] = None
+    error_type: str | None = None
 
 
 class RumJsErrorMetric(BaseModel):
@@ -1705,7 +1701,7 @@ class RumJsErrorMetric(BaseModel):
     error_type: str
     page: str
     is_rejection: bool = False
-    component: Optional[str] = None
+    component: str | None = None
 
 
 class RumUserActionMetric(BaseModel):
@@ -1713,23 +1709,23 @@ class RumUserActionMetric(BaseModel):
 
     action_type: str
     page: str
-    form_name: Optional[str] = None
-    form_status: Optional[str] = None
+    form_name: str | None = None
+    form_status: str | None = None
 
 
 class RumSessionMetric(BaseModel):
     """Session metric."""
 
     event: str
-    duration_seconds: Optional[float] = None
+    duration_seconds: float | None = None
 
 
 class RumWebSocketMetric(BaseModel):
     """WebSocket event metric from frontend."""
 
     event: str
-    direction: Optional[str] = None
-    event_type: Optional[str] = None
+    direction: str | None = None
+    event_type: str | None = None
 
 
 class RumResourceMetric(BaseModel):
@@ -1751,14 +1747,14 @@ class RumMetrics(BaseModel):
 
     session_id: str
     timestamp: str
-    page_metrics: Optional[RumPageMetrics] = None
-    api_calls: Optional[List[RumApiCallMetric]] = None
-    js_errors: Optional[List[RumJsErrorMetric]] = None
-    user_actions: Optional[List[RumUserActionMetric]] = None
-    session: Optional[RumSessionMetric] = None
-    websocket_events: Optional[List[RumWebSocketMetric]] = None
-    resources: Optional[List[RumResourceMetric]] = None
-    critical_issues: Optional[List[RumCriticalIssueMetric]] = None
+    page_metrics: RumPageMetrics | None = None
+    api_calls: List[RumApiCallMetric] | None = None
+    js_errors: List[RumJsErrorMetric] | None = None
+    user_actions: List[RumUserActionMetric] | None = None
+    session: RumSessionMetric | None = None
+    websocket_events: List[RumWebSocketMetric] | None = None
+    resources: List[RumResourceMetric] | None = None
+    critical_issues: List[RumCriticalIssueMetric] | None = None
 
 
 # analytics_cost.py schemas (#6042)
@@ -1784,10 +1780,10 @@ class CostTrendResponse(BaseModel):
 class SessionCostResponse(BaseModel):
     session_id: str
     found: bool
-    cost_usd: Optional[float] = None
-    input_tokens: Optional[int] = None
-    output_tokens: Optional[int] = None
-    error: Optional[str] = None
+    cost_usd: float | None = None
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+    error: str | None = None
 
 
 class BudgetAlertRequest(BaseModel):
@@ -1855,9 +1851,9 @@ class CodeGenerationRequest(BaseModel):
 
     description: str = Field(..., description="Natural language description of code to generate")
     language: CodeLanguage = Field(default=CodeLanguage.PYTHON, description="Target language")
-    context: Optional[str] = Field(None, description="Additional context or requirements")
-    file_path: Optional[str] = Field(None, description="Target file path for context")
-    existing_code: Optional[str] = Field(None, description="Existing code to integrate with")
+    context: str | None = Field(None, description="Additional context or requirements")
+    file_path: str | None = Field(None, description="Target file path for context")
+    existing_code: str | None = Field(None, description="Existing code to integrate with")
 
 
 class RefactoringRequest(BaseModel):
@@ -1866,7 +1862,7 @@ class RefactoringRequest(BaseModel):
     code: str = Field(..., description="Code to refactor")
     refactoring_type: RefactoringType = Field(default=RefactoringType.GENERAL)
     language: CodeLanguage = Field(default=CodeLanguage.PYTHON)
-    file_path: Optional[str] = Field(None, description="Source file path for context")
+    file_path: str | None = Field(None, description="Source file path for context")
     preserve_comments: bool = Field(default=True)
     preserve_formatting: bool = Field(default=False)
 
@@ -1882,18 +1878,18 @@ class CodeGenRollbackRequest(BaseModel):
     """Request model for code rollback"""
 
     file_path: str = Field(..., description="File to rollback")
-    version_id: Optional[str] = Field(None, description="Specific version to rollback to")
+    version_id: str | None = Field(None, description="Specific version to rollback to")
 
 
 class CodeGenerationResponse(BaseModel):
     """Response model for code generation"""
 
     success: bool
-    generated_code: Optional[str] = None
-    validation: Optional[Dict[str, Any]] = None
+    generated_code: str | None = None
+    validation: Dict[str, Any] | None = None
     tokens_used: int = 0
     processing_time: float = 0.0
-    error: Optional[str] = None
+    error: str | None = None
 
 
 class RefactoringResponse(BaseModel):
@@ -1901,13 +1897,13 @@ class RefactoringResponse(BaseModel):
 
     success: bool
     original_code: str
-    refactored_code: Optional[str] = None
-    diff: Optional[str] = None
+    refactored_code: str | None = None
+    diff: str | None = None
     changes: List[str] = []
-    validation: Optional[Dict[str, Any]] = None
+    validation: Dict[str, Any] | None = None
     tokens_used: int = 0
     processing_time: float = 0.0
-    error: Optional[str] = None
+    error: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -1967,10 +1963,10 @@ class PatternFeedback(BaseModel):
     feedback_type: FeedbackType = Field(..., description="Type of feedback")
     file_path: str = Field(..., description="File where pattern was detected")
     line_number: int = Field(..., description="Line number of pattern match")
-    code_snippet: Optional[str] = Field(None, description="Code snippet context")
-    developer_comment: Optional[str] = Field(None, description="Developer notes")
-    suggested_fix: Optional[str] = Field(None, description="Suggested improvement")
-    timestamp: Optional[datetime] = Field(None, description="Feedback timestamp")
+    code_snippet: str | None = Field(None, description="Code snippet context")
+    developer_comment: str | None = Field(None, description="Developer notes")
+    suggested_fix: str | None = Field(None, description="Suggested improvement")
+    timestamp: datetime | None = Field(None, description="Feedback timestamp")
 
 
 class PatternDefinition(BaseModel):
@@ -2014,7 +2010,7 @@ class PatternLearningMetrics(BaseModel):
     feedback_by_type: Dict[str, int]
     feedback_by_category: Dict[str, int]
     learning_rate: float
-    last_training_run: Optional[datetime]
+    last_training_run: datetime | None
 
 
 class ActiveLearningQuery(BaseModel):
@@ -2032,8 +2028,8 @@ class PatternUpdate(BaseModel):
 
     pattern_id: str
     update_type: str
-    old_value: Optional[Any]
-    new_value: Optional[Any]
+    old_value: Any | None
+    new_value: Any | None
     reason: str
     applied_at: datetime
 
@@ -2109,7 +2105,7 @@ class LearningInsight(BaseModel):
     data: Dict[str, Any]
     recommendations: List[str]
     generated_at: datetime
-    expires_at: Optional[datetime] = None
+    expires_at: datetime | None = None
 
 
 class ContinuousLearningMetrics(BaseModel):
@@ -2122,8 +2118,8 @@ class ContinuousLearningMetrics(BaseModel):
     patterns_updated: int
     false_positives_reduced: int
     accuracy_improvement: float
-    last_retrain: Optional[datetime]
-    next_scheduled_retrain: Optional[datetime]
+    last_retrain: datetime | None
+    next_scheduled_retrain: datetime | None
     insights_generated: int
     active_insights: int
 
@@ -2132,12 +2128,12 @@ class LearningMonitoringStatus(BaseModel):
     """Status of the monitoring system."""
 
     state: MonitoringState
-    started_at: Optional[datetime]
+    started_at: datetime | None
     uptime_seconds: int
     files_monitored: int
     directories_watched: List[str]
     events_queue_size: int
-    last_event_time: Optional[datetime]
+    last_event_time: datetime | None
 
 
 class RetrainingRequest(BaseModel):
@@ -2145,7 +2141,7 @@ class RetrainingRequest(BaseModel):
 
     reason: RetrainingReason = RetrainingReason.MANUAL
     force: bool = False
-    patterns_to_focus: Optional[List[str]] = None
+    patterns_to_focus: List[str] | None = None
 
 
 class LearningConfig(BaseModel):
@@ -2198,8 +2194,8 @@ class PatternSnapshot(BaseModel):
 class EvolutionTimelineRequest(BaseModel):
     """Request for timeline data."""
 
-    start_date: Optional[str] = None
-    end_date: Optional[str] = None
+    start_date: str | None = None
+    end_date: str | None = None
     granularity: str = "daily"
     metrics: List[str] = ["overall_score", "complexity", "maintainability"]
 
@@ -2208,8 +2204,8 @@ class EvolutionAnalysisRequest(BaseModel):
     """Request to trigger code evolution analysis."""
 
     repo_path: str = Field(description="Path to git repository to analyze")
-    start_date: Optional[str] = Field(None, description="Start date for analysis (ISO format)")
-    end_date: Optional[str] = Field(None, description="End date for analysis (ISO format)")
+    start_date: str | None = Field(None, description="Start date for analysis (ISO format)")
+    end_date: str | None = Field(None, description="End date for analysis (ISO format)")
     commit_limit: int = Field(100, description="Maximum number of commits to analyze", ge=1, le=1000)
 
 
@@ -2250,7 +2246,7 @@ class ConversationFlow(BaseModel):
     frequency: int
     avg_duration_seconds: float
     completion_rate: float
-    drop_off_point: Optional[str] = None
+    drop_off_point: str | None = None
 
 
 class ConversationMetrics(BaseModel):
@@ -2342,7 +2338,7 @@ class CustomReportRequest(BaseModel):
 
     report_type: str = Field(default="executive", description="Report type: executive, technical, cost, performance")
     days: int = Field(default=30, ge=1, le=365, description="Days to include")
-    include_sections: Optional[List[str]] = Field(
+    include_sections: List[str] | None = Field(
         default=None,
         description="Sections to include: cost, agents, behavior, maintenance, optimization",
     )
@@ -2424,7 +2420,7 @@ class AgentMetricsResponse(BaseModel):
     total_tokens_used: int
     error_rate: float
     success_rate: float
-    last_activity: Optional[str]
+    last_activity: str | None
 
 
 class TaskRecordResponse(BaseModel):
@@ -2436,10 +2432,10 @@ class TaskRecordResponse(BaseModel):
     task_name: str
     status: str
     started_at: str
-    completed_at: Optional[str]
-    duration_ms: Optional[float]
-    tokens_used: Optional[int]
-    error_message: Optional[str]
+    completed_at: str | None
+    duration_ms: float | None
+    tokens_used: int | None
+    error_message: str | None
 
 
 class TrackTaskRequest(BaseModel):
@@ -2449,8 +2445,8 @@ class TrackTaskRequest(BaseModel):
     agent_type: str = Field(..., description="Type of agent")
     task_id: str = Field(..., description="Unique task identifier")
     task_name: str = Field(..., description="Human-readable task name")
-    input_size: Optional[int] = Field(None, description="Size of input data")
-    metadata: Optional[dict] = Field(None, description="Additional metadata")
+    input_size: int | None = Field(None, description="Size of input data")
+    metadata: dict | None = Field(None, description="Additional metadata")
 
 
 class CompleteTaskRequest(BaseModel):
@@ -2458,9 +2454,9 @@ class CompleteTaskRequest(BaseModel):
 
     task_id: str = Field(..., description="Task identifier")
     status: str = Field(..., description="Final status (completed, failed, cancelled, timeout)")
-    output_size: Optional[int] = Field(None, description="Size of output data")
-    tokens_used: Optional[int] = Field(None, description="Tokens consumed")
-    error_message: Optional[str] = Field(None, description="Error message if failed")
+    output_size: int | None = Field(None, description="Size of output data")
+    tokens_used: int | None = Field(None, description="Tokens consumed")
+    error_message: str | None = Field(None, description="Error message if failed")
 
 
 # ---------------------------------------------------------------------------
@@ -2473,10 +2469,10 @@ class TrackEventRequest(BaseModel):
 
     event_type: str = Field(..., description="Type of event (page_view, click, search, etc.)")
     feature: str = Field(..., description="Feature area (chat, knowledge, tools, etc.)")
-    user_id: Optional[str] = Field(None, description="User ID if authenticated")
-    session_id: Optional[str] = Field(None, description="Session ID")
-    duration_ms: Optional[int] = Field(None, ge=0, description="Duration in milliseconds")
-    metadata: Optional[dict] = Field(default_factory=dict, description="Additional metadata")
+    user_id: str | None = Field(None, description="User ID if authenticated")
+    session_id: str | None = Field(None, description="Session ID")
+    duration_ms: int | None = Field(None, ge=0, description="Duration in milliseconds")
+    metadata: dict | None = Field(default_factory=dict, description="Additional metadata")
 
 
 class FeatureMetricsResponse(BaseModel):
@@ -2502,7 +2498,7 @@ class EngagementMetricsResponse(BaseModel):
     timestamp: str
     metrics: dict
     feature_popularity: list
-    most_popular_feature: Optional[str]
+    most_popular_feature: str | None
 
 
 # ---------------------------------------------------------------------------
@@ -2534,8 +2530,8 @@ class PerformanceIssue(BaseModel):
     column: int = 0
     description: str
     suggestion: str
-    code_snippet: Optional[str] = None
-    estimated_impact: Optional[str] = None
+    code_snippet: str | None = None
+    estimated_impact: str | None = None
 
 
 class PerformanceAnalysisResult(BaseModel):
@@ -2563,7 +2559,7 @@ class PerformancePatternDefinition(BaseModel):
     impact: ImpactLevel
     description: str
     suggestion: str
-    regex_pattern: Optional[str] = None
+    regex_pattern: str | None = None
     ast_check: bool = False
     enabled: bool = True
 
@@ -2604,9 +2600,9 @@ class ReviewComment(BaseModel):
     severity: ReviewSeverity
     category: ReviewCategory
     message: str
-    suggestion: Optional[str] = None
-    code_snippet: Optional[str] = None
-    pattern_id: Optional[str] = None
+    suggestion: str | None = None
+    code_snippet: str | None = None
+    pattern_id: str | None = None
 
 
 class ReviewResult(BaseModel):
@@ -2739,7 +2735,7 @@ class PromptAnalysisRequest(BaseModel):
     """Request for prompt analysis."""
 
     prompt: str = Field(..., description="The prompt to analyze")
-    model: Optional[str] = Field(None, description="Model used or planned")
+    model: str | None = Field(None, description="Model used or planned")
 
 
 class UsageRecordRequest(BaseModel):
@@ -2751,7 +2747,7 @@ class UsageRecordRequest(BaseModel):
     output_tokens: int = Field(..., description="Output token count")
     response_time: float = Field(..., description="Response time in seconds")
     success: bool = Field(default=True)
-    session_id: Optional[str] = Field(None)
+    session_id: str | None = Field(None)
 
     def to_record_dict(
         self,
@@ -2782,8 +2778,8 @@ class DateRangeParams:
     """FastAPI ``Depends()`` helper for endpoints accepting a date-range filter.
 
     Use as a query-param dependency to consolidate the recurring
-    ``start_date: Optional[str] = Query(None, ...)`` /
-    ``end_date: Optional[str] = Query(None, ...)`` pair across analytics
+    ``start_date: str | None = Query(None, ...)`` /
+    ``end_date: str | None = Query(None, ...)`` pair across analytics
     endpoints (#7110, #6624 follow-up).
 
     Example usage::
@@ -2808,8 +2804,8 @@ class DateRangeParams:
 
     def __init__(
         self,
-        start_date: Annotated[Optional[str], Query(description="Start date (YYYY-MM-DD)")] = None,
-        end_date: Annotated[Optional[str], Query(description="End date (YYYY-MM-DD)")] = None,
+        start_date: Annotated[str | None, Query(description="Start date (YYYY-MM-DD)")] = None,
+        end_date: Annotated[str | None, Query(description="End date (YYYY-MM-DD)")] = None,
     ):
         self.start_date = start_date
         self.end_date = end_date
@@ -2849,7 +2845,7 @@ class QualityMetric(BaseModel):
     value: float = Field(..., ge=0, le=100)
     grade: QualityGrade
     trend: float = Field(default=0, description="Percentage change from previous period")
-    details: Optional[Dict[str, Any]] = None
+    details: Dict[str, Any] | None = None
 
 
 class HealthScore(BaseModel):
@@ -2949,12 +2945,12 @@ class PatternMatch(BaseModel):
 
     pattern_type: PatternType
     file_path: str
-    class_name: Optional[str] = None
-    function_name: Optional[str] = None
+    class_name: str | None = None
+    function_name: str | None = None
     line_number: int
     confidence: float = Field(..., ge=0.0, le=1.0)
     indicators_found: List[str]
-    code_snippet: Optional[str] = None
+    code_snippet: str | None = None
 
 
 class PatternConsistency(BaseModel):
@@ -2995,7 +2991,7 @@ class ArchitectureAnalysisRequest(BaseModel):
     """Request for architecture analysis."""
 
     paths: List[str] = Field(default_factory=lambda: ["backend/", "src/"], description="Paths to analyze")
-    patterns_to_detect: Optional[List[PatternType]] = Field(None, description="Specific patterns to look for")
+    patterns_to_detect: List[PatternType] | None = Field(None, description="Specific patterns to look for")
     include_autobot_patterns: bool = Field(True, description="Include AutoBot-specific patterns")
     generate_diagram: bool = Field(True, description="Generate Mermaid diagram")
 
@@ -3074,7 +3070,7 @@ class VariableDefResponse(BaseModel):
     column: int
     scope: str
     taint_level: str
-    source_type: Optional[str]
+    source_type: str | None
 
 
 class VulnerabilityResponse(BaseModel):
@@ -3140,8 +3136,8 @@ class EmbeddingUsageRequest(BaseModel):
     batch_size: int = Field(default=1, description="Batch size used")
     processing_time: float = Field(..., description="Processing time in seconds")
     success: bool = Field(default=True, description="Whether operation succeeded")
-    source: Optional[str] = Field(None, description="Source of the operation")
-    metadata: Optional[Dict[str, Any]] = Field(None, description="Additional metadata")
+    source: str | None = Field(None, description="Source of the operation")
+    metadata: Dict[str, Any] | None = Field(None, description="Additional metadata")
 
     def to_usage_record(self, operation_id: str, cost: float) -> Dict[str, Any]:
         """Convert to usage record dict for storage."""
@@ -3194,10 +3190,10 @@ class EmbeddingStatsResponse(BaseModel):
     model_config = {"extra": "allow"}
 
     status: str = Field(..., description="success | error")
-    stats: Optional[EmbeddingStatsBody] = None
-    timestamp: Optional[str] = None
+    stats: EmbeddingStatsBody | None = None
+    timestamp: str | None = None
     # error shape
-    error: Optional[str] = None
+    error: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -3211,7 +3207,7 @@ class UsageRecordEndpointRequest(BaseModel):
     Renamed from UsageRecordRequest in #6636 to disambiguate from the
     LLM-analytics UsageRecordRequest at line 2845, which has a different
     shape (prompt-based) and is used by analytics_llm_patterns.py and
-    llm_interface_pkg/interface.py. The previous shadowing caused silent
+    llm_shared/interface.py. The previous shadowing caused silent
     Pydantic validation failures in LLM usage tracking
     (logged as non-critical and swallowed)."""
 
@@ -3219,10 +3215,10 @@ class UsageRecordEndpointRequest(BaseModel):
     model: str
     input_tokens: int
     output_tokens: int
-    session_id: Optional[str] = None
-    user_id: Optional[str] = None
-    agent_id: Optional[str] = None
-    latency_ms: Optional[float] = None
+    session_id: str | None = None
+    user_id: str | None = None
+    agent_id: str | None = None
+    latency_ms: float | None = None
     success: bool = True
 
 
@@ -3281,9 +3277,9 @@ class FileRisk(BaseModel):
     risk_score: float = Field(..., ge=0, le=100)
     risk_level: RiskLevel
     factors: Dict[str, float] = Field(default_factory=dict)
-    factor_details: Optional[List[Dict[str, Any]]] = None
+    factor_details: List[Dict[str, Any]] | None = None
     bug_count_history: int = 0
-    last_bug_date: Optional[str] = None
+    last_bug_date: str | None = None
     prevention_tips: List[str] = Field(default_factory=list)
     suggested_tests: List[str] = Field(default_factory=list)
     recommendation: str = ""
@@ -3298,8 +3294,300 @@ class PredictionResult(BaseModel):
     analyzed_files: int = 0
     high_risk_count: int
     predicted_bugs: int = 0
-    accuracy_score: Optional[float] = None
+    accuracy_score: float | None = None
     accuracy_available: bool = False
     risk_distribution: Dict[str, int] = Field(default_factory=dict)
     files: List[FileRisk] = Field(default_factory=list)
     top_risk_factors: List[Dict[str, Any]] = Field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
+# analytics_evolution.py schemas (GH #6509 Batch D)
+# ---------------------------------------------------------------------------
+
+
+class AnalyticsEvolutionTimelineResponse(BaseModel):
+    """Response for GET /timeline."""
+
+    timeline: List[Dict[str, Any]] = Field(default_factory=list)
+    total_snapshots: int = 0
+    date_range: Dict[str, Any] = Field(default_factory=dict)
+    granularity: str = "daily"
+    metrics_available: List[str] = Field(default_factory=list)
+
+
+class AnalyticsEvolutionPatternsResponse(BaseModel):
+    """Response for GET /patterns."""
+
+    status: str
+    patterns: Dict[str, Any] = Field(default_factory=dict)
+    pattern_types: List[str] = Field(default_factory=list)
+    date_range: Dict[str, Any] = Field(default_factory=dict)
+
+
+class AnalyticsEvolutionTrendsResponse(BaseModel):
+    """Response for GET /trends."""
+
+    status: str
+    trends: Dict[str, Any] = Field(default_factory=dict)
+    period_days: int = 30
+    snapshot_count: int = 0
+    analysis_timestamp: str = ""
+
+
+class AnalyticsEvolutionSnapshotResponse(BaseModel):
+    """Response for POST /snapshot."""
+
+    status: str
+    message: str = ""
+    snapshot: Dict[str, Any] = Field(default_factory=dict)
+
+
+class AnalyticsEvolutionPatternSnapshotResponse(BaseModel):
+    """Response for POST /pattern-snapshot."""
+
+    status: str
+    message: str = ""
+    snapshot: Dict[str, Any] = Field(default_factory=dict)
+
+
+class AnalyticsEvolutionExportResponse(BaseModel):
+    """Response for GET /export (JSON format path)."""
+
+    status: str
+    export_format: str = "json"
+    data: List[EvolutionQualitySnapshot] = Field(default_factory=list)
+    record_count: int = 0
+    exported_at: str = ""
+
+
+class AnalyticsEvolutionSummaryResponse(BaseModel):
+    """Response for GET /summary."""
+
+    total_snapshots: int = 0
+    date_range: Dict[str, Any] = Field(default_factory=dict)
+    latest_scores: Dict[str, Any] = Field(default_factory=dict)
+    trend_direction: str = "unknown"
+    pattern_counts: Dict[str, Any] = Field(default_factory=dict)
+
+
+# ---------------------------------------------------------------------------
+# analytics_debt.py schemas (GH #6509 Batch D)
+# ---------------------------------------------------------------------------
+
+
+class AnalyticsDebtCalculateResponse(BaseModel):
+    """Response for POST /calculate."""
+
+    status: str
+    data: Dict[str, Any] = Field(default_factory=dict)
+    target_path: str | None = None
+
+
+class AnalyticsDebtSummaryResponse(BaseModel):
+    """Response for GET /summary."""
+
+    status: str
+    summary: Dict[str, Any] = Field(default_factory=dict)
+    top_files: List[Dict[str, Any]] = Field(default_factory=list)
+    roi_ranking: List[Dict[str, Any]] = Field(default_factory=list)
+    timestamp: str | None = None
+
+
+class AnalyticsDebtByCategoryResponse(BaseModel):
+    """Response for GET /by-category/{category}."""
+
+    status: str
+    category: str = ""
+    items: List[Dict[str, Any]] = Field(default_factory=list)
+    count: int = 0
+
+
+class AnalyticsDebtTrendsResponse(BaseModel):
+    """Response for GET /trends."""
+
+    status: str
+    trends: List[Dict[str, Any]] = Field(default_factory=list)
+    data_points: int = 0
+    change: Dict[str, Any] = Field(default_factory=dict)
+    direction: str = "unknown"
+
+
+class AnalyticsDebtROIPrioritiesResponse(BaseModel):
+    """Response for GET /roi-priorities."""
+
+    status: str
+    priorities: List[Dict[str, Any]] = Field(default_factory=list)
+    total_available: int = 0
+
+
+class AnalyticsDebtReportResponse(BaseModel):
+    """Response for GET /report."""
+
+    status: str
+    format: str = "json"
+    data: Dict[str, Any] | None = None
+    report: str | None = None
+
+
+# ---------------------------------------------------------------------------
+# bi_export_endpoints.py schemas (GH #6509 Batch D)
+# ---------------------------------------------------------------------------
+
+
+class SavedReportDeleteResponse(BaseModel):
+    """Response for DELETE /reports/saved/{report_id}."""
+
+    report_id: str
+    deleted: bool
+
+
+class SavedReportRunResponse(BaseModel):
+    """Response for POST /reports/saved/{report_id}/run."""
+
+    status: str = ""
+    report_id: str = ""
+    data: Dict[str, Any] = Field(default_factory=dict)
+
+
+# ---------------------------------------------------------------------------
+# analytics_cfg.py schemas (GH #6509 Batch D)
+# ---------------------------------------------------------------------------
+
+
+class AnalyticsCFGAnalyzeResponse(BaseModel):
+    """Response for POST /analyze."""
+
+    success: bool
+    graphs: List[Dict[str, Any]] = Field(default_factory=list)
+    summary: Dict[str, Any] = Field(default_factory=dict)
+    issues: List[Dict[str, Any]] = Field(default_factory=list)
+    analysis_time_ms: float = 0.0
+
+
+class AnalyticsCFGComplexityResponse(BaseModel):
+    """Response for POST /complexity."""
+
+    success: bool
+    metrics: List[Dict[str, Any]] = Field(default_factory=list)
+    summary: Dict[str, Any] = Field(default_factory=dict)
+
+
+class AnalyticsCFGUnreachableResponse(BaseModel):
+    """Response for POST /unreachable."""
+
+    success: bool
+    unreachable_code: List[Dict[str, Any]] = Field(default_factory=list)
+    count: int = 0
+
+
+class AnalyticsCFGInfiniteLoopsResponse(BaseModel):
+    """Response for POST /infinite-loops."""
+
+    success: bool
+    loop_issues: List[Dict[str, Any]] = Field(default_factory=list)
+    definite_infinite: int = 0
+    potential_infinite: int = 0
+
+
+# ---------------------------------------------------------------------------
+# analytics_reporting.py schemas (GH #6509 Batch D)
+# ---------------------------------------------------------------------------
+
+
+class AnalyticsReportingReportResponse(BaseModel):
+    """Response for GET /report."""
+
+    status: str
+    generated_at: str = ""
+    summary: Dict[str, Any] = Field(default_factory=dict)
+    quality: Dict[str, Any] = Field(default_factory=dict)
+    categories: Dict[str, Any] = Field(default_factory=dict)
+    top_files: List[Any] = Field(default_factory=list)
+    technical_debt: Dict[str, Any] = Field(default_factory=dict)
+    performance: Dict[str, Any] = Field(default_factory=dict)
+
+
+class AnalyticsReportingSummaryResponse(BaseModel):
+    """Response for GET /summary."""
+
+    health_score: float = 0.0
+    grade: str = "N/A"
+    total_issues: int = 0
+    high_priority: int = 0
+    timestamp: str = ""
+
+
+class AnalyticsReportingTrendsResponse(BaseModel):
+    """Response for GET /trends."""
+
+    status: str
+    message: str = ""
+    data: List[Any] = Field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
+# analytics_embedding_patterns.py schemas (GH #6509 Batch D)
+# ---------------------------------------------------------------------------
+
+
+class AnalyticsEmbeddingRecordResponse(BaseModel):
+    """Response for POST /record."""
+
+    status: str = ""
+    message: str | None = None
+    data: Dict[str, Any] = Field(default_factory=dict)
+
+
+class AnalyticsEmbeddingModelComparisonResponse(BaseModel):
+    """Response for GET /model-comparison."""
+
+    status: str = ""
+    data: Dict[str, Any] = Field(default_factory=dict)
+
+
+class AnalyticsEmbeddingOptimizationResponse(BaseModel):
+    """Response for GET /optimization-recommendations."""
+
+    status: str = ""
+    data: Dict[str, Any] = Field(default_factory=dict)
+
+
+# ---------------------------------------------------------------------------
+# analytics_code_generation.py / analytics_performance.py / analytics_quality.py
+# schemas (GH #6509 Batch E)
+# ---------------------------------------------------------------------------
+
+
+class AnalyticsCodeGenRollbackData(BaseModel):
+    """Response data for POST /codegen/rollback."""
+
+    success: bool = True
+    file_path: str = ""
+    version_id: str = ""
+    code: str = ""
+
+
+class AnalyticsPerformanceAnalyzeData(BaseModel):
+    """Response data for GET /performance/analyze."""
+
+    total_issues: int = 0
+    critical_count: int = 0
+    high_count: int = 0
+    medium_count: int = 0
+    low_count: int = 0
+    files_analyzed: int = 0
+    duration_ms: float = 0.0
+    timestamp: str = ""
+    score: float = 0.0
+    issues: List[Any] = Field(default_factory=list)
+    status: str = ""
+
+
+class AnalyticsQualityExportData(BaseModel):
+    """Response data for GET /quality/export."""
+
+    format: str = "json"
+    content: Any = None
+    status: str = ""
+    error: str | None = None

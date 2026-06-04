@@ -13,10 +13,10 @@ from __future__ import annotations
 
 import asyncio
 import io
-import logging
 import time
 from typing import TYPE_CHECKING, Any, Dict
 
+from autobot_shared.logging_manager import get_logger
 from config import get_config_section
 
 from ..base import BaseModalProcessor
@@ -63,10 +63,10 @@ try:
     VISION_MODELS_AVAILABLE = True
 except ImportError:
     VISION_MODELS_AVAILABLE = False
-    logger = logging.getLogger(__name__)
+    logger = get_logger(__name__)
     logger.warning("Vision models not available. Install transformers with: pip install transformers")
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class VisionProcessor(BaseModalProcessor):
@@ -102,13 +102,21 @@ class VisionProcessor(BaseModalProcessor):
         try:
             # Load CLIP model for image embeddings and classification
             self.logger.info("Loading CLIP model...")
-            self.clip_model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32").to(self.device)
-            self.clip_processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32", use_fast=True)
+            self.clip_model = CLIPModel.from_pretrained(
+                "openai/clip-vit-base-patch32", resume_download=True
+            ).to(  # nosec B615 - HuggingFace model loaded by name; revision pinning managed operationally
+                self.device
+            )
+            self.clip_processor = CLIPProcessor.from_pretrained(  # nosec B615
+                "openai/clip-vit-base-patch32", use_fast=True, resume_download=True
+            )
 
             # Load BLIP-2 model for image captioning and VQA
             # Using smaller model for memory efficiency
             self.logger.info("Loading BLIP-2 model...")
-            self.blip_processor = Blip2Processor.from_pretrained("Salesforce/blip2-opt-2.7b", use_fast=True)
+            self.blip_processor = Blip2Processor.from_pretrained(  # nosec B615
+                "Salesforce/blip2-opt-2.7b", use_fast=True, resume_download=True
+            )
 
             # Check if accelerate is available for device_map
             try:
@@ -119,15 +127,17 @@ class VisionProcessor(BaseModalProcessor):
 
             # Load BLIP-2 model with device_map only if accelerate is available
             if accelerate_available and torch.cuda.is_available():
-                self.blip_model = Blip2ForConditionalGeneration.from_pretrained(
+                self.blip_model = Blip2ForConditionalGeneration.from_pretrained(  # nosec B615
                     "Salesforce/blip2-opt-2.7b",
                     torch_dtype=torch.float16,
                     device_map="auto",
+                    resume_download=True,
                 )
             else:
-                self.blip_model = Blip2ForConditionalGeneration.from_pretrained(
+                self.blip_model = Blip2ForConditionalGeneration.from_pretrained(  # nosec B615
                     "Salesforce/blip2-opt-2.7b",
                     torch_dtype=(torch.float16 if torch.cuda.is_available() else torch.float32),
+                    resume_download=True,
                 ).to(self.device)
 
             # Set models to evaluation mode

@@ -9,12 +9,13 @@ request payloads through compression, summarization, and intelligent chunking.
 """
 
 import json
-import logging
 import re
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Pattern
+from typing import Any, Dict, List, Pattern
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 
 # Issue #380: Pre-compiled regex patterns for text compression
 _WHITESPACE_RE = re.compile(r"\s+")
@@ -36,7 +37,7 @@ def is_empty_value(value: Any) -> bool:
     return value is None or value == "" or value == [] or value == {}
 
 
-def _compress_value_by_type(optimizer: "PayloadOptimizer", value: Any) -> Optional[Any]:
+def _compress_value_by_type(optimizer: "PayloadOptimizer", value: Any) -> Any | None:
     """Compress a value based on its type. (Issue #315 - extracted)"""
     if isinstance(value, dict):
         result = optimizer._compress_dict(value)

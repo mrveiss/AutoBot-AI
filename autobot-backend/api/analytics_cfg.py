@@ -15,16 +15,19 @@ Provides CFG construction, visualization exports, and comprehensive analysis.
 
 import ast
 import asyncio
-import logging
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Set, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 
 from api.schemas_analytics import (
+    AnalyticsCFGAnalyzeResponse,
+    AnalyticsCFGComplexityResponse,
+    AnalyticsCFGInfiniteLoopsResponse,
+    AnalyticsCFGUnreachableResponse,
     CFGAnalyzeFileRequest,
     CFGAnalyzeRequest,
     EdgeType,
@@ -35,9 +38,10 @@ from api.schemas_analytics import (
 from api.schemas_common import DataResponse
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.path_validator import validate_path
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/cfg", tags=["control-flow", "analytics"])
 
@@ -138,7 +142,7 @@ class ControlFlowGraph:
     file_path: str
     nodes: List[CFGNode] = field(default_factory=list)
     edges: List[CFGEdge] = field(default_factory=list)
-    entry_node_id: Optional[str] = None
+    entry_node_id: str | None = None
     exit_node_ids: List[str] = field(default_factory=list)
     issues: List[CFGIssue] = field(default_factory=list)
     metrics: Dict[str, Any] = field(default_factory=dict)
@@ -171,9 +175,9 @@ class CFGBuilder(ast.NodeVisitor):
         self.source_lines = source_code.split("\n")
         self.file_path = file_path
         self.graphs: List[ControlFlowGraph] = []
-        self._current_graph: Optional[ControlFlowGraph] = None
+        self._current_graph: ControlFlowGraph | None = None
         self._node_counter = 0
-        self._current_node_id: Optional[str] = None
+        self._current_node_id: str | None = None
         self._loop_stack: List[Tuple[str, str]] = []  # (header_id, exit_id)
         self._try_stack: List[str] = []
 
@@ -198,7 +202,7 @@ class CFGBuilder(ast.NodeVisitor):
         node_type: NodeType,
         ast_node: ast.AST,
         code_snippet: str = "",
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: Dict[str, Any] | None = None,
     ) -> CFGNode:
         """Add a node to the current graph."""
         node_id = self._generate_node_id()
@@ -229,7 +233,7 @@ class CFGBuilder(ast.NodeVisitor):
         target_id: str,
         edge_type: EdgeType,
         condition: str = "",
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: Dict[str, Any] | None = None,
     ) -> CFGEdge:
         """Add an edge to the current graph."""
         edge = CFGEdge(
@@ -1039,7 +1043,7 @@ def _calculate_cfg_summary(graphs: List[ControlFlowGraph], all_issues: List[Dict
     }
 
 
-@router.post("/analyze", response_model=DataResponse)
+@router.post("/analyze", response_model=DataResponse[AnalyticsCFGAnalyzeResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="analyze_control_flow",
@@ -1199,7 +1203,7 @@ async def export_cfg_dot(
     )
 
 
-@router.post("/complexity", response_model=DataResponse)
+@router.post("/complexity", response_model=DataResponse[AnalyticsCFGComplexityResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_complexity_metrics",
@@ -1250,7 +1254,7 @@ async def get_complexity_metrics(
     )
 
 
-@router.post("/unreachable", response_model=DataResponse)
+@router.post("/unreachable", response_model=DataResponse[AnalyticsCFGUnreachableResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="detect_unreachable_code",
@@ -1286,7 +1290,7 @@ async def detect_unreachable_code(
     )
 
 
-@router.post("/infinite-loops", response_model=DataResponse)
+@router.post("/infinite-loops", response_model=DataResponse[AnalyticsCFGInfiniteLoopsResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="detect_infinite_loops",
@@ -1322,43 +1326,5 @@ async def detect_infinite_loops(
             "loop_issues": loop_issues,
             "definite_infinite": sum(1 for i in loop_issues if i["issue_type"] == "infinite_loop"),
             "potential_infinite": sum(1 for i in loop_issues if i["issue_type"] == "potential_infinite_loop"),
-        },
-    )
-
-
-@router.get("/health", response_model=DataResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="cfg_health",
-    error_code_prefix="ANALYTICS_CFG",
-)
-async def cfg_health(
-    admin_check: bool = Depends(check_admin_permission),
-) -> JSONResponse:
-    """
-    Health check for CFG analyzer.
-
-    Deprecated: Use /api/system/health for system-wide health checks.
-    This per-module endpoint will be removed in a future release. (#3333)
-
-    Issue #744: Requires admin authentication.
-    """
-    logger.warning(
-        "Deprecated health endpoint called: /api/cfg-analytics/health — " "use /api/system/health instead (#3333)"
-    )
-    return JSONResponse(
-        status_code=200,
-        content={
-            "status": "healthy",
-            "service": "cfg_analyzer",
-            "deprecated": True,
-            "use_instead": "/api/system/health",
-            "capabilities": [
-                "cfg_construction",
-                "unreachable_code_detection",
-                "infinite_loop_detection",
-                "complexity_analysis",
-                "dot_export",
-            ],
         },
     )

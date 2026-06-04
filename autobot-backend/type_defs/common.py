@@ -7,7 +7,7 @@ Common Type Definitions for AutoBot
 Provides reusable type definitions to replace generic Dict[str, Any] patterns.
 """
 
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List
 
 # Type alias for timestamp strings (ISO 8601 format)
 TimestampStr = str
@@ -15,7 +15,7 @@ TimestampStr = str
 # JSON-compatible types
 # Note: Using Any to avoid Pydantic recursive type alias issues
 
-JSONPrimitive = Union[str, int, float, bool, None]
+JSONPrimitive = str | int | float | bool | None
 JSONValue = Any  # Simplified to avoid recursion - represents any JSON-serializable value
 JSONArray = List[Any]
 JSONObject = Dict[str, Any]
@@ -25,14 +25,14 @@ JSONObject = Dict[str, Any]
 Metadata = Dict[str, Any]
 
 # Metrics dictionary - numeric values with string keys
-MetricsDict = Dict[str, Union[int, float]]
+MetricsDict = Dict[str, int | float]
 
 # Configuration types
-ConfigValue = Union[str, int, float, bool, List[str], Dict[str, str]]
+ConfigValue = str | int | float | bool | List[str] | Dict[str, str]
 ConfigDict = Dict[str, ConfigValue]
 
 # Search/Filter types
-FilterValue = Union[str, int, float, bool, List[str]]
+FilterValue = str | int | float | bool | List[str]
 FilterDict = Dict[str, FilterValue]
 
 # Entity ID types (for documentation/clarity)
@@ -43,22 +43,22 @@ UserId = str
 WorkflowId = str
 
 # Status types
-StatusDict = Dict[str, Union[str, bool, int, float, TimestampStr]]
+StatusDict = Dict[str, str | bool | int | float | TimestampStr]
 
 # Error context type
-ErrorContext = Dict[str, Union[str, int, float, bool, List[str]]]
+ErrorContext = Dict[str, str | int | float | bool | List[str]]
 
 # Document/Content types
-DocumentContent = Dict[str, Union[str, int, float, List[str], Metadata]]
-SearchResult = Dict[str, Union[str, float, int, Metadata]]
+DocumentContent = Dict[str, str | int | float | List[str] | Metadata]
+SearchResult = Dict[str, str | float | int | Metadata]
 SearchResults = List[SearchResult]
 
 # Optional wrapper types for common patterns
-OptionalStr = Optional[str]
-OptionalInt = Optional[int]
-OptionalFloat = Optional[float]
-OptionalBool = Optional[bool]
-OptionalMetadata = Optional[Metadata]
+OptionalStr = str | None
+OptionalInt = int | None
+OptionalFloat = float | None
+OptionalBool = bool | None
+OptionalMetadata = Metadata | None
 
 # Message type constants for chat/streaming systems
 # Used for deduplication logic and persistence filtering

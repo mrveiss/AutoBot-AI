@@ -19,11 +19,11 @@ Execution: Uses PTY integration for commands to appear in user's terminal.
 """
 
 import asyncio
-import logging
 import time
 from datetime import datetime, timezone
-from typing import AsyncGenerator, Optional, Tuple, Union
+from typing import AsyncGenerator, Tuple
 
+from autobot_shared.logging_manager import get_logger
 from security.command_patterns import check_dangerous_patterns, is_safe_command
 from utils.command_utils import execute_shell_command_streaming
 
@@ -49,7 +49,7 @@ except ImportError:
     simple_pty_manager = None
     PTY_AVAILABLE = False
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #765: DANGEROUS_PATTERNS and SAFE_COMMANDS now imported from
 # src.security.command_patterns for centralized security pattern management
@@ -82,7 +82,7 @@ def _build_no_command_result(task: "AgentTask", execution_time: float) -> StepRe
     )
 
 
-def _build_blocked_command_result(task: "AgentTask", safety_reason: Optional[str], execution_time: float) -> StepResult:
+def _build_blocked_command_result(task: "AgentTask", safety_reason: str | None, execution_time: float) -> StepResult:
     """
     Build StepResult for commands blocked by security validation.
 
@@ -160,8 +160,8 @@ class StepExecutorAgent:
     def __init__(
         self,
         session_id: str,
-        pty_session_id: Optional[str] = None,
-        explanation_service: Optional[CommandExplanationService] = None,
+        pty_session_id: str | None = None,
+        explanation_service: CommandExplanationService | None = None,
     ):
         """
         Initialize the StepExecutorAgent.
@@ -178,7 +178,7 @@ class StepExecutorAgent:
         self._command_executor = None
         self._chat_history_manager = None
 
-    def _validate_command(self, command: str) -> Tuple[bool, Optional[str]]:
+    def _validate_command(self, command: str) -> Tuple[bool, str | None]:
         """
         Validate a command for safety before execution.
 
@@ -347,7 +347,7 @@ class StepExecutorAgent:
         )
         return start_time
 
-    async def _handle_command_validation(self, task: AgentTask, start_time: float) -> Optional[StepResult]:
+    async def _handle_command_validation(self, task: AgentTask, start_time: float) -> StepResult | None:
         """
         Validate command safety and return error result if unsafe.
 
@@ -367,7 +367,7 @@ class StepExecutorAgent:
             return _build_blocked_command_result(task, safety_reason, time.time() - start_time)
         return None
 
-    async def _execute_command_phase(self, task: AgentTask) -> tuple[list[str], int, Optional[Exception]]:
+    async def _execute_command_phase(self, task: AgentTask) -> tuple[list[str], int, Exception | None]:
         """
         Execute command phase and collect streaming output.
 
@@ -455,7 +455,7 @@ class StepExecutorAgent:
             stream_complete=True,
         )
 
-    async def execute_step(self, task: AgentTask) -> AsyncGenerator[Union[StreamChunk, StepResult], None]:
+    async def execute_step(self, task: AgentTask) -> AsyncGenerator[StreamChunk | StepResult, None]:
         """
         Execute a single step with streaming output and explanations.
 

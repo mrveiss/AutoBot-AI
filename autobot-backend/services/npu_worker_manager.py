@@ -9,7 +9,8 @@ Manages NPU worker registration, health monitoring, and state tracking.
 
 import asyncio
 import json
-import logging
+import math
+import random
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -17,9 +18,10 @@ from typing import Any, Dict, List, Optional
 import aiofiles
 import yaml
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc, utc_timestamp
 from constants.threshold_constants import TimingConstants
-from event_manager import get_event_manager
+from events.bus import PersistStrategy, publish_event
 from models.npu_models import (
     LoadBalancingConfig,
     NPUWorkerConfig,
@@ -32,10 +34,37 @@ from models.npu_models import (
 from npu_integration import NPUWorkerClient
 from utils.async_initializable import AsyncInitializable
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level frozenset for worker events that include full data
 _WORKER_FULL_DATA_EVENTS = frozenset({"worker.added", "worker.updated"})
+
+# GH#6739: Pulse-probe canary config path
+_PULSE_CANARIES_CONFIG = Path("config/npu_pulse_canaries.yaml")
+
+# GH#6739: Prometheus metrics (lazy-initialised to avoid import-time side-effects)
+try:
+    from prometheus_client import Counter, Histogram
+
+    _pulse_total = Counter(
+        "autobot_npu_pulse_total",
+        "Total NPU pulse-probe attempts",
+        ["worker_id", "model_id"],
+    )
+    _pulse_failure_total = Counter(
+        "autobot_npu_pulse_failure_total",
+        "Total NPU pulse-probe failures",
+        ["worker_id", "model_id", "failure_class"],
+    )
+    _pulse_latency = Histogram(
+        "autobot_npu_pulse_latency_seconds",
+        "NPU pulse-probe round-trip latency",
+        ["worker_id", "model_id"],
+        buckets=(0.5, 1.0, 2.0, 5.0, 10.0, 20.0, 30.0, 60.0),
+    )
+    _PULSE_METRICS_AVAILABLE = True
+except Exception:
+    _PULSE_METRICS_AVAILABLE = False
 
 
 class NPUWorkerManager(AsyncInitializable):
@@ -54,7 +83,7 @@ class NPUWorkerManager(AsyncInitializable):
     _MIN_BACKOFF_MULTIPLIER = 1
     _MAX_BACKOFF_MULTIPLIER = 8  # Max 8x the health check interval (4 minutes at 30s)
 
-    def __init__(self, config_file: Path = None, redis_client=None):
+    def __init__(self, config_file: Path = None, redis_client=None) -> None:
         """
         Initialize NPU Worker Manager.
 
@@ -67,14 +96,20 @@ class NPUWorkerManager(AsyncInitializable):
         self.redis_client = redis_client
         self._workers: Dict[str, NPUWorkerConfig] = {}
         self._worker_clients: Dict[str, NPUWorkerClient] = {}
-        self._health_check_task: Optional[asyncio.Task] = None
+        self._health_check_task: asyncio.Task | None = None
         self._running = False
         self._load_balancing_config = LoadBalancingConfig()
-        self._failover_monitor_task: Optional[asyncio.Task] = None
+        self._failover_monitor_task: asyncio.Task | None = None
 
         # Issue #699: Track consecutive failures for exponential backoff
         self._worker_failure_counts: Dict[str, int] = {}
         self._worker_next_check: Dict[str, float] = {}
+
+        # GH#6739: Pulse-probe state
+        self._pulse_task: asyncio.Task | None = None
+        self._pulse_failure_counts: Dict[str, int] = {}
+        self._pulse_canaries: Dict[str, Any] = {}
+        self._pulse_defaults: Dict[str, Any] = {}
 
     async def _initialize_impl(self) -> bool:
         """Load worker configurations from YAML (deferred from __init__ to avoid blocking I/O)."""
@@ -99,7 +134,7 @@ class NPUWorkerManager(AsyncInitializable):
             logger.error("Failed to load worker config: %s", e)
             return False
 
-    def _load_workers_from_config(self):
+    def _load_workers_from_config(self) -> None:
         """Load worker configurations from YAML file"""
         try:
             if not self.config_file.exists():
@@ -125,7 +160,7 @@ class NPUWorkerManager(AsyncInitializable):
         except Exception as e:
             logger.error("Failed to load worker configurations: %s", e)
 
-    async def _save_workers_to_config(self):
+    async def _save_workers_to_config(self) -> None:
         """Save worker configurations to YAML file"""
         try:
             # Ensure config directory exists
@@ -153,7 +188,7 @@ class NPUWorkerManager(AsyncInitializable):
             logger.error("Failed to save worker configurations: %s", e)
             raise
 
-    async def start_health_monitoring(self):
+    async def start_health_monitoring(self) -> None:
         """Start background health monitoring and failover monitor tasks."""
         if self._running:
             logger.warning("Health monitoring already running")
@@ -162,9 +197,10 @@ class NPUWorkerManager(AsyncInitializable):
         self._running = True
         self._health_check_task = asyncio.create_task(self._health_check_loop())
         self._failover_monitor_task = asyncio.create_task(self.failover_monitor())
-        logger.info("Started NPU worker health monitoring and failover monitor")
+        self._pulse_task = asyncio.create_task(self._pulse_probe_loop())
+        logger.info("Started NPU worker health monitoring, failover monitor, and pulse-probe loop")
 
-    async def stop_health_monitoring(self):
+    async def stop_health_monitoring(self) -> None:
         """Stop background health monitoring and failover monitor tasks."""
         self._running = False
 
@@ -181,6 +217,13 @@ class NPUWorkerManager(AsyncInitializable):
                 await self._failover_monitor_task
             except asyncio.CancelledError:
                 logger.debug("Failover monitor task cancelled")
+
+        if self._pulse_task:
+            self._pulse_task.cancel()
+            try:
+                await self._pulse_task
+            except asyncio.CancelledError:
+                logger.debug("Pulse-probe task cancelled")
 
         # Close all worker clients
         for client in self._worker_clients.values():
@@ -251,7 +294,371 @@ class NPUWorkerManager(AsyncInitializable):
         if worker_id in self._worker_next_check:
             del self._worker_next_check[worker_id]
 
-    async def _health_check_loop(self):
+    # ------------------------------------------------------------------ #
+    #  GH#6739 — Pulse-probe: correctness / inference-quality check       #
+    # ------------------------------------------------------------------ #
+
+    def _load_pulse_canaries(self) -> None:
+        """Load pulse canary config from YAML (called lazily on first probe)."""
+        try:
+            if not _PULSE_CANARIES_CONFIG.exists():
+                logger.warning("Pulse canary config not found: %s", _PULSE_CANARIES_CONFIG)
+                return
+            with open(_PULSE_CANARIES_CONFIG, "r", encoding="utf-8") as f:
+                data = yaml.safe_load(f) or {}
+            self._pulse_defaults = data.get("defaults", {})
+            self._pulse_canaries = data.get("model_families", {})
+            logger.debug("Loaded pulse canary config with %d model families", len(self._pulse_canaries))
+        except Exception as e:
+            logger.error("Failed to load pulse canary config: %s", e)
+
+    def _canary_for_model(self, model_id: str) -> Dict[str, Any]:
+        """Return the canary definition that matches model_id (longest prefix wins)."""
+        if not self._pulse_canaries:
+            self._load_pulse_canaries()
+        best: Dict[str, Any] = {}
+        best_len = -1
+        for _family, cfg in self._pulse_canaries.items():
+            for prefix in cfg.get("match_prefixes", []):
+                if model_id.startswith(prefix) and len(prefix) > best_len:
+                    best = cfg
+                    best_len = len(prefix)
+        if not best:
+            best = self._pulse_canaries.get("default", {})
+        return best
+
+    async def _store_pulse_latency(self, worker_id: str, model_id: str, latency_s: float) -> None:
+        """Append latest pulse latency to a Redis list for p95 tracking."""
+        if not self.redis_client:
+            return
+        window = int(self._pulse_defaults.get("latency_window", 20))
+        key = f"npu:worker:{worker_id}:pulse_latency:{model_id}"
+        try:
+            pipe = self.redis_client.pipeline()
+            pipe.rpush(key, latency_s)
+            pipe.ltrim(key, -window, -1)
+            pipe.expire(key, 86400)
+            await pipe.execute()
+        except Exception as e:
+            logger.debug("Failed to store pulse latency for %s: %s", worker_id, e)
+
+    async def _get_pulse_p95_latency(self, worker_id: str, model_id: str) -> Optional[float]:
+        """Return p95 latency (seconds) from the Redis window, or None if unavailable."""
+        if not self.redis_client:
+            return None
+        key = f"npu:worker:{worker_id}:pulse_latency:{model_id}"
+        try:
+            raw = await self.redis_client.lrange(key, 0, -1)
+            if not raw:
+                return None
+            samples = sorted(float(v) for v in raw)
+            idx = math.ceil(0.95 * len(samples)) - 1
+            return samples[max(idx, 0)]
+        except Exception:
+            return None
+
+    async def _get_pool_median_latency(self, model_id: str) -> Optional[float]:
+        """Return median p95 latency across all workers for throttle detection."""
+        p95s = []
+        for worker_id in list(self._workers):
+            v = await self._get_pulse_p95_latency(worker_id, model_id)
+            if v is not None:
+                p95s.append(v)
+        if not p95s:
+            return None
+        p95s.sort()
+        mid = len(p95s) // 2
+        return p95s[mid] if len(p95s) % 2 else (p95s[mid - 1] + p95s[mid]) / 2
+
+    def _check_heartbeat_reachability(self, worker_id: str, status: NPUWorkerStatus | None) -> Optional[str]:
+        """Return 'heartbeat_stale' if last_heartbeat exceeds the silence threshold.
+
+        MVA-1399: The pulse-probe correctness check now includes heartbeat
+        reachability — a worker whose last_heartbeat has gone silent beyond
+        heartbeat_max_silence_seconds is classified as unreachable regardless
+        of whether its inference endpoint still responds.
+
+        Returns None when the worker is reachable (or when the check is
+        disabled / no baseline has been established yet).
+        """
+        max_silence = float(self._pulse_defaults.get("heartbeat_max_silence_seconds", 600))
+        if max_silence <= 0:
+            return None
+
+        if status is None or status.last_heartbeat is None:
+            # No heartbeat baseline yet — skip; cannot distinguish a fresh
+            # worker from a silent one until at least one heartbeat arrives.
+            return None
+
+        last_hb = status.last_heartbeat
+        now = now_utc()
+        # Normalise to tz-aware for safe subtraction (last_heartbeat is
+        # written by now_utc() so it should always be tz-aware; guard anyway).
+        if last_hb.tzinfo is None:
+            from datetime import timezone as _tz
+
+            last_hb = last_hb.replace(tzinfo=_tz.utc)
+
+        silence_s = (now - last_hb).total_seconds()
+        if silence_s > max_silence:
+            logger.warning(
+                "Pulse-probe: heartbeat silent for %.1fs (threshold %.0fs) on worker %s",
+                silence_s,
+                max_silence,
+                worker_id,
+            )
+            return "heartbeat_stale"
+        return None
+
+    async def _pulse_check_worker(self, worker_id: str) -> None:
+        """Send a canary inference request to verify worker correctness (GH#6739).
+
+        On failure increments pulse_failure counter; after K failures marks
+        worker DEGRADED; after M failures marks worker OFFLINE and lets the
+        existing exponential-backoff health-check path retry.
+        """
+        if not self._pulse_canaries:
+            self._load_pulse_canaries()
+
+        worker_config = self._workers.get(worker_id)
+        if not worker_config:
+            return
+
+        status = await self._get_worker_status(worker_id)
+        if status and status.status not in (WorkerStatus.ONLINE, WorkerStatus.DEGRADED):
+            return
+
+        degrade_k = int(self._pulse_defaults.get("degrade_after_failures", 3))
+        unhealthy_m = int(self._pulse_defaults.get("unhealthy_after_failures", 5))
+        pulse_timeout = float(self._pulse_defaults.get("pulse_timeout_seconds", 30))
+        throttle_mult = float(self._pulse_defaults.get("latency_throttle_multiplier", 3.0))
+
+        # MVA-1399: heartbeat reachability check — runs before the inference
+        # probe so a silent worker fails fast without consuming model resources.
+        heartbeat_failure = self._check_heartbeat_reachability(worker_id, status)
+        if heartbeat_failure:
+            if _PULSE_METRICS_AVAILABLE:
+                _pulse_failure_total.labels(
+                    worker_id=worker_id, model_id="__heartbeat__", failure_class=heartbeat_failure
+                ).inc()
+            consecutive = self._pulse_failure_counts.get(worker_id, 0) + 1
+            self._pulse_failure_counts[worker_id] = consecutive
+            if consecutive >= unhealthy_m:
+                new_status = NPUWorkerStatus(
+                    id=worker_id,
+                    status=WorkerStatus.OFFLINE,
+                    error_message=f"Pulse-probe: heartbeat silent for {consecutive} consecutive checks",
+                )
+                await self._store_and_emit_status(
+                    worker_id, new_status, status.status if status else WorkerStatus.UNKNOWN
+                )
+                logger.error(
+                    "Pulse-probe: worker %s marked OFFLINE — heartbeat silent for %d checks",
+                    worker_id,
+                    consecutive,
+                )
+            elif consecutive >= degrade_k:
+                new_status = NPUWorkerStatus(
+                    id=worker_id,
+                    status=WorkerStatus.DEGRADED,
+                    error_message=f"Pulse-probe: heartbeat silent for {consecutive} consecutive checks",
+                )
+                await self._store_and_emit_status(
+                    worker_id, new_status, status.status if status else WorkerStatus.UNKNOWN
+                )
+                logger.warning(
+                    "Pulse-probe: worker %s marked DEGRADED — heartbeat silent for %d checks",
+                    worker_id,
+                    consecutive,
+                )
+            return
+
+        # Pick a model to probe: prefer loaded_models from latest heartbeat, else skip
+        model_id = None
+        if status and hasattr(status, "error_message"):
+            pass  # no model list on NPUWorkerStatus — rely on client
+        # Use the client's available_models endpoint to pick one
+        client = self._worker_clients.get(worker_id)
+        if client is None:
+            client = NPUWorkerClient(worker_config.url)
+            self._worker_clients[worker_id] = client
+
+        try:
+            models_data = await asyncio.wait_for(client.get_available_models(), timeout=10)
+            models_list = models_data.get("models", [])
+            if not models_list:
+                return  # nothing to probe
+            model_id = random.choice(models_list)
+        except Exception as e:
+            logger.debug("Pulse-probe: could not fetch models for worker %s: %s", worker_id, e)
+            return
+
+        canary = self._canary_for_model(model_id)
+        prompt = canary.get("canary_prompt", "Reply with exactly: PULSE_OK")
+        expected = canary.get("expected_token", "PULSE_OK")
+        probe_mode = canary.get("probe_mode", "inference")
+
+        if _PULSE_METRICS_AVAILABLE:
+            _pulse_total.labels(worker_id=worker_id, model_id=model_id).inc()
+
+        start = time.monotonic()
+        failure_class: Optional[str] = None
+
+        try:
+            if probe_mode == "embedding":
+                result = await asyncio.wait_for(
+                    client.offload_heavy_processing("embedding_batch", {"texts": [prompt]}),
+                    timeout=pulse_timeout,
+                )
+                embeddings = result.get("embeddings") or result.get("result", {}).get("embeddings")
+                if not embeddings or not isinstance(embeddings, list) or len(embeddings) == 0:
+                    failure_class = "malformed_response"
+            else:
+                result = await asyncio.wait_for(
+                    client.run_inference(model_id=model_id, input_text=prompt, max_tokens=16),
+                    timeout=pulse_timeout,
+                )
+                if result.get("error"):
+                    failure_class = "inference_error"
+                else:
+                    text = result.get("output") or result.get("text") or str(result)
+                    if expected not in text:
+                        failure_class = "canary_token_missing"
+        except asyncio.TimeoutError:
+            failure_class = "timeout"
+        except Exception as e:
+            logger.debug("Pulse-probe exception for worker %s model %s: %s", worker_id, model_id, e)
+            failure_class = "exception"
+
+        latency_s = time.monotonic() - start
+        await self._store_pulse_latency(worker_id, model_id, latency_s)
+
+        if _PULSE_METRICS_AVAILABLE:
+            _pulse_latency.labels(worker_id=worker_id, model_id=model_id).observe(latency_s)
+
+        # Throttling detection: p95 > multiplier * pool_median → treat as failure
+        if failure_class is None and latency_s < pulse_timeout:
+            p95 = await self._get_pulse_p95_latency(worker_id, model_id)
+            pool_med = await self._get_pool_median_latency(model_id)
+            if p95 is not None and pool_med is not None and pool_med > 0:
+                if p95 > throttle_mult * pool_med:
+                    failure_class = "throttling"
+
+        if failure_class:
+            logger.warning(
+                "Pulse-probe FAILED worker=%s model=%s latency=%.2fs class=%s",
+                worker_id,
+                model_id,
+                latency_s,
+                failure_class,
+                extra={
+                    "worker_id": worker_id,
+                    "model_id": model_id,
+                    "latency_s": latency_s,
+                    "failure_class": failure_class,
+                },
+            )
+            if _PULSE_METRICS_AVAILABLE:
+                _pulse_failure_total.labels(worker_id=worker_id, model_id=model_id, failure_class=failure_class).inc()
+
+            consecutive = self._pulse_failure_counts.get(worker_id, 0) + 1
+            self._pulse_failure_counts[worker_id] = consecutive
+
+            if consecutive >= unhealthy_m:
+                new_status = NPUWorkerStatus(
+                    id=worker_id,
+                    status=WorkerStatus.OFFLINE,
+                    error_message=f"Pulse-probe: {consecutive} consecutive failures (last: {failure_class})",
+                )
+                await self._store_and_emit_status(
+                    worker_id, new_status, status.status if status else WorkerStatus.UNKNOWN
+                )
+                logger.error(
+                    "Pulse-probe: worker %s marked OFFLINE after %d consecutive failures",
+                    worker_id,
+                    consecutive,
+                )
+            elif consecutive >= degrade_k:
+                new_status = NPUWorkerStatus(
+                    id=worker_id,
+                    status=WorkerStatus.DEGRADED,
+                    error_message=f"Pulse-probe: {consecutive} consecutive failures (last: {failure_class})",
+                )
+                await self._store_and_emit_status(
+                    worker_id, new_status, status.status if status else WorkerStatus.UNKNOWN
+                )
+                logger.warning(
+                    "Pulse-probe: worker %s marked DEGRADED after %d consecutive failures",
+                    worker_id,
+                    consecutive,
+                )
+        else:
+            if worker_id in self._pulse_failure_counts:
+                del self._pulse_failure_counts[worker_id]
+            # Recover DEGRADED → ONLINE on a clean pass
+            if status and status.status == WorkerStatus.DEGRADED:
+                new_status = NPUWorkerStatus(
+                    id=worker_id,
+                    status=WorkerStatus.ONLINE,
+                    error_message=None,
+                )
+                await self._store_and_emit_status(worker_id, new_status, WorkerStatus.DEGRADED)
+                logger.info("Pulse-probe: worker %s recovered (DEGRADED → ONLINE)", worker_id)
+            logger.debug(
+                "Pulse-probe OK worker=%s model=%s latency=%.2fs",
+                worker_id,
+                model_id,
+                latency_s,
+            )
+
+    async def _pulse_probe_loop(self) -> None:
+        """Background loop: probe each healthy worker at a jittered 5-minute cadence (GH#6739)."""
+        if not self._pulse_canaries:
+            self._load_pulse_canaries()
+        base_interval = float(self._pulse_defaults.get("pulse_interval_seconds", 300))
+        logger.info("NPU pulse-probe loop started (base interval %ds)", int(base_interval))
+
+        while self._running:
+            try:
+                for worker_id, cfg in list(self._workers.items()):
+                    if not cfg.enabled:
+                        continue
+                    try:
+                        await self._pulse_check_worker(worker_id)
+                    except Exception as e:
+                        logger.debug("Pulse-probe error for worker %s: %s", worker_id, e)
+
+                # Jitter: ±20 % of base_interval
+                jitter = base_interval * 0.2 * (random.random() * 2 - 1)
+                await asyncio.sleep(max(base_interval + jitter, 60))
+
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.debug("Pulse-probe loop error: %s", e)
+                await asyncio.sleep(TimingConstants.LONG_DELAY)
+
+    # ------------------------------------------------------------------ #
+    #  GH#6739 — Load-balancer: deprioritise DEGRADED workers             #
+    # ------------------------------------------------------------------ #
+
+    async def get_healthy_workers_sorted(self) -> List[NPUWorkerDetails]:
+        """Return workers sorted for task assignment: ONLINE first, then DEGRADED.
+
+        OFFLINE/ERROR/UNKNOWN workers are excluded.  Call sites in the task
+        dispatch path should prefer this method over list_workers() so that
+        degraded workers receive traffic only when no healthy alternative exists.
+        """
+        all_workers = await self.list_workers()
+        online = [w for w in all_workers if w.status.status == WorkerStatus.ONLINE and w.config.enabled]
+        degraded = [w for w in all_workers if w.status.status == WorkerStatus.DEGRADED and w.config.enabled]
+
+        def _by_priority(w: NPUWorkerDetails) -> tuple:
+            return (-w.config.priority, w.status.current_load)
+
+        return sorted(online, key=_by_priority) + sorted(degraded, key=_by_priority)
+
+    async def _health_check_loop(self) -> None:
         """Background task that periodically checks worker health"""
         logger.info("NPU worker health check loop started")
 
@@ -276,7 +683,7 @@ class NPUWorkerManager(AsyncInitializable):
                 # Error recovery delay before retry
                 await asyncio.sleep(TimingConstants.LONG_DELAY)
 
-    async def _check_worker_health(self, worker_id: str):
+    async def _check_worker_health(self, worker_id: str) -> None:
         """Check health of a specific worker (Issue #665: refactored with helper)."""
         worker_config = self._workers.get(worker_id)
         if not worker_config:
@@ -364,7 +771,7 @@ class NPUWorkerManager(AsyncInitializable):
             if worker_details:
                 await self._emit_worker_event("worker.status.changed", worker_details)
 
-    async def _store_worker_status(self, worker_id: str, status: NPUWorkerStatus):
+    async def _store_worker_status(self, worker_id: str, status: NPUWorkerStatus) -> None:
         """Store worker status in Redis"""
         if not self.redis_client:
             return
@@ -380,7 +787,7 @@ class NPUWorkerManager(AsyncInitializable):
         except Exception as e:
             logger.error("Failed to store worker status in Redis: %s", e)
 
-    async def _emit_worker_event(self, event_type: str, worker_details: NPUWorkerDetails):
+    async def _emit_worker_event(self, event_type: str, worker_details: NPUWorkerDetails) -> None:
         """Emit worker event via event_manager (Issue #372 - refactored)"""
         try:
             event_data = {
@@ -397,13 +804,13 @@ class NPUWorkerManager(AsyncInitializable):
             if event_type in _WORKER_FULL_DATA_EVENTS:
                 event_data["worker"] = worker_details.to_event_dict()
 
-            await get_event_manager().publish(f"npu.{event_type}", event_data)
+            await publish_event("global", f"npu.{event_type}", event_data, persist=PersistStrategy.NONE)
             logger.debug(f"Emitted event {event_type} for worker {worker_details.config.id}")
 
         except Exception as e:
             logger.error("Failed to emit worker event: %s", e, exc_info=True)
 
-    async def _get_worker_status(self, worker_id: str) -> Optional[NPUWorkerStatus]:
+    async def _get_worker_status(self, worker_id: str) -> NPUWorkerStatus | None:
         """Get worker status from Redis"""
         if not self.redis_client:
             return None
@@ -444,7 +851,7 @@ class NPUWorkerManager(AsyncInitializable):
 
         return workers
 
-    async def get_worker(self, worker_id: str) -> Optional[NPUWorkerDetails]:
+    async def get_worker(self, worker_id: str) -> NPUWorkerDetails | None:
         """Get specific worker details"""
         config = self._workers.get(worker_id)
         if not config:
@@ -549,7 +956,7 @@ class NPUWorkerManager(AsyncInitializable):
 
         logger.debug("Updated worker status from heartbeat: %s", worker_id)
 
-    async def remove_worker(self, worker_id: str):
+    async def remove_worker(self, worker_id: str) -> None:
         """Remove worker from registry"""
         if worker_id not in self._workers:
             raise ValueError(f"Worker with ID '{worker_id}' not found")
@@ -576,17 +983,21 @@ class NPUWorkerManager(AsyncInitializable):
         await self._save_workers_to_config()
 
         # Emit worker removed event
-        await get_event_manager().publish(
+        await publish_event(
+            "global",
             "npu.worker.removed",
             {
                 "event": "worker.removed",
                 "worker_id": worker_id,
                 "data": {"timestamp": utc_timestamp()},
             },
+            persist=PersistStrategy.NONE,
         )
 
     async def test_worker_connection(self, worker_config: NPUWorkerConfig) -> WorkerTestResult:
         """Test connection to a worker"""
+        from services.npu_profile_suggester import suggest_profile  # GH#6738: lazy import
+
         client = NPUWorkerClient(worker_config.url)
 
         try:
@@ -601,12 +1012,20 @@ class NPUWorkerManager(AsyncInitializable):
             end_time = now_utc()
             response_time_ms = (end_time - start_time).total_seconds() * 1000
 
+            # GH#6738: derive profile + model suggestions from capabilities in health_data
+            suggestion = suggest_profile(health_data)
+
             return WorkerTestResult(
                 worker_id=worker_config.id,
                 success=health_data.get("status") == "healthy",
                 response_time_ms=response_time_ms,
                 status_code=200,
                 health_data=health_data,
+                recommended_profile=suggestion.recommended_profile,
+                recommended_models=suggestion.recommended_models,
+                vram_gb=suggestion.vram_gb,
+                compute_class=suggestion.compute_class,
+                capabilities_summary=suggestion.capabilities_summary,
             )
 
         except asyncio.TimeoutError:
@@ -622,11 +1041,11 @@ class NPUWorkerManager(AsyncInitializable):
         finally:
             await client.close()
 
-    async def get_worker_metrics(self, worker_id: str) -> Optional[NPUWorkerMetrics]:
+    async def get_worker_metrics(self, worker_id: str) -> NPUWorkerMetrics | None:
         """Get performance metrics for a worker"""
         return await self._get_worker_metrics(worker_id)
 
-    async def _get_worker_metrics(self, worker_id: str) -> Optional[NPUWorkerMetrics]:
+    async def _get_worker_metrics(self, worker_id: str) -> NPUWorkerMetrics | None:
         """Get worker metrics from Redis"""
         if not self.redis_client:
             return None
@@ -869,7 +1288,7 @@ class NPUWorkerManager(AsyncInitializable):
         """Get current load balancing configuration"""
         return self._load_balancing_config
 
-    async def update_load_balancing_config(self, config: LoadBalancingConfig):
+    async def update_load_balancing_config(self, config: LoadBalancingConfig) -> None:
         """Update load balancing configuration"""
         self._load_balancing_config = config
         await self._save_workers_to_config()
@@ -879,7 +1298,7 @@ class NPUWorkerManager(AsyncInitializable):
 # Global worker manager instance (thread-safe)
 import asyncio as _asyncio_lock
 
-_worker_manager: Optional[NPUWorkerManager] = None
+_worker_manager: NPUWorkerManager | None = None
 _worker_manager_lock = _asyncio_lock.Lock()
 
 

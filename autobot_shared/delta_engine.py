@@ -45,7 +45,7 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from autobot_shared.redis_client import get_redis_client
 
@@ -113,7 +113,7 @@ class DeltaResult:
     """
 
     metric_name: str
-    previous_value: Optional[float]
+    previous_value: float | None
     current_value: float
     change_pct: float
     severity: str  # "none" | "moderate" | "critical"
@@ -166,7 +166,7 @@ class DeltaEngine:
 
     def __init__(
         self,
-        thresholds: Optional[Dict[str, MetricThreshold]] = None,
+        thresholds: Dict[str, MetricThreshold] | None = None,
         database: str = "metrics",
         snapshot_ttl_seconds: int = _DEFAULT_SNAPSHOT_TTL,
     ) -> None:
@@ -182,7 +182,7 @@ class DeltaEngine:
         self,
         metric_name: str,
         current_value: float,
-        threshold: Optional[MetricThreshold] = None,
+        threshold: MetricThreshold | None = None,
     ) -> DeltaResult:
         """Compare *current_value* against the most recent stored snapshot.
 
@@ -209,7 +209,7 @@ class DeltaEngine:
     def compute_batch(
         self,
         metrics: Dict[str, float],
-        thresholds: Optional[Dict[str, MetricThreshold]] = None,
+        thresholds: Dict[str, MetricThreshold] | None = None,
     ) -> List[DeltaResult]:
         """Compute deltas for all metrics in *metrics* in a single pass.
 
@@ -303,7 +303,7 @@ class DeltaEngine:
     # Internal helpers — Redis I/O
     # ------------------------------------------------------------------
 
-    def _load_latest_snapshot(self, metric_name: str) -> Optional[float]:
+    def _load_latest_snapshot(self, metric_name: str) -> float | None:
         """Return the most recent stored snapshot for *metric_name*, or ``None``."""
         client = self._get_client()
         if client is None:
@@ -365,7 +365,7 @@ def _history_key(metric_name: str) -> str:
 
 def _compute_single_delta(
     metric_name: str,
-    previous: Optional[float],
+    previous: float | None,
     current: float,
     threshold: MetricThreshold,
 ) -> DeltaResult:

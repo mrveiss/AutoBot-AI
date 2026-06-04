@@ -17,7 +17,7 @@ from services.pattern_extractor import PatternExtractor
 
 
 @pytest.fixture
-def temp_codebase():
+def temp_codebase() -> None:
     """Create temporary codebase for testing."""
     with tempfile.TemporaryDirectory() as tmpdir:
         base = Path(tmpdir)
@@ -31,10 +31,10 @@ def temp_codebase():
         sample_py.write_text('''
 """Sample module for testing."""
 
-import logging
 from typing import Dict, List
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 async def get_user(user_id: int) -> Dict:
@@ -55,7 +55,7 @@ def process_data(items: List[str]) -> int:
 class UserService:
     """User service class."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.cache = {}
 
     async def create_user(self, name: str) -> Dict:
@@ -93,14 +93,14 @@ export function useUserStore(): {
         yield base
 
 
-def test_pattern_extractor_initialization(temp_codebase):
+def test_pattern_extractor_initialization(temp_codebase) -> None:
     """Test PatternExtractor initialization."""
     extractor = PatternExtractor(base_path=str(temp_codebase))
     assert extractor.base_path == temp_codebase
     assert extractor.patterns is not None
 
 
-def test_extract_python_function_patterns(temp_codebase):
+def test_extract_python_function_patterns(temp_codebase) -> None:
     """Test extraction of Python function patterns."""
     extractor = PatternExtractor(base_path=str(temp_codebase))
     extractor._extract_python_patterns()
@@ -115,7 +115,7 @@ def test_extract_python_function_patterns(temp_codebase):
     assert any("process_data" in sig for sig in signatures)
 
 
-def test_extract_python_error_handling_patterns(temp_codebase):
+def test_extract_python_error_handling_patterns(temp_codebase) -> None:
     """Test extraction of error handling patterns."""
     extractor = PatternExtractor(base_path=str(temp_codebase))
     extractor._extract_python_patterns()
@@ -130,7 +130,7 @@ def test_extract_python_error_handling_patterns(temp_codebase):
     assert "KeyError" in pattern["category"]
 
 
-def test_extract_async_function_patterns(temp_codebase):
+def test_extract_async_function_patterns(temp_codebase) -> None:
     """Test extraction of async function patterns."""
     extractor = PatternExtractor(base_path=str(temp_codebase))
     extractor._extract_python_patterns()
@@ -142,7 +142,7 @@ def test_extract_async_function_patterns(temp_codebase):
     assert len(async_patterns) >= 1  # get_user and create_user are async
 
 
-def test_categorize_function():
+def test_categorize_function() -> None:
     """Test function categorization logic."""
     extractor = PatternExtractor()
 
@@ -162,7 +162,7 @@ def test_categorize_function():
     assert category == "private"
 
 
-def test_extract_typescript_composable_patterns(temp_codebase):
+def test_extract_typescript_composable_patterns(temp_codebase) -> None:
     """Test extraction of Vue composable patterns."""
     extractor = PatternExtractor(base_path=str(temp_codebase))
     extractor._extract_typescript_vue_patterns()
@@ -177,7 +177,7 @@ def test_extract_typescript_composable_patterns(temp_codebase):
     assert "useUserStore" in pattern["signature"]
 
 
-def test_extract_typescript_interface_patterns(temp_codebase):
+def test_extract_typescript_interface_patterns(temp_codebase) -> None:
     """Test extraction of TypeScript interface patterns."""
     extractor = PatternExtractor(base_path=str(temp_codebase))
     extractor._extract_typescript_vue_patterns()
@@ -192,7 +192,7 @@ def test_extract_typescript_interface_patterns(temp_codebase):
     assert "User" in pattern["signature"]
 
 
-def test_extract_from_codebase_all_languages(temp_codebase):
+def test_extract_from_codebase_all_languages(temp_codebase) -> None:
     """Test extracting patterns from all languages."""
     extractor = PatternExtractor(base_path=str(temp_codebase))
     patterns = extractor.extract_from_codebase(languages=["python", "typescript", "vue"])
@@ -202,7 +202,7 @@ def test_extract_from_codebase_all_languages(temp_codebase):
     assert "function" in patterns or "composable" in patterns
 
 
-def test_extract_from_codebase_python_only(temp_codebase):
+def test_extract_from_codebase_python_only(temp_codebase) -> None:
     """Test extracting patterns from Python only."""
     extractor = PatternExtractor(base_path=str(temp_codebase))
     patterns = extractor.extract_from_codebase(languages=["python"])
@@ -213,7 +213,7 @@ def test_extract_from_codebase_python_only(temp_codebase):
             assert pattern["language"] == "python"
 
 
-def test_get_statistics(temp_codebase):
+def test_get_statistics(temp_codebase) -> None:
     """Test pattern extraction statistics."""
     extractor = PatternExtractor(base_path=str(temp_codebase))
     extractor.extract_from_codebase()
@@ -225,7 +225,7 @@ def test_get_statistics(temp_codebase):
     assert sum(stats.values()) > 0
 
 
-def test_pattern_context_includes_metadata(temp_codebase):
+def test_pattern_context_includes_metadata(temp_codebase) -> None:
     """Test that patterns include context metadata."""
     extractor = PatternExtractor(base_path=str(temp_codebase))
     extractor._extract_python_patterns()
@@ -248,7 +248,7 @@ def test_pattern_context_includes_metadata(temp_codebase):
         assert "is_async" in context
 
 
-def test_skip_test_files():
+def test_skip_test_files() -> None:
     """Test that test files are skipped during extraction."""
     with tempfile.TemporaryDirectory() as tmpdir:
         base = Path(tmpdir)
@@ -268,7 +268,7 @@ def test_skip_test_files():
         assert len(test_file_patterns) == 0
 
 
-def test_skip_long_functions():
+def test_skip_long_functions() -> None:
     """Test that very long functions are skipped."""
     with tempfile.TemporaryDirectory() as tmpdir:
         base = Path(tmpdir)

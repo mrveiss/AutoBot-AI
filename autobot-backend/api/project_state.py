@@ -7,24 +7,27 @@ Project State API
 Exposes project development phase information and validation status
 """
 
-import logging
-
 from fastapi import APIRouter, HTTPException
 
 from api.schemas_common import DataResponse
 from api.schemas_system import (
     PhaseStatus,
     PhaseValidationModel,
-    ProjectStateHealthResponse,
+    ProjectStateActivatePhaseResponse,
+    ProjectStateAutoProgressResponse,
+    ProjectStatePhasesResponse,
+    ProjectStateReportResponse,
+    ProjectStateValidateResponse,
     ProjectStatus,
     ValidationResultModel,
 )
 from api.system_health import register_singleton_probe
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from project_state_manager import DevelopmentPhase, get_project_state_manager
 from utils.advanced_cache_manager import smart_cache
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/project", tags=["project_state"])
 
@@ -75,7 +78,7 @@ async def get_project_status(detailed: bool = False):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.post("/validate", response_model=DataResponse)
+@router.post("/validate", response_model=DataResponse[ProjectStateValidateResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="run_validation",
@@ -116,7 +119,7 @@ async def run_validation():
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/report", response_model=DataResponse)
+@router.get("/report", response_model=DataResponse[ProjectStateReportResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_validation_report",
@@ -143,7 +146,7 @@ async def get_validation_report():
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/phases", response_model=DataResponse)
+@router.get("/phases", response_model=DataResponse[ProjectStatePhasesResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_all_phases",
@@ -193,7 +196,7 @@ async def get_all_phases():
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.post("/phase/{phase_id}/activate", response_model=DataResponse)
+@router.post("/phase/{phase_id}/activate", response_model=DataResponse[ProjectStateActivatePhaseResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="activate_phase",
@@ -234,7 +237,7 @@ async def activate_phase(phase_id: str):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.post("/auto-progress", response_model=DataResponse)
+@router.post("/auto-progress", response_model=DataResponse[ProjectStateAutoProgressResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="auto_progress_phases",
@@ -258,31 +261,3 @@ async def auto_progress_phases():
 
 
 register_singleton_probe("project_state", get_project_state_manager)
-
-
-@router.get("/health", response_model=ProjectStateHealthResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="health_check",
-    error_code_prefix="PROJECT_STATE",
-)
-async def health_check():
-    """Health check for project state API"""
-    try:
-        manager = get_project_state_manager()
-        status = manager.get_project_status()
-
-        return {
-            "status": "healthy",
-            "current_phase": status["current_phase"],
-            "overall_completion": status["overall_completion"],
-            "timestamp": (
-                manager.phases[manager.current_phase].last_validated.isoformat()
-                if manager.phases[manager.current_phase].last_validated
-                else None
-            ),
-        }
-
-    except Exception as e:
-        logger.error("Health check failed: %s", e)
-        raise HTTPException(status_code=500, detail="Internal server error")

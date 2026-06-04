@@ -10,7 +10,7 @@ between the backend and frontend clients.
 
 import asyncio
 import json
-import logging
+import uuid
 from typing import Callable, Dict, Optional, Tuple
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
@@ -18,9 +18,11 @@ from starlette.websockets import WebSocketState
 
 from auth_middleware import authenticate_websocket
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
+from events.bus import get_event_bus
 from type_defs.common import SKIP_WEBSOCKET_PERSISTENCE_TYPES
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 router = APIRouter()
 
 
@@ -216,6 +218,11 @@ def _format_agent_plan(raw_data: dict) -> Tuple[str, str]:
     return f"Plan ({step_count} steps): {summary}", "agent-plan"
 
 
+def _format_canvas_cell(raw_data: dict) -> Tuple[str, str]:
+    """Format canvas_cell event (pass-through, not logged to chat history)."""
+    return None, "canvas"
+
+
 # Issue #336: Dispatch table for message type formatting
 MESSAGE_TYPE_FORMATTERS: Dict[str, Callable[[dict], Tuple[str, str]]] = {
     "goal_received": _format_goal_received,
@@ -249,10 +256,12 @@ MESSAGE_TYPE_FORMATTERS: Dict[str, Callable[[dict], Tuple[str, str]]] = {
     "agent.tool.result": _format_agent_tool_result,
     "agent.llm.chunk": _format_agent_llm_chunk,
     "agent.plan": _format_agent_plan,
+    # MVA-370: Canvas cell streaming events
+    "canvas_cell": _format_canvas_cell,
 }
 
 
-def _format_event_for_chat(message_type: str, raw_data: dict) -> Tuple[Optional[str], str]:
+def _format_event_for_chat(message_type: str, raw_data: dict) -> Tuple[str | None, str]:
     """Format event data for chat history (Issue #336 - extracted dispatch helper).
 
     Args:
@@ -266,6 +275,119 @@ def _format_event_for_chat(message_type: str, raw_data: dict) -> Tuple[Optional[
     if formatter:
         return formatter(raw_data)
     return None, "system"
+
+
+async def register_canvas_streaming_task(canvas_id: str, cell_id: str, task: asyncio.Task) -> None:
+    """Register a canvas cell streaming task for cancellation support (MVA-370).
+
+    Args:
+        canvas_id: The canvas ID
+        cell_id: The cell ID
+        task: The asyncio.Task for the streaming operation
+    """
+    async with _canvas_tasks_lock:
+        key = (canvas_id, cell_id)
+        _canvas_streaming_tasks[key] = task
+        logger.debug(f"Registered streaming task for canvas {canvas_id}, cell {cell_id}")
+
+
+async def unregister_canvas_streaming_task(canvas_id: str, cell_id: str) -> None:
+    """Unregister a canvas cell streaming task (MVA-370).
+
+    Args:
+        canvas_id: The canvas ID
+        cell_id: The cell ID
+    """
+    async with _canvas_tasks_lock:
+        key = (canvas_id, cell_id)
+        if key in _canvas_streaming_tasks:
+            del _canvas_streaming_tasks[key]
+            logger.debug(f"Unregistered streaming task for canvas {canvas_id}, cell {cell_id}")
+
+
+def get_canvas_cell_event(cell_id: str, seq: int, delta: str, state: str, canvas_id: Optional[str] = None) -> dict:
+    """Create a canvas_cell WebSocket event (MVA-370).
+
+    Args:
+        cell_id: The cell ID
+        seq: The sequence number for this delta
+        delta: The content delta/chunk
+        state: The current cell state (queued, skeleton, streaming, complete, etc.)
+        canvas_id: Optional canvas ID for context
+
+    Returns:
+        A formatted WebSocket event dict ready to send
+    """
+    return {
+        "type": "canvas_cell",
+        "payload": {
+            "cellId": cell_id,
+            "canvasId": canvas_id,
+            "seq": seq,
+            "delta": delta,
+            "state": state,
+        },
+    }
+
+
+async def _handle_canvas_cancel(data: dict, current_user_id: str) -> None:
+    """Handle canvas_cancel message from client (MVA-370).
+
+    Cancels the streaming task for the specified cell. Verifies that the
+    requesting user owns the cell before cancelling (MVA-362 security fix).
+
+    Args:
+        data: The message data with cellId
+        current_user_id: Authenticated user ID from the WebSocket session
+    """
+    try:
+        cell_id = data.get("cellId")
+        canvas_id = data.get("canvasId")
+
+        if not cell_id:
+            logger.warning("canvas_cancel message missing cellId")
+            return
+
+        # Validate cellId format before DB lookup
+        try:
+            cell_uuid = uuid.UUID(cell_id)
+        except ValueError:
+            logger.warning("canvas_cancel: invalid cellId format")
+            return
+
+        # Verify ownership: only the cell owner may cancel their streaming task
+        from sqlalchemy import select
+
+        from canvas.models import CanvasCell
+        from user_management.database import db_session_context
+
+        async with db_session_context() as session:
+            result = await session.execute(select(CanvasCell).where(CanvasCell.id == cell_uuid))
+            cell = result.scalar_one_or_none()
+
+        if cell is None or cell.user_id != current_user_id:
+            logger.warning(
+                "canvas_cancel: forbidden - cell %s not owned by user %s",
+                cell_id,
+                current_user_id,
+            )
+            return
+
+        # Try to find and cancel the streaming task
+        async with _canvas_tasks_lock:
+            # Search through all tasks for this cell
+            keys_to_remove = [
+                k for k in _canvas_streaming_tasks.keys() if k[1] == cell_id and (not canvas_id or k[0] == canvas_id)
+            ]
+
+            for key in keys_to_remove:
+                task = _canvas_streaming_tasks[key]
+                if not task.done():
+                    task.cancel()
+                    logger.info(f"Cancelled streaming task for cell {cell_id}")
+                del _canvas_streaming_tasks[key]
+    except Exception as e:
+        logger.error(f"Error handling canvas_cancel: {e}")
 
 
 async def _handle_command_approval(websocket: WebSocket, data: dict) -> None:
@@ -331,7 +453,9 @@ async def _add_to_chat_history(chat_history_manager, message_type: str, raw_data
     # Issue #350 Root Cause Fix: Skip message types that are explicitly persisted elsewhere
     if text and chat_history_manager and message_type not in SKIP_WEBSOCKET_PERSISTENCE_TYPES:
         try:
-            await chat_history_manager.add_message(sender, text, message_type, raw_data)
+            await chat_history_manager.add_message(
+                sender=sender, text=text, message_type=message_type, raw_data=raw_data
+            )
         except Exception as e:
             logger.error("Failed to add message to chat history: %s", e)
 
@@ -369,11 +493,12 @@ async def _create_broadcast_event_handler(websocket: WebSocket, chat_history_man
     return broadcast_event
 
 
-async def _websocket_message_receive_loop(websocket: WebSocket) -> None:
+async def _websocket_message_receive_loop(websocket: WebSocket, current_user_id: str) -> None:
     """Main message receive loop for WebSocket (Issue #315 - extracted).
 
     Args:
         websocket: The WebSocket connection
+        current_user_id: Authenticated user ID for ownership checks
     """
     while True:
         # Check connection state before each operation
@@ -399,15 +524,16 @@ async def _websocket_message_receive_loop(websocket: WebSocket) -> None:
                 continue
 
         # Issue #336: Use extracted helper for message handling
-        await _handle_websocket_message(websocket, message)
+        await _handle_websocket_message(websocket, message, current_user_id)
 
 
-async def _handle_websocket_message(websocket: WebSocket, message: str) -> None:
+async def _handle_websocket_message(websocket: WebSocket, message: str, current_user_id: str) -> None:
     """Handle incoming WebSocket message (Issue #336 - extracted helper).
 
     Args:
         websocket: The WebSocket connection
         message: The raw message string
+        current_user_id: Authenticated user ID from the WebSocket session
     """
     try:
         data = json.loads(message)
@@ -419,6 +545,8 @@ async def _handle_websocket_message(websocket: WebSocket, message: str) -> None:
             logger.debug("Received pong from client")
         elif msg_type == "command_approval":
             await _handle_command_approval(websocket, data)
+        elif msg_type == "canvas_cancel":
+            await _handle_canvas_cancel(data, current_user_id)
     except json.JSONDecodeError:
         logger.warning("Received invalid JSON via WebSocket: %s", message)
 
@@ -434,6 +562,12 @@ _ws_clients_lock = asyncio.Lock()
 import threading
 
 _npu_events_lock = threading.Lock()
+
+
+# MVA-370: Canvas cell streaming task registry
+# Tracks active streaming tasks by (canvas_id, cell_id) -> Task
+_canvas_streaming_tasks: Dict[tuple, asyncio.Task] = {}
+_canvas_tasks_lock = asyncio.Lock()
 
 
 @router.websocket("/ws-test")
@@ -511,12 +645,8 @@ def _register_event_manager_broadcast(broadcast_event: Callable) -> None:
         broadcast_event: Broadcast callback function
     """
     try:
-        from event_manager import get_event_manager
-
-        get_event_manager().register_websocket_broadcast(broadcast_event)
+        get_event_bus().register_ws_broadcast(broadcast_event)
         logger.info("Successfully registered WebSocket broadcast with event manager")
-    except ImportError as e:
-        logger.warning("Event manager not available, continuing without it: %s", e)
     except Exception as e:
         logger.warning("Failed to register WebSocket broadcast, continuing: %s", e)
 
@@ -528,12 +658,8 @@ def _unregister_event_manager_broadcast() -> None:
     Issue #665: Extracted from websocket_endpoint to reduce function length.
     """
     try:
-        from event_manager import get_event_manager
-
-        get_event_manager().register_websocket_broadcast(None)
+        get_event_bus().register_ws_broadcast(None)
         logger.info("WebSocket broadcast unregistered from event manager")
-    except ImportError:
-        logger.debug("Event manager not available for cleanup")
     except Exception as e:
         logger.error("Error during event manager cleanup: %s", e)
 
@@ -556,6 +682,9 @@ async def websocket_endpoint(websocket: WebSocket):
     if user is None:
         await websocket.close(code=4001, reason="Authentication required")
         return
+
+    # Extract stable user ID for ownership checks (mirrors canvas.py _user_id())
+    current_user_id: str = user.get("user_id") or user.get("id") or user.get("username", "")
 
     try:
         await websocket.accept()
@@ -580,7 +709,7 @@ async def websocket_endpoint(websocket: WebSocket):
     _register_event_manager_broadcast(broadcast_event)
 
     try:
-        await _websocket_message_receive_loop(websocket)
+        await _websocket_message_receive_loop(websocket, current_user_id)
     except WebSocketDisconnect:
         logger.info("WebSocket disconnected normally")
     except Exception as e:
@@ -844,14 +973,12 @@ def init_npu_worker_websocket():
             return
 
         try:
-            from event_manager import get_event_manager
-
-            # Subscribe to all NPU worker events
-            get_event_manager().subscribe("npu.worker.status.changed", broadcast_npu_worker_event)
-            get_event_manager().subscribe("npu.worker.added", broadcast_npu_worker_event)
-            get_event_manager().subscribe("npu.worker.updated", broadcast_npu_worker_event)
-            get_event_manager().subscribe("npu.worker.removed", broadcast_npu_worker_event)
-            get_event_manager().subscribe("npu.worker.metrics.updated", broadcast_npu_worker_event)
+            bus = get_event_bus()
+            bus.subscribe("npu.worker.status.changed", broadcast_npu_worker_event)
+            bus.subscribe("npu.worker.added", broadcast_npu_worker_event)
+            bus.subscribe("npu.worker.updated", broadcast_npu_worker_event)
+            bus.subscribe("npu.worker.removed", broadcast_npu_worker_event)
+            bus.subscribe("npu.worker.metrics.updated", broadcast_npu_worker_event)
 
             _npu_events_subscribed = True
             logger.info("NPU worker WebSocket event subscriptions initialized")

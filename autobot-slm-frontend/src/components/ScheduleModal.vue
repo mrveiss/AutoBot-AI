@@ -212,7 +212,7 @@ const isFormValid = computed(() => {
             <!-- Schedule Name -->
             <div class="mb-4">
               <label for="schedule-name" class="block text-sm font-medium text-gray-700 mb-1">
-                Schedule Name
+                {{ $t('scheduleModal.scheduleName') }}
               </label>
               <input
                 id="schedule-name"
@@ -226,7 +226,7 @@ const isFormValid = computed(() => {
             <!-- Cron Expression -->
             <div class="mb-4">
               <label for="cron-expression" class="block text-sm font-medium text-gray-700 mb-1">
-                Schedule (Cron Expression)
+                {{ $t('scheduleModal.scheduleCronExpression') }}
               </label>
               <input
                 id="cron-expression"
@@ -259,23 +259,23 @@ const isFormValid = computed(() => {
             <!-- Target Type -->
             <div class="mb-4">
               <label for="target-type" class="block text-sm font-medium text-gray-700 mb-1">
-                Target Nodes
+                {{ $t('scheduleModal.targetNodes') }}
               </label>
               <select
                 id="target-type"
                 v-model="targetType"
                 class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
               >
-                <option value="all">All outdated nodes</option>
-                <option value="specific">Specific nodes</option>
-                <option value="roles">By Role</option>
+                <option value="all">{{ $t('scheduleModal.allOutdatedNodes') }}</option>
+                <option value="specific">{{ $t('scheduleModal.specificNodes') }}</option>
+                <option value="roles">{{ $t('scheduleModal.byRole') }}</option>
               </select>
             </div>
 
             <!-- Node Selection (when specific) -->
             <div v-if="targetType === 'specific' && nodes.length > 0" class="mb-4">
               <label class="block text-sm font-medium text-gray-700 mb-1">
-                Select Nodes
+                {{ $t('scheduleModal.selectNodes') }}
               </label>
               <div class="border border-gray-200 rounded-md max-h-40 overflow-y-auto" role="group" aria-label="Node selection">
                 <div
@@ -306,7 +306,7 @@ const isFormValid = computed(() => {
             <!-- Role Selection (when roles) - Issue #779 -->
             <div v-if="targetType === 'roles'" class="mb-4">
               <label class="block text-sm font-medium text-gray-700 mb-2">
-                Target Roles
+                {{ $t('scheduleModal.targetRoles') }}
               </label>
               <div v-if="availableRoles.length > 0" class="border border-gray-200 rounded-md max-h-40 overflow-y-auto" role="group" aria-label="Role selection">
                 <div
@@ -331,7 +331,7 @@ const isFormValid = computed(() => {
                 </div>
               </div>
               <div v-else class="text-sm text-gray-500 italic">
-                No roles available. Please configure roles first.
+                {{ $t('scheduleModal.noRolesAvailablePlease') }}
               </div>
               <p v-if="targetRoles.length > 0" class="mt-1 text-sm text-gray-500" role="status">
                 {{ targetRoles.length }} role(s) selected
@@ -341,16 +341,16 @@ const isFormValid = computed(() => {
             <!-- Restart Strategy -->
             <div class="mb-4">
               <label for="restart-strategy" class="block text-sm font-medium text-gray-700 mb-1">
-                Restart Strategy
+                {{ $t('scheduleModal.restartStrategy') }}
               </label>
               <select
                 id="restart-strategy"
                 v-model="restartStrategy"
                 class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
               >
-                <option value="graceful">Graceful (wait for tasks)</option>
-                <option value="immediate">Immediate</option>
-                <option value="manual">Manual (no restart)</option>
+                <option value="graceful">{{ $t('scheduleModal.gracefulWaitForTasks') }}</option>
+                <option value="immediate">{{ $t('scheduleModal.immediate') }}</option>
+                <option value="manual">{{ $t('scheduleModal.manualNoRestart') }}</option>
               </select>
             </div>
 
@@ -362,7 +362,7 @@ const isFormValid = computed(() => {
                   v-model="restartAfterSync"
                   class="w-4 h-4 text-primary-600 rounded-sm focus:ring-primary-500"
                 />
-                <span class="text-sm text-gray-700">Restart service after sync</span>
+                <span class="text-sm text-gray-700">{{ $t('scheduleModal.restartServiceAfterSync') }}</span>
               </label>
 
               <label class="flex items-center gap-2 cursor-pointer">
@@ -371,7 +371,7 @@ const isFormValid = computed(() => {
                   v-model="enabled"
                   class="w-4 h-4 text-primary-600 rounded-sm focus:ring-primary-500"
                 />
-                <span class="text-sm text-gray-700">Schedule enabled</span>
+                <span class="text-sm text-gray-700">{{ $t('scheduleModal.scheduleEnabled') }}</span>
               </label>
             </div>
           </div>
@@ -382,7 +382,7 @@ const isFormValid = computed(() => {
               @click="handleClose"
               class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
             >
-              Cancel
+              {{ $t('scheduleModal.cancel') }}
             </button>
             <button
               @click="handleSave"

@@ -1,8 +1,27 @@
 /**
  * Vue Composable for API Client Access
  *
- * This composable provides a clean way to access the centralized API client
- * in Vue 3 Composition API, with TypeScript support and error handling.
+ * @deprecated This composable family has been superseded. GH#7446 audit found zero
+ * active callers outside legacy test mocks — do not add new callers.
+ *
+ * ## Decision rule: which API surface to use
+ *
+ * | Need                                            | Use                                                      |
+ * |-------------------------------------------------|----------------------------------------------------------|
+ * | Reactive GET with loading/error/data refs       | `useApiResource` → `useFetchEndpoint` (canonical layer)  |
+ * | Imperative POST / PUT / DELETE                  | `useApiClient()` from `@/plugins/api`                    |
+ * | One-off authenticated GET (no reactivity)       | `fetchWithAuth` from `@/utils/fetchWithAuth`             |
+ * | Error wrapping + notifications for any call     | `useAsyncHandler` from `@/composables/useErrorHandler`   |
+ *
+ * ### useApi vs useApiResource vs useFetchEndpoint
+ *
+ * - `useApi` (this file) — legacy inject-based accessor. Deprecated, no new callers.
+ * - `useApiResource` — lower-level reactive wrapper around any `async () => T` fetcher.
+ *   Race-condition safe, AbortController integrated. Used internally by useFetchEndpoint.
+ * - `useFetchEndpoint` — canonical GET data-loader built on useApiResource. Handles URL
+ *   resolution, auth, and source-scoping. **Use this for all new reactive data loading.**
+ *
+ * Sunset: Q3 2026. See GH#6487 for migration history, GH#7446 for consolidation audit.
  */
 
 import { inject } from 'vue'
@@ -16,6 +35,9 @@ const logger = createLogger('useApi')
 
 /**
  * Composable to access the centralized API client
+ *
+ * @deprecated Use `useApiClient()` from `@/plugins/api` for imperative HTTP calls,
+ * or `useFetchEndpoint` from `@/composables/api/useFetchEndpoint` for data loading.
  *
  * @returns {ApiClientType} The configured API client instance
  * @throws {Error} If API client is not available (plugin not installed)
@@ -35,6 +57,8 @@ export function useApi(): ApiClientType {
 
 /**
  * Composable for API calls with built-in error handling and loading states
+ *
+ * @deprecated Use `useFetchEndpoint({ onError, fallbackData })` from `@/composables/api/useFetchEndpoint`.
  *
  * @returns Object with API client and utility functions
  */
@@ -134,6 +158,8 @@ export function useApiWithState() {
 /**
  * Composable for chat-related API calls
  *
+ * @deprecated Use `useFetchEndpoint` for data loading or `useApiClient()` for imperative calls.
+ *
  * @returns Object with chat-specific API methods
  */
 export function useChatApi() {
@@ -224,6 +250,8 @@ export function useChatApi() {
 /**
  * Composable for settings-related API calls
  *
+ * @deprecated Use `useFetchEndpoint` for data loading or `useApiClient()` for imperative calls.
+ *
  * @returns Object with settings-specific API methods
  */
 export function useSettingsApi() {
@@ -286,6 +314,8 @@ export function useSettingsApi() {
 
 /**
  * Composable for knowledge base API calls
+ *
+ * @deprecated Use `useFetchEndpoint` for data loading or `useApiClient()` for imperative calls.
  */
 export function useKnowledgeApi() {
   const { api, withErrorHandling } = useApiWithState()
@@ -352,6 +382,8 @@ export function useKnowledgeApi() {
 
 /**
  * Composable for connection testing and status
+ *
+ * @deprecated Use `useApiClient()` from `@/plugins/api` for direct API access.
  */
 export function useConnectionStatus() {
   const { api, withErrorHandling } = useApiWithState()
@@ -404,6 +436,8 @@ export function useConnectionStatus() {
 
 /**
  * Composable for file management operations
+ *
+ * @deprecated Use `useFetchEndpoint` for data loading or `useApiClient()` for imperative calls.
  */
 export function useFileApi() {
   const { api, withErrorHandling } = useApiWithState()

@@ -16,7 +16,6 @@ import time
 import uuid
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Optional
 
 from type_defs.common import Metadata
 
@@ -101,20 +100,20 @@ class CommandExecution:
     state: CommandState = CommandState.PENDING_APPROVAL
 
     # Execution results
-    output: Optional[str] = None  # stdout
-    stderr: Optional[str] = None  # stderr
-    return_code: Optional[int] = None
+    output: str | None = None  # stdout
+    stderr: str | None = None  # stderr
+    return_code: int | None = None
 
     # Timestamps - full lifecycle tracking
     requested_at: float = field(default_factory=time.time)
-    approved_at: Optional[float] = None
-    denied_at: Optional[float] = None
-    execution_started_at: Optional[float] = None
-    execution_completed_at: Optional[float] = None
+    approved_at: float | None = None
+    denied_at: float | None = None
+    execution_started_at: float | None = None
+    execution_completed_at: float | None = None
 
     # Approval metadata
-    approved_by_user_id: Optional[str] = None
-    approval_comment: Optional[str] = None
+    approved_by_user_id: str | None = None
+    approval_comment: str | None = None
 
     # Additional metadata
     metadata: Metadata = field(default_factory=dict)
@@ -168,14 +167,14 @@ class CommandExecution:
             metadata=data.get("metadata", {}),
         )
 
-    def approve(self, user_id: str, comment: Optional[str] = None):
+    def approve(self, user_id: str, comment: str | None = None):
         """Mark command as approved"""
         self.state = CommandState.APPROVED
         self.approved_at = time.time()
         self.approved_by_user_id = user_id
         self.approval_comment = comment
 
-    def deny(self, user_id: str, comment: Optional[str] = None):
+    def deny(self, user_id: str, comment: str | None = None):
         """Mark command as denied"""
         self.state = CommandState.DENIED
         self.denied_at = time.time()

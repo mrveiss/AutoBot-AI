@@ -13,11 +13,11 @@ Integrates security assessment findings with Memory MCP for:
 Issue: #260
 """
 
-import logging
 from dataclasses import dataclass
-from typing import Any, FrozenSet, Optional
+from typing import Any, FrozenSet
 
 from autobot_memory_graph import AutoBotMemoryGraph
+from autobot_shared.logging_manager import get_logger
 
 # Issue #380: Module-level frozenset for security-related tags
 _SECURITY_TAGS: FrozenSet[str] = frozenset({"security", "vulnerability", "host", "service"})
@@ -34,14 +34,14 @@ class VulnerabilityRequest:
 
     assessment_id: str
     host_ip: str
-    cve_id: Optional[str] = None
+    cve_id: str | None = None
     title: str = ""
     severity: str = "unknown"
     description: str = ""
-    affected_port: Optional[int] = None
-    affected_service: Optional[str] = None
-    references: Optional[list[str]] = None
-    metadata: Optional[dict[str, Any]] = None
+    affected_port: int | None = None
+    affected_service: str | None = None
+    references: list[str] | None = None
+    metadata: dict[str, Any] | None = None
 
 
 @dataclass
@@ -57,13 +57,13 @@ class ServiceRequest:
     host_ip: str
     port: int
     protocol: str = "tcp"
-    service_name: Optional[str] = None
-    version: Optional[str] = None
-    product: Optional[str] = None
-    metadata: Optional[dict[str, Any]] = None
+    service_name: str | None = None
+    version: str | None = None
+    product: str | None = None
+    metadata: dict[str, Any] | None = None
 
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Performance optimization: O(1) lookup for security relation types (Issue #326)
 DETAIL_RELATION_TYPES = {"contains", "runs", "has_vulnerability", "exploited_by"}
@@ -98,11 +98,11 @@ class SecurityFindingsIndex:
 
     COLLECTION_NAME = "security_findings"
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._collection = None
         self._initialized = False
 
-    async def initialize(self):
+    async def initialize(self) -> None:
         """Initialize ChromaDB collection."""
         if self._initialized:
             return
@@ -115,7 +115,7 @@ class SecurityFindingsIndex:
         )
         self._initialized = True
 
-    async def index_finding(self, finding_id, text, metadata):
+    async def index_finding(self, finding_id, text, metadata) -> None:
         """Index a finding for semantic search."""
         await self.initialize()
         await self._collection.upsert(ids=[finding_id], documents=[text], metadatas=[metadata])
@@ -151,7 +151,7 @@ class SecurityMemoryIntegration:
         results = await integration.search_security_findings("SSH vulnerability")
     """
 
-    def __init__(self, memory_graph: Optional[AutoBotMemoryGraph] = None):
+    def __init__(self, memory_graph: AutoBotMemoryGraph | None = None) -> None:
         """
         Initialize security memory integration.
 
@@ -185,7 +185,7 @@ class SecurityMemoryIntegration:
         target: str,
         scope: list[str],
         training_mode: bool,
-        metadata: Optional[dict[str, Any]],
+        metadata: dict[str, Any] | None,
     ) -> list[str]:
         """
         Build observations list for a security assessment entity.
@@ -211,7 +211,7 @@ class SecurityMemoryIntegration:
         scope: list[str],
         training_mode: bool,
         observations: list[str],
-        metadata: Optional[dict[str, Any]],
+        metadata: dict[str, Any] | None,
     ) -> dict[str, Any]:
         """
         Store assessment entity in memory graph.
@@ -240,7 +240,7 @@ class SecurityMemoryIntegration:
         target: str,
         scope: list[str],
         training_mode: bool = False,
-        metadata: Optional[dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """
         Create a memory entity for a security assessment.
@@ -268,9 +268,9 @@ class SecurityMemoryIntegration:
         self,
         ip: str,
         status: str,
-        hostname: Optional[str],
-        os_guess: Optional[str],
-        metadata: Optional[dict[str, Any]],
+        hostname: str | None,
+        os_guess: str | None,
+        metadata: dict[str, Any] | None,
     ) -> list[str]:
         """
         Build observations list for a host entity.
@@ -294,10 +294,10 @@ class SecurityMemoryIntegration:
         ip: str,
         observations: list[str],
         assessment_id: str,
-        hostname: Optional[str],
+        hostname: str | None,
         status: str,
-        os_guess: Optional[str],
-        metadata: Optional[dict[str, Any]],
+        os_guess: str | None,
+        metadata: dict[str, Any] | None,
     ) -> dict[str, Any]:
         """
         Store host entity in memory graph.
@@ -324,10 +324,10 @@ class SecurityMemoryIntegration:
         self,
         assessment_id: str,
         ip: str,
-        hostname: Optional[str] = None,
+        hostname: str | None = None,
         status: str = "up",
-        os_guess: Optional[str] = None,
-        metadata: Optional[dict[str, Any]] = None,
+        os_guess: str | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """
         Create a memory entity for a discovered host.
@@ -360,9 +360,9 @@ class SecurityMemoryIntegration:
         host_ip: str,
         port: int,
         protocol: str,
-        service_name: Optional[str],
-        version: Optional[str],
-        product: Optional[str],
+        service_name: str | None,
+        version: str | None,
+        product: str | None,
     ) -> list[str]:
         """
         Build observations list for a service entity.
@@ -387,10 +387,10 @@ class SecurityMemoryIntegration:
         host_ip: str,
         port: int,
         protocol: str,
-        service_name: Optional[str],
-        version: Optional[str],
-        product: Optional[str],
-        metadata: Optional[dict[str, Any]],
+        service_name: str | None,
+        version: str | None,
+        product: str | None,
+        metadata: dict[str, Any] | None,
     ) -> dict[str, Any]:
         """
         Store service entity in memory graph.
@@ -421,10 +421,10 @@ class SecurityMemoryIntegration:
         host_ip: str,
         port: int,
         protocol: str = "tcp",
-        service_name: Optional[str] = None,
-        version: Optional[str] = None,
-        product: Optional[str] = None,
-        metadata: Optional[dict[str, Any]] = None,
+        service_name: str | None = None,
+        version: str | None = None,
+        product: str | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """
         Create a memory entity for a discovered service.
@@ -473,9 +473,9 @@ class SecurityMemoryIntegration:
         severity: str,
         host_ip: str,
         description: str,
-        affected_port: Optional[int],
-        affected_service: Optional[str],
-        references: Optional[list[str]],
+        affected_port: int | None,
+        affected_service: str | None,
+        references: list[str] | None,
     ) -> list[str]:
         """Build observations list for vulnerability (Issue #281 - extracted helper)."""
         observations = [
@@ -497,8 +497,8 @@ class SecurityMemoryIntegration:
         self,
         host_ip: str,
         entity_name: str,
-        affected_port: Optional[int],
-        affected_service: Optional[str],
+        affected_port: int | None,
+        affected_service: str | None,
     ) -> None:
         """Create relations for vulnerability entity (Issue #281 - extracted helper)."""
         await self._create_security_relation(
@@ -520,12 +520,12 @@ class SecurityMemoryIntegration:
         observations: list[str],
         assessment_id: str,
         host_ip: str,
-        cve_id: Optional[str],
+        cve_id: str | None,
         title: str,
         severity: str,
-        affected_port: Optional[int],
-        affected_service: Optional[str],
-        metadata: Optional[dict[str, Any]],
+        affected_port: int | None,
+        affected_service: str | None,
+        metadata: dict[str, Any] | None,
     ) -> dict[str, Any]:
         """
         Store vulnerability entity in memory graph.
@@ -568,17 +568,17 @@ class SecurityMemoryIntegration:
 
     def _normalize_to_request(
         self,
-        request: Optional[VulnerabilityRequest],
-        assessment_id: Optional[str],
-        host_ip: Optional[str],
-        cve_id: Optional[str],
+        request: VulnerabilityRequest | None,
+        assessment_id: str | None,
+        host_ip: str | None,
+        cve_id: str | None,
         title: str,
         severity: str,
         description: str,
-        affected_port: Optional[int],
-        affected_service: Optional[str],
-        references: Optional[list[str]],
-        metadata: Optional[dict[str, Any]],
+        affected_port: int | None,
+        affected_service: str | None,
+        references: list[str] | None,
+        metadata: dict[str, Any] | None,
     ) -> VulnerabilityRequest:
         """
         Normalize parameters into a VulnerabilityRequest object. Issue #620.
@@ -642,18 +642,18 @@ class SecurityMemoryIntegration:
 
     async def create_vulnerability_entity(
         self,
-        request: Optional[VulnerabilityRequest] = None,
+        request: VulnerabilityRequest | None = None,
         *,
-        assessment_id: Optional[str] = None,
-        host_ip: Optional[str] = None,
-        cve_id: Optional[str] = None,
+        assessment_id: str | None = None,
+        host_ip: str | None = None,
+        cve_id: str | None = None,
         title: str = "",
         severity: str = "unknown",
         description: str = "",
-        affected_port: Optional[int] = None,
-        affected_service: Optional[str] = None,
-        references: Optional[list[str]] = None,
-        metadata: Optional[dict[str, Any]] = None,
+        affected_port: int | None = None,
+        affected_service: str | None = None,
+        references: list[str] | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """
         Create a memory entity for a discovered vulnerability.
@@ -725,8 +725,8 @@ class SecurityMemoryIntegration:
     async def search_security_findings(
         self,
         query: str,
-        entity_type: Optional[str] = None,
-        severity: Optional[str] = None,
+        entity_type: str | None = None,
+        severity: str | None = None,
         limit: int = 20,
     ) -> list[dict[str, Any]]:
         """
@@ -867,10 +867,10 @@ class SecurityMemoryIntegration:
         self,
         assessment_id: str,
         ip: str,
-        hostname: Optional[str],
+        hostname: str | None,
         status: str,
-        os_guess: Optional[str],
-        metadata: Optional[dict[str, Any]],
+        os_guess: str | None,
+        metadata: dict[str, Any] | None,
     ) -> None:
         """Index host finding in ChromaDB for semantic search. Issue #260."""
         try:
@@ -896,9 +896,9 @@ class SecurityMemoryIntegration:
         host_ip: str,
         port: int,
         protocol: str,
-        service_name: Optional[str],
-        version: Optional[str],
-        product: Optional[str],
+        service_name: str | None,
+        version: str | None,
+        product: str | None,
     ) -> None:
         """Index service finding in ChromaDB. Issue #260."""
         try:
@@ -926,8 +926,8 @@ class SecurityMemoryIntegration:
         vuln_name: str,
         severity: str,
         description: str,
-        affected_port: Optional[int],
-        affected_service: Optional[str],
+        affected_port: int | None,
+        affected_service: str | None,
     ) -> None:
         """Index vulnerability finding in ChromaDB. Issue #260."""
         try:
@@ -950,8 +950,8 @@ class SecurityMemoryIntegration:
     async def search_findings_semantic(
         self,
         query: str,
-        severity: Optional[str] = None,
-        entity_type: Optional[str] = None,
+        severity: str | None = None,
+        entity_type: str | None = None,
     ) -> dict[str, Any]:
         """
         Search security findings using semantic similarity.
@@ -982,7 +982,7 @@ class SecurityMemoryIntegration:
 # Singleton instance (thread-safe)
 import asyncio as _asyncio_lock
 
-_security_memory: Optional[SecurityMemoryIntegration] = None
+_security_memory: SecurityMemoryIntegration | None = None
 _security_memory_lock = _asyncio_lock.Lock()
 
 

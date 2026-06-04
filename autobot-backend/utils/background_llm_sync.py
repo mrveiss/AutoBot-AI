@@ -17,16 +17,16 @@ Key Features:
 """
 
 import asyncio
-import logging
-import os
 import time
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 from constants.network_constants import NetworkConstants
 from constants.threshold_constants import TimingConstants
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -37,7 +37,7 @@ class LLMServiceStatus:
     endpoint: str
     status: str  # healthy, degraded, offline
     last_check: float = field(default_factory=time.time)
-    response_time: Optional[float] = None
+    response_time: float | None = None
     error_count: int = 0
     success_count: int = 0
     metadata: Dict[str, Any] = field(default_factory=dict)
@@ -56,7 +56,7 @@ class BackgroundLLMSync:
         self.check_interval = check_interval
         self.running = False
         self.services: Dict[str, LLMServiceStatus] = {}
-        self._task: Optional[asyncio.Task] = None
+        self._task: asyncio.Task | None = None
 
         # Lock for thread-safe service status access
         self._lock = asyncio.Lock()
@@ -76,7 +76,7 @@ class BackgroundLLMSync:
             ),
             (
                 "openai",
-                os.getenv("OPENAI_API_BASE_URL", "https://api.openai.com/v1"),
+                config.openai_api_base_url,
             ),
             (
                 "local_llm",
@@ -228,7 +228,7 @@ class BackgroundLLMSync:
 
         logger.info("✅ Background LLM sync stopped")
 
-    async def get_service_status(self, service_name: str) -> Optional[Dict[str, Any]]:
+    async def get_service_status(self, service_name: str) -> Dict[str, Any] | None:
         """Get status for a specific service (thread-safe)."""
         async with self._lock:
             service = self.services.get(service_name)

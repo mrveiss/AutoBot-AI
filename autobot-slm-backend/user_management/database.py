@@ -86,6 +86,7 @@ def get_slm_engine() -> AsyncEngine:
                     pool_recycle=pool["pool_recycle"],
                     pool_timeout=pool["pool_timeout"],
                     pool_pre_ping=True,
+                    connect_args={"timeout": 10},
                 )
                 logger.info("Created SLM database engine")
     return _slm_engine
@@ -110,6 +111,7 @@ def get_autobot_engine() -> AsyncEngine:
                     pool_recycle=pool["pool_recycle"],
                     pool_timeout=pool["pool_timeout"],
                     pool_pre_ping=True,
+                    connect_args={"timeout": 10},
                 )
                 logger.info("Created AutoBot database engine")
     return _autobot_engine
@@ -148,9 +150,12 @@ async def get_slm_session() -> AsyncGenerator[AsyncSession, None]:
     """Get SLM database session (context manager)."""
     session_maker = get_slm_session_maker()
     async with session_maker() as session:
+        session.info["_post_commit_cbs"] = []
         try:
             yield session
             await session.commit()
+            for cb in session.info.pop("_post_commit_cbs", []):
+                await cb()
         except Exception:
             await session.rollback()
             raise
@@ -161,9 +166,12 @@ async def get_autobot_session() -> AsyncGenerator[AsyncSession, None]:
     """Get AutoBot database session (context manager)."""
     session_maker = get_autobot_session_maker()
     async with session_maker() as session:
+        session.info["_post_commit_cbs"] = []
         try:
             yield session
             await session.commit()
+            for cb in session.info.pop("_post_commit_cbs", []):
+                await cb()
         except Exception:
             await session.rollback()
             raise

@@ -18,13 +18,12 @@ from __future__ import annotations
 
 import asyncio
 import inspect
-import logging
 import time
-from typing import Any, AsyncIterator, Dict, List
+from typing import Any, AsyncIterator, Dict, List, Tuple
 from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
 from api.schemas_code import (
     ChatCompletionChunk,
@@ -40,12 +39,24 @@ from api.schemas_code import (
 )
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from llm_interface_pkg.models import LLMRequest
-from llm_providers.provider_registry import get_provider_registry
+from autobot_shared.logging_manager import get_logger
+from llm_shared import get_provider_registry
+from llm_shared.models import LLMRequest
+from llm_shared.tiered_routing.tier_router import get_tiered_router
+from services.llm_api_key_service import LLMApiKeyRecord, get_llm_api_key_service
+from services.llm_cost_tracker import get_cost_tracker
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(tags=["openai-compat"])
+
+# ---------------------------------------------------------------------------
+# Reserved model names for server-side tiered routing (#6592)
+# ---------------------------------------------------------------------------
+# Callers may pass these instead of a concrete model name to opt into
+# AutoBot's tiered routing.  "auto" uses TieredModelRouter complexity scoring;
+# "auto-fast" forces the simple tier; "auto-quality" forces the complex tier.
+_AUTO_MODEL_NAMES = frozenset({"auto", "auto-fast", "auto-quality"})
 
 # ---------------------------------------------------------------------------
 # Rate limiting — per-IP sliding window via shared IPRateLimiter (#7271)
@@ -78,13 +89,13 @@ def _remote_addr(request: Request) -> str:
 # ---------------------------------------------------------------------------
 
 
-def _get_user(request: Request) -> Dict[str, Any]:
+async def _get_user(request: Request) -> Dict[str, Any]:
     """Validate Bearer token and return AutoBot user dict.
 
     Raises HTTPException 401 if auth fails.
     """
     try:
-        return get_current_user(request)
+        return await get_current_user(request)
     except HTTPException:
         raise
     except Exception as exc:
@@ -92,17 +103,56 @@ def _get_user(request: Request) -> Dict[str, Any]:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
 
+def _extract_bearer(request: Request) -> str | None:
+    """Return the raw Bearer token string, or None if absent/malformed."""
+    header = request.headers.get("authorization", "")
+    if header.lower().startswith("bearer "):
+        return header[7:].strip()
+    return None
+
+
+async def _resolve_auth(request: Request) -> Tuple[Dict[str, Any] | None, LLMApiKeyRecord | None]:
+    """Dual-auth: accept either a platform JWT or a virtual sk-... API key.
+
+    Returns (user_dict, api_key_record). Exactly one of them will be non-None.
+    Raises HTTPException 401 if neither form of auth succeeds.
+    """
+    bearer = _extract_bearer(request)
+    if bearer and bearer.startswith("sk-"):
+        svc = get_llm_api_key_service()
+        record = await svc.authenticate_key(bearer)
+        if record is None:
+            raise HTTPException(status_code=401, detail="Invalid or revoked API key")
+        return None, record
+    # Fall back to platform JWT
+    user = await _get_user(request)
+    return user, None
+
+
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
 
 
-def _build_llm_request(body: ChatCompletionRequest) -> LLMRequest:
+async def _resolve_auto_model(model: str, messages: list) -> str:
+    """Resolve an auto-* model alias to a concrete model name via TieredModelRouter."""
+    router = get_tiered_router()
+    if model == "auto-fast":
+        return router.get_model_for_tier("simple")
+    if model == "auto-quality":
+        return router.get_model_for_tier("complex")
+    # "auto" — complexity-scored routing
+    selected, _ = router.route(messages, requested_model=model)
+    return selected
+
+
+def _build_llm_request(body: ChatCompletionRequest, resolved_model: str | None = None) -> LLMRequest:
     """Convert OpenAI-format request to AutoBot LLMRequest."""
     messages = [{"role": m.role, "content": m.content} for m in body.messages]
+    effective_model = resolved_model or (body.model if body.model != "autobot-default" else None)
     return LLMRequest(
         messages=messages,
-        model_name=body.model if body.model != "autobot-default" else None,
+        model_name=effective_model,
         temperature=body.temperature,
         max_tokens=body.max_tokens,
         top_p=body.top_p,
@@ -138,6 +188,7 @@ async def _stream_generator(
     *,
     include_usage: bool = False,
     prompt_text: str = "",
+    api_key_record: LLMApiKeyRecord | None = None,
 ) -> AsyncIterator[str]:
     """Yield SSE lines for a streaming completion."""
     created = int(time.time())
@@ -191,10 +242,15 @@ async def _stream_generator(
     )
     yield f"data: {final_chunk.model_dump_json()}\n\n"
 
+    prompt_tokens = _estimate_tokens(prompt_text)
+    completion_tokens = _estimate_tokens("".join(completion_text_parts))
+    tracker = get_cost_tracker()
+    cost_usd = tracker.calculate_cost(model_name, prompt_tokens, completion_tokens)
+
     # Usage chunk (OpenAI spec: emit only when stream_options.include_usage=true)
+    # Cost is embedded here when available; a standalone cost chunk is emitted
+    # when include_usage is false so clients get cost info in a valid chunk (#7610).
     if include_usage:
-        prompt_tokens = _estimate_tokens(prompt_text)
-        completion_tokens = _estimate_tokens("".join(completion_text_parts))
         usage_chunk = ChatCompletionChunk(
             id=completion_id,
             created=created,
@@ -204,11 +260,27 @@ async def _stream_generator(
                 prompt_tokens=prompt_tokens,
                 completion_tokens=completion_tokens,
                 total_tokens=prompt_tokens + completion_tokens,
+                cost_usd=cost_usd if cost_usd > 0 else None,
             ),
         )
-        yield f"data: {usage_chunk.model_dump_json()}\n\n"
+        yield f"data: {usage_chunk.model_dump_json(exclude_none=True)}\n\n"
+    elif cost_usd > 0:
+        cost_chunk = ChatCompletionChunk(
+            id=completion_id,
+            created=created,
+            model=model_name,
+            choices=[],
+            usage=OAIUsage(cost_usd=cost_usd),
+        )
+        yield f"data: {cost_chunk.model_dump_json(exclude_none=True)}\n\n"
 
     yield "data: [DONE]\n\n"
+
+    # Record per-key spend and publish usage event after stream completes (#6590)
+    if api_key_record is not None:
+        svc = get_llm_api_key_service()
+        await svc.record_spend(api_key_record, cost_usd)
+        await svc.publish_usage_event(api_key_record, model_name, prompt_tokens, completion_tokens, cost_usd)
 
 
 # ---------------------------------------------------------------------------
@@ -228,14 +300,43 @@ async def chat_completions(
 ) -> Any:
     """OpenAI-compatible chat completions endpoint (#4447).
 
-    Accepts Bearer token auth, delegates to ProviderRegistry, returns
-    OpenAI-format response (streaming or non-streaming).
+    Accepts Bearer token auth (platform JWT or virtual sk-... key), delegates
+    to ProviderRegistry, returns OpenAI-format response (streaming or non-streaming).
+    Virtual keys enforce per-key monthly budget and model whitelist (#6590).
     """
-    _get_user(request)
+    _user, api_key_record = await _resolve_auth(request)
     await _oai_limiter.check_or_429(_remote_addr(request))
 
+    # Virtual key enforcement: model whitelist + budget (#6590)
+    if api_key_record is not None:
+        from services.llm_api_key_service import LLMApiKeyService
+
+        if body.model not in _AUTO_MODEL_NAMES and body.model != "autobot-default":
+            if not LLMApiKeyService.model_allowed(api_key_record, body.model):
+                raise HTTPException(
+                    status_code=403,
+                    detail="Model not permitted for this API key",
+                    headers={"x-llm-key-allowed-models": ",".join(api_key_record.allowed_models)},
+                )
+        allowed, remaining = await get_llm_api_key_service().check_budget(api_key_record)
+        if not allowed:
+            raise HTTPException(
+                status_code=429,
+                detail="Monthly budget exhausted",
+                headers={"x-llm-budget-remaining": "0"},
+            )
+
+    # Resolve auto-* model aliases to concrete model names via tiered routing (#6592)
+    if body.model in _AUTO_MODEL_NAMES:
+        messages_raw = [{"role": m.role, "content": m.content} for m in body.messages]
+        resolved_model = await _resolve_auto_model(body.model, messages_raw)
+    elif body.model == "autobot-default":
+        resolved_model = None  # will be set from provider name below
+    else:
+        resolved_model = body.model
+
     registry = get_provider_registry()
-    llm_request = _build_llm_request(body)
+    llm_request = _build_llm_request(body, resolved_model=resolved_model)
 
     provider = await registry.get_provider_for_request(request=llm_request)
     if provider is None:
@@ -246,12 +347,23 @@ async def chat_completions(
         raise ValueError(f"Provider {provider.provider_name!r} stream_completion must be an async generator function")
 
     completion_id = _make_completion_id()
-    # Use resolved provider name as model echo when caller sent "autobot-default"
-    resolved_model = body.model if body.model != "autobot-default" else provider.provider_name
+    # Echo the concrete model name; fall back to provider name for autobot-default
+    if resolved_model is None:
+        resolved_model = provider.provider_name
 
     if body.stream:
         include_usage = bool(body.stream_options and body.stream_options.include_usage)
         prompt_text = "\n".join(m.content for m in body.messages)
+        # For streaming, cost cannot be determined accurately until stream completes
+        # (token counts are not known upfront). Per acceptance criteria, header is
+        # absent when cost cannot be determined. Non-streaming path includes the header.
+        stream_headers: Dict[str, str] = {
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        }
+        if body.model in _AUTO_MODEL_NAMES:
+            stream_headers["x-llm-routed-from"] = body.model
         return StreamingResponse(
             _stream_generator(
                 provider,
@@ -260,13 +372,10 @@ async def chat_completions(
                 resolved_model,
                 include_usage=include_usage,
                 prompt_text=prompt_text,
+                api_key_record=api_key_record,
             ),
             media_type="text/event-stream",
-            headers={
-                "Cache-Control": "no-cache",
-                "Connection": "keep-alive",
-                "X-Accel-Buffering": "no",
-            },
+            headers=stream_headers,
         )
 
     # Non-streaming path
@@ -281,7 +390,16 @@ async def chat_completions(
         total_tokens=tokens.get("total_tokens", llm_response.tokens_used or 0),
     )
 
-    return ChatCompletionResponse(
+    # Calculate cost and store in response hidden params
+    tracker = get_cost_tracker()
+    cost_usd = tracker.calculate_cost(
+        resolved_model,
+        usage.prompt_tokens,
+        usage.completion_tokens,
+    )
+    llm_response.hidden_params["response_cost"] = cost_usd
+
+    response = ChatCompletionResponse(
         id=completion_id,
         created=int(time.time()),
         model=resolved_model,
@@ -298,6 +416,31 @@ async def chat_completions(
         usage=usage,
     )
 
+    # Extract cost from hidden params and add as header
+    response_cost = llm_response.hidden_params.get("response_cost", 0)
+    headers: Dict[str, str] = {}
+    if response_cost > 0:
+        headers["x-llm-cost"] = str(response_cost)
+    if body.model in _AUTO_MODEL_NAMES:
+        headers["x-llm-routed-from"] = body.model
+
+    # Record per-key spend and publish usage event (#6590)
+    if api_key_record is not None:
+        svc = get_llm_api_key_service()
+        await svc.record_spend(api_key_record, cost_usd)
+        await svc.publish_usage_event(
+            api_key_record,
+            resolved_model,
+            usage.prompt_tokens,
+            usage.completion_tokens,
+            cost_usd,
+        )
+
+    return JSONResponse(
+        content=response.model_dump(exclude_none=True),
+        headers=headers,
+    )
+
 
 @router.get("/models", response_model=OAIModelListResponse)
 @with_error_handling(
@@ -310,7 +453,7 @@ async def list_models(request: Request) -> OAIModelListResponse:
 
     Returns all models available across registered providers.
     """
-    _get_user(request)
+    await _resolve_auth(request)
 
     registry = get_provider_registry()
     created = int(time.time())
@@ -334,5 +477,13 @@ async def list_models(request: Request) -> OAIModelListResponse:
     # Always include a sentinel entry so the list is non-empty
     if not model_cards:
         model_cards.append(OAIModelCard(id="autobot-default", created=created))
+
+    # Prepend reserved auto-routing aliases (#6592)
+    auto_cards = [
+        OAIModelCard(id="auto", created=created, owned_by="autobot"),
+        OAIModelCard(id="auto-fast", created=created, owned_by="autobot"),
+        OAIModelCard(id="auto-quality", created=created, owned_by="autobot"),
+    ]
+    model_cards = auto_cards + [c for c in model_cards if c.id not in _AUTO_MODEL_NAMES]
 
     return OAIModelListResponse(data=model_cards)

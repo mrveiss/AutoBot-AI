@@ -1,20 +1,20 @@
 <template>
   <div v-if="stats" class="vector-stats-section">
     <div class="section-header">
-      <h3><i class="fas fa-project-diagram"></i> {{ $t('knowledge.stats.vector.title') }}</h3>
+      <h3><Icon name="project-diagram" /> {{ $t('knowledge.stats.vector.title') }}</h3>
       <button @click="$emit('refresh')"
               :disabled="loading"
               class="refresh-btn"
               :aria-label="$t('knowledge.stats.vector.refreshAriaLabel')">
-        <i class="fas fa-sync" :class="{ 'fa-spin': loading }" aria-hidden="true"></i>
+        <Icon name="sync" />
         {{ $t('knowledge.stats.vector.refresh') }}
       </button>
     </div>
 
     <div class="vector-overview-grid">
-      <BasePanel variant="elevated" size="medium">
+      <BasePanel variant="elevated" size="md">
         <div class="vector-stat-icon facts">
-          <i class="fas fa-lightbulb"></i>
+          <Icon name="lightbulb" />
         </div>
         <div class="vector-stat-content">
           <h4>{{ $t('knowledge.stats.vector.totalFacts') }}</h4>
@@ -23,23 +23,23 @@
         </div>
       </BasePanel>
 
-      <BasePanel variant="elevated" size="medium" :class="{ 'needs-attention': needsVectorization }">
+      <BasePanel variant="elevated" size="md" :class="{ 'needs-attention': needsVectorization }">
         <div class="vector-stat-icon vectors">
-          <i class="fas fa-cubes"></i>
+          <Icon name="cubes" />
         </div>
         <div class="vector-stat-content">
           <h4>{{ $t('knowledge.stats.vector.totalVectors') }}</h4>
           <p class="vector-stat-value">{{ stats.total_vectors || 0 }}</p>
           <p v-if="needsVectorization" class="vector-stat-label warning">
-            <i class="fas fa-exclamation-triangle"></i> {{ $t('knowledge.stats.vector.notVectorized') }}
+            <Icon name="exclamation-triangle" /> {{ $t('knowledge.stats.vector.notVectorized') }}
           </p>
           <p v-else class="vector-stat-label">{{ $t('knowledge.stats.vector.embeddingsGenerated') }}</p>
         </div>
       </BasePanel>
 
-      <BasePanel variant="elevated" size="medium">
+      <BasePanel variant="elevated" size="md">
         <div class="vector-stat-icon database">
-          <i class="fas fa-database"></i>
+          <Icon name="database" />
         </div>
         <div class="vector-stat-content">
           <h4>{{ $t('knowledge.stats.vector.databaseSize') }}</h4>
@@ -48,13 +48,13 @@
         </div>
       </BasePanel>
 
-      <BasePanel variant="elevated" size="medium">
+      <BasePanel variant="elevated" size="md">
         <div class="vector-stat-icon status">
-          <i class="fas fa-check-circle"></i>
+          <Icon name="check-circle" />
         </div>
         <div class="vector-stat-content">
           <h4>{{ $t('knowledge.stats.vector.status') }}</h4>
-          <StatusBadge :variant="getStatusVariant(stats.status)" size="small" class="vector-stat-value">
+          <StatusBadge :variant="getStatusVariant(stats.status)" size="sm" class="vector-stat-value">
             {{ stats.status || $t('knowledge.stats.vector.unknown') }}
           </StatusBadge>
           <p class="vector-stat-label">{{ $t('knowledge.stats.vector.rag') }}: {{ stats.rag_available ? $t('knowledge.stats.vector.available') : $t('knowledge.stats.vector.unavailable') }}</p>
@@ -65,7 +65,7 @@
     <!-- Vectorization Notice -->
     <div v-if="needsVectorization" class="vectorization-notice">
       <div class="notice-icon">
-        <i class="fas fa-info-circle"></i>
+        <Icon name="info-circle" />
       </div>
       <div class="notice-content">
         <h4>{{ $t('knowledge.stats.vector.embeddingsNotGenerated') }}</h4>
@@ -73,7 +73,7 @@
           {{ $t('knowledge.stats.vector.embeddingsNotGeneratedDesc', { count: stats.total_facts }) }}
         </p>
         <p class="notice-hint">
-          <i class="fas fa-lightbulb"></i>
+          <Icon name="lightbulb" />
           {{ $t('knowledge.stats.vector.embeddingsHint') }}
         </p>
       </div>
@@ -81,7 +81,7 @@
 
     <!-- Vector Categories Distribution Chart -->
     <div class="vector-chart-section">
-      <h4><i class="fas fa-chart-pie"></i> {{ $t('knowledge.stats.vector.distributionByCategory') }}</h4>
+      <h4><Icon name="chart-pie" /> {{ $t('knowledge.stats.vector.distributionByCategory') }}</h4>
       <div class="vector-categories-chart">
         <div
           v-for="(category, idx) in stats.categories"
@@ -107,26 +107,26 @@
 
     <!-- Vector Index Health -->
     <div class="vector-health-section">
-      <h4><i class="fas fa-heartbeat"></i> {{ $t('knowledge.stats.vector.indexHealth') }}</h4>
+      <h4><Icon name="heartbeat" /> {{ $t('knowledge.stats.vector.indexHealth') }}</h4>
       <div class="health-indicators">
         <div class="health-item" :class="{ active: stats.initialized }">
-          <i class="fas fa-check-circle"></i>
+          <Icon name="check-circle" />
           <span>{{ $t('knowledge.stats.vector.initialized') }}</span>
         </div>
         <div class="health-item" :class="{ active: stats.llama_index_configured }">
-          <i class="fas fa-cube"></i>
+          <Icon name="cube" />
           <span>{{ $t('knowledge.stats.vector.llamaIndex') }}</span>
         </div>
         <div class="health-item" :class="{ active: stats.llama_index_configured }">
-          <i class="fas fa-link"></i>
+          <Icon name="link" />
           <span>{{ $t('knowledge.stats.vector.langChain') }}</span>
         </div>
         <div class="health-item" :class="{ active: stats.index_available }">
-          <i class="fas fa-layer-group"></i>
+          <Icon name="layer-group" />
           <span>{{ $t('knowledge.stats.vector.indexAvailable') }}</span>
         </div>
         <div class="health-item" :class="{ active: stats.rag_available }">
-          <i class="fas fa-brain"></i>
+          <Icon name="brain" />
           <span>{{ $t('knowledge.stats.vector.ragAvailable') }}</span>
         </div>
       </div>
@@ -177,6 +177,7 @@
  * Issue #184: Split oversized Vue components
  */
 
+import Icon from '@/components/ui/Icon.vue'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BasePanel from '@/components/base/BasePanel.vue'
@@ -236,10 +237,10 @@ const embeddingModelDisplay = computed(() => {
   return t('knowledge.stats.vector.notConfigured')
 })
 
-const getStatusVariant = (status: string): 'success' | 'danger' | 'secondary' => {
-  const variantMap: Record<string, 'success' | 'danger' | 'secondary'> = {
+const getStatusVariant = (status: string): 'success' | 'error' | 'secondary' => {
+  const variantMap: Record<string, 'success' | 'error' | 'secondary'> = {
     'online': 'success',
-    'offline': 'danger',
+    'offline': 'error',
     'unknown': 'secondary'
   }
   return variantMap[status] || 'secondary'

@@ -7,14 +7,14 @@ Temporal Search Service - Search and traverse temporal events.
 Issue #759: Knowledge Pipeline Foundation - Extract, Cognify, Load (ECL).
 """
 
-import logging
 from datetime import datetime
-from typing import List, Optional, Set
+from typing import List, Set
 from uuid import UUID
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import parse_utc_iso
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class TemporalSearchService:
@@ -33,8 +33,8 @@ class TemporalSearchService:
         self,
         start_date: datetime,
         end_date: datetime,
-        event_types: Optional[List[str]] = None,
-        participants: Optional[List[UUID]] = None,
+        event_types: List[str] | None = None,
+        participants: List[UUID] | None = None,
         limit: int = 100,
     ) -> List[dict]:
         """
@@ -208,14 +208,14 @@ class TemporalSearchService:
                 visited,
             )
 
-    async def _get_entity_id_by_name(self, entity_name: str) -> Optional[str]:
+    async def _get_entity_id_by_name(self, entity_name: str) -> str | None:
         """Lookup entity ID by canonical name."""
         canonical_name = entity_name.lower().strip()
         name_key = f"entity:name:{canonical_name}"
         entity_id = await self.redis.get(name_key)
         return entity_id.decode() if entity_id else None
 
-    async def _get_event(self, event_id: str) -> Optional[dict]:
+    async def _get_event(self, event_id: str) -> dict | None:
         """Retrieve event data from Redis JSON."""
         try:
             key = f"event:{event_id}"

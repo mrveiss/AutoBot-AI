@@ -11,18 +11,18 @@ Provides a unified interface for certificate lifecycle management.
 This is the primary entry point for all PKI operations in AutoBot.
 """
 
-import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Dict, List, Optional
+from typing import Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from pki.config import VM_DEFINITIONS, TLSConfig, TLSMode
 from pki.configurator import ServiceConfigurator
 from pki.distributor import CertificateDistributor
 from pki.generator import CertificateGenerator
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class PKIStage(str, Enum):
@@ -79,7 +79,7 @@ class PKIManager:
             await pki.renew()
     """
 
-    def __init__(self, config: Optional[TLSConfig] = None):
+    def __init__(self, config: TLSConfig | None = None):
         """Initialize PKI manager."""
         self.config = config or TLSConfig()
         self.generator = CertificateGenerator(self.config)
@@ -243,7 +243,7 @@ class PKIManager:
 
     async def renew(
         self,
-        certificates: Optional[List[str]] = None,
+        certificates: List[str] | None = None,
         preserve_keys: bool = True,
     ) -> bool:
         """

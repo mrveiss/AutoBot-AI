@@ -225,12 +225,13 @@ function getCategoryIcon(category: string): string {
       <!-- Header -->
       <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200">
         <div>
-          <h3 class="text-lg font-semibold text-gray-900">New Deployment</h3>
+          <h3 class="text-lg font-semibold text-gray-900">{{ $t('deploymentWizard.newDeployment') }}</h3>
           <p class="text-sm text-gray-500">Step {{ step }} of 3</p>
         </div>
         <button
           @click="$emit('close')"
           class="text-gray-400 hover:text-gray-600 transition-colors"
+          aria-label="Close"
         >
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -251,9 +252,9 @@ function getCategoryIcon(category: string): string {
           />
         </div>
         <div class="flex justify-between mt-2 text-xs text-gray-500">
-          <span>Select Node</span>
-          <span>Choose Roles</span>
-          <span>Review & Deploy</span>
+          <span>{{ $t('deploymentWizard.selectNode') }}</span>
+          <span>{{ $t('deploymentWizard.chooseRoles') }}</span>
+          <span>{{ $t('deploymentWizard.reviewDeploy') }}</span>
         </div>
       </div>
 
@@ -261,7 +262,7 @@ function getCategoryIcon(category: string): string {
       <div class="flex-1 overflow-y-auto px-6 py-4">
         <!-- Step 1: Select Node -->
         <div v-if="step === 1">
-          <h4 class="text-base font-medium text-gray-900 mb-4">Select Target Node</h4>
+          <h4 class="text-base font-medium text-gray-900 mb-4">{{ $t('deploymentWizard.selectTargetNode') }}</h4>
 
           <!-- Manual mode toggle -->
           <div v-if="nodes.length > 0" class="mb-4">
@@ -271,14 +272,14 @@ function getCategoryIcon(category: string): string {
                 type="checkbox"
                 class="rounded-sm border-gray-300 text-primary-600 focus:ring-primary-500"
               />
-              <span class="text-gray-700">Enter IP address manually</span>
+              <span class="text-gray-700">{{ $t('deploymentWizard.enterIPAddressManually') }}</span>
             </label>
           </div>
 
           <!-- Manual IP input -->
           <div v-if="manualMode" class="space-y-4">
             <div>
-              <label class="label">Hostname</label>
+              <label class="label">{{ $t('deploymentWizard.hostname') }}</label>
               <input
                 v-model="manualHostname"
                 type="text"
@@ -287,7 +288,7 @@ function getCategoryIcon(category: string): string {
               />
             </div>
             <div>
-              <label class="label">IP Address</label>
+              <label class="label">{{ $t('deploymentWizard.iPAddress') }}</label>
               <input
                 v-model="manualIp"
                 type="text"
@@ -296,15 +297,15 @@ function getCategoryIcon(category: string): string {
               />
             </div>
             <p class="text-sm text-gray-500">
-              The node will be registered automatically when you deploy.
+              {{ $t('deploymentWizard.theNodeWillBe') }}
             </p>
           </div>
 
           <!-- Node selection -->
           <div v-else class="space-y-2">
             <div v-if="nodes.length === 0" class="text-center py-8 text-gray-500">
-              <p>No nodes registered yet.</p>
-              <p class="text-sm mt-2">Switch to manual mode to enter an IP address.</p>
+              <p>{{ $t('deploymentWizard.noNodesRegisteredYet') }}</p>
+              <p class="text-sm mt-2">{{ $t('deploymentWizard.switchToManualMode') }}</p>
             </div>
             <div
               v-for="node in nodes"
@@ -352,7 +353,7 @@ function getCategoryIcon(category: string): string {
 
         <!-- Step 2: Select Roles -->
         <div v-else-if="step === 2">
-          <h4 class="text-base font-medium text-gray-900 mb-4">Select Roles to Deploy</h4>
+          <h4 class="text-base font-medium text-gray-900 mb-4">{{ $t('deploymentWizard.selectRolesToDeploy') }}</h4>
 
           <div v-if="isLoadingRoles" class="flex items-center justify-center py-8">
             <div class="animate-spin w-6 h-6 border-2 border-primary-600 border-t-transparent rounded-full" />
@@ -416,7 +417,7 @@ function getCategoryIcon(category: string): string {
 
         <!-- Step 3: Review -->
         <div v-else-if="step === 3">
-          <h4 class="text-base font-medium text-gray-900 mb-4">Review Deployment</h4>
+          <h4 class="text-base font-medium text-gray-900 mb-4">{{ $t('deploymentWizard.reviewDeployment') }}</h4>
 
           <!-- Error Message -->
           <div
@@ -428,10 +429,10 @@ function getCategoryIcon(category: string): string {
 
           <div class="space-y-4">
             <div class="p-4 bg-gray-50 rounded-lg">
-              <div class="text-sm text-gray-500 mb-1">Target Node</div>
+              <div class="text-sm text-gray-500 mb-1">{{ $t('deploymentWizard.targetNode') }}</div>
               <div v-if="manualMode" class="font-medium text-gray-900">
                 {{ manualHostname }} ({{ manualIp }})
-                <span class="text-xs text-gray-500 ml-2">(will be registered)</span>
+                <span class="text-xs text-gray-500 ml-2">{{ $t('deploymentWizard.willBeRegistered') }}</span>
               </div>
               <div v-else-if="selectedNode" class="font-medium text-gray-900">
                 {{ selectedNode.hostname }} ({{ selectedNode.ip_address }})
@@ -439,7 +440,7 @@ function getCategoryIcon(category: string): string {
             </div>
 
             <div class="p-4 bg-gray-50 rounded-lg">
-              <div class="text-sm text-gray-500 mb-2">Roles to Deploy</div>
+              <div class="text-sm text-gray-500 mb-2">{{ $t('deploymentWizard.rolesToDeploy') }}</div>
               <div class="flex flex-wrap gap-2">
                 <span
                   v-for="role in selectedRoles"
@@ -457,12 +458,12 @@ function getCategoryIcon(category: string): string {
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
                 <div class="text-sm text-blue-700">
-                  <p class="font-medium">What happens next?</p>
+                  <p class="font-medium">{{ $t('deploymentWizard.whatHappensNext') }}</p>
                   <ul class="mt-1 space-y-1 text-blue-600">
-                    <li>1. Ansible playbook will be generated</li>
-                    <li>2. SSH connection to target node established</li>
-                    <li>3. Roles will be installed and configured</li>
-                    <li>4. Services will be started and health-checked</li>
+                    <li>{{ $t('deploymentWizard.1AnsiblePlaybookWill') }}</li>
+                    <li>{{ $t('deploymentWizard.2SSHConnectionTo') }}</li>
+                    <li>{{ $t('deploymentWizard.3RolesWillBe') }}</li>
+                    <li>{{ $t('deploymentWizard.4ServicesWillBe') }}</li>
                   </ul>
                 </div>
               </div>
@@ -479,13 +480,13 @@ function getCategoryIcon(category: string): string {
           class="btn btn-secondary"
           :disabled="isDeploying"
         >
-          Back
+          {{ $t('deploymentWizard.back') }}
         </button>
         <div v-else></div>
 
         <div class="flex gap-3">
           <button @click="$emit('close')" class="btn btn-secondary" :disabled="isDeploying">
-            Cancel
+            {{ $t('deploymentWizard.cancel') }}
           </button>
           <button
             v-if="step < 3"
@@ -493,7 +494,7 @@ function getCategoryIcon(category: string): string {
             :disabled="(step === 1 && !canProceedStep1) || (step === 2 && !canProceedStep2)"
             class="btn btn-primary"
           >
-            Next
+            {{ $t('deploymentWizard.next') }}
           </button>
           <button
             v-else

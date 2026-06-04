@@ -17,27 +17,24 @@ Used for:
 - Debugging (why did this specific task fail?)
 """
 
-import logging
-from typing import Optional
-
 from fastapi import APIRouter, HTTPException, Query
 
 from api.schemas_system import (
     FailureAnalysisRequest,
     FailureAnalysisResponse,
-    HealthCheckResponse,
 )
 from api.system_health import register_singleton_probe
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from services.causal_inference_engine import CausalInferenceEngine
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Create router
 router = APIRouter(prefix="/api/diagnostics", tags=["diagnostics"])
 
 # Singleton engine instance
-_engine: Optional[CausalInferenceEngine] = None
+_engine: CausalInferenceEngine | None = None
 
 
 def get_engine() -> CausalInferenceEngine:
@@ -105,28 +102,6 @@ async def analyze_failure(request: FailureAnalysisRequest):
 register_singleton_probe("diagnostics", get_engine)
 
 
-@router.get("/health", response_model=HealthCheckResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="health_check",
-    error_code_prefix="DIAGNOSTICS",
-)
-async def health_check():
-    """
-    Check diagnostics service health.
-
-    Returns:
-        HealthCheckResponse with status and engine readiness
-    """
-    try:
-        get_engine()
-        # Engine is ready if it can be instantiated
-        return HealthCheckResponse(status="ok", engine_ready=True)
-    except Exception as e:
-        logger.error("Health check failed: %s", e)
-        return HealthCheckResponse(status="error", engine_ready=False)
-
-
 @router.get("/analyze-failure", response_model=FailureAnalysisResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -135,7 +110,7 @@ async def health_check():
 )
 async def analyze_failure_get(
     task_id: str = Query(..., description="Task ID to analyze"),
-    error_description: Optional[str] = Query(None, description="Optional error description"),
+    error_description: str | None = Query(None, description="Optional error description"),
 ):
     """
     Alternative GET endpoint for failure analysis (useful for integration testing).

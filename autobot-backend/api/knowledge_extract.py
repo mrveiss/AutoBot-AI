@@ -42,17 +42,17 @@ API contract::
     }
 """
 
-import logging
 from typing import Any, Dict, Literal
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+from autobot_shared.logging_manager import get_logger
 from web_fetch import FetchResult, RenderMode, WebFetcher
 from web_fetch.extractors import extract_url
 from web_fetch.ingest import ingest_markdown
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter()
 

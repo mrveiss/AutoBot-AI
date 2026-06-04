@@ -27,7 +27,7 @@
 - name: Enable log monitoring timer
   systemd:
     name: autobot-log-monitor.timer
-    enabled: yes
+    enabled: true
     state: started
-    daemon_reload: yes
+    daemon_reload: true
   when: enable_alerting

@@ -16,10 +16,11 @@ Tests cover:
 import os
 import sys
 import tempfile
-from datetime import datetime
 from unittest.mock import AsyncMock, patch
 
 import pytest
+
+from autobot_shared.datetime_utils import datetime_now
 
 # ---------------------------------------------------------------------------
 # Ensure the autobot-backend package root is on sys.path
@@ -69,7 +70,11 @@ def test_source_id_stable():
 
 
 def test_source_id_differs_for_different_sources():
-    assert _source_id_for("/tmp/a.mp3") != _source_id_for("/tmp/b.mp3")
+    assert _source_id_for(
+        "/tmp/a.mp3"
+    ) != _source_id_for(  # nosec B108 - test/controlled code uses tmpdir intentionally
+        "/tmp/b.mp3"  # nosec B108 - test/controlled code uses tmpdir intentionally
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -183,7 +188,7 @@ async def test_detect_changes_all_added():
 async def test_detect_changes_incremental_still_returns_all():
     """Audio sources are immutable — incremental sync re-indexes them."""
     connector = AudioConnector(_make_config(sources=["https://youtu.be/abc"]))
-    changes = await connector.detect_changes(since=datetime.utcnow())
+    changes = await connector.detect_changes(since=datetime_now())
     assert len(changes) == 1
 
 

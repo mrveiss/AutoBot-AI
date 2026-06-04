@@ -8,7 +8,7 @@ Helper functions for agent terminal operations.
 """
 
 import re
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from models.command_execution import CommandExecution, CommandState, RiskLevel
 from secure_command_executor import CommandRisk
@@ -66,7 +66,7 @@ def create_command_execution(
     risk: "CommandRisk",
     risk_reasons: list[str],
     is_interactive: bool = False,
-    interactive_reasons: Optional[list[str]] = None,
+    interactive_reasons: list[str] | None = None,
 ) -> CommandExecution:
     """
     Create CommandExecution object from session and command details.

@@ -8,15 +8,15 @@ Monitors system performance during workflow execution
 
 import asyncio
 import json
-import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List
 
 import psutil
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import parse_utc_iso
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class SystemResourceMonitor:

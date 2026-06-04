@@ -9,16 +9,17 @@ Adapts WebSocket connections to the unified Gateway message format.
 """
 
 import json
-import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from fastapi import WebSocket
 from starlette.websockets import WebSocketState
 
+from autobot_shared.logging_manager import get_logger
+
 from ..types import ChannelType, GatewaySession, MessageType, UnifiedMessage
 from .base import BaseChannelAdapter
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class WebSocketAdapter(BaseChannelAdapter):
@@ -28,7 +29,7 @@ class WebSocketAdapter(BaseChannelAdapter):
     Translates between WebSocket messages and unified Gateway messages.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize WebSocket adapter."""
         super().__init__(ChannelType.WEBSOCKET)
 
@@ -36,7 +37,7 @@ class WebSocketAdapter(BaseChannelAdapter):
         self,
         message: UnifiedMessage,
         session: GatewaySession,
-        connection_context: Optional[Any] = None,
+        connection_context: Any | None = None,
     ) -> bool:
         """
         Send message through WebSocket.
@@ -76,7 +77,7 @@ class WebSocketAdapter(BaseChannelAdapter):
         self,
         raw_data: Any,
         session: GatewaySession,
-    ) -> Optional[UnifiedMessage]:
+    ) -> UnifiedMessage | None:
         """
         Receive and parse WebSocket message.
 
@@ -136,7 +137,7 @@ class WebSocketAdapter(BaseChannelAdapter):
     async def disconnect(
         self,
         session: GatewaySession,
-        connection_context: Optional[Any] = None,
+        connection_context: Any | None = None,
     ) -> None:
         """
         Close WebSocket connection.
@@ -160,7 +161,7 @@ class WebSocketAdapter(BaseChannelAdapter):
     async def handle_heartbeat(
         self,
         session: GatewaySession,
-        connection_context: Optional[Any] = None,
+        connection_context: Any | None = None,
     ) -> bool:
         """
         Send WebSocket heartbeat/ping.

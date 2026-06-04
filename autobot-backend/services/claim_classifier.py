@@ -21,7 +21,7 @@ import asyncio
 import json
 import re
 import time
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Set
 
 from autobot_shared.logging_manager import get_llm_logger
 from autobot_shared.redis_client import get_async_redis_client
@@ -72,7 +72,7 @@ class ClaimClassifier:
         knowledge_base: Any,
         cache_ttl: int = CACHE_TTL_SECONDS,
         batch_semaphore_limit: int = BATCH_PROCESSING_SEMAPHORE_LIMIT,
-    ):
+    ) -> None:
         """
         Initialize ClaimClassifier.
 
@@ -84,8 +84,8 @@ class ClaimClassifier:
         self.kb = knowledge_base
         self.cache_ttl = cache_ttl
         self.batch_semaphore_limit = batch_semaphore_limit
-        self._semaphore: Optional[asyncio.Semaphore] = None
-        self._redis_client: Optional[Any] = None
+        self._semaphore: asyncio.Semaphore | None = None
+        self._redis_client: Any | None = None
         self._initialized = False
 
     async def _ensure_initialized(self) -> None:
@@ -383,9 +383,7 @@ class ClaimClassifier:
             logger.error(f"KB search failed for claim '{claim}': {e}")
             return []
 
-    def _evaluate_kb_results(
-        self, results: List[Dict[str, Any]]
-    ) -> tuple[KBStatus, float, List[KBSource], Optional[str]]:
+    def _evaluate_kb_results(self, results: List[Dict[str, Any]]) -> tuple[KBStatus, float, List[KBSource], str | None]:
         """
         Evaluate KB search results to determine status and confidence.
 
@@ -452,7 +450,7 @@ class ClaimClassifier:
         claim_hash = hashlib.sha256(claim.encode()).hexdigest()
         return f"claim:classification:{claim_hash}"
 
-    async def _get_from_cache(self, cache_key: str) -> Optional[Claim]:
+    async def _get_from_cache(self, cache_key: str) -> Claim | None:
         """Retrieve classification from Redis cache."""
         if not self._redis_client:
             return None

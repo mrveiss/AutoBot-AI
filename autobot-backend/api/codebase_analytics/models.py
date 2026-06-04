@@ -5,7 +5,7 @@
 Pydantic models for codebase analytics API
 """
 
-from typing import List, Optional
+from typing import List
 
 from pydantic import BaseModel
 
@@ -31,7 +31,7 @@ class ProblemItem(BaseModel):
     type: str
     severity: str
     file_path: str
-    line_number: Optional[int]
+    line_number: int | None
     description: str
     suggestion: str
 
@@ -55,7 +55,7 @@ class DeclarationItem(BaseModel):
     line_number: int
     usage_count: int
     is_exported: bool
-    parameters: Optional[List[str]]
+    parameters: List[str] | None
 
 
 # =============================================================================
@@ -71,8 +71,8 @@ class APIEndpointItem(BaseModel):
     file_path: str  # Source file containing the endpoint
     line_number: int  # Line number of decorator
     function_name: str  # Handler function name
-    router_prefix: Optional[str] = None  # Router prefix if any
-    tags: Optional[List[str]] = None  # API tags
+    router_prefix: str | None = None  # Router prefix if any
+    tags: List[str] | None = None  # API tags
     is_async: bool = False  # Whether handler is async
 
 
@@ -83,7 +83,7 @@ class FrontendAPICallItem(BaseModel):
     path: str  # API path called (may include variables)
     file_path: str  # Source file containing the call
     line_number: int  # Line number of call
-    context: Optional[str] = None  # Surrounding code context
+    context: str | None = None  # Surrounding code context
     is_dynamic: bool = False  # True if path contains variables/templates
 
 
@@ -103,7 +103,7 @@ class EndpointMismatchItem(BaseModel):
     path: str
     file_path: str
     line_number: int
-    details: Optional[str] = None
+    details: str | None = None
 
 
 class APIEndpointAnalysis(BaseModel):
@@ -145,8 +145,8 @@ class DTOMismatchItem(BaseModel):
     mismatch_id: str
     backend_type: str
     frontend_type: str
-    backend_location: Optional[PatternLocationItem] = None
-    frontend_location: Optional[PatternLocationItem] = None
+    backend_location: PatternLocationItem | None = None
+    frontend_location: PatternLocationItem | None = None
     field_name: str
     mismatch_type: str  # "missing_field", "type_mismatch", "optional_mismatch"
     backend_definition: str = ""
@@ -160,8 +160,8 @@ class ValidationDuplicationItem(BaseModel):
 
     duplication_id: str
     validation_type: str  # "email", "phone", "required", etc.
-    python_location: Optional[PatternLocationItem] = None
-    typescript_location: Optional[PatternLocationItem] = None
+    python_location: PatternLocationItem | None = None
+    typescript_location: PatternLocationItem | None = None
     python_code: str = ""
     typescript_code: str = ""
     similarity_score: float = 0.0
@@ -176,8 +176,8 @@ class APIContractMismatchItem(BaseModel):
     endpoint_path: str
     http_method: str
     mismatch_type: str  # "missing_endpoint", "orphaned_endpoint", "method_mismatch"
-    backend_location: Optional[PatternLocationItem] = None
-    frontend_location: Optional[PatternLocationItem] = None
+    backend_location: PatternLocationItem | None = None
+    frontend_location: PatternLocationItem | None = None
     backend_definition: str = ""
     frontend_call: str = ""
     severity: str = "critical"
@@ -190,8 +190,8 @@ class PatternMatchItem(BaseModel):
 
     pattern_id: str
     similarity_score: float  # 0.0 to 1.0
-    source_location: Optional[PatternLocationItem] = None
-    target_location: Optional[PatternLocationItem] = None
+    source_location: PatternLocationItem | None = None
+    target_location: PatternLocationItem | None = None
     source_code: str = ""
     target_code: str = ""
     match_type: str = "semantic"  # "semantic", "structural", "exact"

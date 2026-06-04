@@ -7,9 +7,8 @@ Integrates with VirusTotal, URLVoid, and threat intelligence feeds
 """
 
 import asyncio
-import logging
 import time
-from typing import Dict, List, Optional
+from typing import Dict, List
 from urllib.parse import urlparse
 
 import aiohttp
@@ -17,9 +16,10 @@ import yaml
 from cachetools import TTLCache
 
 from autobot_shared.http_client import get_http_client
+from autobot_shared.logging_manager import get_logger
 from constants.path_constants import PATH
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class DomainReputationService:
@@ -104,7 +104,7 @@ class DomainReputationService:
         """Parse text format threat feed (Issue #315 - extracted helper)."""
         return set(line.strip() for line in content.split("\n") if line.strip() and not line.startswith("#"))
 
-    def _parse_feed_content(self, content: str, feed_format: str) -> Optional[set]:
+    def _parse_feed_content(self, content: str, feed_format: str) -> set | None:
         """Parse feed content based on format (Issue #315 - extracted helper)."""
         format_parsers = {
             "text": self._parse_text_feed,
@@ -177,7 +177,7 @@ class DomainReputationService:
             return False
         return True
 
-    async def check_domain_reputation(self, domain: str, context: Optional[Dict] = None) -> Dict:
+    async def check_domain_reputation(self, domain: str, context: Dict | None = None) -> Dict:
         """
         Comprehensive domain reputation check using multiple sources
 
@@ -207,7 +207,7 @@ class DomainReputationService:
 
         return result
 
-    async def _perform_reputation_check(self, domain: str, context: Optional[Dict]) -> Dict:
+    async def _perform_reputation_check(self, domain: str, context: Dict | None) -> Dict:
         """Perform multi-source reputation check"""
         checks = {
             "domain": domain,
@@ -344,7 +344,7 @@ class DomainReputationService:
 
         return service_config.get("enabled", False) and service_config.get("api_key", "")
 
-    async def _check_virustotal(self, domain: str) -> Optional[Dict]:
+    async def _check_virustotal(self, domain: str) -> Dict | None:
         """Check domain reputation with VirusTotal API"""
         try:
             config = self.config["domain_security"]["reputation_services"]["virustotal"]
@@ -383,7 +383,7 @@ class DomainReputationService:
 
         return None
 
-    async def _check_urlvoid(self, domain: str) -> Optional[Dict]:
+    async def _check_urlvoid(self, domain: str) -> Dict | None:
         """Check domain reputation with URLVoid API"""
         try:
             config = self.config["domain_security"]["reputation_services"]["urlvoid"]
@@ -446,7 +446,7 @@ class DomainReputationService:
 
         return "allow"
 
-    def _log_security_event(self, domain: str, checks: Dict, context: Optional[Dict]):
+    def _log_security_event(self, domain: str, checks: Dict, context: Dict | None):
         """Log security event for threat detection"""
         if checks["action"] == "block":
             self.stats["blocked_domains"] += 1
@@ -463,7 +463,7 @@ class DomainReputationService:
             "cache_hit_rate": (self.stats["cache_hits"] / max(1, self.stats["total_checks"])),
         }
 
-    async def bulk_check_domains(self, domains: List[str], context: Optional[Dict] = None) -> List[Dict]:
+    async def bulk_check_domains(self, domains: List[str], context: Dict | None = None) -> List[Dict]:
         """Check multiple domains concurrently"""
         max_concurrent = self.config.get("performance", {}).get("concurrent_checks", 5)
         semaphore = asyncio.Semaphore(max_concurrent)

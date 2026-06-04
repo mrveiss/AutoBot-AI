@@ -37,9 +37,7 @@ npu:
       enabled: true
       priority: 5
 """
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".yaml", delete=False, encoding="utf-8"
-    ) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False, encoding="utf-8") as f:
         f.write(config_content)
         f.flush()  # Ensure content is written before yield
         config_path = f.name
@@ -60,9 +58,7 @@ npu:
       enabled: true
       priority: 10
 """
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".yaml", delete=False, encoding="utf-8"
-    ) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False, encoding="utf-8") as f:
         f.write(config_content)
         f.flush()  # Ensure content is written before yield
         config_path = f.name
@@ -136,12 +132,8 @@ async def test_load_distribution_with_concurrent_tasks(two_worker_config_file):
         await asyncio.sleep(0.1)
         return {"success": True, "result": "completed"}
 
-    pool.workers["primary-worker"].client.offload_heavy_processing = AsyncMock(
-        side_effect=slow_response
-    )
-    pool.workers["secondary-worker"].client.offload_heavy_processing = AsyncMock(
-        side_effect=slow_response
-    )
+    pool.workers["primary-worker"].client.offload_heavy_processing = AsyncMock(side_effect=slow_response)
+    pool.workers["secondary-worker"].client.offload_heavy_processing = AsyncMock(side_effect=slow_response)
 
     # Simulate primary being busy
     pool.workers["primary-worker"].active_tasks = 5
@@ -172,9 +164,7 @@ async def test_circuit_opens_after_consecutive_failures(single_worker_config_fil
     pool = NPUWorkerPool(config_path=single_worker_config_file)
 
     # Configure worker to fail
-    pool.workers["solo-worker"].client.offload_heavy_processing = AsyncMock(
-        side_effect=Exception("Connection refused")
-    )
+    pool.workers["solo-worker"].client.offload_heavy_processing = AsyncMock(side_effect=Exception("Connection refused"))
 
     # Execute tasks until circuit opens (5 failures threshold)
     for _ in range(5):
@@ -223,9 +213,7 @@ async def test_health_monitor_updates_worker_status(single_worker_config_file):
     pool = NPUWorkerPool(config_path=single_worker_config_file)
 
     # Mock health check to return healthy
-    pool.workers["solo-worker"].client.check_health = AsyncMock(
-        return_value={"status": "healthy", "models_loaded": 3}
-    )
+    pool.workers["solo-worker"].client.check_health = AsyncMock(return_value={"status": "healthy", "models_loaded": 3})
 
     # Run a single health check cycle
     await pool._check_worker_health(pool.workers["solo-worker"])
@@ -242,9 +230,7 @@ async def test_health_monitor_marks_unhealthy_on_failure(single_worker_config_fi
     pool = NPUWorkerPool(config_path=single_worker_config_file)
 
     # Mock health check to fail
-    pool.workers["solo-worker"].client.check_health = AsyncMock(
-        side_effect=Exception("Health check timeout")
-    )
+    pool.workers["solo-worker"].client.check_health = AsyncMock(side_effect=Exception("Health check timeout"))
 
     # Run a single health check cycle
     await pool._check_worker_health(pool.workers["solo-worker"])
@@ -288,9 +274,7 @@ npu:
       enabled: true
       priority: 10
 """
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".yaml", delete=False, encoding="utf-8"
-    ) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False, encoding="utf-8") as f:
         f.write(initial_config)
         config_path = f.name
 
@@ -344,9 +328,7 @@ npu:
       enabled: true
       priority: 5
 """
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".yaml", delete=False, encoding="utf-8"
-    ) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False, encoding="utf-8") as f:
         f.write(initial_config)
         config_path = f.name
 
@@ -414,9 +396,7 @@ async def test_pool_stats_accurate_after_operations(two_worker_config_file):
     pool.workers["primary-worker"].client.offload_heavy_processing = AsyncMock(
         return_value={"success": True, "result": "ok"}
     )
-    pool.workers["secondary-worker"].client.offload_heavy_processing = AsyncMock(
-        side_effect=Exception("Failed")
-    )
+    pool.workers["secondary-worker"].client.offload_heavy_processing = AsyncMock(side_effect=Exception("Failed"))
 
     # Execute some tasks
     await pool.execute_task("test", {"data": "1"})
@@ -442,9 +422,7 @@ async def test_graceful_degradation_all_workers_fail(two_worker_config_file):
     pool = NPUWorkerPool(config_path=two_worker_config_file)
 
     # Both workers fail
-    pool.workers["primary-worker"].client.offload_heavy_processing = AsyncMock(
-        side_effect=Exception("Primary down")
-    )
+    pool.workers["primary-worker"].client.offload_heavy_processing = AsyncMock(side_effect=Exception("Primary down"))
     pool.workers["secondary-worker"].client.offload_heavy_processing = AsyncMock(
         side_effect=Exception("Secondary down")
     )

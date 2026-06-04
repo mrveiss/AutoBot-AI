@@ -2,7 +2,7 @@
 <template>
   <div class="pipeline-config">
     <div class="config-header">
-      <h4><i class="fas fa-sliders-h"></i> {{ $t('knowledge.pipeline.config.title') }}</h4>
+      <h4><Icon name="sliders-h" /> {{ $t('knowledge.pipeline.config.title') }}</h4>
       <p class="header-description">
         {{ $t('knowledge.pipeline.config.description') }}
       </p>
@@ -27,7 +27,7 @@
                 class="toggle-input"
               />
               <label :for="`stage-${stage.id}`" class="toggle-label">
-                <i :class="stage.icon"></i>
+                <Icon :name="stage.icon" />
                 {{ stage.name }}
               </label>
             </div>
@@ -107,7 +107,7 @@
     <!-- Generated Config Preview -->
     <div class="preview-section">
       <h5>
-        <i class="fas fa-code"></i>
+        <Icon name="code" />
         {{ $t('knowledge.pipeline.config.configurationPreview') }}
       </h5>
       <pre class="config-preview">{{ configPreview }}</pre>
@@ -116,10 +116,10 @@
     <!-- Actions -->
     <div class="config-actions">
       <button class="action-btn secondary" @click="resetDefaults">
-        <i class="fas fa-undo"></i> {{ $t('knowledge.pipeline.config.resetDefaults') }}
+        <Icon name="undo" /> {{ $t('knowledge.pipeline.config.resetDefaults') }}
       </button>
       <button class="action-btn primary" @click="emitConfig">
-        <i class="fas fa-check"></i> {{ $t('knowledge.pipeline.config.applyConfiguration') }}
+        <Icon name="check" /> {{ $t('knowledge.pipeline.config.applyConfiguration') }}
       </button>
     </div>
   </div>
@@ -130,6 +130,7 @@
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
 
+import Icon from '@/components/ui/Icon.vue'
 import { ref, reactive, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
@@ -161,7 +162,7 @@ const stages = reactive<Stage[]>([
   {
     id: 'extract',
     name: t('knowledge.pipeline.config.stageExtract'),
-    icon: 'fas fa-file-alt',
+    icon: 'file-alt',
     description: t('knowledge.pipeline.config.stageExtractDesc'),
     enabled: true,
     tasks: [
@@ -173,7 +174,7 @@ const stages = reactive<Stage[]>([
   {
     id: 'cognify',
     name: t('knowledge.pipeline.config.stageCognify'),
-    icon: 'fas fa-brain',
+    icon: 'brain',
     description: t('knowledge.pipeline.config.stageCognifyDesc'),
     enabled: true,
     tasks: [
@@ -186,7 +187,7 @@ const stages = reactive<Stage[]>([
   {
     id: 'load',
     name: t('knowledge.pipeline.config.stageLoad'),
-    icon: 'fas fa-database',
+    icon: 'database',
     description: t('knowledge.pipeline.config.stageLoadDesc'),
     enabled: true,
     tasks: [

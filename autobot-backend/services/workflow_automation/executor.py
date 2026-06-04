@@ -7,15 +7,18 @@ Workflow Execution Module
 Handles workflow step execution, dependency checking, and command execution.
 """
 
+from __future__ import annotations
+
 import asyncio
-import logging
 import re
 import time
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any, Callable, Dict, FrozenSet, Optional
+from typing import TYPE_CHECKING, Any, Callable, Dict, FrozenSet
 
+from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import TimingConstants
 from monitoring.prometheus_metrics import get_metrics_manager
+from orchestration.success_criteria import SuccessCriteriaEvaluator
 from services.workflow_secret_service import get_workflow_secret_service
 from type_defs.common import Metadata
 
@@ -42,7 +45,7 @@ if TYPE_CHECKING:
     from .messaging import WorkflowMessenger
 
 # Lazy import to avoid circular dependency at module level.
-_notification_event_mod: Optional[type] = None
+_notification_event_mod: type | None = None
 
 
 def _get_notification_event():
@@ -55,7 +58,7 @@ def _get_notification_event():
     return _notification_event_mod
 
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -186,19 +189,22 @@ class WorkflowExecutor:
     def __init__(
         self,
         messenger: "WorkflowMessenger",
-        notification_service: Optional["NotificationService"] = None,
-    ):
+        notification_service: "NotificationService" | None = None,
+        criteria_evaluator: SuccessCriteriaEvaluator | None = None,
+    ) -> None:
         """Initialize executor with messenger and step evaluator."""
         self.messenger = messenger
         # Issue #3101: Notification service for workflow lifecycle events.
         self._notification_service = notification_service
+        # GH #7887: optional success criteria evaluator (injected from manager in prod)
+        self._criteria_evaluator = criteria_evaluator
         self.step_evaluator = WorkflowStepEvaluator()
         self.prometheus_metrics = get_metrics_manager()
         # Issue #390: Track pending plan approvals
         self._pending_plan_approvals: Dict[str, PlanApprovalRequest] = {}
         self._plan_approval_events: Dict[str, asyncio.Event] = {}
         # Issue #1367: Called when a workflow finishes (completed/cancelled)
-        self.on_workflow_finished: Optional[Callable[[str], None]] = None
+        self.on_workflow_finished: Callable[[str], None] | None = None
         # Issue #1380: State machine for explicit routing
         self.state_machine = WorkflowStateMachine()
         # Issue #2159: Safety limits infrastructure
@@ -426,7 +432,7 @@ class WorkflowExecutor:
         self,
         workflow: ActiveWorkflow,
         to_phase: str,
-        error: Optional[str] = None,
+        error: str | None = None,
     ) -> None:
         """Transition workflow state machine and sync phase."""
         try:

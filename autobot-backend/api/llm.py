@@ -1,8 +1,14 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
+"""
+LLM configuration and model-listing endpoints.
+
+Exposes GET/POST routes for querying available language models, reading
+current LLM config, and selecting the active model.
+"""
+
 import asyncio
-import logging
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
@@ -15,8 +21,21 @@ from api.schemas_agent import (
     LLMModelsResponse,
 )
 from api.schemas_common import DataResponse
+from api.schemas_workflows import (
+    LLMCacheClearData,
+    LLMComprehensiveStatusData,
+    LLMDeprecatedData,
+    LLMProviderHealthData,
+    LLMProvidersHealthData,
+    LLMQuickStatusData,
+    LLMTieredMetricsResetData,
+    LLMTieredRoutingConfigData,
+    LLMTieredRoutingMetricsData,
+    LLMTieredRoutingUpdateData,
+)
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config as ssot_config
 from autobot_shared.time_utils import now_utc
 from config.manager import get_config_manager
@@ -24,6 +43,7 @@ from config.manager import get_config_manager
 # Import unified configuration system - NO HARDCODED VALUES
 from constants.model_constants import ModelConstants
 from services.config_service import ConfigService
+from services.llm_service import get_llm_service
 
 # Import caching utilities from unified cache manager (P4 Cache Consolidation)
 from utils.advanced_cache_manager import cache_response
@@ -33,23 +53,11 @@ config = get_config_manager()
 
 router = APIRouter()
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Performance optimization: O(1) lookup for embedding model detection (Issue #326)
 EMBEDDING_MODEL_PATTERNS = {"embed", "nomic", "all-minilm", "sentence"}
 TEXT_MODEL_SIZE_INDICATORS = {"small", "large", "medium"}
-
-
-def _get_llm_interface():
-    """Return the LLMService singleton (#3185).
-
-    Name retained for backwards compatibility — callers below access
-    ``_tier_router`` which LLMService exposes alongside the public
-    ``tier_router`` property.
-    """
-    from services.llm_service import get_llm_service
-
-    return get_llm_service()
 
 
 @router.get("/config", response_model=LLMConfigResponse)
@@ -72,7 +80,7 @@ async def get_llm_config(
         raise HTTPException(status_code=500, detail="Error getting LLM config")
 
 
-@router.post("/config", response_model=DataResponse)
+@router.post("/config", response_model=DataResponse[LLMDeprecatedData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="update_llm_config",
@@ -230,7 +238,7 @@ def _build_llm_update_response() -> dict:
     }
 
 
-@router.post("/provider", response_model=DataResponse)
+@router.post("/provider", response_model=DataResponse[LLMDeprecatedData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="update_llm_provider",
@@ -330,7 +338,7 @@ async def _apply_embedding_config(provider: str, model: str, embedding_data: dic
     await asyncio.to_thread(config.save_config_to_yaml)
 
 
-@router.post("/embedding", response_model=DataResponse)
+@router.post("/embedding", response_model=DataResponse[LLMDeprecatedData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="update_embedding_model",
@@ -456,7 +464,7 @@ def _build_active_provider_info(provider_type: str, local_config: dict, cloud_co
     }
 
 
-@router.get("/status/comprehensive", response_model=DataResponse)
+@router.get("/status/comprehensive", response_model=DataResponse[LLMComprehensiveStatusData])
 @cache_response(cache_key="llm_status_comprehensive", ttl=30)  # Cache for 30 seconds
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -504,7 +512,7 @@ async def get_comprehensive_llm_status(
         return JSONResponse(status_code=500, content={"error": "Failed to get LLM status"})
 
 
-@router.get("/status", response_model=DataResponse)
+@router.get("/status", response_model=DataResponse[LLMQuickStatusData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_llm_status",
@@ -566,7 +574,7 @@ def _get_model_from_cloud_config(unified_config: dict) -> str:
     return model if (api_key and model) else ""
 
 
-@router.get("/status/quick", response_model=DataResponse)
+@router.get("/status/quick", response_model=DataResponse[LLMQuickStatusData])
 @cache_response(cache_key="llm_status_quick", ttl=15)  # Cache for 15 seconds
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -635,7 +643,7 @@ def _build_providers_health_dict(results: dict) -> tuple:
     return providers_health, available_count
 
 
-@router.get("/health/providers", response_model=DataResponse)
+@router.get("/health/providers", response_model=DataResponse[LLMProvidersHealthData])
 @cache_response(cache_key="llm_providers_health", ttl=30)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -689,7 +697,7 @@ async def get_all_providers_health():
         )
 
 
-@router.get("/health/providers/{provider_name}", response_model=DataResponse)
+@router.get("/health/providers/{provider_name}", response_model=DataResponse[LLMProviderHealthData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_provider_health",
@@ -745,7 +753,7 @@ async def get_provider_health(provider_name: str, use_cache: bool = True):
         )
 
 
-@router.post("/health/providers/clear-cache", response_model=DataResponse)
+@router.post("/health/providers/clear-cache", response_model=DataResponse[LLMCacheClearData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="clear_provider_health_cache",
@@ -797,7 +805,7 @@ async def clear_provider_health_cache(
 # ============================================================================
 
 
-@router.get("/tiered-routing/metrics", response_model=DataResponse)
+@router.get("/tiered-routing/metrics", response_model=DataResponse[LLMTieredRoutingMetricsData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_tiered_routing_metrics",
@@ -823,7 +831,7 @@ async def get_tiered_routing_metrics(
         - fallback_count: Times simple tier failed and escalated
     """
     try:
-        llm_interface = _get_llm_interface()
+        llm_interface = get_llm_service()
 
         if not hasattr(llm_interface, "_tier_router") or not llm_interface._tier_router:
             return JSONResponse(
@@ -852,7 +860,7 @@ async def get_tiered_routing_metrics(
         )
 
 
-@router.get("/tiered-routing/config", response_model=DataResponse)
+@router.get("/tiered-routing/config", response_model=DataResponse[LLMTieredRoutingConfigData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_tiered_routing_config",
@@ -876,7 +884,7 @@ async def get_tiered_routing_config(
         - logging: Logging configuration
     """
     try:
-        llm_interface = _get_llm_interface()
+        llm_interface = get_llm_service()
 
         if not hasattr(llm_interface, "_tier_router") or not llm_interface._tier_router:
             return JSONResponse(
@@ -976,7 +984,7 @@ def _build_tiered_routing_response(tier_router) -> dict:
     }
 
 
-@router.post("/tiered-routing/config", response_model=DataResponse)
+@router.post("/tiered-routing/config", response_model=DataResponse[LLMTieredRoutingUpdateData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="update_tiered_routing_config",
@@ -1004,7 +1012,7 @@ async def update_tiered_routing_config(
         Updated configuration and confirmation message
     """
     try:
-        llm_interface = _get_llm_interface()
+        llm_interface = get_llm_service()
         tier_router = _get_tier_router(llm_interface)
         _apply_tiered_routing_updates(tier_router, config_data)
         logger.info("Tiered routing configuration updated: %s", config_data)
@@ -1023,7 +1031,7 @@ async def update_tiered_routing_config(
         )
 
 
-@router.post("/tiered-routing/metrics/reset", response_model=DataResponse)
+@router.post("/tiered-routing/metrics/reset", response_model=DataResponse[LLMTieredMetricsResetData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="reset_tiered_routing_metrics",
@@ -1042,7 +1050,7 @@ async def reset_tiered_routing_metrics(
         Confirmation of metrics reset
     """
     try:
-        llm_interface = _get_llm_interface()
+        llm_interface = get_llm_service()
 
         if not hasattr(llm_interface, "_tier_router") or not llm_interface._tier_router:
             raise HTTPException(

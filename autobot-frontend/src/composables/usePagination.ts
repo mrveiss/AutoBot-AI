@@ -273,7 +273,7 @@ export function usePagination<T = unknown>(
   const paginatedData = computed(() => {
     // Server-side: use provided page data
     if (isServerSide && serverPageData) {
-      return serverPageData
+      return serverPageData as T[]
     }
 
     // Client-side: slice the data array

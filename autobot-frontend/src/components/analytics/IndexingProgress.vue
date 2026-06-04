@@ -2,7 +2,7 @@
   <div v-if="analyzing" class="progress-container">
     <div class="progress-header">
       <div class="progress-title">
-        <i class="fas fa-spinner fa-spin"></i>
+        <Icon name="spinner" class="animate-spin" />
         {{ $t('analytics.indexing.inProgress') }}
       </div>
       <div v-if="currentJobId" class="job-id">{{ $t('analytics.indexing.jobId') }} {{ currentJobId.substring(0, 8) }}...</div>
@@ -20,7 +20,7 @@
           'phase-pending': phase.status === 'pending'
         }"
       >
-        <i :class="getPhaseIcon(phase.status)"></i>
+        <Icon :name="getPhaseIcon(phase.status)" />
         <span>{{ phase.name }}</span>
       </div>
     </div>
@@ -48,23 +48,23 @@
     <!-- Live Stats -->
     <div v-if="jobStats" class="live-stats">
       <div class="stat-item">
-        <i class="fas fa-file-code"></i>
+        <Icon name="file-code" />
         <span>{{ jobStats.files_scanned }} {{ $t('analytics.indexing.files') }}</span>
       </div>
       <div class="stat-item">
-        <i class="fas fa-exclamation-triangle"></i>
+        <Icon name="exclamation-triangle" />
         <span>{{ jobStats.problems_found }} {{ $t('analytics.indexing.problems') }}</span>
       </div>
       <div class="stat-item">
-        <i class="fas fa-code"></i>
+        <Icon name="code" />
         <span>{{ jobStats.functions_found }} {{ $t('analytics.indexing.functions') }}</span>
       </div>
       <div class="stat-item">
-        <i class="fas fa-cubes"></i>
+        <Icon name="cubes" />
         <span>{{ jobStats.classes_found }} {{ $t('analytics.indexing.classes') }}</span>
       </div>
       <div class="stat-item" v-if="jobStats.items_stored > 0">
-        <i class="fas fa-database"></i>
+        <Icon name="database" />
         <span>{{ jobStats.items_stored }} {{ $t('analytics.indexing.stored') }}</span>
       </div>
     </div>
@@ -74,7 +74,7 @@
   <div v-if="analyzingCodeSmells" class="progress-container code-smells-progress">
     <div class="progress-header">
       <div class="progress-title">
-        <i class="fas fa-spinner fa-spin"></i>
+        <Icon name="spinner" class="animate-spin" />
         {{ codeSmellsProgressTitle }}
       </div>
     </div>
@@ -98,6 +98,7 @@
  * Issue #184: Split oversized Vue components
  * Issue #704: Migrated to design tokens
  */
+import Icon from '@/components/ui/Icon.vue'
 
 interface Phase {
   id: string
@@ -138,10 +139,10 @@ defineProps<Props>()
 
 const getPhaseIcon = (status: string): string => {
   switch (status) {
-    case 'completed': return 'fas fa-check-circle'
-    case 'running': return 'fas fa-spinner fa-spin'
+    case 'completed': return 'check-circle'
+    case 'running': return 'spinner'
     case 'pending':
-    default: return 'fas fa-circle'
+    default: return 'circle'
   }
 }
 </script>

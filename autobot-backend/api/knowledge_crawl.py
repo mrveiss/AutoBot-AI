@@ -34,17 +34,17 @@ API contract::
     }
 """
 
-import logging
-from typing import Any, Dict, List, Literal
+from typing import Any, Dict, List, Literal, Optional
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+from autobot_shared.logging_manager import get_logger
 from knowledge.connectors.models import ConnectorConfig
 from knowledge.connectors.web_crawler import WebCrawlerConnector
 from web_fetch import FetchResult, RenderMode
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter()
 
@@ -61,6 +61,11 @@ class CrawlRequest(BaseModel):
     ingest: bool = Field(default=True, description="Index crawled pages into ChromaDB")
     same_origin: bool = Field(default=True, description="Restrict crawl to same scheme+host per seed")
     render: Literal["auto", "fast", "playwright"] = Field(default="auto", description="Render mode")
+    # Issue #5136 Phase 4: run a scrape template on every crawled URL and merge
+    # region-extracted fields into the KB document.
+    scrape_template_id: Optional[str] = Field(
+        default=None, description="UUID of a ScrapeTemplate to apply to every crawled page"
+    )
 
 
 class CrawlPageEntry(BaseModel):
@@ -146,4 +151,27 @@ async def crawl_url_endpoint(request: CrawlRequest) -> CrawlResponse:
         ) from exc
 
     pages = _fetch_results_to_pages(results)
+
+    # Issue #5136 Phase 4: apply scrape template to each crawled page if requested
+    if request.scrape_template_id:
+        try:
+            from api.scrape_templates import _load_template, _run_template_on_url
+
+            template = await _load_template(request.scrape_template_id)
+            if template is None:
+                logger.warning(
+                    "scrape_template_id %s not found — skipping region extraction", request.scrape_template_id
+                )
+            else:
+                for page in pages:
+                    if page.get("success") and page.get("url"):
+                        try:
+                            region_data = await _run_template_on_url(template, page["url"])
+                            page["scrape_regions"] = region_data
+                        except Exception as exc:
+                            logger.warning("Template run failed for %s: %s", page["url"], exc)
+                            page["scrape_regions"] = {}
+        except Exception as exc:
+            logger.warning("scrape_template integration failed: %s", exc)
+
     return CrawlResponse(pages=pages, count=len(pages), indexed=request.ingest)

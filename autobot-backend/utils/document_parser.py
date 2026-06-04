@@ -7,11 +7,12 @@ Supports: PDF, DOC, DOCX, XLSX, PPT, PPTX, ODT, ODS, ODP, ODG
 """
 
 import asyncio
-import logging
 from pathlib import Path
-from typing import Dict, Optional, Tuple
+from typing import Dict, Tuple
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 
 # Performance optimization: O(1) lookup for file extension checks (Issue #326)
 DOCX_EXTENSIONS = {".docx"}
@@ -40,7 +41,7 @@ class DocumentParser:
             ".odg": "application/vnd.oasis.opendocument.graphics",
         }
 
-    async def extract_text(self, file_path: Path, mime_type: Optional[str] = None) -> Tuple[str, Dict[str, any]]:
+    async def extract_text(self, file_path: Path, mime_type: str | None = None) -> Tuple[str, Dict[str, any]]:
         """
         Extract text from document
 

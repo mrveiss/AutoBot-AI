@@ -265,6 +265,49 @@ describe('usePollingJob', () => {
     stop()
   })
 
+  it('stops after consecutiveErrorLimit consecutive errors (#6765 circuit-breaker)', async () => {
+    const fetcher = vi.fn().mockRejectedValue(new Error('404 Not Found'))
+    const { start, isPolling, error, attempts } = usePollingJob(fetcher, {
+      intervalMs: 100,
+      consecutiveErrorLimit: 3
+    })
+
+    start('task-404')
+    await vi.advanceTimersByTimeAsync(0)
+    await vi.advanceTimersByTimeAsync(100)
+    await vi.advanceTimersByTimeAsync(100)
+
+    expect(attempts.value).toBe(3)
+    expect(isPolling.value).toBe(false)
+    expect(error.value?.message).toBe('404 Not Found')
+
+    await vi.advanceTimersByTimeAsync(500)
+    expect(fetcher).toHaveBeenCalledTimes(3)
+  })
+
+  it('resets consecutive error count on success (circuit-breaker survives recovery)', async () => {
+    const fetcher = vi.fn()
+      .mockRejectedValueOnce(new Error('blip'))
+      .mockRejectedValueOnce(new Error('blip'))
+      .mockResolvedValueOnce({ status: 'OK' })
+      .mockRejectedValueOnce(new Error('blip'))
+      .mockRejectedValueOnce(new Error('blip'))
+    const { start, isPolling, attempts } = usePollingJob(fetcher, {
+      intervalMs: 50,
+      consecutiveErrorLimit: 3
+    })
+
+    start('task-recovery')
+    await vi.advanceTimersByTimeAsync(0)   // error #1
+    await vi.advanceTimersByTimeAsync(50)  // error #2
+    await vi.advanceTimersByTimeAsync(50)  // success → resets counter
+    await vi.advanceTimersByTimeAsync(50)  // error #1 again
+    await vi.advanceTimersByTimeAsync(50)  // error #2 again — still below limit 3
+
+    expect(isPolling.value).toBe(true)
+    expect(attempts.value).toBe(5)
+  })
+
   it('picks up updated Ref<number> value when start() is called again', async () => {
     const fetcher = vi.fn().mockResolvedValue({ status: 'PENDING' })
     const intervalRef = ref(1000)

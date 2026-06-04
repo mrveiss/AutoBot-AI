@@ -11,21 +11,21 @@ Part of Issue #381 - God Class Refactoring
 
 import asyncio
 import functools
-import logging
 from datetime import datetime, timezone
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict
 
+from autobot_shared.logging_manager import get_logger
 from constants.ttl_constants import TTL_24_HOURS
 
 from .types import REDIS_METRIC_KEYS, SIGNIFICANT_INTERACTIONS
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 async def track_error_to_redis(
     redis_client: Any,
     error: Exception,
-    context: Optional[Dict[str, Any]] = None,
+    context: Dict[str, Any] | None = None,
 ) -> None:
     """Track an error occurrence to Redis for error rate calculation"""
     try:
@@ -49,7 +49,7 @@ async def track_api_call_to_redis(
     redis_client: Any,
     endpoint: str,
     method: str = "GET",
-    response_status: Optional[int] = None,
+    response_status: int | None = None,
 ) -> None:
     """Track an API call to Redis for metrics"""
     try:
@@ -79,8 +79,8 @@ async def track_api_call_to_redis(
 async def track_user_interaction_to_redis(
     redis_client: Any,
     interaction_type: str,
-    user_id: Optional[str] = None,
-    context: Optional[Dict[str, Any]] = None,
+    user_id: str | None = None,
+    context: Dict[str, Any] | None = None,
 ) -> None:
     """Track a user interaction to Redis for metrics"""
     try:

@@ -10,7 +10,7 @@ In multi_company and provider modes, each organization is isolated.
 
 import uuid
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from sqlalchemy import Boolean, DateTime, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -59,7 +59,7 @@ class Organization(Base, TimestampMixin):
         index=True,
     )
 
-    description: Mapped[Optional[str]] = mapped_column(
+    description: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
@@ -72,7 +72,7 @@ class Organization(Base, TimestampMixin):
     )
 
     # Provider mode: subscription management
-    subscription_tier: Mapped[Optional[str]] = mapped_column(
+    subscription_tier: Mapped[str | None] = mapped_column(
         String(50),
         nullable=True,
         default="free",
@@ -92,7 +92,7 @@ class Organization(Base, TimestampMixin):
     )
 
     # Soft delete
-    deleted_at: Mapped[Optional[datetime]] = mapped_column(
+    deleted_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )

@@ -88,8 +88,8 @@ function getSortIcon(key: SortKey): string {
   <div class="bg-white rounded-lg shadow-xs border border-gray-200">
     <!-- Header -->
     <div class="px-6 py-4 border-b border-gray-200">
-      <h3 class="text-lg font-semibold text-gray-900">Node Metrics</h3>
-      <p class="text-sm text-gray-500 mt-1">Click column headers to sort</p>
+      <h3 class="text-lg font-semibold text-gray-900">{{ $t('monitoring.nodeMetricsGrid.nodeMetrics') }}</h3>
+      <p class="text-sm text-gray-500 mt-1">{{ $t('monitoring.nodeMetricsGrid.clickColumnHeadersTo') }}</p>
     </div>
 
     <div v-if="loading" class="flex items-center justify-center py-12">
@@ -97,7 +97,7 @@ function getSortIcon(key: SortKey): string {
     </div>
 
     <div v-else-if="!nodes || nodes.length === 0" class="text-center py-12 text-gray-500">
-      No node metrics available
+      {{ $t('monitoring.nodeMetricsGrid.noNodeMetricsAvailable') }}
     </div>
 
     <div v-else class="overflow-x-auto">
@@ -135,10 +135,10 @@ function getSortIcon(key: SortKey): string {
               Disk {{ getSortIcon('disk_percent') }}
             </th>
             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Services
+              {{ $t('monitoring.nodeMetricsGrid.services') }}
             </th>
             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Last Heartbeat
+              {{ $t('monitoring.nodeMetricsGrid.lastHeartbeat') }}
             </th>
           </tr>
         </thead>
@@ -185,7 +185,7 @@ function getSortIcon(key: SortKey): string {
               <span v-if="node.last_heartbeat">
                 {{ formatDateTime(node.last_heartbeat) }}
               </span>
-              <span v-else class="text-gray-400">No data</span>
+              <span v-else class="text-gray-400">{{ $t('monitoring.nodeMetricsGrid.noData') }}</span>
             </td>
           </tr>
         </tbody>

@@ -5,11 +5,12 @@
 Shared utilities and constants for codebase analytics endpoints
 """
 
-import logging
 from pathlib import Path
 
+from autobot_shared.logging_manager import get_logger
+
 # Logger
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Performance optimization: O(1) lookup for internal modules (Issue #326)
 INTERNAL_MODULE_PREFIXES = {

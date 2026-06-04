@@ -3,7 +3,7 @@
     <!-- Header -->
     <div class="maintenance-header">
       <div class="header-content">
-        <h2><i class="fas fa-tools"></i> {{ $t('knowledge.maintenance.title') }}</h2>
+        <h2><Icon name="tools" /> {{ $t('knowledge.maintenance.title') }}</h2>
         <p class="header-subtitle">
           {{ $t('knowledge.maintenance.subtitle') }}
         </p>
@@ -16,7 +16,7 @@
           :disabled="isRefreshing"
           :loading="isRefreshing"
         >
-          <i v-if="!isRefreshing" class="fas fa-sync"></i>
+          <Icon name="sync" v-if="!isRefreshing" />
           {{ isRefreshing ? $t('knowledge.maintenance.refreshing') : $t('knowledge.maintenance.refreshAll') }}
         </BaseButton>
       </div>
@@ -25,14 +25,14 @@
     <!-- Health Dashboard Summary -->
     <div class="health-dashboard">
       <div class="section-title">
-        <h3><i class="fas fa-heartbeat"></i> {{ $t('knowledge.maintenance.healthDashboard') }}</h3>
+        <h3><Icon name="heartbeat" /> {{ $t('knowledge.maintenance.healthDashboard') }}</h3>
         <span v-if="healthDashboard" :class="['health-status-badge', healthDashboard.status]">
           {{ healthDashboard.status }}
         </span>
       </div>
 
       <div v-if="isLoadingHealth" class="loading-state">
-        <i class="fas fa-spinner fa-spin"></i>
+        <Icon name="spinner" class="animate-spin" />
         <span>{{ $t('knowledge.maintenance.loadingHealth') }}</span>
       </div>
 
@@ -40,7 +40,7 @@
         <!-- Stats Cards -->
         <div class="health-card">
           <div class="card-icon facts">
-            <i class="fas fa-lightbulb"></i>
+            <Icon name="lightbulb" />
           </div>
           <div class="card-content">
             <span class="card-value">{{ healthDashboard.stats.total_facts }}</span>
@@ -50,7 +50,7 @@
 
         <div class="health-card">
           <div class="card-icon vectors">
-            <i class="fas fa-cubes"></i>
+            <Icon name="cubes" />
           </div>
           <div class="card-content">
             <span class="card-value">{{ healthDashboard.stats.total_vectors }}</span>
@@ -60,7 +60,7 @@
 
         <div class="health-card">
           <div class="card-icon storage">
-            <i class="fas fa-database"></i>
+            <Icon name="database" />
           </div>
           <div class="card-content">
             <span class="card-value">{{ formatFileSize(healthDashboard.stats.db_size) }}</span>
@@ -70,7 +70,7 @@
 
         <div v-if="healthDashboard?.quality" class="health-card">
           <div class="card-icon quality" :class="getQualityClass(healthDashboard.quality.overall_score)">
-            <i class="fas fa-chart-line"></i>
+            <Icon name="chart-line" />
           </div>
           <div class="card-content">
             <span class="card-value">{{ healthDashboard.quality.overall_score }}%</span>
@@ -107,11 +107,11 @@
           <h4>{{ $t('knowledge.maintenance.issuesFound') }}</h4>
           <div class="issues-counts">
             <div class="issue-count critical">
-              <i class="fas fa-exclamation-circle"></i>
+              <Icon name="exclamation-circle" />
               <span>{{ healthDashboard.quality.critical_issues ?? 0 }} {{ $t('knowledge.maintenance.critical') }}</span>
             </div>
             <div class="issue-count warning">
-              <i class="fas fa-exclamation-triangle"></i>
+              <Icon name="exclamation-triangle" />
               <span>{{ healthDashboard.quality.warnings ?? 0 }} {{ $t('knowledge.maintenance.warnings') }}</span>
             </div>
           </div>
@@ -122,7 +122,7 @@
           <h4>{{ $t('knowledge.maintenance.topRecommendations') }}</h4>
           <ul class="recommendation-list">
             <li v-for="(rec, idx) in healthDashboard.top_recommendations" :key="idx">
-              <i class="fas fa-lightbulb"></i>
+              <Icon name="lightbulb" />
               {{ rec }}
             </li>
           </ul>
@@ -130,7 +130,7 @@
       </div>
 
       <div v-else class="empty-state">
-        <i class="fas fa-info-circle"></i>
+        <Icon name="info-circle" />
         <p>{{ $t('knowledge.maintenance.healthError') }}</p>
       </div>
     </div>
@@ -164,11 +164,11 @@
     <!-- Maintenance History (future enhancement) -->
     <div class="maintenance-history">
       <div class="section-title">
-        <h3><i class="fas fa-history"></i> {{ $t('knowledge.maintenance.maintenanceHistory') }}</h3>
+        <h3><Icon name="history" /> {{ $t('knowledge.maintenance.maintenanceHistory') }}</h3>
       </div>
       <div class="history-content">
         <div v-if="maintenanceHistory.length === 0" class="empty-history">
-          <i class="fas fa-calendar-check"></i>
+          <Icon name="calendar" />
           <p>{{ $t('knowledge.maintenance.noHistory') }}</p>
         </div>
         <div v-else class="history-list">
@@ -179,7 +179,7 @@
             :class="entry.type"
           >
             <div class="history-icon">
-              <i :class="getHistoryIcon(entry.type)"></i>
+              <Icon :name="getHistoryIcon(entry.type)" />
             </div>
             <div class="history-content">
               <span class="history-action">{{ entry.action }}</span>
@@ -194,6 +194,7 @@
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { ref, onMounted } from 'vue'
 import { formatFileSize, formatTimeAgo } from '@/utils/formatHelpers'
 import BaseButton from '@/components/base/BaseButton.vue'
@@ -266,13 +267,13 @@ const getQualityClass = (score: number): string => {
 
 const getHistoryIcon = (type: string): string => {
   const icons: Record<string, string> = {
-    cleanup: 'fas fa-broom',
-    dedup: 'fas fa-copy',
-    backup: 'fas fa-download',
-    restore: 'fas fa-upload',
-    orphan: 'fas fa-unlink'
+    cleanup: 'broom',
+    dedup: 'copy',
+    backup: 'download',
+    restore: 'upload',
+    orphan: 'unlink'
   }
-  return icons[type] || 'fas fa-cog'
+  return icons[type] || 'cog'
 }
 
 // Lifecycle

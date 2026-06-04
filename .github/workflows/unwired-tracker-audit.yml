@@ -39,7 +39,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.0.2
         with:
           fetch-depth: 1
 
@@ -47,11 +47,24 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: 'pip'
+          cache-dependency-path: |
+            requirements*.txt
+            autobot-backend/requirements*.txt
+            autobot-slm-backend/requirements*.txt
+
+      - name: Install pytest
+        run: pip install pytest
+
+      - name: Test audit script (#6929)
+        run: pytest pipeline-scripts/test_audit_unwired_trackers.py -v
 
       - name: Run audit (dry-run, JSON output)
         id: scan
+        shell: bash
         run: |
-          python3 pipeline-scripts/audit-unwired-trackers.py --json > findings.json || true
+          set -euo pipefail
+          python3 pipeline-scripts/audit_unwired_trackers.py --json > findings.json || true
           count=$(jq 'length' findings.json)
           echo "count=${count}" >> "$GITHUB_OUTPUT"
           jq -r '"\(.file)\t#\(.tracker)"' findings.json | head -50
@@ -72,14 +85,16 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           MAX_ISSUES: ${{ github.event.inputs.max_issues || '10' }}
         run: |
-          python3 pipeline-scripts/audit-unwired-trackers.py \
+          python3 pipeline-scripts/audit_unwired_trackers.py \
             --file-issues --max-issues "$MAX_ISSUES"
 
       - name: Summary
         if: always()
+        shell: bash
         env:
           FINDING_COUNT: ${{ steps.scan.outputs.count }}
         run: |
+          set -euo pipefail
           {
             echo "### Unwired Tracker Audit"
             echo ""

@@ -13,18 +13,18 @@ Provides endpoints to:
 """
 
 import asyncio
-import logging
-from typing import Dict, Optional
+from typing import Dict
 
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 
 from ..api_endpoint_scanner import APIEndpointChecker
 from ..models import APIEndpointAnalysis
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter()
 
@@ -94,7 +94,7 @@ async def get_frontend_api_calls() -> JSONResponse:
     error_code_prefix="CODEBASE",
 )
 async def get_endpoint_coverage(
-    source_id: Optional[str] = Query(None, description="#1772: source_id for API consistency"),
+    source_id: str | None = Query(None, description="#1772: source_id for API consistency"),
 ) -> JSONResponse:
     """
     Get full API endpoint coverage analysis.

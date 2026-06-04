@@ -34,6 +34,12 @@ Note: Uses lazy imports via __getattr__ to avoid circular import with NetworkCon
 import logging
 from typing import TYPE_CHECKING
 
+from autobot_shared.ssot_config import config
+
+# Use stdlib logging here to avoid circular import:
+# constants → network_constants → autobot_shared/network_constants → config.registry →
+# config/__init__ → get_logger → logging_manager → from config import config_manager (incomplete)
+# GH#7765
 logger = logging.getLogger(__name__)
 
 # Type hints for IDE support without runtime import
@@ -75,13 +81,12 @@ class _ConfigStub:
 
     def get_redis_config(self):
         """Env-var fallback so redis_client.get_redis_client() survives re-entry (#3491)."""
-        import os
 
         return {
-            "enabled": os.getenv("AUTOBOT_REDIS_ENABLED", "true").lower() == "true",
-            "host": os.getenv("AUTOBOT_REDIS_HOST", os.getenv("REDIS_HOST", "localhost")),
-            "port": int(os.getenv("AUTOBOT_REDIS_PORT", os.getenv("REDIS_PORT", "6379"))),
-            "db": int(os.getenv("AUTOBOT_REDIS_DB_MAIN", "0")),
+            "enabled": config.redis_enabled.lower() == "true",
+            "host": config.redis_host,
+            "port": int(config.redis_port),
+            "db": int(config.redis_db_main),
         }
 
     def get_llm_config(self):

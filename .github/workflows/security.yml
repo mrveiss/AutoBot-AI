@@ -8,7 +8,7 @@ on:
   push:
     branches: [ main, dev, Dev_new_gui ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, Dev_new_gui ]  # Issue #6597: Semgrep blocks merge on all feature PRs
   schedule:
     # Run security scans daily at 2 AM UTC
     - cron: '0 2 * * *'
@@ -33,7 +33,7 @@ jobs:
       python: ${{ steps.filter.outputs.python }}
       deps: ${{ steps.filter.outputs.deps }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6.0.2
       - uses: dorny/paths-filter@d1c1ffe0248fe513906c8e24db8ea791d46f8590  # v3
         id: filter
         with:
@@ -60,13 +60,16 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v6
+      uses: actions/checkout@v6.0.2
 
     - name: Set up Python 3.12
       uses: actions/setup-python@v5
       with:
         python-version: '3.12'
         cache: 'pip'
+        cache-dependency-path: |
+          requirements*.txt
+          autobot-backend/requirements*.txt
 
     - name: Install Python dependencies
       run: |
@@ -80,20 +83,22 @@ jobs:
 
     - name: Python Dependency Audit
       run: |
-        echo "## Python Dependency Security Report" >> $GITHUB_STEP_SUMMARY
+        echo "## Python Dependency Security Report" >> "$GITHUB_STEP_SUMMARY"
         pip-audit --format=json --output=python-audit.json || true
-        pip-audit --format=markdown >> $GITHUB_STEP_SUMMARY || true
+        pip-audit --format=markdown >> "$GITHUB_STEP_SUMMARY" || true
 
     - name: Safety Check (Alternative Python Security)
       run: |
-        echo "## Safety Security Report" >> $GITHUB_STEP_SUMMARY
+        echo "## Safety Security Report" >> "$GITHUB_STEP_SUMMARY"
         safety check --json --output safety-report.json || true
         safety check || true
 
     - name: Setup Node.js
-      uses: actions/setup-node@v6
+      uses: actions/setup-node@v6.4.0
       with:
-        node-version: '20'
+        node-version: '22'
+        cache: 'npm'
+        cache-dependency-path: autobot-frontend/package-lock.json
 
     - name: Install Frontend dependencies
       run: |
@@ -103,12 +108,12 @@ jobs:
     - name: Node.js Dependency Audit
       run: |
         cd autobot-frontend
-        echo "## Node.js Dependency Security Report" >> $GITHUB_STEP_SUMMARY
+        echo "## Node.js Dependency Security Report" >> "$GITHUB_STEP_SUMMARY"
         npm audit --audit-level=moderate --json > npm-audit.json || true
         npm audit --audit-level=moderate || true
 
     - name: Upload Security Reports
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@v4
       if: always()
       with:
         name: dependency-security-reports
@@ -132,13 +137,16 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v6
+      uses: actions/checkout@v6.0.2
 
     - name: Set up Python 3.12
       uses: actions/setup-python@v5
       with:
         python-version: '3.12'
         cache: 'pip'
+        cache-dependency-path: |
+          requirements*.txt
+          autobot-backend/requirements*.txt
 
     - name: Install SAST tools
       run: |
@@ -147,19 +155,44 @@ jobs:
 
     - name: Bandit Security Linter
       run: |
-        echo "## Bandit Security Analysis" >> $GITHUB_STEP_SUMMARY
+        echo "## Bandit Security Analysis" >> "$GITHUB_STEP_SUMMARY"
         python3 -m bandit -r autobot-backend/ autobot-slm-backend/ autobot_shared/ -f json -o bandit-report.json || true
         python3 -m bandit -r autobot-backend/ autobot-slm-backend/ autobot_shared/ -f txt || true
 
     - name: Semgrep SAST Scan
+      # Blocking: exits non-zero when ERROR-severity findings are present.
+      # Uses only local .semgrep/rules.yaml — community configs (p/python,
+      # p/secrets) require SEMGREP_APP_TOKEN and are not available in CI.
+      # semgrep.sarif is pre-initialised so the upload step always has a file.
       run: |
-        echo "## Semgrep Security Analysis" >> $GITHUB_STEP_SUMMARY
-        python3 -m semgrep --config=auto --json --output=semgrep-report.json autobot-backend/ autobot-slm-backend/ autobot_shared/ || true
-        python3 -m semgrep --config=auto autobot-backend/ autobot-slm-backend/ autobot_shared/ || true
+        set -euo pipefail
+        echo "## Semgrep Security Analysis" >> "$GITHUB_STEP_SUMMARY"
+        # Pre-initialise so the SARIF upload step succeeds even if semgrep exits
+        # early (e.g. config error) before writing its own output file.
+        echo '{"version":"2.1.0","runs":[]}' > semgrep.sarif
+        semgrep \
+          --config=.semgrep/rules.yaml \
+          --severity ERROR \
+          --sarif \
+          --output=semgrep.sarif \
+          --error \
+          autobot-backend/ autobot-slm-backend/ autobot_shared/
+        semgrep \
+          --config=.semgrep/rules.yaml \
+          --json \
+          --output=semgrep-report.json \
+          autobot-backend/ autobot-slm-backend/ autobot_shared/ || true
+
+    - name: Upload Semgrep SARIF to GitHub Security tab
+      uses: github/codeql-action/upload-sarif@4f3212b61783c3c68e8309a0f18a699764811cda  # v3
+      if: always()
+      with:
+        sarif_file: semgrep.sarif
+        category: semgrep
 
     - name: Python Code Quality Check
       run: |
-        echo "## Code Quality Analysis" >> $GITHUB_STEP_SUMMARY
+        echo "## Code Quality Analysis" >> "$GITHUB_STEP_SUMMARY"
         python3 -m flake8 autobot-backend/ autobot-slm-backend/ autobot_shared/ --max-line-length=88 --extend-ignore=E203,W503 \
           --output-file=flake8-report.txt || true
         cat flake8-report.txt || true
@@ -168,7 +201,7 @@ jobs:
       shell: bash
       run: |
         set -euo pipefail
-        echo "## Secret Detection" >> $GITHUB_STEP_SUMMARY
+        echo "## Secret Detection" >> "$GITHUB_STEP_SUMMARY"
         # Check for common secret patterns (without Docker)
         echo "Scanning for potential secrets..."
 
@@ -193,22 +226,23 @@ jobs:
           SECRETS_FOUND=$((SECRETS_FOUND + 1))
         fi
 
-        if [ $SECRETS_FOUND -eq 0 ]; then
-          echo "No obvious secrets detected" >> $GITHUB_STEP_SUMMARY
+        if [ "$SECRETS_FOUND" -eq 0 ]; then
+          echo "No obvious secrets detected" >> "$GITHUB_STEP_SUMMARY"
         else
           echo "::error::Found $SECRETS_FOUND potential secret(s) — review required"
-          echo "Found $SECRETS_FOUND potential secret(s) — please review" >> $GITHUB_STEP_SUMMARY
+          echo "Found $SECRETS_FOUND potential secret(s) — please review" >> "$GITHUB_STEP_SUMMARY"
           exit 1
         fi
 
     - name: Upload SAST Reports
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@v4
       if: always()
       with:
         name: sast-security-reports
         path: |
           bandit-report.json
           semgrep-report.json
+          semgrep.sarif
           flake8-report.txt
         retention-days: 30
 
@@ -223,11 +257,11 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v6
+      uses: actions/checkout@v6.0.2
 
     - name: Check for Security Files
       run: |
-        echo "## Security Compliance Check" >> $GITHUB_STEP_SUMMARY
+        echo "## Security Compliance Check" >> "$GITHUB_STEP_SUMMARY"
 
         # Check for required security files
         files=(
@@ -243,29 +277,34 @@ jobs:
         done
 
         if [ ${#missing_files[@]} -eq 0 ]; then
-          echo "All required security files present" >> $GITHUB_STEP_SUMMARY
+          echo "All required security files present" >> "$GITHUB_STEP_SUMMARY"
         else
-          echo "Missing security files:" >> $GITHUB_STEP_SUMMARY
-          printf '%s\n' "${missing_files[@]}" >> $GITHUB_STEP_SUMMARY
+          {
+            echo "Missing security files:"
+            printf '%s\n' "${missing_files[@]}"
+          } >> "$GITHUB_STEP_SUMMARY"
         fi
 
     - name: Security Best Practices Check
       shell: bash
       run: |
         set -euo pipefail
-        echo "## Security Best Practices" >> $GITHUB_STEP_SUMMARY
+        echo "## Security Best Practices" >> "$GITHUB_STEP_SUMMARY"
 
         # Check for security-related imports
+        # shellcheck disable=SC2126
         security_imports=$(grep -r "hashlib\|secrets\|cryptography\|bcrypt" autobot-backend/ autobot-slm-backend/ autobot_shared/ | wc -l)
-        echo "Security-related imports found: $security_imports" >> $GITHUB_STEP_SUMMARY
+        echo "Security-related imports found: $security_imports" >> "$GITHUB_STEP_SUMMARY"
 
         # Check for input validation patterns
+        # shellcheck disable=SC2126
         validation_patterns=$(grep -r "validator\|sanitize\|escape\|validate" autobot-backend/ autobot-slm-backend/ autobot_shared/ | wc -l)
-        echo "Input validation patterns found: $validation_patterns" >> $GITHUB_STEP_SUMMARY
+        echo "Input validation patterns found: $validation_patterns" >> "$GITHUB_STEP_SUMMARY"
 
         # Check for error handling
+        # shellcheck disable=SC2126
         error_handling=$(grep -r "try:\|except\|raise" autobot-backend/ autobot-slm-backend/ autobot_shared/ | wc -l)
-        echo "Error handling patterns found: $error_handling" >> $GITHUB_STEP_SUMMARY
+        echo "Error handling patterns found: $error_handling" >> "$GITHUB_STEP_SUMMARY"
 
   security-summary:
     name: Security Summary Report
@@ -279,36 +318,44 @@ jobs:
 
     - name: Generate Security Summary
       run: |
-        echo "# Security Scan Summary" > security-summary.md
-        echo "" >> security-summary.md
-        echo "**Scan Date:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> security-summary.md
-        echo "**Branch:** ${{ github.ref_name }}" >> security-summary.md
-        echo "**Commit:** ${{ github.sha }}" >> security-summary.md
-        echo "" >> security-summary.md
+        {
+          echo "# Security Scan Summary"
+          echo ""
+          echo "**Scan Date:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+          echo "**Branch:** ${{ github.ref_name }}"
+          echo "**Commit:** ${{ github.sha }}"
+          echo ""
+        } > security-summary.md
 
         # Check if reports exist and summarize
         if [ -d "dependency-security-reports" ]; then
-          echo "## Dependency Security" >> security-summary.md
-          echo "- Python audit completed" >> security-summary.md
-          echo "- Node.js audit completed" >> security-summary.md
-          echo "" >> security-summary.md
+          {
+            echo "## Dependency Security"
+            echo "- Python audit completed"
+            echo "- Node.js audit completed"
+            echo ""
+          } >> security-summary.md
         fi
 
         if [ -d "sast-security-reports" ]; then
-          echo "## Static Analysis Security Testing" >> security-summary.md
-          echo "- Bandit security linting completed" >> security-summary.md
-          echo "- Semgrep security analysis completed" >> security-summary.md
-          echo "- Secret detection completed" >> security-summary.md
-          echo "" >> security-summary.md
+          {
+            echo "## Static Analysis Security Testing"
+            echo "- Bandit security linting completed"
+            echo "- Semgrep security analysis completed"
+            echo "- Secret detection completed"
+            echo ""
+          } >> security-summary.md
         fi
 
-        echo "## Recommendations" >> security-summary.md
-        echo "1. Review all security reports for critical findings" >> security-summary.md
-        echo "2. Update dependencies with known vulnerabilities" >> security-summary.md
-        echo "3. Address any SAST findings in critical code paths" >> security-summary.md
+        {
+          echo "## Recommendations"
+          echo "1. Review all security reports for critical findings"
+          echo "2. Update dependencies with known vulnerabilities"
+          echo "3. Address any SAST findings in critical code paths"
+        } >> security-summary.md
 
     - name: Upload Security Summary
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@v4
       with:
         name: security-summary
         path: security-summary.md

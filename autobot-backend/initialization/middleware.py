@@ -10,23 +10,23 @@ Configures all middleware for FastAPI application:
 - Service authentication
 """
 
-import logging
-from typing import List, Optional
+from typing import List
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from autobot_shared.logging_manager import get_logger
 from config.manager import get_config_manager
 from constants.network_constants import (  # noqa: F401 - used in docstring example
     NetworkConstants,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
-def configure_cors(app: FastAPI, allow_origins: Optional[List[str]] = None):
+def configure_cors(app: FastAPI, allow_origins: List[str] | None = None):
     """
     Configure CORS middleware
 
@@ -197,6 +197,25 @@ def configure_validation(app: FastAPI):
         logger.warning("Input validation middleware not available: %s", e)
 
 
+def configure_llc_agent_auth(app: FastAPI):
+    """Configure LLC agent authentication middleware (GH#8218).
+
+    Registers LLCAgentAuthMiddleware which validates bearer tokens for
+    /api/llc/agent/* routes using SHA-256 DB lookup. All other routes are
+    unaffected.
+
+    Args:
+        app: FastAPI application instance
+    """
+    try:
+        from llc.middleware.agent_auth import LLCAgentAuthMiddleware
+
+        app.add_middleware(LLCAgentAuthMiddleware)
+        logger.info("LLC agent auth middleware enabled")
+    except ImportError as e:
+        logger.warning("LLC agent auth middleware not available: %s", e)
+
+
 def configure_sunset_legacy_health(app: FastAPI):
     """Issue #6902: telegraph deprecation of legacy /api/<module>/health routes.
 
@@ -219,7 +238,7 @@ def configure_sunset_legacy_health(app: FastAPI):
 
 def configure_middleware(
     app: FastAPI,
-    allow_origins: Optional[List[str]] = None,
+    allow_origins: List[str] | None = None,
     gzip_minimum_size: int = 1000,
     enable_service_auth: bool = True,
     enable_llm_awareness: bool = True,
@@ -268,6 +287,9 @@ def configure_middleware(
     if enable_audit:
         configure_audit(app)
 
+    # Configure LLC agent auth (GH#8218) — scoped to /api/llc/agent/* only.
+    configure_llc_agent_auth(app)
+
     # Configure LLM Awareness context injection (optional)
     # Must be registered after service auth so awareness context is applied
     # only to authenticated requests that reach the route handlers.
@@ -290,4 +312,5 @@ __all__ = [
     "configure_audit",
     "configure_llm_awareness",
     "configure_validation",
+    "configure_llc_agent_auth",
 ]

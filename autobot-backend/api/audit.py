@@ -16,20 +16,21 @@ Endpoints:
 - POST /api/audit/cleanup - Trigger cleanup of old audit logs (admin only)
 """
 
-import logging
 from datetime import datetime, timedelta, timezone
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from api.schemas_common import DataResponse
 from api.schemas_system import (
+    AuditCleanupData,
     AuditCleanupRequest,
+    AuditOperationsData,
     AuditQueryResponse,
     AuditStatisticsResponse,
 )
 from auth_middleware import get_auth_middleware
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.models.pagination import PaginationParams
 from autobot_shared.time_utils import parse_utc_iso
 from services.audit_logger import AuditResult, get_audit_logger
@@ -40,7 +41,7 @@ from utils.catalog_http_exceptions import (
 )
 
 router = APIRouter(prefix="/audit", tags=["audit"])
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def check_admin_permission(request: Request) -> bool:
@@ -70,13 +71,13 @@ def check_admin_permission(request: Request) -> bool:
 
 
 def _build_query_dict(
-    start_time: Optional[str],
-    end_time: Optional[str],
-    operation: Optional[str],
-    user_id: Optional[str],
-    session_id: Optional[str],
-    vm_name: Optional[str],
-    result: Optional[AuditResult],
+    start_time: str | None,
+    end_time: str | None,
+    operation: str | None,
+    user_id: str | None,
+    session_id: str | None,
+    vm_name: str | None,
+    result: AuditResult | None,
     limit: int,
     offset: int,
 ) -> dict:
@@ -105,13 +106,13 @@ def _build_query_dict(
 )
 async def query_audit_logs(
     request: Request,
-    start_time: Optional[str] = Query(None, description="Start time (ISO format)"),
-    end_time: Optional[str] = Query(None, description="End time (ISO format)"),
-    operation: Optional[str] = Query(None, description="Operation filter"),
-    user_id: Optional[str] = Query(None, description="User filter"),
-    session_id: Optional[str] = Query(None, description="Session filter"),
-    vm_name: Optional[str] = Query(None, description="VM filter"),
-    result: Optional[AuditResult] = Query(None, description="Result filter"),
+    start_time: str | None = Query(None, description="Start time (ISO format)"),
+    end_time: str | None = Query(None, description="End time (ISO format)"),
+    operation: str | None = Query(None, description="Operation filter"),
+    user_id: str | None = Query(None, description="User filter"),
+    session_id: str | None = Query(None, description="Session filter"),
+    vm_name: str | None = Query(None, description="VM filter"),
+    result: AuditResult | None = Query(None, description="Result filter"),
     pagination: PaginationParams = Depends(),
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -326,7 +327,7 @@ async def get_failed_operations(
         raise_server_error("API_0003", "Failed operations query error")
 
 
-@router.post("/cleanup", response_model=DataResponse)
+@router.post("/cleanup", response_model=DataResponse[AuditCleanupData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="cleanup_old_logs",
@@ -367,7 +368,7 @@ async def cleanup_old_logs(
         raise_server_error("API_0003", "Cleanup error")
 
 
-@router.get("/operations", response_model=DataResponse)
+@router.get("/operations", response_model=DataResponse[AuditOperationsData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_operation_types",

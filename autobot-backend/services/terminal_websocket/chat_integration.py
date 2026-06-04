@@ -8,17 +8,16 @@ Handles integration between terminal output and chat history.
 """
 
 import asyncio
-import logging
 import time
 from pathlib import Path
-from typing import Optional
 
 import aiofiles
 
+from autobot_shared.logging_manager import get_logger
 from chat_history import ChatHistoryManager
 from utils.encoding_utils import is_terminal_prompt, strip_ansi_codes
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class TerminalChatIntegrator:
@@ -26,10 +25,10 @@ class TerminalChatIntegrator:
 
     def __init__(
         self,
-        conversation_id: Optional[str],
-        chat_history_manager: Optional[ChatHistoryManager] = None,
+        conversation_id: str | None,
+        chat_history_manager: ChatHistoryManager | None = None,
         data_dir: str = "data/chats",
-    ):
+    ) -> None:
         """Initialize chat integrator with conversation and history manager."""
         self.conversation_id = conversation_id
         self.chat_history_manager = chat_history_manager or (ChatHistoryManager() if conversation_id else None)

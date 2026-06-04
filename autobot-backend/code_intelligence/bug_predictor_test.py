@@ -82,7 +82,7 @@ def complex_python_file(tmp_path):
     """Create a complex Python file for testing."""
     content = "import os\nimport sys\nimport json\nimport logging\n"
     content += "import pathlib\nimport datetime\nimport subprocess\n"
-    content += "from typing import Any, Optional, List, Dict\n"
+    content += "from typing import Any, List, Dict\n"
     content += "from dataclasses import dataclass\n\n"
 
     # Add many functions

@@ -7,14 +7,14 @@ Workflow Step Evaluator Module
 LLM judge integration for evaluating workflow steps.
 """
 
-import logging
 from typing import Set
 
+from autobot_shared.logging_manager import get_logger
 from type_defs.common import Metadata
 
 from .models import ActiveWorkflow, WorkflowStep, WorkflowStepStatus
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Performance optimization: O(1) lookup for approval recommendations (Issue #326)
 APPROVAL_RECOMMENDATIONS: Set[str] = {"APPROVE", "CONDITIONAL"}
@@ -23,7 +23,7 @@ APPROVAL_RECOMMENDATIONS: Set[str] = {"APPROVE", "CONDITIONAL"}
 class WorkflowStepEvaluator:
     """Evaluates workflow steps using LLM judges"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize step evaluator with LLM judges if available."""
         self.judges_enabled = False
         self.workflow_step_judge = None

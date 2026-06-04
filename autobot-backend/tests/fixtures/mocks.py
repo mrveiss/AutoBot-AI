@@ -7,8 +7,8 @@ Mock fixtures for AutoBot backend testing (canonical location for #6994).
 Provides mock implementations of core components for tests and the
 `__main__` demo blocks under `intelligence/`:
 
-- MockLLMInterface  - Legacy mock matching the deleted LLMInterface surface
-                      (kept per "never delete code — wire it in" policy).
+- MockLLMInterface  - Mock for UnifiedLLMInterface (llm_multi_provider); covers
+                      both chat_completion() and legacy generate_response().
 - MockLLMService    - Mock matching the LLMService surface that replaced
                       LLMInterface in #3185. Returns LLMResponse-shaped
                       objects via `.chat(...)` so demos exercising
@@ -21,30 +21,28 @@ Provides mock implementations of core components for tests and the
 
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 
 class MockLLMInterface:
-    """Legacy mock LLM interface for testing agent workflows.
+    """Mock for ``UnifiedLLMInterface`` (``llm_multi_provider.UnifiedLLMInterface``).
 
-    Predates the #3185 LLMInterface retirement. Kept for any test that
-    still depends on the `generate_response()` surface. New code should
-    prefer `MockLLMService`.
+    Covers the full surface of ``UnifiedLLMInterface``: both the primary
+    ``chat_completion()`` method and the legacy ``generate_response()`` shim.
+    New test code should prefer ``MockLLMService`` (which mocks the canonical
+    ``LLMService.chat()`` surface); this class is retained for tests that
+    still exercise ``UnifiedLLMInterface`` directly.
     """
 
-    def __init__(self, responses: Optional[Dict[str, str]] = None):
+    def __init__(self, responses: Dict[str, str] | None = None):
         self._custom_responses = responses or {}
         self._call_count = 0
         self._call_history: list = []
 
-    async def generate_response(self, prompt: str, **kwargs) -> str:
-        self._call_count += 1
-        self._call_history.append({"prompt": prompt, "kwargs": kwargs})
-
+    def _pick_response(self, prompt: str) -> str:
         for keyword, response in self._custom_responses.items():
             if keyword.lower() in prompt.lower():
                 return response
-
         prompt_lower = prompt.lower()
         if "progress" in prompt_lower:
             return "Processing data..."
@@ -53,6 +51,26 @@ class MockLLMInterface:
         if "command" in prompt_lower:
             return "COMMAND: echo 'This is a test response'\nEXPLANATION: Testing the system"
         return "Command executing..."
+
+    async def chat_completion(
+        self,
+        messages: List[Dict[str, Any]],
+        **kwargs: Any,
+    ) -> Any:
+        """Mock primary method matching ``UnifiedLLMInterface.chat_completion``."""
+        prompt = messages[-1].get("content", "") if messages else ""
+        self._call_count += 1
+        self._call_history.append({"prompt": prompt, "kwargs": kwargs})
+        return make_llm_response(content=self._pick_response(prompt))
+
+    async def generate_response(self, prompt: str, **kwargs: Any) -> str:
+        """Legacy shim matching ``UnifiedLLMInterface.generate_response``."""
+        self._call_count += 1
+        self._call_history.append({"prompt": prompt, "kwargs": kwargs})
+        return self._pick_response(prompt)
+
+    async def initialize(self) -> None:
+        """No-op — matches ``UnifiedLLMInterface.initialize``."""
 
     @property
     def call_count(self) -> int:
@@ -69,33 +87,33 @@ class MockLLMInterface:
 
 @dataclass
 class _MockLLMResponseShim:
-    """Duck-typed fallback if `llm_interface_pkg.models.LLMResponse` is
+    """Duck-typed fallback if `llm_shared.models.LLMResponse` is
     unavailable at import time. Matches the fields agents/cognifiers read
     (`.content`, `.model`, `.provider`)."""
 
     content: str
     model: str = "mock"
     provider: str = "mock"
-    tokens_used: Optional[int] = None
+    tokens_used: int | None = None
     processing_time: float = 0.0
     cached: bool = False
     metadata: Dict[str, Any] = field(default_factory=dict)
     usage: Dict[str, int] = field(default_factory=dict)
     finish_reason: str = "stop"
     request_id: str = ""
-    error: Optional[str] = None
+    error: str | None = None
 
 
 def make_llm_response(
     *,
     content: str = "",
-    error: Optional[str] = None,
+    error: str | None = None,
     model: str = "mock",
     provider: str = "mock",
 ):
     """Build an LLMResponse-shaped value for tests (canonical, #7134).
 
-    Returns the real ``LLMResponse`` from ``llm_interface_pkg.models`` when
+    Returns the real ``LLMResponse`` from ``llm_shared.models`` when
     importable — that pins the field contract, so a future field rename or
     type change breaks the fixture (and every test that uses it) at import
     time rather than silently producing wrong-shape mocks. Falls back to a
@@ -119,7 +137,7 @@ def make_llm_response(
         provider: provider name; defaults to ``"mock"``.
     """
     try:
-        from llm_interface_pkg.models import LLMResponse
+        from llm_shared.models import LLMResponse
 
         return LLMResponse(content=content, error=error, model=model, provider=provider)
     except Exception:
@@ -178,38 +196,38 @@ def make_async_redis(
     exists_returns: int = 0,
     incr_returns: int = 1,
     decr_returns: int = 0,
-    keys_returns: Optional[List[bytes]] = None,
+    keys_returns: List[bytes] | None = None,
     ttl_returns: int = -1,
     # Hash ops
     hget_returns: Any = None,
     hset_returns: int = 1,
-    hgetall_returns: Optional[Dict[bytes, bytes]] = None,
-    hkeys_returns: Optional[List[bytes]] = None,
-    hvals_returns: Optional[List[bytes]] = None,
+    hgetall_returns: Dict[bytes, bytes] | None = None,
+    hkeys_returns: List[bytes] | None = None,
+    hvals_returns: List[bytes] | None = None,
     hdel_returns: int = 1,
     hexists_returns: int = 0,
     # Set ops
     sadd_returns: int = 1,
     srem_returns: int = 1,
-    smembers_returns: Optional[set] = None,
+    smembers_returns: set | None = None,
     sismember_returns: bool = False,
     # List ops
-    lrange_returns: Optional[List[bytes]] = None,
+    lrange_returns: List[bytes] | None = None,
     lpush_returns: int = 1,
     rpush_returns: int = 1,
     llen_returns: int = 0,
     # Sorted-set ops
     zadd_returns: int = 1,
     zcard_returns: int = 0,
-    zrange_returns: Optional[List[bytes]] = None,
-    zrangebyscore_returns: Optional[List[bytes]] = None,
-    zrevrange_returns: Optional[List[bytes]] = None,
+    zrange_returns: List[bytes] | None = None,
+    zrangebyscore_returns: List[bytes] | None = None,
+    zrevrange_returns: List[bytes] | None = None,
     zremrangebyrank_returns: int = 0,
     # Pub/sub
     publish_returns: int = 0,
     # Pipeline + scan-iter (#7339)
-    pipeline: Optional["AsyncMock"] = None,
-    scan_iter_keys: Optional[List[bytes]] = None,
+    pipeline: "AsyncMock" | None = None,
+    scan_iter_keys: List[bytes] | None = None,
     **extra_methods: Any,
 ) -> "AsyncMock":
     """Build an async-redis-shaped ``AsyncMock`` for tests (canonical, #7264).
@@ -323,8 +341,52 @@ def make_async_redis(
     return redis
 
 
+def make_stateful_redis() -> "AsyncMock":
+    """Build a stateful async-redis ``AsyncMock`` that tracks stored values (#7753).
+
+    Unlike ``make_async_redis`` (which returns fixed values), this helper
+    wires ``set``/``get``/``publish`` to an in-memory ``_store`` dict and
+    ``_published`` list so tests can assert on the actual data written:
+
+        fake = make_stateful_redis()
+        await fake.set("k", "v")
+        assert fake._store["k"] == "v"
+
+        await fake.publish("chan", "msg")
+        assert fake._published == [("chan", "msg")]
+
+    All other redis methods remain standard ``AsyncMock`` instances from
+    the parent ``AsyncMock``.
+
+    Returns:
+        An ``AsyncMock`` with ``_store: dict`` and ``_published: list``
+        attributes wired through ``side_effect`` callbacks.
+    """
+    from unittest.mock import AsyncMock
+
+    fake = AsyncMock()
+    fake._store: dict = {}
+    fake._published: list = []
+
+    async def _set(key, value, *_args, **_kwargs):
+        fake._store[key] = value
+        return True
+
+    async def _get(key):
+        return fake._store.get(key)
+
+    async def _publish(channel, message):
+        fake._published.append((channel, message))
+        return 1
+
+    fake.set.side_effect = _set
+    fake.get.side_effect = _get
+    fake.publish.side_effect = _publish
+    return fake
+
+
 @contextmanager
-def patch_async_redis(target: str, redis: Optional["AsyncMock"] = None):
+def patch_async_redis(target: str, redis: "AsyncMock" | None = None):
     """Context manager: patch ``get_async_redis_client`` at ``target`` with
     correct ``AsyncMock`` wrapping (canonical, #7264).
 
@@ -373,7 +435,7 @@ class MockLLMService:
     `generate_response()` method) does not. This class fills the gap.
     """
 
-    def __init__(self, responses: Optional[Dict[str, str]] = None):
+    def __init__(self, responses: Dict[str, str] | None = None):
         self._custom_responses = responses or {}
         self._call_count = 0
         self._call_history: List[Dict[str, Any]] = []
@@ -438,7 +500,7 @@ class MockCommandValidator:
     def __init__(
         self,
         default_safe: bool = True,
-        dangerous_patterns: Optional[list] = None,
+        dangerous_patterns: list | None = None,
     ):
         self._default_safe = default_safe
         self._dangerous_patterns = dangerous_patterns or [
@@ -476,7 +538,7 @@ class MockKnowledgeBase:
     async def store_fact(
         self,
         content: str,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
         fact = {
             "id": len(self._facts) + 1,
@@ -511,7 +573,7 @@ class MockWorkerNode:
     def __init__(
         self,
         node_id: str = "mock-worker-1",
-        capabilities: Optional[list] = None,
+        capabilities: list | None = None,
     ):
         self.node_id = node_id
         self.capabilities = capabilities or ["text", "vision", "audio"]

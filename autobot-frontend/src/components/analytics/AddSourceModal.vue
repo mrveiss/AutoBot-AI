@@ -15,11 +15,11 @@
           <!-- Header -->
           <div class="modal-header">
             <h3>
-              <i :class="isEditMode ? 'fas fa-edit' : 'fas fa-plus-circle'"></i>
+              <Icon :name="isEditMode ? 'edit' : 'plus-circle'" />
               {{ isEditMode ? $t('analytics.sources.editSource') : $t('analytics.sources.addCodeSource') }}
             </h3>
             <button class="close-btn" @click="handleClose" :aria-label="$t('analytics.sources.form.close')">
-              <i class="fas fa-times"></i>
+              <Icon name="times" />
             </button>
           </div>
 
@@ -50,7 +50,7 @@
                   @click="form.source_type = 'github'"
                   type="button"
                 >
-                  <i class="fab fa-github"></i>
+                  <Icon name="code-branch" />
                   {{ $t('analytics.sources.form.github') }}
                 </button>
                 <button
@@ -59,7 +59,7 @@
                   @click="form.source_type = 'local'"
                   type="button"
                 >
-                  <i class="fas fa-folder"></i>
+                  <Icon name="folder" />
                   {{ $t('analytics.sources.form.localPath') }}
                 </button>
               </div>
@@ -110,7 +110,7 @@
                   </option>
                 </select>
                 <span class="form-hint">
-                  <i class="fas fa-info-circle"></i>
+                  <Icon name="info-circle" />
                   {{ $t('analytics.sources.form.credentialHint') }}
                 </span>
                 <div v-if="secretsLoadError" class="form-error">{{ secretsLoadError }}</div>
@@ -162,7 +162,7 @@
                     v-model="form.access"
                     class="sr-only"
                   />
-                  <i :class="level.icon"></i>
+                  <Icon :name="level.icon" />
                   <span>{{ level.label }}</span>
                   <small>{{ level.description }}</small>
                 </label>
@@ -171,7 +171,7 @@
 
             <!-- Submission error -->
             <div v-if="submitError" class="submit-error">
-              <i class="fas fa-exclamation-triangle"></i>
+              <Icon name="exclamation-triangle" />
               {{ submitError }}
             </div>
           </div>
@@ -185,7 +185,8 @@
               :disabled="submitting"
               type="button"
             >
-              <i :class="submitting ? 'fas fa-spinner fa-spin' : (isEditMode ? 'fas fa-save' : 'fas fa-plus')"></i>
+              <i v-if="submitting" class="fas fa-spinner fa-spin"></i>
+              <Icon v-else :name="isEditMode ? 'save' : 'plus'" />
               {{ submitting ? $t('analytics.sources.form.saving') : (isEditMode ? $t('analytics.sources.form.saveChanges') : $t('analytics.sources.addSource')) }}
             </button>
           </div>
@@ -206,6 +207,7 @@
  * Issue #1133: Code Source Registry for codebase analytics.
  */
 
+import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, watch, onMounted, toRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useFocusTrap } from '@/composables/useFocusTrap'
@@ -258,19 +260,19 @@ const accessLevels = computed(() => [
   {
     value: 'private' as const,
     label: t('analytics.sources.access.private'),
-    icon: 'fas fa-lock',
+    icon: 'lock',
     description: t('analytics.sources.access.privateDesc')
   },
   {
     value: 'shared' as const,
     label: t('analytics.sources.access.shared'),
-    icon: 'fas fa-users',
+    icon: 'users',
     description: t('analytics.sources.access.sharedDesc')
   },
   {
     value: 'public' as const,
     label: t('analytics.sources.access.public'),
-    icon: 'fas fa-globe',
+    icon: 'globe',
     description: t('analytics.sources.access.publicDesc')
   }
 ])

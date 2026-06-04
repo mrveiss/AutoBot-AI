@@ -8,9 +8,7 @@ Multi-user session collaboration with permission management.
 Part of Issue #872 - Session Collaboration API (#608 Phase 3).
 """
 
-import logging
 import uuid
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -27,10 +25,11 @@ from api.schemas_agent import (
 from api.schemas_workflows import SessionPresenceResponse, SessionShareSecretResponse
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from models.session_collaboration import PermissionLevel, SessionCollaboration
 from user_management.database import get_async_session
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/sessions", tags=["collaboration"])
 
@@ -40,7 +39,7 @@ router = APIRouter(prefix="/sessions", tags=["collaboration"])
 # ====================================================================
 
 
-async def _get_session_collab(session_id: str, db: AsyncSession) -> Optional[SessionCollaboration]:
+async def _get_session_collab(session_id: str, db: AsyncSession) -> SessionCollaboration | None:
     """Get session collaboration record."""
     from sqlalchemy import select
 

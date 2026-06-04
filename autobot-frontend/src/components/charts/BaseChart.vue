@@ -15,15 +15,15 @@
       <span v-if="subtitle" class="chart-subtitle">{{ subtitle }}</span>
     </div>
     <div v-if="loading" class="chart-loading-overlay">
-      <i class="fas fa-spinner fa-spin"></i>
+      <Icon name="spinner" :spin="true" />
       <span>{{ $t('charts.base.loading') }}</span>
     </div>
     <div v-else-if="error" class="chart-error">
-      <i class="fas fa-exclamation-triangle"></i>
+      <Icon name="exclamation-triangle" />
       <span>{{ error }}</span>
     </div>
     <div v-else-if="!hasData" class="chart-no-data">
-      <i class="fas fa-chart-bar"></i>
+      <Icon name="chart-bar" />
       <span>{{ $t('charts.base.noData') }}</span>
     </div>
     <apexchart
@@ -44,6 +44,7 @@ import { useI18n } from 'vue-i18n'
 import VueApexCharts from 'vue3-apexcharts'
 import type { ApexOptions } from 'apexcharts'
 import { getCssVar } from '@/composables/useCssVars'
+import Icon from '@/components/ui/Icon.vue'
 
 const { t } = useI18n()
 

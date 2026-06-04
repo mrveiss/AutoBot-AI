@@ -45,6 +45,23 @@ export interface DiscoveredPlugin {
   manifest: PluginManifest
 }
 
+export interface CapabilityInfo {
+  plugin_name: string
+  trust_tier: 'official' | 'verified' | 'community' | 'unverified'
+  required_capabilities: string[]
+  granted_capabilities: string[]
+  pending_approval: string[]
+}
+
+export interface AuditLogEntry {
+  timestamp: string
+  plugin_name: string
+  capability: string
+  granted: boolean
+  operation: string
+  metadata?: string
+}
+
 // ===== Composable =====
 
 export function usePlugins() {
@@ -57,7 +74,10 @@ export function usePlugins() {
     error.value = null
     try {
       const data = await wrap(() => ApiClient.get<any>(`${getApiBase()}/plugins`))
-      plugins.value = data.plugins ?? []
+      // Backend returns {plugins:[...], total:N}. Guard against a bare array
+      // response to handle shape divergence between PluginListResponse and actual
+      // payload. (#6774)
+      plugins.value = Array.isArray(data) ? data : (data?.plugins ?? [])
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to list plugins'
       error.value = msg
@@ -220,6 +240,54 @@ export function usePlugins() {
     }
   }
 
+  async function getCapabilities(pluginName: string): Promise<CapabilityInfo | null> {
+    error.value = null
+    try {
+      const data = await wrap(() =>
+        ApiClient.get<CapabilityInfo>(`${getApiBase()}/plugins/${pluginName}/capabilities`),
+      )
+      return data
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : `Failed to get capabilities for ${pluginName}`
+      error.value = msg
+      logger.error('getCapabilities error: %s', msg)
+      return null
+    }
+  }
+
+  async function approveCapabilities(
+    pluginName: string,
+    capabilities: string[],
+  ): Promise<boolean> {
+    error.value = null
+    try {
+      await ApiClient.post(`${getApiBase()}/plugins/${pluginName}/approve-capabilities`, {
+        capabilities,
+      })
+      return true
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : `Failed to approve capabilities for ${pluginName}`
+      error.value = msg
+      logger.error('approveCapabilities error: %s', msg)
+      return false
+    }
+  }
+
+  async function getAuditLog(limit = 50): Promise<AuditLogEntry[]> {
+    error.value = null
+    try {
+      const data = await wrap(() =>
+        ApiClient.get<{ entries: AuditLogEntry[] }>(`${getApiBase()}/plugins/audit?limit=${limit}`),
+      )
+      return data.entries ?? []
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to fetch audit log'
+      error.value = msg
+      logger.error('getAuditLog error: %s', msg)
+      return []
+    }
+  }
+
   return {
     plugins,
     discovered,
@@ -237,5 +305,8 @@ export function usePlugins() {
     updatePluginConfig,
     installFromZip,
     installFromGit,
+    getCapabilities,
+    approveCapabilities,
+    getAuditLog,
   }
 }

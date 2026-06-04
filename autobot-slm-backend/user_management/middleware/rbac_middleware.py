@@ -5,111 +5,76 @@
 RBAC Middleware
 
 Role-Based Access Control middleware for FastAPI endpoints.
-Provides database-driven permission checking backed by Redis (GH #6511).
-
-Cache strategy
---------------
-When ``SLM_REDIS_URL`` is set the middleware stores each user's permission set
-in Redis under ``slm:perm:{user_id}`` with a 5-minute TTL.  On Redis failure
-the middleware falls back to a per-process dict so a Redis outage cannot
-take down auth entirely, but the fallback is ephemeral and non-shared.
-
-Use ``RBACMiddleware.clear_cache(user_id)`` after every role-change write so
-stale permission sets are not served until TTL expiry.
-
-Audit events
-------------
-Every denied permission check emits an ``AuditLog`` row (action=
-``permission_denied``) to the user-management database via a fire-and-forget
-``asyncio.Task``.  Failures in the audit write are logged at WARNING level and
-never bubble up to the caller (GH #6511).
+Provides database-driven permission checking with Redis-backed caching.
 """
 
 import asyncio
 import json
 import logging
+import time
 import uuid
 from functools import wraps
-from typing import Callable, List, Optional, Set, Union
+from typing import Callable, List, Set
 
 from fastapi import HTTPException, Request, status
 
-from autobot_shared.auth.permissions import Permission  # canonical enum (GH #6511)
+from autobot_shared.redis_client import get_async_redis_client
 from user_management.config import get_deployment_config
 from user_management.database import db_session_context
 from user_management.services import TenantContext, UserService
 
 logger = logging.getLogger(__name__)
 
-CACHE_TTL_SECONDS = 300  # 5 minutes — matches old in-process TTL
+_PUBSUB_CHANNEL = "autobot:rbac:invalidate"
+_REDIS_KEY_PREFIX = "rbac:perm:"
+
+# L1 per-worker cache — invalidated immediately on this worker via clear_cache,
+# and on all other workers via the pub/sub listener below.
+_permission_cache: dict[str, tuple[Set[str], float]] = {}
+CACHE_TTL_SECONDS = 300  # 5 minutes
+
+_listener_task: asyncio.Task | None = None
 
 
-# ---------------------------------------------------------------------------
-# Redis client helper (lazy, optional)
-# ---------------------------------------------------------------------------
-
-_redis_client = None
-_redis_init_attempted = False
-
-
-async def _get_redis():
-    """Return an asyncio Redis client, or None when Redis is not configured."""
-    global _redis_client, _redis_init_attempted
-    if _redis_init_attempted:
-        return _redis_client
-
-    _redis_init_attempted = True
-    try:
-        from config import settings
-
-        if not settings.redis_url:
-            return None
-        import redis.asyncio as aioredis
-
-        _redis_client = aioredis.from_url(settings.redis_url, decode_responses=True)
-        await _redis_client.ping()
-        logger.info("RBAC: Redis permission cache connected at %s", settings.redis_url)
-    except Exception as exc:
-        logger.warning("RBAC: Redis not available, using in-process fallback: %s", exc)
-        _redis_client = None
-    return _redis_client
-
-
-# In-process fallback: user_id → (frozenset(permissions), timestamp)
-_fallback_cache: dict[str, tuple[frozenset, float]] = {}
-
-
-# ---------------------------------------------------------------------------
-# Audit helper (fire-and-forget)
-# ---------------------------------------------------------------------------
+async def _run_invalidation_listener() -> None:
+    """Subscribe to the RBAC invalidation channel and clear L1 on each message."""
+    while True:
+        try:
+            redis = await get_async_redis_client()
+            if redis is None:
+                await asyncio.sleep(5)
+                continue
+            pubsub = redis.pubsub()
+            await pubsub.subscribe(_PUBSUB_CHANNEL)
+            logger.info("RBAC cache: subscribed to %s", _PUBSUB_CHANNEL)
+            async for message in pubsub.listen():
+                if message["type"] != "message":
+                    continue
+                try:
+                    data = json.loads(message["data"])
+                    user_id_str = data.get("user_id")
+                    if user_id_str:
+                        _permission_cache.pop(user_id_str, None)
+                    else:
+                        _permission_cache.clear()
+                except Exception:
+                    logger.exception("RBAC invalidation listener: error processing message")
+        except asyncio.CancelledError:
+            return
+        except Exception:
+            logger.exception("RBAC invalidation listener: reconnecting in 5s")
+            try:
+                await pubsub.unsubscribe(_PUBSUB_CHANNEL)
+                await pubsub.aclose()
+            except Exception:
+                pass
+            await asyncio.sleep(5)
 
 
-async def _emit_permission_denied_audit(
-    user_id: Optional[uuid.UUID],
-    permission: str,
-    endpoint: str,
-) -> None:
-    """Write a permission_denied audit row; swallow all errors."""
-    try:
-        from user_management.models.audit import AuditAction, AuditLog, AuditResourceType
-
-        async with db_session_context() as session:
-            log = AuditLog(
-                user_id=user_id,
-                action=AuditAction.PERMISSION_DENIED,
-                resource_type=AuditResourceType.ENDPOINT,
-                outcome="denied",
-                details={"permission_required": permission, "endpoint": endpoint},
-            )
-            session.add(log)
-            await session.commit()
-    except Exception as exc:
-        logger.warning("RBAC: failed to write permission_denied audit log: %s", exc)
-
-
-# ---------------------------------------------------------------------------
-# RBACMiddleware
-# ---------------------------------------------------------------------------
+async def _ensure_listener_started() -> None:
+    global _listener_task
+    if _listener_task is None or _listener_task.done():
+        _listener_task = asyncio.create_task(_run_invalidation_listener())
 
 
 class RBACMiddleware:
@@ -180,24 +145,47 @@ class RBACMiddleware:
 
     async def get_user_permissions(
         self,
-        user_id: Optional[uuid.UUID],
-        org_id: Optional[uuid.UUID] = None,
+        user_id: uuid.UUID | None,
+        org_id: uuid.UUID | None = None,
     ) -> Set[str]:
         """Return the full permission set for *user_id* (Redis → DB → empty)."""
         if not user_id:
             return set()
 
-        cached = await self._cache_get(user_id)
-        if cached is not None:
-            return cached
+        await _ensure_listener_started()
 
+        cache_key = str(user_id)
+
+        # L1: check local per-worker cache
+        if cache_key in _permission_cache:
+            permissions, timestamp = _permission_cache[cache_key]
+            if time.time() - timestamp < CACHE_TTL_SECONDS:
+                return permissions
+
+        # L2: check Redis shared cache
+        redis = await get_async_redis_client()
+        if redis is not None:
+            raw = await redis.get(f"{_REDIS_KEY_PREFIX}{cache_key}")
+            if raw is not None:
+                permissions = set(json.loads(raw))
+                _permission_cache[cache_key] = (permissions, time.time())
+                return permissions
+
+        # Fetch from database and populate both caches
         if self._config.postgres_enabled:
             try:
                 async with db_session_context() as session:
                     context = TenantContext(org_id=org_id, user_id=user_id)
                     user_service = UserService(session, context)
                     permissions = await user_service.get_user_permissions(user_id)
-                    await self._cache_set(user_id, permissions)
+
+                    _permission_cache[cache_key] = (permissions, time.time())
+                    if redis is not None:
+                        await redis.setex(
+                            f"{_REDIS_KEY_PREFIX}{cache_key}",
+                            CACHE_TTL_SECONDS,
+                            json.dumps(list(permissions)),
+                        )
                     return permissions
             except Exception as exc:
                 logger.warning("RBAC: failed to fetch permissions from database: %s", exc)
@@ -206,9 +194,9 @@ class RBACMiddleware:
 
     async def check_permission(
         self,
-        user_id: Optional[uuid.UUID],
-        permission: Union[Permission, str],
-        org_id: Optional[uuid.UUID] = None,
+        user_id: uuid.UUID | None,
+        permission: str,
+        org_id: uuid.UUID | None = None,
     ) -> bool:
         perm_str = permission.value if isinstance(permission, Permission) else permission
         permissions = await self.get_user_permissions(user_id, org_id)
@@ -216,9 +204,9 @@ class RBACMiddleware:
 
     async def check_any_permission(
         self,
-        user_id: Optional[uuid.UUID],
-        permissions: List[Union[Permission, str]],
-        org_id: Optional[uuid.UUID] = None,
+        user_id: uuid.UUID | None,
+        permissions: List[str],
+        org_id: uuid.UUID | None = None,
     ) -> bool:
         user_permissions = await self.get_user_permissions(user_id, org_id)
         if "allow_all" in user_permissions:
@@ -228,9 +216,9 @@ class RBACMiddleware:
 
     async def check_all_permissions(
         self,
-        user_id: Optional[uuid.UUID],
-        permissions: List[Union[Permission, str]],
-        org_id: Optional[uuid.UUID] = None,
+        user_id: uuid.UUID | None,
+        permissions: List[str],
+        org_id: uuid.UUID | None = None,
     ) -> bool:
         user_permissions = await self.get_user_permissions(user_id, org_id)
         if "allow_all" in user_permissions:
@@ -238,10 +226,19 @@ class RBACMiddleware:
         perm_strs = {p.value if isinstance(p, Permission) else p for p in permissions}
         return perm_strs.issubset(user_permissions)
 
-    def clear_cache(self, user_id: Optional[uuid.UUID] = None) -> None:
-        """Schedule cache invalidation.  Safe to call from sync code."""
+    async def clear_cache(self, user_id: uuid.UUID | None = None) -> None:
+        """
+        Clear permission cache for one user or all users.
+
+        Deletes from the L1 local dict, the Redis L2 key, and publishes an
+        invalidation message so all other uvicorn workers clear their L1.
+
+        Args:
+            user_id: If provided, clear only for this user. Otherwise clear all.
+        """
+        # Clear L1
         if user_id:
-            asyncio.ensure_future(self._cache_delete(user_id))
+            _permission_cache.pop(str(user_id), None)
         else:
             # Clear entire fallback; Redis keys expire naturally.
             _fallback_cache.clear()
@@ -258,17 +255,41 @@ class RBACMiddleware:
         except Exception as exc:
             logger.warning("RBAC: failed to clear all Redis permission keys: %s", exc)
 
+        # Clear Redis L2 and notify other workers
+        redis = await get_async_redis_client()
+        if redis is not None:
+            if user_id:
+                await redis.delete(f"{_REDIS_KEY_PREFIX}{user_id}")
+            else:
+                pipeline = redis.pipeline()
+                async for key in redis.scan_iter(f"{_REDIS_KEY_PREFIX}*"):
+                    pipeline.delete(key)
+                await pipeline.execute()
+            payload = json.dumps({"user_id": str(user_id)} if user_id else {})
+            await redis.publish(_PUBSUB_CHANNEL, payload)
+            logger.debug("RBAC cache invalidated for user=%s", user_id)
+
 
 # Global instance
 rbac_middleware = RBACMiddleware()
 
 
-# ---------------------------------------------------------------------------
-# Request context helpers (unchanged signatures)
-# ---------------------------------------------------------------------------
+def _extract_request(args: tuple, request: Request | None) -> Request:
+    """
+    Extract Request object from function arguments.
 
+    Issue #620: Extracted from permission decorators to reduce duplication.
 
-def _extract_request(args: tuple, request: Optional[Request]) -> Request:
+    Args:
+        args: Positional arguments
+        request: Request from kwargs (may be None)
+
+    Returns:
+        Request object
+
+    Raises:
+        HTTPException: 500 if Request not found
+    """
     if request is None:
         for arg in args:
             if isinstance(arg, Request):
@@ -283,7 +304,18 @@ def _extract_request(args: tuple, request: Optional[Request]) -> Request:
 
 def _extract_user_context(
     request: Request,
-) -> tuple[Optional[uuid.UUID], Optional[uuid.UUID]]:
+) -> tuple[uuid.UUID | None, uuid.UUID | None]:
+    """
+    Extract user_id and org_id from request state.
+
+    Issue #620: Extracted from permission decorators to reduce duplication.
+
+    Args:
+        request: FastAPI Request object
+
+    Returns:
+        Tuple of (user_id, org_id), either may be None
+    """
     user_id = None
     org_id = None
     if hasattr(request.state, "user"):
@@ -301,7 +333,20 @@ def _extract_user_context(
     return user_id, org_id
 
 
-def _require_authentication(user_id: Optional[uuid.UUID], permissions_desc: str) -> None:
+def _require_authentication(user_id: uuid.UUID | None, permissions_desc: str) -> None:
+    """
+    Check that user is authenticated, raise 401 if not.
+
+    Issue #620: Extracted from permission decorators to reduce duplication.
+    Issue #744: Return 401 for unauthenticated users.
+
+    Args:
+        user_id: User UUID (None if not authenticated)
+        permissions_desc: Description of required permissions for logging
+
+    Raises:
+        HTTPException: 401 if user_id is None
+    """
     if user_id is None:
         logger.warning("RBAC: authentication required for permission: %s", permissions_desc)
         raise HTTPException(

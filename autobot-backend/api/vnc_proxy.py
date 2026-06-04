@@ -13,7 +13,6 @@ enabling the agent to see what users are viewing in real-time.
 """
 
 import asyncio
-import logging
 
 import aiohttp
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
@@ -23,11 +22,12 @@ from api.schemas_system import VncProxyStatusResponse
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_client import get_http_client
+from autobot_shared.logging_manager import get_logger
 from constants.network_constants import NetworkConstants
 from type_defs.common import Metadata
 
 router = APIRouter()
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 async def _send_client_data_to_vnc(data: dict, vnc_ws, vnc_type: str) -> bool:

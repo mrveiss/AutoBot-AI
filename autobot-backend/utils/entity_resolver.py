@@ -12,7 +12,7 @@ import json
 import uuid
 from datetime import datetime, timezone
 from difflib import SequenceMatcher
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
@@ -162,7 +162,7 @@ class EntityResolver:
         )
 
     async def resolve_entities(
-        self, entity_names: List[str], context: Optional[Dict[str, Any]] = None
+        self, entity_names: List[str], context: Dict[str, Any] | None = None
     ) -> EntityResolutionResult:
         """
         Resolve a list of entity names to canonical entities.
@@ -251,7 +251,7 @@ class EntityResolver:
 
     async def _find_exact_match(
         self, entity_name: str, existing_mappings: Dict[str, EntityMapping]
-    ) -> Optional[EntityMapping]:
+    ) -> EntityMapping | None:
         """Find exact match for entity name in existing mappings."""
         entity_name_normalized = entity_name.lower().strip()
 
@@ -268,7 +268,7 @@ class EntityResolver:
 
     async def _find_similar_entity(
         self, entity_name: str, existing_mappings: Dict[str, EntityMapping]
-    ) -> Optional[EntityMapping]:
+    ) -> EntityMapping | None:
         """Find similar entity using various similarity methods."""
         best_mapping = None
         best_score = 0.0
@@ -403,7 +403,7 @@ class EntityResolver:
         except Exception as e:
             logger.error("Error storing entity mappings: %s", e)
 
-    async def _record_resolution_history(self, result: EntityResolutionResult, context: Optional[Dict[str, Any]]):
+    async def _record_resolution_history(self, result: EntityResolutionResult, context: Dict[str, Any] | None):
         """Record entity resolution history for analytics."""
         try:
             if not self.redis_client:

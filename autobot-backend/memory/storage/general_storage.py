@@ -6,19 +6,19 @@ General Storage Implementation - Category-based memory management
 """
 
 import json
-import logging
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Union
+from typing import Any, Dict, List
 
 import aiosqlite
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import parse_utc_iso
 
 from ..enums import MemoryCategory
 from ..models import MemoryEntry
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class GeneralStorage:
@@ -28,7 +28,7 @@ class GeneralStorage:
     Responsibility: Manage category-based memory in SQLite database
     """
 
-    def __init__(self, db_path: Union[str, Path]):
+    def __init__(self, db_path: str | Path):
         """Initialize general storage with SQLite database path."""
         self.db_path = Path(db_path) if isinstance(db_path, str) else db_path
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -98,7 +98,7 @@ class GeneralStorage:
             logger.error("Failed to store memory entry: %s", e)
             raise RuntimeError(f"Failed to store memory entry: {e}")
 
-    async def retrieve(self, category: Union[MemoryCategory, str], filters: Dict[str, Any]) -> List[MemoryEntry]:
+    async def retrieve(self, category: MemoryCategory | str, filters: Dict[str, Any]) -> List[MemoryEntry]:
         """Retrieve memories by category and filters"""
         category_value = category.value if isinstance(category, MemoryCategory) else category
 

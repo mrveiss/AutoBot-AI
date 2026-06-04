@@ -19,7 +19,7 @@ import { ref } from 'vue'
 import appConfig from '@/config/AppConfig.js'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import apiClient from '@/utils/ApiClient'
-import { useToast } from '@/composables/useToast'
+import { useNotificationBus } from '@/composables/useNotificationBus'
 import { createLogger } from '@/utils/debugUtils'
 import { useChatStore } from '@/stores/useChatStore'
 import { usePermissionStore } from '@/stores/usePermissionStore'
@@ -54,7 +54,7 @@ export interface ApprovalResponse {
 }
 
 export function useCommandApproval() {
-  const { showToast } = useToast()
+  const { showToast } = useNotificationBus()
   const chatStore = useChatStore()
   const permissionStore = usePermissionStore()
 

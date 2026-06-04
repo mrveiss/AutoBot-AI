@@ -8,8 +8,9 @@
  */
 
 import { ref, computed } from 'vue'
-import { useApiWithState } from './useApi'
+import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
+import { showSubtleErrorNotification } from '@/utils/cacheManagement'
 import { usePollingJob } from '@/composables/usePollingJob'
 import { useLoadingState } from '@/composables/useLoadingState'
 import type {
@@ -23,86 +24,58 @@ import type {
 } from '@/types/operations'
 import { isTerminalStatus } from '@/types/operations'
 import { getApiBase } from '@/config/ssot-config'
-import { useProbeBackedHealth } from '@/composables/useProbeBackedHealth'
+import { useProbeBackedHealth, probeStatusToLegacy } from '@/composables/useProbeBackedHealth'
 
 const logger = createLogger('useOperationsApi')
 
-/**
- * Composable for long-running operations API calls
- */
 export function useOperationsApi() {
-  const { api, withErrorHandling } = useApiWithState()
+  const api = useApiClient()
 
   return {
-    /**
-     * List all operations with optional filtering
-     */
     async listOperations(filter?: OperationsFilter): Promise<OperationsListResponse | null> {
-      return withErrorHandling(
-        async () => {
-          const params = new URLSearchParams()
-          if (filter?.status) params.append('status', filter.status)
-          if (filter?.operation_type) params.append('operation_type', filter.operation_type)
-          if (filter?.limit) params.append('limit', filter.limit.toString())
-
-          const queryString = params.toString()
-          const url = `${getApiBase()}/long-running/${queryString ? `?${queryString}` : ''}`
-          return await api.get<any>(url)
-        },
-        {
-          errorMessage: 'Failed to load operations',
-          fallbackValue: {
-            operations: [],
-            total_count: 0,
-            active_count: 0,
-            completed_count: 0,
-            failed_count: 0
-          }
-        }
-      )
+      try {
+        const params = new URLSearchParams()
+        if (filter?.status) params.append('status', filter.status)
+        if (filter?.operation_type) params.append('operation_type', filter.operation_type)
+        if (filter?.limit) params.append('limit', filter.limit.toString())
+        const queryString = params.toString()
+        const url = `${getApiBase()}/long-running/${queryString ? `?${queryString}` : ''}`
+        return await api.get<any>(url)
+      } catch (error: unknown) {
+        logger.error('Failed to load operations', error)
+        showSubtleErrorNotification('Error', 'Failed to load operations', 'error')
+        return { operations: [], total_count: 0, active_count: 0, completed_count: 0, failed_count: 0 }
+      }
     },
 
-    /**
-     * Get single operation status
-     */
     async getOperation(operationId: string): Promise<Operation | null> {
-      return withErrorHandling(
-        async () => {
-          return await api.get<any>(`${getApiBase()}/long-running/${operationId}`)
-        },
-        {
-          errorMessage: 'Failed to get operation status',
-          fallbackValue: null
-        }
-      )
+      try {
+        return await api.get<any>(`${getApiBase()}/long-running/${operationId}`)
+      } catch (error: unknown) {
+        logger.error('Failed to get operation status', error)
+        showSubtleErrorNotification('Error', 'Failed to get operation status', 'error')
+        return null
+      }
     },
 
-    /**
-     * Cancel a running operation
-     */
     async cancelOperation(operationId: string): Promise<CancelOperationResponse | null> {
-      return withErrorHandling(
-        async () => {
-          return await api.post<any>(`${getApiBase()}/long-running/${operationId}/cancel`)
-        },
-        {
-          errorMessage: 'Failed to cancel operation'
-        }
-      )
+      try {
+        return await api.post<any>(`${getApiBase()}/long-running/${operationId}/cancel`)
+      } catch (error: unknown) {
+        logger.error('Failed to cancel operation', error)
+        showSubtleErrorNotification('Error', 'Failed to cancel operation', 'error')
+        return null
+      }
     },
 
-    /**
-     * Resume a failed/paused operation from checkpoint
-     */
     async resumeOperation(operationId: string): Promise<ResumeOperationResponse | null> {
-      return withErrorHandling(
-        async () => {
-          return await api.post<any>(`${getApiBase()}/long-running/${operationId}/resume`)
-        },
-        {
-          errorMessage: 'Failed to resume operation'
-        }
-      )
+      try {
+        return await api.post<any>(`${getApiBase()}/long-running/${operationId}/resume`)
+      } catch (error: unknown) {
+        logger.error('Failed to resume operation', error)
+        showSubtleErrorNotification('Error', 'Failed to resume operation', 'error')
+        return null
+      }
     },
 
     /**
@@ -116,7 +89,7 @@ export function useOperationsApi() {
     getHealth: useProbeBackedHealth<OperationsHealthResponse>({
       probeName: 'long_running',
       buildHealthy: (probe, data) => ({
-        status: 'healthy',
+        status: probeStatusToLegacy(probe.status),
         active_operations: Number(data.active_operations ?? 0),
         total_operations: Number(data.total_operations ?? 0),
         redis_connected: Boolean(data.redis_connected),
@@ -124,7 +97,7 @@ export function useOperationsApi() {
         message: probe.detail,
       }),
       buildUnavailable: (message) => ({
-        status: 'unavailable',
+        status: 'unavailable' as const,
         active_operations: 0,
         total_operations: 0,
         redis_connected: false,
@@ -136,13 +109,9 @@ export function useOperationsApi() {
   }
 }
 
-/**
- * Composable with reactive state management for operations
- */
 export function useOperationsState() {
   const operationsApi = useOperationsApi()
 
-  // Reactive state
   const operations = ref<Operation[]>([])
   const totalCount = ref(0)
   const activeCount = ref(0)
@@ -156,39 +125,20 @@ export function useOperationsState() {
   const selectedOperation = ref<Operation | null>(null)
   const healthStatus = ref<OperationsHealthResponse | null>(null)
 
-  // Filter state
-  const filter = ref<OperationsFilter>({
-    status: undefined,
-    operation_type: undefined,
-    limit: 50
-  })
-
-  // Polling state
+  const filter = ref<OperationsFilter>({ status: undefined, operation_type: undefined, limit: 50 })
   const isPolling = ref(false)
   const pollingIntervalMs = ref(5000)
 
-  // Computed
   const activeOperations = computed(() =>
     operations.value.filter((op) => op.status === 'running' || op.status === 'pending')
   )
-
-  const completedOperations = computed(() =>
-    operations.value.filter((op) => op.status === 'completed')
-  )
-
+  const completedOperations = computed(() => operations.value.filter((op) => op.status === 'completed'))
   const failedOperations = computed(() =>
     operations.value.filter((op) => op.status === 'failed' || op.status === 'timeout')
   )
-
   const hasActiveOperations = computed(() => activeOperations.value.length > 0)
+  const isServiceHealthy = computed(() => healthStatus.value?.status === 'healthy')
 
-  const isServiceHealthy = computed(
-    () => healthStatus.value?.status === 'healthy'
-  )
-
-  /**
-   * Load operations list
-   */
   async function loadOperations() {
     errors.value = []
     await wrap(async () => {
@@ -209,97 +159,54 @@ export function useOperationsState() {
     })
   }
 
-  /**
-   * Refresh single operation
-   */
   async function refreshOperation(operationId: string) {
     const result = await operationsApi.getOperation(operationId)
     if (result) {
-      // Update in operations list
       const index = operations.value.findIndex((op) => op.operation_id === operationId)
-      if (index !== -1) {
-        operations.value[index] = result
-      }
-      // Update selected if matches
-      if (selectedOperation.value?.operation_id === operationId) {
-        selectedOperation.value = result
-      }
+      if (index !== -1) operations.value[index] = result
+      if (selectedOperation.value?.operation_id === operationId) selectedOperation.value = result
     }
     return result
   }
 
-  /**
-   * Cancel an operation
-   */
   async function cancelOperation(operationId: string) {
     const result = await operationsApi.cancelOperation(operationId)
-    if (result) {
-      // Refresh the operation to get updated status
-      await refreshOperation(operationId)
-    }
+    if (result) await refreshOperation(operationId)
     return result
   }
 
-  /**
-   * Resume an operation
-   */
   async function resumeOperation(operationId: string) {
     const result = await operationsApi.resumeOperation(operationId)
-    if (result) {
-      // Reload all operations as a new one was created
-      await loadOperations()
-    }
+    if (result) await loadOperations()
     return result
   }
 
-  /**
-   * Check service health
-   */
   async function checkHealth() {
     healthStatus.value = await operationsApi.getHealth()
     return healthStatus.value
   }
 
-  /**
-   * Set filter and reload
-   */
   async function setFilter(newFilter: Partial<OperationsFilter>) {
     filter.value = { ...filter.value, ...newFilter }
     await loadOperations()
   }
 
-  /**
-   * Clear filter and reload
-   */
   async function clearFilter() {
-    filter.value = {
-      status: undefined,
-      operation_type: undefined,
-      limit: 50
-    }
+    filter.value = { status: undefined, operation_type: undefined, limit: 50 }
     await loadOperations()
   }
 
-  /**
-   * Select an operation for detail view
-   */
   function selectOperation(operation: Operation | null) {
     selectedOperation.value = operation
   }
 
-  /**
-   * Start polling for updates.
-   * usePollingJob is recreated on each call to support dynamic intervalMs.
-   */
   let _stopOperationsPoller: (() => void) | null = null
 
   function startPolling(intervalMs = 5000) {
     if (_stopOperationsPoller) _stopOperationsPoller()
-
     pollingIntervalMs.value = intervalMs
     isPolling.value = true
     logger.debug(`Started polling every ${intervalMs}ms`)
-
     const poller = usePollingJob<void>(
       async () => {
         if (hasActiveOperations.value) {
@@ -316,9 +223,6 @@ export function useOperationsState() {
     poller.start('')
   }
 
-  /**
-   * Stop polling
-   */
   function stopPolling() {
     if (_stopOperationsPoller) _stopOperationsPoller()
     _stopOperationsPoller = null
@@ -326,9 +230,6 @@ export function useOperationsState() {
     logger.debug('Stopped polling')
   }
 
-  /**
-   * Get operations grouped by status
-   */
   function getOperationsByStatus(status: OperationStatus): Operation[] {
     return operations.value.filter((op) => op.status === status)
   }
@@ -336,38 +237,10 @@ export function useOperationsState() {
   // usePollingJob handles cleanup via its own onScopeDispose hook.
 
   return {
-    // State
-    operations,
-    totalCount,
-    activeCount,
-    completedCount,
-    failedCount,
-    loading,
-    error,
-    selectedOperation,
-    healthStatus,
-    filter,
-    isPolling,
-    pollingIntervalMs,
-
-    // Computed
-    activeOperations,
-    completedOperations,
-    failedOperations,
-    hasActiveOperations,
-    isServiceHealthy,
-
-    // Methods
-    loadOperations,
-    refreshOperation,
-    cancelOperation,
-    resumeOperation,
-    checkHealth,
-    setFilter,
-    clearFilter,
-    selectOperation,
-    startPolling,
-    stopPolling,
-    getOperationsByStatus
+    operations, totalCount, activeCount, completedCount, failedCount,
+    loading, error, selectedOperation, healthStatus, filter, isPolling, pollingIntervalMs,
+    activeOperations, completedOperations, failedOperations, hasActiveOperations, isServiceHealthy,
+    loadOperations, refreshOperation, cancelOperation, resumeOperation, checkHealth,
+    setFilter, clearFilter, selectOperation, startPolling, stopPolling, getOperationsByStatus
   }
 }

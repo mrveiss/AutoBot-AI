@@ -10,6 +10,7 @@ Issue #759: Knowledge Pipeline Foundation - Extract, Cognify, Load (ECL).
 from knowledge.pipeline.cognifiers.context_generator import ContextGeneratorCognifier
 from knowledge.pipeline.cognifiers.entity_extractor import EntityExtractor
 from knowledge.pipeline.cognifiers.event_extractor import EventExtractor
+from knowledge.pipeline.cognifiers.fact_extractor import FactExtractor
 from knowledge.pipeline.cognifiers.recursive_summarizer import RecursiveSummarizer
 from knowledge.pipeline.cognifiers.relationship_extractor import RelationshipExtractor
 from knowledge.pipeline.cognifiers.summarizer import HierarchicalSummarizer
@@ -18,6 +19,7 @@ __all__ = [
     "ContextGeneratorCognifier",
     "EntityExtractor",
     "EventExtractor",
+    "FactExtractor",
     "HierarchicalSummarizer",
     "RecursiveSummarizer",
     "RelationshipExtractor",

@@ -38,7 +38,7 @@ import threading
 from collections import OrderedDict
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import numpy as np
 import uvicorn
@@ -169,7 +169,7 @@ def load_config() -> Dict[str, Any]:
     return {}
 
 
-def get_persistent_worker_id(prefix: str = "windows_npu_worker") -> Optional[str]:
+def get_persistent_worker_id(prefix: str = "windows_npu_worker") -> str | None:
     """
     Get persistent worker ID assigned by main host.
 
@@ -282,9 +282,7 @@ def save_pairing_status(main_host: str, worker_id: str) -> bool:
 config = load_config()
 
 # Configure logging
-log_dir = Path(__file__).parent.parent / config.get("logging", {}).get(
-    "directory", "logs"
-)
+log_dir = Path(__file__).parent.parent / config.get("logging", {}).get("directory", "logs")
 log_dir.mkdir(exist_ok=True)
 
 logging.basicConfig(
@@ -320,7 +318,7 @@ class LRUCache:
         self._ttl = ttl
         self._lock = asyncio.Lock()
 
-    async def get(self, key: str) -> Optional[Any]:
+    async def get(self, key: str) -> Any | None:
         """Get item from cache, returns None if not found or expired."""
         async with self._lock:
             if key not in self._cache:
@@ -401,9 +399,7 @@ class ThreadSafeStats:
             # Keep only last 100 for rolling average
             if len(self._response_times) > 100:
                 self._response_times.pop(0)
-            self._stats["average_response_time_ms"] = sum(self._response_times) / len(
-                self._response_times
-            )
+            self._stats["average_response_time_ms"] = sum(self._response_times) / len(self._response_times)
 
     async def set(self, stat_name: str, value: Any) -> None:
         """Thread-safe set of a stat value."""
@@ -452,7 +448,7 @@ class ONNXModelManager:
         self._sessions: Dict[str, Any] = {}  # ONNX Runtime InferenceSessions
         self._model_configs: Dict[str, Dict] = {}
         self._lock = asyncio.Lock()
-        self._selected_device: Optional[str] = None
+        self._selected_device: str | None = None
         self._available_providers: List[str] = []
         self._initialized = False
         self._openvino_device: str = "CPU"  # NPU, GPU, or CPU
@@ -467,9 +463,7 @@ class ONNXModelManager:
             import onnxruntime as ort
 
             self._available_providers = ort.get_available_providers()
-            logger.info(
-                f"Available ONNX Runtime providers: {self._available_providers}"
-            )
+            logger.info(f"Available ONNX Runtime providers: {self._available_providers}")
 
             # Check for OpenVINO Execution Provider (preferred for Intel NPU)
             if "OpenVINOExecutionProvider" in self._available_providers:
@@ -531,9 +525,7 @@ class ONNXModelManager:
                 if preferred_device in available_devices:
                     self._selected_device = preferred_device
                     self._openvino_device = preferred_device
-                    device_name = self._device_full_names.get(
-                        preferred_device, preferred_device
-                    )
+                    device_name = self._device_full_names.get(preferred_device, preferred_device)
                     logger.info(f"Selected device: {preferred_device} ({device_name})")
                     selected = True
                     break
@@ -629,9 +621,7 @@ class ONNXModelManager:
                 "num_of_threads": DEFAULT_NPU_THREADS,
             }
             providers.append(("OpenVINOExecutionProvider", openvino_options))
-            logger.info(
-                f"Using OpenVINO EP with device_type='{target_device}' for {model_type}"
-            )
+            logger.info(f"Using OpenVINO EP with device_type='{target_device}' for {model_type}")
 
         # DirectML as fallback for GPU (doesn't support NPU properly)
         if "DmlExecutionProvider" in self._available_providers:
@@ -654,9 +644,7 @@ class ONNXModelManager:
         """
         model_config = SUPPORTED_MODELS.get(model_name)
         if not model_config:
-            raise ValueError(
-                f"Unsupported model: {model_name}. Supported: {list(SUPPORTED_MODELS.keys())}"
-            )
+            raise ValueError(f"Unsupported model: {model_name}. Supported: {list(SUPPORTED_MODELS.keys())}")
 
         model_path = self.models_dir / model_name
         onnx_model_path = model_path / "model.onnx"
@@ -669,15 +657,11 @@ class ONNXModelManager:
 
         # Run blocking operations in thread pool
         loop = asyncio.get_event_loop()
-        await loop.run_in_executor(
-            None, self._download_and_convert, model_name, model_config, model_path
-        )
+        await loop.run_in_executor(None, self._download_and_convert, model_name, model_config, model_path)
 
         return model_path
 
-    def _download_and_convert(
-        self, model_name: str, model_config: Dict, model_path: Path
-    ):
+    def _download_and_convert(self, model_name: str, model_config: Dict, model_path: Path):
         """Download model from HuggingFace and export to ONNX (blocking)"""
         try:
             from transformers import AutoModel, AutoTokenizer
@@ -771,9 +755,7 @@ class ONNXModelManager:
 
                 # Load in thread pool (blocking operations)
                 loop = asyncio.get_event_loop()
-                success = await loop.run_in_executor(
-                    None, self._create_inference_session, model_name, model_path
-                )
+                success = await loop.run_in_executor(None, self._create_inference_session, model_name, model_path)
                 return success
 
             except Exception as e:
@@ -787,17 +769,9 @@ class ONNXModelManager:
         Issue #165: Used to route embedding models to GPU, chat models to NPU.
         """
         model_name_lower = model_name.lower()
-        if (
-            "embed" in model_name_lower
-            or "minilm" in model_name_lower
-            or "bge" in model_name_lower
-        ):
+        if "embed" in model_name_lower or "minilm" in model_name_lower or "bge" in model_name_lower:
             return "embedding"
-        elif (
-            "llama" in model_name_lower
-            or "chat" in model_name_lower
-            or "instruct" in model_name_lower
-        ):
+        elif "llama" in model_name_lower or "chat" in model_name_lower or "instruct" in model_name_lower:
             return "chat"
         return "default"
 
@@ -811,9 +785,7 @@ class ONNXModelManager:
 
             # Load tokenizer
             logger.info(f"Loading tokenizer for {model_name}...")
-            tokenizer = AutoTokenizer.from_pretrained(
-                str(model_path), trust_remote_code=True
-            )
+            tokenizer = AutoTokenizer.from_pretrained(str(model_path), trust_remote_code=True)
             self._tokenizers[model_name] = tokenizer
 
             # Issue #165: Determine model type for device selection
@@ -821,25 +793,19 @@ class ONNXModelManager:
 
             # Create ONNX Runtime session with workload-specific device
             onnx_model_path = model_path / "model.onnx"
-            logger.info(
-                f"Creating inference session for {onnx_model_path} (type: {model_type})..."
-            )
+            logger.info(f"Creating inference session for {onnx_model_path} (type: {model_type})...")
 
             providers = self._get_session_providers(model_type)
             logger.info(f"Using execution providers: {providers}")
 
             # Session options for optimization
             sess_options = ort.SessionOptions()
-            sess_options.graph_optimization_level = (
-                ort.GraphOptimizationLevel.ORT_ENABLE_ALL
-            )
+            sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
             sess_options.enable_mem_pattern = True
             sess_options.enable_cpu_mem_arena = True
 
             # Create session with provider fallback
-            session = ort.InferenceSession(
-                str(onnx_model_path), sess_options=sess_options, providers=providers
-            )
+            session = ort.InferenceSession(str(onnx_model_path), sess_options=sess_options, providers=providers)
 
             # Log which provider was actually used
             actual_providers = session.get_providers()
@@ -859,9 +825,7 @@ class ONNXModelManager:
             self._sessions[model_name] = session
             self._model_configs[model_name] = SUPPORTED_MODELS.get(model_name, {})
 
-            logger.info(
-                f"Model {model_name} loaded successfully on {self._selected_device}"
-            )
+            logger.info(f"Model {model_name} loaded successfully on {self._selected_device}")
             return True
 
         except Exception as e:
@@ -878,9 +842,7 @@ class ONNXModelManager:
         Issue #640: Real inference using DirectML for NPU/GPU acceleration.
         """
         if model_name not in self._sessions:
-            raise RuntimeError(
-                f"Model {model_name} not loaded. Call load_model() first."
-            )
+            raise RuntimeError(f"Model {model_name} not loaded. Call load_model() first.")
 
         tokenizer = self._tokenizers[model_name]
         session = self._sessions[model_name]
@@ -927,9 +889,7 @@ class ONNXModelManager:
             self._initialize_onnx_runtime()
 
             # Get the full device name for the selected device
-            selected_full_name = self._device_full_names.get(
-                self._openvino_device, self._selected_device or "Unknown"
-            )
+            selected_full_name = self._device_full_names.get(self._openvino_device, self._selected_device or "Unknown")
 
             info = {
                 "selected_device": self._selected_device or "Unknown",
@@ -942,12 +902,9 @@ class ONNXModelManager:
                     "DmlExecutionProvider",
                     "CPUExecutionProvider",
                 ],
-                "is_npu": self._selected_device == "NPU"
-                or self._openvino_device == "NPU",
-                "is_gpu": self._selected_device in ["GPU", "DirectML", "CUDA"]
-                or self._openvino_device == "GPU",
-                "is_cpu": self._selected_device == "CPU"
-                and self._openvino_device == "CPU",
+                "is_npu": self._selected_device == "NPU" or self._openvino_device == "NPU",
+                "is_gpu": self._selected_device in ["GPU", "DirectML", "CUDA"] or self._openvino_device == "GPU",
+                "is_cpu": self._selected_device == "CPU" and self._openvino_device == "CPU",
                 "backend": "ONNX Runtime + OpenVINO EP",
                 "device_full_names": self._device_full_names,
             }
@@ -970,9 +927,7 @@ class ONNXModelManager:
                 info["device_name"] = self._selected_device
 
             # Check DirectML as fallback
-            info["directml_available"] = (
-                "DmlExecutionProvider" in self._available_providers
-            )
+            info["directml_available"] = "DmlExecutionProvider" in self._available_providers
 
             return info
 
@@ -985,7 +940,7 @@ OpenVINOModelManager = ONNXModelManager
 
 
 # Global model manager instance with thread-safe initialization (Issue #662)
-_model_manager: Optional[OpenVINOModelManager] = None
+_model_manager: OpenVINOModelManager | None = None
 _model_manager_lock = threading.Lock()
 
 
@@ -1017,11 +972,11 @@ class NPUTaskResponse(BaseModel):
 
     task_id: str
     status: str
-    result: Optional[Dict[str, Any]] = None
-    error: Optional[str] = None
-    processing_time_ms: Optional[float] = None
-    npu_utilization_percent: Optional[float] = None
-    optimization_metrics: Optional[Dict[str, Any]] = None
+    result: Dict[str, Any] | None = None
+    error: str | None = None
+    processing_time_ms: float | None = None
+    npu_utilization_percent: float | None = None
+    optimization_metrics: Dict[str, Any] | None = None
 
 
 class PairRequest(BaseModel):
@@ -1033,7 +988,7 @@ class PairRequest(BaseModel):
 
     worker_id: str  # ID assigned by main host
     main_host: str  # IP/hostname of the main host
-    config: Optional[Dict[str, Any]] = None  # Optional config from main host
+    config: Dict[str, Any] | None = None  # Optional config from main host
 
 
 class PairResponse(BaseModel):
@@ -1044,7 +999,7 @@ class PairResponse(BaseModel):
     success: bool
     worker_id: str
     message: str
-    device_info: Optional[Dict[str, Any]] = None
+    device_info: Dict[str, Any] | None = None
 
 
 class WindowsNPUWorker:
@@ -1079,10 +1034,8 @@ class WindowsNPUWorker:
         self._models_lock = asyncio.Lock()  # Thread-safe model loading (TOCTOU fix)
 
         # Real OpenVINO model manager (Issue #640 - replaces mock inference)
-        self._model_manager: Optional[OpenVINOModelManager] = None
-        self._use_real_inference = (
-            True  # Set to False to use mock inference for testing
-        )
+        self._model_manager: OpenVINOModelManager | None = None
+        self._use_real_inference = True  # Set to False to use mock inference for testing
 
         # Thread-safe LRU cache (Issue #68 - race condition + memory growth fix)
         cache_size = cache_config.get("max_size", DEFAULT_EMBEDDING_CACHE_SIZE)
@@ -1104,7 +1057,7 @@ class WindowsNPUWorker:
         )
 
         # Bootstrap config storage
-        self._bootstrap_config: Optional[Dict[str, Any]] = None
+        self._bootstrap_config: Dict[str, Any] | None = None
 
         self.setup_routes()
 
@@ -1220,8 +1173,7 @@ class WindowsNPUWorker:
                         success=False,
                         worker_id=self.worker_id,
                         message=(
-                            f"Worker already paired with different host: "
-                            f"{self.pairing_status.get('main_host')}"
+                            f"Worker already paired with different host: " f"{self.pairing_status.get('main_host')}"
                         ),
                     )
 
@@ -1326,15 +1278,9 @@ class WindowsNPUWorker:
                 try:
                     manager_info = self._model_manager.get_device_info()
                     info["model_manager"] = manager_info
-                    info["selected_device"] = manager_info.get(
-                        "selected_device", "UNKNOWN"
-                    )
-                    info["available_providers"] = manager_info.get(
-                        "available_providers", []
-                    )
-                    info["directml_available"] = manager_info.get(
-                        "directml_available", False
-                    )
+                    info["selected_device"] = manager_info.get("selected_device", "UNKNOWN")
+                    info["available_providers"] = manager_info.get("available_providers", [])
+                    info["directml_available"] = manager_info.get("directml_available", False)
                 except Exception as e:
                     info["model_manager_error"] = str(e)
             else:
@@ -1370,9 +1316,7 @@ class WindowsNPUWorker:
             optimization_level: str = "balanced",
         ):
             """Generate embeddings with NPU acceleration"""
-            return await self._handle_embedding_generate(
-                texts, model_name, use_cache, optimization_level
-            )
+            return await self._handle_embedding_generate(texts, model_name, use_cache, optimization_level)
 
         @self.app.post("/search/semantic")
         async def semantic_search(
@@ -1432,9 +1376,7 @@ class WindowsNPUWorker:
         """
         try:
             start_time = time.time()
-            embeddings = await self.generate_npu_embeddings(
-                texts, model_name, use_cache, optimization_level
-            )
+            embeddings = await self.generate_npu_embeddings(texts, model_name, use_cache, optimization_level)
             processing_time = (time.time() - start_time) * 1000
 
             model_info = self.loaded_models.get(model_name, {})
@@ -1531,9 +1473,7 @@ class WindowsNPUWorker:
         if self.worker_id:
             logger.info(f"Starting Windows NPU Worker (paired): {self.worker_id}")
         else:
-            logger.info(
-                "Starting Windows NPU Worker (unpaired - waiting for main host)"
-            )
+            logger.info("Starting Windows NPU Worker (unpaired - waiting for main host)")
 
         logger.info(f"Port: {config.get('service', {}).get('port', DEFAULT_PORT)}")
 
@@ -1564,12 +1504,8 @@ class WindowsNPUWorker:
             logger.info("Telemetry disabled - worker not yet paired with main host")
             self.telemetry_client = None
 
-        pairing_msg = (
-            "paired" if self.pairing_status.get("paired") else "waiting for pairing"
-        )
-        logger.info(
-            f"Windows NPU Worker initialized - NPU: {self.npu_available}, Status: {pairing_msg}"
-        )
+        pairing_msg = "paired" if self.pairing_status.get("paired") else "waiting for pairing"
+        logger.info(f"Windows NPU Worker initialized - NPU: {self.npu_available}, Status: {pairing_msg}")
 
     async def bootstrap_config(self):
         """
@@ -1588,7 +1524,7 @@ class WindowsNPUWorker:
 
             # Issue #640: Pass our persistent worker_id to prevent duplicates
             # Issue #3084: Use AUTOBOT_BACKEND_HOST env var; fallback to localhost (no hardcoded IPs)
-            default_backend_host = os.environ.get("AUTOBOT_BACKEND_HOST", "localhost")
+            default_backend_host = os.environ.get("AUTOBOT_BACKEND_HOST", "localhost")  # ssot-config-exempt: NPU worker
             bootstrap = await fetch_bootstrap_config(
                 backend_host=backend_config.get("host") or default_backend_host,
                 backend_port=backend_config.get("port", 8001),
@@ -1608,9 +1544,7 @@ class WindowsNPUWorker:
                 self._bootstrap_config = bootstrap
                 logger.info("Bootstrap config received from backend")
             else:
-                logger.warning(
-                    "Bootstrap failed - using local config (standalone mode)"
-                )
+                logger.warning("Bootstrap failed - using local config (standalone mode)")
                 self._bootstrap_config = None
 
         except Exception as e:
@@ -1699,14 +1633,10 @@ class WindowsNPUWorker:
 
                 if "NPU" in available_devices:
                     self.npu_available = True
-                    logger.info(
-                        "Intel NPU detected via OpenVINO - NPU acceleration enabled!"
-                    )
+                    logger.info("Intel NPU detected via OpenVINO - NPU acceleration enabled!")
                 elif "GPU" in available_devices:
                     self.npu_available = True
-                    logger.info(
-                        "Intel GPU detected via OpenVINO - GPU acceleration enabled"
-                    )
+                    logger.info("Intel GPU detected via OpenVINO - GPU acceleration enabled")
                 else:
                     self.npu_available = False
                     logger.warning("OpenVINO EP available but no NPU/GPU detected")
@@ -1715,14 +1645,10 @@ class WindowsNPUWorker:
                 logger.info("OpenVINO EP available - will try NPU/GPU acceleration")
         elif "DmlExecutionProvider" in available_providers:
             self.npu_available = True
-            logger.info(
-                "DirectML available (GPU only, Intel NPU not exposed via DirectML)"
-            )
+            logger.info("DirectML available (GPU only, Intel NPU not exposed via DirectML)")
         elif "CUDAExecutionProvider" in available_providers:
             self.npu_available = True
-            logger.info(
-                "CUDA execution provider available - NVIDIA GPU acceleration enabled"
-            )
+            logger.info("CUDA execution provider available - NVIDIA GPU acceleration enabled")
         else:
             self.npu_available = False
             logger.warning("No GPU/NPU acceleration available - using CPU only")
@@ -1739,9 +1665,7 @@ class WindowsNPUWorker:
             import platform
 
             if platform.system() != "Windows":
-                logger.warning(
-                    "NPU worker optimized for Windows - OpenVINO NPU not available on this platform"
-                )
+                logger.warning("NPU worker optimized for Windows - OpenVINO NPU not available on this platform")
                 self.npu_available = False
                 return
 
@@ -1792,9 +1716,7 @@ class WindowsNPUWorker:
                 except Exception as e:
                     logger.warning(f"Failed to preload {model_type} model: {e}")
 
-    async def load_and_optimize_model(
-        self, model_name: str, optimization_level: str = "balanced"
-    ):
+    async def load_and_optimize_model(self, model_name: str, optimization_level: str = "balanced"):
         """
         Load and optimize model with thread-safe locking (Issue #68 - TOCTOU fix).
 
@@ -1813,9 +1735,7 @@ class WindowsNPUWorker:
             try:
                 # Issue #640: Use ONNX Runtime model manager for DirectML inference
                 if self._use_real_inference and self._model_manager is not None:
-                    logger.info(
-                        f"Loading {model_name} with ONNX Runtime (real inference)..."
-                    )
+                    logger.info(f"Loading {model_name} with ONNX Runtime (real inference)...")
 
                     # Load model via model manager (handles download + ONNX export)
                     success = await self._model_manager.load_model(model_name)
@@ -1834,40 +1754,27 @@ class WindowsNPUWorker:
                             "load_time": time.time() - start_time,
                             "device": display_device,
                             "size_mb": self.estimate_model_size(model_name),
-                            "optimized_for_npu": device_info.get("is_npu", False)
-                            or device_info.get("is_gpu", False),
+                            "optimized_for_npu": device_info.get("is_npu", False) or device_info.get("is_gpu", False),
                             "optimization_level": optimization_level,
-                            "precision": self.npu_optimization.get(
-                                "precision", DEFAULT_NPU_PRECISION
-                            ),
+                            "precision": self.npu_optimization.get("precision", DEFAULT_NPU_PRECISION),
                             "real_inference": True,
                             "device_info": device_info,
                             "backend": device_info.get("backend", "ONNX Runtime"),
                         }
-                        logger.info(
-                            f"Model {model_name} loaded for {display_device} (real inference)"
-                        )
+                        logger.info(f"Model {model_name} loaded for {display_device} (real inference)")
                     else:
-                        logger.warning(
-                            f"Failed to load {model_name} with real inference, using mock"
-                        )
-                        await self._load_mock_model(
-                            model_name, optimization_level, start_time
-                        )
+                        logger.warning(f"Failed to load {model_name} with real inference, using mock")
+                        await self._load_mock_model(model_name, optimization_level, start_time)
 
                 else:
                     # Fallback to mock loading
-                    await self._load_mock_model(
-                        model_name, optimization_level, start_time
-                    )
+                    await self._load_mock_model(model_name, optimization_level, start_time)
 
             except Exception as e:
                 logger.error(f"Failed to load model {model_name}: {e}")
                 raise
 
-    async def _load_mock_model(
-        self, model_name: str, optimization_level: str, start_time: float
-    ):
+    async def _load_mock_model(self, model_name: str, optimization_level: str, start_time: float):
         """Load mock model (fallback when real inference unavailable)."""
         if self.npu_available:
             logger.info(f"Loading {model_name} for NPU (mock)...")
@@ -1880,9 +1787,7 @@ class WindowsNPUWorker:
                 "size_mb": self.estimate_model_size(model_name),
                 "optimized_for_npu": True,
                 "optimization_level": optimization_level,
-                "precision": self.npu_optimization.get(
-                    "precision", DEFAULT_NPU_PRECISION
-                ),
+                "precision": self.npu_optimization.get("precision", DEFAULT_NPU_PRECISION),
                 "real_inference": False,
             }
             logger.info(f"Model {model_name} loaded for NPU (mock)")
@@ -1899,9 +1804,7 @@ class WindowsNPUWorker:
                 "real_inference": False,
             }
 
-    async def process_task(
-        self, task_id: str, task_data: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    async def process_task(self, task_id: str, task_data: Dict[str, Any]) -> Dict[str, Any]:
         """Process task"""
         task_type = task_data.get("task_type")
         model_name = task_data.get("model_name")
@@ -1919,9 +1822,7 @@ class WindowsNPUWorker:
         else:
             raise ValueError(f"Unsupported task type: {task_type}")
 
-    async def process_embedding_task(
-        self, input_data: Dict[str, Any], model_name: str
-    ) -> Dict[str, Any]:
+    async def process_embedding_task(self, input_data: Dict[str, Any], model_name: str) -> Dict[str, Any]:
         """Process embedding task with thread-safe cache and stats (Issue #68)"""
         text = input_data.get("text", "")
         cache_key = self._generate_cache_key(text, model_name)
@@ -1999,9 +1900,7 @@ class WindowsNPUWorker:
         similarity_threshold: float,
     ) -> List[Dict[str, Any]]:
         """Perform semantic search with thread-safe stats (Issue #68)"""
-        query_embedding = await self.generate_npu_embeddings(
-            [query_text], "nomic-embed-text", True, "speed"
-        )
+        query_embedding = await self.generate_npu_embeddings([query_text], "nomic-embed-text", True, "speed")
         query_vector = np.array(query_embedding[0])
 
         document_vectors = np.array(document_embeddings)
@@ -2013,9 +1912,7 @@ class WindowsNPUWorker:
 
         # Compute cosine similarities
         query_norm = query_vector / np.linalg.norm(query_vector)
-        doc_norms = document_vectors / np.linalg.norm(
-            document_vectors, axis=1, keepdims=True
-        )
+        doc_norms = document_vectors / np.linalg.norm(document_vectors, axis=1, keepdims=True)
         similarities = np.dot(doc_norms, query_norm)
 
         results = []
@@ -2025,9 +1922,7 @@ class WindowsNPUWorker:
                     {
                         "index": i,
                         "similarity": float(similarity),
-                        "metadata": (
-                            document_metadata[i] if i < len(document_metadata) else {}
-                        ),
+                        "metadata": (document_metadata[i] if i < len(document_metadata) else {}),
                     }
                 )
 
@@ -2049,9 +1944,7 @@ class WindowsNPUWorker:
                 embedding = self._model_manager.generate_embedding(text, model_name)
                 return embedding
             except Exception as e:
-                logger.warning(
-                    f"Real inference failed for {model_name}, using mock: {e}"
-                )
+                logger.warning(f"Real inference failed for {model_name}, using mock: {e}")
                 # Fall through to mock implementation
 
         # Mock implementation (fallback)
@@ -2066,11 +1959,7 @@ class WindowsNPUWorker:
         random.seed(int(hash_obj.hexdigest(), 16) % (2**32))
 
         # Use constants for embedding dimensions
-        dim = (
-            EMBEDDING_DIM_NOMIC
-            if "nomic" in model_name.lower()
-            else EMBEDDING_DIM_DEFAULT
-        )
+        dim = EMBEDDING_DIM_NOMIC if "nomic" in model_name.lower() else EMBEDDING_DIM_DEFAULT
         embedding = [random.uniform(-1, 1) for _ in range(dim)]
 
         # Normalize
@@ -2132,11 +2021,7 @@ class WindowsNPUWorker:
 
     async def get_npu_memory_usage(self) -> float:
         """Get NPU memory usage"""
-        return sum(
-            info.get("size_mb", 0)
-            for info in self.loaded_models.values()
-            if info.get("device") == "NPU"
-        )
+        return sum(info.get("size_mb", 0) for info in self.loaded_models.values() if info.get("device") == "NPU")
 
     def estimate_model_size(self, model_name: str) -> int:
         """Estimate model size in MB using constants"""
@@ -2167,9 +2052,7 @@ class WindowsNPUWorker:
         ]
 
         start_time = time.time()
-        embeddings = await self.generate_npu_embeddings(
-            test_texts, "nomic-embed-text", False, "speed"
-        )
+        embeddings = await self.generate_npu_embeddings(test_texts, "nomic-embed-text", False, "speed")
         embedding_time = (time.time() - start_time) * 1000
 
         results["benchmarks"]["embedding_generation"] = {
@@ -2231,9 +2114,7 @@ class WindowsNPUWorker:
                 logger.info("  Network Interfaces:")
                 for iface in interfaces:
                     primary = " (Primary)" if iface.get("is_primary") else ""
-                    logger.info(
-                        f"    - {iface['type']} ({iface['interface']}): {iface['ip']}{primary}"
-                    )
+                    logger.info(f"    - {iface['type']} ({iface['interface']}): {iface['ip']}{primary}")
             else:
                 logger.info("  Network Interfaces: None detected")
 
@@ -2259,9 +2140,7 @@ class WindowsNPUWorker:
             # Apply Redis config if provided
             if "redis" in host_config:
                 redis_cfg = host_config["redis"]
-                logger.info(
-                    f"Received Redis config from main host: {redis_cfg.get('host', 'N/A')}"
-                )
+                logger.info(f"Received Redis config from main host: {redis_cfg.get('host', 'N/A')}")
                 # Store for use by initialize_redis on next restart
                 self._bootstrap_config = {"redis": redis_cfg}
 
@@ -2331,19 +2210,19 @@ def main():
     tls_config = config.get("tls", {})
     tls_enabled = (
         tls_config.get("enabled", False)
-        or os.environ.get("NPU_WORKER_TLS_ENABLED", "false").lower() == "true"
+        or os.environ.get("NPU_WORKER_TLS_ENABLED", "false").lower() == "true"  # ssot-config-exempt: NPU worker
     )
     ssl_keyfile = None
     ssl_certfile = None
 
     if tls_enabled:
         cert_dir = tls_config.get(
-            "cert_dir", os.environ.get("AUTOBOT_TLS_CERT_DIR", "certs")
+            "cert_dir", os.environ.get("AUTOBOT_TLS_CERT_DIR", "certs")  # ssot-config-exempt: NPU worker
         )
         ssl_keyfile = os.path.join(cert_dir, "server-key.pem")
         ssl_certfile = os.path.join(cert_dir, "server-cert.pem")
         port = tls_config.get(
-            "port", int(os.environ.get("NPU_WORKER_TLS_PORT", "8444"))
+            "port", int(os.environ.get("NPU_WORKER_TLS_PORT", "8444"))  # ssot-config-exempt: NPU worker
         )
         logger.info(f"TLS enabled - using HTTPS on port {port}")
 

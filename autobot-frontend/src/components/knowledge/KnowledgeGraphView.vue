@@ -4,23 +4,23 @@
     <!-- Sidebar -->
     <aside class="graph-sidebar">
       <div class="sidebar-header">
-        <h3><i class="fas fa-project-diagram"></i> {{ $t('knowledge.graphView.title') }}</h3>
+        <h3><Icon name="project-diagram" /> {{ $t('knowledge.graphView.title') }}</h3>
       </div>
 
       <!-- Quick Stats -->
       <div class="quick-stats">
         <div class="stat-row">
-          <i class="fas fa-circle"></i>
+          <Icon name="circle" />
           <span class="stat-label">{{ $t('knowledge.graphView.entities') }}</span>
           <span class="stat-value">{{ stats.entityCount }}</span>
         </div>
         <div class="stat-row">
-          <i class="fas fa-clock"></i>
+          <Icon name="clock" />
           <span class="stat-label">{{ $t('knowledge.graphView.events') }}</span>
           <span class="stat-value">{{ stats.eventCount }}</span>
         </div>
         <div class="stat-row">
-          <i class="fas fa-layer-group"></i>
+          <Icon name="layer-group" />
           <span class="stat-label">{{ $t('knowledge.graphView.summaries') }}</span>
           <span class="stat-value">{{ stats.summaryCount }}</span>
         </div>
@@ -35,7 +35,7 @@
           class="nav-item"
           :class="{ active: isActiveTab(tab.route) }"
         >
-          <i :class="tab.icon"></i>
+          <Icon :name="tab.icon" />
           <span>{{ tab.label }}</span>
         </router-link>
       </nav>
@@ -43,7 +43,7 @@
       <!-- Back Link -->
       <div class="sidebar-footer">
         <router-link to="/knowledge" class="back-link">
-          <i class="fas fa-arrow-left"></i>
+          <Icon name="arrow-left" />
           {{ $t('knowledge.graphView.backToKnowledgeBase') }}
         </router-link>
       </div>
@@ -60,7 +60,7 @@
       >
         <div class="welcome-card">
           <h2>
-            <i class="fas fa-project-diagram"></i>
+            <Icon name="project-diagram" />
             {{ $t('knowledge.graphView.knowledgeGraphPipeline') }}
           </h2>
           <p>
@@ -74,7 +74,7 @@
               class="feature-card"
               @click="navigateTo(tab.route)"
             >
-              <i :class="tab.icon" class="feature-icon"></i>
+              <Icon :name="tab.icon" />
               <h4>{{ tab.label }}</h4>
               <p>{{ tab.description }}</p>
             </div>
@@ -90,6 +90,7 @@
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
 
+import Icon from '@/components/ui/Icon.vue'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
@@ -104,25 +105,25 @@ const tabs = computed(() => [
   {
     route: '/knowledge/graph/pipeline',
     label: t('knowledge.graphView.pipeline'),
-    icon: 'fas fa-play-circle',
+    icon: 'play-circle',
     description: t('knowledge.graphView.pipelineDescription'),
   },
   {
     route: '/knowledge/graph/entities',
     label: t('knowledge.graphView.entitiesTab'),
-    icon: 'fas fa-project-diagram',
+    icon: 'project-diagram',
     description: t('knowledge.graphView.entitiesDescription'),
   },
   {
     route: '/knowledge/graph/timeline',
     label: t('knowledge.graphView.timeline'),
-    icon: 'fas fa-stream',
+    icon: 'stream',
     description: t('knowledge.graphView.timelineDescription'),
   },
   {
     route: '/knowledge/graph/summaries',
     label: t('knowledge.graphView.summariesTab'),
-    icon: 'fas fa-layer-group',
+    icon: 'layer-group',
     description: t('knowledge.graphView.summariesDescription'),
   },
 ])

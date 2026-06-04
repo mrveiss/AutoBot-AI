@@ -9,10 +9,9 @@ Includes advanced codebase analytics for usage statistics and reusability detect
 """
 
 import asyncio
-import logging
 import re
 from collections import defaultdict
-from typing import List, Optional
+from typing import List
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse
@@ -24,17 +23,27 @@ from agents.npu_code_search_agent import (
 )
 from api.schemas_code import (
     CodeAnalyticsRequest,
+    CodeSearchCacheClearResultResponse,
+    CodeSearchDeclarationsResultResponse,
+    CodeSearchDuplicatesResultResponse,
+    CodeSearchExamplesResultResponse,
     CodeSearchGetResponse,
     CodeSearchIndexRequest,
+    CodeSearchIndexResultResponse,
+    CodeSearchRefactorSuggestionsResultResponse,
     CodeSearchRequest,
+    CodeSearchSearchResultResponse,
+    CodeSearchStatsResultResponse,
+    CodeSearchStatusResultResponse,
 )
 from api.schemas_common import DataResponse
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
 
 router = APIRouter()
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Performance optimization: O(1) lookup for index status validation (Issue #326)
 SUCCESSFUL_INDEX_STATUSES = {"success", "already_indexed"}
@@ -142,7 +151,7 @@ SEARCH_EXAMPLES_DATA = {
 _get_code_search_agent = lazy_singleton(get_npu_code_search)
 
 
-@router.post("/index", response_model=DataResponse)
+@router.post("/index", response_model=DataResponse[CodeSearchIndexResultResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="index_codebase",
@@ -194,7 +203,7 @@ async def index_codebase(request: CodeSearchIndexRequest):
         raise HTTPException(status_code=500, detail="Indexing failed")
 
 
-@router.post("/search", response_model=DataResponse)
+@router.post("/search", response_model=DataResponse[CodeSearchSearchResultResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="search_code",
@@ -275,7 +284,7 @@ async def search_code(request: CodeSearchRequest):
 async def search_code_get(
     q: str = Query(..., description="Search query"),
     type: str = Query("semantic", description="Search type"),
-    lang: Optional[str] = Query(None, description="Programming language filter"),
+    lang: str | None = Query(None, description="Programming language filter"),
     max: int = Query(20, description="Maximum results", le=100),
 ):
     """
@@ -291,7 +300,7 @@ async def search_code_get(
     return await search_code(request)
 
 
-@router.get("/status", response_model=DataResponse)
+@router.get("/status", response_model=DataResponse[CodeSearchStatusResultResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_search_status",
@@ -348,7 +357,7 @@ async def get_search_status():
         raise HTTPException(status_code=500, detail="Status check failed")
 
 
-@router.delete("/cache", response_model=DataResponse)
+@router.delete("/cache", response_model=DataResponse[CodeSearchCacheClearResultResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="clear_search_cache",
@@ -386,7 +395,7 @@ async def clear_search_cache():
         raise HTTPException(status_code=500, detail="Cache clear failed")
 
 
-@router.get("/examples", response_model=DataResponse)
+@router.get("/examples", response_model=DataResponse[CodeSearchExamplesResultResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_search_examples",
@@ -599,7 +608,7 @@ _DUPLICATE_DETECTION_PATTERNS = (
 )
 
 
-async def _search_pattern_for_duplicates(pattern: str) -> Optional[dict]:
+async def _search_pattern_for_duplicates(pattern: str) -> dict | None:
     """
     Search for duplicates matching a pattern.
 
@@ -712,7 +721,7 @@ async def _analyze_all_pattern_types() -> dict:
     return analysis_results
 
 
-@router.post("/analytics/declarations", response_model=DataResponse)
+@router.post("/analytics/declarations", response_model=DataResponse[CodeSearchDeclarationsResultResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="analyze_declarations",
@@ -745,7 +754,7 @@ async def analyze_declarations(request: CodeAnalyticsRequest):
         raise HTTPException(status_code=500, detail="Analysis failed")
 
 
-@router.post("/analytics/duplicates", response_model=DataResponse)
+@router.post("/analytics/duplicates", response_model=DataResponse[CodeSearchDuplicatesResultResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="find_code_duplicates",
@@ -790,7 +799,7 @@ async def find_code_duplicates(request: CodeAnalyticsRequest):
         raise HTTPException(status_code=500, detail="Duplicate detection failed")
 
 
-@router.get("/analytics/stats", response_model=DataResponse)
+@router.get("/analytics/stats", response_model=DataResponse[CodeSearchStatsResultResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_codebase_statistics",
@@ -874,7 +883,9 @@ def _build_refactor_response(root_path: str, suggestions: list) -> dict:
     }
 
 
-@router.post("/analytics/refactor-suggestions", response_model=DataResponse)
+@router.post(
+    "/analytics/refactor-suggestions", response_model=DataResponse[CodeSearchRefactorSuggestionsResultResponse]
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_refactor_suggestions",

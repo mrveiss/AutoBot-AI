@@ -1,7 +1,7 @@
 <template>
   <div v-if="attachments && attachments.length > 0" class="message-attachments">
     <div class="attachment-header">
-      <i class="fas fa-paperclip" aria-hidden="true"></i>
+      <Icon name="paperclip" />
       <span>{{ $t('chat.messages.attachments', { count: attachments.length }, attachments.length) }}</span>
     </div>
     <div class="attachment-list">
@@ -11,7 +11,7 @@
         class="attachment-item"
         @click="$emit('view', attachment)"
       >
-        <i :class="getAttachmentIcon(attachment.type)" aria-hidden="true"></i>
+        <Icon :name="getAttachmentIcon(attachment.type)" />
         <span class="attachment-name">{{ attachment.name }}</span>
         <span class="attachment-size">{{ formatSize(attachment.size) }}</span>
         <button
@@ -19,7 +19,7 @@
           @click.stop="$emit('download', attachment)"
           :aria-label="`Download ${attachment.name}`"
         >
-          <i class="fas fa-download" aria-hidden="true"></i>
+          <Icon name="download" />
         </button>
       </div>
     </div>
@@ -38,6 +38,7 @@
  *
  * Issue #184: Split oversized Vue components
  */
+import Icon from '@/components/ui/Icon.vue'
 
 interface Attachment {
   id: string
@@ -61,15 +62,15 @@ defineEmits<Emits>()
 
 const getAttachmentIcon = (type: string): string => {
   const iconMap: Record<string, string> = {
-    image: 'fas fa-file-image',
-    video: 'fas fa-file-video',
-    audio: 'fas fa-file-audio',
-    pdf: 'fas fa-file-pdf',
-    document: 'fas fa-file-word',
-    spreadsheet: 'fas fa-file-excel',
-    code: 'fas fa-file-code',
-    archive: 'fas fa-file-archive',
-    text: 'fas fa-file-alt'
+    image: 'file-image',
+    video: 'file-video',
+    audio: 'file-audio',
+    pdf: 'file-pdf',
+    document: 'file-word',
+    spreadsheet: 'file-excel',
+    code: 'file-code',
+    archive: 'file-archive',
+    text: 'file-alt'
   }
 
   // Check for specific types
@@ -89,7 +90,7 @@ const getAttachmentIcon = (type: string): string => {
     return iconMap.code
   if (type.startsWith('text/')) return iconMap.text
 
-  return 'fas fa-file'
+  return 'file'
 }
 
 const formatSize = (bytes: number): string => {

@@ -9,18 +9,18 @@ request revision, resubmit, and comment. Publishes WebSocket
 notifications for pending approvals.
 """
 
-import logging
 import uuid
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
 from models.approval import Approval, ApprovalComment, ApprovalStatus, TaskApprovalLink
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Valid state transitions: source -> {allowed targets}
 _VALID_TRANSITIONS = {
@@ -39,7 +39,7 @@ _VALID_TRANSITIONS = {
 class ApprovalGateService:
     """Service for approval gate CRUD and lifecycle transitions."""
 
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
     # -- Create --------------------------------------------------------
@@ -48,12 +48,12 @@ class ApprovalGateService:
         self,
         title: str,
         approval_type: str,
-        requested_by_agent: Optional[str] = None,
-        description: Optional[str] = None,
-        workflow_id: Optional[str] = None,
-        workflow_step: Optional[str] = None,
-        context: Optional[Dict[str, Any]] = None,
-        task_ids: Optional[List[str]] = None,
+        requested_by_agent: str | None = None,
+        description: str | None = None,
+        workflow_id: str | None = None,
+        workflow_step: str | None = None,
+        context: Dict[str, Any] | None = None,
+        task_ids: List[str] | None = None,
     ) -> Approval:
         """Create a new approval gate request."""
         approval = Approval(
@@ -95,7 +95,7 @@ class ApprovalGateService:
         self,
         approval_id: uuid.UUID,
         decided_by: str,
-        comment: Optional[str] = None,
+        comment: str | None = None,
     ) -> Approval:
         """Approve a pending approval gate."""
         return await self._transition(
@@ -109,7 +109,7 @@ class ApprovalGateService:
         self,
         approval_id: uuid.UUID,
         decided_by: str,
-        comment: Optional[str] = None,
+        comment: str | None = None,
     ) -> Approval:
         """Reject a pending approval gate."""
         return await self._transition(
@@ -123,7 +123,7 @@ class ApprovalGateService:
         self,
         approval_id: uuid.UUID,
         decided_by: str,
-        comment: Optional[str] = None,
+        comment: str | None = None,
     ) -> Approval:
         """Request revision on a pending approval gate."""
         return await self._transition(
@@ -136,8 +136,8 @@ class ApprovalGateService:
     async def resubmit(
         self,
         approval_id: uuid.UUID,
-        description: Optional[str] = None,
-        context: Optional[Dict[str, Any]] = None,
+        description: str | None = None,
+        context: Dict[str, Any] | None = None,
     ) -> Approval:
         """Resubmit after revision request, reset to pending."""
         approval = await self._get_or_raise(approval_id)
@@ -220,7 +220,7 @@ class ApprovalGateService:
 
     # -- Queries -------------------------------------------------------
 
-    async def get(self, approval_id: uuid.UUID) -> Optional[Approval]:
+    async def get(self, approval_id: uuid.UUID) -> Approval | None:
         """Get an approval with comments and task links loaded."""
         stmt = (
             select(Approval)
@@ -235,10 +235,10 @@ class ApprovalGateService:
 
     async def list_approvals(
         self,
-        status: Optional[str] = None,
-        approval_type: Optional[str] = None,
-        workflow_id: Optional[str] = None,
-        agent_id: Optional[str] = None,
+        status: str | None = None,
+        approval_type: str | None = None,
+        workflow_id: str | None = None,
+        agent_id: str | None = None,
         limit: int = 50,
         offset: int = 0,
     ) -> List[Approval]:
@@ -301,7 +301,7 @@ class ApprovalGateService:
         approval_id: uuid.UUID,
         new_status: ApprovalStatus,
         decided_by: str,
-        comment: Optional[str],
+        comment: str | None,
     ) -> Approval:
         """Perform a status transition with validation."""
         approval = await self._get_or_raise(approval_id)
@@ -343,9 +343,10 @@ class ApprovalGateService:
     ) -> None:
         """Publish WebSocket notification via get_event_manager()."""
         try:
-            from event_manager import get_event_manager
+            from events.bus import PersistStrategy, publish_event
 
-            await get_event_manager().publish(
+            await publish_event(
+                "global",
                 event_type=event_type,
                 payload={
                     "approval_id": str(approval.id),
@@ -357,6 +358,7 @@ class ApprovalGateService:
                     "workflow_id": approval.workflow_id,
                     "workflow_step": approval.workflow_step,
                 },
+                persist=PersistStrategy.NONE,
             )
         except Exception as exc:
             logger.warning(

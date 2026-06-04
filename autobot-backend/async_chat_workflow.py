@@ -8,20 +8,20 @@ Replaces SimpleChatWorkflow with proper async architecture
 """
 
 import asyncio
-import logging
 import time
 import uuid
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from constants.threshold_constants import TimingConstants
 from dependency_container import inject_services
-from llm_interface_pkg.models import ChatMessage, LLMResponse  # Phase 2D #3185
+from llm_shared.models import ChatMessage, LLMResponse  # Phase 2D #3185
 from retry_mechanism import RetryConfig, RetryStrategy, with_retry
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Performance optimization: O(1) lookup for message classification keywords (Issue #326)
 TERMINAL_KEYWORDS = {"terminal", "command", "bash", "shell", "run"}
@@ -326,7 +326,7 @@ class WorkflowManager:
 
     def __init__(self):
         """Initialize workflow manager with async lock."""
-        self._instance: Optional[AsyncChatWorkflow] = None
+        self._instance: AsyncChatWorkflow | None = None
         self._lock = asyncio.Lock()
 
     async def get_workflow(self) -> AsyncChatWorkflow:

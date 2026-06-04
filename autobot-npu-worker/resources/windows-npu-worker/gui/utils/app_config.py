@@ -3,7 +3,6 @@ Application Configuration - GUI Application Settings
 """
 
 from pathlib import Path
-from typing import Optional
 
 
 class AppConfig:
@@ -30,7 +29,7 @@ class AppConfig:
         """Get configuration directory path"""
         return self.config_dir
 
-    def get_icon_path(self, icon_name: str) -> Optional[Path]:
+    def get_icon_path(self, icon_name: str) -> Path | None:
         """Get icon file path"""
         icon_path = self.icons_dir / icon_name
         if icon_path.exists():

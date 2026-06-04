@@ -54,9 +54,9 @@ function navigateToTab(tab: UpdatesTab): void {
   <div class="p-6 max-w-7xl mx-auto">
     <!-- Header -->
     <div class="mb-6">
-      <h1 class="text-2xl font-bold text-gray-900">Updates</h1>
+      <h1 class="text-2xl font-bold text-gray-900">{{ $t('updatesView.updates') }}</h1>
       <p class="text-sm text-gray-500 mt-1">
-        Manage system updates and code deployments across the fleet
+        {{ $t('updatesView.manageSystemUpdatesAnd') }}
       </p>
     </div>
 

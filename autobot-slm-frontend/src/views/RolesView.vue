@@ -284,8 +284,8 @@ onMounted(() => {
     <!-- Header -->
     <div class="flex items-center justify-between mb-6">
       <div>
-        <h1 class="text-2xl font-bold text-gray-900">Role Registry</h1>
-        <p class="text-sm text-gray-500 mt-1">Manage role definitions for fleet nodes</p>
+        <h1 class="text-2xl font-bold text-gray-900">{{ $t('rolesView.roleRegistry') }}</h1>
+        <p class="text-sm text-gray-500 mt-1">{{ $t('rolesView.manageRoleDefinitionsFor') }}</p>
       </div>
       <div class="flex items-center gap-2">
         <!-- Fleet health badge -->
@@ -299,7 +299,7 @@ onMounted(() => {
         </button>
         <button @click="openCreateForm"
           class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-          Create Role
+          {{ $t('rolesView.createRole') }}
         </button>
       </div>
     </div>
@@ -313,7 +313,7 @@ onMounted(() => {
     <!-- Alerts -->
     <div v-if="errorMessage" class="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
       {{ errorMessage }}
-      <button @click="errorMessage = null" class="ml-2 underline">Dismiss</button>
+      <button @click="errorMessage = null" class="ml-2 underline">{{ $t('rolesView.dismiss') }}</button>
     </div>
     <div v-if="successMessage" class="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">
       {{ successMessage }}
@@ -323,75 +323,75 @@ onMounted(() => {
     <div v-if="showForm" class="bg-white rounded-lg border mb-6">
       <div class="px-4 py-3 bg-gray-50 border-b flex items-center justify-between">
         <h2 class="font-medium text-gray-900">{{ formTitle }}</h2>
-        <button @click="showForm = false" class="text-gray-400 hover:text-gray-600">&times;</button>
+        <button @click="showForm = false" class="text-gray-400 hover:text-gray-600">{{ $t('rolesView.times') }}</button>
       </div>
       <form @submit.prevent="saveRole" class="p-4 space-y-4">
         <div class="grid grid-cols-2 gap-4">
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Name *</label>
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('rolesView.name') }}</label>
             <input v-model="formData.name" :disabled="!!editingRole" required
               class="w-full px-3 py-2 border rounded-lg text-sm disabled:bg-gray-100" placeholder="e.g. redis-server" />
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Display Name</label>
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('rolesView.displayName') }}</label>
             <input v-model="formData.display_name"
               class="w-full px-3 py-2 border rounded-lg text-sm" placeholder="e.g. Redis Server" />
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Sync Type</label>
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('rolesView.syncType') }}</label>
             <select v-model="formData.sync_type" class="w-full px-3 py-2 border rounded-lg text-sm">
-              <option value="component">Component</option>
-              <option value="full">Full</option>
-              <option value="config">Config Only</option>
+              <option value="component">{{ $t('rolesView.component') }}</option>
+              <option value="full">{{ $t('rolesView.full') }}</option>
+              <option value="config">{{ $t('rolesView.configOnly') }}</option>
             </select>
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Target Path *</label>
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('rolesView.targetPath') }}</label>
             <input v-model="formData.target_path" required
               class="w-full px-3 py-2 border rounded-lg text-sm" placeholder="/opt/autobot" />
           </div>
           <div class="col-span-2">
-            <label class="block text-sm font-medium text-gray-700 mb-1">Source Paths (comma-separated)</label>
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('rolesView.sourcePathsCommaSeparated') }}</label>
             <input v-model="formData.source_paths"
               class="w-full px-3 py-2 border rounded-lg text-sm" placeholder="autobot-slm-backend/, autobot_shared/" />
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Systemd Service</label>
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('rolesView.systemdService') }}</label>
             <input v-model="formData.systemd_service"
               class="w-full px-3 py-2 border rounded-lg text-sm" placeholder="autobot-slm.service" />
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Ansible Playbook</label>
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('rolesView.ansiblePlaybook') }}</label>
             <input v-model="formData.ansible_playbook"
               class="w-full px-3 py-2 border rounded-lg text-sm" placeholder="deploy-backend.yml" />
           </div>
           <div class="flex items-center gap-4 pt-6">
             <label class="flex items-center gap-2 text-sm text-gray-700">
               <input type="checkbox" v-model="formData.auto_restart" class="rounded-sm" />
-              Auto Restart on Deploy
+              {{ $t('rolesView.autoRestartOnDeploy') }}
             </label>
             <label class="flex items-center gap-2 text-sm text-gray-700">
               <input type="checkbox" v-model="formData.required" class="rounded-sm" />
-              Required Role
+              {{ $t('rolesView.requiredRole') }}
             </label>
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Health Check Port</label>
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('rolesView.healthCheckPort') }}</label>
             <input v-model="formData.health_check_port" type="number"
               class="w-full px-3 py-2 border rounded-lg text-sm" placeholder="8000" />
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Health Check Path</label>
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('rolesView.healthCheckPath') }}</label>
             <input v-model="formData.health_check_path"
               class="w-full px-3 py-2 border rounded-lg text-sm" placeholder="/health" />
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Pre-sync Command</label>
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('rolesView.preSyncCommand') }}</label>
             <input v-model="formData.pre_sync_cmd"
               class="w-full px-3 py-2 border rounded-lg text-sm" placeholder="systemctl stop autobot-slm" />
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Post-sync Command</label>
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('rolesView.postSyncCommand') }}</label>
             <input v-model="formData.post_sync_cmd"
               class="w-full px-3 py-2 border rounded-lg text-sm" placeholder="systemctl restart autobot-slm" />
           </div>
@@ -401,7 +401,7 @@ onMounted(() => {
             {{ editingRole ? 'Update' : 'Create' }}
           </button>
           <button type="button" @click="showForm = false"
-            class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-sm">Cancel</button>
+            class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-sm">{{ $t('rolesView.cancel') }}</button>
         </div>
       </form>
     </div>
@@ -414,12 +414,12 @@ onMounted(() => {
       <table class="w-full">
         <thead class="bg-gray-50">
           <tr>
-            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
-            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Sync Type</th>
-            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Target</th>
-            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Service</th>
-            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Health</th>
-            <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('rolesView.name1') }}</th>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('rolesView.syncType') }}</th>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('rolesView.target') }}</th>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('rolesView.service') }}</th>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('rolesView.health') }}</th>
+            <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">{{ $t('rolesView.actions') }}</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-gray-200">
@@ -428,7 +428,7 @@ onMounted(() => {
               <div class="flex items-center gap-2">
                 <p class="text-sm font-medium text-gray-900">{{ role.display_name || role.name }}</p>
                 <span v-if="role.required"
-                  class="px-1.5 py-0.5 text-xs rounded-sm bg-red-100 text-red-700 font-medium">Required</span>
+                  class="px-1.5 py-0.5 text-xs rounded-sm bg-red-100 text-red-700 font-medium">{{ $t('rolesView.required') }}</span>
               </div>
               <p v-if="role.display_name" class="text-xs text-gray-500">{{ role.name }}</p>
             </td>
@@ -443,19 +443,19 @@ onMounted(() => {
             </td>
             <td class="px-4 py-3 text-right space-x-1">
               <button @click="openEditForm(role)"
-                class="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded-sm hover:bg-gray-200">Edit</button>
+                class="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded-sm hover:bg-gray-200">{{ $t('rolesView.edit') }}</button>
               <button v-if="role.ansible_playbook" @click="openMigrateDialog(role)"
-                class="px-2 py-1 text-xs bg-purple-100 text-purple-700 rounded-sm hover:bg-purple-200">Migrate</button>
+                class="px-2 py-1 text-xs bg-purple-100 text-purple-700 rounded-sm hover:bg-purple-200">{{ $t('rolesView.migrate') }}</button>
               <button @click="deleteRole(role.name)"
-                class="px-2 py-1 text-xs bg-red-100 text-red-700 rounded-sm hover:bg-red-200">Delete</button>
+                class="px-2 py-1 text-xs bg-red-100 text-red-700 rounded-sm hover:bg-red-200">{{ $t('rolesView.delete') }}</button>
             </td>
           </tr>
         </tbody>
       </table>
       <div v-if="!filteredRoles.length && !isLoading" class="p-8 text-center text-gray-500">
-        No roles defined. Click "Create Role" to add one.
+        {{ $t('rolesView.noRolesDefinedClick') }}
       </div>
-      <div v-if="isLoading" class="p-8 text-center text-gray-500">Loading roles...</div>
+      <div v-if="isLoading" class="p-8 text-center text-gray-500">{{ $t('rolesView.loadingRoles') }}</div>
     </div>
 
     <!-- Migrate Role Dialog -->
@@ -467,16 +467,16 @@ onMounted(() => {
             Migrate Role: {{ migratingRole?.display_name || migratingRole?.name }}
           </h2>
           <button @click="showMigrateDialog = false; migrateOutput = null"
-            class="text-gray-400 hover:text-gray-600 text-xl">&times;</button>
+            class="text-gray-400 hover:text-gray-600 text-xl">{{ $t('rolesView.times') }}</button>
         </div>
         <div class="p-6 space-y-4">
           <div v-if="migratingRole?.ansible_playbook" class="text-sm text-gray-600">
-            Playbook: <code class="bg-gray-100 px-1 rounded-sm">{{ migratingRole.ansible_playbook }}</code>
+            {{ $t('rolesView.playbook') }} <code class="bg-gray-100 px-1 rounded-sm">{{ migratingRole.ansible_playbook }}</code>
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Target Node *</label>
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('rolesView.targetNode') }}</label>
             <select v-model="targetNodeId" class="w-full px-3 py-2 border rounded-lg text-sm">
-              <option value="">Select target node…</option>
+              <option value="">{{ $t('rolesView.selectTargetNode') }}</option>
               <option v-for="node in nodes" :key="node.node_id" :value="node.node_id">
                 {{ node.node_id }} — {{ node.ip_address }} ({{ node.status }})
               </option>
@@ -487,13 +487,13 @@ onMounted(() => {
           </div>
           <!-- Output -->
           <div v-if="migrateOutput" class="mt-2">
-            <p class="text-xs font-medium text-gray-600 mb-1">Playbook Output:</p>
+            <p class="text-xs font-medium text-gray-600 mb-1">{{ $t('rolesView.playbookOutput') }}</p>
             <pre class="bg-gray-900 text-green-300 text-xs p-3 rounded-sm overflow-auto max-h-48">{{ migrateOutput }}</pre>
           </div>
         </div>
         <div class="px-6 py-4 border-t flex justify-end gap-2">
           <button @click="showMigrateDialog = false; migrateOutput = null"
-            class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-sm">Cancel</button>
+            class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-sm">{{ $t('rolesView.cancel') }}</button>
           <button @click="executeMigrate" :disabled="!targetNodeId || migrateLoading"
             class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 text-sm">
             {{ migrateLoading ? 'Running…' : 'Run Migration' }}

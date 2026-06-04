@@ -11,7 +11,7 @@ Split from ``facts.py`` per Issue #5486.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -29,7 +29,7 @@ class QueryKnowledgeResponse(BaseModel):
     synthesized_response: str = ""
     results: List[Dict[str, Any]] = Field(default_factory=list)
     total_results: int = 0
-    original_query: Optional[str] = None
+    original_query: str | None = None
     reformulated_queries: List[str] = Field(default_factory=list)
     rag_enhanced: bool = False
 
@@ -41,5 +41,5 @@ class ManPageSearchResponse(BaseModel):
 
     results: List[Dict[str, Any]] = Field(default_factory=list)
     total_results: int = 0
-    query: Optional[str] = None
-    limit: Optional[int] = None
+    query: str | None = None
+    limit: int | None = None

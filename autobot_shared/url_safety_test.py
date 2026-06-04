@@ -16,7 +16,7 @@ from unittest.mock import patch
 
 import pytest
 
-from autobot_shared.url_safety import is_public_url, is_public_url_async
+from autobot_shared.url_safety import is_public_url, is_public_url_async, resolve_safe_ip_async
 
 # ---------------------------------------------------------------------------
 # Scheme/host rejection
@@ -116,6 +116,72 @@ async def test_async_wrapper_delegates_to_sync_in_executor() -> None:
     fake_infos = [(2, 1, 6, "", ("10.5.5.5", 0))]
     with patch("autobot_shared.url_safety.socket.getaddrinfo", return_value=fake_infos):
         assert (await is_public_url_async("https://intranet-db.company/admin")) is False
+
+
+# ---------------------------------------------------------------------------
+# resolve_safe_ip_async — returns resolved IP literal for TOCTOU protection
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_resolve_safe_ip_returns_ip_for_public_hostname() -> None:
+    """resolve_safe_ip_async returns the first public IP when resolution succeeds."""
+    fake_infos = [(2, 1, 6, "", ("93.184.216.34", 0))]  # example.com
+    with patch("autobot_shared.url_safety.socket.getaddrinfo", return_value=fake_infos):
+        result = await resolve_safe_ip_async("example.com")
+        assert result == "93.184.216.34"
+
+
+@pytest.mark.asyncio
+async def test_resolve_safe_ip_rejects_rfc1918() -> None:
+    """resolve_safe_ip_async raises ValueError for private IPs."""
+    fake_infos = [(2, 1, 6, "", ("10.5.5.5", 0))]
+    with patch("autobot_shared.url_safety.socket.getaddrinfo", return_value=fake_infos):
+        with pytest.raises(ValueError, match="non-public"):
+            await resolve_safe_ip_async("internal.example")
+
+
+@pytest.mark.asyncio
+async def test_resolve_safe_ip_rejects_loopback() -> None:
+    """resolve_safe_ip_async rejects 127.0.0.1 and ::1."""
+    fake_infos = [(2, 1, 6, "", ("127.0.0.1", 0))]
+    with patch("autobot_shared.url_safety.socket.getaddrinfo", return_value=fake_infos):
+        with pytest.raises(ValueError, match="non-public"):
+            await resolve_safe_ip_async("localhost.example")
+
+
+@pytest.mark.asyncio
+async def test_resolve_safe_ip_rejects_ipv6_ula() -> None:
+    """resolve_safe_ip_async rejects fc00::/7 (IPv6 ULA)."""
+    fake_infos = [(10, 1, 6, "", ("fc00::1", 0))]  # AF_INET6
+    with patch("autobot_shared.url_safety.socket.getaddrinfo", return_value=fake_infos):
+        with pytest.raises(ValueError, match="non-public"):
+            await resolve_safe_ip_async("ipv6-private.example")
+
+
+@pytest.mark.asyncio
+async def test_resolve_safe_ip_rejects_dns_failure() -> None:
+    """resolve_safe_ip_async raises ValueError on DNS resolution failure."""
+    import socket as _socket
+
+    with patch(
+        "autobot_shared.url_safety.socket.getaddrinfo",
+        side_effect=_socket.gaierror("name or service not known"),
+    ):
+        with pytest.raises(ValueError, match="Could not resolve"):
+            await resolve_safe_ip_async("nonexistent.invalid")
+
+
+@pytest.mark.asyncio
+async def test_resolve_safe_ip_no_usable_ip() -> None:
+    """resolve_safe_ip_async raises ValueError if all resolved IPs are private."""
+    fake_infos = [
+        (2, 1, 6, "", ("192.168.1.1", 0)),  # Private
+        (2, 1, 6, "", ("10.0.0.1", 0)),  # Private
+    ]
+    with patch("autobot_shared.url_safety.socket.getaddrinfo", return_value=fake_infos):
+        with pytest.raises(ValueError, match="non-public"):
+            await resolve_safe_ip_async("all-private.example")
 
 
 # ---------------------------------------------------------------------------

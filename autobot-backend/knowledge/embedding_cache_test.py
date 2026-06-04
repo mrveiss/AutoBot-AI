@@ -1,11 +1,12 @@
 """
-Unit tests for Embedding Cache - Issue #65 P0 Optimization
-Tests the LRU cache with TTL for ChromaDB query embeddings.
+Unit tests for Embedding Cache - Issue #65 P0 Optimization / Issue #8156 ARC
+Tests the ARC cache with TTL for ChromaDB query embeddings.
 """
 
 import asyncio
 
 import pytest
+import pytest_asyncio
 
 from knowledge_base import EmbeddingCache, get_embedding_cache
 
@@ -16,11 +17,11 @@ def cache():
     return EmbeddingCache(maxsize=3, ttl_seconds=2)
 
 
-@pytest.fixture
-def global_cache():
+@pytest_asyncio.fixture
+async def global_cache():
     """Get the global cache instance"""
     cache = get_embedding_cache()
-    cache.clear()  # Reset for testing
+    await cache.clear()  # Reset for testing
     return cache
 
 
@@ -71,7 +72,7 @@ class TestEmbeddingCache:
 
     @pytest.mark.asyncio
     async def test_lru_eviction(self, cache):
-        """Test LRU eviction when cache is full"""
+        """Test eviction when cache is full (cold-miss path uses T1)"""
         # Fill cache to capacity (maxsize=3)
         await cache.put("query1", [0.1])
         await cache.put("query2", [0.2])
@@ -80,13 +81,13 @@ class TestEmbeddingCache:
         stats = cache.get_stats()
         assert stats["cache_size"] == 3
 
-        # Add fourth entry - should evict oldest (query1)
+        # Add fourth entry - should evict one of the existing entries
         await cache.put("query4", [0.4])
 
         stats = cache.get_stats()
         assert stats["cache_size"] == 3
 
-        # query1 should be evicted
+        # query1 should be evicted (oldest T1 entry, p starts at 0 so T1 evicted first)
         result1 = await cache.get("query1")
         assert result1 is None
 
@@ -98,26 +99,82 @@ class TestEmbeddingCache:
         assert result4 == [0.4]
 
     @pytest.mark.asyncio
-    async def test_lru_access_pattern(self, cache):
-        """Test that accessing an entry makes it most recently used"""
-        # Fill cache
+    async def test_promotion_t1_to_t2_on_second_hit(self, cache):
+        """ARC-specific: second access promotes entry from T1 to T2"""
         await cache.put("query1", [0.1])
         await cache.put("query2", [0.2])
-        await cache.put("query3", [0.3])
 
-        # Access query1 to make it most recently used
-        await cache.get("query1")
+        stats = cache.get_stats()
+        assert stats["t1_size"] == 2
+        assert stats["t2_size"] == 0
 
-        # Add new entry - should evict query2 (now oldest)
-        await cache.put("query4", [0.4])
+        # First hit on query1: still in T1 initially, promoted to T2 on get
+        result = await cache.get("query1")
+        assert result == [0.1]
 
-        # query1 should still be present (was accessed)
-        result1 = await cache.get("query1")
-        assert result1 == [0.1]
+        stats = cache.get_stats()
+        assert stats["t1_size"] == 1  # query2 remains in T1
+        assert stats["t2_size"] == 1  # query1 promoted to T2
 
-        # query2 should be evicted
-        result2 = await cache.get("query2")
-        assert result2 is None
+    @pytest.mark.asyncio
+    async def test_t2_entries_survive_scan(self, cache):
+        """ARC-specific: scan workload (1001 unique queries) does not evict hot T2 entries"""
+        # Use a larger cache for this test
+        big_cache = EmbeddingCache(maxsize=100, ttl_seconds=3600)
+
+        hot_queries = [f"hot_{i}" for i in range(5)]
+        hot_embeddings = {q: [float(i)] for i, q in enumerate(hot_queries)}
+
+        # Warm up hot set — put then get to promote into T2
+        for q in hot_queries:
+            await big_cache.put(q, hot_embeddings[q])
+        for q in hot_queries:
+            await big_cache.get(q)  # promotes to T2
+
+        stats = big_cache.get_stats()
+        assert stats["t2_size"] == 5
+
+        # Scan 1001 unique queries to fill cache many times over
+        for i in range(1001):
+            scan_q = f"scan_unique_{i}"
+            await big_cache.put(scan_q, [float(i)])
+
+        # Hot set should still be retrievable (ARC protects T2 from scans)
+        for q in hot_queries:
+            result = await big_cache.get(q)
+            assert result == hot_embeddings[q], f"Hot entry {q!r} was evicted by scan workload"
+
+    @pytest.mark.asyncio
+    async def test_eviction_prefers_t1_over_t2(self, cache):
+        """ARC-specific: evict(count) removes from T1 before T2"""
+        big_cache = EmbeddingCache(maxsize=10, ttl_seconds=3600)
+
+        # Put 4 entries and promote 2 into T2
+        for i in range(4):
+            await big_cache.put(f"q{i}", [float(i)])
+        await big_cache.get("q0")  # promotes q0 to T2
+        await big_cache.get("q1")  # promotes q1 to T2
+
+        stats = big_cache.get_stats()
+        assert stats["t2_size"] == 2
+        assert stats["t1_size"] == 2  # q2, q3
+
+        # Evict 1 — should come from T1 (q2 is oldest T1 entry)
+        evicted = big_cache.evict(1)
+        assert evicted == 1
+
+        stats = big_cache.get_stats()
+        assert stats["t1_size"] == 1
+        assert stats["t2_size"] == 2  # T2 untouched
+
+    @pytest.mark.asyncio
+    async def test_get_stats_returns_t1_and_t2_sizes(self, cache):
+        """get_stats() must expose t1_size and t2_size for monitoring"""
+        stats = cache.get_stats()
+        assert "t1_size" in stats
+        assert "t2_size" in stats
+        assert isinstance(stats["t1_size"], int)
+        assert isinstance(stats["t2_size"], int)
 
     @pytest.mark.asyncio
     async def test_ttl_expiration(self, cache):
@@ -148,12 +205,14 @@ class TestEmbeddingCache:
         assert stats["cache_size"] == 2
         assert stats["misses"] == 0
 
-        cache.clear()
+        await cache.clear()
 
         stats = cache.get_stats()
         assert stats["cache_size"] == 0
         assert stats["hits"] == 0
         assert stats["misses"] == 0
+        assert stats["t1_size"] == 0
+        assert stats["t2_size"] == 0
 
         # Entries should be gone
         result = await cache.get("query1")
@@ -262,5 +321,7 @@ class TestEmbeddingCacheIntegration:
         assert "misses" in stats
         assert "hit_rate_percent" in stats
         assert "cache_size" in stats
+        assert "t1_size" in stats
+        assert "t2_size" in stats
         assert stats["hits"] == 1
         assert stats["misses"] == 1

@@ -9,19 +9,19 @@ Manages immutable system knowledge templates and their runtime copies
 import asyncio
 import hashlib
 import json
-import logging
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import aiofiles
 import yaml
 
 from agents.kb_librarian import EnhancedKBLibrarian
+from autobot_shared.logging_manager import get_logger
 from knowledge_base import KnowledgeBase
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class SystemKnowledgeManager:
@@ -140,7 +140,7 @@ class SystemKnowledgeManager:
 
         return file_states
 
-    async def _load_file_state_cache(self) -> Optional[Dict[str, str]]:
+    async def _load_file_state_cache(self) -> Dict[str, str] | None:
         """Load cached file states from Redis"""
         try:
             from autobot_shared.redis_client import get_redis_client

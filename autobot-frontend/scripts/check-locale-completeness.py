@@ -9,6 +9,7 @@ Usage:
     python3 scripts/check-locale-completeness.py
     python3 scripts/check-locale-completeness.py --quiet
 """
+
 import json
 import sys
 from pathlib import Path

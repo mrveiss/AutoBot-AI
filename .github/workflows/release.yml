@@ -18,12 +18,16 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   release:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.0.2
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -49,11 +53,11 @@ jobs:
           NEXT_VERSION="${{ steps.version.outputs.version }}"
           if [ -z "$NEXT_VERSION" ]; then
             echo "No version bump needed (no conventional commits since last tag)"
-            echo "release_needed=false" >> $GITHUB_OUTPUT
+            echo "release_needed=false" >> "$GITHUB_OUTPUT"
           else
             echo "Next version: $NEXT_VERSION"
-            echo "release_needed=true" >> $GITHUB_OUTPUT
-            echo "version=$NEXT_VERSION" >> $GITHUB_OUTPUT
+            echo "release_needed=true" >> "$GITHUB_OUTPUT"
+            echo "version=$NEXT_VERSION" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Generate release notes (git-cliff)
@@ -94,8 +98,11 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add CHANGELOG.md "changelog/${VERSION}.md" changelog/
-          git diff --staged --quiet && echo "No changelog changes" || \
+          if git diff --staged --quiet; then
+            echo "No changelog changes"
+          else
             git commit -m "chore(release): changelog and fragments for ${VERSION}"
+          fi
           git tag -a "${VERSION}" -m "Release ${VERSION}"
           git push origin main --follow-tags
 

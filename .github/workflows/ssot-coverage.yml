@@ -33,7 +33,7 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v6
+      uses: actions/checkout@v6.0.2
 
     - name: Run SSOT-aware hardcoded value detection
       id: ssot_check
@@ -54,11 +54,13 @@ jobs:
         STATUS=$(echo "$JSON_OUTPUT" | grep -o '"status": "[^"]*"' | grep -o '"[^"]*"$' | tr -d '"' || echo "unknown")
 
         # Set outputs for subsequent steps
-        echo "total_violations=$TOTAL_VIOLATIONS" >> $GITHUB_OUTPUT
-        echo "ssot_violations=$SSOT_VIOLATIONS" >> $GITHUB_OUTPUT
-        echo "other_violations=$OTHER_VIOLATIONS" >> $GITHUB_OUTPUT
-        echo "status=$STATUS" >> $GITHUB_OUTPUT
-        echo "exit_code=$EXIT_CODE" >> $GITHUB_OUTPUT
+        {
+          echo "total_violations=$TOTAL_VIOLATIONS"
+          echo "ssot_violations=$SSOT_VIOLATIONS"
+          echo "other_violations=$OTHER_VIOLATIONS"
+          echo "status=$STATUS"
+          echo "exit_code=$EXIT_CODE"
+        } >> "$GITHUB_OUTPUT"
 
         # Output summary
         echo "::group::SSOT Coverage Summary"

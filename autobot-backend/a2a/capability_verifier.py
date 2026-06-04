@@ -28,16 +28,19 @@ Results are cached for CAPABILITY_CACHE_TTL seconds to avoid hammering
 remote endpoints on every request.
 """
 
-import logging
 import os
 import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, List
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 
 # Cache TTL in seconds for remote capability checks.
-_CACHE_TTL = int(os.environ.get("AUTOBOT_A2A_CAPABILITY_TTL", "300"))
+_CACHE_TTL = int(
+    os.environ.get("AUTOBOT_A2A_CAPABILITY_TTL", "300")
+)  # ssot-config-exempt: int-wrapping type conversion per GH#7743
 
 
 @dataclass
@@ -135,7 +138,7 @@ async def verify_remote_card(remote_url: str) -> CapabilityReport:
 
 async def _fetch_and_verify(remote_url: str) -> CapabilityReport:
     """Perform the actual HTTP fetch and verification."""
-    import json as _json
+    import json
 
     import aiohttp
 
@@ -144,19 +147,24 @@ async def _fetch_and_verify(remote_url: str) -> CapabilityReport:
     well_known = remote_url.rstrip("/") + "/.well-known/agent.json"
 
     try:
-        # fetch_safe_url: DNS-pinning resolver + allow_redirects=False (#6533)
-        # codeql[py/full-ssrf] - SSRF mitigated by fetch_safe_url (DNS pin, no redirects)
-        status_code, body = await fetch_safe_url(well_known, timeout_s=5.0)
+        # fetch_safe_url enforces: scheme validation, DNS resolution to public IPs,
+        # pinned resolver (defeats DNS-rebind), allow_redirects=False (#1721, #6533).
+        status, body_bytes, _ = await fetch_safe_url(well_known, timeout=5.0)
     except SSRFError as exc:
+        return CapabilityReport(verified=False, warnings=[f"Invalid agent URL: {exc}"])
+    except aiohttp.ClientError as exc:
+        return CapabilityReport(verified=False, warnings=[f"Agent card fetch error: {exc}"])
+
+    if status != 200:
         return CapabilityReport(
             verified=False,
-            warnings=[f"Invalid agent URL: {exc}"],
+            warnings=[f"Agent card fetch failed: HTTP {status}"],
         )
-    except (aiohttp.ClientError, Exception) as exc:
-        return CapabilityReport(
-            verified=False,
-            warnings=[f"Agent card fetch error: {exc}"],
-        )
+
+    try:
+        data = json.loads(body_bytes)
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        return CapabilityReport(verified=False, warnings=[f"Agent card is not valid JSON: {exc}"])
 
     if status_code != 200:
         return CapabilityReport(

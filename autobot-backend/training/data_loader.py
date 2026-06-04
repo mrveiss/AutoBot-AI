@@ -7,19 +7,19 @@ Pattern Data Loader (Issue #904)
 Loads code patterns from database and prepares training data.
 """
 
-import logging
 import re
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 
 import torch
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from torch.utils.data import Dataset
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
 from models.code_pattern import CodePattern
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class Tokenizer:
@@ -74,8 +74,8 @@ class PatternDataset(Dataset):
 
     def __init__(
         self,
-        language: Optional[str] = None,
-        pattern_type: Optional[str] = None,
+        language: str | None = None,
+        pattern_type: str | None = None,
         context_window: int = 5,
         max_length: int = 128,
         min_frequency: int = 1,
@@ -167,8 +167,8 @@ class PatternDataset(Dataset):
 def create_dataloaders(
     train_split: float = 0.8,
     batch_size: int = 32,
-    language: Optional[str] = None,
-    pattern_type: Optional[str] = None,
+    language: str | None = None,
+    pattern_type: str | None = None,
 ) -> Tuple:
     """
     Create train and validation data loaders.

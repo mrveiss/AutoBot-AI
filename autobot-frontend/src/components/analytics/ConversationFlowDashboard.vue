@@ -3,7 +3,7 @@
     <!-- Header -->
     <div class="dashboard-header">
       <div class="header-content">
-        <h2><i class="fas fa-comments"></i> {{ $t('analytics.conversationFlow.title') }}</h2>
+        <h2><Icon name="comments" /> {{ $t('analytics.conversationFlow.title') }}</h2>
         <p class="subtitle">{{ $t('analytics.conversationFlow.subtitle') }}</p>
       </div>
       <div class="header-actions">
@@ -14,7 +14,7 @@
           <option value="168">{{ $t('analytics.conversationFlow.last7Days') }}</option>
         </select>
         <button @click="runAnalysis" class="analyze-btn" :disabled="isLoading">
-          <i :class="isLoading ? 'fas fa-spinner fa-spin' : 'fas fa-chart-line'"></i>
+          <i :class="isLoading ? 'fas fa-spinner fa-spin' : 'chart-line'"></i>
           {{ isLoading ? $t('analytics.conversationFlow.analyzing') : $t('analytics.conversationFlow.analyze') }}
         </button>
       </div>
@@ -24,7 +24,7 @@
     <div class="metrics-grid" v-if="analysisResult?.metrics">
       <div class="metric-card">
         <div class="metric-icon conversations">
-          <i class="fas fa-comment-dots"></i>
+          <Icon name="comment" />
         </div>
         <div class="metric-content">
           <div class="metric-value">{{ analysisResult.metrics.total_conversations }}</div>
@@ -33,7 +33,7 @@
       </div>
       <div class="metric-card">
         <div class="metric-icon messages">
-          <i class="fas fa-envelope"></i>
+          <Icon name="envelope" />
         </div>
         <div class="metric-content">
           <div class="metric-value">{{ analysisResult.metrics.avg_messages_per_conversation }}</div>
@@ -42,7 +42,7 @@
       </div>
       <div class="metric-card">
         <div class="metric-icon satisfaction" :class="getSatisfactionClass(analysisResult.metrics.user_satisfaction_estimate)">
-          <i class="fas fa-smile"></i>
+          <Icon name="user" />
         </div>
         <div class="metric-content">
           <div class="metric-value">{{ analysisResult.metrics.user_satisfaction_estimate }}%</div>
@@ -51,7 +51,7 @@
       </div>
       <div class="metric-card">
         <div class="metric-icon resolution">
-          <i class="fas fa-check-circle"></i>
+          <Icon name="check-circle" />
         </div>
         <div class="metric-content">
           <div class="metric-value">{{ analysisResult.metrics.resolution_rate }}%</div>
@@ -65,7 +65,7 @@
       <!-- Intent Patterns -->
       <div class="panel intents-panel">
         <div class="panel-header">
-          <h3><i class="fas fa-bullseye"></i> {{ $t('analytics.conversationFlow.userIntents') }}</h3>
+          <h3><Icon name="bullseye" /> {{ $t('analytics.conversationFlow.userIntents') }}</h3>
           <span class="count-badge">{{ analysisResult.intent_patterns.length }} {{ $t('analytics.conversationFlow.detected') }}</span>
         </div>
         <div class="panel-content">
@@ -88,8 +88,8 @@
                 ></div>
               </div>
               <div class="intent-meta">
-                <span><i class="fas fa-check"></i> {{ intent.success_rate }}% {{ $t('analytics.conversationFlow.success') }}</span>
-                <span><i class="fas fa-exchange-alt"></i> {{ intent.avg_turns_to_resolve }} {{ $t('analytics.conversationFlow.turnsAvg') }}</span>
+                <span><Icon name="check" /> {{ intent.success_rate }}% {{ $t('analytics.conversationFlow.success') }}</span>
+                <span><Icon name="exchange-alt" /> {{ intent.avg_turns_to_resolve }} {{ $t('analytics.conversationFlow.turnsAvg') }}</span>
               </div>
             </div>
           </div>
@@ -99,11 +99,11 @@
       <!-- Common Flows -->
       <div class="panel flows-panel">
         <div class="panel-header">
-          <h3><i class="fas fa-route"></i> {{ $t('analytics.conversationFlow.commonFlowPaths') }}</h3>
+          <h3><Icon name="sitemap" /> {{ $t('analytics.conversationFlow.commonFlowPaths') }}</h3>
         </div>
         <div class="panel-content">
           <div v-if="analysisResult.common_flows.length === 0" class="empty-state">
-            <i class="fas fa-route"></i>
+            <Icon name="sitemap" />
             <p>{{ $t('analytics.conversationFlow.notEnoughData') }}</p>
           </div>
           <div v-else class="flow-list">
@@ -119,15 +119,15 @@
                   class="flow-step"
                 >
                   {{ formatIntentName(step) }}
-                  <i v-if="idx < flow.path.length - 1" class="fas fa-chevron-right"></i>
+                  <Icon name="chevron-right" v-if="idx < flow.path.length - 1" />
                 </span>
               </div>
               <div class="flow-stats">
                 <span class="stat">
-                  <i class="fas fa-redo"></i> {{ flow.frequency }}x
+                  <Icon name="redo" /> {{ flow.frequency }}x
                 </span>
                 <span class="stat">
-                  <i class="fas fa-check-circle"></i> {{ flow.completion_rate }}%
+                  <Icon name="check-circle" /> {{ flow.completion_rate }}%
                 </span>
               </div>
             </div>
@@ -138,11 +138,11 @@
       <!-- Bottlenecks -->
       <div class="panel bottlenecks-panel">
         <div class="panel-header">
-          <h3><i class="fas fa-exclamation-triangle"></i> {{ $t('analytics.conversationFlow.identifiedBottlenecks') }}</h3>
+          <h3><Icon name="exclamation-triangle" /> {{ $t('analytics.conversationFlow.identifiedBottlenecks') }}</h3>
         </div>
         <div class="panel-content">
           <div v-if="analysisResult.bottlenecks.length === 0" class="empty-state success">
-            <i class="fas fa-thumbs-up"></i>
+            <Icon name="check" />
             <p>{{ $t('analytics.conversationFlow.noBottlenecks') }}</p>
           </div>
           <div v-else class="bottleneck-list">
@@ -175,7 +175,7 @@
       <!-- Hourly Distribution -->
       <div class="panel distribution-panel">
         <div class="panel-header">
-          <h3><i class="fas fa-clock"></i> {{ $t('analytics.conversationFlow.activityDistribution') }}</h3>
+          <h3><Icon name="clock" /> {{ $t('analytics.conversationFlow.activityDistribution') }}</h3>
         </div>
         <div class="panel-content">
           <div class="distribution-chart">
@@ -201,7 +201,7 @@
         <div class="modal-header">
           <h3>{{ selectedIntent.intent_name }}</h3>
           <button @click="selectedIntent = null" class="close-btn">
-            <i class="fas fa-times"></i>
+            <Icon name="times" />
           </button>
         </div>
         <div class="modal-body">
@@ -239,13 +239,13 @@
 
     <!-- Loading State -->
     <div v-if="isLoading && !analysisResult" class="loading-state">
-      <i class="fas fa-cog fa-spin fa-3x"></i>
+      <Icon name="cog" class="animate-spin" />
       <p>{{ $t('analytics.conversationFlow.analyzingPatterns') }}</p>
     </div>
 
     <!-- Empty State -->
     <div v-if="!isLoading && !analysisResult" class="empty-state-full">
-      <i class="fas fa-comments"></i>
+      <Icon name="comments" />
       <h3>{{ $t('analytics.conversationFlow.noData') }}</h3>
       <p>{{ $t('analytics.conversationFlow.noDataDescription') }}</p>
     </div>
@@ -261,6 +261,7 @@
  * ConversationFlowDashboard.vue - Conversation flow analysis dashboard
  * Issue #704: Migrated to design tokens for centralized theming
  */
+import Icon from '@/components/ui/Icon.vue'
 import { ref, onMounted, computed } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
 import {

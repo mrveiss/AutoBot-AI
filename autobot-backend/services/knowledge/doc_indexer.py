@@ -14,7 +14,6 @@ Replaces the dual Redis KB + ChromaDB CLI approach with a single ChromaDB-based 
 import asyncio
 import hashlib
 import json
-import logging
 import os
 import re
 import threading
@@ -22,7 +21,9 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Tuple
+
+from autobot_shared.logging_manager import get_logger
 
 if TYPE_CHECKING:
     from services.knowledge.sync_queue import SyncQueueEntry, SyncReason  # noqa: F401
@@ -32,7 +33,7 @@ from constants.path_constants import PATH
 from knowledge.query_sanitizer import sanitize_document as _sanitize_document
 from services.knowledge.synthesis_schema_loader import SynthesisSchema, load_synthesis_schema
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # ============================================================================
 # TIER DEFINITIONS (from CLI tool)
@@ -233,7 +234,7 @@ def _parse_frontmatter(content: str) -> Tuple[str, List[str], List[str]]:
     fm_aliases: List[str] = []
 
     # Parse simple YAML list values for 'tags' and 'aliases' keys.
-    current_key: Optional[str] = None
+    current_key: str | None = None
     for line in fm_block.splitlines():
         key_match = re.match(r"^(\w+)\s*:", line)
         if key_match:
@@ -257,7 +258,7 @@ def _estimate_tokens(text: str) -> int:
 def _create_chunk(
     content: str,
     section: str,
-    subsection: Optional[str],
+    subsection: str | None,
     file_path: str,
     doc_type: str,
     category: str,
@@ -278,7 +279,7 @@ def _create_chunk(
 def _chunk_large_content(
     full_content: str,
     section_name: str,
-    subsection_name: Optional[str],
+    subsection_name: str | None,
     file_path: str,
     doc_type: str,
     category: str,
@@ -472,7 +473,7 @@ def _should_exclude(file_path: str) -> bool:
     return False
 
 
-def _discover_files(root_dir: Path, tier: Optional[int] = None) -> List[Tuple[str, int]]:
+def _discover_files(root_dir: Path, tier: int | None = None) -> List[Tuple[str, int]]:
     """Discover markdown files to index by tier."""
     files: List[Tuple[str, int]] = []
 
@@ -630,9 +631,9 @@ class DocIndexerService:
 
     def __init__(
         self,
-        llm_service: Optional[Any] = None,
-        org_id: Optional[str] = None,
-    ):
+        llm_service: Any | None = None,
+        org_id: str | None = None,
+    ) -> None:
         self._client = None
         self._collection = None
         self._embed_model = None
@@ -642,7 +643,7 @@ class DocIndexerService:
         self._llm_service = llm_service
         # Issue #4451: per-org embedding model selection (None => __default__)
         self._org_id = org_id
-        self.embedding_model_name: Optional[str] = None
+        self.embedding_model_name: str | None = None
         self.synthesis_schema: SynthesisSchema = self._load_schema()
 
     def _load_schema(self) -> SynthesisSchema:
@@ -671,6 +672,10 @@ class DocIndexerService:
 
             from llama_index.embeddings.ollama import OllamaEmbedding
 
+            from autobot_shared.embedding_provenance import (
+                EmbeddingProvenance,
+                provenance_to_metadata,
+            )
             from knowledge.backends import get_default_client
 
             chromadb_path = self._root_dir / "data" / "chromadb"
@@ -679,14 +684,11 @@ class DocIndexerService:
             # the indexer back to slow SCAN paths.
             self._client = await asyncio.to_thread(get_default_client, db_path=str(chromadb_path))
 
-            self._collection = self._client.get_or_create_collection(
-                name=self.COLLECTION_NAME,
-                metadata={"hnsw:space": "cosine"},
-            )
-
             ollama_url = get_ollama_url()
 
             # Issue #4451: per-org embedding model config, SSOT fallback.
+            # Resolved before collection creation so embedding_model metadata
+            # can be written at first-create time (#7427).
             from services.knowledge.org_knowledge_config import (
                 get_org_knowledge_config_service,
             )
@@ -694,6 +696,26 @@ class DocIndexerService:
             effective = await get_org_knowledge_config_service().get_effective(self._org_id)
             embed_model_name = effective.embedding_model or "nomic-embed-text"
             self.embedding_model_name = embed_model_name
+
+            _KNOWN_DIMS: dict = {
+                "nomic-embed-text": 768,
+                "mxbai-embed-large": 1024,
+                "all-minilm": 384,
+                "bge-small-en-v1.5": 384,
+                "bge-large-en-v1.5": 1024,
+                "text-embedding-ada-002": 1536,
+            }
+            embed_dim = _KNOWN_DIMS.get(embed_model_name)
+
+            provenance_meta = (
+                provenance_to_metadata(EmbeddingProvenance(embed_model_name, embed_dim))
+                if embed_dim is not None
+                else {}
+            )
+            self._collection = self._client.get_or_create_collection(
+                name=self.COLLECTION_NAME,
+                metadata={"hnsw:space": "cosine", **provenance_meta},
+            )
 
             self._embed_model = OllamaEmbedding(model_name=embed_model_name, base_url=ollama_url)
 
@@ -865,7 +887,9 @@ class DocIndexerService:
         Returns True when at least one (sub-)chunk was stored successfully.
         """
         priority_map = {1: "critical", 2: "high", 3: "medium"}
-        chunk_id = hashlib.md5(f"{rel_path}:{chunk['section']}:{chunk_index}".encode()).hexdigest()[:12]
+        chunk_id = hashlib.md5(
+            f"{rel_path}:{chunk['section']}:{chunk_index}".encode(), usedforsecurity=False
+        ).hexdigest()[:12]
 
         metadata: Dict[str, Any] = {
             "source": "autobot_documentation",
@@ -1248,11 +1272,11 @@ class DocIndexerService:
 # SINGLETON
 # ============================================================================
 
-_doc_indexer: Optional[DocIndexerService] = None
+_doc_indexer: DocIndexerService | None = None
 _doc_indexer_lock = threading.Lock()
 
 
-def get_doc_indexer_service(llm_service: Optional[Any] = None) -> DocIndexerService:
+def get_doc_indexer_service(llm_service: Any | None = None) -> DocIndexerService:
     """Get or create the global DocIndexerService instance (thread-safe).
 
     Args:

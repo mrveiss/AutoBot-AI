@@ -15,25 +15,23 @@ Endpoints:
     POST /api/conversations/import
 """
 
-import logging
-
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import Response
 
 from api.schemas_agent import ConversationImportRequest, ConversationImportResponse
-from api.schemas_common import DataResponse
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
+from exceptions import get_exceptions_lazy
 from services.conversation_export import (
     export_all_conversations_json,
     export_conversation_json,
     export_conversation_markdown,
     import_conversation,
 )
-from utils.chat_exceptions import get_exceptions_lazy
 from utils.chat_utils import get_chat_history_manager, validate_chat_session_id
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(tags=["conversation-export"])
 
@@ -153,7 +151,7 @@ async def export_conversation(
     return _build_export_response(content, session_id, format)
 
 
-@router.get("/conversations/export-all", response_model=DataResponse)
+@router.get("/conversations/export-all", response_class=Response)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="export_all_conversations",

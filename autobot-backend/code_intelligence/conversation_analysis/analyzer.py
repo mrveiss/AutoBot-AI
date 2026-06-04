@@ -8,10 +8,12 @@ Issue #381: Extracted from conversation_flow_analyzer.py god class refactoring.
 Contains the main ConversationFlowAnalyzer class that coordinates analysis.
 """
 
-import logging
 from collections import Counter, defaultdict
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
+
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.time_utils import parse_utc_iso
 
 from autobot_shared.time_utils import parse_utc_iso
 
@@ -31,7 +33,7 @@ from .types import (
     ResponseType,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ConversationFlowAnalyzer:
@@ -69,7 +71,7 @@ class ConversationFlowAnalyzer:
         self._bottlenecks: List[Bottleneck] = []
         self._optimizations: List[Optimization] = []
 
-    def _parse_timestamp(self, timestamp: Any) -> Optional[datetime]:
+    def _parse_timestamp(self, timestamp: Any) -> datetime | None:
         """Parse timestamp from raw message data. Issue #620.
 
         Args:
@@ -87,7 +89,7 @@ class ConversationFlowAnalyzer:
 
     def _classify_message_role(
         self, role: str, content: str
-    ) -> Tuple[Optional[IntentCategory], Optional[ResponseType], int, int, Optional[str]]:
+    ) -> Tuple[IntentCategory | None, ResponseType | None, int, int, str | None]:
         """Classify message based on role and extract metrics. Issue #620.
 
         Args:
@@ -119,7 +121,7 @@ class ConversationFlowAnalyzer:
     def _parse_single_message(
         self,
         msg: Dict[str, Any],
-    ) -> Tuple[ConversationMessage, Optional[IntentCategory], int, int, Optional[str]]:
+    ) -> Tuple[ConversationMessage, IntentCategory | None, int, int, str | None]:
         """Parse a single message from raw dict into ConversationMessage. Issue #620.
 
         Args:
@@ -299,7 +301,7 @@ class ConversationFlowAnalyzer:
 
         return FlowState.PROCESSING
 
-    def _determine_primary_intent(self, intent_sequence: List[IntentCategory]) -> Optional[IntentCategory]:
+    def _determine_primary_intent(self, intent_sequence: List[IntentCategory]) -> IntentCategory | None:
         """Determine the primary intent from a sequence."""
         if not intent_sequence:
             return None
@@ -326,8 +328,8 @@ class ConversationFlowAnalyzer:
 
     def _ingest_conversations(
         self,
-        conversations: Optional[List[List[Dict[str, Any]]]] = None,
-        flows: Optional[List[ConversationFlow]] = None,
+        conversations: List[List[Dict[str, Any]]] | None = None,
+        flows: List[ConversationFlow] | None = None,
     ) -> None:
         """
         Parse and ingest raw conversations and flows into internal storage.
@@ -404,8 +406,8 @@ class ConversationFlowAnalyzer:
 
     def analyze(
         self,
-        conversations: Optional[List[List[Dict[str, Any]]]] = None,
-        flows: Optional[List[ConversationFlow]] = None,
+        conversations: List[List[Dict[str, Any]]] | None = None,
+        flows: List[ConversationFlow] | None = None,
     ) -> AnalysisResult:
         """
         Analyze conversation flows and generate insights.
@@ -525,7 +527,7 @@ class ConversationFlowAnalyzer:
         description_template: str,
         severity: str,
         recommendations: List[str],
-    ) -> Optional[Bottleneck]:
+    ) -> Bottleneck | None:
         """Create a bottleneck entry if session count is significant (Issue #665: extracted helper).
 
         Args:
@@ -549,7 +551,7 @@ class ConversationFlowAnalyzer:
             )
         return None
 
-    def _detect_slow_response_bottleneck(self) -> Optional[Bottleneck]:
+    def _detect_slow_response_bottleneck(self) -> Bottleneck | None:
         """Detect slow response bottleneck from flows.
 
         Issue #620.
@@ -570,7 +572,7 @@ class ConversationFlowAnalyzer:
             ],
         )
 
-    def _detect_clarification_bottleneck(self) -> Optional[Bottleneck]:
+    def _detect_clarification_bottleneck(self) -> Bottleneck | None:
         """Detect repeated clarification bottleneck from flows.
 
         Issue #620.
@@ -588,7 +590,7 @@ class ConversationFlowAnalyzer:
             ],
         )
 
-    def _detect_error_loop_bottleneck(self) -> Optional[Bottleneck]:
+    def _detect_error_loop_bottleneck(self) -> Bottleneck | None:
         """Detect error loop bottleneck from flows.
 
         Issue #620.
@@ -606,7 +608,7 @@ class ConversationFlowAnalyzer:
             ],
         )
 
-    def _detect_excessive_turns_bottleneck(self) -> Optional[Bottleneck]:
+    def _detect_excessive_turns_bottleneck(self) -> Bottleneck | None:
         """Detect excessive turns bottleneck from flows.
 
         Issue #620.
@@ -645,7 +647,7 @@ class ConversationFlowAnalyzer:
 
         return bottlenecks
 
-    def _create_caching_optimization(self, patterns: List[FlowPattern]) -> Optional[Optimization]:
+    def _create_caching_optimization(self, patterns: List[FlowPattern]) -> Optimization | None:
         """
         Create caching optimization from frequent patterns. Issue #620.
 
@@ -668,7 +670,7 @@ class ConversationFlowAnalyzer:
             estimated_improvement="20-30% latency reduction",
         )
 
-    def _create_prompt_optimization(self, patterns: List[FlowPattern]) -> Optional[Optimization]:
+    def _create_prompt_optimization(self, patterns: List[FlowPattern]) -> Optimization | None:
         """
         Create prompt improvement optimization from low success patterns. Issue #620.
 

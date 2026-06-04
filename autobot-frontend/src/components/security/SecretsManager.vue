@@ -3,13 +3,13 @@
     <!-- Sidebar Navigation -->
     <aside class="secrets-sidebar">
       <div class="sidebar-header">
-        <h3><i class="fas fa-key"></i> {{ $t('security.secretsManager.sidebarTitle') }}</h3>
+        <h3><Icon name="key" /> {{ $t('security.secretsManager.sidebarTitle') }}</h3>
       </div>
 
       <!-- Search -->
       <div class="sidebar-search">
         <div class="search-wrapper">
-          <i class="fas fa-search"></i>
+          <Icon name="search" />
           <input
             type="text"
             v-model="searchQuery"
@@ -17,7 +17,7 @@
             class="search-input"
           />
           <button v-if="searchQuery" @click="searchQuery = ''" class="clear-search">
-            <i class="fas fa-times"></i>
+            <Icon name="times" />
           </button>
         </div>
       </div>
@@ -29,7 +29,7 @@
           :class="{ active: selectedCategory === 'all' }"
           @click="selectCategory('all')"
         >
-          <i class="fas fa-layer-group"></i>
+          <Icon name="layer-group" />
           <span>{{ $t('security.secretsManager.allCredentials') }}</span>
           <span class="count">{{ secrets.length }}</span>
         </div>
@@ -45,7 +45,7 @@
           :class="{ active: selectedCategory === category.type }"
           @click="selectCategory(category.type)"
         >
-          <i :class="category.icon"></i>
+          <Icon :name="category.icon" />
           <span>{{ category.label }}</span>
           <span class="count">{{ getCategoryCount(category.type) }}</span>
         </div>
@@ -59,7 +59,7 @@
           :class="{ active: selectedScope === 'general' }"
           @click="selectScope('general')"
         >
-          <i class="fas fa-globe"></i>
+          <Icon name="globe" />
           <span>{{ $t('security.secretsManager.scopeGeneral') }}</span>
           <span class="count">{{ stats?.by_scope?.general || 0 }}</span>
         </div>
@@ -69,7 +69,7 @@
           :class="{ active: selectedScope === 'chat' }"
           @click="selectScope('chat')"
         >
-          <i class="fas fa-comments"></i>
+          <Icon name="comments" />
           <span>{{ $t('security.secretsManager.scopeChat') }}</span>
           <span class="count">{{ stats?.by_scope?.chat || 0 }}</span>
         </div>
@@ -84,7 +84,7 @@
           :class="{ active: showExpiredOnly }"
           @click="toggleExpiredFilter"
         >
-          <i class="fas fa-exclamation-triangle"></i>
+          <Icon name="exclamation-triangle" />
           <span>{{ $t('security.secretsManager.scopeExpired') }}</span>
           <span class="count alert">{{ stats.expired_count }}</span>
         </div>
@@ -93,7 +93,7 @@
       <!-- Quick Actions -->
       <div class="sidebar-actions">
         <button @click="openCreateModal" class="btn-create">
-          <i class="fas fa-plus"></i> {{ $t('security.secretsManager.newCredential') }}
+          <Icon name="plus" /> {{ $t('security.secretsManager.newCredential') }}
         </button>
       </div>
     </aside>
@@ -107,11 +107,11 @@
           <span class="subtitle">{{ t('security.secretsManager.credentialCount', { count: filteredSecrets.length }, filteredSecrets.length) }}</span>
         </div>
         <div class="header-actions">
-          <button @click="loadSecrets" class="btn-icon" :disabled="loading" :title="t('security.secretsManager.refresh')">
-            <i class="fas fa-sync-alt" :class="{ 'fa-spin': loading }"></i>
+          <button @click="loadSecrets" class="btn-icon" :disabled="loading" :title="t('security.secretsManager.refresh')" :aria-label="t('security.secretsManager.refresh')">
+            <Icon name="sync-alt" />
           </button>
-          <button @click="toggleView" class="btn-icon" :title="viewMode === 'grid' ? t('security.secretsManager.listView') : t('security.secretsManager.gridView')">
-            <i :class="viewMode === 'grid' ? 'fas fa-list' : 'fas fa-th'"></i>
+          <button @click="toggleView" class="btn-icon" :title="viewMode === 'grid' ? t('security.secretsManager.listView') : t('security.secretsManager.gridView')" :aria-label="viewMode === 'grid' ? t('security.secretsManager.listView') : t('security.secretsManager.gridView')">
+            <Icon :name="viewMode === 'grid' ? 'list' : 'th'" />
           </button>
         </div>
       </header>
@@ -119,22 +119,22 @@
       <!-- Stats Bar -->
       <div class="stats-bar" v-if="stats">
         <div class="stat-item">
-          <i class="fas fa-key"></i>
+          <Icon name="key" />
           <span class="stat-value">{{ stats.total_secrets }}</span>
           <span class="stat-label">{{ $t('security.secretsManager.statsTotal') }}</span>
         </div>
         <div class="stat-item">
-          <i class="fas fa-globe"></i>
+          <Icon name="globe" />
           <span class="stat-value">{{ stats.by_scope?.general || 0 }}</span>
           <span class="stat-label">{{ $t('security.secretsManager.scopeGeneral') }}</span>
         </div>
         <div class="stat-item">
-          <i class="fas fa-comments"></i>
+          <Icon name="comments" />
           <span class="stat-value">{{ stats.by_scope?.chat || 0 }}</span>
           <span class="stat-label">{{ $t('security.secretsManager.scopeChat') }}</span>
         </div>
         <div class="stat-item warning" v-if="stats.expired_count > 0">
-          <i class="fas fa-clock"></i>
+          <Icon name="clock" />
           <span class="stat-value">{{ stats.expired_count }}</span>
           <span class="stat-label">{{ $t('security.secretsManager.scopeExpired') }}</span>
         </div>
@@ -154,7 +154,7 @@
       >
         <template #actions>
           <button @click="openCreateModal()" class="btn-primary">
-            <i class="fas fa-plus"></i> {{ $t('security.secretsManager.createCredential') }}
+            <Icon name="plus" /> {{ $t('security.secretsManager.createCredential') }}
           </button>
           <button v-if="hasActiveFilters" @click="clearFilters" class="btn-secondary">
             {{ $t('security.secretsManager.clearFilters') }}
@@ -173,7 +173,7 @@
         >
           <!-- Card Icon -->
           <div class="card-icon" :style="{ backgroundColor: getTypeColor(secret.type) }">
-            <i :class="getTypeIcon(secret.type)"></i>
+            <Icon :name="getTypeIcon(secret.type)" />
           </div>
 
           <!-- Card Content -->
@@ -184,11 +184,11 @@
                 <span class="badge" :class="secret.scope">{{ secret.scope }}</span>
                 <!-- Issue #685: Visibility badge -->
                 <span v-if="getVisibility(secret)" class="badge visibility" :class="`visibility-${getVisibility(secret)}`">
-                  <i :class="getVisibilityIcon(secret)"></i>
+                  <Icon :name="getVisibilityIcon(secret)" />
                   {{ formatVisibility(secret) }}
                 </span>
                 <span v-if="isExpired(secret)" class="badge expired">
-                  <i class="fas fa-exclamation-triangle"></i> {{ $t('security.secretsManager.expired') }}
+                  <Icon name="exclamation-triangle" /> {{ $t('security.secretsManager.expired') }}
                 </span>
               </div>
             </div>
@@ -199,11 +199,11 @@
 
             <div class="card-meta">
               <span class="meta-item">
-                <i class="fas fa-clock"></i>
+                <Icon name="clock" />
                 {{ formatRelativeTime(secret.created_at) }}
               </span>
               <span v-if="secret.expires_at" class="meta-item" :class="{ 'text-warning': isExpiringSoon(secret) }">
-                <i class="fas fa-hourglass-half"></i>
+                <Icon name="clock" />
                 {{ t('security.secretsManager.expiresIn', { time: formatRelativeTime(secret.expires_at) }) }}
               </span>
             </div>
@@ -215,7 +215,7 @@
 
             <!-- Workflow usage (#1415) -->
             <div class="card-workflow-usage" v-if="getWorkflowUsage(secret).length">
-              <span class="usage-label"><i class="fas fa-project-diagram"></i> Used by:</span>
+              <span class="usage-label"><Icon name="project-diagram" /> Used by:</span>
               <span v-for="usage in getWorkflowUsage(secret)" :key="usage.template_id" class="usage-tag">
                 {{ usage.template_name }}
               </span>
@@ -225,10 +225,10 @@
           <!-- Card Actions -->
           <div class="card-actions">
             <button @click.stop="viewSecret(secret)" class="action-btn" :title="t('security.secretsManager.view')">
-              <i class="fas fa-eye"></i>
+              <Icon name="eye" />
             </button>
             <button @click.stop="editSecret(secret)" class="action-btn" :title="t('security.secretsManager.edit')">
-              <i class="fas fa-edit"></i>
+              <Icon name="edit" />
             </button>
             <button
               v-if="secret.scope === 'chat'"
@@ -236,10 +236,10 @@
               class="action-btn"
               :title="t('security.secretsManager.makeGeneral')"
             >
-              <i class="fas fa-share"></i>
+              <Icon name="share-alt" />
             </button>
             <button @click.stop="confirmDelete(secret)" class="action-btn delete" :title="t('security.secretsManager.delete')">
-              <i class="fas fa-trash"></i>
+              <Icon name="trash" />
             </button>
           </div>
         </div>
@@ -247,7 +247,7 @@
 
       <!-- Templates Section -->
       <div v-if="showTemplates && filteredSecrets.length === 0" class="templates-section">
-        <h3><i class="fas fa-magic"></i> {{ $t('security.secretsManager.quickAddTemplates') }}</h3>
+        <h3><Icon name="magic" /> {{ $t('security.secretsManager.quickAddTemplates') }}</h3>
         <p class="templates-subtitle">{{ $t('security.secretsManager.quickAddTemplatesHint') }}</p>
         <div class="templates-grid">
           <div
@@ -257,7 +257,7 @@
             @click="useTemplate(template)"
           >
             <div class="template-icon" :style="{ backgroundColor: template.color }">
-              <i :class="template.icon"></i>
+              <Icon :name="template.icon" />
             </div>
             <div class="template-info">
               <h4>{{ template.name }}</h4>
@@ -273,7 +273,7 @@
       :modelValue="showCreateModal || showEditModal"
       @update:modelValue="val => !val && closeModals()"
       :title="modalTitle"
-      size="large"
+      size="lg"
       :closeOnOverlay="!saving"
     >
       <form @submit.prevent="saveSecret" class="credential-form">
@@ -288,7 +288,7 @@
               @click="selectType(category.type)"
             >
               <div class="type-icon" :style="{ backgroundColor: category.color }">
-                <i :class="category.icon"></i>
+                <Icon :name="category.icon" />
               </div>
               <span>{{ category.label }}</span>
             </div>
@@ -300,7 +300,7 @@
           <!-- Selected Type Display -->
           <div class="selected-type">
             <div class="type-icon" :style="{ backgroundColor: getTypeColor(secretForm.type) }">
-              <i :class="getTypeIcon(secretForm.type)"></i>
+              <Icon :name="getTypeIcon(secretForm.type)" />
             </div>
             <div class="type-info">
               <span class="type-label">{{ getTypeLabel(secretForm.type) }}</span>
@@ -459,7 +459,7 @@
                     class="toggle-visibility"
                     :title="showValue ? t('security.secretsManager.hideKey') : t('security.secretsManager.showKey')"
                   >
-                    <i :class="showValue ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
+                    <Icon :name="showValue ? 'eye-slash' : 'eye'" />
                   </button>
                 </div>
                 <small class="input-hint">{{ t('security.secretsManager.sshKeyHint') }}</small>
@@ -485,7 +485,7 @@
                     class="toggle-visibility"
                     :title="showValue ? t('security.secretsManager.hidePassword') : t('security.secretsManager.showPassword')"
                   >
-                    <i :class="showValue ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
+                    <Icon :name="showValue ? 'eye-slash' : 'eye'" />
                   </button>
                 </div>
               </div>
@@ -498,12 +498,12 @@
                 <div class="capability-checkboxes">
                   <label class="checkbox-option">
                     <input type="checkbox" value="ssh" v-model="secretForm.capabilities" disabled checked />
-                    <i class="fas fa-terminal"></i>
+                    <Icon name="terminal" />
                     <span>{{ t('security.secretsManager.sshAlwaysEnabled') }}</span>
                   </label>
                   <label class="checkbox-option">
                     <input type="checkbox" value="vnc" v-model="secretForm.capabilities" />
-                    <i class="fas fa-desktop"></i>
+                    <Icon name="desktop" />
                     <span>{{ t('security.secretsManager.vncDesktop') }}</span>
                   </label>
                 </div>
@@ -590,7 +590,7 @@
                   class="toggle-visibility"
                   :title="showValue ? t('security.secretsManager.hideValue') : t('security.secretsManager.showValue')"
                 >
-                  <i :class="showValue ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
+                  <Icon :name="showValue ? 'eye-slash' : 'eye'" />
                 </button>
               </div>
               <small class="input-hint">{{ getValueHint(secretForm.type) }}</small>
@@ -642,7 +642,7 @@
           class="btn-primary"
           :disabled="saving || !isFormValid"
         >
-          <i v-if="saving" class="fas fa-spinner fa-spin"></i>
+          <Icon name="spinner" class="animate-spin" v-if="saving" />
           {{ saving ? $t('security.secretsManager.saving') : (showEditModal ? $t('security.secretsManager.updateCredential') : $t('security.secretsManager.createCredential')) }}
         </button>
       </template>
@@ -652,12 +652,12 @@
     <BaseModal
       v-model="showViewModal"
       :title="viewingSecret?.name || $t('security.secretsManager.viewDetails')"
-      size="medium"
+      size="md"
     >
       <div class="view-credential">
         <div class="view-header">
           <div class="view-icon" :style="{ backgroundColor: getTypeColor(viewingSecret?.type) }">
-            <i :class="getTypeIcon(viewingSecret?.type)"></i>
+            <Icon :name="getTypeIcon(viewingSecret?.type)" />
           </div>
           <div class="view-title">
             <h3>{{ viewingSecret?.name }}</h3>
@@ -672,10 +672,10 @@
             <code v-else>{{ '•'.repeat(Math.min(viewingSecret?.value?.length || 20, 40)) }}</code>
             <div class="secret-actions">
               <button @click="toggleSecretValue" class="action-btn">
-                <i :class="showSecretValue ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
+                <Icon :name="showSecretValue ? 'eye-slash' : 'eye'" />
               </button>
               <button @click="copySecretValue" class="action-btn">
-                <i class="fas fa-copy"></i>
+                <Icon name="copy" />
               </button>
             </div>
           </div>
@@ -685,7 +685,7 @@
           <div class="view-item">
             <label>{{ $t('security.secretsManager.scope') }}</label>
             <span class="badge" :class="viewingSecret?.scope">
-              <i :class="viewingSecret?.scope === 'general' ? 'fas fa-globe' : 'fas fa-comments'"></i>
+              <Icon :name="viewingSecret?.scope === 'general' ? 'globe' : 'comments'" />
               {{ viewingSecret?.scope }}
             </span>
           </div>
@@ -721,7 +721,7 @@
       <template #actions>
         <button @click="closeViewModal" class="btn-secondary">{{ $t('security.secretsManager.close') }}</button>
         <button @click="editSecret(viewingSecret)" class="btn-primary">
-          <i class="fas fa-edit"></i> {{ $t('security.secretsManager.edit') }}
+          <Icon name="edit" /> {{ $t('security.secretsManager.edit') }}
         </button>
       </template>
     </BaseModal>
@@ -730,16 +730,16 @@
     <BaseModal
       v-model="showTransferModal"
       :title="$t('security.secretsManager.transferTitle')"
-      size="small"
+      size="sm"
     >
       <div class="transfer-content">
         <div class="transfer-icon">
-          <i class="fas fa-share-square"></i>
+          <Icon name="share-alt" />
         </div>
         <h4>{{ $t('security.secretsManager.transferConfirmTitle', { name: transferringSecret?.name }) }}</h4>
         <p>{{ $t('security.secretsManager.transferConfirmMessage') }}</p>
         <div class="transfer-warning">
-          <i class="fas fa-info-circle"></i>
+          <Icon name="info-circle" />
           <span>{{ $t('security.secretsManager.cannotBeUndone') }}</span>
         </div>
       </div>
@@ -747,7 +747,7 @@
       <template #actions>
         <button @click="closeTransferModal" class="btn-secondary">{{ $t('security.secretsManager.cancel') }}</button>
         <button @click="confirmTransfer" class="btn-primary" :disabled="transferring">
-          <i v-if="transferring" class="fas fa-spinner fa-spin"></i>
+          <Icon name="spinner" class="animate-spin" v-if="transferring" />
           {{ transferring ? $t('security.secretsManager.transferring') : $t('security.secretsManager.transferToGeneral') }}
         </button>
       </template>
@@ -757,16 +757,16 @@
     <BaseModal
       v-model="showDeleteModal"
       :title="$t('security.secretsManager.deleteConfirmTitle')"
-      size="small"
+      size="sm"
     >
       <div class="delete-content">
         <div class="delete-icon">
-          <i class="fas fa-trash-alt"></i>
+          <Icon name="trash-alt" />
         </div>
         <h4>{{ $t('security.secretsManager.deleteConfirmName', { name: deletingSecret?.name }) }}</h4>
         <p>{{ $t('security.secretsManager.deleteConfirmMessage') }}</p>
         <div class="delete-warning">
-          <i class="fas fa-exclamation-triangle"></i>
+          <Icon name="exclamation-triangle" />
           <span>{{ $t('security.secretsManager.cannotBeUndone') }}</span>
         </div>
       </div>
@@ -774,7 +774,7 @@
       <template #actions>
         <button @click="showDeleteModal = false" class="btn-secondary">{{ $t('security.secretsManager.cancel') }}</button>
         <button @click="deleteSecret" class="btn-danger" :disabled="deleting">
-          <i v-if="deleting" class="fas fa-spinner fa-spin"></i>
+          <Icon name="spinner" class="animate-spin" v-if="deleting" />
           {{ deleting ? $t('security.secretsManager.deleting') : $t('security.secretsManager.deleteCredential') }}
         </button>
       </template>
@@ -783,6 +783,7 @@
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { ref, reactive, computed, onMounted, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 // @ts-ignore - JavaScript API client without type declarations
@@ -803,27 +804,27 @@ const { fetchInfraHosts, fetchSecretsUsage, deleteInfraHost } = useSecretsAuditA
 
 // Credential type categories with icons and colors (using design tokens)
 const credentialCategories = computed(() => [
-  { type: 'api_key', label: 'API Keys', icon: 'fas fa-key', color: getCssVar('--color-primary', '#6366f1') },
-  { type: 'token', label: 'Tokens', icon: 'fas fa-ticket-alt', color: getCssVar('--chart-purple', '#8b5cf6') },
-  { type: 'password', label: 'Passwords', icon: 'fas fa-lock', color: getCssVar('--chart-pink', '#ec4899') },
-  { type: 'ssh_key', label: 'SSH Keys', icon: 'fas fa-terminal', color: getCssVar('--chart-teal', '#14b8a6') },
-  { type: 'infrastructure_host', label: 'Infrastructure Hosts', icon: 'fas fa-server', color: getCssVar('--chart-blue', '#3b82f6') },
-  { type: 'database_url', label: 'Database', icon: 'fas fa-database', color: getCssVar('--color-warning', '#f59e0b') },
-  { type: 'certificate', label: 'Certificates', icon: 'fas fa-certificate', color: getCssVar('--color-success', '#10b981') },
-  { type: 'other', label: 'Other', icon: 'fas fa-ellipsis-h', color: getCssVar('--text-tertiary', '#6b7280') },
+  { type: 'api_key', label: 'API Keys', icon: 'key', color: getCssVar('--color-primary', '#6366f1') },
+  { type: 'token', label: 'Tokens', icon: 'ticket-alt', color: getCssVar('--chart-purple', '#8b5cf6') },
+  { type: 'password', label: 'Passwords', icon: 'lock', color: getCssVar('--chart-pink', '#ec4899') },
+  { type: 'ssh_key', label: 'SSH Keys', icon: 'terminal', color: getCssVar('--chart-teal', '#14b8a6') },
+  { type: 'infrastructure_host', label: 'Infrastructure Hosts', icon: 'server', color: getCssVar('--chart-blue', '#3b82f6') },
+  { type: 'database_url', label: 'Database', icon: 'database', color: getCssVar('--color-warning', '#f59e0b') },
+  { type: 'certificate', label: 'Certificates', icon: 'certificate', color: getCssVar('--color-success', '#10b981') },
+  { type: 'other', label: 'Other', icon: 'ellipsis-h', color: getCssVar('--text-tertiary', '#6b7280') },
 ]);
 
 // Quick-add templates for common services (using design tokens)
 const credentialTemplates = computed(() => [
-  { id: 'openai', name: 'OpenAI', description: 'GPT API access', icon: 'fas fa-brain', color: getCssVar('--color-success', '#10a37f'), type: 'api_key' },
-  { id: 'anthropic', name: 'Anthropic', description: 'Claude API access', icon: 'fas fa-robot', color: getCssVar('--color-warning-hover', '#d97706'), type: 'api_key' },
-  { id: 'aws', name: 'AWS', description: 'Amazon Web Services', icon: 'fab fa-aws', color: getCssVar('--chart-orange', '#ff9900'), type: 'api_key' },
-  { id: 'github', name: 'GitHub', description: 'GitHub personal token', icon: 'fab fa-github', color: getCssVar('--bg-tertiary', '#333'), type: 'token' },
-  { id: 'postgres', name: 'PostgreSQL', description: 'Database connection', icon: 'fas fa-database', color: getCssVar('--color-info', '#336791'), type: 'database_url' },
-  { id: 'redis', name: 'Redis', description: 'Redis connection', icon: 'fas fa-layer-group', color: getCssVar('--chart-red', '#dc382d'), type: 'database_url' },
-  { id: 'ssh', name: 'SSH Key', description: 'Server access', icon: 'fas fa-terminal', color: getCssVar('--bg-primary', '#000'), type: 'ssh_key' },
-  { id: 'slack', name: 'Slack', description: 'Slack bot token', icon: 'fab fa-slack', color: getCssVar('--chart-purple', '#4a154b'), type: 'token' },
-  { id: 'server', name: 'Server Host', description: 'SSH/VNC server access', icon: 'fas fa-server', color: getCssVar('--chart-blue', '#3b82f6'), type: 'infrastructure_host' },
+  { id: 'openai', name: 'OpenAI', description: 'GPT API access', icon: 'brain', color: getCssVar('--color-success', '#10a37f'), type: 'api_key' },
+  { id: 'anthropic', name: 'Anthropic', description: 'Claude API access', icon: 'robot', color: getCssVar('--color-warning-hover', '#d97706'), type: 'api_key' },
+  { id: 'aws', name: 'AWS', description: 'Amazon Web Services', icon: 'aws', color: getCssVar('--chart-orange', '#ff9900'), type: 'api_key' },
+  { id: 'github', name: 'GitHub', description: 'GitHub personal token', icon: 'github', color: getCssVar('--bg-tertiary', '#333'), type: 'token' },
+  { id: 'postgres', name: 'PostgreSQL', description: 'Database connection', icon: 'database', color: getCssVar('--color-info', '#336791'), type: 'database_url' },
+  { id: 'redis', name: 'Redis', description: 'Redis connection', icon: 'layer-group', color: getCssVar('--chart-red', '#dc382d'), type: 'database_url' },
+  { id: 'ssh', name: 'SSH Key', description: 'Server access', icon: 'terminal', color: getCssVar('--bg-primary', '#000'), type: 'ssh_key' },
+  { id: 'slack', name: 'Slack', description: 'Slack bot token', icon: 'slack', color: getCssVar('--chart-purple', '#4a154b'), type: 'token' },
+  { id: 'server', name: 'Server Host', description: 'SSH/VNC server access', icon: 'server', color: getCssVar('--chart-blue', '#3b82f6'), type: 'infrastructure_host' },
 ]);
 
 // State
@@ -967,8 +968,8 @@ const hasActiveFilters = computed(() => {
 });
 
 const emptyStateIcon = computed(() => {
-  if (hasActiveFilters.value) return 'fas fa-search';
-  return 'fas fa-key';
+  if (hasActiveFilters.value) return 'search';
+  return 'key';
 });
 
 const emptyStateMessage = computed(() => {
@@ -1122,7 +1123,7 @@ const getTypeColor = (type: string) => {
 
 const getTypeIcon = (type: string) => {
   const cat = credentialCategories.value.find(c => c.type === type);
-  return cat?.icon || 'fas fa-key';
+  return cat?.icon || 'key';
 };
 
 const getTypeLabel = (type: string) => {
@@ -1567,13 +1568,13 @@ const formatVisibility = (secret: any): string => {
 const getVisibilityIcon = (secret: any): string => {
   const visibility = getVisibility(secret);
   const icons: Record<string, string> = {
-    'private': 'fas fa-lock',
-    'shared': 'fas fa-user-friends',
-    'group': 'fas fa-users',
-    'organization': 'fas fa-building',
-    'system': 'fas fa-globe'
+    'private': 'lock',
+    'shared': 'user-friends',
+    'group': 'users',
+    'organization': 'building',
+    'system': 'globe'
   };
-  return icons[visibility || ''] || 'fas fa-eye';
+  return icons[visibility || ''] || 'eye';
 };
 
 // Lifecycle

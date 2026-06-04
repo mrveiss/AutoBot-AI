@@ -9,17 +9,16 @@ Issue #1498: Contextual Retrieval - +35% RAG retrieval accuracy.
 
 import asyncio
 import json
-import logging
-import os
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
-from autobot_shared.ssot_config import QUALITY_MODEL
+from autobot_shared.ssot_config import config
 from autobot_shared.time_utils import now_utc
 from knowledge.pipeline.base import BaseCognifier, PipelineContext
 from knowledge.pipeline.registry import TaskRegistry
 from services.llm_service import get_llm_service
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _SUMMARY_PROMPT = (
     "You are summarizing a document for a retrieval system.\n"
@@ -46,8 +45,8 @@ class ContextGeneratorCognifier(BaseCognifier):
     """Prepend LLM-generated context sentences to each chunk (Issue #1498)."""
 
     def __init__(self, model=None, ttl_days=None):
-        self.model = model or os.getenv("CONTEXT_MODEL", QUALITY_MODEL)
-        days = ttl_days or int(os.getenv("CONTEXT_SUMMARY_TTL_DAYS", "30"))
+        self.model = model or config.context_model
+        days = ttl_days or int(config.context_summary_ttl_days)
         self.ttl_seconds = days * 86400
         self.llm = get_llm_service()
 
@@ -116,4 +115,4 @@ class ContextGeneratorCognifier(BaseCognifier):
 
     @staticmethod
     def is_enabled() -> bool:
-        return os.getenv("CONTEXT_ENABLED", "false").lower() == "true"
+        return config.context_enabled.lower() == "true"

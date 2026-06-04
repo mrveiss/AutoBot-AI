@@ -10,16 +10,16 @@ by the chat terminal and host-selection UI components.
 Issue #1310: Fleet/system VMs removed — they belong in SLM only.
 """
 
-import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, Query
 
 from api.schemas_system import InfrastructureHostsResponse
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 router = APIRouter(tags=["infrastructure"])
 
 # Issue #1310: Fleet hosts removed from main UI.
@@ -64,8 +64,8 @@ def _load_secrets_hosts() -> List[Dict[str, Any]]:
     error_code_prefix="INFRASTRUCTURE",
 )
 async def get_infrastructure_hosts(
-    capability: Optional[str] = Query(None, description="Filter by capability (ssh, vnc)"),
-    chat_id: Optional[str] = Query(None, description="Associated chat session (unused, for context)"),
+    capability: str | None = Query(None, description="Filter by capability (ssh, vnc)"),
+    chat_id: str | None = Query(None, description="Associated chat session (unused, for context)"),
     _user: Any = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """Return user-configured hosts from secrets, filtered by capability.

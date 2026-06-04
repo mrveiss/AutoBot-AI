@@ -11,10 +11,10 @@ Part of Issue #381 - God Class Refactoring
 """
 
 import asyncio
-import logging
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from enhanced_memory_manager_async import (
     TaskPriority,
     get_async_enhanced_memory_manager,
@@ -25,7 +25,7 @@ from .models import MultiModalInput, ProcessingResult
 from .processors import ContextProcessor, VisionProcessor, VoiceProcessor
 from .types import EMBEDDING_FIELDS, VISUAL_MODALITY_TYPES, ModalityType
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #3016: lazy module-level imports for torch to avoid startup cost
 _torch = None
@@ -70,7 +70,7 @@ class UnifiedMultiModalProcessor:
         self.voice_processor = VoiceProcessor()
         self.context_processor = ContextProcessor()
         self.memory_manager = get_async_enhanced_memory_manager()
-        self.logger = logging.getLogger(__name__)
+        self.logger = get_logger(__name__)
 
         # Performance monitoring integration
         self.performance_monitor = performance_monitor
@@ -298,7 +298,7 @@ class UnifiedMultiModalProcessor:
         except Exception as e:
             self.logger.error("Failed to initialize fusion components: %s", e)
 
-    def _extract_embedding_from_result(self, result: ProcessingResult) -> Optional[Any]:
+    def _extract_embedding_from_result(self, result: ProcessingResult) -> Any | None:
         """Extract embedding from a processing result (Issue #315 - extracted method)"""
         if not result.result_data:
             return None
@@ -392,9 +392,7 @@ class UnifiedMultiModalProcessor:
 
         return fused_embedding
 
-    def _extract_modality_contributions(
-        self, attention_weights: Optional[Any], modalities: List[str]
-    ) -> Dict[str, float]:
+    def _extract_modality_contributions(self, attention_weights: Any | None, modalities: List[str]) -> Dict[str, float]:
         """Extract modality contributions from attention weights. Issue #620."""
         if attention_weights is not None:
             attn_scores = attention_weights.mean(dim=1).squeeze().cpu().numpy()

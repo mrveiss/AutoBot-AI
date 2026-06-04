@@ -40,15 +40,15 @@ Usage:
 """
 
 import json
-import logging
 import uuid
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.time_utils import utc_timestamp
 from services.workflow_serializer import WorkflowSerializer
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Redis key prefixes
 _SHARE_KEY_PREFIX = "autobot:workflow_share"
@@ -68,7 +68,7 @@ def _share_record(
     workflow_id: str,
     owner_id: str,
     public: bool,
-    target_user_id: Optional[str],
+    target_user_id: str | None,
     export_doc: Dict[str, Any],
 ) -> Dict[str, Any]:
     """Build the share record dict stored in Redis (pure helper)."""
@@ -117,9 +117,9 @@ class WorkflowSharingService:
         self,
         workflow_id: str,
         owner_id: str,
-        target_user_id: Optional[str] = None,
+        target_user_id: str | None = None,
         public: bool = False,
-    ) -> Optional[str]:
+    ) -> str | None:
         """
         Create a new share for *workflow_id*.
 
@@ -221,7 +221,7 @@ class WorkflowSharingService:
     # List
     # ------------------------------------------------------------------
 
-    async def list_shared(self, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
+    async def list_shared(self, user_id: str | None = None) -> List[Dict[str, Any]]:
         """
         Return share records visible to *user_id*.
 
@@ -277,9 +277,9 @@ class WorkflowSharingService:
     async def clone_workflow(
         self,
         share_id: str,
-        new_owner_id: Optional[str],
-        session_id: Optional[str] = None,
-    ) -> Optional[str]:
+        new_owner_id: str | None,
+        session_id: str | None = None,
+    ) -> str | None:
         """
         Import a shared workflow and assign it to *new_owner_id*.
 
@@ -339,7 +339,7 @@ class WorkflowSharingService:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _is_visible_to(record: Dict[str, Any], user_id: Optional[str]) -> bool:
+    def _is_visible_to(record: Dict[str, Any], user_id: str | None) -> bool:
         """Return True when the share record is visible to *user_id* (pure helper)."""
         if record.get("public"):
             return True

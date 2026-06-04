@@ -17,7 +17,6 @@ Includes:
 
 import asyncio
 import json
-import logging
 from datetime import datetime, timezone
 from pathlib import Path as PathLib
 
@@ -38,6 +37,7 @@ from api.schemas_knowledge import (
 )
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import QueryDefaults
 
 # Import Pydantic models from dedicated module
@@ -77,7 +77,7 @@ from services.knowledge.contradiction_detector import (
 from services.knowledge.synthesis_provenance import SynthesisProvenanceLog
 
 # Set up logging
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(tags=["knowledge_maintenance"])
 

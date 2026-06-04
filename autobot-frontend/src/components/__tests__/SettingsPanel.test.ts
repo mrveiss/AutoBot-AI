@@ -91,7 +91,7 @@ const mockHealthResponse = {
  *   GET /api/system/health       -> loadHealthStatus fallback
  */
 function setupAxiosMocks() {
-  vi.mocked(axios.get).mockImplementation((url: string, ...args: any[]) => {
+  vi.mocked(axios.get).mockImplementation((url: string, ..._args: any[]) => {
     if (url === '/api/settings/') {
       return Promise.resolve({ data: mockSettingsResponse })
     }
@@ -117,7 +117,7 @@ function setupAxiosMocks() {
 }
 
 describe('SettingsPanel', () => {
-  let user: ReturnType<typeof userEvent.setup>
+  let _user: ReturnType<typeof userEvent.setup>
 
   beforeEach(() => {
     user = userEvent.setup()

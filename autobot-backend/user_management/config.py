@@ -11,10 +11,10 @@ Supports 4 deployment modes:
 - provider: Full multi-tenant with billing, quotas, social login
 """
 
-import os
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Optional
+
+from autobot_shared.ssot_config import config
 
 
 def _get_default_postgres_host() -> str:
@@ -70,7 +70,7 @@ class DeploymentConfig:
     postgres_db: str = "autobot"
     postgres_user: str = "autobot"
     postgres_password: str = ""
-    encryption_key: Optional[str] = None
+    encryption_key: str | None = None
 
     @property
     def postgres_url(self) -> str:
@@ -143,7 +143,7 @@ MODE_FEATURES: dict[DeploymentMode, FeatureFlags] = {
 
 
 # Singleton config instance
-_deployment_config: Optional[DeploymentConfig] = None
+_deployment_config: DeploymentConfig | None = None
 
 
 def get_deployment_config() -> DeploymentConfig:
@@ -161,7 +161,7 @@ def get_deployment_config() -> DeploymentConfig:
     # Note: AUTOBOT_USER_MODE is separate from AUTOBOT_DEPLOYMENT_MODE (infrastructure)
     # AUTOBOT_DEPLOYMENT_MODE = hybrid/local/distributed (infrastructure)
     # AUTOBOT_USER_MODE = single_user/single_company/multi_company/provider (user mgmt)
-    mode_str = os.getenv("AUTOBOT_USER_MODE", "single_user").lower()
+    mode_str = config.user_mode.lower()
 
     try:
         mode = DeploymentMode(mode_str)
@@ -176,14 +176,14 @@ def get_deployment_config() -> DeploymentConfig:
     postgres_enabled = mode != DeploymentMode.SINGLE_USER
 
     # Load PostgreSQL configuration from environment (uses SSOT fallback)
-    postgres_host = os.getenv("AUTOBOT_POSTGRES_HOST", _get_default_postgres_host())
-    postgres_port = int(os.getenv("AUTOBOT_POSTGRES_PORT", "5432"))
-    postgres_db = os.getenv("AUTOBOT_POSTGRES_DB", "autobot")
-    postgres_user = os.getenv("AUTOBOT_POSTGRES_USER", "autobot")
-    postgres_password = os.getenv("AUTOBOT_POSTGRES_PASSWORD", "")
+    postgres_host = config.postgres_host
+    postgres_port = int(config.postgres_port)
+    postgres_db = config.postgres_db
+    postgres_user = config.postgres_user
+    postgres_password = config.postgres_password
 
     # Encryption key for secrets (MFA, SSO config)
-    encryption_key = os.getenv("AUTOBOT_ENCRYPTION_KEY")
+    encryption_key = config.encryption_key
 
     _deployment_config = DeploymentConfig(
         mode=mode,

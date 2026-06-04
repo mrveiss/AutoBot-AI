@@ -8,14 +8,14 @@ and wraps each as a local skill package.  Delegates to :class:`MCPClient`
 for transport-agnostic communication (#3103).
 """
 
-import logging
 from typing import Any, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from skills.models import SkillState
 from skills.sync.base_sync import BaseRepoSync
 from skills.sync.mcp_client import MCPClient
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _SKILL_MD_TEMPLATE = """\
 ---

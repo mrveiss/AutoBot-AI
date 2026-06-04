@@ -9,9 +9,11 @@ Contains ConversationContextEnhancer for conversation-aware RAG.
 """
 
 import re
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from autobot_shared.singleton_factory import lazy_singleton
+
+from .types import FOLLOWUP_KEYWORDS, EnhancedQuery
 
 from .types import FOLLOWUP_KEYWORDS, EnhancedQuery
 
@@ -63,7 +65,7 @@ class ConversationContextEnhancer:
         r"\b(error|exception|bug|issue|problem|failure)\b",
     ]
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the context enhancer with compiled conversation analysis patterns.
 
         Issue #509: Optimized entity extraction by combining patterns into
@@ -154,7 +156,7 @@ class ConversationContextEnhancer:
 
         return self._build_enhanced_result(query, enhanced_query, context_entities, context_topics, word_count)
 
-    def _needs_context_enhancement(self, query: str, word_count: Optional[int] = None) -> bool:
+    def _needs_context_enhancement(self, query: str, word_count: int | None = None) -> bool:
         """Check if a query would benefit from context enhancement."""
         query_lower = query.lower().strip()
 
@@ -219,7 +221,7 @@ class ConversationContextEnhancer:
         history: List[Dict[str, str]],
         entities: List[str],
         topics: List[str],
-        word_count: Optional[int] = None,
+        word_count: int | None = None,
     ) -> str:
         """Build an enhanced query with context."""
         enhanced_parts = [query]
@@ -249,7 +251,7 @@ class ConversationContextEnhancer:
 
         return "".join(enhanced_parts)
 
-    def _get_enhancement_reasoning(self, query: str, entities: List[str], word_count: Optional[int] = None) -> str:
+    def _get_enhancement_reasoning(self, query: str, entities: List[str], word_count: int | None = None) -> str:
         """Generate reasoning for the enhancement."""
         reasons = []
 

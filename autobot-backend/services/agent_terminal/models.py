@@ -11,7 +11,7 @@ import asyncio
 import time
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import List, Optional
+from typing import List
 
 from services.command_approval_manager import AgentRole
 from type_defs.common import Metadata
@@ -34,17 +34,17 @@ class AgentTerminalSession:
     session_id: str
     agent_id: str
     agent_role: AgentRole
-    conversation_id: Optional[str] = None  # Linked chat conversation
+    conversation_id: str | None = None  # Linked chat conversation
     host: str = "main"  # Target host (main, frontend, npu-worker, etc.)
     state: AgentSessionState = AgentSessionState.AGENT_CONTROL
     created_at: float = field(default_factory=time.time)
     last_activity: float = field(default_factory=time.time)
     command_queue: List[Metadata] = field(default_factory=list)
     command_history: List[Metadata] = field(default_factory=list)
-    pending_approval: Optional[Metadata] = None
+    pending_approval: Metadata | None = None
     metadata: Metadata = field(default_factory=dict)
-    pty_session_id: Optional[str] = None  # PTY session for terminal display
-    running_command_task: Optional[asyncio.Task] = None  # Track running command for cancellation
+    pty_session_id: str | None = None  # PTY session for terminal display
+    running_command_task: asyncio.Task | None = None  # Track running command for cancellation
 
     # === Issue #372: Feature Envy Reduction Methods ===
 
@@ -63,7 +63,7 @@ class AgentTerminalSession:
     def set_pending_approval(
         self,
         command: str,
-        description: Optional[str],
+        description: str | None,
         risk_value: str,
         reasons: List[str],
         command_id: str,
@@ -87,7 +87,7 @@ class AgentTerminalSession:
         command: str,
         risk_value: str,
         reasons: List[str],
-        description: Optional[str],
+        description: str | None,
         command_id: str,
         terminal_session_id: str,
         is_interactive: bool,
@@ -131,19 +131,19 @@ class AgentTerminalSession:
         """Check if session has pending approval (Issue #372)."""
         return self.pending_approval is not None
 
-    def get_pending_command(self) -> Optional[str]:
+    def get_pending_command(self) -> str | None:
         """Get pending command from approval (Issue #372)."""
         if self.pending_approval:
             return self.pending_approval.get("command")
         return None
 
-    def get_pending_risk_level(self) -> Optional[str]:
+    def get_pending_risk_level(self) -> str | None:
         """Get pending command risk level (Issue #372)."""
         if self.pending_approval:
             return self.pending_approval.get("risk")
         return None
 
-    def get_pending_command_id(self) -> Optional[str]:
+    def get_pending_command_id(self) -> str | None:
         """Get pending command ID (Issue #372)."""
         if self.pending_approval:
             return self.pending_approval.get("command_id")
@@ -153,8 +153,8 @@ class AgentTerminalSession:
         self,
         command: str,
         risk_level: str,
-        user_id: Optional[str],
-        comment: Optional[str],
+        user_id: str | None,
+        comment: str | None,
         result: Metadata,
     ) -> None:
         """Add approved command to history (Issue #372)."""
@@ -173,8 +173,8 @@ class AgentTerminalSession:
         self,
         command: str,
         risk_level: str,
-        user_id: Optional[str],
-        comment: Optional[str],
+        user_id: str | None,
+        comment: str | None,
     ) -> None:
         """Add denied command to history (Issue #372)."""
         self.command_history.append(

@@ -20,12 +20,12 @@ Test matrix:
 - Case-insensitivity
 """
 
-import logging
 from unittest.mock import MagicMock, patch
 
+from autobot_shared.logging_manager import get_logger
 from security.domain_security import DomainSecurityConfig, DomainSecurityManager
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def _make_manager(blacklist: list, whitelist: list) -> DomainSecurityManager:

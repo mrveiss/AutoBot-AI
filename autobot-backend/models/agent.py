@@ -11,20 +11,12 @@ rows in this table.
 """
 
 import uuid
-from enum import Enum
 
 from sqlalchemy import Column, String, Text
 from sqlalchemy.types import Uuid
 
+from autobot_shared.status_enums import AgentLifecycleStatus as AgentStatus  # #7504 consolidation
 from user_management.models.base import Base
-
-
-class AgentStatus(str, Enum):
-    """Lifecycle states for an agent (#1754)."""
-
-    ACTIVE = "active"
-    INACTIVE = "inactive"
-    ARCHIVED = "archived"
 
 
 class Agent(Base):

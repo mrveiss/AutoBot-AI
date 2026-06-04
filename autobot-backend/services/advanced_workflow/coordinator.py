@@ -7,10 +7,10 @@ Advanced Workflow Orchestrator
 Main orchestrator that coordinates all workflow components.
 """
 
-import logging
 import uuid
 from typing import Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from knowledge_base import KnowledgeBase
 from orchestrator import get_orchestrator_sync as get_orchestrator
 from services.llm_service import get_llm_service
@@ -29,13 +29,13 @@ from .risk_analyzer import RiskAnalyzer
 from .step_generator import StepGenerator
 from .templates import TemplateManager
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class WorkflowCoordinator:
     """AI-driven workflow orchestrator with learning capabilities"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize orchestrator with core and specialized components."""
         # Core components
         self.base_manager = WorkflowAutomationManager()

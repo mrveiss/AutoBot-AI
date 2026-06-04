@@ -14,7 +14,6 @@ import os
 import uuid
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
@@ -72,10 +71,10 @@ class PlaybookExecution(BaseModel):
     execution_id: str
     playbook_id: str
     status: PlaybookStatus
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
     output: list[str] = Field(default_factory=list)
-    error: Optional[str] = None
+    error: str | None = None
     triggered_by: str
 
 
@@ -84,7 +83,7 @@ class ExecutePlaybookRequest(BaseModel):
 
     playbook_id: str
     variables: dict = Field(default_factory=dict)
-    limit_hosts: Optional[list[str]] = None
+    limit_hosts: list[str] | None = None
 
 
 class PlaybookListResponse(BaseModel):
@@ -414,7 +413,7 @@ _executions: dict[str, PlaybookExecution] = {}
 @router.get("/playbooks", response_model=PlaybookListResponse)
 async def list_playbooks(
     _: Annotated[dict, Depends(get_current_user)],
-    category: Optional[PlaybookCategory] = None,
+    category: PlaybookCategory | None = None,
 ) -> PlaybookListResponse:
     """List available infrastructure playbooks."""
     playbooks = AVAILABLE_PLAYBOOKS
@@ -581,7 +580,7 @@ async def _run_playbook(
     execution_id: str,
     playbook: PlaybookInfo,
     variables: dict,
-    limit_hosts: Optional[list[str]],
+    limit_hosts: list[str] | None,
 ) -> None:
     """Execute an Ansible playbook asynchronously."""
     execution = _executions.get(execution_id)

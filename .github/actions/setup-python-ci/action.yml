@@ -1,0 +1,71 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Composite action: Setup Python + install CI dependencies (GH#7086)
+#
+# Encapsulates the repeated "setup Python + pip bootstrap + install deps"
+# pattern shared across ci.yml, code-quality.yml, and other workflows.
+# Eliminates ~15 lines of duplicated YAML per job.
+#
+# Usage:
+#   - uses: ./.github/actions/setup-python-ci
+#     with:
+#       python-version: '3.12'
+#       requirements-file: 'requirements-ci.txt'
+#       extra-packages: 'pytest pytest-asyncio mypy'
+
+name: Setup Python CI
+description: 'Set up Python with pip caching, upgrade pip/setuptools/wheel, and install project dependencies.'
+
+inputs:
+  python-version:
+    description: 'Python version to install (e.g. "3.12")'
+    required: false
+    default: '3.12'
+  requirements-file:
+    description: 'Path to requirements file to install (relative to repo root). Empty to skip.'
+    required: false
+    default: ''
+  extra-packages:
+    description: 'Space-separated list of additional pip packages to install after requirements-file.'
+    required: false
+    default: ''
+
+outputs:
+  python-version:
+    description: 'The resolved Python version that was installed.'
+    value: ${{ steps.setup.outputs.python-version }}
+  cache-key:
+    description: 'The pip cache key used (for documentation and debugging).'
+    value: ${{ steps.cache-key.outputs.value }}
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Python ${{ inputs.python-version }}
+      id: setup
+      uses: actions/setup-python@1d6f8c11a0e30b87a6af51d0d78681a80e55c65a  # v5
+      with:
+        python-version: ${{ inputs.python-version }}
+        cache: 'pip'
+
+    - name: Compute cache key
+      id: cache-key
+      shell: bash
+      run: |
+        echo "value=python-${{ inputs.python-version }}-pip-${{ hashFiles('**/requirements*.txt', 'pyproject.toml') }}" >> "$GITHUB_OUTPUT"
+
+    - name: Upgrade pip, setuptools, wheel
+      shell: bash
+      run: python -m pip install --upgrade pip setuptools wheel
+
+    - name: Install requirements file
+      if: inputs.requirements-file != ''
+      shell: bash
+      run: python -m pip install -r ${{ inputs.requirements-file }} --prefer-binary
+
+    - name: Install extra packages
+      if: inputs.extra-packages != ''
+      shell: bash
+      run: python -m pip install ${{ inputs.extra-packages }}

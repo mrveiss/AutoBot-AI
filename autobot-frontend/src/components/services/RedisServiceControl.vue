@@ -2,8 +2,8 @@
   <div class="redis-service-control bg-autobot-bg-card rounded-lg shadow-md overflow-hidden" data-testid="redis-service-container">
     <!-- Service Header -->
     <div class="flex items-center justify-between px-6 py-4 border-b bg-linear-to-r from-red-50 to-red-100" data-testid="redis-service-header">
-      <div class="flex items-center space-x-3">
-        <i class="fas fa-database text-2xl text-red-600"></i>
+      <div class="flex items-center gap-3">
+        <Icon name="database" class="text-2xl text-red-600" />
         <div>
           <h3 class="text-lg font-semibold text-autobot-text-primary" data-testid="redis-service-title">{{ $t('redis.title') }}</h3>
           <p class="text-sm text-autobot-text-secondary" data-testid="redis-service-vm-info">VM3: {{ serviceStatus.vm_info?.host || NetworkConstants.REDIS_VM_IP }}</p>
@@ -11,7 +11,7 @@
       </div>
 
       <!-- Status Badge -->
-      <div class="flex items-center space-x-3" data-testid="redis-service-status-area">
+      <div class="flex items-center gap-3" data-testid="redis-service-status-area">
         <span class="text-xs text-autobot-text-muted" data-testid="redis-service-last-check">
           {{ $t('redis.lastCheck') }} {{ formatLastCheck(serviceStatus.last_check) }}
         </span>
@@ -53,15 +53,15 @@
     <!-- Control Buttons -->
     <div class="px-6 py-4 border-b" data-testid="redis-service-controls">
       <div class="flex items-center justify-between">
-        <div class="flex space-x-3">
+        <div class="flex gap-3">
           <BaseButton
             variant="success"
             @click="handleStartService"
             :disabled="serviceStatus.status === 'running' || loading"
-            class="flex items-center space-x-2 px-4 py-2"
+            class="flex items-center gap-2 px-4 py-2"
             data-testid="redis-service-start-btn"
           >
-            <i class="fas fa-play"></i>
+            <Icon name="play" />
             <span>{{ $t('redis.start') }}</span>
           </BaseButton>
 
@@ -69,21 +69,21 @@
             variant="warning"
             @click="handleRestartService"
             :disabled="serviceStatus.status !== 'running' || loading"
-            class="flex items-center space-x-2 px-4 py-2"
+            class="flex items-center gap-2 px-4 py-2"
             data-testid="redis-service-restart-btn"
           >
-            <i class="fas fa-sync"></i>
+            <Icon name="sync" />
             <span>{{ $t('redis.restart') }}</span>
           </BaseButton>
 
           <BaseButton
-            variant="danger"
+            variant="error"
             @click="handleStopService"
             :disabled="serviceStatus.status !== 'running' || loading"
-            class="flex items-center space-x-2 px-4 py-2"
+            class="flex items-center gap-2 px-4 py-2"
             data-testid="redis-service-stop-btn"
           >
-            <i class="fas fa-stop"></i>
+            <Icon name="stop" />
             <span>{{ $t('redis.stop') }}</span>
           </BaseButton>
         </div>
@@ -92,10 +92,10 @@
           variant="secondary"
           @click="refreshStatus"
           :loading="loading"
-          class="flex items-center space-x-2 px-4 py-2"
+          class="flex items-center gap-2 px-4 py-2"
           data-testid="redis-service-refresh-btn"
         >
-          <i class="fas fa-sync-alt"></i>
+          <Icon name="sync-alt" />
           <span>{{ $t('common.refresh') }}</span>
         </BaseButton>
       </div>
@@ -106,7 +106,7 @@
       <h4 class="text-md font-semibold text-autobot-text-primary mb-3">{{ $t('redis.healthStatus') }}</h4>
 
       <!-- Overall Health Indicator -->
-      <StatusBadge :variant="healthVariant" size="medium" class="font-semibold mb-4" data-testid="redis-service-health-badge">
+      <StatusBadge :variant="healthVariant" size="md" class="font-semibold mb-4" data-testid="redis-service-health-badge">
         {{ (healthStatus?.overall_status || 'unknown').toUpperCase() }}
       </StatusBadge>
 
@@ -121,7 +121,7 @@
         >
           <div class="flex items-center justify-between mb-2">
             <span class="text-sm font-medium text-autobot-text-secondary capitalize">{{ name }}</span>
-            <StatusBadge :variant="getHealthCheckVariant(check.status)" size="small" class="font-bold">
+            <StatusBadge :variant="getHealthCheckVariant(check.status)" size="sm" class="font-bold">
               {{ check.status }}
             </StatusBadge>
           </div>
@@ -137,7 +137,7 @@
         data-testid="redis-service-recommendations"
       >
         <h5 class="text-sm font-semibold text-yellow-800 mb-2">
-          <i class="fas fa-lightbulb mr-1"></i>
+          <Icon name="lightbulb" class="mr-1" />
           {{ $t('redis.recommendations') }}
         </h5>
         <ul class="list-disc list-inside space-y-1">
@@ -173,7 +173,7 @@
           class="mt-3 p-3 bg-red-100 border border-red-300 rounded text-sm text-red-800"
           data-testid="redis-service-manual-intervention"
         >
-          <i class="fas fa-exclamation-triangle mr-1"></i>
+          <Icon name="exclamation-triangle" class="mr-1" />
           <strong>{{ $t('redis.manualInterventionTitle') }}</strong> {{ $t('redis.manualInterventionMsg') }}
         </div>
       </div>
@@ -182,7 +182,7 @@
     <!-- Loading Overlay -->
     <div v-if="loading" class="absolute inset-0 bg-autobot-bg-card/75 flex items-center justify-center" data-testid="redis-service-loading-overlay">
       <div class="text-center">
-        <i class="fas fa-spinner fa-spin text-4xl text-blue-600 mb-2"></i>
+        <Icon name="spinner" class="animate-spin text-4xl text-blue-600 mb-2" />
         <p class="text-sm text-autobot-text-secondary">{{ $t('redis.processing') }}</p>
       </div>
     </div>
@@ -191,7 +191,7 @@
     <BaseModal
       v-model="showConfirmDialog"
       :title="confirmDialog.title"
-      size="medium"
+      size="md"
       data-testid="redis-service-confirm-dialog"
     >
       <p class="text-sm text-autobot-text-secondary mb-4">{{ confirmDialog.message }}</p>
@@ -200,7 +200,7 @@
         class="p-3 bg-yellow-50 border-l-4 border-yellow-400 rounded"
       >
         <p class="text-sm text-yellow-800">
-          <i class="fas fa-exclamation-triangle mr-1"></i>
+          <Icon name="exclamation-triangle" class="mr-1" />
           {{ confirmDialog.warning }}
         </p>
       </div>
@@ -214,7 +214,7 @@
           {{ $t('common.cancel') }}
         </BaseButton>
         <BaseButton
-          :variant="confirmDialog.type === 'danger' ? 'danger' : 'primary'"
+          :variant="confirmDialog.type === 'error' ? 'error' : 'primary'"
           @click="confirmDialog.onConfirm"
           data-testid="redis-service-confirm-ok-btn"
         >
@@ -226,6 +226,7 @@
 </template>
 
 <script setup>
+import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useServiceManagement } from '@/composables/useServiceManagement'
@@ -266,7 +267,7 @@ const statusVariant = computed(() => {
   const statusMap = {
     'running': 'success',
     'stopped': 'secondary',
-    'failed': 'danger'
+    'failed': 'error'
   }
   return statusMap[serviceStatus.value.status] || 'warning'
 })
@@ -276,7 +277,7 @@ const healthVariant = computed(() => {
   const healthMap = {
     'healthy': 'success',
     'degraded': 'warning',
-    'critical': 'danger'
+    'critical': 'error'
   }
   return healthMap[healthStatus.value?.overall_status] || 'secondary'
 })
@@ -286,7 +287,7 @@ const getHealthCheckVariant = (status) => {
   const variantMap = {
     'pass': 'success',
     'warning': 'warning',
-    'fail': 'danger'
+    'fail': 'error'
   }
   return variantMap[status] || 'secondary'
 }
@@ -340,7 +341,7 @@ const handleStopService = () => {
     title: t('redis.stopTitle'),
     message: t('redis.stopMsg'),
     warning: t('redis.stopWarning'),
-    type: 'danger',
+    type: 'error',
     onConfirm: async () => {
       showConfirmDialog.value = false
       try {

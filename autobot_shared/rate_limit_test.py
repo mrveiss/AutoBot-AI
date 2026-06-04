@@ -82,7 +82,7 @@ class TestIPRateLimiterRedisPath:
     """Issue #7271: shared limiter — Redis pipeline + 429 enforcement."""
 
     @pytest.mark.asyncio
-    async def test_below_limit_does_not_raise(self):
+    async def test_below_limit_does_not_raise(self) -> None:
         limiter = _make_limiter(default_limit=60)
         with patch(
             "autobot_shared.redis_client.get_async_redis_client",
@@ -91,7 +91,7 @@ class TestIPRateLimiterRedisPath:
             await limiter.check_or_429("1.2.3.4")  # no exception
 
     @pytest.mark.asyncio
-    async def test_at_limit_raises_429(self):
+    async def test_at_limit_raises_429(self) -> None:
         limiter = _make_limiter(default_limit=5)
         with patch(
             "autobot_shared.redis_client.get_async_redis_client",
@@ -103,7 +103,7 @@ class TestIPRateLimiterRedisPath:
             assert "Rate limit exceeded" in exc_info.value.detail
 
     @pytest.mark.asyncio
-    async def test_pipeline_uses_correct_key_and_ops(self):
+    async def test_pipeline_uses_correct_key_and_ops(self) -> None:
         """Pipeline must build (key, 4 ops) in the documented order."""
         fake_pipe = _FakePipeline(zcard_result=1)
         fake_redis = MagicMock()
@@ -124,7 +124,7 @@ class TestIPRateLimiterRedisPath:
             assert args[0] == "ratelimit:oai:203.0.113.1"
 
     @pytest.mark.asyncio
-    async def test_per_instance_prefix_keeps_buckets_independent(self):
+    async def test_per_instance_prefix_keeps_buckets_independent(self) -> None:
         """Two limiters with different prefixes must keep keys separate."""
         oai_pipe = _FakePipeline(zcard_result=1)
         a2a_pipe = _FakePipeline(zcard_result=1)
@@ -153,7 +153,7 @@ class TestIPRateLimiterFallback:
     """Issue #7271: shared limiter — in-process fallback paths."""
 
     @pytest.mark.asyncio
-    async def test_redis_unavailable_falls_back_to_inprocess(self, caplog):
+    async def test_redis_unavailable_falls_back_to_inprocess(self, caplog) -> None:
         """Redis None → fallback to per-process bucket (degraded mode)."""
         import logging
 
@@ -173,7 +173,7 @@ class TestIPRateLimiterFallback:
         import logging
 
         class _BrokenPipeline:
-            async def __aenter__(self):
+            async def __aenter__(self) -> None:
                 raise RuntimeError("redis down mid-pipeline")
 
             async def __aexit__(self, *a):
@@ -193,7 +193,7 @@ class TestIPRateLimiterFallback:
         assert any("pipeline failed" in r.getMessage() for r in caplog.records)
 
     @pytest.mark.asyncio
-    async def test_inprocess_at_limit_raises_429(self):
+    async def test_inprocess_at_limit_raises_429(self) -> None:
         """In-process fallback respects the limit too."""
         limiter = _make_limiter(prefix="ratelimit:fb3", default_limit=2)
         # Pre-seed bucket so the next call exceeds the limit.
@@ -214,19 +214,19 @@ class TestIPRateLimiterFallback:
 class TestIPRateLimiterConfig:
     """Issue #7271: limit is read from env each call (dynamic config)."""
 
-    def test_limit_property_reads_env(self, monkeypatch):
+    def test_limit_property_reads_env(self, monkeypatch) -> None:
         limiter = _make_limiter(default_limit=60)
         monkeypatch.setenv("UNIT_TEST_RATE_LIMIT", "120")
         assert limiter.limit == 120
         monkeypatch.setenv("UNIT_TEST_RATE_LIMIT", "5")
         assert limiter.limit == 5
 
-    def test_limit_falls_back_to_default_when_env_unparseable(self, monkeypatch):
+    def test_limit_falls_back_to_default_when_env_unparseable(self, monkeypatch) -> None:
         limiter = _make_limiter(default_limit=60)
         monkeypatch.setenv("UNIT_TEST_RATE_LIMIT", "not-a-number")
         assert limiter.limit == 60
 
-    def test_limit_uses_default_when_env_unset(self, monkeypatch):
+    def test_limit_uses_default_when_env_unset(self, monkeypatch) -> None:
         monkeypatch.delenv("UNIT_TEST_RATE_LIMIT", raising=False)
         limiter = _make_limiter(default_limit=60)
         assert limiter.limit == 60

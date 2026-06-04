@@ -1,10 +1,10 @@
-paramiko>=4.0.0
+paramiko>=5.0.0
 
 # Retry logic for resilient operations
 tenacity>=9.1.4
 
 # Async SSH for PKI certificate distribution (Issue #166)
-asyncssh>=2.22.0
+asyncssh>=2.23.0
 
 # opentelemetry-proto>=1.40.0 requires protobuf>=5.0,<7.0 — relaxed upper bound to <7.0.0 (#3971)
 # TensorFlow is not a project dependency; former <6.0.0 cap caused pip conflicts with protobuf 6.x
@@ -15,11 +15,11 @@ protobuf>=5.29.6,<7.0.0
 # Provides 3-4x throughput improvement with 98.7% cache efficiency
 # Requires: CUDA-compatible GPU, Python 3.12
 # Enable in config: llm.vllm.enabled = true
-vllm>=0.19.0
+vllm>=0.21.0
 
 # Document parsing libraries for knowledge base
 # Supports PDF, Word, Excel, PowerPoint, OpenDocument formats
-pypdf>=6.10.2             # PDF parsing - SECURITY UPDATE (improved permission checks)
+pypdf>=6.11.0             # PDF parsing - SECURITY UPDATE (improved permission checks)
 python-docx>=1.2.0        # Microsoft Word (.docx)
 openpyxl>=3.1.5           # Microsoft Excel (.xlsx)
 python-pptx>=1.0.2        # Microsoft PowerPoint (.pptx)
@@ -27,23 +27,23 @@ odfpy>=1.4.1              # OpenDocument formats (.odt, .ods, .odp, .odg)
 
 # OpenTelemetry - Distributed Tracing (Issue #57, #697)
 # Provides request tracing across the 5-VM AutoBot infrastructure
-opentelemetry-api==1.41.1
-opentelemetry-sdk==1.41.1
-opentelemetry-exporter-otlp==1.41.1
-opentelemetry-exporter-otlp-proto-grpc==1.41.1
-opentelemetry-exporter-otlp-proto-http==1.41.1
-opentelemetry-proto==1.41.1
-opentelemetry-instrumentation-fastapi>=0.61b0
-opentelemetry-propagator-b3==1.41.1
+opentelemetry-api==1.42.1
+opentelemetry-sdk==1.42.1
+opentelemetry-exporter-otlp==1.42.1
+opentelemetry-exporter-otlp-proto-grpc==1.42.1
+opentelemetry-exporter-otlp-proto-http==1.42.1
+opentelemetry-proto==1.42.1
+opentelemetry-instrumentation-fastapi>=0.63b1
+opentelemetry-propagator-b3==1.42.1
 # Issue #697: Additional instrumentation for comprehensive tracing
-opentelemetry-instrumentation-redis>=0.61b0
-opentelemetry-instrumentation-aiohttp-client>=0.62b1
+opentelemetry-instrumentation-redis>=0.63b1
+opentelemetry-instrumentation-aiohttp-client>=0.63b1
 
 # FAISS - Vector Similarity Search (Issue #387, #856)
 # Provides efficient vector similarity search operations
 # Using CPU version for Python 3.12 compatibility (GPU version requires conda)
 # For GPU acceleration: conda install -c conda-forge faiss-gpu (Python 3.12)
-faiss-cpu>=1.13.2
+faiss-cpu>=1.14.2
 aiosqlite>=0.22.1
 
 # Security - XML parsing protection (Issue #67)
@@ -52,4 +52,4 @@ defusedxml>=0.7.1
 
 # MinHash LSH - Locality-Sensitive Hashing for duplicate detection (Issue #659)
 # Provides 10-100x speedup for similarity search via O(n) expected complexity
-datasketch>=1.9.0
+datasketch>=1.10.0

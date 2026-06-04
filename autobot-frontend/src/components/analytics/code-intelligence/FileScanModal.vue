@@ -10,7 +10,7 @@
         <div class="modal-header">
           <h3>{{ $t('analytics.findings.fileScan.title') }}</h3>
           <button class="close-btn" @click="$emit('close')">
-            <i class="fas fa-times"></i>
+            <Icon name="times" />
           </button>
         </div>
 
@@ -65,6 +65,7 @@
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
@@ -180,13 +181,13 @@ async function handleScan() {
 }
 
 .file-input.error {
-  border-color: #ef4444;
+  border-color: var(--color-error);
 }
 
 .error-text {
   display: block;
   margin-top: var(--spacing-1);
-  color: #ef4444;
+  color: var(--color-error);
   font-size: var(--text-sm);
 }
 

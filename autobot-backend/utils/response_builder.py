@@ -37,7 +37,7 @@ Usage:
             return error_response("Internal server error", status_code=500)
 """
 
-from typing import Any, Dict, List, Optional, TypeVar, Union
+from typing import Any, Dict, List, TypeVar
 
 from fastapi.responses import JSONResponse
 
@@ -49,9 +49,9 @@ T = TypeVar("T")
 
 def success_response(
     data: Any = None,
-    message: Optional[str] = None,
+    message: str | None = None,
     status_code: int = 200,
-    headers: Optional[Dict[str, str]] = None,
+    headers: Dict[str, str] | None = None,
 ) -> JSONResponse:
     """
     Build a standardized success response.
@@ -85,9 +85,9 @@ def success_response(
 def error_response(
     error: str,
     status_code: int = 400,
-    error_code: Optional[str] = None,
-    details: Optional[Metadata] = None,
-    headers: Optional[Dict[str, str]] = None,
+    error_code: str | None = None,
+    details: Metadata | None = None,
+    headers: Dict[str, str] | None = None,
 ) -> JSONResponse:
     """
     Build a standardized error response.
@@ -127,8 +127,8 @@ def paginated_response(
     total: int,
     page: int = 1,
     page_size: int = 20,
-    message: Optional[str] = None,
-    headers: Optional[Dict[str, str]] = None,
+    message: str | None = None,
+    headers: Dict[str, str] | None = None,
 ) -> JSONResponse:
     """
     Build a standardized paginated response.
@@ -178,7 +178,7 @@ def paginated_response(
 def created_response(
     data: Any = None,
     message: str = "Resource created successfully",
-    location: Optional[str] = None,
+    location: str | None = None,
 ) -> JSONResponse:
     """
     Build a standardized 201 Created response.
@@ -207,7 +207,7 @@ def no_content_response() -> JSONResponse:
 
 def not_found_response(
     resource: str = "Resource",
-    resource_id: Optional[str] = None,
+    resource_id: str | None = None,
 ) -> JSONResponse:
     """
     Build a standardized 404 Not Found response.
@@ -232,7 +232,7 @@ def not_found_response(
 
 
 def validation_error_response(
-    errors: Union[List[str], Dict[str, List[str]]],
+    errors: List[str] | Dict[str, List[str]],
     message: str = "Validation failed",
 ) -> JSONResponse:
     """
@@ -294,7 +294,7 @@ def forbidden_response(
 def server_error_response(
     error: str = "Internal server error",
     error_code: str = "INTERNAL_ERROR",
-    details: Optional[Metadata] = None,
+    details: Metadata | None = None,
 ) -> JSONResponse:
     """
     Build a standardized 500 Internal Server Error response.
@@ -317,7 +317,7 @@ def server_error_response(
 
 def service_unavailable_response(
     service: str = "Service",
-    retry_after: Optional[int] = None,
+    retry_after: int | None = None,
 ) -> JSONResponse:
     """
     Build a standardized 503 Service Unavailable response.

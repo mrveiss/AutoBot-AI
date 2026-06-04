@@ -13,17 +13,17 @@ ROOT CAUSE FIX: Replaces sync file I/O with proper async operations using asynci
 import asyncio
 import functools
 import json
-import logging
 import os
 import tempfile
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List
 
 import aiofiles
 
+from autobot_shared.logging_manager import get_logger
 from constants.ttl_constants import TTL_5_MINUTES
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #4397: skip in-memory cache for files larger than 1 MiB to prevent
 # unbounded memory growth when processing 10 MB+ files.
@@ -46,7 +46,7 @@ class AsyncFileOperations:
         self.file_cache: Dict[str, Dict] = {}
         self.cache_ttl = TTL_5_MINUTES
 
-    async def read_text_file(self, file_path: Union[str, Path], encoding: str = "utf-8") -> str:
+    async def read_text_file(self, file_path: str | Path, encoding: str = "utf-8") -> str:
         """
         Read text file asynchronously without blocking
 
@@ -86,7 +86,7 @@ class AsyncFileOperations:
 
     async def write_text_file(
         self,
-        file_path: Union[str, Path],
+        file_path: str | Path,
         content: str,
         encoding: str = "utf-8",
         create_dirs: bool = True,
@@ -120,7 +120,7 @@ class AsyncFileOperations:
             logger.error("📝 Error writing to %s: %s", file_path, e)
             return False
 
-    async def read_json_file(self, file_path: Union[str, Path]) -> Dict[str, Any]:
+    async def read_json_file(self, file_path: str | Path) -> Dict[str, Any]:
         """
         Read JSON file asynchronously without blocking
 
@@ -144,7 +144,7 @@ class AsyncFileOperations:
             logger.error("📊 Error loading JSON from %s: %s", file_path, e)
             return {}
 
-    async def write_json_file(self, file_path: Union[str, Path], data: Dict[str, Any], indent: int = 2) -> bool:
+    async def write_json_file(self, file_path: str | Path, data: Dict[str, Any], indent: int = 2) -> bool:
         """
         Write JSON file asynchronously without blocking
 
@@ -166,7 +166,7 @@ class AsyncFileOperations:
             logger.error("📊 Error saving JSON to %s: %s", file_path, e)
             return False
 
-    async def file_exists(self, file_path: Union[str, Path]) -> bool:
+    async def file_exists(self, file_path: str | Path) -> bool:
         """
         Check if file exists asynchronously without blocking
 
@@ -178,7 +178,7 @@ class AsyncFileOperations:
             logger.error("📁 Error checking file existence %s: %s", file_path, e)
             return False
 
-    async def get_file_size(self, file_path: Union[str, Path]) -> int:
+    async def get_file_size(self, file_path: str | Path) -> int:
         """
         Get file size asynchronously without blocking
 
@@ -191,7 +191,7 @@ class AsyncFileOperations:
             logger.error("📏 Error getting file size %s: %s", file_path, e)
             return 0
 
-    async def list_directory(self, dir_path: Union[str, Path], pattern: Optional[str] = None) -> List[str]:
+    async def list_directory(self, dir_path: str | Path, pattern: str | None = None) -> List[str]:
         """
         List directory contents asynchronously without blocking
 
@@ -215,7 +215,7 @@ class AsyncFileOperations:
             logger.error("📁 Error listing directory %s: %s", dir_path, e)
             return []
 
-    async def create_temp_file(self, content: str, suffix: str = ".tmp", prefix: str = "autobot_") -> Optional[str]:
+    async def create_temp_file(self, content: str, suffix: str = ".tmp", prefix: str = "autobot_") -> str | None:
         """
         Create temporary file asynchronously without blocking
 
@@ -240,7 +240,7 @@ class AsyncFileOperations:
             logger.error("🗂️ Error creating temp file: %s", e)
             return None
 
-    async def copy_file(self, src: Union[str, Path], dst: Union[str, Path]) -> bool:
+    async def copy_file(self, src: str | Path, dst: str | Path) -> bool:
         """
         Copy file asynchronously without blocking
 
@@ -311,31 +311,31 @@ async def get_async_file_operations() -> AsyncFileOperations:
 
 
 # Convenience functions for common operations
-async def read_file_async(file_path: Union[str, Path], encoding: str = "utf-8") -> str:
+async def read_file_async(file_path: str | Path, encoding: str = "utf-8") -> str:
     """Read text file asynchronously - ROOT CAUSE FIX for sync file I/O"""
     ops = await get_async_file_operations()
     return await ops.read_text_file(file_path, encoding)
 
 
-async def write_file_async(file_path: Union[str, Path], content: str, encoding: str = "utf-8") -> bool:
+async def write_file_async(file_path: str | Path, content: str, encoding: str = "utf-8") -> bool:
     """Write text file asynchronously - ROOT CAUSE FIX for sync file I/O"""
     ops = await get_async_file_operations()
     return await ops.write_text_file(file_path, content, encoding)
 
 
-async def read_json_async(file_path: Union[str, Path]) -> Dict[str, Any]:
+async def read_json_async(file_path: str | Path) -> Dict[str, Any]:
     """Read JSON file asynchronously - ROOT CAUSE FIX for sync file I/O"""
     ops = await get_async_file_operations()
     return await ops.read_json_file(file_path)
 
 
-async def write_json_async(file_path: Union[str, Path], data: Dict[str, Any]) -> bool:
+async def write_json_async(file_path: str | Path, data: Dict[str, Any]) -> bool:
     """Write JSON file asynchronously - ROOT CAUSE FIX for sync file I/O"""
     ops = await get_async_file_operations()
     return await ops.write_json_file(file_path, data)
 
 
-async def file_exists_async(file_path: Union[str, Path]) -> bool:
+async def file_exists_async(file_path: str | Path) -> bool:
     """Check file existence asynchronously - ROOT CAUSE FIX for sync file I/O"""
     ops = await get_async_file_operations()
     return await ops.file_exists(file_path)

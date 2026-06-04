@@ -24,7 +24,7 @@ class TestSyncEntry:
 
         assert run_or_schedule(echo(21)) == 42
 
-    def test_propagates_exception_from_coro(self):
+    def test_propagates_exception_from_coro(self) -> None:
         async def failing() -> None:
             raise ValueError("boom")
 
@@ -62,7 +62,7 @@ class TestInLoopEntry:
         assert result == 101
 
     @pytest.mark.asyncio
-    async def test_propagates_exception_through_threadpool(self):
+    async def test_propagates_exception_through_threadpool(self) -> None:
         async def failing() -> None:
             raise RuntimeError("inner")
 

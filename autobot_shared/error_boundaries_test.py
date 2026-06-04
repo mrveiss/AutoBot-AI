@@ -18,7 +18,7 @@ from utils.error_boundaries import APIErrorResponse, ErrorCategory, with_error_h
 class TestErrorCategoryEnum:
     """Test ErrorCategory enum with HTTP-aligned categories"""
 
-    def test_http_aligned_categories_exist(self):
+    def test_http_aligned_categories_exist(self) -> None:
         """Verify all HTTP-aligned categories are defined"""
         assert hasattr(ErrorCategory, "VALIDATION")
         assert hasattr(ErrorCategory, "AUTHENTICATION")
@@ -30,7 +30,7 @@ class TestErrorCategoryEnum:
         assert hasattr(ErrorCategory, "SERVICE_UNAVAILABLE")
         assert hasattr(ErrorCategory, "EXTERNAL_SERVICE")
 
-    def test_system_level_categories_exist(self):
+    def test_system_level_categories_exist(self) -> None:
         """Verify system-level categories still exist (backward compatibility)"""
         assert hasattr(ErrorCategory, "SYSTEM")
         assert hasattr(ErrorCategory, "NETWORK")
@@ -41,7 +41,7 @@ class TestErrorCategoryEnum:
         assert hasattr(ErrorCategory, "CONFIGURATION")
         assert hasattr(ErrorCategory, "USER_INPUT")
 
-    def test_category_values(self):
+    def test_category_values(self) -> None:
         """Verify category values are strings"""
         assert ErrorCategory.VALIDATION.value == "validation"
         assert ErrorCategory.AUTHENTICATION.value == "authentication"
@@ -52,7 +52,7 @@ class TestErrorCategoryEnum:
 class TestAPIErrorResponse:
     """Test APIErrorResponse dataclass"""
 
-    def test_create_error_response(self):
+    def test_create_error_response(self) -> None:
         """Test creating an API error response"""
         error = APIErrorResponse(
             category=ErrorCategory.NOT_FOUND,
@@ -69,7 +69,7 @@ class TestAPIErrorResponse:
         assert error.retry_after is None
         assert error.trace_id is None
 
-    def test_error_response_with_details(self):
+    def test_error_response_with_details(self) -> None:
         """Test error response with additional details"""
         error = APIErrorResponse(
             category=ErrorCategory.VALIDATION,
@@ -84,7 +84,7 @@ class TestAPIErrorResponse:
         assert error.details == {"field": "email", "reason": "Invalid format"}
         assert error.trace_id == "req_12345"
 
-    def test_to_dict_conversion(self):
+    def test_to_dict_conversion(self) -> None:
         """Test converting error response to dictionary"""
         error = APIErrorResponse(
             category=ErrorCategory.SERVER_ERROR,
@@ -105,7 +105,7 @@ class TestAPIErrorResponse:
         assert error_dict["error"]["trace_id"] == "trace_abc123"
         assert "timestamp" in error_dict["error"]
 
-    def test_to_dict_minimal(self):
+    def test_to_dict_minimal(self) -> None:
         """Test to_dict with minimal fields"""
         error = APIErrorResponse(
             category=ErrorCategory.CONFLICT,
@@ -124,7 +124,7 @@ class TestAPIErrorResponse:
         assert "retry_after" not in error_dict["error"]
         assert "trace_id" not in error_dict["error"]
 
-    def test_get_status_code_for_category(self):
+    def test_get_status_code_for_category(self) -> None:
         """Test status code mapping for all categories"""
         # HTTP-aligned categories
         assert APIErrorResponse.get_status_code_for_category(ErrorCategory.VALIDATION) == 400
@@ -199,7 +199,7 @@ class TestWithErrorHandlingDecorator:
         assert result == {"user_id": "user123", "data": "test"}
 
     @pytest.mark.asyncio
-    async def test_decorator_on_async_function_error(self):
+    async def test_decorator_on_async_function_error(self) -> None:
         """Test decorator on async function that raises error"""
 
         @with_error_handling(
@@ -224,11 +224,11 @@ class TestWithErrorHandlingDecorator:
         assert my_function.__name__ == "my_function"
 
     @pytest.mark.asyncio
-    async def test_decorator_generates_trace_id(self):
+    async def test_decorator_generates_trace_id(self) -> None:
         """Test that decorator generates trace IDs for errors"""
 
         @with_error_handling(category=ErrorCategory.SERVER_ERROR, operation="test_operation")
-        async def failing_operation():
+        async def failing_operation() -> None:
             raise RuntimeError("Test error")
 
         try:
@@ -243,7 +243,7 @@ class TestWithErrorHandlingDecorator:
 class TestErrorHandlingIntegration:
     """Integration tests for error handling system"""
 
-    def test_multiple_categories_produce_correct_status_codes(self):
+    def test_multiple_categories_produce_correct_status_codes(self) -> None:
         """Test that different categories produce different HTTP status codes"""
         categories_and_codes = [
             (ErrorCategory.VALIDATION, 400),
@@ -263,7 +263,7 @@ class TestErrorHandlingIntegration:
                 f"Category {category} should map to {expected_code}, " f"got {status_code}"
             )
 
-    def test_error_response_serialization_roundtrip(self):
+    def test_error_response_serialization_roundtrip(self) -> None:
         """Test that error response can be serialized and contains all info"""
         error = APIErrorResponse(
             category=ErrorCategory.VALIDATION,

@@ -15,8 +15,8 @@
 # Provision the host with required roles
 - name: "Provision AutoBot Host"
   hosts: "{{ target_host | default('all') }}"
-  gather_facts: yes
-  become: yes
+  gather_facts: true
+  become: true
 
   vars:
     provision_timestamp: "{{ ansible_facts['date_time'].iso8601 }}"

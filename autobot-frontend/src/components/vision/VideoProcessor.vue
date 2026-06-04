@@ -19,7 +19,7 @@
         />
 
         <div v-if="!selectedFile" class="drop-placeholder">
-          <i class="fas fa-film"></i>
+          <Icon name="video" />
           <p>{{ t('vision.videoProcessor.dropTitle') }}</p>
           <span>{{ t('vision.videoProcessor.dropOrClick') }}</span>
           <div class="supported-formats">
@@ -40,7 +40,7 @@
             <span class="duration" v-if="videoDuration">{{ formatDuration(videoDuration) }}</span>
           </div>
           <button @click.stop="clearFile" class="btn-clear">
-            <i class="fas fa-times"></i>
+            <Icon name="times" />
           </button>
         </div>
       </div>
@@ -96,8 +96,8 @@
         class="btn-process"
         :disabled="processing"
       >
-        <i v-if="processing" class="fas fa-spinner fa-spin"></i>
-        <i v-else class="fas fa-cogs"></i>
+        <Icon name="spinner" class="animate-spin" v-if="processing" />
+        <Icon name="cogs" v-else />
         {{ processing ? t('vision.videoProcessor.processing', { processed: processedFrames, total: totalFrames }) : t('vision.videoProcessor.processVideo') }}
       </button>
     </div>
@@ -119,7 +119,7 @@
     <!-- Results Section -->
     <div v-if="frameResults.length > 0" class="results-section">
       <div class="results-header">
-        <h4><i class="fas fa-check-circle"></i> {{ t('vision.videoProcessor.processingComplete') }}</h4>
+        <h4><Icon name="check-circle" /> {{ t('vision.videoProcessor.processingComplete') }}</h4>
         <span class="frame-count">{{ t('vision.videoProcessor.framesAnalyzed', { count: frameResults.length }) }}</span>
       </div>
 
@@ -158,7 +158,7 @@
 
         <div class="frame-data" v-if="selectedFrame.result_data">
           <button @click="showFrameJson = !showFrameJson" class="btn-toggle">
-            <i :class="showFrameJson ? 'fas fa-chevron-up' : 'fas fa-chevron-down'"></i>
+            <Icon :name="showFrameJson ? 'chevron-up' : 'chevron-down'" />
             {{ showFrameJson ? t('vision.videoProcessor.hideAnalysisData') : t('vision.videoProcessor.showAnalysisData') }}
           </button>
           <pre v-if="showFrameJson" class="json-display">{{ JSON.stringify(selectedFrame.result_data, null, 2) }}</pre>
@@ -167,11 +167,11 @@
 
       <div class="results-actions">
         <button @click="exportAllResults" class="btn-secondary">
-          <i class="fas fa-download"></i>
+          <Icon name="download" />
           {{ t('vision.videoProcessor.exportAllResults') }}
         </button>
         <button @click="saveToGallery" class="btn-secondary">
-          <i class="fas fa-save"></i>
+          <Icon name="save" />
           {{ t('vision.videoProcessor.saveToGallery') }}
         </button>
       </div>
@@ -180,21 +180,22 @@
     <!-- Error Display -->
     <div v-if="error" class="error-section">
       <div class="error-content">
-        <i class="fas fa-exclamation-triangle"></i>
+        <Icon name="exclamation-triangle" />
         <span>{{ error }}</span>
       </div>
       <button @click="error = null" class="btn-dismiss">
-        <i class="fas fa-times"></i>
+        <Icon name="times" />
       </button>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onUnmounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { createLogger } from '@/utils/debugUtils';
-import { useToast } from '@/composables/useToast';
+import { useNotificationBus } from '@/composables/useNotificationBus';
 import { useThumbnailWorker } from '@/composables/useThumbnailWorker';
 import {
   visionMultimodalApiClient,
@@ -209,7 +210,7 @@ interface FrameResult extends MultiModalResponse {
 
 const { t } = useI18n();
 const logger = createLogger('VideoProcessor');
-const { showToast } = useToast();
+const { showToast } = useNotificationBus();
 const { generateThumbnail, isSupported: isWorkerSupported } = useThumbnailWorker();
 
 // Emits

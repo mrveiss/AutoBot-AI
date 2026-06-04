@@ -12,7 +12,11 @@ import json
 import logging
 import os
 from datetime import timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
+
+from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 
 from autobot_shared.async_compat import run_or_schedule
 
@@ -20,7 +24,26 @@ from autobot_shared.async_compat import run_or_schedule
 from config import config as global_config_manager
 from secure_command_executor import CommandRisk, SecureCommandExecutor, SecurityPolicy
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
+
+# Audit log file path resolved from AUTOBOT_AUDIT_LOG_FILE env var at import time.
+# Set AUTOBOT_AUDIT_LOG_FILE to override the default path.
+_AUDIT_LOG_FILE_DEFAULT = "/opt/autobot/logs/audit.log"
+
+
+def _resolve_audit_log_file() -> str:
+    """Return audit log file path from AUTOBOT_AUDIT_LOG_FILE env var with logged fallback."""
+    value = config.audit_log_file
+    if not value:
+        logger.warning(
+            "AUTOBOT_AUDIT_LOG_FILE is not set or empty; falling back to %s",
+            _AUDIT_LOG_FILE_DEFAULT,
+        )
+        return _AUDIT_LOG_FILE_DEFAULT
+    return value
+
+
+_AUDIT_LOG_FILE = _resolve_audit_log_file()
 
 # Performance optimization: O(1) lookup for security checks (Issue #326)
 DEPRECATED_PRIVILEGED_ROLES = {"god", "superuser", "root"}
@@ -28,7 +51,7 @@ HIGH_RISK_COMMAND_RISKS = {CommandRisk.HIGH, CommandRisk.MODERATE}
 COMMAND_EXECUTION_ACTIONS = {"command_execution_attempt", "command_execution_complete"}
 
 
-def _parse_audit_log_entry(line: str, user: Optional[str] = None) -> Optional[Dict[str, Any]]:
+def _parse_audit_log_entry(line: str, user: str | None = None) -> Dict[str, Any] | None:
     """Parse a single audit log line and filter by user (Issue #315: extracted).
 
     Args:
@@ -65,9 +88,7 @@ class EnhancedSecurityLayer:
         self.security_config = global_config_manager.get("security_config", {})
         self.enable_auth = self.security_config.get("enable_auth", False)
         self.enable_command_security = self.security_config.get("enable_command_security", True)
-        self.audit_log_file = self.security_config.get(
-            "audit_log_file", os.getenv("AUTOBOT_AUDIT_LOG_FILE", "data/audit.log")
-        )
+        self.audit_log_file = self.security_config.get("audit_log_file") or _AUDIT_LOG_FILE
         self.roles = self.security_config.get("roles", {})
         self.allowed_users = self.security_config.get("allowed_users", {})
 
@@ -97,7 +118,10 @@ class EnhancedSecurityLayer:
         self.pending_approvals: Dict[str, asyncio.Event] = {}
         self.approval_results: Dict[str, bool] = {}
 
-        os.makedirs(os.path.dirname(self.audit_log_file), exist_ok=True)
+        if self.audit_log_file:
+            log_dir = os.path.dirname(self.audit_log_file)
+            if log_dir:
+                os.makedirs(log_dir, exist_ok=True)
         logger.info("EnhancedSecurityLayer initialized")
         logger.debug("Authentication enabled: %s", self.enable_auth)
         logger.debug("Command security enabled: %s", self.enable_command_security)
@@ -144,7 +168,7 @@ class EnhancedSecurityLayer:
             },
         )
 
-    def _check_auto_approve_moderate(self, command_id: str, approval_data: Dict[str, Any]) -> Optional[bool]:
+    def _check_auto_approve_moderate(self, command_id: str, approval_data: Dict[str, Any]) -> bool | None:
         """Check if moderate risk command should be auto-approved. Issue #620.
 
         Returns:
@@ -218,7 +242,7 @@ class EnhancedSecurityLayer:
             self.approval_results[command_id] = approved
             self.pending_approvals[command_id].set()
 
-    def _handle_deprecated_role(self, user_role: str, action_type: str, resource: Optional[str]) -> str:
+    def _handle_deprecated_role(self, user_role: str, action_type: str, resource: str | None) -> str:
         """Handle deprecated privileged roles by logging and downgrading. Issue #620.
 
         Args:
@@ -274,7 +298,7 @@ class EnhancedSecurityLayer:
                     return True
         return False
 
-    def check_permission(self, user_role: str, action_type: str, resource: Optional[str] = None) -> bool:
+    def check_permission(self, user_role: str, action_type: str, resource: str | None = None) -> bool:
         """
         Enhanced permission checking that includes command execution permissions
         SECURITY FIX: Removed god mode bypass - all roles use granular RBAC
@@ -509,7 +533,7 @@ class EnhancedSecurityLayer:
         except Exception as e:
             logger.error("Failed to write to audit log: %s", e)
 
-    def get_command_history(self, user: Optional[str] = None, limit: int = 100) -> List[Dict[str, Any]]:
+    def get_command_history(self, user: str | None = None, limit: int = 100) -> List[Dict[str, Any]]:
         """
         Get command execution history from audit log
 
@@ -535,7 +559,7 @@ class EnhancedSecurityLayer:
         # Return most recent entries
         return command_history[-limit:]
 
-    def authenticate_user(self, username: str, password: str) -> Optional[str]:
+    def authenticate_user(self, username: str, password: str) -> str | None:
         """Authenticate user and return their role"""
         if not self.enable_auth:
             return "admin"

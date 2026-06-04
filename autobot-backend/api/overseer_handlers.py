@@ -12,8 +12,7 @@ Provides WebSocket endpoints for:
 """
 
 import asyncio
-import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 
@@ -24,13 +23,15 @@ from agents.overseer.types import (
     OutputExplanation,
     StepStatus,
 )
+from api.schemas_agent import OverseerQueryData
 from api.schemas_common import DataResponse
 from api.schemas_system import OverseerStatusResponse
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from chat_history import ChatHistoryManager
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def _dict_to_step_result(step_data: Dict[str, Any]) -> StepResult:
@@ -93,7 +94,7 @@ def _dict_to_step_result(step_data: Dict[str, Any]) -> StepResult:
 
 
 # Shared chat history manager
-_chat_history_manager: Optional[ChatHistoryManager] = None
+_chat_history_manager: ChatHistoryManager | None = None
 
 
 def _get_chat_history_manager() -> ChatHistoryManager:
@@ -117,10 +118,10 @@ class OverseerWebSocketHandler:
         """Initialize handler with websocket and session."""
         self.websocket = websocket
         self.session_id = session_id
-        self.overseer: Optional[OverseerAgent] = None
-        self.executor: Optional[StepExecutorAgent] = None
+        self.overseer: OverseerAgent | None = None
+        self.executor: StepExecutorAgent | None = None
         self.chat_history = _get_chat_history_manager()
-        self._current_task: Optional[asyncio.Task] = None
+        self._current_task: asyncio.Task | None = None
 
     async def connect(self) -> bool:
         """Accept WebSocket connection."""
@@ -313,7 +314,7 @@ class OverseerWebSocketHandler:
                 elif isinstance(update.content, StepResult):
                     await self.save_step_result_to_chat(update.content)
 
-    async def handle_query(self, query: str, context: Optional[Dict] = None):
+    async def handle_query(self, query: str, context: Dict | None = None):
         """
         Handle a user query through the overseer.
 
@@ -463,7 +464,7 @@ async def overseer_websocket(websocket: WebSocket, session_id: str):
         await handler.disconnect()
 
 
-@router.post("/query/{session_id}", response_model=DataResponse)
+@router.post("/query/{session_id}", response_model=DataResponse[OverseerQueryData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="submit_query",
@@ -472,7 +473,7 @@ async def overseer_websocket(websocket: WebSocket, session_id: str):
 async def submit_query(
     session_id: str,
     query: str,
-    context: Optional[Dict] = None,
+    context: Dict | None = None,
     current_user: dict = Depends(get_current_user),
 ):
     """

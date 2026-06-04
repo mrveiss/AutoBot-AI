@@ -8,18 +8,18 @@ Implements sophisticated batching algorithms to reduce API calls and improve eff
 
 import asyncio
 import hashlib
-import logging
 import time
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List
 
 from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config as _ssot_config
 from constants.threshold_constants import TimingConstants
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class BatchingStrategy(Enum):
@@ -52,7 +52,7 @@ class BatchableRequest:
     context_type: str = "general"
     timestamp: float = field(default_factory=time.time)
     timeout: float = _ssot_config.timeout.default_request
-    callback: Optional[Callable] = None
+    callback: Callable | None = None
     metadata: Dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self):
@@ -74,7 +74,7 @@ class BatchResult:
     processing_time: float
     success: bool
     individual_responses: Dict[str, str] = field(default_factory=dict)
-    error_message: Optional[str] = None
+    error_message: str | None = None
 
 
 class RequestSimilarityAnalyzer:
@@ -309,7 +309,7 @@ class IntelligentRequestBatcher:
         logger.debug("Added request %s with priority %s", request.id, request.priority)
         return request.id
 
-    async def get_result(self, request_id: str, timeout: float = TimingConstants.SHORT_TIMEOUT) -> Optional[str]:
+    async def get_result(self, request_id: str, timeout: float = TimingConstants.SHORT_TIMEOUT) -> str | None:
         """Get the result for a specific request"""
         start_time = time.time()
 
@@ -360,7 +360,7 @@ class IntelligentRequestBatcher:
 
     async def _create_batch(
         self, priority: RequestPriority, strategy: BatchingStrategy
-    ) -> Optional[List[BatchableRequest]]:
+    ) -> List[BatchableRequest] | None:
         """Create a batch using the specified strategy"""
         queue = self.request_queues[priority]
         if not queue:
@@ -696,7 +696,7 @@ async def batch_request(
     priority: RequestPriority = RequestPriority.NORMAL,
     context_type: str = "general",
     timeout: float = _ssot_config.timeout.default_request,
-) -> Optional[str]:
+) -> str | None:
     """Submit a request for batching and wait for result"""
     request = BatchableRequest(
         id="",  # Will be auto-generated

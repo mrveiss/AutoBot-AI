@@ -12,6 +12,7 @@ import uuid
 from enum import Enum
 
 from sqlalchemy import Column, String, Text
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.types import Uuid
 
 from user_management.models.base import Base
@@ -43,6 +44,7 @@ class AgentOrgNode(Base):
     org_role = Column(String(50), nullable=False, default=OrgRole.WORKER.value, index=True)
     title = Column(String(255), nullable=True)
     capabilities = Column(Text, nullable=True)
+    company_id = Column(UUID(as_uuid=True), nullable=True, index=True)
 
     def __repr__(self) -> str:
         return f"<AgentOrgNode agent={self.agent_id!r} role={self.org_role!r} " f"reports_to={self.reports_to!r}>"

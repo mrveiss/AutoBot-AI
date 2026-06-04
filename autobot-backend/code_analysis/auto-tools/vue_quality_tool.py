@@ -18,8 +18,11 @@ import re
 from pathlib import Path
 from typing import Any, Dict, List
 
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
+
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class VueSpecificFixAgent:
@@ -29,7 +32,7 @@ class VueSpecificFixAgent:
         """Initialize the Vue fix agent."""
         import os  # noqa: PLC0415
 
-        self.project_root = Path(project_root or os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot"))
+        self.project_root = Path(project_root or config.base_dir)
         self.vue_dir = self.project_root / "autobot-frontend" / "src"
         self.fixes_applied = []
         self.errors = []

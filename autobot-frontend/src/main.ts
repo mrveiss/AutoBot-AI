@@ -44,6 +44,7 @@ import i18n from './i18n'
 import rumPlugin from './plugins/rum'
 import errorHandlerPlugin from './plugins/errorHandler'
 import ApiPlugin from './plugins/api'
+import { mountAllPlugins } from '@/plugins/registry'
 
 // Import global services
 import './services/GlobalWebSocketService'
@@ -87,6 +88,9 @@ app.use(rumPlugin, { router })
 app.use(errorHandlerPlugin)
 app.use(ApiPlugin)
 
+// Register plugin UI components from the plugin mount registry (#6972 / #7793)
+mountAllPlugins(app)
+
 // Global error handler for uncaught errors
 app.config.errorHandler = (err, _instance, info) => {
   logger.error('Vue Error Handler:', { error: err, info })
@@ -120,7 +124,15 @@ app.config.warnHandler = (msg, _instance, trace) => {
 app.mount('#app')
 
 // Register Service Worker for caching strategy (Issue #4015, #4041, #3275)
-if ('serviceWorker' in navigator) {
+// #6767: Skip registration on IP-based hosts (172.x, 10.x, 192.168.x, bare-IP) — these
+// deployments almost always use self-signed TLS.  Chrome emits an unrecoverable
+// SecurityError *before* our catch block, polluting the console with a red error.
+// Proactively gating on hostname prevents the attempt entirely.  Localhost is
+// explicitly allowed because it is a secure context even without HTTPS.
+const _swHostIsIp = window.location.hostname !== 'localhost' &&
+  /^(\d{1,3}\.){3}\d{1,3}$/.test(window.location.hostname)
+
+if ('serviceWorker' in navigator && !_swHostIsIp) {
   window.addEventListener('load', async () => {
     try {
       // Register the service worker with stale-while-revalidate strategy (Issue #4015)
@@ -172,6 +184,8 @@ if ('serviceWorker' in navigator) {
       }
     }
   })
+} else if (_swHostIsIp) {
+  logger.debug('Service Worker skipped (IP-based host — likely self-signed TLS; #6767)')
 }
 
 // Performance monitoring in development

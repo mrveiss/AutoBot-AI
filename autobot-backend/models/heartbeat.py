@@ -13,7 +13,6 @@ import uuid
 from enum import Enum
 
 from sqlalchemy import (
-    Boolean,
     Column,
     DateTime,
     Float,
@@ -23,6 +22,7 @@ from sqlalchemy import (
     Text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import relationship
 from sqlalchemy.types import Uuid
 
@@ -48,6 +48,25 @@ class WakeupTrigger(str, Enum):
     MANUAL = "manual"
 
 
+class AgentStatus(str, Enum):
+    """Lifecycle status for an agent's heartbeat (GH#6476).
+
+    ACTIVE     — heartbeat fires normally; user may re-disable freely.
+    DISABLED   — user disabled; re-enable freely via PUT config.
+    PAUSED     — system-enforced pause (e.g. budget breach); resume requires
+                 admin approval when paused_by starts with "system:".
+    ERROR      — agent entered an error state (e.g. repeated run failures);
+                 heartbeat suspended until recovered via POST /recover.
+    TERMINATED — permanently stopped; cannot be resumed.
+    """
+
+    ACTIVE = "active"
+    DISABLED = "disabled"
+    PAUSED = "paused"
+    ERROR = "error"
+    TERMINATED = "terminated"
+
+
 class AgentRuntimeState(Base):
     """Persistent runtime state per agent, survives restarts (#1407)."""
 
@@ -55,13 +74,44 @@ class AgentRuntimeState(Base):
 
     id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     agent_id = Column(String(255), nullable=False, unique=True, index=True)
-    heartbeat_enabled = Column(Boolean, nullable=False, default=False)
     heartbeat_interval_seconds = Column(Integer, nullable=False, default=300)
     max_run_duration_seconds = Column(Integer, nullable=False, default=600)
     current_task_id = Column(String(255), nullable=True, index=True)
     session_params = Column(JSONB, nullable=True)
     last_heartbeat_at = Column(DateTime, nullable=True)
     extra = Column(JSONB, nullable=True)
+    # Explicit status replaces the old heartbeat_enabled boolean (GH#6476)
+    status = Column(String(32), nullable=False, default=AgentStatus.ACTIVE.value, index=True)
+    paused_reason = Column(Text, nullable=True)
+    paused_at = Column(DateTime, nullable=True)
+    paused_by = Column(String(255), nullable=True)
+    # Error state metadata (MVA-1411)
+    error_detail = Column(Text, nullable=True)
+    error_at = Column(DateTime, nullable=True)
+    error_code = Column(String(64), nullable=True)
+    # Per-task worktree workspace (GH#6471)
+    workspace_dir = Column(String(1024), nullable=True)
+    preview_url = Column(String(512), nullable=True)
+    preview_port = Column(Integer, nullable=True)
+
+    @hybrid_property
+    def heartbeat_enabled(self) -> bool:
+        """Backward-compat property: True iff status is ACTIVE (GH#6476)."""
+        return self.status == AgentStatus.ACTIVE.value
+
+    @heartbeat_enabled.setter
+    def heartbeat_enabled(self, value: bool) -> None:
+        self.status = AgentStatus.ACTIVE.value if value else AgentStatus.DISABLED.value
+        if value:
+            # Clear pause metadata whenever the agent is re-enabled (P1: GH#6476)
+            self.paused_reason = None
+            self.paused_at = None
+            self.paused_by = None
+
+    @heartbeat_enabled.expression  # type: ignore[no-redef]
+    @classmethod
+    def heartbeat_enabled(cls):  # type: ignore[override]
+        return cls.status == AgentStatus.ACTIVE.value
 
     runs = relationship(
         "HeartbeatRun",
@@ -77,7 +127,7 @@ class AgentRuntimeState(Base):
     )
 
     def __repr__(self) -> str:
-        return f"<AgentRuntimeState agent={self.agent_id} enabled={self.heartbeat_enabled}>"
+        return f"<AgentRuntimeState agent={self.agent_id} status={self.status}>"
 
 
 class HeartbeatRun(Base):
@@ -101,6 +151,7 @@ class HeartbeatRun(Base):
     )
     trigger = Column(String(30), nullable=False, default=WakeupTrigger.INTERVAL.value)
     wakeup_context = Column(JSONB, nullable=True)
+    created_at = Column(DateTime, nullable=True)
     started_at = Column(DateTime, nullable=True)
     finished_at = Column(DateTime, nullable=True)
     tokens_used = Column(Integer, nullable=True)
@@ -162,6 +213,7 @@ class AgentWakeupRequest(Base):
     reason = Column(String(255), nullable=True)
     consumed_at = Column(DateTime, nullable=True)
     consumed_by_run_id = Column(Uuid(as_uuid=True), nullable=True)
+    merged_count = Column(Integer, nullable=False, default=0)
 
     runtime_state = relationship("AgentRuntimeState", back_populates="wakeup_requests")
 

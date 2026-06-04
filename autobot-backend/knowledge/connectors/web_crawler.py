@@ -6,17 +6,23 @@ Web Crawler Connector
 
 Issue #1254: Ingests content from web URLs using the web_fetch foundation package.
 Issue #7402: Wire dead ``max_depth`` parameter to Frontier + RobotsCache + WebFetcher.
+Issue #8144: Migrated HTTP fetches to use AbstractConnector.fetch_with_retry() so
+transient 429/5xx responses are retried with exponential backoff instead of failing.
+Issue #8284: sync() override now integrates #8146 checkpoint (read/write/clear).
+Issue #8286: Connection-level failures (status_code=None) now also raise RetryableError.
+Issue #8152: Added config_version=2 and migrate_config() (v1→v2: max_depth→crawl_depth).
 """
 
 import hashlib
-import logging
 import os
+from collections.abc import Awaitable, Callable
 from datetime import datetime
-from typing import List, Optional
+from typing import List
 from urllib.parse import urlparse
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
-from knowledge.connectors.base import AbstractConnector
+from knowledge.connectors.base import AbstractConnector, RetryableError
 from knowledge.connectors.models import (
     ChangeInfo,
     ConnectorConfig,
@@ -29,7 +35,7 @@ from web_fetch import ERR_CONNECTION, FetchResult, Frontier, RenderMode, RobotsC
 from web_fetch.extractors import extract_markdown
 from web_fetch.frontier import extract_links
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def _url_to_source_id(url: str) -> str:
@@ -45,7 +51,7 @@ def _get_domain(url: str) -> str:
         return url
 
 
-def _fetch_result_to_content(result: FetchResult, connector_id: str) -> Optional[ContentResult]:
+def _fetch_result_to_content(result: FetchResult, connector_id: str) -> ContentResult | None:
     """Convert a successful FetchResult to a ContentResult for KB ingestion."""
     if not result.success or not result.markdown.strip():
         return None
@@ -99,12 +105,46 @@ class WebCrawlerConnector(AbstractConnector):
     connector_type = "web_crawler"
     # Issue #4421: zero-config — unauthenticated crawl via web_fetch.
     tier = 0
+    # Issue #8152: v2 renamed max_depth → crawl_depth.
+    config_version = 2
+
+    @classmethod
+    def output_schema(cls) -> dict:
+        """Issue #8147: JSONSchema for WebCrawlerConnector ContentResult.metadata."""
+        return {
+            "type": "object",
+            "properties": {
+                "url": {"type": "string"},
+                "domain": {"type": "string"},
+                "title": {"type": "string"},
+                "connector_id": {"type": "string"},
+                "source": {"type": "string"},
+            },
+            "required": ["url", "domain"],
+        }
+
+    @classmethod
+    def migrate_config(cls, stored_version: int, config: dict) -> dict:
+        """Migrate WebCrawlerConnector config to current version (Issue #8152).
+
+        v1→v2: renamed ``max_depth`` to ``crawl_depth``.
+        """
+        if stored_version < 2:
+            if "max_depth" in config and "crawl_depth" not in config:
+                config["crawl_depth"] = config.pop("max_depth")
+        return config
+
+    @property
+    def max_concurrency(self) -> int:
+        """Issue #8148: default 5 concurrent page fetches; config overrides."""
+        cfg_val = self.config.max_concurrency
+        return cfg_val if cfg_val is not None else 5
 
     def __init__(self, config: ConnectorConfig) -> None:
         super().__init__(config)
         cfg = config.config
         self._seed_urls: List[str] = cfg.get("urls", [])
-        self._max_depth: int = int(cfg.get("max_depth", 1))
+        self._max_depth: int = int(cfg.get("crawl_depth", cfg.get("max_depth", 1)))
         self._max_pages: int = int(cfg.get("max_pages", 100))
         self._respect_robots: bool = bool(cfg.get("respect_robots", True))
         self._same_origin: bool = bool(cfg.get("same_origin", True))
@@ -116,6 +156,23 @@ class WebCrawlerConnector(AbstractConnector):
     async def test_connection(self) -> bool:
         """Check that at least one seed URL is reachable via web_fetch."""
         if not self._seed_urls:
+            return False
+        url = self._seed_urls[0]
+
+        async def _do_fetch():
+            r = await WebFetcher.fetch(url)
+            if not r.success and (r.status_code is None or r.status_code in (429, 500, 502, 503, 504)):
+                raise RetryableError("HTTP %s" % (r.status_code or "connection error"), r.status_code or 0)
+            return r
+
+        try:
+            result = await self.fetch_with_retry(_do_fetch)
+            if result.success:
+                self.logger.info("web_fetch connectivity OK for %s", url)
+                return True
+            self.logger.warning("web_fetch connectivity check failed: %s", result.error_code)
+            return False
+        except Exception:
             return False
         result = await WebFetcher.fetch(self._seed_urls[0])
         if result.success:
@@ -143,16 +200,26 @@ class WebCrawlerConnector(AbstractConnector):
             )
         return sources
 
-    async def fetch_content(self, source_id: str) -> Optional[ContentResult]:
+    async def fetch_content(self, source_id: str) -> ContentResult | None:
         """Fetch a single seed URL by source_id (depth=1 backward-compat path)."""
         url = self._find_url_for_source_id(source_id)
         if url is None:
             self.logger.warning("No URL found for source_id: %s", source_id)
             return None
-        result = await WebFetcher.fetch(url)
+
+        async def _do_fetch():
+            r = await WebFetcher.fetch(url)
+            if not r.success and (r.status_code is None or r.status_code in (429, 500, 502, 503, 504)):
+                raise RetryableError("HTTP %s" % (r.status_code or "connection error"), r.status_code or 0)
+            return r
+
+        try:
+            result = await self.fetch_with_retry(_do_fetch)
+        except Exception:
+            return None
         return _fetch_result_to_content(result, self.config.connector_id)
 
-    async def detect_changes(self, since: Optional[datetime] = None) -> List[ChangeInfo]:
+    async def detect_changes(self, since: datetime | None = None) -> List[ChangeInfo]:
         """Return all seed URLs as 'added' changes (crawl runs via sync override)."""
         changes: List[ChangeInfo] = []
         for url in self._seed_urls:
@@ -171,7 +238,8 @@ class WebCrawlerConnector(AbstractConnector):
         """Override base sync to run full BFS crawl via crawl().
 
         Calls ``crawl()`` with config-driven depth and ingests all results.
-        The scheduler triggers this path via ``connector.sync(incremental=True)``.
+        Integrates the #8146 checkpoint so crash-resume skips already-crawled
+        seeds and full-refresh (incremental=False) restarts from scratch (#8284).
         """
         from datetime import datetime as _dt
 
@@ -182,16 +250,38 @@ class WebCrawlerConnector(AbstractConnector):
             completed_at=None,
             status="failed",
         )
+
+        if not incremental:
+            await self._clear_checkpoint()
+
+        already_processed = await self._read_checkpoint()
+        pending_seeds = [url for url in self._seed_urls if _url_to_source_id(url) not in already_processed]
+        if already_processed:
+            result.resumed_from_checkpoint = True
+            self.logger.info(
+                "WebCrawlerConnector %s resuming from checkpoint (%d seeds already processed)",
+                self.config.connector_id,
+                len(already_processed),
+            )
+
         try:
+
+            async def _on_seed_done(url: str) -> None:
+                await self._write_checkpoint(_url_to_source_id(url))
+
             fetched = await self.crawl(
-                seed_urls=self._seed_urls,
+                seed_urls=pending_seeds,
                 max_depth=self._max_depth,
                 max_pages=self._max_pages,
                 respect_robots=self._respect_robots,
-                ingest=True,
+                ingest=False,
                 same_origin=self._same_origin,
+                on_seed_complete=_on_seed_done,
             )
+            await _ingest_results_to_kb(fetched, self, result)
             result.status = "success" if not result.errors else "partial"
+            if result.status == "success":
+                await self._clear_checkpoint()
             self.logger.info(
                 "WebCrawlerConnector sync complete: %d pages fetched, %d ingested, %d errors",
                 len(fetched),
@@ -218,6 +308,7 @@ class WebCrawlerConnector(AbstractConnector):
         respect_robots: bool = True,
         ingest: bool = True,
         same_origin: bool = True,
+        on_seed_complete: Callable[[str], Awaitable[None]] | None = None,
     ) -> List[FetchResult]:
         """BFS crawl starting from *seed_urls*.
 
@@ -249,6 +340,8 @@ class WebCrawlerConnector(AbstractConnector):
             seed_results = await self._crawl_seed(seed, max_depth, pages_remaining, same_origin, fetcher)
             all_results.extend(seed_results)
             pages_remaining -= len(seed_results)
+            if on_seed_complete is not None:
+                await on_seed_complete(seed)
 
         if ingest:
             sync_result = SyncResult(
@@ -261,7 +354,7 @@ class WebCrawlerConnector(AbstractConnector):
 
         return all_results
 
-    async def _build_robots_cache(self, respect_robots: bool) -> Optional[RobotsCache]:
+    async def _build_robots_cache(self, respect_robots: bool) -> RobotsCache | None:
         """Return a RobotsCache backed by Redis, or None when robots disabled."""
         if not respect_robots:
             return None
@@ -318,7 +411,8 @@ class WebCrawlerConnector(AbstractConnector):
 
         Using bs4 directly yields the raw HTML needed for extract_links and
         avoids a second HTTP request.  The robots check uses the fetcher's
-        embedded RobotsCache so respect_robots is still honoured.
+        embedded RobotsCache so respect_robots is still honoured.  Transient
+        HTTP errors (429/5xx) are retried via fetch_with_retry() (Issue #8144).
 
         Returns (FetchResult(success=False, ...), "") on any error.
         """
@@ -326,7 +420,19 @@ class WebCrawlerConnector(AbstractConnector):
             if not await fetcher._robots.is_allowed(url):
                 return FetchResult(url=url, success=False, error_code="robots_blocked"), ""
 
-        html, status = await WebFetcher.fetch_raw_html(url, timeout=30.0)
+        async def _do_fetch():
+            h, s = await WebFetcher.fetch_raw_html(url, timeout=30.0)
+            if s is None or s in (429, 500, 502, 503, 504):
+                raise RetryableError("HTTP %s" % (s or "connection error"), s or 0)
+            return h, s
+
+        try:
+            html, status = await self.fetch_with_retry(_do_fetch)
+        except RetryableError as exc:
+            return FetchResult(url=url, success=False, error_code=ERR_CONNECTION, status_code=exc.status_code), ""
+        except Exception:
+            return FetchResult(url=url, success=False, error_code=ERR_CONNECTION), ""
+
         if html is None or status is None or status >= 400:
             return (
                 FetchResult(url=url, success=False, error_code=ERR_CONNECTION, status_code=status),
@@ -349,7 +455,7 @@ class WebCrawlerConnector(AbstractConnector):
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _find_url_for_source_id(self, source_id: str) -> Optional[str]:
+    def _find_url_for_source_id(self, source_id: str) -> str | None:
         """Return the URL that corresponds to *source_id* from seed list."""
         for url in self._seed_urls:
             if _url_to_source_id(url) == source_id:
@@ -366,6 +472,4 @@ class WebCrawlerConnector(AbstractConnector):
         except Exception:
             from constants.network_constants import NetworkConstants
 
-            return (
-                f"http://{os.environ.get('AUTOBOT_BROWSER_SERVICE_HOST', '')}:{NetworkConstants.BROWSER_SERVICE_PORT}"
-            )
+            return f"http://{os.environ.get('AUTOBOT_BROWSER_SERVICE_HOST', '')}:{NetworkConstants.BROWSER_SERVICE_PORT}"  # ssot-config-exempt: fallback path, empty-string default differs from config  # noqa: E501

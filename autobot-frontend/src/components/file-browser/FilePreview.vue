@@ -78,7 +78,7 @@
             @click="downloadFile"
             class="download-btn"
           >
-            <i class="fas fa-download"></i>
+            <Icon name="download" />
             {{ $t('fileBrowser.preview.downloadFile') }}
           </button>
         </div>
@@ -88,6 +88,7 @@
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { computed } from 'vue'
 
 interface FilePreviewData {

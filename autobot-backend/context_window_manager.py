@@ -1,17 +1,34 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
-"""Centralized context window management for LLM interactions."""
+"""Centralized context window management for LLM interactions.
 
-import logging
+Issue #7351: architecture_family-aware compression bypass.  Non-transformer
+models (state_space, linear_attention, hybrid) carry constant inference memory
+and do not face the quadratic attention cost that justifies the 4K/8K
+compression trigger.  For those families the model's declared
+``context_window_tokens`` is used directly as the compression threshold
+instead of hard-capping at 8192.
+"""
+
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List
+
+_CONTEXT_HEADROOM: float = 0.85
+_CONTEXT_HARD_MAX: int = 200_000
 
 import yaml
 
+from autobot_shared.logging_manager import get_logger
 from constants.model_constants import ModelConfig, ModelConstants
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
+
+# Architecture families whose cost curve does not require transformer caps.
+# "ssm" matches llm_shared.ArchitectureFamily.SSM; "state_space" is kept for
+# backward-compatible YAML entries written before MVA-1379 standardised the
+# enum.  Both string values bypass the 4K/8K compression trigger.
+_NON_TRANSFORMER_FAMILIES: frozenset[str] = frozenset({"ssm", "state_space", "linear_attention", "hybrid"})
 
 # Lazy singleton — imported on first call to avoid circular imports.
 _compression_service = None
@@ -110,14 +127,16 @@ class ContextWindowManager:
             model_name: Name of the LLM model to use
         """
         if model_name not in self.config["models"]:
-            logger.warning("Unknown model %s, using default", model_name)
+            logger.warning(
+                "Unknown model %s, using default", model_name
+            )  # codeql[py/clear-text-logging-sensitive-data]
             self.current_model = self.config["models"]["default"]["name"]
         else:
             self.current_model = model_name
 
-        logger.info("Active model: %s", self.current_model)
+        logger.info("Active model: %s", self.current_model)  # codeql[py/clear-text-logging-sensitive-data]
 
-    def get_message_limit(self, model_name: Optional[str] = None) -> int:
+    def get_message_limit(self, model_name: str | None = None) -> int:
         """Get recommended message limit for model.
 
         Args:
@@ -133,7 +152,7 @@ class ContextWindowManager:
 
         return self.config["models"][model]["message_budget"]["recent_messages"]
 
-    def get_max_history_tokens(self, model_name: Optional[str] = None) -> int:
+    def get_max_history_tokens(self, model_name: str | None = None) -> int:
         """Get max tokens to allocate for conversation history.
 
         Args:
@@ -161,7 +180,7 @@ class ContextWindowManager:
         chars_per_token = self.config["token_estimation"]["chars_per_token"]
         return len(text) // chars_per_token
 
-    def calculate_retrieval_limit(self, model_name: Optional[str] = None) -> int:
+    def calculate_retrieval_limit(self, model_name: str | None = None) -> int:
         """Calculate how many messages to retrieve from Redis.
 
         More efficient than fetching 500 when we only use 200.
@@ -177,7 +196,7 @@ class ContextWindowManager:
         # Fetch 2x what we plan to use (buffer for filtering)
         return message_limit * 2
 
-    def should_truncate_history(self, messages: List[Dict], model_name: Optional[str] = None) -> bool:
+    def should_truncate_history(self, messages: List[Dict], model_name: str | None = None) -> bool:
         """Check if message history needs truncation.
 
         Args:
@@ -195,11 +214,53 @@ class ContextWindowManager:
         max_tokens = self.get_max_history_tokens(model_name)
         return estimated_tokens > max_tokens
 
-    def get_compression_threshold(self, model_name: Optional[str] = None) -> int:
-        """Get the compression_threshold for a model (defaults to 8192).
+    @staticmethod
+    def _registry_family(model: str) -> str:
+        """Look up architecture_family from llm_shared registry (lazy import)."""
+        try:
+            from llm_shared.model_param_registry import get_architecture_family as _get
 
-        Issue #3770: Models whose context_window_tokens <= 8192 trigger
-        compression when retrieved content exceeds this value.
+            return _get(model)
+        except Exception:
+            return "transformer"
+
+    def get_architecture_family(self, model_name: str | None = None) -> str:
+        """Return the architecture_family for a model (defaults to 'transformer').
+
+        Issue #7351: resolution order:
+        1. ``architecture_family`` key from ``context_windows.yaml`` (normalized).
+        2. ``llm_shared.get_architecture_family()`` — reads ``llm_models.yaml``
+           and, optionally, HuggingFace ``config.json`` (MVA-1379).
+        3. ``'transformer'`` safe default.
+
+        Args:
+            model_name: Optional model name, uses current if not specified.
+
+        Returns:
+            Architecture family string (e.g. ``'transformer'``, ``'ssm'``).
+        """
+        model = model_name or self.current_model
+        # Issue #8360: unknown models must not inherit default model's family.
+        if model not in self.config["models"]:
+            return self._registry_family(model)
+        raw = self.config["models"][model].get("architecture_family")
+        if raw is None:
+            # Entry exists but omits architecture_family — delegate to registry.
+            return self._registry_family(model)
+        # Issue #8361: normalize whitespace and case before frozenset check.
+        return raw.strip().lower()
+
+    def get_compression_threshold(self, model_name: str | None = None) -> int:
+        """Get the compression threshold for a model.
+
+        Issue #3770: transformer models whose context_window_tokens <= 8192
+        trigger compression when retrieved content exceeds this value.
+
+        Issue #7351: non-transformer families (state_space, linear_attention,
+        hybrid) return the model's declared ``context_window_tokens`` instead of
+        the 8192 default so that large-context models are not falsely capped.
+        When ``context_window_tokens`` is also absent the fallback is 8192
+        (same safe default as before, still transformer-conservative).
 
         Args:
             model_name: Optional model name, uses current if not specified.
@@ -210,13 +271,69 @@ class ContextWindowManager:
         model = model_name or self.current_model
         if model not in self.config["models"]:
             model = self.config["models"]["default"]["name"]
-        return self.config["models"][model].get("compression_threshold", 8192)
 
-    async def async_should_compress(self, content_tokens: int, model_name: Optional[str] = None) -> bool:
+        entry = self.config["models"][model]
+        # Use the method so the llm_shared registry fallback is applied.
+        family = self.get_architecture_family(model_name)
+
+        # Issue #8359: explicit compression_threshold always wins, regardless of
+        # architecture family.  Only fall back to family-specific defaults when
+        # the field is absent.
+        if "compression_threshold" in entry:
+            return entry["compression_threshold"]
+
+        if family in _NON_TRANSFORMER_FAMILIES:
+            # Use the model's declared context window as the threshold —
+            # no artificial cap for non-attention architectures.
+            threshold = entry.get("context_window_tokens", 8192)
+            logger.debug(
+                "get_compression_threshold: %s (family=%s) → %d (no cap)",
+                model,
+                family,
+                threshold,
+            )
+            return threshold
+
+        return 8192
+
+    def _query_known_context_length(self, model_name: str) -> int:
+        """Try to get context window from llm_shared model registry. Returns 0 when unknown."""
+        try:
+            from llm_shared.model_param_registry import get_model_kwargs
+
+            kwargs = get_model_kwargs(model_name)
+            return int(kwargs.get("context_window_tokens", 0))
+        except Exception:
+            return 0
+
+    def get_adaptive_context_length(self, model_name: str | None = None) -> int:
+        """Return the effective context length for token budget calculations.
+
+        Resolution order:
+        1. Model in YAML config → return declared context_window_tokens exactly.
+        2. Not in YAML → query llm_shared registry; scale by _CONTEXT_HEADROOM,
+           cap at _CONTEXT_HARD_MAX.
+        3. Registry also misses → YAML fallback (4096).
+        """
+        model = model_name or self.current_model
+        if model in self.config["models"]:
+            return int(self.config["models"][model].get("context_window_tokens", 4096))
+
+        discovered = self._query_known_context_length(model)
+        if discovered > 0:
+            return min(int(discovered * _CONTEXT_HEADROOM), _CONTEXT_HARD_MAX)
+
+        default_name = self.config["models"]["default"]["name"]
+        return int(self.config["models"].get(default_name, {}).get("context_window_tokens", 4096))
+
+    async def async_should_compress(self, content_tokens: int, model_name: str | None = None) -> bool:
         """Return True when content_tokens exceed the model compression threshold.
 
         Issue #3770: Delegates to ContextCompressionService which applies the
         large-model guard (threshold > 8192 -> always False).
+
+        Issue #7351: non-transformer families bypass compression entirely —
+        their cost curve does not justify the 4K/8K trigger.
 
         Args:
             content_tokens: Estimated token count of content to evaluate.
@@ -226,10 +343,18 @@ class ContextWindowManager:
             True when compression should be applied.
         """
         model = model_name or self.current_model
+        family = self.get_architecture_family(model)
+        if family in _NON_TRANSFORMER_FAMILIES:
+            logger.debug(
+                "async_should_compress: %s (family=%s) → False (bypass)",
+                model,  # codeql[py/clear-text-logging-sensitive-data]
+                family,
+            )
+            return False
         svc = _get_compression_service()
         return await svc.should_compress(model, content_tokens)
 
-    def get_model_info(self, model_name: Optional[str] = None) -> Dict:
+    def get_model_info(self, model_name: str | None = None) -> Dict:
         """Get full model configuration.
 
         Args:

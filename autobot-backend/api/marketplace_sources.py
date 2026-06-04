@@ -11,11 +11,10 @@ catalog URLs alongside the built-in AutoBot marketplace.
 from __future__ import annotations
 
 import json
-import logging
 import re
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Any
 from urllib.parse import urlparse
 
 import aiohttp
@@ -29,10 +28,11 @@ from api.schemas_workflows import (
 )
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
-from autobot_shared.security.ssrf_guard import SSRFError, resolve_safe_ip, safe_aiohttp_resolver
+from autobot_shared.url_safety import resolve_safe_ip_async
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter()
 
@@ -208,14 +208,28 @@ async def _fetch_catalog_document(url: str) -> CatalogDocument:
         )
     # Resolve to a public IP and connect to it directly. The Host header still
     # carries the original hostname for TLS SNI / virtual hosting; the
-    # pinned resolver prevents DNS rebinding between resolve and connect.
+    # connector resolution map prevents DNS rebinding between resolve and connect.
     try:
-        safe_ip = await resolve_safe_ip(host)
-    except SSRFError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+        safe_ip = await resolve_safe_ip_async(host)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
     port = parsed.port or (443 if parsed.scheme == "https" else 80)
     timeout = aiohttp.ClientTimeout(total=_FETCH_TIMEOUT_SECONDS)
-    connector = aiohttp.TCPConnector(resolver=safe_aiohttp_resolver(host, safe_ip, port), use_dns_cache=False)
+    resolver_map = {
+        host: [{"hostname": host, "host": safe_ip, "port": port, "family": socket.AF_INET, "proto": 0, "flags": 0}]
+    }
+
+    class _PinnedResolver(aiohttp.abc.AbstractResolver):
+        async def resolve(self, hostname, port_, family=socket.AF_INET):
+            return resolver_map.get(hostname, [])
+
+        async def close(self):
+            return None
+
+    connector = aiohttp.TCPConnector(resolver=_PinnedResolver(), use_dns_cache=False)
     try:
         async with aiohttp.ClientSession(timeout=timeout, connector=connector) as session:
             # allow_redirects=False — a redirect to an internal IP would bypass
@@ -264,7 +278,7 @@ async def _fetch_catalog_document(url: str) -> CatalogDocument:
         ) from exc
 
 
-async def get_source_by_id(source_id: str) -> Optional[MarketplaceSource]:
+async def get_source_by_id(source_id: str) -> MarketplaceSource | None:
     """Look up a single source by id (built-in or user-added)."""
     if source_id == BUILTIN_SOURCE_ID:
         return _builtin_source()

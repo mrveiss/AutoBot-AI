@@ -10,6 +10,7 @@ Extended with PerformanceMetricsRecorder as part of Issue #469.
 Extended with KnowledgeBase, LLMProvider, WebSocket, Redis recorders (Issue #470).
 Extended with FrontendMetricsRecorder for RUM metrics (Issue #476).
 Extended with MCPWorkerMetricsRecorder for worker restart budget tracking (Issue #4109).
+Extended with VoiceRealtimeMetricsRecorder for Realtime WebRTC session metrics (Issue #7421).
 
 Package Structure:
 - base.py: Base recorder class with shared functionality
@@ -29,6 +30,9 @@ Package Structure:
 """
 
 from .base import BaseMetricsRecorder
+
+# Phase 4 (#7590): Chat SSOT observability recorder
+from .chat import ChatMetricsRecorder
 from .claude_api import ClaudeAPIMetricsRecorder
 
 # Issue #476: Frontend RUM metrics recorder
@@ -49,11 +53,14 @@ from .redis import RedisMetricsRecorder
 from .service_health import ServiceHealthMetricsRecorder
 from .system import SystemMetricsRecorder
 from .task import TaskMetricsRecorder
+from .voice_realtime import VoiceRealtimeMetricsRecorder
 from .websocket import WebSocketMetricsRecorder
 from .workflow import WorkflowMetricsRecorder
 
 __all__ = [
     "BaseMetricsRecorder",
+    # Phase 4 (#7590): Chat SSOT observability
+    "ChatMetricsRecorder",
     "WorkflowMetricsRecorder",
     "GitHubMetricsRecorder",
     "TaskMetricsRecorder",
@@ -72,4 +79,6 @@ __all__ = [
     "InferenceProfilerMetricsRecorder",
     # Issue #4109: MCP worker metrics
     "MCPWorkerMetricsRecorder",
+    # Issue #7421: Voice Realtime WebRTC session metrics
+    "VoiceRealtimeMetricsRecorder",
 ]

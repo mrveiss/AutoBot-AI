@@ -93,6 +93,68 @@ if echo "$COMMAND_TO_CHECK" | grep -qE '(^|[;&|()]+[[:space:]]*)git[[:space:]]+(
   deny "Blocked: never check out main/master locally (#4113, #6512). Main is read-only; commits flow Dev_new_gui → main via release cycle. If you need to inspect main, use git log origin/main or create a worktree: git worktree add .worktrees/inspect-main main"
 fi
 
+# Block ALL branch checkouts and branch creation from the main working tree (#6512)
+# Subagents running in parallel would trample the shared HEAD for every other session.
+# Any branch work must happen inside an isolated worktree.
+# BUG FIX: previously -b/-B/-c flags bypassed the pattern because [^-] required a
+# non-dash first char after checkout/switch. Now both cases are caught explicitly.
+if echo "$COMMAND_TO_CHECK" | grep -qE '(^|[;&|()]+[[:space:]]*)git[[:space:]]+(checkout|switch)[[:space:]]'; then
+  CURRENT_DIR=$(pwd)
+  if [[ ! "$CURRENT_DIR" =~ \.worktrees/ ]]; then
+    # Detect -b/-B/-c/--create/--orphan flags — new-branch creation always denied on main tree
+    # because it still moves HEAD away from Dev_new_gui.
+    HAS_NEW_BRANCH_FLAG=0
+    if echo "$COMMAND_TO_CHECK" | grep -qE 'git[[:space:]]+(checkout|switch)[[:space:]]+(-b|-B|-c|--create|--orphan)([[:space:]]|$)' || \
+       echo "$COMMAND_TO_CHECK" | grep -qE 'git[[:space:]]+(checkout|switch)[[:space:]]+.*[[:space:]](-b|-B|-c|--create|--orphan)([[:space:]]|$)'; then
+      HAS_NEW_BRANCH_FLAG=1
+    fi
+
+    BRANCH_ARG=$(echo "$COMMAND_TO_CHECK" | awk '{
+      found=0
+      for(i=1;i<=NF;i++) {
+        if ($i=="checkout" || $i=="switch") { found=i; break }
+      }
+      if (found) {
+        for(j=found+1;j<=NF;j++) {
+          if (substr($j,1,1)!="-") { print $j; break }
+        }
+      }
+    }')
+
+    if [[ "$HAS_NEW_BRANCH_FLAG" -eq 1 ]]; then
+      deny "Blocked: creating a branch on the main working tree moves HEAD away from Dev_new_gui and tramples parallel sessions (#6512). Use a worktree instead: git worktree add .worktrees/<name> -b <branch> Dev_new_gui && cd .worktrees/<name>"
+    elif [[ "$BRANCH_ARG" != "Dev_new_gui" ]] && \
+         [[ "$BRANCH_ARG" != "." ]] && \
+         ! [[ "$BRANCH_ARG" =~ ^[0-9a-f]{7,40}$ ]] && \
+         ! [[ "$BRANCH_ARG" =~ ^v[0-9]+\.[0-9]+ ]] && \
+         ! [[ "$BRANCH_ARG" =~ ^/ ]]; then
+      deny "Blocked: switching branches on the main working tree tramples HEAD for parallel sessions (#6512). Use a worktree instead: git worktree add .worktrees/<name> <branch> && cd .worktrees/<name>. Then do your work and remove with: git worktree remove .worktrees/<name>"
+    fi
+  fi
+fi
+
+# Warn if committing outside a worktree when issue-specific worktree exists (#6512)
+if echo "$COMMAND_TO_CHECK" | grep -qE '(^|[;&|()]+[[:space:]]*)git[[:space:]]+commit'; then
+  CURRENT_DIR=$(pwd)
+  IN_WORKTREE=0
+
+  # Check if we're inside .worktrees/
+  if [[ "$CURRENT_DIR" =~ \.worktrees/issue- ]]; then
+    IN_WORKTREE=1
+  fi
+
+  # If NOT in a worktree, warn about parallel work isolation
+  if [ "$IN_WORKTREE" -eq 0 ]; then
+    # Check if any issue-specific worktrees exist
+    REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
+    if [ -d "$REPO_ROOT/.worktrees" ] && ls "$REPO_ROOT/.worktrees"/issue-* >/dev/null 2>&1; then
+      # Worktrees exist—you should be using one
+      AVAILABLE=$(ls -d "$REPO_ROOT/.worktrees"/issue-* 2>/dev/null | xargs basename -a | paste -sd "," -)
+      echo "{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"warn\",\"permissionDecisionReason\":\"Git commit outside worktree detected (#6512). Parallel work worktrees exist: $AVAILABLE. Consider: cd $REPO_ROOT/.worktrees/issue-XXXX && git commit (...) to avoid shared tree conflicts.\"}}" >&2
+    fi
+  fi
+fi
+
 # Block bare `git reset <ref>` on Dev_new_gui — parallel sessions doing
 # `git reset origin/Dev_new_gui` from a feature branch silently move HEAD
 # and lose committed work that wasn't pushed yet (#6512).

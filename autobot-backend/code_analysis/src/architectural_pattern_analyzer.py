@@ -14,11 +14,12 @@ Refactoring History:
 """
 
 import json
-import logging
 import time
 from typing import Any, Dict, List
 
 from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_constants import TTL_1_HOUR
 
 # Issue #394: Import from architectural_analysis package
 from .architectural_analysis import (
@@ -31,7 +32,7 @@ from .architectural_analysis import (
     PatternDetector,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ArchitecturalPatternAnalyzer:
@@ -176,7 +177,7 @@ class ArchitecturalPatternAnalyzer:
             try:
                 key = self.ARCHITECTURE_KEY
                 value = json.dumps(results, default=str)
-                await self.redis_client.setex(key, 3600, value)
+                await self.redis_client.setex(key, TTL_1_HOUR, value)
             except Exception as e:
                 logger.warning(f"Failed to cache results: {e}")
 

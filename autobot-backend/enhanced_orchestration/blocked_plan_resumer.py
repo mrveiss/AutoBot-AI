@@ -34,12 +34,12 @@ task. WorkflowRunner is responsible for both calls.
 
 import asyncio
 import json
-import logging
-from typing import Any, Optional
+from typing import Any
 
+from autobot_shared.logging_manager import get_logger
 from skills.skill_promotion_publisher import CHANNEL_SKILL_PROMOTED
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class BlockedPlanResumer:
@@ -52,7 +52,7 @@ class BlockedPlanResumer:
 
     def __init__(self, runner: Any) -> None:
         self._runner = runner
-        self._task: Optional[asyncio.Task] = None
+        self._task: asyncio.Task | None = None
         self._stopping = False
 
     @property

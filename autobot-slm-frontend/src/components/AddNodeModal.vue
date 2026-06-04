@@ -48,10 +48,9 @@
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                 </svg>
                 <div>
-                  <p class="text-sm font-medium text-yellow-800">You are replacing an existing node</p>
+                  <p class="text-sm font-medium text-yellow-800">{{ $t('addNodeModal.youAreReplacingAn') }}</p>
                   <p class="text-sm text-yellow-700 mt-1">
-                    Node <span class="font-medium">{{ existingNode?.hostname }}</span> will be removed and replaced with the new node configuration.
-                    This action cannot be undone.
+                    {{ $t('addNodeModal.node') }} <span class="font-medium">{{ existingNode?.hostname }}</span> {{ $t('addNodeModal.willBeRemovedAnd') }}
                   </p>
                 </div>
               </div>
@@ -67,15 +66,15 @@
                     <svg class="h-4 w-4 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
                     </svg>
-                    Connection Information
+                    {{ $t('addNodeModal.connectionInformation') }}
                   </legend>
 
                   <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <!-- Hostname -->
                     <div class="sm:col-span-1">
                       <label for="hostname" class="block text-sm font-medium text-gray-700 mb-1">
-                        Hostname <span class="text-danger-500" aria-hidden="true">*</span>
-                        <span class="sr-only">(required)</span>
+                        {{ $t('addNodeModal.hostname') }} <span class="text-danger-500" aria-hidden="true">*</span>
+                        <span class="sr-only">{{ $t('addNodeModal.required') }}</span>
                       </label>
                       <input
                         v-model="formData.hostname"
@@ -94,8 +93,8 @@
                     <!-- IP Address -->
                     <div class="sm:col-span-1">
                       <label for="ip_address" class="block text-sm font-medium text-gray-700 mb-1">
-                        IP Address <span class="text-danger-500" aria-hidden="true">*</span>
-                        <span class="sr-only">(required)</span>
+                        {{ $t('addNodeModal.iPAddress') }} <span class="text-danger-500" aria-hidden="true">*</span>
+                        <span class="sr-only">{{ $t('addNodeModal.required') }}</span>
                       </label>
                       <input
                         v-model="formData.ip_address"
@@ -114,7 +113,7 @@
                     <!-- SSH Port -->
                     <div class="sm:col-span-1">
                       <label for="ssh_port" class="block text-sm font-medium text-gray-700 mb-1">
-                        SSH Port
+                        {{ $t('addNodeModal.sSHPort') }}
                       </label>
                       <input
                         v-model.number="formData.ssh_port"
@@ -135,7 +134,7 @@
                     <svg class="h-4 w-4 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
                     </svg>
-                    Authentication Method
+                    {{ $t('addNodeModal.authenticationMethod') }}
                   </legend>
 
                   <!-- Auth Method Selection -->
@@ -160,8 +159,8 @@
                         </svg>
                       </div>
                       <div>
-                        <p class="font-medium text-gray-900">Password</p>
-                        <p class="text-xs text-gray-500">Sudo user with password</p>
+                        <p class="font-medium text-gray-900">{{ $t('addNodeModal.password') }}</p>
+                        <p class="text-xs text-gray-500">{{ $t('addNodeModal.sudoUserWithPassword') }}</p>
                       </div>
                     </label>
 
@@ -185,8 +184,8 @@
                         </svg>
                       </div>
                       <div>
-                        <p class="font-medium text-gray-900">PKI (SSH Key)</p>
-                        <p class="text-xs text-gray-500">Recommended for production</p>
+                        <p class="font-medium text-gray-900">{{ $t('addNodeModal.pKISSHKey') }}</p>
+                        <p class="text-xs text-gray-500">{{ $t('addNodeModal.recommendedForProduction') }}</p>
                       </div>
                     </label>
                   </div>
@@ -197,8 +196,8 @@
                       <!-- SSH User -->
                       <div>
                         <label for="ssh_user" class="block text-sm font-medium text-gray-700 mb-1">
-                          Username <span class="text-danger-500" aria-hidden="true">*</span>
-                          <span class="sr-only">(required)</span>
+                          {{ $t('addNodeModal.username') }} <span class="text-danger-500" aria-hidden="true">*</span>
+                          <span class="sr-only">{{ $t('addNodeModal.required') }}</span>
                         </label>
                         <input
                           v-model="formData.ssh_user"
@@ -213,10 +212,10 @@
                       <!-- Password -->
                       <div>
                         <label for="ssh_password" class="block text-sm font-medium text-gray-700 mb-1">
-                          Password
+                          {{ $t('addNodeModal.password') }}
                           <span v-if="!isEditMode || needsCredentialsForEdit" class="text-danger-500" aria-hidden="true">*</span>
-                          <span v-if="!isEditMode || needsCredentialsForEdit" class="sr-only">(required)</span>
-                          <span v-else class="text-gray-400 text-xs ml-1">(optional)</span>
+                          <span v-if="!isEditMode || needsCredentialsForEdit" class="sr-only">{{ $t('addNodeModal.required') }}</span>
+                          <span v-else class="text-gray-400 text-xs ml-1">{{ $t('addNodeModal.optional') }}</span>
                         </label>
                         <div class="relative">
                           <input
@@ -257,7 +256,7 @@
                         v-model="formData.has_sudo"
                         class="w-4 h-4 text-primary-600 border-gray-300 rounded-sm focus:ring-primary-500"
                       />
-                      <span class="text-sm text-gray-700">User has sudo privileges</span>
+                      <span class="text-sm text-gray-700">{{ $t('addNodeModal.userHasSudoPrivileges') }}</span>
                     </label>
                   </div>
 
@@ -266,8 +265,8 @@
                     <!-- SSH User -->
                     <div>
                       <label for="ssh_user_pki" class="block text-sm font-medium text-gray-700 mb-1">
-                        Username <span class="text-danger-500" aria-hidden="true">*</span>
-                        <span class="sr-only">(required)</span>
+                        {{ $t('addNodeModal.username') }} <span class="text-danger-500" aria-hidden="true">*</span>
+                        <span class="sr-only">{{ $t('addNodeModal.required') }}</span>
                       </label>
                       <input
                         v-model="formData.ssh_user"
@@ -281,7 +280,7 @@
 
                     <!-- Key Source Selection -->
                     <div>
-                      <label class="block text-sm font-medium text-gray-700 mb-2">SSH Key Source</label>
+                      <label class="block text-sm font-medium text-gray-700 mb-2">{{ $t('addNodeModal.sSHKeySource') }}</label>
                       <div class="space-y-2" role="radiogroup" aria-label="SSH key source">
                         <label
                           v-for="option in keySourceOptions"
@@ -307,7 +306,7 @@
                     <!-- Key Path (for browse) -->
                     <div v-if="keySource === 'browse'">
                       <label for="ssh_key_path" class="block text-sm font-medium text-gray-700 mb-1">
-                        Key Path
+                        {{ $t('addNodeModal.keyPath') }}
                       </label>
                       <input
                         v-model="formData.ssh_key_path"
@@ -321,7 +320,7 @@
                     <!-- Key Content (for paste) -->
                     <div v-if="keySource === 'paste'">
                       <label for="ssh_key" class="block text-sm font-medium text-gray-700 mb-1">
-                        SSH Private Key
+                        {{ $t('addNodeModal.sSHPrivateKey') }}
                       </label>
                       <textarea
                         v-model="formData.ssh_key"
@@ -344,7 +343,7 @@
                     <svg class="h-4 w-4 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                     </svg>
-                    Role Assignment
+                    {{ $t('addNodeModal.roleAssignment') }}
                   </legend>
 
                   <div class="grid grid-cols-1 sm:grid-cols-2 gap-3" role="group" aria-label="Available roles">
@@ -375,7 +374,7 @@
 
                   <!-- Selected Roles Details -->
                   <div v-if="selectedRolesDetails.length > 0" class="p-3 bg-gray-50 rounded-lg" role="status">
-                    <p class="text-xs font-medium text-gray-600 mb-2">Selected roles will configure:</p>
+                    <p class="text-xs font-medium text-gray-600 mb-2">{{ $t('addNodeModal.selectedRolesWillConfigure') }}</p>
                     <div class="space-y-1">
                       <div v-for="role in selectedRolesDetails" :key="role.id" class="flex items-center gap-2 text-xs">
                         <span class="w-2 h-2 bg-primary-500 rounded-full" aria-hidden="true"></span>
@@ -406,9 +405,9 @@
                         class="mt-0.5 w-4 h-4 text-primary-600 border-gray-300 rounded-sm focus:ring-primary-500"
                       />
                       <div>
-                        <span class="text-sm text-gray-700 font-medium">Import existing node (no deployment)</span>
+                        <span class="text-sm text-gray-700 font-medium">{{ $t('addNodeModal.importExistingNodeNo') }}</span>
                         <p class="text-xs text-gray-500 mt-0.5">
-                          Register an already-configured node without running Ansible. Use this for nodes that already have services running. The node will be marked as healthy immediately.
+                          {{ $t('addNodeModal.registerAnAlreadyConfigured') }}
                         </p>
                       </div>
                     </label>
@@ -421,9 +420,9 @@
                           class="mt-0.5 w-4 h-4 text-primary-600 border-gray-300 rounded-sm focus:ring-primary-500"
                         />
                         <div>
-                          <span class="text-sm text-gray-700">Start enrollment immediately after adding</span>
+                          <span class="text-sm text-gray-700">{{ $t('addNodeModal.startEnrollmentImmediatelyAfter') }}</span>
                           <p class="text-xs text-gray-500 mt-0.5">
-                            The node will be automatically enrolled with Ansible after being added, including installing dependencies and configuring services.
+                            {{ $t('addNodeModal.theNodeWillBe') }}
                           </p>
                         </div>
                       </label>
@@ -435,9 +434,9 @@
                           class="mt-0.5 w-4 h-4 text-primary-600 border-gray-300 rounded-sm focus:ring-primary-500"
                         />
                         <div>
-                          <span class="text-sm text-gray-700">Deploy PKI certificates during enrollment</span>
+                          <span class="text-sm text-gray-700">{{ $t('addNodeModal.deployPKICertificatesDuring') }}</span>
                           <p class="text-xs text-gray-500 mt-0.5">
-                            SSH keys will be deployed to the node for passwordless authentication in future connections.
+                            {{ $t('addNodeModal.sSHKeysWillBe') }}
                           </p>
                         </div>
                       </label>
@@ -452,7 +451,7 @@
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                       </svg>
                       <p class="text-sm text-blue-700">
-                        Using SSH key authentication. No password required.
+                        {{ $t('addNodeModal.usingSSHKeyAuthentication') }}
                       </p>
                     </div>
                     <!-- Info: Password auth - credentials optional for basic edits -->
@@ -461,7 +460,7 @@
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
                       <p class="text-sm text-green-700">
-                        Password not required for basic edits. Enable options below if you need SSH access.
+                        {{ $t('addNodeModal.passwordNotRequiredFor') }}
                       </p>
                     </div>
                     <!-- Info: Password auth with SSH ops - password required -->
@@ -470,7 +469,7 @@
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                       </svg>
                       <p class="text-sm text-amber-700">
-                        Password required for selected SSH operations.
+                        {{ $t('addNodeModal.passwordRequiredForSelected') }}
                       </p>
                     </div>
 
@@ -481,9 +480,9 @@
                         class="mt-0.5 w-4 h-4 text-primary-600 border-gray-300 rounded-sm focus:ring-primary-500"
                       />
                       <div>
-                        <span class="text-sm text-gray-700">Deploy PKI certificates after update</span>
+                        <span class="text-sm text-gray-700">{{ $t('addNodeModal.deployPKICertificatesAfter') }}</span>
                         <p class="text-xs text-gray-500 mt-0.5">
-                          If a password is provided, it will be used to connect and deploy PKI certificates.
+                          {{ $t('addNodeModal.ifAPasswordIs') }}
                         </p>
                       </div>
                     </label>
@@ -495,9 +494,9 @@
                         class="mt-0.5 w-4 h-4 text-primary-600 border-gray-300 rounded-sm focus:ring-primary-500"
                       />
                       <div>
-                        <span class="text-sm text-gray-700">Re-run enrollment tasks</span>
+                        <span class="text-sm text-gray-700">{{ $t('addNodeModal.reRunEnrollmentTasks') }}</span>
                         <p class="text-xs text-gray-500 mt-0.5">
-                          Run Ansible enrollment to update dependencies and services on the node.
+                          {{ $t('addNodeModal.runAnsibleEnrollmentTo') }}
                         </p>
                       </div>
                     </label>
@@ -509,7 +508,7 @@
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                     <p class="text-sm text-blue-700">
-                      Password will be used to establish connection and deploy PKI certificates.
+                      {{ $t('addNodeModal.passwordWillBeUsed') }}
                     </p>
                   </div>
                 </fieldset>
@@ -524,10 +523,10 @@
                     />
                     <div>
                       <span class="text-sm text-gray-700 font-medium">
-                        I understand that this will permanently remove the existing node
+                        {{ $t('addNodeModal.iUnderstandThatThis') }}
                       </span>
                       <p class="text-xs text-gray-500 mt-0.5">
-                        All configuration and history for <span class="font-medium">{{ existingNode?.hostname }}</span> will be deleted.
+                        {{ $t('addNodeModal.allConfigurationAndHistory') }} <span class="font-medium">{{ existingNode?.hostname }}</span> {{ $t('addNodeModal.willBeDeleted') }}
                       </p>
                     </div>
                   </label>
@@ -603,7 +602,7 @@
                 :disabled="isSubmitting"
                 class="btn btn-secondary"
               >
-                Cancel
+                {{ $t('addNodeModal.cancel') }}
               </button>
 
               <div class="flex items-center gap-3">
@@ -691,7 +690,7 @@ interface ExistingNode {
   ip_address: string
   ssh_user?: string
   ssh_port?: number
-  auth_method?: 'password' | 'pki'
+  auth_method?: 'password' | 'key' | 'pki'
   roles: NodeRole[]
 }
 
@@ -699,7 +698,7 @@ interface FormData {
   hostname: string
   ip_address: string
   ssh_port: number
-  auth_method: 'password' | 'pki'
+  auth_method: 'password' | 'key' | 'pki'
   ssh_user: string
   ssh_password: string
   has_sudo: boolean

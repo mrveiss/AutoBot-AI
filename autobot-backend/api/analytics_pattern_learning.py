@@ -18,12 +18,11 @@ Key Features:
 import asyncio
 import hashlib
 import json
-import logging
 import time
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from fastapi import APIRouter, HTTPException, Query, Request
 
@@ -38,7 +37,6 @@ from api.schemas_analytics import (
     PatternLearningActiveLearningResponse,
     PatternLearningConfidenceResponse,
     PatternLearningFeedbackResponse,
-    PatternLearningHealthResponse,
     PatternLearningHistoryResponse,
     PatternLearningLearnCycleResponse,
     PatternLearningMetrics,
@@ -47,9 +45,10 @@ from api.schemas_analytics import (
 )
 from api.system_health import ComponentHealth, register_health_probe
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import parse_utc_iso
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter()
 
@@ -101,9 +100,9 @@ class FeedbackRecord:
     feedback_type: FeedbackType
     file_path: str
     line_number: int
-    code_snippet: Optional[str]
-    developer_comment: Optional[str]
-    suggested_fix: Optional[str]
+    code_snippet: str | None
+    developer_comment: str | None
+    suggested_fix: str | None
     timestamp: datetime
     weight: float = 1.0
 
@@ -518,7 +517,7 @@ class PatternLearningEngine:
 
         return new_feedback_count >= 10
 
-    async def get_confidence_scores(self, pattern_ids: Optional[List[str]] = None) -> List[ConfidenceScore]:
+    async def get_confidence_scores(self, pattern_ids: List[str] | None = None) -> List[ConfidenceScore]:
         """Get confidence scores for patterns."""
         await self.initialize()
 
@@ -843,7 +842,7 @@ class PatternLearningEngine:
 
         return analysis
 
-    async def _apply_pattern_update(self, pattern_id: str, analysis: Dict[str, Any]) -> Optional[PatternUpdate]:
+    async def _apply_pattern_update(self, pattern_id: str, analysis: Dict[str, Any]) -> PatternUpdate | None:
         """Apply an update to a pattern based on learning analysis."""
         if not analysis.get("needs_update"):
             return None
@@ -880,7 +879,7 @@ class PatternLearningEngine:
 # Global Instance
 # =============================================================================
 
-_learning_engine: Optional[PatternLearningEngine] = None
+_learning_engine: PatternLearningEngine | None = None
 _learning_engine_lock = asyncio.Lock()
 
 
@@ -925,7 +924,7 @@ async def submit_pattern_feedback(feedback: PatternFeedback) -> Dict[str, Any]:
     error_code_prefix="ANALYTICS_PATTERN_LEARNING",
 )
 async def get_pattern_confidence(
-    pattern_ids: Optional[str] = Query(None, description="Comma-separated pattern IDs"),
+    pattern_ids: str | None = Query(None, description="Comma-separated pattern IDs"),
 ) -> Dict[str, Any]:
     """Get confidence scores for patterns."""
     engine = await get_learning_engine()
@@ -1038,7 +1037,7 @@ async def run_learning_cycle() -> Dict[str, Any]:
 
 @register_health_probe("analytics_pattern_learning")
 async def probe_analytics_pattern_learning(
-    request: Optional[Request] = None,
+    request: Request | None = None,
 ) -> ComponentHealth:
     """Issue #3333: probe registration for the pattern-learning analytics module.
 
@@ -1064,31 +1063,3 @@ async def probe_analytics_pattern_learning(
             status="down",
             detail=f"probe error: {type(exc).__name__}",
         )
-
-
-@router.get("/health", response_model=PatternLearningHealthResponse, summary="Health check")
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="health_check",
-    error_code_prefix="ANALYTICS_PATTERN_LEARNING",
-)
-async def health_check() -> Dict[str, Any]:
-    """Check the health of the pattern learning system."""
-    try:
-        engine = await get_learning_engine()
-        metrics = await engine.get_learning_metrics()
-
-        return {
-            "status": "healthy",
-            "initialized": engine._initialized,
-            "learning_phase": engine.learning_phase.value,
-            "total_patterns": metrics.total_patterns,
-            "total_feedback": metrics.total_feedback,
-            "redis_connected": engine.redis_client is not None,
-        }
-    except Exception as e:
-        logger.exception("Unexpected error: %s", e)
-        return {
-            "status": "degraded",
-            "error": "Internal server error",
-        }

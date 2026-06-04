@@ -3,7 +3,7 @@
     <!-- Plan Header -->
     <div class="plan-header">
       <div class="plan-title">
-        <i class="fas fa-sitemap" aria-hidden="true"></i>
+        <Icon name="sitemap" aria-hidden="true" />
         <span>{{ $t('chat.overseer.executionPlan') }}</span>
       </div>
       <div class="plan-progress">
@@ -14,7 +14,7 @@
 
     <!-- Analysis -->
     <div class="plan-analysis">
-      <i class="fas fa-lightbulb" aria-hidden="true"></i>
+      <Icon name="lightbulb" aria-hidden="true" />
       <p>{{ plan.analysis }}</p>
     </div>
 
@@ -53,6 +53,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { OverseerPlan, OverseerStep } from '@/composables/useOverseerAgent'
+import Icon from '@/components/ui/Icon.vue'
 
 const { t } = useI18n()
 

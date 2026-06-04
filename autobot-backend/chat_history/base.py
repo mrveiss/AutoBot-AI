@@ -11,19 +11,18 @@ Provides the foundation for the ChatHistoryManager composed class with:
 - Context window management
 """
 
-import logging
 import os
 import threading
-from typing import Optional
 
 from autobot_memory_graph import AutoBotMemoryGraph
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.ssot_config import config as _ssot_config
-from config import config as global_config_manager
+from config import get_config_manager
 from context_window_manager import ContextWindowManager
 from encryption_service import get_encryption_service, is_encryption_enabled
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ChatHistoryBase:
@@ -41,10 +40,10 @@ class ChatHistoryBase:
 
     def _load_config_values(
         self,
-        history_file: Optional[str],
-        use_redis: Optional[bool],
-        redis_host: Optional[str],
-        redis_port: Optional[int],
+        history_file: str | None,
+        use_redis: bool | None,
+        redis_host: str | None,
+        redis_port: int | None,
     ) -> None:
         """
         Load configuration values from config manager with overrides.
@@ -57,15 +56,15 @@ class ChatHistoryBase:
             redis_host: Optional override for Redis host
             redis_port: Optional override for Redis port
         """
-        data_config = global_config_manager.get("data", {})
+        data_config = get_config_manager().get("data", {})
 
         self.history_file = history_file or data_config.get(
             "chat_history_file",
-            os.getenv("AUTOBOT_CHAT_HISTORY_FILE", "data/chat_history.json"),
+            _ssot_config.misc.chat_history_file or "data/chat_history.json",
         )
         self.use_redis = use_redis if use_redis is not None else _ssot_config.redis.enabled
-        self.redis_host = redis_host or os.getenv("AUTOBOT_REDIS_HOST", _ssot_config.vm.redis)
-        self.redis_port = redis_port or int(os.getenv("AUTOBOT_REDIS_PORT", str(_ssot_config.port.redis)))
+        self.redis_host = redis_host or _ssot_config.vm.redis
+        self.redis_port = redis_port or _ssot_config.port.redis
 
     def _init_state_and_settings(self) -> None:
         """
@@ -88,7 +87,7 @@ class ChatHistoryBase:
         self._session_save_counter = 0
 
         # Memory Graph integration
-        self.memory_graph: Optional[AutoBotMemoryGraph] = None
+        self.memory_graph: AutoBotMemoryGraph | None = None
         self.memory_graph_enabled = False
 
         # Context window management
@@ -99,10 +98,10 @@ class ChatHistoryBase:
 
     def __init__(
         self,
-        history_file: Optional[str] = None,
-        use_redis: Optional[bool] = None,
-        redis_host: Optional[str] = None,
-        redis_port: Optional[int] = None,
+        history_file: str | None = None,
+        use_redis: bool | None = None,
+        redis_host: str | None = None,
+        redis_port: int | None = None,
     ):
         """
         Initialize the ChatHistoryManager base with performance optimizations.
@@ -200,10 +199,10 @@ class ChatHistoryBase:
 
     def _get_chats_directory(self) -> str:
         """Get the chats directory path from configuration."""
-        data_config = global_config_manager.get("data", {})
+        data_config = get_config_manager().get("data", {})
         return data_config.get(
             "chats_directory",
-            os.getenv("AUTOBOT_CHATS_DIRECTORY", "data/chats"),
+            _ssot_config.misc.chats_directory or "data/chats",
         )
 
     def _load_history(self):

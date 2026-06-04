@@ -2,7 +2,7 @@
   <!-- PRE-APPROVED STATE - Show blue auto-approval -->
   <div v-if="status === 'pre_approved'" class="approval-confirmed approval-pre-approved">
     <div class="approval-header">
-      <i class="fas fa-shield-check text-blue-600" aria-hidden="true"></i>
+      <Icon name="shield-check" class="text-blue-600" />
       <span class="font-semibold">{{ $t('chat.approval.autoApproved') }}</span>
     </div>
     <div class="approval-details">
@@ -20,7 +20,7 @@
   <!-- USER APPROVED STATE - Show green confirmation -->
   <div v-else-if="status === 'approved'" class="approval-confirmed approval-approved">
     <div class="approval-header">
-      <i class="fas fa-check-circle text-green-600" aria-hidden="true"></i>
+      <Icon name="check-circle" class="text-green-600" />
       <span class="font-semibold">{{ $t('chat.approval.commandApproved') }}</span>
     </div>
     <div class="approval-details">
@@ -38,7 +38,7 @@
   <!-- DENIED STATE - Show red rejection -->
   <div v-else-if="status === 'denied'" class="approval-confirmed approval-denied">
     <div class="approval-header">
-      <i class="fas fa-times-circle text-red-600" aria-hidden="true"></i>
+      <Icon name="times-circle" class="text-red-600" />
       <span class="font-semibold">{{ $t('chat.approval.commandDenied') }}</span>
     </div>
     <div class="approval-details">
@@ -56,7 +56,7 @@
   <!-- PENDING APPROVAL STATE - Show approval buttons -->
   <div v-else-if="requiresApproval && !status" class="approval-request">
     <div class="approval-header">
-      <i class="fas fa-exclamation-triangle text-yellow-600" aria-hidden="true"></i>
+      <Icon name="exclamation-triangle" class="text-yellow-600" />
       <span class="font-semibold">{{ $t('chat.approval.approvalRequired') }}</span>
     </div>
     <div class="approval-details">
@@ -82,7 +82,7 @@
       <!-- Interactive Command Warning (Issue #33) -->
       <div v-if="isInteractive" class="approval-detail-item interactive-warning">
         <div class="interactive-header">
-          <i class="fas fa-keyboard text-blue-600" aria-hidden="true"></i>
+          <Icon name="keyboard" class="text-blue-600" />
           <span class="detail-label font-semibold text-blue-700">{{ $t('chat.approval.interactiveCommand') }}</span>
         </div>
         <div class="interactive-info">
@@ -120,7 +120,7 @@
           class="cancel-comment-btn"
           :aria-label="$t('chat.approval.cancelComment')"
         >
-          <i class="fas fa-times" aria-hidden="true"></i>
+          <Icon name="times" />
           <span>{{ $t('common.cancel') }}</span>
         </BaseButton>
         <BaseButton
@@ -131,7 +131,7 @@
           class="submit-comment-btn"
           :aria-label="$t('chat.approval.submitDecision', { decision: pendingDecision ? $t('chat.approval.approval') : $t('chat.approval.denial') })"
         >
-          <i class="fas fa-check" aria-hidden="true"></i>
+          <Icon name="check" />
           <span>{{ $t('chat.approval.submitDecision', { decision: pendingDecision ? $t('chat.approval.approval') : $t('chat.approval.denial') }) }}</span>
         </BaseButton>
       </div>
@@ -147,12 +147,12 @@
           @change="$emit('auto-approve-changed', localAutoApprove)"
         />
         <span class="checkbox-label">
-          <i class="fas fa-shield-check" aria-hidden="true"></i>
+          <Icon name="shield-check" />
           {{ $t('chat.approval.autoApproveLabel') }}
         </span>
       </label>
       <div v-if="localAutoApprove" class="auto-approve-hint">
-        <i class="fas fa-info-circle" aria-hidden="true"></i>
+        <Icon name="info-circle" />
         <span>{{ $t('chat.approval.autoApproveHint') }}</span>
       </div>
     </div>
@@ -160,14 +160,14 @@
     <!-- Approval buttons -->
     <div class="approval-actions">
       <BaseButton
-        variant="danger"
+        variant="error"
         size="sm"
         @click="startDeny"
         :disabled="processing"
         class="deny-btn"
         :aria-label="$t('chat.approval.denyCommand')"
       >
-        <i class="fas fa-times" aria-hidden="true"></i>
+        <Icon name="times" />
         <span>{{ $t('chat.approval.deny') }}</span>
       </BaseButton>
       <BaseButton
@@ -178,7 +178,7 @@
         class="deny-comment-btn"
         :aria-label="$t('chat.approval.denyWithComment')"
       >
-        <i class="fas fa-comment" aria-hidden="true"></i>
+        <Icon name="comment" />
         <span>{{ $t('chat.approval.denyWithComment') }}</span>
       </BaseButton>
       <BaseButton
@@ -189,7 +189,7 @@
         class="approve-comment-btn"
         :aria-label="$t('chat.approval.approveWithComment')"
       >
-        <i class="fas fa-comment" aria-hidden="true"></i>
+        <Icon name="comment" />
         <span>{{ $t('chat.approval.approveWithComment') }}</span>
       </BaseButton>
       <BaseButton
@@ -200,7 +200,7 @@
         class="approve-btn"
         :aria-label="$t('chat.approval.approveCommand')"
       >
-        <i class="fas fa-check" aria-hidden="true"></i>
+        <Icon name="check" />
         <span>{{ $t('chat.approval.approve') }}</span>
       </BaseButton>
     </div>
@@ -220,6 +220,7 @@
  * Issue #184: Split oversized Vue components
  */
 
+import Icon from '@/components/ui/Icon.vue'
 import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseButton from '@/components/base/BaseButton.vue'

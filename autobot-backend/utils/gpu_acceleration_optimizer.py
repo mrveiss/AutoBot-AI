@@ -18,12 +18,12 @@ Optimizes GPU utilization for multi-modal AI workloads and provides acceleration
 """
 
 import asyncio
-import logging
 import time
 from dataclasses import asdict
 from typing import Any, Dict, List
 
 from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.logging_manager import get_logger
 
 # Re-export benchmarking functions for backward compatibility (used by external code)
 # Re-export all public API from the package for backward compatibility
@@ -49,7 +49,7 @@ from utils.gpu_optimization import (  # noqa: F401
 )
 from utils.performance_monitor import performance_monitor
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 __all__ = [
@@ -80,7 +80,7 @@ class GPUAccelerationOptimizer:
 
     def __init__(self):
         """Initialize GPU optimizer with config, history, and capabilities."""
-        self.logger = logging.getLogger(__name__)
+        self.logger = get_logger(__name__)
         self.config = GPUOptimizationConfig()
         self.optimization_history: List[GPUOptimizationResult] = []
         self.baseline_metrics = None

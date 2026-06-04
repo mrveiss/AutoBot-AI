@@ -6,17 +6,17 @@ Backward Compatibility Wrappers - Drop-in replacements for legacy APIs
 """
 
 import hashlib
-import logging
 from datetime import datetime, timedelta, timezone
-from typing import Dict, List, Optional
+from typing import Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 
 from .enums import MemoryCategory, TaskPriority, TaskStatus
 from .manager import UnifiedMemoryManager
 from .models import MemoryEntry, TaskExecutionRecord
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class EnhancedMemoryManager(UnifiedMemoryManager):
@@ -70,10 +70,10 @@ class EnhancedMemoryManager(UnifiedMemoryManager):
         task_name: str,
         description: str,
         priority: TaskPriority = TaskPriority.MEDIUM,
-        agent_type: Optional[str] = None,
-        inputs: Optional[Dict] = None,
-        parent_task_id: Optional[str] = None,
-        metadata: Optional[Dict] = None,
+        agent_type: str | None = None,
+        inputs: Dict | None = None,
+        parent_task_id: str | None = None,
+        metadata: Dict | None = None,
     ) -> str:
         """
         Create a new task with auto-generated task_id (Issue #742).
@@ -142,7 +142,7 @@ class EnhancedMemoryManager(UnifiedMemoryManager):
     def complete_task(
         self,
         task_id: str,
-        outputs: Optional[Dict] = None,
+        outputs: Dict | None = None,
         status: TaskStatus = TaskStatus.COMPLETED,
     ) -> bool:
         """
@@ -215,8 +215,8 @@ class EnhancedMemoryManager(UnifiedMemoryManager):
 
     def get_task_history_sync(
         self,
-        agent_type: Optional[str] = None,
-        status: Optional[TaskStatus] = None,
+        agent_type: str | None = None,
+        status: TaskStatus | None = None,
         limit: int = 100,
         days_back: int = 30,
     ) -> List[TaskExecutionRecord]:
@@ -276,7 +276,7 @@ class EnhancedMemoryManager(UnifiedMemoryManager):
 class LongTermMemoryManager:
     """Backward compatibility wrapper for memory_manager.py."""
 
-    def __init__(self, config_path: Optional[str] = None, db_path: str = "data/agent_memory.db"):
+    def __init__(self, config_path: str | None = None, db_path: str = "data/agent_memory.db"):
         """
         Initialize with memory_manager.py defaults
 
@@ -296,8 +296,8 @@ class LongTermMemoryManager:
         self,
         category: str,
         content: str,
-        metadata: Optional[Dict] = None,
-        embedding: Optional[bytes] = None,
+        metadata: Dict | None = None,
+        embedding: bytes | None = None,
     ) -> int:
         """Map old API to new unified API"""
         # Convert string category to enum if possible
@@ -309,7 +309,7 @@ class LongTermMemoryManager:
         return await self._unified.store_memory(cat, content, metadata, embedding=embedding)
 
     async def retrieve_memories(
-        self, category: str, filters: Optional[Dict] = None, limit: int = 100
+        self, category: str, filters: Dict | None = None, limit: int = 100
     ) -> List[MemoryEntry]:
         """Map old API to new unified API"""
         filters = filters or {}
@@ -359,7 +359,7 @@ class LongTermMemoryManager:
         """Search memories for context relevant to the given query."""
         return await self._unified.search_memories(query)
 
-    async def cleanup_old_memories(self, retention_days: Optional[int] = None) -> int:
+    async def cleanup_old_memories(self, retention_days: int | None = None) -> int:
         """Cleanup old memories"""
         return await self._unified.cleanup_old_memories(retention_days)
 

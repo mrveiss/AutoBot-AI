@@ -9,7 +9,6 @@ Tracks which files have been imported into the knowledge base
 import hashlib
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
 
 
 class ImportTracker:
@@ -71,7 +70,7 @@ class ImportTracker:
         file_path: str,
         category: str,
         facts_count: int = 0,
-        metadata: Optional[dict] = None,
+        metadata: dict | None = None,
     ):
         """Mark a file as successfully imported"""
         import json
@@ -178,7 +177,7 @@ class ImportTracker:
 
         return result[0] != current_hash  # Hash changed
 
-    def get_import_status(self, file_path: Optional[str] = None, category: Optional[str] = None):
+    def get_import_status(self, file_path: str | None = None, category: str | None = None):
         """Get import status for files"""
         import sqlite3
 

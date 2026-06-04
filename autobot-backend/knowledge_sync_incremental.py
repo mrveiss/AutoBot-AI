@@ -25,9 +25,11 @@ import time
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 import aiofiles
+
+from autobot_shared.ssot_config import config
 
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -65,7 +67,7 @@ async def _process_file_with_semaphore(
         return await processor._process_file_with_gpu_chunking(file_path)
 
 
-async def _read_file_content(file_path: Path) -> Optional[str]:
+async def _read_file_content(file_path: Path) -> str | None:
     """Read file content with UTF-8 encoding (Issue #315 - extracted helper)."""
     try:
         async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
@@ -84,7 +86,7 @@ def _classify_file_change(
     current_hash: str,
     file_stat,
     relative_path: Path,
-) -> Optional[str]:
+) -> str | None:
     """Classify file as changed, timestamp-only, or new (Issue #315 - extracted helper).
 
     Returns: 'changed', 'timestamp', 'new', or None for no action needed.
@@ -116,7 +118,7 @@ class FileMetadata:
     content_hash: str
     size: int
     modified_time: float
-    sync_time: Optional[float] = None
+    sync_time: float | None = None
     vector_ids: List[str] = None
     fact_ids: List[str] = None
     chunk_count: int = 0
@@ -188,10 +190,9 @@ class IncrementalKnowledgeSync:
 
     def __init__(self, project_root: str = None):
         """Initialize incremental sync with project root and file tracking."""
-        import os
 
         if project_root is None:
-            project_root = os.getenv("AUTOBOT_BASE_DIR")
+            project_root = config.base_dir
             if not project_root:
                 raise ValueError(
                     "Project root configuration missing: AUTOBOT_BASE_DIR environment variable must be set"
@@ -421,7 +422,7 @@ class IncrementalKnowledgeSync:
             logger.error("Failed to process %s: %s", file_path, e)
             return None
 
-    async def _read_and_validate_file_content(self, file_path: Path) -> Optional[Tuple[str, Any]]:
+    async def _read_and_validate_file_content(self, file_path: Path) -> Tuple[str, Any] | None:
         """Issue #665: Extracted from _process_file_with_gpu_chunking to reduce function length.
 
         Read file content and validate it's not empty.

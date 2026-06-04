@@ -10,13 +10,13 @@ Provides endpoints for scheduling and managing maintenance windows.
 import logging
 import uuid
 from datetime import datetime, timezone
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
 
+from autobot_shared.auth.permissions import Permission
 from models.database import (
     EventSeverity,
     EventType,
@@ -31,7 +31,7 @@ from models.schemas import (
     MaintenanceWindowResponse,
     MaintenanceWindowUpdate,
 )
-from services.auth import get_current_user, require_admin
+from services.auth import get_current_user, require_permission
 from services.database import get_db
 
 logger = logging.getLogger(__name__)
@@ -42,8 +42,8 @@ router = APIRouter(prefix="/maintenance", tags=["maintenance"])
 async def list_maintenance_windows(
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(get_current_user)],
-    node_id: Optional[str] = Query(None),
-    status_filter: Optional[str] = Query(None, alias="status"),
+    node_id: str | None = Query(None),
+    status_filter: str | None = Query(None, alias="status"),
     include_completed: bool = Query(False),
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
@@ -84,8 +84,8 @@ async def list_maintenance_windows(
 
 async def _count_maintenance_windows(
     db: AsyncSession,
-    node_id: Optional[str],
-    status_filter: Optional[str],
+    node_id: str | None,
+    status_filter: str | None,
     include_completed: bool,
 ) -> int:
     """Count maintenance windows matching filters.
@@ -112,7 +112,7 @@ async def _count_maintenance_windows(
 async def get_active_windows(
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(get_current_user)],
-    node_id: Optional[str] = Query(None),
+    node_id: str | None = Query(None),
 ) -> MaintenanceWindowListResponse:
     """Get currently active maintenance windows."""
     now = datetime.now(timezone.utc)
@@ -165,7 +165,7 @@ async def get_maintenance_window(
 async def create_maintenance_window(
     window_data: MaintenanceWindowCreate,
     db: Annotated[AsyncSession, Depends(get_db)],
-    user: Annotated[dict, Depends(require_admin)],
+    user: Annotated[dict, Depends(require_permission(Permission.ADMIN_SYSTEM))],
 ) -> MaintenanceWindowResponse:
     """Create a new maintenance window (admin only)."""
     # Validate time range
@@ -230,7 +230,7 @@ async def update_maintenance_window(
     window_id: str,
     window_data: MaintenanceWindowUpdate,
     db: Annotated[AsyncSession, Depends(get_db)],
-    _: Annotated[dict, Depends(require_admin)],
+    _: Annotated[dict, Depends(require_permission(Permission.ADMIN_SYSTEM))],
 ) -> MaintenanceWindowResponse:
     """Update a maintenance window (admin only)."""
     result = await db.execute(select(MaintenanceWindow).where(MaintenanceWindow.window_id == window_id))
@@ -284,7 +284,7 @@ async def update_maintenance_window(
 async def delete_maintenance_window(
     window_id: str,
     db: Annotated[AsyncSession, Depends(get_db)],
-    _: Annotated[dict, Depends(require_admin)],
+    _: Annotated[dict, Depends(require_permission(Permission.ADMIN_SYSTEM))],
 ) -> None:
     """Delete a maintenance window (admin only)."""
     result = await db.execute(select(MaintenanceWindow).where(MaintenanceWindow.window_id == window_id))
@@ -310,7 +310,7 @@ async def delete_maintenance_window(
 async def activate_maintenance_window(
     window_id: str,
     db: Annotated[AsyncSession, Depends(get_db)],
-    _: Annotated[dict, Depends(require_admin)],
+    _: Annotated[dict, Depends(require_permission(Permission.ADMIN_SYSTEM))],
 ) -> MaintenanceWindowResponse:
     """Manually activate a scheduled maintenance window (admin only)."""
     result = await db.execute(select(MaintenanceWindow).where(MaintenanceWindow.window_id == window_id))
@@ -345,7 +345,7 @@ async def activate_maintenance_window(
 async def complete_maintenance_window(
     window_id: str,
     db: Annotated[AsyncSession, Depends(get_db)],
-    _: Annotated[dict, Depends(require_admin)],
+    _: Annotated[dict, Depends(require_permission(Permission.ADMIN_SYSTEM))],
 ) -> MaintenanceWindowResponse:
     """Manually complete an active maintenance window (admin only)."""
     result = await db.execute(select(MaintenanceWindow).where(MaintenanceWindow.window_id == window_id))

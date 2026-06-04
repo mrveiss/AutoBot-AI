@@ -10,7 +10,6 @@ exactly — changes to the template must be reflected here.
 """
 
 import logging
-from typing import Optional
 from unittest.mock import MagicMock, patch
 
 # ---------------------------------------------------------------------------
@@ -50,7 +49,7 @@ def _warn_missing_token(model_id: str) -> None:
         )
 
 
-def _configure_hf_token(hf_token: Optional[str], model_id: str) -> None:
+def _configure_hf_token(hf_token: str | None, model_id: str) -> None:
     """Authenticate with HuggingFace Hub using hf_token when present."""
     if hf_token:
         import huggingface_hub
@@ -100,9 +99,7 @@ class TestConfigureHfTokenPresent:
         mock_hub = MagicMock()
         with patch.dict("sys.modules", {"huggingface_hub": mock_hub}):
             _configure_hf_token("hf_testtoken123", "liquid-ai/kani-tts-2")
-        mock_hub.login.assert_called_once_with(
-            token="hf_testtoken123", add_to_git_credential=False
-        )
+        mock_hub.login.assert_called_once_with(token="hf_testtoken123", add_to_git_credential=False)
 
     def test_logs_authenticated_message(self, caplog):
         mock_hub = MagicMock()

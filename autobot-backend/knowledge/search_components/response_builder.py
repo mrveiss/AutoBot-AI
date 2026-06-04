@@ -8,13 +8,13 @@ Issue #381: Extracted from search.py god class refactoring.
 Contains response building and clustering functionality.
 """
 
-import logging
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from models.task_context import SearchResponseContext
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ResponseBuilder:
@@ -41,7 +41,7 @@ class ResponseBuilder:
         limit: int,
         processed_query: str,
         mode: str,
-        tags: Optional[List[str]],
+        tags: List[str] | None,
         min_score: float,
         enable_reranking: bool,
     ) -> Dict[str, Any]:
@@ -63,7 +63,7 @@ class ResponseBuilder:
         enable_clustering: bool,
         offset: int,
         limit: int,
-    ) -> Tuple[Optional[List[Dict[str, Any]]], List[Dict[str, Any]]]:
+    ) -> Tuple[List[Dict[str, Any]] | None, List[Dict[str, Any]]]:
         """
         Cluster search results by topic.
 
@@ -101,10 +101,10 @@ class ResponseBuilder:
         self,
         results: List[Dict[str, Any]],
         unclustered: List[Dict[str, Any]],
-        clusters: Optional[List[Dict[str, Any]]],
+        clusters: List[Dict[str, Any]] | None,
         query: str,
         mode: str,
-        tags: Optional[List[str]],
+        tags: List[str] | None,
         min_score: float,
         enable_reranking: bool,
         enable_query_expansion: bool,

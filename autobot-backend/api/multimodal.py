@@ -7,14 +7,22 @@ Multi-Modal AI Processing API Endpoints
 Provides REST API access to GPU-accelerated multi-modal AI capabilities
 """
 
-import logging
 import time
 import uuid
-from typing import List, Optional
+from typing import List
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 
 from ai_hardware_accelerator import HardwareDevice, accelerated_embedding_generation
+from api.schemas_ai_stack import (
+    MultimodalBatchSizeData,
+    MultimodalEmbeddingData,
+    MultimodalFusionData,
+    MultimodalOptimizeData,
+    MultimodalPerfStatsData,
+    MultimodalPerfSummaryData,
+    MultimodalStatsData,
+)
 from api.schemas_common import DataResponse
 from api.schemas_knowledge import (
     CrossModalSearchRequest,
@@ -23,10 +31,10 @@ from api.schemas_knowledge import (
     MultiModalResponse,
     TextProcessingRequest,
 )
-from api.schemas_system import MultimodalHealthResponse
 from api.system_health import ComponentHealth, register_health_probe
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from multimodal_processor import (
     ModalityType,
     MultiModalInput,
@@ -37,7 +45,7 @@ from multimodal_processor import (
 # Import AutoBot multi-modal components
 from npu_semantic_search import get_npu_search_engine
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Initialize router
 router = APIRouter(tags=["multimodal"])
@@ -96,7 +104,7 @@ def _build_image_modal_input(image_data, file, intent: str, question) -> MultiMo
 async def process_image(
     file: UploadFile = File(...),
     intent: str = Form(default="analysis"),
-    question: Optional[str] = Form(default=None),
+    question: str | None = Form(default=None),
     current_user: dict = Depends(get_current_user),
 ):
     """
@@ -281,7 +289,7 @@ async def process_text(
         )
 
 
-@router.post("/embeddings/generate", response_model=DataResponse)
+@router.post("/embeddings/generate", response_model=DataResponse[MultimodalEmbeddingData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="generate_embedding",
@@ -410,7 +418,7 @@ async def cross_modal_search(
         )
 
 
-@router.get("/stats", response_model=DataResponse)
+@router.get("/stats", response_model=DataResponse[MultimodalStatsData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_multimodal_stats",
@@ -533,9 +541,9 @@ async def _create_audio_input(audio_file: UploadFile, intent: str) -> MultiModal
 
 
 async def _collect_modal_inputs(
-    text: Optional[str],
-    image_file: Optional[UploadFile],
-    audio_file: Optional[UploadFile],
+    text: str | None,
+    image_file: UploadFile | None,
+    audio_file: UploadFile | None,
     intent: str,
 ) -> List[MultiModalInput]:
     """Collect all modal inputs from form data (Issue #398: extracted)."""
@@ -554,9 +562,9 @@ async def _collect_modal_inputs(
 
 
 def _create_combined_input(
-    text: Optional[str],
-    image_file: Optional[UploadFile],
-    audio_file: Optional[UploadFile],
+    text: str | None,
+    image_file: UploadFile | None,
+    audio_file: UploadFile | None,
     intent: str,
 ) -> MultiModalInput:
     """Create combined MultiModalInput for fusion (Issue #398: extracted)."""
@@ -573,16 +581,16 @@ def _create_combined_input(
     )
 
 
-@router.post("/fusion/combine", response_model=DataResponse)
+@router.post("/fusion/combine", response_model=DataResponse[MultimodalFusionData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="combine_multimodal_inputs",
     error_code_prefix="MULTIMODAL",
 )
 async def combine_multimodal_inputs(
-    text: Optional[str] = Form(default=None),
-    image_file: Optional[UploadFile] = File(default=None),
-    audio_file: Optional[UploadFile] = File(default=None),
+    text: str | None = Form(default=None),
+    image_file: UploadFile | None = File(default=None),
+    audio_file: UploadFile | None = File(default=None),
     intent: str = Form(default="decision_making"),
     current_user: dict = Depends(get_current_user),
 ):
@@ -638,7 +646,7 @@ async def combine_multimodal_inputs(
 
 
 # Performance monitoring endpoints
-@router.get("/performance/stats", response_model=DataResponse)
+@router.get("/performance/stats", response_model=DataResponse[MultimodalPerfStatsData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_performance_stats",
@@ -682,7 +690,7 @@ async def get_performance_stats(
         }
 
 
-@router.post("/performance/optimize", response_model=DataResponse)
+@router.post("/performance/optimize", response_model=DataResponse[MultimodalOptimizeData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="optimize_performance",
@@ -715,7 +723,7 @@ async def optimize_performance(
         }
 
 
-@router.get("/performance/summary", response_model=DataResponse)
+@router.get("/performance/summary", response_model=DataResponse[MultimodalPerfSummaryData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_performance_summary",
@@ -743,7 +751,7 @@ async def get_performance_summary(
         }
 
 
-@router.post("/performance/batch-size", response_model=DataResponse)
+@router.post("/performance/batch-size", response_model=DataResponse[MultimodalBatchSizeData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="update_batch_size",
@@ -793,7 +801,7 @@ async def update_batch_size(
 
 @register_health_probe("multimodal")
 async def probe_multimodal(
-    request: Optional[Request] = None,
+    request: Request | None = None,
 ) -> ComponentHealth:
     """Issue #3333: probe registration for multimodal module.
 
@@ -813,27 +821,3 @@ async def probe_multimodal(
 
 
 # Health check endpoint
-@router.get("/health", response_model=MultimodalHealthResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="health_check",
-    error_code_prefix="MULTIMODAL",
-)
-async def health_check(
-    current_user: dict = Depends(get_current_user),
-):
-    """
-    Health check for multi-modal API.
-
-    Issue #744: Requires authenticated user.
-    """
-    import torch  # Issue #3016: lazy import — avoid ~3s startup cost
-
-    return {
-        "status": "healthy",
-        "timestamp": time.time(),
-        "gpu_available": torch.cuda.is_available(),
-        "processor_ready": unified_processor is not None,
-        "performance_monitoring": unified_processor.performance_monitor is not None,
-        "mixed_precision_enabled": getattr(unified_processor, "use_amp", False),
-    }

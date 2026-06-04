@@ -12,7 +12,6 @@ Analyzes codebase for:
 """
 
 import json
-import logging
 import subprocess
 import sys
 import time
@@ -20,7 +19,10 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
+
+from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.logging_manager import get_logger
 
 from autobot_shared.async_compat import run_or_schedule
 
@@ -44,7 +46,7 @@ except ImportError as _e:
     _CONFIG_AVAILABLE = False
 
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Directories to skip during analysis
 _SKIP_DIRECTORIES = (
@@ -85,8 +87,8 @@ class AuthorContribution:
     lines_count: int
     lines_percentage: float
     commits_count: int
-    first_commit_date: Optional[datetime] = None
-    last_commit_date: Optional[datetime] = None
+    first_commit_date: datetime | None = None
+    last_commit_date: datetime | None = None
     files_touched: List[str] = field(default_factory=list)
 
 
@@ -96,12 +98,12 @@ class FileOwnership:
 
     file_path: str
     total_lines: int
-    primary_owner: Optional[str]
+    primary_owner: str | None
     ownership_percentage: float
     contributors: List[AuthorContribution] = field(default_factory=list)
     bus_factor: int = 1  # Number of people who could maintain this file
     knowledge_risk: str = "low"  # low, medium, high, critical
-    last_modified: Optional[datetime] = None
+    last_modified: datetime | None = None
 
 
 @dataclass
@@ -111,7 +113,7 @@ class DirectoryOwnership:
     directory_path: str
     total_files: int
     total_lines: int
-    primary_owner: Optional[str]
+    primary_owner: str | None
     ownership_percentage: float
     contributors: List[AuthorContribution] = field(default_factory=list)
     bus_factor: int = 1
@@ -175,7 +177,7 @@ class OwnershipAnalyzer:
     async def analyze_ownership(
         self,
         root_path: str = ".",
-        patterns: Optional[List[str]] = None,
+        patterns: List[str] | None = None,
         days_for_recency: int = 90,
     ) -> Dict[str, Any]:
         """
@@ -344,7 +346,7 @@ class OwnershipAnalyzer:
         contributors.sort(key=lambda x: x.lines_count, reverse=True)
         return contributors
 
-    async def _get_file_ownership(self, file_path: Path, root: Path) -> Optional[FileOwnership]:
+    async def _get_file_ownership(self, file_path: Path, root: Path) -> FileOwnership | None:
         """Get ownership data for a single file using git blame"""
         try:
             relative_path = str(file_path.relative_to(root))
@@ -403,7 +405,7 @@ class OwnershipAnalyzer:
     @staticmethod
     def _get_last_modified(
         contributors: List["AuthorContribution"],
-    ) -> Optional[datetime]:
+    ) -> datetime | None:
         """Return the most recent last_commit_date across all contributors.
 
         Issue #1183: Extracted from _get_file_ownership() to reduce function length.
@@ -820,7 +822,7 @@ class OwnershipAnalyzer:
             except Exception as e:
                 logger.warning(f"Failed to clear cache: {e}")
 
-    async def get_cached_results(self) -> Optional[Dict[str, Any]]:
+    async def get_cached_results(self) -> Dict[str, Any] | None:
         """Get cached analysis results"""
         await self._ensure_redis()
         if self.redis_client:

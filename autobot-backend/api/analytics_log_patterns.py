@@ -7,12 +7,11 @@ Provides endpoints for discovering patterns, anomalies, and trends in log data
 """
 
 import asyncio
-import logging
 import re
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 import aiofiles
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -29,8 +28,9 @@ from api.schemas_analytics import (
 )
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(tags=["log-patterns", "analytics"])
 
@@ -113,7 +113,7 @@ class LogPatternMiner:
                 return "WARNING" if level == "WARN" else level
         return "INFO"
 
-    def extract_timestamp(self, line: str) -> Optional[datetime]:
+    def extract_timestamp(self, line: str) -> datetime | None:
         """Extract timestamp from a log line"""
         # Try common timestamp formats
         patterns = [
@@ -464,7 +464,7 @@ class LogPatternMiner:
                     hourly_data[hour_key]["warnings"] += 1
         return hourly_data
 
-    def _build_volume_trend(self, hourly_data: Dict[str, Dict[str, int]], hours: List[str]) -> Optional[LogTrend]:
+    def _build_volume_trend(self, hourly_data: Dict[str, Dict[str, int]], hours: List[str]) -> LogTrend | None:
         """
         Build log volume trend (Issue #665: extracted helper).
         """
@@ -481,7 +481,7 @@ class LogPatternMiner:
             data_points=[{"hour": h, "count": hourly_data[h]["total"]} for h in hours[-24:]],
         )
 
-    def _build_error_rate_trend(self, hourly_data: Dict[str, Dict[str, int]], hours: List[str]) -> Optional[LogTrend]:
+    def _build_error_rate_trend(self, hourly_data: Dict[str, Dict[str, int]], hours: List[str]) -> LogTrend | None:
         """
         Build error rate trend (Issue #665: extracted helper).
         """
@@ -549,8 +549,8 @@ pattern_miner = LogPatternMiner()
 
 def _filter_log_line(
     line: str,
-    cutoff_time: Optional[datetime],
-) -> Optional[Tuple[str, datetime]]:
+    cutoff_time: datetime | None,
+) -> Tuple[str, datetime] | None:
     """Filter a single log line by timestamp (Issue #315 - extracted)."""
     if not line.strip():
         return None
@@ -566,8 +566,8 @@ def _filter_log_line(
 
 async def _read_log_lines(
     file_path: Path,
-    cutoff_time: Optional[datetime] = None,
-    max_lines: Optional[int] = None,
+    cutoff_time: datetime | None = None,
+    max_lines: int | None = None,
 ) -> List[Tuple[str, datetime]]:
     """
     Read log lines from a file, filtering by timestamp.
@@ -595,7 +595,7 @@ async def _read_log_lines(
     return result
 
 
-def _should_include_log_line(line: str, cutoff_time: Optional[datetime], pattern_filter: Optional[str]) -> bool:
+def _should_include_log_line(line: str, cutoff_time: datetime | None, pattern_filter: str | None) -> bool:
     """Check if a log line should be included. (Issue #315 - extracted)"""
     if not line.strip():
         return False
@@ -612,9 +612,9 @@ def _should_include_log_line(line: str, cutoff_time: Optional[datetime], pattern
 
 async def _read_log_lines_with_source(
     file_path: Path,
-    cutoff_time: Optional[datetime] = None,
-    source_filter: Optional[set] = None,
-    pattern_filter: Optional[str] = None,
+    cutoff_time: datetime | None = None,
+    source_filter: set | None = None,
+    pattern_filter: str | None = None,
 ) -> List[Tuple[str, str, str]]:
     """
     Read log lines with source info, optional pattern filtering (Issue #315).
@@ -645,8 +645,8 @@ async def _read_log_lines_with_source(
 async def _collect_all_log_lines(
     log_dir: Path,
     cutoff_time: datetime,
-    source_filter: Optional[set] = None,
-    pattern_filter: Optional[str] = None,
+    source_filter: set | None = None,
+    pattern_filter: str | None = None,
 ) -> List[Tuple[str, str, str]]:
     """Collect log lines from all log files in directory (Issue #315)."""
     all_lines: List[Tuple[str, str, str]] = []
@@ -757,7 +757,7 @@ def _build_mining_summary(
     error_code_prefix="ANALYTICS_LOG_PATTERNS",
 )
 async def mine_log_patterns(
-    sources: Optional[str] = Query(None, description="Comma-separated log sources"),
+    sources: str | None = Query(None, description="Comma-separated log sources"),
     hours: int = Query(24, ge=1, le=168, description="Hours of logs to analyze"),
     min_occurrences: int = Query(2, ge=1, le=100, description="Minimum pattern occurrences"),
     include_anomalies: bool = Query(True, description="Include anomaly detection"),

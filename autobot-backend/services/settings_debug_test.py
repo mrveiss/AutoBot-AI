@@ -90,7 +90,7 @@ async def test_api_endpoint():
         return False
 
 
-async def main():
+async def main() -> None:
     print("🔍 Debug Testing Settings Components")  # noqa: print
     print("=" * 50)  # noqa: print
 

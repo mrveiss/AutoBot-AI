@@ -10,10 +10,8 @@ Provides endpoints for monitoring system errors and error boundary statistics.
 
 import asyncio
 import json
-import logging
 import os
 import sys
-from typing import Optional
 
 from fastapi import APIRouter, Header, HTTPException, Request, status
 
@@ -34,6 +32,7 @@ from autobot_shared.error_boundaries import (
     get_error_statistics,
     with_error_handling,
 )
+from autobot_shared.logging_manager import get_logger
 from config.manager import get_config_manager
 from type_defs.common import Metadata
 from utils.error_metrics import get_metrics_collector
@@ -44,7 +43,7 @@ config = get_config_manager()
 # Add project root to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Create FastAPI router
 router = APIRouter(tags=["Error Monitoring"])
@@ -206,7 +205,7 @@ def _calculate_health_status(critical_errors: int, high_errors: int, total_error
 
 @register_health_probe("error_monitoring")
 async def probe_error_monitoring(
-    request: Optional[Request] = None,
+    request: Request | None = None,
 ) -> ComponentHealth:
     """Issue #3333: probe registration for error-monitoring service."""
     try:
@@ -237,51 +236,13 @@ async def probe_error_monitoring(
         )
 
 
-@router.get("/health", response_model=ErrorMonitoringDataResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_error_system_health",
-    error_code_prefix="ERROR_MONITORING",
-)
-async def get_error_system_health():
-    """Get error system health status"""
-    try:
-        stats = get_error_statistics()
-        total_errors = stats.get("total_errors", 0)
-        severities = stats.get("severities", {})
-
-        critical_errors = severities.get("critical", 0)
-        high_errors = severities.get("high", 0)
-
-        # Use extracted helper (Issue #315 - reduced depth)
-        health_status, health_score = _calculate_health_status(critical_errors, high_errors, total_errors)
-
-        return {
-            "status": "success",
-            "data": {
-                "health_status": health_status,
-                "health_score": health_score,
-                "total_errors": total_errors,
-                "critical_errors": critical_errors,
-                "high_errors": high_errors,
-                "recommendations": _get_health_recommendations(health_status, stats),
-            },
-        }
-    except Exception as e:
-        logger.error("Failed to get error system health: %s", e)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Internal server error",
-        )
-
-
 @router.post("/clear", response_model=ErrorMonitoringClearResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="clear_error_history",
     error_code_prefix="ERROR_MONITORING",
 )
-async def clear_error_history(authorization: Optional[str] = Header(None)):
+async def clear_error_history(authorization: str | None = Header(None)):
     """Clear error history (admin only)"""
     try:
         # This would typically require authentication
@@ -434,7 +395,7 @@ async def get_metrics_summary():
     operation="get_error_timeline_endpoint",
     error_code_prefix="ERROR_MONITORING",
 )
-async def get_error_timeline_endpoint(hours: int = 24, component: Optional[str] = None):
+async def get_error_timeline_endpoint(hours: int = 24, component: str | None = None):
     """
     Get error timeline data for visualization
 

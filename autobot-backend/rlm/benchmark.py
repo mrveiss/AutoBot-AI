@@ -16,6 +16,7 @@ Usage (CLI):
 
 Usage (programmatic):
     from rlm.benchmark import run_benchmark
+from autobot_shared.logging_manager import get_logger
     results = await run_benchmark()
 """
 
@@ -23,15 +24,16 @@ import json
 import logging
 import time
 from dataclasses import asdict, dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import DEFAULT_LLM_MODEL
 from autobot_shared.ssot_config import config as _ssot_config
 from rlm.evaluator import ResponseQualityEvaluator
 from rlm.types import RLMConfig
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # -----------------------------------------------------------------------
@@ -141,7 +143,7 @@ async def _generate(
 ) -> str:
     """Call Ollama generate and return the raw text."""
     from autobot_shared.ssot_config import get_config
-    from llm_providers.ollama_helpers import call_ollama_generate
+    from llm_shared.ollama_helpers import call_ollama_generate
 
     ssot = get_config()
     return await call_ollama_generate(
@@ -184,7 +186,7 @@ async def _run_rlm_pass(
     query: str,
     category: str,
     model: str,
-    rlm_config: Optional[RLMConfig] = None,
+    rlm_config: RLMConfig | None = None,
 ) -> RLMResult:
     """Run the RLM loop: generate -> evaluate -> refine -> repeat."""
     cfg = rlm_config or RLMConfig()
@@ -230,9 +232,9 @@ async def _run_rlm_pass(
 
 
 async def run_benchmark(
-    queries: Optional[List[Dict[str, Any]]] = None,
+    queries: List[Dict[str, Any]] | None = None,
     model: str = DEFAULT_LLM_MODEL,
-    rlm_config: Optional[RLMConfig] = None,
+    rlm_config: RLMConfig | None = None,
     max_queries: int = 0,
 ) -> Dict[str, Any]:
     """Run the full benchmark and return structured results.

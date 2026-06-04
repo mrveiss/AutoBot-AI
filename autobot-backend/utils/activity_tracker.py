@@ -10,13 +10,13 @@ Centralized utility for tracking user activities across all UI components.
 Provides async, non-blocking activity recording with secret usage detection.
 """
 
-import logging
 import re
 import uuid
-from typing import Any, Optional
+from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
 from models.activities import (
     BrowserActivityModel,
@@ -26,7 +26,7 @@ from models.activities import (
     TerminalActivityModel,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # Secret detection patterns
@@ -51,7 +51,7 @@ def _detect_secrets_in_command(command: str) -> bool:
 
 def detect_secret_usage(
     text: str,
-    known_secret_ids: Optional[list[uuid.UUID]] = None,
+    known_secret_ids: list[uuid.UUID] | None = None,
 ) -> list[uuid.UUID]:
     """
     Detect potential secret usage in text.
@@ -85,12 +85,12 @@ async def track_terminal_activity(
     db: AsyncSession,
     user_id: uuid.UUID,
     command: str,
-    session_id: Optional[str] = None,
-    working_directory: Optional[str] = None,
-    exit_code: Optional[int] = None,
-    output: Optional[str] = None,
-    secrets_used: Optional[list[uuid.UUID]] = None,
-    metadata: Optional[dict[str, Any]] = None,
+    session_id: str | None = None,
+    working_directory: str | None = None,
+    exit_code: int | None = None,
+    output: str | None = None,
+    secrets_used: list[uuid.UUID] | None = None,
+    metadata: dict[str, Any] | None = None,
 ) -> uuid.UUID:
     """
     Track terminal command execution activity.
@@ -142,11 +142,11 @@ async def track_file_activity(
     user_id: uuid.UUID,
     operation: str,
     path: str,
-    session_id: Optional[str] = None,
-    new_path: Optional[str] = None,
-    file_type: Optional[str] = None,
-    size_bytes: Optional[int] = None,
-    metadata: Optional[dict[str, Any]] = None,
+    session_id: str | None = None,
+    new_path: str | None = None,
+    file_type: str | None = None,
+    size_bytes: int | None = None,
+    metadata: dict[str, Any] | None = None,
 ) -> uuid.UUID:
     """
     Track file system operation activity.
@@ -191,11 +191,11 @@ async def track_browser_activity(
     user_id: uuid.UUID,
     url: str,
     action: str,
-    session_id: Optional[str] = None,
-    selector: Optional[str] = None,
-    input_value: Optional[str] = None,
-    secrets_used: Optional[list[uuid.UUID]] = None,
-    metadata: Optional[dict[str, Any]] = None,
+    session_id: str | None = None,
+    selector: str | None = None,
+    input_value: str | None = None,
+    secrets_used: list[uuid.UUID] | None = None,
+    metadata: dict[str, Any] | None = None,
 ) -> uuid.UUID:
     """
     Track browser automation activity.
@@ -249,12 +249,12 @@ async def track_desktop_activity(
     db: AsyncSession,
     user_id: uuid.UUID,
     action: str,
-    session_id: Optional[str] = None,
-    coordinates: Optional[tuple[int, int]] = None,
-    window_title: Optional[str] = None,
-    input_text: Optional[str] = None,
-    screenshot_path: Optional[str] = None,
-    metadata: Optional[dict[str, Any]] = None,
+    session_id: str | None = None,
+    coordinates: tuple[int, int] | None = None,
+    window_title: str | None = None,
+    input_text: str | None = None,
+    screenshot_path: str | None = None,
+    metadata: dict[str, Any] | None = None,
 ) -> uuid.UUID:
     """
     Track desktop automation activity.
@@ -300,10 +300,10 @@ async def _track_secret_usage(
     user_id: uuid.UUID,
     activity_type: str,
     activity_id: uuid.UUID,
-    session_id: Optional[str] = None,
+    session_id: str | None = None,
     access_granted: bool = True,
-    denial_reason: Optional[str] = None,
-    metadata: Optional[dict[str, Any]] = None,
+    denial_reason: str | None = None,
+    metadata: dict[str, Any] | None = None,
 ) -> None:
     """
     Track secret usage for audit trail.

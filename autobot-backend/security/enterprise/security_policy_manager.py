@@ -9,21 +9,21 @@ Issue #378: Added threading locks for file operations to prevent race conditions
 """
 
 import json
-import logging
 import threading
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List
 from uuid import uuid4
 
 import yaml
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import parse_utc_iso, utc_timestamp
 from constants.path_constants import PATH
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Performance optimization: O(1) lookup for policy versioning and data classification (Issue #326)
 MAJOR_VERSION_UPDATE_KEYS = {"rules", "enforcement_mode"}
@@ -78,10 +78,10 @@ class SecurityPolicy:
     version: str
     author: str
     approval_required: bool
-    approved_by: Optional[str] = None
-    approved_at: Optional[datetime] = None
-    effective_date: Optional[datetime] = None
-    expiry_date: Optional[datetime] = None
+    approved_by: str | None = None
+    approved_at: datetime | None = None
+    effective_date: datetime | None = None
+    expiry_date: datetime | None = None
 
 
 @dataclass
@@ -98,7 +98,7 @@ class PolicyViolation:
     timestamp: datetime
     details: Dict
     resolved: bool = False
-    resolution_notes: Optional[str] = None
+    resolution_notes: str | None = None
 
 
 class SecurityPolicyManager:
@@ -489,9 +489,9 @@ class SecurityPolicyManager:
         rules: List[Dict],
         author: str,
         enforcement_mode: EnforcementMode = EnforcementMode.ENFORCE,
-        effective_date: Optional[datetime] = None,
-        expiry_date: Optional[datetime] = None,
-        metadata: Optional[Dict] = None,
+        effective_date: datetime | None = None,
+        expiry_date: datetime | None = None,
+        metadata: Dict | None = None,
     ) -> str:
         """Create a new security policy"""
 
@@ -837,14 +837,14 @@ class SecurityPolicyManager:
             violation.resource,
         )
 
-    def get_policy(self, policy_id: str) -> Optional[SecurityPolicy]:
+    def get_policy(self, policy_id: str) -> SecurityPolicy | None:
         """Get a specific policy by ID"""
         return self.policies.get(policy_id)
 
     def list_policies(
         self,
-        policy_type: Optional[PolicyType] = None,
-        status: Optional[PolicyStatus] = None,
+        policy_type: PolicyType | None = None,
+        status: PolicyStatus | None = None,
     ) -> List[SecurityPolicy]:
         """List policies with optional filtering"""
 

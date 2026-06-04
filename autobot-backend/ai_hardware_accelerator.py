@@ -15,7 +15,7 @@ import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
+from typing import TYPE_CHECKING, Any, Dict, List
 
 import aiohttp
 import numpy as np
@@ -85,7 +85,7 @@ def _get_pil_image():
     return _PILImage
 
 
-def _get_gpu_metrics_with_pynvml() -> Optional[Dict[str, Any]]:
+def _get_gpu_metrics_with_pynvml() -> Dict[str, Any] | None:
     """Get GPU metrics using pynvml (Issue #315 - extracted to reduce nesting)."""
     try:
         import pynvml
@@ -111,7 +111,7 @@ async def _try_fallback_processing(
     fallback_device: HardwareDevice,
     process_on_gpu: callable,
     process_on_cpu: callable,
-) -> Optional[Dict[str, Any]]:
+) -> Dict[str, Any] | None:
     """Try processing on fallback device (Issue #315 - extracted to reduce nesting)."""
     try:
         if fallback_device.value == "gpu":
@@ -160,7 +160,7 @@ class ProcessingTask:
     complexity: ProcessingLoad
     priority: int = 1
     timeout_seconds: int = int(_ssot_config.timeout.default_request)
-    preferred_device: Optional[HardwareDevice] = None
+    preferred_device: HardwareDevice | None = None
 
 
 @dataclass
@@ -169,11 +169,11 @@ class ProcessingResult:
 
     task_id: str
     success: bool
-    result: Optional[Dict[str, Any]] = None
-    error: Optional[str] = None
-    device_used: Optional[HardwareDevice] = None
+    result: Dict[str, Any] | None = None
+    error: str | None = None
+    device_used: HardwareDevice | None = None
     processing_time_ms: float = 0.0
-    device_metrics: Optional[HardwareMetrics] = None
+    device_metrics: HardwareMetrics | None = None
 
 
 class AIHardwareAccelerator:
@@ -189,10 +189,9 @@ class AIHardwareAccelerator:
         self.redis_client = None
         self.device_metrics = {}
         self.task_history = []
-        import os
 
-        npu_worker_host = os.getenv("AUTOBOT_NPU_WORKER_HOST")
-        npu_worker_port = os.getenv("AUTOBOT_NPU_WORKER_PORT")
+        npu_worker_host = _ssot_config.npu_worker_host
+        npu_worker_port = _ssot_config.npu_worker_port
         if not npu_worker_host or not npu_worker_port:
             raise ValueError(
                 "NPU Worker configuration missing: AUTOBOT_NPU_WORKER_HOST and "
@@ -213,7 +212,10 @@ class AIHardwareAccelerator:
         self.device_status = {
             HardwareDevice.NPU: {"available": False, "last_check": None},
             HardwareDevice.GPU: {"available": False, "last_check": None},
-            HardwareDevice.CPU: {"available": True, "last_check": datetime.now(tz=timezone.utc)},
+            HardwareDevice.CPU: {
+                "available": True,
+                "last_check": datetime.now(tz=timezone.utc),
+            },
         }
 
         # Multi-modal models
@@ -530,7 +532,7 @@ class AIHardwareAccelerator:
             processing_time_ms=processing_time,
         )
 
-    def _get_fallback_device(self, primary_device: HardwareDevice) -> Optional[HardwareDevice]:
+    def _get_fallback_device(self, primary_device: HardwareDevice) -> HardwareDevice | None:
         """Get fallback device for failed processing."""
         if primary_device == HardwareDevice.NPU:
             if self.device_status[HardwareDevice.GPU]["available"]:
@@ -601,10 +603,13 @@ class AIHardwareAccelerator:
         """
         torch = _get_torch()
 
-        self.clip_processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
-        self.clip_model = CLIPModel.from_pretrained(
+        self.clip_processor = CLIPProcessor.from_pretrained(
+            "openai/clip-vit-base-patch32", resume_download=True
+        )  # nosec B615 - HuggingFace model loaded by name; revision pinning managed operationally
+        self.clip_model = CLIPModel.from_pretrained(  # nosec B615
             "openai/clip-vit-base-patch32",
             torch_dtype=(torch.float16 if torch.cuda.is_available() else torch.float32),
+            resume_download=True,
         ).to(device)
         self.clip_model.eval()
 
@@ -616,10 +621,13 @@ class AIHardwareAccelerator:
         """
         torch = _get_torch()
 
-        self.wav2vec_processor = Wav2Vec2Processor.from_pretrained("facebook/wav2vec2-base-960h")
-        self.wav2vec_model = Wav2Vec2Model.from_pretrained(
+        self.wav2vec_processor = Wav2Vec2Processor.from_pretrained(
+            "facebook/wav2vec2-base-960h", resume_download=True
+        )  # nosec B615 - HuggingFace model loaded by name; revision pinning managed operationally
+        self.wav2vec_model = Wav2Vec2Model.from_pretrained(  # nosec B615
             "facebook/wav2vec2-base-960h",
             torch_dtype=(torch.float16 if torch.cuda.is_available() else torch.float32),
+            resume_download=True,
         ).to(device)
         self.wav2vec_model.eval()
 
@@ -893,9 +901,9 @@ async def get_ai_accelerator() -> AIHardwareAccelerator:
 
 # Convenience functions for common tasks
 async def accelerated_embedding_generation(
-    content: Union[str, bytes, np.ndarray],
+    content: str | bytes | np.ndarray,
     modality: str = "text",
-    preferred_device: Optional[HardwareDevice] = None,
+    preferred_device: HardwareDevice | None = None,
 ) -> np.ndarray:
     """
     Generate embeddings using optimal hardware acceleration.
@@ -957,7 +965,7 @@ async def accelerated_semantic_search(
     query: str,
     documents: List[str],
     top_k: int = 10,
-    preferred_device: Optional[HardwareDevice] = None,
+    preferred_device: HardwareDevice | None = None,
 ) -> List[Dict[str, Any]]:
     """Perform semantic search using optimal hardware acceleration."""
     accelerator = await get_ai_accelerator()

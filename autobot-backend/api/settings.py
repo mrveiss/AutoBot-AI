@@ -1,11 +1,17 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
+"""
+Application settings read/write endpoints.
+
+Manages the mutable runtime configuration store, supporting live reload
+of settings without restarting the backend process.
+"""
+
 import asyncio
 import copy
 import datetime
 import json
-import logging
 import os
 import tempfile
 from pathlib import Path
@@ -33,6 +39,7 @@ from api.schemas_system import (
 from api.user_management.dependencies import get_db_session
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from celery_app import celery_app
 from services.config_revision_service import ConfigRevisionService
 from services.config_service import ConfigService
@@ -45,7 +52,7 @@ from utils.catalog_http_exceptions import raise_server_error
 
 router = APIRouter()
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # Issue #687: RBAC marker path constant

@@ -17,12 +17,19 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, watchEffect } from 'vue'
 import { useI18n } from 'vue-i18n'
+import type { BadgeVariant } from '@/types/component-props'
+import { createLogger } from '@/utils/debugUtils'
+
+const BADGE_SIZES = ['xs', 'sm', 'md', 'lg'] as const
+const BADGE_VARIANTS = ['default', 'primary', 'success', 'warning', 'error', 'info'] as const
+
+const logger = createLogger('BaseBadge')
 
 interface Props {
   label?: string
-  variant?: 'default' | 'primary' | 'success' | 'warning' | 'error' | 'info'
+  variant?: BadgeVariant
   size?: 'xs' | 'sm' | 'md' | 'lg'
   rounded?: boolean
   outline?: boolean
@@ -59,6 +66,17 @@ const badgeClasses = computed(() => [
 const handleRemove = (event: MouseEvent) => {
   event.stopPropagation()
   emit('remove')
+}
+
+if (import.meta.env.DEV) {
+  watchEffect(() => {
+    if (props.size !== undefined && !(BADGE_SIZES as readonly string[]).includes(props.size)) {
+      logger.warn(`Invalid "size" prop: "${props.size}". Expected: ${BADGE_SIZES.join(' | ')}`)
+    }
+    if (props.variant !== undefined && !(BADGE_VARIANTS as readonly string[]).includes(props.variant)) {
+      logger.warn(`Invalid "variant" prop: "${props.variant}". Expected: ${BADGE_VARIANTS.join(' | ')}`)
+    }
+  })
 }
 </script>
 

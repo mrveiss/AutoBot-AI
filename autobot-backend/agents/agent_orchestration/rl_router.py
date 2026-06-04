@@ -19,13 +19,13 @@ rl:router:replay:{state_key}   LIST   JSON-encoded (action, reward) pairs
 
 import hashlib
 import json
-import logging
 import time
 from typing import Dict, List, Tuple
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # Module-level constants
@@ -183,7 +183,7 @@ class RLRouter(AsyncRedisClientMixin):
         """Compute a 4-hex-char hash of the character n-grams of *text*."""
         ngrams = [text[i : i + n] for i in range(max(0, len(text) - n + 1))]
         raw = " ".join(ngrams).encode("utf-8")
-        return hashlib.sha1(raw).hexdigest()[:4]  # noqa: S324 — not used for security
+        return hashlib.sha1(raw, usedforsecurity=False).hexdigest()[:4]  # noqa: S324 — not used for security
 
     # ------------------------------------------------------------------
     # Q-table operations

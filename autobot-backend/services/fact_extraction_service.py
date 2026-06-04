@@ -11,7 +11,7 @@ Integrates with the knowledge base to store and retrieve temporal facts.
 import json
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from agents.knowledge_extraction_agent import KnowledgeExtractionAgent
 from autobot_shared.logging_manager import get_llm_logger
@@ -33,7 +33,7 @@ class FactExtractionService:
     storing them in the knowledge base, and managing temporal relationships.
     """
 
-    def __init__(self, knowledge_base=None):
+    def __init__(self, knowledge_base=None) -> None:
         """
         Initialize the fact extraction service.
 
@@ -55,7 +55,7 @@ class FactExtractionService:
 
         logger.info("Fact Extraction Service initialized")
 
-    async def _ensure_redis(self):
+    async def _ensure_redis(self) -> None:
         """Lazy-init async Redis client on first use (#2725)."""
         if self.redis_client is None:
             from autobot_shared.redis_client import get_async_redis_client
@@ -139,7 +139,7 @@ class FactExtractionService:
         }
 
     async def extract_and_store_facts(
-        self, content: str, source: str, metadata: Optional[Dict[str, Any]] = None
+        self, content: str, source: str, metadata: Dict[str, Any] | None = None
     ) -> Dict[str, Any]:
         """
         Extract facts from content and store them.
@@ -275,7 +275,7 @@ class FactExtractionService:
         self,
         chunks: List[Dict[str, Any]],
         source: str,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
         """Extract facts from semantic chunks and store them.
 
@@ -351,7 +351,7 @@ class FactExtractionService:
             logger.error("Error in fact deduplication: %s", e)
             return facts  # Return original list if deduplication fails
 
-    def _prepare_fact_for_pipeline(self, pipe, fact: AtomicFact, metadata: Optional[Dict[str, Any]]) -> bool:
+    def _prepare_fact_for_pipeline(self, pipe, fact: AtomicFact, metadata: Dict[str, Any] | None) -> bool:
         """Prepare single fact for pipeline storage (Issue #315: extracted helper).
 
         Args:
@@ -392,7 +392,7 @@ class FactExtractionService:
     async def _process_fact_batch(
         self,
         batch: List[AtomicFact],
-        metadata: Optional[Dict[str, Any]],
+        metadata: Dict[str, Any] | None,
     ) -> tuple[int, int]:
         """
         Process and store a single batch of facts to Redis.
@@ -421,7 +421,7 @@ class FactExtractionService:
             logger.error("Error executing batch storage: %s", e)
             return 0, len(batch)
 
-    async def _store_facts(self, facts: List[AtomicFact], metadata: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async def _store_facts(self, facts: List[AtomicFact], metadata: Dict[str, Any] | None = None) -> Dict[str, Any]:
         """
         Store facts in Redis and knowledge base.
 
@@ -456,7 +456,7 @@ class FactExtractionService:
 
         return {"stored_count": stored_count, "error_count": error_count}
 
-    async def _store_facts_in_kb(self, facts: List[AtomicFact], metadata: Optional[Dict[str, Any]] = None):
+    async def _store_facts_in_kb(self, facts: List[AtomicFact], metadata: Dict[str, Any] | None = None) -> None:
         """
         Store facts in the main knowledge base as structured content.
 
@@ -505,7 +505,7 @@ class FactExtractionService:
         source: str,
         extraction_result: FactExtractionResult,
         storage_results: Dict[str, Any],
-    ):
+    ) -> None:
         """
         Record extraction history for analytics and monitoring.
 
@@ -545,9 +545,9 @@ class FactExtractionService:
 
     def _build_criteria_candidate_keys(
         self,
-        source: Optional[str],
-        fact_type: Optional[FactType],
-        temporal_type: Optional[TemporalType],
+        source: str | None,
+        fact_type: FactType | None,
+        temporal_type: TemporalType | None,
     ) -> List[str]:
         """
         Build Redis index keys for fact criteria filtering.
@@ -600,7 +600,7 @@ class FactExtractionService:
             # Get all facts
             return await self.redis_client.smembers(self.fact_index_key)
 
-    async def _batch_retrieve_facts(self, fact_ids_list: List[str]) -> List[Optional[str]]:
+    async def _batch_retrieve_facts(self, fact_ids_list: List[str]) -> List[str | None]:
         """
         Batch retrieve fact data from Redis.
 
@@ -621,10 +621,10 @@ class FactExtractionService:
     def _filter_and_deserialize_fact(
         self,
         fact_id: str,
-        fact_data: Optional[str],
+        fact_data: str | None,
         active_only: bool,
-        min_confidence: Optional[float],
-    ) -> Optional[AtomicFact]:
+        min_confidence: float | None,
+    ) -> AtomicFact | None:
         """
         Deserialize and filter a single fact.
 
@@ -659,9 +659,9 @@ class FactExtractionService:
     def _collect_filtered_facts(
         self,
         fact_ids_list: List[str],
-        fact_data_list: List[Optional[str]],
+        fact_data_list: List[str | None],
         active_only: bool,
-        min_confidence: Optional[float],
+        min_confidence: float | None,
         limit: int,
     ) -> List[AtomicFact]:
         """
@@ -690,10 +690,10 @@ class FactExtractionService:
 
     async def get_facts_by_criteria(
         self,
-        source: Optional[str] = None,
-        fact_type: Optional[FactType] = None,
-        temporal_type: Optional[TemporalType] = None,
-        min_confidence: Optional[float] = None,
+        source: str | None = None,
+        fact_type: FactType | None = None,
+        temporal_type: TemporalType | None = None,
+        min_confidence: float | None = None,
         active_only: bool = True,
         limit: int = 100,
     ) -> List[AtomicFact]:
@@ -838,7 +838,7 @@ class FactExtractionService:
             logger.error("Error getting extraction statistics: %s", e)
             return {"error": "Failed to retrieve extraction statistics"}
 
-    async def _handle_temporal_invalidation(self, new_facts: List[AtomicFact]):
+    async def _handle_temporal_invalidation(self, new_facts: List[AtomicFact]) -> None:
         """
         Handle temporal invalidation for newly extracted facts.
 

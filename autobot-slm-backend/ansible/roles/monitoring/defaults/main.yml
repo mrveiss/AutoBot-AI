@@ -44,3 +44,10 @@ grafana_data_dir: "/var/lib/grafana"
 # SLM integration
 slm_api_url: "http://localhost:8000"
 slm_metrics_endpoint: "/api/metrics"
+
+# Daily health check cron settings (MVA-291)
+monitoring_install_health_check_cron: true
+autobot_repo_dir: "/opt/autobot"  # Override per inventory for your deployment path
+code_source_dir: "/opt/autobot/code_source"  # Full repo clone; matches slm_manager default
+autobot_log_dir: "/var/log/autobot"
+health_check_cron_wrapper: "/usr/local/bin/autobot-health-check-cron.sh"

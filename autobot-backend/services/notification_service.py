@@ -13,6 +13,7 @@ Dispatches workflow event notifications over four channels:
 Usage::
 
     from services.notification_service import (
+from autobot_shared.logging_manager import get_logger
         NotificationService,
         NotificationChannel,
         NotificationEvent,
@@ -28,9 +29,7 @@ Usage::
 """
 
 import json
-import logging
 import smtplib
-import ssl
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -38,14 +37,16 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from enum import Enum
 from string import Template
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import aiohttp
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
+from autobot_shared.ssot_config import config
 from constants.ttl_constants import TTL_7_DAYS
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # Enums
@@ -62,6 +63,7 @@ class NotificationChannel(str, Enum):
     SLACK = "slack"
     WEBHOOK = "webhook"
     IN_APP = "in_app"
+    TELEGRAM = "telegram"  # MVA-2075
 
 
 class NotificationEvent(str, Enum):
@@ -98,10 +100,12 @@ class NotificationConfig:
 
     # Channel-specific addresses / URLs
     email_recipients: List[str] = field(default_factory=list)
-    slack_webhook_url: Optional[str] = None
-    webhook_url: Optional[str] = None
+    slack_webhook_url: str | None = None
+    webhook_url: str | None = None
     # user_id for IN_APP delivery
-    user_id: Optional[str] = None
+    user_id: str | None = None
+    # Telegram chat_id for TELEGRAM delivery (MVA-2075)
+    telegram_chat_id: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -160,7 +164,7 @@ class NotificationStore:
         event: str,
         workflow_id: str,
         message: str,
-    ) -> Optional[str]:
+    ) -> str | None:
         """
         Persist a notification for *user_id* and return the notification ID.
 
@@ -266,7 +270,7 @@ class NotificationService:
     channel cannot block others.
     """
 
-    def __init__(self, store: Optional[NotificationStore] = None) -> None:
+    def __init__(self, store: NotificationStore | None = None) -> None:
         self._store = store or NotificationStore()
 
     # ------------------------------------------------------------------
@@ -390,6 +394,17 @@ class NotificationService:
                     "IN_APP channel requested but user_id not set (workflow=%s)",
                     workflow_id,
                 )
+        elif channel == NotificationChannel.TELEGRAM:
+            if config.telegram_chat_id:
+                await self._send_telegram(
+                    chat_id=config.telegram_chat_id,
+                    message=message,
+                )
+            else:
+                logger.warning(
+                    "Telegram channel requested but telegram_chat_id not set (workflow=%s)",
+                    workflow_id,
+                )
 
     # ------------------------------------------------------------------
     # Channel implementations
@@ -407,14 +422,13 @@ class NotificationService:
             AUTOBOT_SMTP_FROM   (default: autobot@localhost)
             AUTOBOT_SMTP_TLS    (default: true)
         """
-        import os
 
-        smtp_host = os.environ.get("AUTOBOT_SMTP_HOST", "localhost")
-        smtp_port = int(os.environ.get("AUTOBOT_SMTP_PORT", "587"))
-        smtp_user = os.environ.get("AUTOBOT_SMTP_USER", "")
-        smtp_password = os.environ.get("AUTOBOT_SMTP_PASSWORD", "")
-        smtp_from = os.environ.get("AUTOBOT_SMTP_FROM", "autobot@localhost")
-        use_tls = os.environ.get("AUTOBOT_SMTP_TLS", "true").lower() != "false"
+        smtp_host = config.smtp_host
+        smtp_port = int(config.smtp_port)
+        smtp_user = config.smtp_user
+        smtp_password = config.smtp_password
+        smtp_from = config.smtp_from
+        use_tls = config.smtp_tls.lower() != "false"
 
         msg = MIMEMultipart("alternative")
         msg["Subject"] = subject
@@ -424,7 +438,9 @@ class NotificationService:
 
         try:
             if use_tls:
-                context = ssl.create_default_context()
+                from autobot_shared.tls import get_internal_tls_context
+
+                context = get_internal_tls_context()  # #6702: canonical SSL context
                 with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as server:
                     server.ehlo()
                     server.starttls(context=context)
@@ -480,6 +496,27 @@ class NotificationService:
         Slack incoming webhooks accept ``{"text": "..."}`` JSON payloads.
         """
         await self._send_webhook(webhook_url, {"text": message})
+
+    async def _send_telegram(self, chat_id: str, message: str) -> None:
+        """
+        Send *message* to a Telegram chat via TelegramBotService (MVA-2075).
+
+        Args:
+            chat_id: Telegram chat ID
+            message: Notification message text
+        """
+        try:
+            from services.telegram_bot_service import TelegramBotService
+
+            service = await TelegramBotService.from_redis()
+            await service.send_message(
+                chat_id=chat_id,
+                text=message,
+            )
+            logger.info(f"Sent Telegram notification to chat {chat_id}")
+        except Exception as exc:
+            logger.error(f"Failed to send Telegram notification to chat {chat_id}: {exc}")
+            raise
 
     async def _send_in_app(
         self,

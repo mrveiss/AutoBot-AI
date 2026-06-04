@@ -10,14 +10,14 @@ and cascading failures, not just symptoms.
 Integration point for the Think Tool with causal reasoning guidance.
 """
 
-import logging
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from agent_loop.think_tool import ThinkTool
 from agent_loop.types import ThinkCategory, ThinkResult
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -41,7 +41,7 @@ class CausalErrorAnalyzer:
     It provides deep understanding of error causation for better debugging.
     """
 
-    def __init__(self, think_tool: Optional[ThinkTool] = None):
+    def __init__(self, think_tool: ThinkTool | None = None):
         """
         Initialize the analyzer.
 
@@ -54,7 +54,7 @@ class CausalErrorAnalyzer:
         self,
         error: Exception,
         context: Dict[str, Any],
-        execution_history: Optional[list[Dict[str, Any]]] = None,
+        execution_history: list[Dict[str, Any]] | None = None,
     ) -> CausalErrorAnalysis:
         """
         Analyze an error using causal reasoning.
@@ -207,8 +207,8 @@ class CausalErrorAnalyzer:
 async def analyze_error_causally(
     error: Exception,
     step_id: str,
-    workflow_id: Optional[str] = None,
-    execution_history: Optional[list[Dict[str, Any]]] = None,
+    workflow_id: str | None = None,
+    execution_history: list[Dict[str, Any]] | None = None,
 ) -> CausalErrorAnalysis:
     """
     Convenience function to analyze an error causally.

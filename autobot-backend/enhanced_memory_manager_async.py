@@ -10,19 +10,19 @@ markdown references
 import asyncio
 import hashlib
 import json
-import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import aiosqlite
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.status_enums import TaskStatus
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class Priority(Enum):
@@ -52,16 +52,16 @@ class TaskEntry:
     priority: Priority
     created_at: datetime
     updated_at: datetime
-    completed_at: Optional[datetime] = None
-    assigned_agent: Optional[str] = None
-    parent_task_id: Optional[str] = None
+    completed_at: datetime | None = None
+    assigned_agent: str | None = None
+    parent_task_id: str | None = None
     tags: List[str] = None
     metadata: Dict[str, Any] = None
     execution_log: List[Dict[str, Any]] = None
-    estimated_duration_minutes: Optional[int] = None
-    actual_duration_minutes: Optional[int] = None
+    estimated_duration_minutes: int | None = None
+    actual_duration_minutes: int | None = None
     dependencies: List[str] = None
-    markdown_reference: Optional[str] = None
+    markdown_reference: str | None = None
 
     def __post_init__(self):
         """Initialize default empty collections for task entry fields."""
@@ -114,14 +114,14 @@ class TaskEntry:
 class ExecutionRecord:
     """Individual execution step record"""
 
-    record_id: Optional[str]
+    record_id: str | None
     task_id: str
     timestamp: datetime
     action: str
     result: str
     duration_ms: int
     success: bool
-    error_message: Optional[str] = None
+    error_message: str | None = None
     agent_context: Dict[str, Any] = None
 
     def __post_init__(self):
@@ -320,7 +320,7 @@ class AsyncEnhancedMemoryManager:
         self,
         task_id: str,
         status: TaskStatus,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: Dict[str, Any] | None = None,
     ) -> bool:
         """Update task status with async performance"""
         await self._init_database()
@@ -405,7 +405,7 @@ class AsyncEnhancedMemoryManager:
             logger.error("Failed to log execution record: %s", e)
             raise RuntimeError(f"Failed to log execution: {e}")
 
-    async def get_task(self, task_id: str) -> Optional[TaskEntry]:
+    async def get_task(self, task_id: str) -> TaskEntry | None:
         """Retrieve task by ID with async performance"""
         await self._init_database()
 
@@ -516,9 +516,9 @@ class AsyncEnhancedMemoryManager:
         self,
         category: str,
         content: str,
-        metadata: Optional[Dict[str, Any]] = None,
-        embedding: Optional[bytes] = None,
-        reference_path: Optional[str] = None,
+        metadata: Dict[str, Any] | None = None,
+        embedding: bytes | None = None,
+        reference_path: str | None = None,
     ) -> int:
         """Store memory entry with async performance"""
         await self._init_database()

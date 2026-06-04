@@ -74,9 +74,19 @@ SPACING_MAP = {
 _SHORTHAND_PROPS = ["padding", "margin", "gap", "row-gap", "column-gap"]
 # All properties including directional variants (always single-value)
 _ALL_PROPS = [
-    "padding", "padding-top", "padding-right", "padding-bottom", "padding-left",
-    "margin", "margin-top", "margin-right", "margin-bottom", "margin-left",
-    "gap", "row-gap", "column-gap",
+    "padding",
+    "padding-top",
+    "padding-right",
+    "padding-bottom",
+    "padding-left",
+    "margin",
+    "margin-top",
+    "margin-right",
+    "margin-bottom",
+    "margin-left",
+    "gap",
+    "row-gap",
+    "column-gap",
 ]
 
 _SHORTHAND_PROPS_RE = "|".join(re.escape(p) for p in _SHORTHAND_PROPS)
@@ -95,8 +105,7 @@ MULTI_DECL_RE = re.compile(
 
 # Single-value declarations (all properties)
 SINGLE_DECL_RE = re.compile(
-    r"(?P<indent>[ \t]*)(?P<prop>" + _ALL_PROPS_RE + r")(?P<colon>\s*:\s*)"
-    r"(?P<value>" + _VAL + r")(?P<tail>\s*;)",
+    r"(?P<indent>[ \t]*)(?P<prop>" + _ALL_PROPS_RE + r")(?P<colon>\s*:\s*)" r"(?P<value>" + _VAL + r")(?P<tail>\s*;)",
     re.MULTILINE,
 )
 
@@ -113,8 +122,11 @@ def migrate_style_block(style_block: str) -> tuple[str, int]:
             return m.group(0)  # at least one value has no token — leave unchanged
         replacements += 1
         return (
-            m.group("indent") + m.group("prop") + m.group("colon")
-            + " ".join(mapped) + m.group("tail")  # type: ignore[arg-type]
+            m.group("indent")
+            + m.group("prop")
+            + m.group("colon")
+            + " ".join(mapped)
+            + m.group("tail")  # type: ignore[arg-type]
         )
 
     def single_replacer(m: re.Match) -> str:

@@ -17,21 +17,21 @@ Features:
 
 import asyncio
 import json
-import logging
-import os
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import List, Optional, Tuple
+from typing import List, Tuple
 
 import aiohttp
 
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 from constants.threshold_constants import TimingConstants
 from type_defs.common import Metadata
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
-_DEFAULT_SLM_URL = os.environ.get("SLM_URL", "")
-_DEFAULT_REDIS_NODE_ID = os.environ.get("REDIS_NODE_ID", "04-Databases")
+_DEFAULT_SLM_URL = config.slm_url
+_DEFAULT_REDIS_NODE_ID = config.redis_node_id
 
 
 # Custom exceptions for Redis Stack service operations
@@ -57,7 +57,7 @@ class ServiceOperationResult:
     duration_seconds: float
     timestamp: datetime
     new_status: str  # "running", "stopped", "failed", "unknown"
-    error: Optional[str] = None
+    error: str | None = None
 
 
 @dataclass
@@ -65,9 +65,9 @@ class ServiceStatus:
     """Current service status"""
 
     status: str  # "running", "stopped", "failed", "unknown"
-    pid: Optional[int] = None
-    uptime_seconds: Optional[float] = None
-    memory_mb: Optional[float] = None
+    pid: int | None = None
+    uptime_seconds: float | None = None
+    memory_mb: float | None = None
     last_check: datetime = None
 
 
@@ -79,7 +79,7 @@ class HealthStatus:
     service_running: bool
     connectivity: bool
     response_time_ms: float
-    last_successful_command: Optional[datetime] = None
+    last_successful_command: datetime | None = None
     error_count_last_hour: int = 0
     recommendations: list = None
 
@@ -97,11 +97,11 @@ class RedisServiceManager:
 
     def __init__(
         self,
-        slm_url: Optional[str] = None,
-        slm_node_id: Optional[str] = None,
+        slm_url: str | None = None,
+        slm_node_id: str | None = None,
         service_name: str = "redis-stack-server",
         enable_audit_logging: bool = True,
-    ):
+    ) -> None:
         """
         Initialize Redis Service Manager.
 
@@ -119,8 +119,8 @@ class RedisServiceManager:
         self.enable_audit_logging = enable_audit_logging
 
         # Status cache
-        self._status_cache: Optional[ServiceStatus] = None
-        self._status_cache_time: Optional[datetime] = None
+        self._status_cache: ServiceStatus | None = None
+        self._status_cache_time: datetime | None = None
         self._cache_ttl_seconds = 10
 
         # Error tracking for health metrics
@@ -161,7 +161,7 @@ class RedisServiceManager:
         """Stop Redis Service Manager (no-op — SLM API is stateless)."""
         logger.info("Redis Service Manager stopped")
 
-    def _audit_log(self, event_type: str, data: Metadata, user_id: Optional[str] = None):
+    def _audit_log(self, event_type: str, data: Metadata, user_id: str | None = None) -> None:
         """Log audit event"""
         if not self.enable_audit_logging:
             return
@@ -255,7 +255,7 @@ class RedisServiceManager:
         success: bool,
         actual_status: str,
         duration: float,
-        stderr: Optional[str] = None,
+        stderr: str | None = None,
     ) -> ServiceOperationResult:
         """
         Create result for service operation completion.

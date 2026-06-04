@@ -19,31 +19,42 @@ and Think Tool into a cohesive execution system.
 import asyncio
 import hashlib
 import json
-import logging
 import time
 import uuid
-from typing import Any, Optional
+from typing import Any
 
+from agent_loop.belief_state import BeliefStateUpdater
 from agent_loop.slack_hook import get_slack_hook
 from agent_loop.think_tool import ThinkTool
 from agent_loop.types import (
     AgentLoopConfig,
     AgentMessage,
     IterationResult,
+    LoopOutcome,
     LoopPhase,
     LoopState,
     MessageType,
     TaskContext,
     ThinkCategory,
 )
+from autobot_shared.error_boundaries import (
+    CRITICAL_ERROR_TYPES,
+    FALLBACK_ERROR_TYPES,
+    ErrorSeverity,
+    classify_error,
+)
+from autobot_shared.logging_manager import get_logger
 from events import EventStreamManager, EventType
+from events.bus import PersistStrategy
+from events.bus import publish_event as _bus_publish_event
+from events.event_types import AGENT_ABSTAINED as EVT_AGENT_ABSTAINED
 from events.event_types import APPROVAL_REQUIRED as EVT_APPROVAL_REQUIRED
+from events.event_types import BELIEF_CACHE_HIT as EVT_BELIEF_CACHE_HIT
 from events.types import create_approval_required_event, create_message_event
-from live_event_manager import publish_live_event
 from planner import PlannerModule
 from tools.parallel import ParallelToolExecutor
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # =============================================================================
 # Approval Workflow – Sensitive Tool Classification (Issue #4092)
@@ -102,6 +113,9 @@ SENSITIVE_TOOLS: frozenset[str] = frozenset(
 # a halt without inspecting the error string.  Issue #3877.
 _HALT_SENTINEL = "__repetition_halt__"
 
+# Sentinel key for stagnation halts (Issue #6627).
+_STAGNATION_SENTINEL = "__stagnation_halt__"
+
 # =============================================================================
 # Agent Loop
 # =============================================================================
@@ -118,10 +132,10 @@ class AgentLoop:
     def __init__(
         self,
         event_stream: EventStreamManager,
-        planner: Optional[PlannerModule] = None,
-        tool_executor: Optional[ParallelToolExecutor] = None,
-        think_tool: Optional[ThinkTool] = None,
-        config: Optional[AgentLoopConfig] = None,
+        planner: PlannerModule | None = None,
+        tool_executor: ParallelToolExecutor | None = None,
+        think_tool: ThinkTool | None = None,
+        config: AgentLoopConfig | None = None,
     ):
         """
         Initialize the agent loop.
@@ -138,17 +152,34 @@ class AgentLoop:
         self.tool_executor = tool_executor
         self.think_tool = think_tool or ThinkTool()
         self.config = config or AgentLoopConfig()
+        self._belief_updater = BeliefStateUpdater(
+            contradiction_surface_threshold=self.config.contradiction_surface_threshold
+        )
 
         # State
         self._state = LoopState.IDLE
         self._current_phase = LoopPhase.STANDBY
-        self._current_context: Optional[TaskContext] = None
+        self._current_context: TaskContext | None = None
         self._iteration_count = 0
         self._consecutive_errors = 0
         # Issue #3877: explicit flag set when repetition halt fires; checked by
         # _should_continue() so the main while-loop exits on the very next guard
         # check rather than relying solely on _should_iterate()'s error detection.
         self._halted_on_repetition: bool = False
+        # GH#6626: confidence-based abstention state
+        self._abstained: bool = False
+        self._abstention_reason: str | None = None
+        # GH#6628: set when a CRITICAL error causes an immediate halt
+        self._fatal_error: Exception | None = None
+        self._fatal_reason: str | None = None
+        # GH#8649: set when per-severity retry budget is exhausted in
+        # _handle_iteration_error(); checked by _should_continue() so the guard
+        # uses the correct severity-aware limit rather than max_consecutive_errors.
+        self._error_budget_exhausted: bool = False
+        # Issue #6627: semantic stagnation halt state
+        self._halted_on_stagnation: bool = False
+        self._halt_outcome: "LoopOutcome | None" = None
+        self._halt_reason: str = ""
 
     # =========================================================================
     # Properties
@@ -165,7 +196,7 @@ class AgentLoop:
         return self._current_phase
 
     @property
-    def context(self) -> Optional[TaskContext]:
+    def context(self) -> TaskContext | None:
         """Get current task context."""
         return self._current_context
 
@@ -182,7 +213,7 @@ class AgentLoop:
         self,
         task_id: str,
         task_description: str,
-        initial_context: Optional[dict],
+        initial_context: dict | None,
     ) -> None:
         """
         Initialize task context and state for new task.
@@ -203,6 +234,14 @@ class AgentLoop:
         self._iteration_count = 0
         self._consecutive_errors = 0
         self._halted_on_repetition = False
+        self._abstained = False
+        self._abstention_reason = None
+        self._fatal_error = None
+        self._fatal_reason = None
+        self._halted_on_stagnation = False
+        self._halt_outcome = None
+        self._halt_reason = ""
+        self._error_budget_exhausted = False
 
     async def _execute_main_loop(self) -> list[IterationResult]:
         """Execute the main iteration loop.
@@ -224,7 +263,7 @@ class AgentLoop:
 
         return results
 
-    async def _create_task_plan(self, task_description: str, initial_context: Optional[dict]) -> None:
+    async def _create_task_plan(self, task_description: str, initial_context: dict | None) -> None:
         """Create execution plan if planner is available.
 
         Issue #620: Extracted from run_task to reduce function length.
@@ -245,6 +284,7 @@ class AgentLoop:
         """Finalize task execution and build result.
 
         Issue #620: Extracted from run_task to reduce function length.
+        GH#6626: Emits agent_abstained event and skips completion-think when abstaining.
 
         Args:
             results: List of iteration results
@@ -253,17 +293,38 @@ class AgentLoop:
             Dict with task results
         """
         self._state = LoopState.COMPLETING
-        if self.config.think_on_completion:
+        if not self._abstained and self.config.think_on_completion:
             await self._think_before_completion()
 
         self._state = LoopState.COMPLETED
-        return self._build_result(results)
+        result = self._build_result(results)
+
+        if self._abstained and self._current_context is not None:
+            await _bus_publish_event(
+                "global",
+                EVT_AGENT_ABSTAINED,
+                {
+                    "task_id": self._current_context.task_id,
+                    "abstained": True,
+                    "abstention_reason": self._abstention_reason,
+                    "iterations": len(results),
+                    "think_count": len(self._current_context.think_history),
+                },
+                persist=PersistStrategy.MEMORY,
+            )
+            logger.info(
+                "AgentLoop: task %s abstained — %s",
+                self._current_context.task_id,
+                self._abstention_reason,
+            )
+
+        return result
 
     async def run_task(
         self,
         task_description: str,
-        task_id: Optional[str] = None,
-        initial_context: Optional[dict] = None,
+        task_id: str | None = None,
+        initial_context: dict | None = None,
     ) -> dict[str, Any]:
         """Run a complete task through the agent loop.
 
@@ -399,7 +460,41 @@ class AgentLoop:
 
         # Phase 3: Execute Tools
         self._current_phase = LoopPhase.WAIT_FOR_EXECUTION
-        tool_results = await self._execute_tools(tools_to_execute)
+
+        # MVA-1434: pre-execution cache check — skip redundant tool calls when a
+        # high-confidence assertion already covers the same tool+key.
+        tools_to_run = tools_to_execute
+        cached_results: dict[str, Any] = {}
+        if self.config.belief_state_enabled and self._current_context:
+            tools_to_run = []
+            for tool in tools_to_execute:
+                tool_name = tool.get("tool_name", "")
+                tool_args = tool.get("args", tool.get("arguments", tool.get("parameters", {})))
+                if not isinstance(tool_args, dict):
+                    tool_args = {}
+                cached_val = self._maybe_use_cached_assertion(tool_name, tool_args)
+                if cached_val is not None:
+                    cached_results[tool_name] = {"cached_assertion": cached_val}
+                    await _bus_publish_event(
+                        "global",
+                        EVT_BELIEF_CACHE_HIT,
+                        {
+                            "task_id": self._current_context.task_id,
+                            "tool_name": tool_name,
+                            "iteration": self._iteration_count,
+                        },
+                        persist=PersistStrategy.MEMORY,
+                    )
+                    logger.info(
+                        "AgentLoop: belief cache hit — skipping '%s' (iteration %d)",
+                        tool_name,
+                        self._iteration_count,
+                    )
+                else:
+                    tools_to_run.append(tool)
+
+        live_results = await self._execute_tools(tools_to_run) if tools_to_run else {}
+        tool_results = {**cached_results, **live_results}
 
         # Issue #3877 / #3859: detect repetition-halt via sentinel key.
         # When halted: do not add any rejected tools to tools_executed and
@@ -415,11 +510,44 @@ class AgentLoop:
             result.phase_completed = LoopPhase.ITERATE
             return result
 
-        result.tools_executed = [t.get("tool_name", "unknown") for t in tools_to_execute]
+        # Only live executions count toward tools_executed; cached hits are not tools_executed.
+        result.tools_executed = [t.get("tool_name", "unknown") for t in tools_to_run]
         result.tool_results = tool_results
 
         for tool_name in result.tools_executed:
             self._current_context.add_tool(tool_name)
+
+        # MVA-1407: update belief state from live tool results when enabled.
+        if self.config.belief_state_enabled and self._current_context:
+            for tool_info in tools_to_run:
+                tool_name = tool_info.get("tool_name", "")
+                call_hash = self._compute_tool_call_hash(tool_info)
+                raw_result = live_results.get(tool_name) or live_results.get(tool_info.get("id", ""))
+                if raw_result is not None:
+                    self._belief_updater.update(
+                        self._current_context,
+                        tool_name,
+                        raw_result,
+                        call_hash,
+                        self._iteration_count,
+                    )
+
+        # Issue #6627: fingerprint observations and check for stagnation.
+        self._record_observation_fingerprints(tool_results)
+        if self._check_observation_stagnation():
+            window = self.config.stagnation_window
+            fingerprints = self._current_context.observation_fingerprints
+            recent = fingerprints[-window:]
+            avg_novelty = sum(f.novel_token_ratio for f in recent) / window
+            self._halted_on_stagnation = True
+            self._halt_outcome = LoopOutcome.STAGNATED
+            self._halt_reason = (
+                f"Halted: observation stagnation — avg novelty {avg_novelty:.3f} "
+                f"< {self.config.min_observation_novelty} over {window} observations"
+            )
+            result.should_continue = False
+            result.phase_completed = LoopPhase.ITERATE
+            return result
 
         # Phase 4: Iterate
         self._current_phase = LoopPhase.ITERATE
@@ -430,6 +558,7 @@ class AgentLoop:
 
         result.phase_completed = LoopPhase.ITERATE
         self._consecutive_errors = 0
+        self._error_budget_exhausted = False
         return result
 
     def _log_iteration_completion(self, start_time: float, result: IterationResult) -> None:
@@ -633,7 +762,7 @@ class AgentLoop:
     # Message Handling (Manus Pattern)
     # =========================================================================
 
-    async def notify(self, content: str, metadata: Optional[dict] = None) -> None:
+    async def notify(self, content: str, metadata: dict | None = None) -> None:
         """
         Send a non-blocking notification to the user.
 
@@ -658,8 +787,8 @@ class AgentLoop:
     async def ask(
         self,
         content: str,
-        options: Optional[list[str]] = None,
-        metadata: Optional[dict] = None,
+        options: list[str] | None = None,
+        metadata: dict | None = None,
     ) -> str:
         """
         Send a blocking question to the user.
@@ -726,12 +855,19 @@ class AgentLoop:
         if not self._current_context:
             return
 
+        belief_summary = ""
+        if self.config.belief_state_enabled and self._current_context.assertions:
+            active = [a for a in self._current_context.assertions.values() if a.is_active]
+            top = sorted(active, key=lambda a: a.confidence, reverse=True)[:20]
+            lines = [f"  {a.key} = {a.value!r} @ {a.confidence:.2f}" for a in top]
+            belief_summary = "\nBelief state (top assertions):\n" + "\n".join(lines) + "\n"
+
         context = f"""
 Task: {self._current_context.description}
 Iterations: {self._iteration_count}
 Tools executed: {len(self._current_context.tools_executed)}
 Errors: {len(self._current_context.errors)}
-Duration: {self._current_context.get_duration_ms():.0f}ms
+Duration: {self._current_context.get_duration_ms():.0f}ms{belief_summary}
 """
         result = await self.think_tool.think(
             ThinkCategory.COMPLETION,
@@ -743,6 +879,31 @@ Duration: {self._current_context.get_duration_ms():.0f}ms
     # =========================================================================
     # Helper Methods
     # =========================================================================
+
+    # =========================================================================
+    # Belief Cache (MVA-1434)
+    # =========================================================================
+
+    def _maybe_use_cached_assertion(self, tool_name: str, tool_args: dict) -> Any | None:
+        """Return cached assertion value if a high-confidence belief covers this call.
+
+        Returns None when belief state is disabled, no extractor key exists for the
+        tool+args, the assertion is absent or refuted, or confidence is below the
+        configured threshold.
+        """
+        from agent_loop.belief_state import build_extractor_key
+
+        if not self._current_context:
+            return None
+        key = build_extractor_key(tool_name, tool_args)
+        if not key:
+            return None
+        assertion = self._current_context.assertions.get(key)
+        if assertion is None:
+            return None
+        if assertion.is_active and assertion.confidence >= self.config.belief_cache_threshold:
+            return assertion.value
+        return None
 
     # =========================================================================
     # Repetitive Tool-Call Detection (#3255)
@@ -772,7 +933,7 @@ Duration: {self._current_context.get_duration_ms():.0f}ms
             canonical = repr({"n": tool_name, "a": args})
         return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
-    def _check_tool_call_repetition(self, tools: list[dict[str, Any]]) -> Optional[str]:
+    def _check_tool_call_repetition(self, tools: list[dict[str, Any]]) -> str | None:
         """Check whether any pending tool call has been issued too many times.
 
         Returns the offending tool name if repetition is detected, else None.
@@ -800,11 +961,46 @@ Duration: {self._current_context.get_duration_ms():.0f}ms
         return None
 
     # =========================================================================
+    # Semantic Stagnation Detection (Issue #6627)
+    # =========================================================================
+
+    def _record_observation_fingerprints(self, tool_results: dict[str, Any]) -> None:
+        """Fingerprint successful tool results and append to the task context.
+
+        Error results (dicts with an "error" key) are skipped — only successful
+        observations contribute to the novelty window.  Issue #6627.
+        """
+        if not self._current_context:
+            return
+        for result in tool_results.values():
+            if isinstance(result, dict) and result.get("error"):
+                continue
+            self._current_context.record_observation(result, iteration=self._iteration_count)
+
+    def _check_observation_stagnation(self) -> bool:
+        """Return True when the recent observation window shows no novelty.
+
+        Disabled when halt_on_stagnation=False or when the context is absent.
+        Issue #6627.
+        """
+        if not self.config.halt_on_stagnation:
+            return False
+        if not self._current_context:
+            return False
+        fingerprints = self._current_context.observation_fingerprints
+        window = self.config.stagnation_window
+        if len(fingerprints) < window:
+            return False
+        recent = fingerprints[-window:]
+        avg_novelty = sum(f.novel_token_ratio for f in recent) / window
+        return avg_novelty < self.config.min_observation_novelty
+
+    # =========================================================================
     # Approval Workflow (Issue #4092)
     # =========================================================================
 
     @staticmethod
-    def _sensitive_tool_name(tool: dict[str, Any]) -> Optional[str]:
+    def _sensitive_tool_name(tool: dict[str, Any]) -> str | None:
         """Return the tool name if it is in SENSITIVE_TOOLS, else None."""
         name = tool.get("tool_name", "").lower()
         if name in SENSITIVE_TOOLS:
@@ -876,11 +1072,9 @@ Duration: {self._current_context.get_duration_ms():.0f}ms
             task_id=task_id,
         )
         await self.event_stream.publish(event)
-        # Bridge to LiveEventManager so the WebSocket frontend receives the
-        # approval dialog trigger (#4959).  RedisEventStreamManager and
-        # LiveEventManager are two disconnected buses — events published to one
-        # never reach the other without an explicit bridge call.
-        await publish_live_event(
+        # (#6486) Use unified bus so the single call reaches LiveEventManager
+        # (WebSocket fan-out) without a separate explicit bridge.
+        await _bus_publish_event(
             "global",
             EVT_APPROVAL_REQUIRED,
             {
@@ -892,6 +1086,7 @@ Duration: {self._current_context.get_duration_ms():.0f}ms
                 "timeout_seconds": self.config.approval_timeout_seconds,
                 "task_id": task_id,
             },
+            persist=PersistStrategy.MEMORY,
         )
         logger.info(
             "AgentLoop: approval required for tool '%s' (approval_id=%s)",
@@ -952,29 +1147,99 @@ Duration: {self._current_context.get_duration_ms():.0f}ms
 
         Issue #3877: Also returns False when a repetition halt has fired so the
         main while-loop exits even if _should_iterate() did not catch the error.
+        GH#6626: Also returns False when confidence-based abstention fires.
+        GH#6628: Returns False immediately when a fatal error has been recorded.
         """
         if self._halted_on_repetition:
+            return False
+        if self._fatal_error is not None:
+            return False
+        if self._halted_on_stagnation:
             return False
         if self._state not in (LoopState.RUNNING, LoopState.PAUSED):
             return False
         if self._iteration_count >= self.config.max_iterations:
             return False
-        if self._consecutive_errors >= self.config.max_consecutive_errors:
+        if self._error_budget_exhausted:
             return False
+        if self.config.abstain_on_low_confidence and self._current_context is not None:
+            window = self.config.confidence_window
+            recent = self._current_context.think_history[-window:]
+            if len(recent) >= window and all(t.confidence < self.config.min_confidence_floor for t in recent):
+                self._abstained = True
+                self._abstention_reason = (
+                    f"confidence below {self.config.min_confidence_floor} " f"for {window} consecutive iterations"
+                )
+                logger.warning(
+                    "AgentLoop: abstaining — %s",
+                    self._abstention_reason,
+                )
+                return False
         return True
 
+    def _max_retries_for_severity(self, severity: ErrorSeverity) -> int:
+        """Return the configured retry budget for the given severity (GH#6628)."""
+        mapping = {
+            ErrorSeverity.CRITICAL: self.config.max_retries_critical,
+            ErrorSeverity.HIGH: self.config.max_retries_high,
+            ErrorSeverity.MEDIUM: self.config.max_retries_medium,
+            ErrorSeverity.LOW: self.config.max_retries_low,
+        }
+        return mapping.get(severity, self.config.max_consecutive_errors)
+
+    async def _try_fallback_strategy(self, error: Exception) -> None:
+        """Placeholder hook for FALLBACK_ERROR_TYPES (GH#6628).
+
+        Real fallback strategies are separate work; this logs the attempt.
+        """
+        logger.warning(
+            "AgentLoop: Fallback-class error %s — fallback hook not yet implemented",
+            type(error).__name__,
+        )
+
     async def _handle_iteration_error(self, error: Exception) -> bool:
-        """Handle an error during iteration."""
+        """Handle an error during iteration (GH#6628: severity-aware).
+
+        CRITICAL errors halt immediately without retry.  All other errors
+        consume their per-severity retry budget before halting.
+        """
+        severity = classify_error(error)
+
+        if isinstance(error, CRITICAL_ERROR_TYPES):
+            self._fatal_error = error
+            self._fatal_reason = f"Critical error {type(error).__name__} — halting without retry"
+            logger.error(
+                "AgentLoop: FATAL %s (severity=%s) — %s",
+                type(error).__name__,
+                severity.value,
+                self._fatal_reason,
+            )
+            return False
+
+        # FALLBACK errors intentionally do both: invoke the hook for recovery AND
+        # consume the per-severity (MEDIUM) retry budget on the same error.
+        if isinstance(error, FALLBACK_ERROR_TYPES):
+            await self._try_fallback_strategy(error)
+
         self._consecutive_errors += 1
+        max_for_severity = self._max_retries_for_severity(severity)
 
         logger.error(
-            "AgentLoop: Iteration error (%d consecutive): %s",
+            "AgentLoop: Iteration error (%d/%d, severity=%s): %s",
             self._consecutive_errors,
+            max_for_severity,
+            severity.value,
             error,
         )
 
-        if self._consecutive_errors >= self.config.max_consecutive_errors:
-            logger.error("AgentLoop: Max consecutive errors reached, stopping")
+        if self._consecutive_errors >= max_for_severity:
+            logger.error(
+                "AgentLoop: Retry budget exhausted (severity=%s, %d/%d), stopping",
+                severity.value,
+                self._consecutive_errors,
+                max_for_severity,
+            )
+            self._error_budget_exhausted = True
             return False
 
         # Think about error recovery
@@ -987,7 +1252,7 @@ Duration: {self._current_context.get_duration_ms():.0f}ms
             if self._current_context:
                 self._current_context.add_think(result)
 
-        return True  # Continue after error
+        return True
 
     async def _plan_steps_to_tools(
         self,
@@ -1022,6 +1287,20 @@ Duration: {self._current_context.get_duration_ms():.0f}ms
 
         return plan.get_progress()
 
+    def _resolve_outcome(self) -> LoopOutcome:
+        """Map current loop state + halt flags to a LoopOutcome."""
+        if self._abstained:
+            return LoopOutcome.ABSTAINED
+        if self._halted_on_stagnation:
+            return LoopOutcome.STAGNATED
+        if self._halted_on_repetition:
+            return LoopOutcome.HALTED
+        if self._state == LoopState.CANCELLED:
+            return LoopOutcome.CANCELLED
+        if self._state == LoopState.FAILED:
+            return LoopOutcome.FAILED
+        return LoopOutcome.COMPLETED
+
     def _build_result(
         self,
         iterations: list[IterationResult],
@@ -1030,10 +1309,12 @@ Duration: {self._current_context.get_duration_ms():.0f}ms
         if not self._current_context:
             return {"error": "No context"}
 
-        return {
+        outcome = self._resolve_outcome()
+        result: dict[str, Any] = {
             "task_id": self._current_context.task_id,
             "description": self._current_context.description,
             "state": self._state.name,
+            "outcome": outcome.value,
             "iterations": len(iterations),
             "tools_executed": len(self._current_context.tools_executed),
             "errors": self._current_context.errors,
@@ -1041,3 +1322,13 @@ Duration: {self._current_context.get_duration_ms():.0f}ms
             "plan_id": self._current_context.plan_id,
             "think_count": len(self._current_context.think_history),
         }
+        if self._abstained:
+            result["abstained"] = True
+            result["abstention_reason"] = self._abstention_reason
+        if self._fatal_reason:
+            result["fatal_reason"] = self._fatal_reason
+        # Issue #6627: surface stagnation halt details when set.
+        if self._halted_on_stagnation:
+            result["halt_outcome"] = outcome.name
+            result["halt_reason"] = self._halt_reason
+        return result

@@ -13,11 +13,12 @@ UPDATED: Now uses unified_config_manager for consistent model selection
 """
 
 import fcntl
-import logging
 import threading
 from typing import Dict
 
 import yaml
+
+from autobot_shared.logging_manager import get_logger
 
 # SSOT Migration (Issue #602): Import SSOT config as primary source
 from autobot_shared.ssot_config import get_config as get_ssot_config
@@ -36,7 +37,7 @@ HTTP_PROTOCOL = "http"
 REDIS_HOST_IP = _ssot.vm.redis if _ssot else NetworkConstants.REDIS_VM_IP
 from config import unified_config_manager
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level frozenset for LLM provider keys
 _LLM_PROVIDER_KEYS = frozenset({"ollama", "local", "cloud"})
@@ -65,7 +66,7 @@ class ConfigService:
         return (time.time() - ConfigService._cache_timestamp) > ConfigService.CACHE_DURATION
 
     @staticmethod
-    def clear_cache():
+    def clear_cache() -> None:
         """Force clear the configuration cache"""
         ConfigService._cached_config = None
         ConfigService._cache_timestamp = None

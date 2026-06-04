@@ -11,7 +11,6 @@ import json
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -42,9 +41,9 @@ class AgentVersion:
         """
         self.version_file = version_file
         self.code_path = code_path
-        self._cached_version: Optional[dict] = None
+        self._cached_version: dict | None = None
 
-    def get_version(self) -> Optional[str]:
+    def get_version(self) -> str | None:
         """
         Get the current code version (commit hash).
 
@@ -54,7 +53,7 @@ class AgentVersion:
         version_info = self.get_version_info()
         return version_info.get("commit") if version_info else None
 
-    def get_version_info(self) -> Optional[dict]:
+    def get_version_info(self) -> dict | None:
         """
         Get full version information from version.json.
 
@@ -82,8 +81,8 @@ class AgentVersion:
     def save_version(
         self,
         commit: str,
-        built_at: Optional[datetime] = None,
-        extra_data: Optional[dict] = None,
+        built_at: datetime | None = None,
+        extra_data: dict | None = None,
     ) -> bool:
         """
         Save version information to version.json.
@@ -147,7 +146,7 @@ class AgentVersion:
 
 
 # Singleton instance
-_version_instance: Optional[AgentVersion] = None
+_version_instance: AgentVersion | None = None
 
 
 def get_agent_version(

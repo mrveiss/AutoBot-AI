@@ -9,14 +9,15 @@ from the system's man pages into the knowledge base for enhanced command assista
 """
 
 import json
-import logging
 import re
 import sqlite3
 import subprocess
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 
 # Pre-compiled regex for section header detection (Issue #380)
 _SECTION_HEADER_RE = re.compile(r"^[A-Z][A-Z\s]+$")
@@ -706,7 +707,7 @@ class CommandManualManager:
             return int(section_match.group(1))
         return 1
 
-    def get_manual_text(self, command_name: str) -> Optional[str]:
+    def get_manual_text(self, command_name: str) -> str | None:
         """Get manual text for a command using the man command.
 
         Args:
@@ -791,7 +792,7 @@ class CommandManualManager:
             section=row[9],
         )
 
-    def get_manual(self, command_name: str) -> Optional[CommandManual]:
+    def get_manual(self, command_name: str) -> CommandManual | None:
         """Retrieve a command manual from the database."""
         try:
             with sqlite3.connect(self.db_path) as conn:
@@ -809,7 +810,7 @@ class CommandManualManager:
             logger.error("Failed to retrieve manual for %s: %s", command_name, e)
             return None
 
-    def _build_search_query(self, query: str, category: Optional[str]) -> Tuple[str, List[str]]:
+    def _build_search_query(self, query: str, category: str | None) -> Tuple[str, List[str]]:
         """Build SQL query and params for manual search."""
         sql = """SELECT command_name, description, syntax, common_options,
                        examples, related_commands, risk_level, category,
@@ -823,7 +824,7 @@ class CommandManualManager:
         sql += " ORDER BY command_name"
         return sql, params
 
-    def search_manuals(self, query: str, category: Optional[str] = None) -> List[CommandManual]:
+    def search_manuals(self, query: str, category: str | None = None) -> List[CommandManual]:
         """Search command manuals by query and optional category."""
         try:
             with sqlite3.connect(self.db_path) as conn:

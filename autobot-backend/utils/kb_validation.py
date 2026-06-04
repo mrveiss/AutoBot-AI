@@ -11,15 +11,15 @@ errors.
 Pattern: Always validate KB exists before use, provide clear error messages.
 """
 
-import logging
 from functools import wraps
 from typing import Callable
 
 from fastapi import HTTPException, Request
 
+from autobot_shared.logging_manager import get_logger
 from knowledge_factory import get_or_create_knowledge_base
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 async def ensure_knowledge_base(req: Request, operation: str = "operation"):

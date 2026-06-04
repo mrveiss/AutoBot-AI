@@ -15,7 +15,7 @@ import logging
 import subprocess  # nosec B404 - subprocess used for systemctl status checks
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from .port_scanner import get_listening_ports
 
@@ -28,8 +28,8 @@ class RoleDefinition:
 
     name: str
     target_path: str
-    systemd_service: Optional[str] = None
-    health_check_port: Optional[int] = None
+    systemd_service: str | None = None
+    health_check_port: int | None = None
 
 
 @dataclass
@@ -37,11 +37,11 @@ class RoleStatus:
     """Detection status for a role."""
 
     path_exists: bool = False
-    path: Optional[str] = None
+    path: str | None = None
     service_running: bool = False
-    service_name: Optional[str] = None
+    service_name: str | None = None
     ports: List[int] = field(default_factory=list)
-    version: Optional[str] = None
+    version: str | None = None
 
     @property
     def status(self) -> str:
@@ -62,7 +62,7 @@ class RoleStatus:
 class RoleDetector:
     """Detects installed roles on this node."""
 
-    def __init__(self, role_definitions: Optional[List[Dict]] = None):
+    def __init__(self, role_definitions: List[Dict] | None = None):
         """
         Initialize role detector.
 
@@ -142,7 +142,7 @@ class RoleDetector:
             logger.debug("Service check failed for %s: %s", service_name, e)
             return False
 
-    def _read_version(self, target_path: Path) -> Optional[str]:
+    def _read_version(self, target_path: Path) -> str | None:
         """Read version from version.json if present."""
         version_file = target_path / "version.json"
 

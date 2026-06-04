@@ -21,14 +21,14 @@ Usage::
 """
 
 import json
-import logging
 import time
-from enum import Enum
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
+from circuit_breaker import CircuitState
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Redis database and key prefixes
 _APPROVAL_REDIS_DB = "main"
@@ -36,14 +36,6 @@ _APPROVAL_THREAD_PREFIX = "approval_thread"
 _CHANNEL_MAPPING_PREFIX = "slack_channel_mapping"
 _APPROVAL_CIRCUIT_BREAKER_PREFIX = "approval_redis_circuit"
 _APPROVAL_TTL_SECONDS = 86400  # 24 hours
-
-
-class CircuitState(str, Enum):
-    """Circuit breaker states for Redis failures."""
-
-    CLOSED = "closed"  # Normal operation
-    OPEN = "open"  # Failures detected, skip Redis ops
-    HALF_OPEN = "half_open"  # Testing if Redis recovered
 
 
 class SlackApprovalManager:
@@ -70,9 +62,9 @@ class SlackApprovalManager:
         node_id: str,
         workflow_id: str,
         channel_id: str,
-        thread_ts: Optional[str] = None,
-        approval_context: Optional[Dict[str, Any]] = None,
-    ) -> Optional[str]:
+        thread_ts: str | None = None,
+        approval_context: Dict[str, Any] | None = None,
+    ) -> str | None:
         """
         Store approval thread metadata in Redis.
 
@@ -134,7 +126,7 @@ class SlackApprovalManager:
             )
             return None
 
-    async def load_approval_thread(self, thread_id: str) -> Optional[Dict[str, Any]]:
+    async def load_approval_thread(self, thread_id: str) -> Dict[str, Any] | None:
         """
         Load approval thread metadata from Redis.
 

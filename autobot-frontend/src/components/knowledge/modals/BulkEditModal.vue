@@ -13,6 +13,7 @@
  * - Preview of affected entries
  */
 
+import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, watch } from 'vue'
 import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
 import BaseButton from '@/components/base/BaseButton.vue'
@@ -231,7 +232,7 @@ watch(() => props.modelValue, (newValue) => {
   <BaseModal
     v-model="isOpen"
     :title="modalTitle"
-    size="medium"
+    size="md"
     @close="closeModal"
   >
     <div class="bulk-edit-content">
@@ -241,7 +242,7 @@ watch(() => props.modelValue, (newValue) => {
       <!-- Selected Entries Preview -->
       <div class="selected-preview">
         <div class="preview-header">
-          <i class="fas fa-list-check"></i>
+          <Icon name="tasks" />
           <span>{{ $t('knowledge.modals.bulkEdit.selectedEntries', { count: selectedEntries.length }) }}</span>
         </div>
         <div class="preview-list">
@@ -262,7 +263,7 @@ watch(() => props.modelValue, (newValue) => {
       <!-- Category Selection -->
       <div v-if="mode === 'category'" class="form-section">
         <label class="form-label">
-          <i class="fas fa-folder"></i>
+          <Icon name="folder" />
           {{ $t('knowledge.modals.bulkEdit.newCategory') }}
         </label>
         <select v-model="selectedCategory" class="form-select">
@@ -283,7 +284,7 @@ watch(() => props.modelValue, (newValue) => {
       <!-- Tags Add Section -->
       <div v-if="mode === 'tags-add'" class="form-section">
         <label class="form-label">
-          <i class="fas fa-tags"></i>
+          <Icon name="tags" />
           {{ $t('knowledge.modals.bulkEdit.tagsToAdd') }}
         </label>
         <input
@@ -305,7 +306,7 @@ watch(() => props.modelValue, (newValue) => {
               :key="tag"
               class="tag-chip add"
             >
-              <i class="fas fa-plus"></i>
+              <Icon name="plus" />
               {{ tag }}
             </span>
           </div>
@@ -315,7 +316,7 @@ watch(() => props.modelValue, (newValue) => {
       <!-- Tags Remove Section -->
       <div v-if="mode === 'tags-remove'" class="form-section">
         <label class="form-label">
-          <i class="fas fa-tag"></i>
+          <Icon name="tag" />
           {{ $t('knowledge.modals.bulkEdit.tagsToRemove') }}
         </label>
 
@@ -333,7 +334,7 @@ watch(() => props.modelValue, (newValue) => {
             >
               {{ tag }}
               <span v-if="commonTags.includes(tag)" class="common-indicator" :title="$t('knowledge.modals.bulkEdit.commonToAll')">
-                <i class="fas fa-check-double"></i>
+                <Icon name="check-double" />
               </span>
             </button>
           </div>
@@ -355,7 +356,7 @@ watch(() => props.modelValue, (newValue) => {
               :key="tag"
               class="tag-chip remove"
             >
-              <i class="fas fa-minus"></i>
+              <Icon name="minus" />
               {{ tag }}
             </span>
           </div>
@@ -365,7 +366,7 @@ watch(() => props.modelValue, (newValue) => {
       <!-- Scope Selection Section -->
       <div v-if="mode === 'scope'" class="form-section">
         <label class="form-label">
-          <i class="fas fa-lock"></i>
+          <Icon name="lock" />
           {{ $t('knowledge.modals.bulkEdit.visibilityScope') }}
         </label>
         <KnowledgeScopeSelector
@@ -386,7 +387,7 @@ watch(() => props.modelValue, (newValue) => {
         :disabled="!isValid || isProcessing"
         @click="handleConfirm"
       >
-        <i v-if="isProcessing" class="fas fa-spinner fa-spin"></i>
+        <Icon name="spinner" class="animate-spin" v-if="isProcessing" />
         {{ confirmButtonText }}
       </BaseButton>
     </template>

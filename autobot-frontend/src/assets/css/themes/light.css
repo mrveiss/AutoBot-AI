@@ -127,6 +127,11 @@
   --border-color: #e2e8f0;
   --border-color-light: rgba(226, 232, 240, 0.8);
   --border-color-dark: #cbd5e1;
+
+  /* Canvas agent-draft tokens — light mode uses spec defaults */
+  --color-agent-draft-border: #3B82F6;
+  --color-agent-draft-bg: #EFF6FF;
+  --color-user-edit-cursor: #059669;
 }
 
 /* ============================================

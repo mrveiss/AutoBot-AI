@@ -19,11 +19,10 @@ Jina circuit breaker from media.link.pipeline is reused via _try_jina / _record_
 from __future__ import annotations
 
 import asyncio
-import logging
 import time
-from typing import Optional
 from urllib.parse import urlparse
 
+from autobot_shared.logging_manager import get_logger
 from web_fetch.cache import WEB_FETCH_MAX_BYTES, get_cached_result, set_cached_result
 from web_fetch.extractors import _MIN_CONTENT_CHARS, extract_markdown, is_spa_content
 
@@ -53,7 +52,7 @@ from web_fetch.types import (
     RenderMode,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Concurrency limits
 _SEM_PER_DOMAIN: int = 4
@@ -62,8 +61,8 @@ _SEM_FAST: int = 50
 
 # Per-domain semaphores (lazy, keyed by netloc)
 _domain_sems: dict[str, asyncio.Semaphore] = {}
-_playwright_sem: Optional[asyncio.Semaphore] = None
-_fast_sem: Optional[asyncio.Semaphore] = None
+_playwright_sem: asyncio.Semaphore | None = None
+_fast_sem: asyncio.Semaphore | None = None
 
 # Per-domain circuit breakers: {netloc: (failure_times_list, cooldown_until)}
 _domain_circuit: dict[str, dict] = {}
@@ -123,18 +122,18 @@ def _record_domain_success(netloc: str) -> None:
         _domain_circuit[netloc]["failures"].clear()
 
 
-def _fail(url: str, code: str, retryable: bool = False, status: Optional[int] = None) -> FetchResult:
+def _fail(url: str, code: str, retryable: bool = False, status: int | None = None) -> FetchResult:
     return FetchResult(url=url, success=False, error_code=code, retryable=retryable, status_code=status)
 
 
-async def _fetch_jina(url: str, timeout: float) -> Optional[str]:
+async def _fetch_jina(url: str, timeout: float) -> str | None:
     """Fetch markdown via Jina Reader fast-path. SSRF guard enforced inline."""
     if not await _is_public_url(url):
         return None
     return await _fetch_jina_impl(url, timeout)
 
 
-async def _fetch_jina_impl(url: str, timeout: float) -> Optional[str]:
+async def _fetch_jina_impl(url: str, timeout: float) -> str | None:
     """Fetch via Jina Reader. Returns raw text or None on failure."""
     import aiohttp
 
@@ -150,7 +149,7 @@ async def _fetch_jina_impl(url: str, timeout: float) -> Optional[str]:
     return None
 
 
-async def _fetch_bs4(url: str, timeout: float) -> tuple[Optional[str], Optional[int]]:
+async def _fetch_bs4(url: str, timeout: float) -> tuple[str | None, int | None]:
     """Fetch raw HTML via aiohttp. Returns (html, status_code) or (None, None).
 
     Single round-trip (#7459): streams the response body in 64 KiB chunks,
@@ -195,7 +194,7 @@ async def _fetch_bs4(url: str, timeout: float) -> tuple[Optional[str], Optional[
         return None, None
 
 
-async def _fetch_playwright(url: str, timeout: float) -> Optional[str]:
+async def _fetch_playwright(url: str, timeout: float) -> str | None:
     """Fetch via Playwright bridge (services/playwright_service.py).
 
     SSRF guard enforced inline (defense in depth) — the Playwright service
@@ -269,7 +268,7 @@ class WebFetcher:
         return await instance._fetch(url, render, timeout)
 
     @classmethod
-    async def fetch_raw_html(cls, url: str, timeout: float = 30.0) -> tuple[Optional[str], Optional[int]]:
+    async def fetch_raw_html(cls, url: str, timeout: float = 30.0) -> tuple[str | None, int | None]:
         """Fetch raw HTML + status code via aiohttp (no markdown extraction).
 
         Public API for callers that need the HTML body itself — link

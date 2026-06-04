@@ -11,11 +11,12 @@ Provides analysis capabilities for chat conversations:
 - Metadata extraction for Memory Graph integration
 """
 
-import logging
 import re
 from typing import Any, Dict, List
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 
 # Issue #380: Module-level frozenset for sender type detection
 _BOT_SENDER_TYPES = frozenset({"bot", "assistant"})

@@ -8,16 +8,16 @@ Integrates markdown documents with SQLite database for enhanced knowledge manage
 
 import hashlib
 import json
-import logging
 import re
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from memory import EnhancedMemoryManager
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Pre-compiled regex patterns for markdown parsing
 _WORD_RE = re.compile(r"\b\w+\b")
@@ -37,7 +37,7 @@ class MarkdownReferenceSystem:
 
     def __init__(
         self,
-        memory_manager: Optional[EnhancedMemoryManager] = None,
+        memory_manager: EnhancedMemoryManager | None = None,
         docs_root: str = "docs",
         knowledge_root: str = "data/system_knowledge",
     ):
@@ -427,7 +427,7 @@ class MarkdownReferenceSystem:
                 ),
             )
 
-    def _resolve_markdown_reference(self, reference: str, source_file: str, all_files: List[str]) -> Optional[str]:
+    def _resolve_markdown_reference(self, reference: str, source_file: str, all_files: List[str]) -> str | None:
         """Resolve a markdown reference to an actual file path"""
         # Try exact match first
         if reference in all_files:
@@ -497,8 +497,8 @@ class MarkdownReferenceSystem:
     def _build_document_search_query(
         self,
         query: str,
-        document_type: Optional[str],
-        tags: Optional[List[str]],
+        document_type: str | None,
+        tags: List[str] | None,
         limit: int,
     ) -> tuple[str, List[Any]]:
         """Issue #665: Extracted from search_markdown_content to reduce function length.
@@ -579,8 +579,8 @@ class MarkdownReferenceSystem:
     def search_markdown_content(
         self,
         query: str,
-        document_type: Optional[str] = None,
-        tags: Optional[List[str]] = None,
+        document_type: str | None = None,
+        tags: List[str] | None = None,
         limit: int = 20,
     ) -> List[Dict[str, Any]]:
         """Search markdown content and sections"""

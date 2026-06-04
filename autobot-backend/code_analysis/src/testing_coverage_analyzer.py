@@ -5,16 +5,17 @@ Analyzes codebase for testing gaps, missing test patterns, and coverage issues
 
 import ast
 import json
-import logging
 import re
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_constants import TTL_1_HOUR
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level tuples for AST node type checks
 _FUNCTION_DEF_TYPES = (ast.FunctionDef, ast.AsyncFunctionDef)
@@ -30,7 +31,7 @@ class CodeFunction:
     name: str
     line_number: int
     parameters: List[str]
-    return_type: Optional[str]
+    return_type: str | None
     is_async: bool
     complexity: int
     is_public: bool  # Not starting with _
@@ -47,7 +48,7 @@ class TestFunction:
     file_path: str
     name: str
     line_number: int
-    target_function: Optional[str]
+    target_function: str | None
     test_type: str  # unit, integration, e2e
     has_assertions: bool
     has_mocking: bool
@@ -239,7 +240,7 @@ class TestingCoverageAnalyzer:
 
         return functions
 
-    def _analyze_function(self, node: ast.AST, file_path: str, content: str) -> Optional[CodeFunction]:
+    def _analyze_function(self, node: ast.AST, file_path: str, content: str) -> CodeFunction | None:
         """Analyze a function node"""
 
         try:
@@ -387,7 +388,7 @@ class TestingCoverageAnalyzer:
         """Check if function name indicates it's a test"""
         return any(re.search(pattern, function_name) for pattern in self.test_function_patterns)
 
-    def _analyze_test_function(self, node: ast.AST, file_path: str, content: str) -> Optional[TestFunction]:
+    def _analyze_test_function(self, node: ast.AST, file_path: str, content: str) -> TestFunction | None:
         """Analyze a test function"""
 
         try:
@@ -425,7 +426,7 @@ class TestingCoverageAnalyzer:
             logger.error(f"Error analyzing test function {node.name}: {e}")
             return None
 
-    def _extract_target_function_from_name(self, test_name: str) -> Optional[str]:
+    def _extract_target_function_from_name(self, test_name: str) -> str | None:
         """Extract target function from test name"""
         # Remove test prefixes
         cleaned_name = test_name
@@ -807,7 +808,7 @@ class TestingCoverageAnalyzer:
             try:
                 key = self.COVERAGE_KEY
                 value = json.dumps(results, default=str)
-                await self.redis_client.setex(key, 3600, value)
+                await self.redis_client.setex(key, TTL_1_HOUR, value)
             except Exception as e:
                 logger.warning(f"Failed to cache results: {e}")
 

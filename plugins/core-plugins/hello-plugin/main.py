@@ -22,11 +22,7 @@ class HelloPlugin(BasePlugin):
     def __init__(self, manifest: PluginManifest, config: Optional[Dict] = None):
         """Initialize hello plugin."""
         super().__init__(manifest, config)
-        self.greeting = (
-            config.get("greeting", "Hello from plugin!")
-            if config
-            else "Hello from plugin!"
-        )
+        self.greeting = config.get("greeting", "Hello from plugin!") if config else "Hello from plugin!"
 
     async def initialize(self) -> None:
         """Initialize plugin resources."""

@@ -124,7 +124,7 @@
     login_port: "{{ postgresql_port }}"
     login_user: "{{ postgresql_user | default('postgres') }}"
     query: "SELECT 1"
-  become: yes
+  become: true
   become_user: postgres
   retries: 60
   delay: 5

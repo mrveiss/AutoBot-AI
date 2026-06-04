@@ -13,7 +13,7 @@ Eliminates duplication of request-related functions across the codebase.
 import time
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 
 def generate_request_id() -> str:
@@ -49,10 +49,10 @@ def generate_chat_id() -> str:
 
 
 def create_request_metadata(
-    request_id: Optional[str] = None,
-    user_id: Optional[str] = None,
-    session_id: Optional[str] = None,
-    additional_data: Optional[Dict[str, Any]] = None,
+    request_id: str | None = None,
+    user_id: str | None = None,
+    session_id: str | None = None,
+    additional_data: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
     """
     Create standardized request metadata.
@@ -130,7 +130,7 @@ class RequestTracker:
             "metadata": metadata,
         }
 
-    def end_request(self, request_id: str) -> Optional[Dict[str, Any]]:
+    def end_request(self, request_id: str) -> Dict[str, Any] | None:
         """
         End tracking a request and return performance data.
 

@@ -9,16 +9,16 @@ snapshots, computing diffs, redacting secrets, and rolling back to any
 prior revision.
 """
 
-import logging
 import uuid
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.logging_manager import get_logger
 from models.config_revision import ConfigRevision
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Keys whose values must be redacted in stored snapshots.
 _SECRET_SUBSTRINGS = frozenset(["password", "secret", "key", "token", "api_key"])
@@ -31,7 +31,7 @@ def _is_secret_key(key: str) -> bool:
     return any(sub in lower for sub in _SECRET_SUBSTRINGS)
 
 
-def redact_secrets(config_dict: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+def redact_secrets(config_dict: Dict[str, Any] | None) -> Dict[str, Any] | None:
     """Return a copy of config_dict with secret values replaced (#1404).
 
     Only top-level keys are inspected. Nested structures are not
@@ -43,7 +43,7 @@ def redact_secrets(config_dict: Optional[Dict[str, Any]]) -> Optional[Dict[str, 
 
 
 def compute_diff(
-    before: Optional[Dict[str, Any]],
+    before: Dict[str, Any] | None,
     after: Dict[str, Any],
 ) -> List[str]:
     """Return sorted list of top-level keys that differ between snapshots (#1404)."""
@@ -64,7 +64,7 @@ class ConfigRevisionService:
         self,
         entity_type: str,
         entity_id: str,
-        before_config: Optional[Dict[str, Any]],
+        before_config: Dict[str, Any] | None,
         after_config: Dict[str, Any],
         source: str,
         created_by: str,
@@ -149,7 +149,7 @@ class ConfigRevisionService:
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 
-    async def get_revision(self, revision_id: uuid.UUID) -> Optional[ConfigRevision]:
+    async def get_revision(self, revision_id: uuid.UUID) -> ConfigRevision | None:
         """Fetch a single revision by primary key (#1404)."""
         stmt = select(ConfigRevision).where(ConfigRevision.id == revision_id)
         result = await self.session.execute(stmt)
@@ -168,7 +168,7 @@ class ConfigRevisionService:
         self,
         entity_type: str,
         entity_id: str,
-    ) -> Optional[ConfigRevision]:
+    ) -> ConfigRevision | None:
         """Return the most recent revision for an entity (#1404)."""
         stmt = (
             select(ConfigRevision)

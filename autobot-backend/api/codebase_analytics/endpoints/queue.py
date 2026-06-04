@@ -8,12 +8,11 @@ Exposes queue state and allows removal of queued jobs.
 Mount point: /api/analytics/codebase (via router.py)
 """
 
-import logging
-
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 
 from ..scanner import (
     _active_tasks,
@@ -24,7 +23,7 @@ from ..scanner import (
     indexing_tasks,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter()
 

@@ -13,22 +13,124 @@ data-driven configuration pattern for improved maintainability.
 """
 
 import importlib
-import logging
+import json
 import os
 from typing import Any, Dict, List, Tuple
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
+
+logger = get_logger(__name__)
 
 # #6797: load-result registry — populated by load_feature_routers() so callers
 # (health endpoint, dashboards) can introspect what loaded vs failed without
 # scraping logs. Each entry: {"name": str, "module": str, "loaded": bool,
-# "error": Optional[str]}.
+# "error": str | None}.
 _LOAD_RESULTS: List[Dict[str, Any]] = []
+
+# #6808: Redis key prefix and TTL for cross-worker aggregation.
+# Each uvicorn worker publishes its results under its PID so the health
+# endpoint can show a unified view regardless of which worker handles the poll.
+_REDIS_KEY_PREFIX = "autobot:feature_routers:"
+_REDIS_TTL_SECONDS = 600  # 10 min — survives rolling restarts
+
+
+def _publish_load_results_to_redis(results: List[Dict[str, Any]]) -> None:
+    """Best-effort: publish this worker's load results to Redis (#6808).
+
+    Uses the PID as the worker discriminator so the health endpoint can
+    aggregate across all workers with ``KEYS autobot:feature_routers:*``.
+    Never raises — Redis unavailability must not block startup.
+    """
+    try:
+        from autobot_shared.redis_client import get_redis_client
+
+        redis = get_redis_client(database="main")
+        if redis is None:
+            return
+        key = f"{_REDIS_KEY_PREFIX}{os.getpid()}"
+        redis.set(key, json.dumps(results), ex=_REDIS_TTL_SECONDS)
+    except Exception:
+        logger.debug("Could not publish feature-router results to Redis (#6808)", exc_info=True)
+
+
+def get_cross_worker_load_results() -> Dict[str, Any]:
+    """Aggregate load results from all uvicorn workers via Redis (#6808).
+
+    Returns a dict with:
+      - ``workers``: mapping of PID → per-worker result list
+      - ``aggregated``: union of all workers' results (by router name)
+      - ``worker_count``: number of live workers seen
+      - ``redis_available``: whether aggregation succeeded
+
+    Falls back to the local ``_LOAD_RESULTS`` when Redis is unavailable.
+    """
+    try:
+        from autobot_shared.redis_client import get_redis_client
+
+        redis = get_redis_client(database="main")
+        if redis is None:
+            raise RuntimeError("Redis client unavailable")
+
+        # Scan for all worker keys (KEYS is fine here — small keyspace, admin op)
+        keys = redis.keys(f"{_REDIS_KEY_PREFIX}*")
+        workers: Dict[str, List[Dict[str, Any]]] = {}
+        for key in keys:
+            pid = key.decode() if isinstance(key, bytes) else key
+            pid = pid.removeprefix(_REDIS_KEY_PREFIX)
+            raw = redis.get(f"{_REDIS_KEY_PREFIX}{pid}")
+            if raw:
+                workers[pid] = json.loads(raw)
+
+        if not workers:
+            # No Redis data yet — fall back to local (boot race window)
+            return {
+                "workers": {str(os.getpid()): _LOAD_RESULTS},
+                "aggregated": _LOAD_RESULTS,
+                "worker_count": 1,
+                "redis_available": True,
+                "note": "local-only: no other worker keys found in Redis yet",
+            }
+
+        # Build union: for each router name, collect all worker statuses
+        by_name: Dict[str, Dict[str, Any]] = {}
+        for pid, results in workers.items():
+            for entry in results:
+                name = entry["name"]
+                if name not in by_name:
+                    by_name[name] = dict(entry)
+                    by_name[name]["worker_statuses"] = {}
+                by_name[name]["worker_statuses"][pid] = {
+                    "loaded": entry["loaded"],
+                    "error": entry["error"],
+                }
+                # Mark as failed if any worker failed to load this router
+                if not entry["loaded"]:
+                    by_name[name]["loaded"] = False
+                    by_name[name]["error"] = entry["error"]
+
+        aggregated = sorted(by_name.values(), key=lambda r: r["name"])
+        return {
+            "workers": workers,
+            "aggregated": aggregated,
+            "worker_count": len(workers),
+            "redis_available": True,
+        }
+    except Exception:
+        logger.debug("Redis aggregation failed, falling back to local results (#6808)", exc_info=True)
+        return {
+            "workers": {str(os.getpid()): _LOAD_RESULTS},
+            "aggregated": _LOAD_RESULTS,
+            "worker_count": 1,
+            "redis_available": False,
+        }
 
 
 # Issue #281: Router configurations as data instead of repetitive code blocks
 # Format: (module_path, prefix, tags, name)
 FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
+    # GH#4458: execution snapshot/restore — now loaded via core_routers (MVA-2531)
+    # ("api.execution_snapshots", "", ["execution", "snapshots"], "execution_snapshots"),
     # Core workflow and batch processing
     # Issue #6229: api.websockets and api.live_events promoted to core_routers
     ("api.workflow", "/workflow", ["workflow"], "workflow"),
@@ -100,8 +202,22 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         ["research-browser"],
         "research_browser",
     ),
+    # Issue #5136 Phase 4: scrape template persistence and runner
+    (
+        "api.scrape_templates",
+        "/scrape-templates",
+        ["scrape-templates"],
+        "scrape_templates",
+    ),
     ("api.playwright", "/playwright", ["playwright"], "playwright"),
     ("api.vision", "/vision", ["vision", "gui-automation"], "vision"),
+    # GH#9015: Image generation — DALL-E 3, Flux, Stable Diffusion
+    (
+        "api.image_generation",
+        "/image-generation",
+        ["image-generation", "media"],
+        "image_generation",
+    ),
     (
         "api.web_research_settings",
         "/web-research-settings",
@@ -133,7 +249,11 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
     ("api.templates", "/templates", ["templates"], "templates"),
     # Security and sandbox
     ("api.sandbox", "/sandbox", ["sandbox"], "sandbox"),
+    # GH#7409: Sandbox-scoped file CRUD surface
+    ("api.sandbox_files", "/sandbox/files", ["sandbox", "files"], "sandbox_files"),
     ("api.security", "/security", ["security"], "security"),
+    # SEC-2 Phase 3 (#6473): run-JWT refresh endpoint
+    ("api.run_jwt_router", "", ["security", "run-jwt"], "run_jwt"),
     (
         "api.security_assessment",
         "",
@@ -244,6 +364,20 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         ["heartbeat", "agents"],
         "heartbeat",
     ),
+    # Issue #6470: Budget policy CRUD API and hard-stop auto-pause
+    (
+        "api.budget_policies",
+        "/api",
+        ["budget-policies"],
+        "budget_policies",
+    ),
+    # GH#6471: per-task git worktree workspace info
+    (
+        "api.task_workspace",
+        "/api",
+        ["task-workspace"],
+        "task_workspace",
+    ),
     # Long-running and validation
     # Moved back from core_routers — has _OPERATIONS_AVAILABLE graceful degradation (Issue #6306)
     (
@@ -301,10 +435,10 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         "knowledge_research_ws",
     ),
     (
-        "api.knowledge_test",
+        "api.knowledge_eval",
         "/knowledge-test",
         ["knowledge-test"],
-        "knowledge_test",
+        "knowledge_eval",
     ),
     (
         "api.knowledge_maintenance",
@@ -319,39 +453,10 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         ["knowledge-relations"],
         "knowledge_relations",
     ),
-    # Issue #708: knowledge_search_aggregator, knowledge_ai_stack, knowledge_debug
-    # consolidated into knowledge.py as sub-routers (backend.api.knowledge includes them)
-    # Issue #4179: Register unregistered knowledge routers
-    (
-        "api.knowledge_search_aggregator",
-        "/unified",
-        ["knowledge-unified"],
-        "knowledge_search_aggregator",
-    ),
-    (
-        "api.knowledge_ai_stack",
-        "",
-        ["knowledge-enhanced"],
-        "knowledge_ai_stack",
-    ),
-    (
-        "api.knowledge_debug",
-        "",
-        [],
-        "knowledge_debug",
-    ),
-    (
-        "api.knowledge_boards",
-        "",
-        [],
-        "knowledge_boards",
-    ),
-    (
-        "api.knowledge_vectorization",
-        "",
-        ["knowledge_vectorization"],
-        "knowledge_vectorization",
-    ),
+    # NOTE (#4203): knowledge_search_aggregator, knowledge_ai_stack, knowledge_debug,
+    # knowledge_boards, knowledge_vectorization removed from here — already registered
+    # unconditionally in core_routers.py (_get_knowledge_routers). Duplicate registration
+    # caused the same routes to appear twice in the OpenAPI schema.
     (
         "api.conversation_files",
         "/conversation-files",
@@ -410,9 +515,18 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         ["admin", "feature-flags"],
         "feature_flags",
     ),
+    # Issue #6590: Virtual LLM API keys with per-key budgets
+    (
+        "api.llm_keys",
+        "/llm-keys",
+        ["llm-keys", "admin", "security"],
+        "llm_keys",
+    ),
     # Issue #4203: External tool integrations consolidated into integration_routers.py
-    # Skills repo management and governance MUST be registered before the base skills
-    # router so their static path prefixes take precedence over skills' /{name} param.
+    # Skills repo management, governance, and hub MUST be registered before the base
+    # skills router so their static path prefixes take precedence over /{name} param.
+    # Issue #4412: community skill hub
+    ("api.skills_hub", "/skills/hub", ["skills-hub"], "skills-hub"),
     ("api.skills_repos", "/skills/repos", ["skills"], "skills-repos"),
     (
         "api.skills_governance",
@@ -473,6 +587,13 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         ["conversation-export"],
         "conversation_export",
     ),
+    # MVA-2174: Transcript export in multiple formats (DOCX, PDF, SRT, VTT)
+    (
+        "api.transcript_export",
+        "",
+        ["transcript-export"],
+        "transcript_export",
+    ),
     # Issue #3407: SLM Docker deployment bridge
     (
         "api.slm.deployments",
@@ -495,15 +616,8 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         ["resilience", "monitoring"],
         "error_resilience",
     ),
-    # User management (users, teams, organizations) — router defines /user-management internally
-    (
-        "api.user_management",
-        "",
-        ["user-management", "users"],
-        "user_management",
-    ),
-    # Issue #1803: Plugin manager endpoints (list, discover, load/unload/enable/disable, config)
-    ("plugin_manager", "", ["plugins"], "plugin_manager"),
+    # NOTE (#4203): user_management and plugin_manager removed from here — already registered
+    # unconditionally in core_routers.py. Duplicate registration caused routes to appear twice.
     # Issue #1803: Plugin and agent marketplace — community catalog
     ("api.marketplace", "/marketplace", ["marketplace", "plugins"], "marketplace"),
     # Issue #6481: User-extensible marketplace sources (custom marketplaces)
@@ -516,20 +630,44 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
     ("api.agent_diary", "/agent-diary", ["agents"], "agent_diary"),
     # Partially wired or legacy feature routers
     ("api.chat_sessions", "", ["chat-sessions"], "chat_sessions"),
+    # GH#8993: thinking mode preferences for conversations
+    ("api.chat_sessions_thinking", "", ["chat-thinking"], "chat_sessions_thinking"),
+    # GH#8996: public shared chat links with optional password protection
+    ("api.chat_shared_links", "", ["chat-shared-links"], "chat_shared_links"),
+    # GH#9047: embed widget unauthenticated chat endpoint
+    ("api.chat_embed", "", ["chat", "embed"], "chat_embed"),
+    # GH#8987: conversation folders and collections
+    ("api.chat_folders", "", ["chat-folders"], "chat_folders"),
     # Issue #5061: First-run onboarding presets + doctor
     ("api.onboarding", "/onboarding", ["onboarding"], "onboarding"),
-    (
-        "api.diagnostics",
-        "/api/diagnostics",
-        ["diagnostics"],
-        "diagnostics",
-    ),
+    # NOTE (#4203): api.diagnostics removed — already registered in monitoring_routers.py
+    # at prefix "" (routes define their own /diagnostics path prefix internally).
     (
         "api.presence_ws",
         "",
         ["collaboration", "websocket", "presence"],
         "presence_ws",
     ),
+    # GH#8251: LLC (Lean Lifecycle Controller) module skeleton
+    ("llc.api", "", ["llc"], "llc"),
+    # GH#7342: Backend SDP proxy for OpenAI Realtime WebRTC
+    (
+        "api.realtime_session",
+        "/voice/realtime",
+        ["voice", "realtime", "webrtc"],
+        "realtime_session",
+    ),
+    # GH#4463: Mobile device pairing for push notifications and offline sync
+    (
+        "api.mobile_devices",
+        "/devices",
+        ["mobile-devices", "push-notifications"],
+        "mobile_devices",
+    ),
+    # GH#4459: Web push notification endpoints (subscribe/unsubscribe/vapid-key)
+    ("api.push", "/push", ["push", "notifications"], "push"),
+    # MVA-2176: Transcript AI analysis and KB integration
+    ("api.transcripts", "/transcripts", ["transcripts"], "transcripts"),
 ]
 
 
@@ -632,11 +770,14 @@ def load_feature_routers() -> List[Tuple]:
             len(failed),
             ", ".join(r["name"] for r in failed),
         )
-        if os.getenv("AUTOBOT_FEATURE_ROUTERS_STRICT", "").lower() in {"1", "true", "yes"}:
+        if config.misc.feature_routers_strict.lower() in {"1", "true", "yes"}:
             raise RuntimeError(
                 f"AUTOBOT_FEATURE_ROUTERS_STRICT=1 — {len(failed)} feature router(s) "
                 f"failed to load: {', '.join(r['name'] for r in failed)}"
             )
     else:
         logger.info("📊 Loaded %s/%s feature routers", loaded, expected)
+    # #6808: publish this worker's results to Redis so the health endpoint can
+    # aggregate across all workers instead of returning a per-worker snapshot.
+    _publish_load_results_to_redis(_LOAD_RESULTS)
     return optional_routers

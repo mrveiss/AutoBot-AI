@@ -1,0 +1,121 @@
+{
+  "metadata": {
+    "name": "Content Creation Team",
+    "description": "Complete content production workflow with strategist, writers, editors, and publishers",
+    "category": "company",
+    "version": "1.0",
+    "tags": ["content", "writing", "publishing", "marketing"]
+  },
+  "variables": {
+    "company_name": "{{COMPANY_NAME}}",
+    "brand_voice": "{{BRAND_VOICE}}",
+    "target_audience": "{{TARGET_AUDIENCE}}"
+  },
+  "agents": [
+    {
+      "name": "Content Strategist",
+      "role": "strategist",
+      "description": "Plans content strategy, defines topics, and ensures alignment with brand goals",
+      "capabilities": ["content_planning", "audience_research", "strategy_development"],
+      "instructions": "You are the content strategist. Research audience needs, plan content calendars, define topics that align with brand goals, and coordinate the content team.",
+      "model": "claude-sonnet-4-6",
+      "adapter_config": {
+        "type": "local",
+        "tools": ["read", "write", "web_search"]
+      }
+    },
+    {
+      "name": "Content Writer",
+      "role": "writer",
+      "description": "Creates engaging, high-quality content across various formats",
+      "capabilities": ["article_writing", "copywriting", "storytelling"],
+      "instructions": "You are a content writer. Create compelling, well-researched content that engages the target audience. Write in the brand voice, ensure clarity and accuracy, and optimize for readability.",
+      "model": "claude-sonnet-4-6",
+      "adapter_config": {
+        "type": "local",
+        "tools": ["read", "write", "web_search"]
+      }
+    },
+    {
+      "name": "Content Editor",
+      "role": "editor",
+      "description": "Reviews and polishes content for quality, consistency, and brand alignment",
+      "capabilities": ["editing", "quality_review", "brand_consistency"],
+      "instructions": "You are a content editor. Review drafts for clarity, grammar, tone, and brand consistency. Provide constructive feedback to improve quality and ensure content meets publication standards.",
+      "model": "claude-sonnet-4-6",
+      "adapter_config": {
+        "type": "local",
+        "tools": ["read", "write"]
+      }
+    },
+    {
+      "name": "Content Publisher",
+      "role": "publisher",
+      "description": "Formats, optimizes, and publishes content across distribution channels",
+      "capabilities": ["formatting", "seo_optimization", "multi_channel_distribution"],
+      "instructions": "You are the content publisher. Format approved content for different platforms, optimize for SEO, schedule publications, and ensure proper distribution across all channels.",
+      "model": "claude-haiku-4-5",
+      "adapter_config": {
+        "type": "local",
+        "tools": ["read", "write", "bash"]
+      }
+    }
+  ],
+  "goals": [
+    {
+      "title": "Define Content Strategy",
+      "description": "Establish brand voice, target personas, and content themes",
+      "priority": "high",
+      "status": "todo"
+    },
+    {
+      "title": "Build Content Pipeline",
+      "description": "Create efficient workflow from ideation to publication",
+      "priority": "high",
+      "status": "backlog"
+    },
+    {
+      "title": "Publish Quality Content",
+      "description": "Produce and distribute engaging content on consistent schedule",
+      "priority": "medium",
+      "status": "backlog"
+    }
+  ],
+  "work_items": [
+    {
+      "title": "Create brand style guide",
+      "description": "Document brand voice, tone, writing standards, and visual guidelines",
+      "assignee_role": "strategist",
+      "priority": "high",
+      "status": "todo"
+    },
+    {
+      "title": "Develop content calendar",
+      "description": "Plan publication schedule with topics, formats, and distribution channels",
+      "assignee_role": "strategist",
+      "priority": "high",
+      "status": "todo"
+    },
+    {
+      "title": "Setup editorial workflow",
+      "description": "Define process from draft to review to publication with quality gates",
+      "assignee_role": "editor",
+      "priority": "medium",
+      "status": "todo"
+    }
+  ],
+  "kb_collections": [
+    {
+      "name": "Brand Guidelines",
+      "description": "Brand voice, style guide, and content standards"
+    },
+    {
+      "name": "Content Library",
+      "description": "Published articles, drafts, and content assets"
+    },
+    {
+      "name": "SEO & Distribution",
+      "description": "SEO best practices, platform guidelines, and publishing checklists"
+    }
+  ]
+}

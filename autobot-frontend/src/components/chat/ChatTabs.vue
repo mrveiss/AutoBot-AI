@@ -35,11 +35,11 @@ interface Emits {
 
 const props = withDefaults(defineProps<Props>(), {
   tabs: () => [
-    { key: 'chat', label: 'Chat', icon: 'fas fa-comments' },
-    { key: 'files', label: 'Files', icon: 'fas fa-folder' },
-    { key: 'terminal', label: 'Terminal', icon: 'fas fa-terminal' },
-    { key: 'browser', label: 'Browser', icon: 'fas fa-globe' },
-    { key: 'novnc', label: 'noVNC', icon: 'fas fa-desktop' }
+    { key: 'chat', label: 'Chat', icon: 'comments' },
+    { key: 'files', label: 'Files', icon: 'folder' },
+    { key: 'terminal', label: 'Terminal', icon: 'terminal' },
+    { key: 'browser', label: 'Browser', icon: 'globe' },
+    { key: 'novnc', label: 'noVNC', icon: 'desktop' }
   ]
 })
 

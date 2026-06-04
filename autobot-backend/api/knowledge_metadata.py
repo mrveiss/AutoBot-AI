@@ -14,8 +14,6 @@ Endpoints:
 - Version History: List, view, compare, and revert fact versions
 """
 
-import logging
-
 from fastapi import APIRouter, Depends, HTTPException
 
 from api.schemas_knowledge import (
@@ -39,10 +37,11 @@ from api.schemas_knowledge import (
 )
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from constants.error_constants import ERR_TEMPLATE_NOT_FOUND
 from knowledge import get_knowledge_base
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(
     tags=["knowledge-metadata"],

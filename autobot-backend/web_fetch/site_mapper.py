@@ -15,16 +15,18 @@ Strategy:
 Public API::
 
     from web_fetch.site_mapper import SiteMapper, SiteMapEntry, SiteMapResult
+from autobot_shared.logging_manager import get_logger
 """
 
 from __future__ import annotations
 
-import logging
-import xml.etree.ElementTree as ET
-from typing import List, Optional
+import xml.etree.ElementTree as ET  # nosec B405 — sitemap XML from crawled URLs; XXE risk accepted
+from typing import List
 from urllib.parse import urlparse
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 
 _SITEMAP_NS = "http://www.sitemaps.org/schemas/sitemap/0.9"
 _SITEMAP_TIMEOUT = 15.0  # seconds
@@ -35,7 +37,7 @@ class SiteMapEntry:
 
     __slots__ = ("url", "title", "depth")
 
-    def __init__(self, url: str, title: Optional[str], depth: int) -> None:
+    def __init__(self, url: str, title: str | None, depth: int) -> None:
         self.url = url
         self.title = title
         self.depth = depth
@@ -60,7 +62,7 @@ def _ns(tag: str) -> str:
     return f"{{{_SITEMAP_NS}}}{tag}"
 
 
-async def _fetch_xml(url: str) -> Optional[str]:
+async def _fetch_xml(url: str) -> str | None:
     """Fetch a URL and return the response body text, or None on failure."""
     try:
         import aiohttp
@@ -97,16 +99,16 @@ def _parse_sitemapindex(root: ET.Element) -> List[str]:
     return urls
 
 
-def _safe_parse(xml_text: str, source_url: str) -> Optional[ET.Element]:
+def _safe_parse(xml_text: str, source_url: str) -> ET.Element | None:
     """Parse XML defensively; log a warning and return None on any error."""
     try:
-        return ET.fromstring(xml_text)
+        return ET.fromstring(xml_text)  # nosec B314 — sitemap XML from crawled URLs; XXE risk accepted
     except ET.ParseError as exc:
         logger.warning("sitemap XML parse error for %s: %s", source_url, exc)
         return None
 
 
-async def _resolve_sitemap_urls(sitemap_url: str) -> Optional[List[str]]:
+async def _resolve_sitemap_urls(sitemap_url: str) -> List[str] | None:
     """Fetch one sitemap URL and return all discovered <loc> URLs.
 
     Handles both <urlset> (leaf) and <sitemapindex> (index) documents.

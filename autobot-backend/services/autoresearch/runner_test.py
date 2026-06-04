@@ -14,12 +14,12 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from autobot_shared.logging_manager import get_logger
 from services.autoresearch.config import AutoResearchConfig
 from services.autoresearch.models import (
     Experiment,
@@ -37,7 +37,7 @@ from services.autoresearch.runner import (
     reorg_results,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -104,57 +104,57 @@ def _make_experiment(**overrides) -> Experiment:
 class TestValidateExtraParams:
     """Tests for ExperimentRunner._validate_extra_params."""
 
-    def test_valid_params_accepted(self):
+    def test_valid_params_accepted(self) -> None:
         ExperimentRunner._validate_extra_params({"custom_lr": 0.001, "warmup_ratio": 0.1})
 
-    def test_reserved_key_rejected(self):
+    def test_reserved_key_rejected(self) -> None:
         for key in ("max_steps", "learning_rate", "batch_size"):
             with pytest.raises(ValueError, match="conflicts with a built-in flag"):
                 ExperimentRunner._validate_extra_params({key: 42})
 
-    def test_uppercase_key_rejected(self):
+    def test_uppercase_key_rejected(self) -> None:
         with pytest.raises(ValueError, match="must be lowercase"):
             ExperimentRunner._validate_extra_params({"BadKey": 1})
 
-    def test_key_starting_with_digit_rejected(self):
+    def test_key_starting_with_digit_rejected(self) -> None:
         with pytest.raises(ValueError, match="must be lowercase"):
             ExperimentRunner._validate_extra_params({"1bad": 1})
 
-    def test_key_with_dash_rejected(self):
+    def test_key_with_dash_rejected(self) -> None:
         with pytest.raises(ValueError, match="must be lowercase"):
             ExperimentRunner._validate_extra_params({"bad-key": 1})
 
-    def test_key_too_long_rejected(self):
+    def test_key_too_long_rejected(self) -> None:
         long_key = "a" * 65
         with pytest.raises(ValueError, match="must be lowercase"):
             ExperimentRunner._validate_extra_params({long_key: 1})
 
-    def test_non_scalar_value_rejected(self):
+    def test_non_scalar_value_rejected(self) -> None:
         with pytest.raises(ValueError, match="must be scalar"):
             ExperimentRunner._validate_extra_params({"key": [1, 2, 3]})
 
-    def test_dict_value_rejected(self):
+    def test_dict_value_rejected(self) -> None:
         with pytest.raises(ValueError, match="must be scalar"):
             ExperimentRunner._validate_extra_params({"key": {"nested": True}})
 
-    def test_string_with_double_dash_rejected(self):
+    def test_string_with_double_dash_rejected(self) -> None:
         with pytest.raises(ValueError, match="cannot contain '--'"):
             ExperimentRunner._validate_extra_params({"key": "--inject"})
 
-    def test_string_too_long_rejected(self):
+    def test_string_too_long_rejected(self) -> None:
         with pytest.raises(ValueError, match="256 chars"):
             ExperimentRunner._validate_extra_params({"key": "x" * 257})
 
-    def test_bool_value_accepted(self):
+    def test_bool_value_accepted(self) -> None:
         ExperimentRunner._validate_extra_params({"use_flash": True})
 
-    def test_int_value_accepted(self):
+    def test_int_value_accepted(self) -> None:
         ExperimentRunner._validate_extra_params({"seed": 42})
 
-    def test_empty_dict_accepted(self):
+    def test_empty_dict_accepted(self) -> None:
         ExperimentRunner._validate_extra_params({})
 
-    def test_all_reserved_keys_are_lowercase(self):
+    def test_all_reserved_keys_are_lowercase(self) -> None:
         """Sanity check: all reserved keys match the key pattern format."""
         for key in _RESERVED_KEYS:
             assert _EXTRA_KEY_PATTERN.match(key), f"Reserved key '{key}' doesn't match pattern"
@@ -168,7 +168,7 @@ class TestValidateExtraParams:
 class TestBuildCommand:
     """Tests for ExperimentRunner._build_command."""
 
-    def test_basic_command_structure(self):
+    def test_basic_command_structure(self) -> None:
         runner = _make_runner()
         exp = _make_experiment()
         cmd = runner._build_command(exp)
@@ -178,7 +178,7 @@ class TestBuildCommand:
         assert any("--max_steps=" in arg for arg in cmd)
         assert any("--learning_rate=" in arg for arg in cmd)
 
-    def test_extra_params_appended(self):
+    def test_extra_params_appended(self) -> None:
         runner = _make_runner()
         exp = _make_experiment(hyperparams=HyperParams(extra={"seed": 42, "use_flash": True}))
         cmd = runner._build_command(exp)
@@ -186,7 +186,7 @@ class TestBuildCommand:
         assert "--seed=42" in cmd
         assert "--use_flash=True" in cmd
 
-    def test_custom_python_executable(self):
+    def test_custom_python_executable(self) -> None:
         config = _make_config()
         config.python_executable = "/usr/bin/python3.12"
         runner = _make_runner(config=config)
@@ -195,7 +195,7 @@ class TestBuildCommand:
 
         assert cmd[0] == "/usr/bin/python3.12"
 
-    def test_all_hyperparams_included(self):
+    def test_all_hyperparams_included(self) -> None:
         runner = _make_runner()
         hp = HyperParams()
         exp = _make_experiment(hyperparams=hp)
@@ -226,7 +226,7 @@ class TestExecuteTraining:
     """Tests for ExperimentRunner._execute_training with mocked subprocess."""
 
     @pytest.mark.asyncio
-    async def test_successful_training(self):
+    async def test_successful_training(self) -> None:
         expected_result = ExperimentResult(val_bpb=5.5, steps_completed=5000)
         parser = _make_parser(result=expected_result)
         runner = _make_runner(parser=parser)
@@ -248,7 +248,7 @@ class TestExecuteTraining:
         parser.parse.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_nonzero_exit_code(self):
+    async def test_nonzero_exit_code(self) -> None:
         runner = _make_runner()
         exp = _make_experiment()
 
@@ -264,7 +264,7 @@ class TestExecuteTraining:
         assert result.raw_output == "segfault"
 
     @pytest.mark.asyncio
-    async def test_timeout_kills_process(self):
+    async def test_timeout_kills_process(self) -> None:
         config = _make_config(default_training_timeout=1)
         runner = _make_runner(config=config)
         exp = _make_experiment()
@@ -284,7 +284,7 @@ class TestExecuteTraining:
         mock_process.kill.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_empty_stdout_handled(self):
+    async def test_empty_stdout_handled(self) -> None:
         parser = _make_parser(result=ExperimentResult(error_message="Empty training output"))
         runner = _make_runner(parser=parser)
         exp = _make_experiment()
@@ -302,7 +302,7 @@ class TestExecuteTraining:
         assert call_args[0][0] == ""
 
     @pytest.mark.asyncio
-    async def test_none_stdout_handled(self):
+    async def test_none_stdout_handled(self) -> None:
         parser = _make_parser(result=ExperimentResult(error_message="Empty training output"))
         runner = _make_runner(parser=parser)
         exp = _make_experiment()
@@ -328,7 +328,7 @@ class TestRunExperiment:
     """Tests for ExperimentRunner.run_experiment end-to-end flow."""
 
     @pytest.mark.asyncio
-    async def test_successful_run_sets_completed(self):
+    async def test_successful_run_sets_completed(self) -> None:
         store = _make_store()
         result = ExperimentResult(val_bpb=5.5, steps_completed=5000)
         parser = _make_parser(result=result)
@@ -350,7 +350,7 @@ class TestRunExperiment:
         assert store.save_experiment.call_count == 2
 
     @pytest.mark.asyncio
-    async def test_failed_run_sets_failed_state(self):
+    async def test_failed_run_sets_failed_state(self) -> None:
         store = _make_store()
         runner = _make_runner(store=store)
         exp = _make_experiment()
@@ -366,7 +366,7 @@ class TestRunExperiment:
         assert updated.result.error_message is not None
 
     @pytest.mark.asyncio
-    async def test_exception_during_training_sets_failed(self):
+    async def test_exception_during_training_sets_failed(self) -> None:
         store = _make_store()
         runner = _make_runner(store=store)
         exp = _make_experiment()
@@ -381,7 +381,7 @@ class TestRunExperiment:
         assert "No such file" in updated.result.error_message
 
     @pytest.mark.asyncio
-    async def test_running_flag_cleared_after_completion(self):
+    async def test_running_flag_cleared_after_completion(self) -> None:
         store = _make_store()
         result = ExperimentResult(val_bpb=5.5)
         runner = _make_runner(store=store, parser=_make_parser(result=result))
@@ -398,7 +398,7 @@ class TestRunExperiment:
         assert runner._current_process is None
 
     @pytest.mark.asyncio
-    async def test_running_flag_cleared_after_failure(self):
+    async def test_running_flag_cleared_after_failure(self) -> None:
         store = _make_store()
         runner = _make_runner(store=store)
         exp = _make_experiment()
@@ -412,7 +412,7 @@ class TestRunExperiment:
         assert runner.is_running is False
 
     @pytest.mark.asyncio
-    async def test_concurrent_run_rejected(self):
+    async def test_concurrent_run_rejected(self) -> None:
         store = _make_store()
         runner = _make_runner(store=store)
         # Simulate already running
@@ -461,7 +461,7 @@ class TestEvaluateResult:
     """Tests for ExperimentRunner._evaluate_result decision logic."""
 
     @pytest.mark.asyncio
-    async def test_first_experiment_becomes_baseline(self):
+    async def test_first_experiment_becomes_baseline(self) -> None:
         store = _make_store()
         store.get_baseline.return_value = None
         runner = _make_runner(store=store)
@@ -477,7 +477,7 @@ class TestEvaluateResult:
         store.set_baseline.assert_called_once_with(5.5)
 
     @pytest.mark.asyncio
-    async def test_improvement_above_threshold_kept(self):
+    async def test_improvement_above_threshold_kept(self) -> None:
         store = _make_store()
         store.get_baseline.return_value = 6.0
         config = _make_config(improvement_threshold=0.01)
@@ -494,7 +494,7 @@ class TestEvaluateResult:
         store.set_baseline.assert_called_once_with(5.5)
 
     @pytest.mark.asyncio
-    async def test_improvement_below_threshold_discarded(self):
+    async def test_improvement_below_threshold_discarded(self) -> None:
         store = _make_store()
         store.get_baseline.return_value = 6.0
         config = _make_config(improvement_threshold=1.0)
@@ -511,7 +511,7 @@ class TestEvaluateResult:
         store.set_baseline.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_worse_result_discarded(self):
+    async def test_worse_result_discarded(self) -> None:
         store = _make_store()
         store.get_baseline.return_value = 5.0
         runner = _make_runner(store=store)
@@ -525,7 +525,7 @@ class TestEvaluateResult:
         assert exp.state == ExperimentState.DISCARDED
 
     @pytest.mark.asyncio
-    async def test_no_result_skips_evaluation(self):
+    async def test_no_result_skips_evaluation(self) -> None:
         store = _make_store()
         runner = _make_runner(store=store)
 
@@ -537,7 +537,7 @@ class TestEvaluateResult:
         store.get_baseline.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_no_val_bpb_skips_evaluation(self):
+    async def test_no_val_bpb_skips_evaluation(self) -> None:
         store = _make_store()
         runner = _make_runner(store=store)
 
@@ -551,7 +551,7 @@ class TestEvaluateResult:
         store.get_baseline.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_exact_threshold_kept(self):
+    async def test_exact_threshold_kept(self) -> None:
         """Improvement exactly equal to threshold should be KEPT."""
         store = _make_store()
         store.get_baseline.return_value = 6.0
@@ -576,7 +576,7 @@ class TestCancel:
     """Tests for ExperimentRunner.cancel."""
 
     @pytest.mark.asyncio
-    async def test_cancel_kills_running_process(self):
+    async def test_cancel_kills_running_process(self) -> None:
         runner = _make_runner()
         mock_process = MagicMock()
         mock_process.returncode = None
@@ -587,14 +587,14 @@ class TestCancel:
         mock_process.kill.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_cancel_noop_when_no_process(self):
+    async def test_cancel_noop_when_no_process(self) -> None:
         runner = _make_runner()
         runner._current_process = None
         # Should not raise
         await runner.cancel()
 
     @pytest.mark.asyncio
-    async def test_cancel_noop_when_process_finished(self):
+    async def test_cancel_noop_when_process_finished(self) -> None:
         runner = _make_runner()
         mock_process = MagicMock()
         mock_process.returncode = 0  # already finished
@@ -613,11 +613,11 @@ class TestCancel:
 class TestIsRunning:
     """Tests for ExperimentRunner.is_running property."""
 
-    def test_initially_not_running(self):
+    def test_initially_not_running(self) -> None:
         runner = _make_runner()
         assert runner.is_running is False
 
-    def test_reflects_internal_flag(self):
+    def test_reflects_internal_flag(self) -> None:
         runner = _make_runner()
         runner._running = True
         assert runner.is_running is True
@@ -646,7 +646,7 @@ def _make_docker_config(**overrides) -> AutoResearchConfig:
 class TestDockerCommand:
     """Tests for ExperimentRunner._build_docker_command."""
 
-    def test_docker_run_flags_present(self):
+    def test_docker_run_flags_present(self) -> None:
         config = _make_docker_config()
         runner = _make_runner(config=config)
         exp = _make_experiment()
@@ -662,7 +662,7 @@ class TestDockerCommand:
         assert "--network" in cmd
         assert "none" in cmd
 
-    def test_memory_and_cpu_flags(self):
+    def test_memory_and_cpu_flags(self) -> None:
         config = _make_docker_config(docker_memory_limit="3g", docker_cpu_limit=1.5)
         runner = _make_runner(config=config)
         exp = _make_experiment()
@@ -680,7 +680,7 @@ class TestDockerCommand:
         cpu_idx = cmd.index("--cpus")
         assert cmd[cpu_idx + 1] == "1.5"
 
-    def test_image_at_end_of_command(self):
+    def test_image_at_end_of_command(self) -> None:
         config = _make_docker_config()
         runner = _make_runner(config=config)
         exp = _make_experiment()
@@ -692,7 +692,7 @@ class TestDockerCommand:
 
         assert cmd[-1] == config.docker_image
 
-    def test_env_flags_contain_hyperparams(self):
+    def test_env_flags_contain_hyperparams(self) -> None:
         config = _make_docker_config()
         runner = _make_runner(config=config)
         hp = HyperParams(max_steps=1000, learning_rate=0.001)
@@ -707,7 +707,7 @@ class TestDockerCommand:
         assert any("AUTOBOT_EXP_MAX_STEPS=1000" in v for v in env_values)
         assert any("AUTOBOT_EXP_LEARNING_RATE=0.001" in v for v in env_values)
 
-    def test_extra_params_in_env_flags(self):
+    def test_extra_params_in_env_flags(self) -> None:
         config = _make_docker_config()
         runner = _make_runner(config=config)
         hp = HyperParams(extra={"seed": 42})
@@ -721,7 +721,7 @@ class TestDockerCommand:
         env_values = [cmd[i + 1] for i, v in enumerate(cmd) if v == "--env"]
         assert any("AUTOBOT_EXP_EXTRA_SEED=42" in v for v in env_values)
 
-    def test_container_name_flag_present(self):
+    def test_container_name_flag_present(self) -> None:
         config = _make_docker_config()
         runner = _make_runner(config=config)
         exp = _make_experiment()
@@ -736,12 +736,12 @@ class TestDockerCommand:
         name_idx = cmd.index("--name")
         assert cmd[name_idx + 1] == f"autobot_exp_{exp.id}"
 
-    def test_unsafe_mount_path_raises(self):
+    def test_unsafe_mount_path_raises(self) -> None:
         runner = _make_runner()
         with pytest.raises(ValueError, match="unsafe"):
             runner._validate_mount_path(Path("/"))
 
-    def test_volume_mounts_present(self):
+    def test_volume_mounts_present(self) -> None:
         config = _make_docker_config()
         runner = _make_runner(config=config)
         exp = _make_experiment()
@@ -786,7 +786,7 @@ class TestExecuteInDocker:
         class _CapturingTmpDir:
             """Context manager that writes result.json on __enter__."""
 
-            def __init__(self, *args, **kwargs):
+            def __init__(self, *args, **kwargs) -> None:
                 self._real = original_tmp(*args, **kwargs)
 
             def __enter__(self):
@@ -830,7 +830,7 @@ class TestExecuteInDocker:
         original_tmp = tempfile.TemporaryDirectory
 
         class _PrePopTmpDir:
-            def __init__(self, *args, **kwargs):
+            def __init__(self, *args, **kwargs) -> None:
                 self._real = original_tmp(*args, **kwargs)
 
             def __enter__(self):
@@ -879,7 +879,7 @@ class TestExecuteInDocker:
         original_tmp = tempfile.TemporaryDirectory
 
         class _EmptyTmpDir:
-            def __init__(self, *args, **kwargs):
+            def __init__(self, *args, **kwargs) -> None:
                 self._real = original_tmp(*args, **kwargs)
 
             def __enter__(self):
@@ -927,7 +927,7 @@ class TestExecuteInDocker:
         original_tmp = tempfile.TemporaryDirectory
 
         class _PrePopTmpDir:
-            def __init__(self, *args, **kwargs):
+            def __init__(self, *args, **kwargs) -> None:
                 self._real = original_tmp(*args, **kwargs)
 
             def __enter__(self):
@@ -957,7 +957,7 @@ class TestExecuteInDocker:
         assert "exited with code 1" in result.error_message
 
     @pytest.mark.asyncio
-    async def test_missing_result_json_returns_error(self):
+    async def test_missing_result_json_returns_error(self) -> None:
         config = _make_docker_config()
         runner = _make_runner(config=config)
         exp = _make_experiment()
@@ -977,7 +977,7 @@ class TestDockerFallback:
     """Verify docker_enabled=False uses subprocess, not Docker."""
 
     @pytest.mark.asyncio
-    async def test_subprocess_path_when_docker_disabled(self):
+    async def test_subprocess_path_when_docker_disabled(self) -> None:
         config = _make_config(docker_enabled=False)
         expected_result = ExperimentResult(val_bpb=5.5, steps_completed=5000)
         parser = _make_parser(result=expected_result)
@@ -1005,12 +1005,12 @@ class TestDockerFallback:
 class TestAppendResult:
     """Tests for append_result()."""
 
-    def test_creates_file_on_first_write(self, tmp_path):
+    def test_creates_file_on_first_write(self, tmp_path) -> None:
         result_file = tmp_path / "results.jsonl"
         append_result(result_file, "exp1", "p1", ScorerResult(score=0.9))
         assert result_file.exists()
 
-    def test_record_contains_key_and_score(self, tmp_path):
+    def test_record_contains_key_and_score(self, tmp_path) -> None:
         result_file = tmp_path / "results.jsonl"
         append_result(result_file, "exp1", "p1", ScorerResult(score=0.9))
         record = json.loads(result_file.read_text(encoding="utf-8").strip())
@@ -1019,21 +1019,21 @@ class TestAppendResult:
         assert record["score"] == 0.9
         assert record["error"] is None
 
-    def test_error_record_stored(self, tmp_path):
+    def test_error_record_stored(self, tmp_path) -> None:
         result_file = tmp_path / "results.jsonl"
         append_result(result_file, "exp1", "p1", ScorerResult(score=None, error="timeout"))
         record = json.loads(result_file.read_text(encoding="utf-8").strip())
         assert record["error"] == "timeout"
         assert record["score"] is None
 
-    def test_multiple_appends_produce_multiple_lines(self, tmp_path):
+    def test_multiple_appends_produce_multiple_lines(self, tmp_path) -> None:
         result_file = tmp_path / "results.jsonl"
         append_result(result_file, "exp1", "p1", ScorerResult(score=0.9))
         append_result(result_file, "exp1", "p2", ScorerResult(score=0.8))
         lines = [l for l in result_file.read_text(encoding="utf-8").splitlines() if l]
         assert len(lines) == 2
 
-    def test_creates_parent_directories(self, tmp_path):
+    def test_creates_parent_directories(self, tmp_path) -> None:
         result_file = tmp_path / "deep" / "nested" / "results.jsonl"
         append_result(result_file, "exp1", "p1", ScorerResult(score=1.0))
         assert result_file.exists()
@@ -1047,11 +1047,11 @@ class TestAppendResult:
 class TestReorgResults:
     """Tests for reorg_results()."""
 
-    def test_returns_empty_dict_for_missing_file(self, tmp_path):
+    def test_returns_empty_dict_for_missing_file(self, tmp_path) -> None:
         result_file = tmp_path / "missing.jsonl"
         assert reorg_results(result_file) == {}
 
-    def test_deduplicates_last_write_wins(self, tmp_path):
+    def test_deduplicates_last_write_wins(self, tmp_path) -> None:
         result_file = tmp_path / "results.jsonl"
         append_result(result_file, "exp1", "p1", ScorerResult(score=None, error="first"))
         append_result(result_file, "exp1", "p1", ScorerResult(score=0.9))
@@ -1060,7 +1060,7 @@ class TestReorgResults:
         assert results[("exp1", "p1")].score == 0.9
         assert results[("exp1", "p1")].error is None
 
-    def test_file_rewritten_without_duplicates(self, tmp_path):
+    def test_file_rewritten_without_duplicates(self, tmp_path) -> None:
         result_file = tmp_path / "results.jsonl"
         append_result(result_file, "exp1", "p1", ScorerResult(score=None, error="err"))
         append_result(result_file, "exp1", "p1", ScorerResult(score=0.7))
@@ -1068,7 +1068,7 @@ class TestReorgResults:
         lines = [l for l in result_file.read_text(encoding="utf-8").splitlines() if l]
         assert len(lines) == 1
 
-    def test_sorted_output(self, tmp_path):
+    def test_sorted_output(self, tmp_path) -> None:
         result_file = tmp_path / "results.jsonl"
         append_result(result_file, "exp1", "p2", ScorerResult(score=0.5))
         append_result(result_file, "exp1", "p1", ScorerResult(score=0.8))
@@ -1078,7 +1078,7 @@ class TestReorgResults:
         prompt_ids = [json.loads(l)["prompt_id"] for l in lines]
         assert prompt_ids == sorted(prompt_ids)
 
-    def test_skips_malformed_lines(self, tmp_path):
+    def test_skips_malformed_lines(self, tmp_path) -> None:
         result_file = tmp_path / "results.jsonl"
         result_file.write_text(
             '{"experiment_id":"e","prompt_id":"p","score":1.0,"error":null}\n' "not-json\n",
@@ -1087,7 +1087,7 @@ class TestReorgResults:
         results = reorg_results(result_file)
         assert len(results) == 1
 
-    def test_returns_correct_scorer_results(self, tmp_path):
+    def test_returns_correct_scorer_results(self, tmp_path) -> None:
         result_file = tmp_path / "results.jsonl"
         append_result(result_file, "exp1", "p1", ScorerResult(score=0.42))
         results = reorg_results(result_file)
@@ -1104,25 +1104,25 @@ class TestReorgResults:
 class TestFilterPrompts:
     """Tests for filter_prompts()."""
 
-    def test_no_resume_returns_all_prompts(self, tmp_path):
+    def test_no_resume_returns_all_prompts(self, tmp_path) -> None:
         result_file = tmp_path / "results.jsonl"
         prompts = [("e", "p1"), ("e", "p2"), ("e", "p3")]
         assert filter_prompts(prompts, result_file, resume=False) == prompts
 
-    def test_resume_skips_successful_results(self, tmp_path):
+    def test_resume_skips_successful_results(self, tmp_path) -> None:
         result_file = tmp_path / "results.jsonl"
         append_result(result_file, "e", "p1", ScorerResult(score=0.9))
         prompts = [("e", "p1"), ("e", "p2")]
         remaining = filter_prompts(prompts, result_file, resume=True)
         assert remaining == [("e", "p2")]
 
-    def test_resume_with_no_prior_results_returns_all(self, tmp_path):
+    def test_resume_with_no_prior_results_returns_all(self, tmp_path) -> None:
         result_file = tmp_path / "results.jsonl"
         prompts = [("e", "p1"), ("e", "p2")]
         remaining = filter_prompts(prompts, result_file, resume=True)
         assert remaining == prompts
 
-    def test_retry_failures_requeues_error_results(self, tmp_path):
+    def test_retry_failures_requeues_error_results(self, tmp_path) -> None:
         result_file = tmp_path / "results.jsonl"
         append_result(result_file, "e", "p1", ScorerResult(score=None, error="timeout"))
         append_result(result_file, "e", "p2", ScorerResult(score=0.8))
@@ -1132,7 +1132,7 @@ class TestFilterPrompts:
         assert ("e", "p2") not in remaining  # success → skipped
         assert ("e", "p3") in remaining  # unseen → included
 
-    def test_resume_without_retry_keeps_errors_skipped(self, tmp_path):
+    def test_resume_without_retry_keeps_errors_skipped(self, tmp_path) -> None:
         result_file = tmp_path / "results.jsonl"
         append_result(result_file, "e", "p1", ScorerResult(score=None, error="err"))
         prompts = [("e", "p1"), ("e", "p2")]
@@ -1141,11 +1141,11 @@ class TestFilterPrompts:
         assert ("e", "p1") not in remaining
         assert ("e", "p2") in remaining
 
-    def test_empty_prompts_returns_empty(self, tmp_path):
+    def test_empty_prompts_returns_empty(self, tmp_path) -> None:
         result_file = tmp_path / "results.jsonl"
         assert filter_prompts([], result_file, resume=True) == []
 
-    def test_all_prompts_complete_returns_empty(self, tmp_path):
+    def test_all_prompts_complete_returns_empty(self, tmp_path) -> None:
         result_file = tmp_path / "results.jsonl"
         prompts = [("e", "p1"), ("e", "p2")]
         for _, pid in prompts:

@@ -8,16 +8,17 @@ Issue #679: Filters search results based on hierarchical access control.
 Integrates with ChromaDB metadata and ownership system.
 """
 
-import logging
-from typing import Dict, List, Optional
+from typing import Dict, List
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 
 
 async def build_chromadb_permission_filter(
     user_id: str,
-    user_org_id: Optional[str] = None,
-    user_group_ids: Optional[List[str]] = None,
+    user_org_id: str | None = None,
+    user_group_ids: List[str] | None = None,
 ) -> Dict:
     """Build ChromaDB where filter for permission-based search.
 
@@ -83,8 +84,8 @@ async def build_chromadb_permission_filter(
 async def filter_search_results_by_permission(
     results: List[Dict],
     user_id: str,
-    user_org_id: Optional[str] = None,
-    user_group_ids: Optional[List[str]] = None,
+    user_org_id: str | None = None,
+    user_group_ids: List[str] | None = None,
     ownership_manager=None,
 ) -> List[Dict]:
     """Filter search results to only include facts user has access to.
@@ -142,9 +143,9 @@ async def filter_search_results_by_permission(
 async def augment_search_request_with_permissions(
     query: str,
     user_id: str,
-    user_org_id: Optional[str] = None,
-    user_group_ids: Optional[List[str]] = None,
-    original_where: Optional[Dict] = None,
+    user_org_id: str | None = None,
+    user_group_ids: List[str] | None = None,
+    original_where: Dict | None = None,
 ) -> Dict:
     """Augment a search request with permission-based metadata filters.
 

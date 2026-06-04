@@ -14,16 +14,16 @@ Parent Issue: #1282 (bi_export_endpoints.py integration)
 """
 
 import json
-import logging
 import uuid
 from datetime import timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import RedisDatabase
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
 from autobot_shared.time_utils import now_utc, utc_timestamp
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Redis key patterns (ANALYTICS db, index 11)
 _REPORT_KEY_PREFIX = "saved_report:"
@@ -43,7 +43,7 @@ class SavedReportsService(AsyncRedisClientMixin):
         self,
         name: str,
         report_type: str = "executive",
-        sections: Optional[List[str]] = None,
+        sections: List[str] | None = None,
     ) -> Dict[str, Any]:
         """Create and persist a new saved report."""
         redis = await self._get_redis()
@@ -81,7 +81,7 @@ class SavedReportsService(AsyncRedisClientMixin):
                 reports.append(json.loads(raw))
         return reports
 
-    async def get_report(self, report_id: str) -> Optional[Dict[str, Any]]:
+    async def get_report(self, report_id: str) -> Dict[str, Any] | None:
         """Get a single saved report by ID."""
         redis = await self._get_redis()
         data = await redis.get(f"{_REPORT_KEY_PREFIX}{report_id}")
@@ -95,8 +95,8 @@ class SavedReportsService(AsyncRedisClientMixin):
         report_id: str,
         name: str,
         report_type: str = "executive",
-        sections: Optional[List[str]] = None,
-    ) -> Optional[Dict[str, Any]]:
+        sections: List[str] | None = None,
+    ) -> Dict[str, Any] | None:
         """Update an existing saved report. Returns None if not found."""
         redis = await self._get_redis()
         existing = await self.get_report(report_id)
@@ -125,7 +125,7 @@ class SavedReportsService(AsyncRedisClientMixin):
     # Report execution
     # ------------------------------------------------------------------
 
-    async def run_report(self, report_id: str, days: int = 30) -> Optional[Dict[str, Any]]:
+    async def run_report(self, report_id: str, days: int = 30) -> Dict[str, Any] | None:
         """
         Run a saved report: fetch live analytics for configured sections.
 
@@ -191,7 +191,7 @@ async def _fetch_agents_section(service) -> Dict[str, Any]:
 # Module-level singleton
 # ------------------------------------------------------------------
 
-_instance: Optional[SavedReportsService] = None
+_instance: SavedReportsService | None = None
 
 
 def get_saved_reports_service() -> SavedReportsService:

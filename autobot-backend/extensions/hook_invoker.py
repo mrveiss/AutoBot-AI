@@ -13,15 +13,15 @@ This module provides:
 - Consistent error handling and logging across all hook points
 """
 
-import logging
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from extensions.base import HookContext
 from extensions.hooks import HookPoint
 from extensions.manager import ExtensionManager
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class InvocationMode(Enum):
@@ -46,8 +46,8 @@ class HookInvocationConfig:
     def __init__(
         self,
         mode: InvocationMode = InvocationMode.COLLECT,
-        transform_key: Optional[str] = None,
-        expected_type: Optional[type] = None,
+        transform_key: str | None = None,
+        expected_type: type | None = None,
     ):
         """
         Initialize hook invocation configuration.
@@ -222,7 +222,7 @@ class HookInvoker:
         self,
         hook: HookPoint,
         context: HookContext,
-        config: Optional[HookInvocationConfig] = None,
+        config: HookInvocationConfig | None = None,
     ) -> Any:
         """
         Invoke a hook using its registered strategy.
@@ -283,7 +283,7 @@ class HookInvoker:
         hook: HookPoint,
         context: HookContext,
         key: str,
-        expected_type: Optional[type],
+        expected_type: type | None,
     ) -> Any:
         """
         Transform a context value through all extensions.
@@ -310,7 +310,7 @@ class HookInvoker:
                 )
         return result
 
-    async def _invoke_until_handled(self, hook: HookPoint, context: HookContext) -> Optional[Any]:
+    async def _invoke_until_handled(self, hook: HookPoint, context: HookContext) -> Any | None:
         """
         Invoke until one extension handles (returns truthy value).
 
@@ -336,7 +336,7 @@ class HookInvoker:
         """
         return await self.manager.invoke_cancellable(hook, context)
 
-    def get_config(self, hook: HookPoint) -> Optional[HookInvocationConfig]:
+    def get_config(self, hook: HookPoint) -> HookInvocationConfig | None:
         """
         Get the registered configuration for a hook.
 

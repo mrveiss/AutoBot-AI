@@ -6,13 +6,20 @@ Enterprise Features API - Phase 4 Implementation
 Provides API endpoints for managing enterprise-grade features.
 """
 
-import asyncio
-import logging
-from typing import Optional
-
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 
+from api.schemas_agent import (
+    EnterpriseBulkEnableResponse,
+    EnterpriseDeploymentResponse,
+    EnterpriseFeatureEnableAllResponse,
+    EnterpriseFeatureEnableResponse,
+    EnterpriseFeatureListResponse,
+    EnterpriseInfrastructureResponse,
+    EnterprisePerformanceOptimizeResponse,
+    EnterprisePhase4ValidationResponse,
+    EnterpriseStatusResponse,
+)
 from api.schemas_common import DataResponse
 from api.schemas_workflows import (
     BulkFeatureRequest,
@@ -22,6 +29,7 @@ from api.schemas_workflows import (
 from api.system_health import register_singleton_probe
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from enterprise_feature_manager import (
     FeatureCategory,
     FeatureStatus,
@@ -29,7 +37,7 @@ from enterprise_feature_manager import (
 )
 
 router = APIRouter(dependencies=[Depends(check_admin_permission)])
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def _process_feature_health_result(name: str, feature_health, health_status: dict, counters: dict) -> None:
@@ -248,7 +256,7 @@ def _build_service_distribution(vm_topology: dict) -> dict:
     return service_distribution
 
 
-@router.get("/status", response_model=DataResponse)
+@router.get("/status", response_model=DataResponse[EnterpriseStatusResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_enterprise_status",
@@ -282,7 +290,7 @@ async def get_enterprise_status():
         raise HTTPException(status_code=500, detail="Failed to get enterprise status")
 
 
-@router.post("/features/enable", response_model=DataResponse)
+@router.post("/features/enable", response_model=DataResponse[EnterpriseFeatureEnableResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="enable_enterprise_feature",
@@ -333,7 +341,7 @@ async def enable_enterprise_feature(request: FeatureEnableRequest):
         raise HTTPException(status_code=500, detail="Failed to enable feature")
 
 
-@router.post("/features/enable-all", response_model=DataResponse)
+@router.post("/features/enable-all", response_model=DataResponse[EnterpriseFeatureEnableAllResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="enable_all_enterprise_features",
@@ -367,15 +375,15 @@ async def enable_all_enterprise_features():
         raise HTTPException(status_code=500, detail="Failed to enable enterprise features")
 
 
-@router.get("/features", response_model=DataResponse)
+@router.get("/features", response_model=DataResponse[EnterpriseFeatureListResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_enterprise_features",
     error_code_prefix="ENTERPRISE_FEATURES",
 )
 async def list_enterprise_features(
-    category: Optional[FeatureCategory] = Query(None, description="Filter by feature category"),
-    status: Optional[FeatureStatus] = Query(None, description="Filter by feature status"),
+    category: FeatureCategory | None = Query(None, description="Filter by feature category"),
+    status: FeatureStatus | None = Query(None, description="Filter by feature status"),
 ):
     """
     List all available enterprise features with filtering options.
@@ -419,7 +427,7 @@ async def list_enterprise_features(
         raise HTTPException(status_code=500, detail="Failed to list features")
 
 
-@router.post("/features/bulk-enable", response_model=DataResponse)
+@router.post("/features/bulk-enable", response_model=DataResponse[EnterpriseBulkEnableResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="bulk_enable_features",
@@ -475,60 +483,7 @@ async def bulk_enable_features(request: BulkFeatureRequest):
 register_singleton_probe("enterprise_features", get_enterprise_manager)
 
 
-@router.get("/health", response_model=DataResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_enterprise_health",
-    error_code_prefix="ENTERPRISE_FEATURES",
-)
-async def get_enterprise_health():
-    """
-    Get health status of all enterprise features.
-    """
-    try:
-        manager = get_enterprise_manager()
-
-        health_status = {
-            "timestamp": manager.get_enterprise_status()["timestamp"],
-            "overall_health": "healthy",
-            "feature_health": {},
-            "critical_issues": [],
-            "warnings": [],
-        }
-        counters = {"critical": 0, "warnings": 0}
-
-        enabled_features = _get_enabled_features_for_health_check(manager)
-
-        # Check health of all enabled features in parallel
-        if enabled_features:
-            health_results = await asyncio.gather(
-                *[manager._check_feature_health(name) for name, _ in enabled_features],
-                return_exceptions=True,
-            )
-            for (name, _), feature_health in zip(enabled_features, health_results):
-                _process_feature_health_result(name, feature_health, health_status, counters)
-
-        _check_features_in_error_state(manager, health_status, counters)
-        health_status["overall_health"] = _determine_overall_health(counters)
-
-        return JSONResponse(
-            status_code=200,
-            content={
-                "status": "success",
-                "health": health_status,
-                "summary": (
-                    f"Health: {health_status['overall_health']}, "
-                    f"Issues: {counters['critical']}, Warnings: {counters['warnings']}"
-                ),
-            },
-        )
-
-    except Exception as e:
-        logger.error("Error getting enterprise health: %s", e)
-        raise HTTPException(status_code=500, detail="Failed to get health status")
-
-
-@router.post("/performance/optimize", response_model=DataResponse)
+@router.post("/performance/optimize", response_model=DataResponse[EnterprisePerformanceOptimizeResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="optimize_system_performance",
@@ -569,7 +524,7 @@ async def optimize_system_performance(request: PerformanceOptimizationRequest):
         raise HTTPException(status_code=500, detail="Performance optimization failed")
 
 
-@router.get("/infrastructure", response_model=DataResponse)
+@router.get("/infrastructure", response_model=DataResponse[EnterpriseInfrastructureResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_infrastructure_status",
@@ -614,7 +569,7 @@ async def get_infrastructure_status():
         raise HTTPException(status_code=500, detail="Failed to get infrastructure status")
 
 
-@router.post("/deployment/zero-downtime", response_model=DataResponse)
+@router.post("/deployment/zero-downtime", response_model=DataResponse[EnterpriseDeploymentResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="deploy_zero_downtime",
@@ -659,7 +614,7 @@ async def deploy_zero_downtime():
         raise HTTPException(status_code=500, detail="Zero-downtime deployment failed")
 
 
-@router.get("/phase4/validation", response_model=DataResponse)
+@router.get("/phase4/validation", response_model=DataResponse[EnterprisePhase4ValidationResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="validate_phase4_completion",

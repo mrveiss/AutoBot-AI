@@ -4,7 +4,6 @@ import BaseModal from './BaseModal.vue';
 const meta = {
   title: 'Components/UI/BaseModal',
   component: BaseModal,
-  tags: ['autodocs'],
   argTypes: {
     modelValue: {
       control: 'boolean',
@@ -16,8 +15,8 @@ const meta = {
     },
     size: {
       control: 'select',
-      options: ['small', 'medium', 'large'],
-      description: 'Modal size: small (500px), medium (900px), large (1200px)',
+      options: ['sm', 'md', 'lg'],
+      description: 'Modal size: sm (500px), md (900px), lg (1200px)',
     },
     showClose: {
       control: 'boolean',
@@ -42,7 +41,7 @@ export const Default: Story = {
   render: () => ({
     components: { BaseModal },
     template: `
-      <BaseModal :model-value="true" title="Default Modal" size="medium">
+      <BaseModal :model-value="true" title="Default Modal" size="md">
         <p>This is the default modal body content. Replace with anything you need.</p>
       </BaseModal>
     `,
@@ -53,7 +52,7 @@ export const Small: Story = {
   render: () => ({
     components: { BaseModal },
     template: `
-      <BaseModal :model-value="true" title="Small Modal" size="small">
+      <BaseModal :model-value="true" title="Small Modal" size="sm">
         <p>Compact modal for confirmations and short messages.</p>
       </BaseModal>
     `,
@@ -64,7 +63,7 @@ export const Large: Story = {
   render: () => ({
     components: { BaseModal },
     template: `
-      <BaseModal :model-value="true" title="Large Modal" size="large">
+      <BaseModal :model-value="true" title="Large Modal" size="lg">
         <p>Wider modal (1200px) for forms or detailed content.</p>
       </BaseModal>
     `,
@@ -75,7 +74,7 @@ export const WithActions: Story = {
   render: () => ({
     components: { BaseModal },
     template: `
-      <BaseModal :model-value="true" title="Confirm Action" size="small">
+      <BaseModal :model-value="true" title="Confirm Action" size="sm">
         <p>Are you sure you want to proceed with this action?</p>
         <template #actions>
           <button class="px-4 py-2 bg-gray-200 rounded">Cancel</button>
@@ -109,7 +108,7 @@ export const LongContent: Story = {
   render: () => ({
     components: { BaseModal },
     template: `
-      <BaseModal :model-value="true" title="Scrollable Content" size="medium" :scrollable="true">
+      <BaseModal :model-value="true" title="Scrollable Content" size="md" :scrollable="true">
         <div>
           <p v-for="i in 20" :key="i" class="mb-3">
             Paragraph {{ i }}: Lorem ipsum dolor sit amet, consectetur adipiscing elit.

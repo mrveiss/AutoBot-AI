@@ -10,17 +10,17 @@ Multi-level context extraction for intelligent code completion.
 import ast
 import hashlib
 import json
-import logging
 import uuid
-from typing import Optional
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
+from autobot_shared.ssot_constants import TTL_1_HOUR
 from models.completion_context import CompletionContext
 from services.dependency_tracker import DependencyTracker
 from services.semantic_analyzer import SemanticAnalyzer
 from services.type_inference import TypeInferencer
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ContextAnalyzer:
@@ -31,7 +31,7 @@ class ContextAnalyzer:
     using AST analysis, type inference, and semantic understanding.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.type_inferencer = TypeInferencer()
         self.semantic_analyzer = SemanticAnalyzer()
         self.dependency_tracker = DependencyTracker()
@@ -91,7 +91,7 @@ class ContextAnalyzer:
 
         return self._build_full_context(tree, context_id, file_content, cursor_line, cursor_position, file_path)
 
-    def _analyze_file_level(self, tree: ast.AST, file_content: str, context: CompletionContext):
+    def _analyze_file_level(self, tree: ast.AST, file_content: str, context: CompletionContext) -> None:
         """
         Extract file-level context.
 
@@ -116,7 +116,7 @@ class ContextAnalyzer:
         ):
             context.module_docstring = tree.body[0].value.value
 
-    def _analyze_function_level(self, tree: ast.AST, cursor_line: int, context: CompletionContext):
+    def _analyze_function_level(self, tree: ast.AST, cursor_line: int, context: CompletionContext) -> None:
         """
         Extract function-level context.
 
@@ -142,7 +142,7 @@ class ContextAnalyzer:
 
                         break
 
-    def _analyze_block_level(self, tree: ast.AST, cursor_line: int, context: CompletionContext):
+    def _analyze_block_level(self, tree: ast.AST, cursor_line: int, context: CompletionContext) -> None:
         """
         Extract block-level context.
 
@@ -182,7 +182,7 @@ class ContextAnalyzer:
         cursor_line: int,
         cursor_position: int,
         context: CompletionContext,
-    ):
+    ) -> None:
         """
         Extract line-level context.
 
@@ -207,7 +207,7 @@ class ContextAnalyzer:
         # Following lines (lookahead)
         context.following_lines = lines[cursor_line + 1 : min(len(lines), cursor_line + 6)]
 
-    def _analyze_semantic_context(self, tree: ast.AST, file_content: str, context: CompletionContext):
+    def _analyze_semantic_context(self, tree: ast.AST, file_content: str, context: CompletionContext) -> None:
         """
         Extract semantic context.
 
@@ -220,7 +220,7 @@ class ContextAnalyzer:
         context.recent_patterns = semantic["recent_patterns"]
         context.suggested_imports = semantic["suggested_imports"]
 
-    def _analyze_dependencies(self, tree: ast.AST, context: CompletionContext):
+    def _analyze_dependencies(self, tree: ast.AST, context: CompletionContext) -> None:
         """
         Extract dependency context.
 
@@ -269,7 +269,7 @@ class ContextAnalyzer:
             following_lines=lines[cursor_line + 1 : min(len(lines), cursor_line + 6)],
         )
 
-    def _get_cached_context(self, context_id: str) -> Optional[CompletionContext]:
+    def _get_cached_context(self, context_id: str) -> CompletionContext | None:
         """Get cached context from Redis."""
         try:
             cached = self.redis_client.get(f"completion_context:{context_id}")
@@ -279,12 +279,12 @@ class ContextAnalyzer:
             logger.warning(f"Failed to get cached context: {e}")
         return None
 
-    def _cache_context(self, context: CompletionContext):
+    def _cache_context(self, context: CompletionContext) -> None:
         """Cache context in Redis with 1-hour TTL."""
         try:
             self.redis_client.setex(
                 f"completion_context:{context.context_id}",
-                3600,
+                TTL_1_HOUR,
                 json.dumps(context.to_dict()),
             )
         except Exception as e:

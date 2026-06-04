@@ -9,7 +9,7 @@
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 
 class MediaType(Enum):
@@ -45,7 +45,7 @@ class MediaInput:
     intent: ProcessingIntent
     data: Any  # Flexible field for any media data (bytes, path, URL, etc.)
     metadata: Dict[str, Any] = field(default_factory=dict)
-    mime_type: Optional[str] = None
+    mime_type: str | None = None
 
 
 @dataclass
@@ -60,7 +60,7 @@ class ProcessingResult:
     confidence: float
     result_data: Any
     processing_time: float
-    error_message: Optional[str] = None
+    error_message: str | None = None
     metadata: Dict[str, Any] = field(default_factory=dict)
 
 

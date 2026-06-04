@@ -51,7 +51,7 @@ class TestMultiBatchPagination:
     """Tests for consume_feedback_stream with >100 entries (#2214)."""
 
     @pytest.mark.asyncio
-    async def test_150_entries_across_two_batches(self):
+    async def test_150_entries_across_two_batches(self) -> None:
         """150 entries: first xrange returns 100, second returns 50, third returns []."""
         db = _make_db_mock()
         redis = AsyncMock()
@@ -69,7 +69,7 @@ class TestMultiBatchPagination:
         assert db.update_access_count.await_count == 150
 
     @pytest.mark.asyncio
-    async def test_exactly_100_entries_single_batch(self):
+    async def test_exactly_100_entries_single_batch(self) -> None:
         """Exactly 100 entries: returned in one batch, loop does NOT continue."""
         db = _make_db_mock()
         redis = AsyncMock()
@@ -84,7 +84,7 @@ class TestMultiBatchPagination:
         assert count == 100
 
     @pytest.mark.asyncio
-    async def test_101_entries_triggers_second_batch(self):
+    async def test_101_entries_triggers_second_batch(self) -> None:
         """101 entries: first batch has 100 (== count), second has 1."""
         db = _make_db_mock()
         redis = AsyncMock()
@@ -100,7 +100,7 @@ class TestMultiBatchPagination:
         assert count == 101
 
     @pytest.mark.asyncio
-    async def test_empty_stream_returns_zero(self):
+    async def test_empty_stream_returns_zero(self) -> None:
         """Empty stream returns 0 processed."""
         db = _make_db_mock()
         redis = AsyncMock()
@@ -113,7 +113,7 @@ class TestMultiBatchPagination:
         db.update_access_count.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_300_entries_three_full_batches(self):
+    async def test_300_entries_three_full_batches(self) -> None:
         """300 entries across 3 full batches + empty terminator."""
         db = _make_db_mock()
         redis = AsyncMock()
@@ -130,7 +130,7 @@ class TestMultiBatchPagination:
         assert count == 300
 
     @pytest.mark.asyncio
-    async def test_cursor_advances_correctly_across_batches(self):
+    async def test_cursor_advances_correctly_across_batches(self) -> None:
         """Cursor passed to second xrange call excludes already-processed entries."""
         db = _make_db_mock()
         redis = AsyncMock()
@@ -151,7 +151,7 @@ class TestMultiBatchPagination:
         assert second_min != "0-0", f"Cursor did not advance: {second_min}"
 
     @pytest.mark.asyncio
-    async def test_no_duplicate_processing_across_batches(self):
+    async def test_no_duplicate_processing_across_batches(self) -> None:
         """Each entry is processed exactly once, not re-processed in later batches."""
         db = _make_db_mock()
         redis = AsyncMock()

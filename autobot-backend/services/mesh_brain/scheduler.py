@@ -4,14 +4,14 @@
 """MeshBrainScheduler — orchestrates autonomous mesh evolution jobs (#1994, #2120)."""
 
 import asyncio
-import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Any
 
+from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import TimingConstants
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # Job status
@@ -38,9 +38,9 @@ class JobStatus:
 
     name: str
     schedule: str
-    last_run: Optional[datetime] = None
-    last_result: Optional[str] = None  # "success" | "failed" | "skipped"
-    next_run: Optional[datetime] = None
+    last_run: datetime | None = None
+    last_result: str | None = None  # "success" | "failed" | "skipped"
+    next_run: datetime | None = None
     is_running: bool = False
 
 

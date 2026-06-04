@@ -10,11 +10,11 @@
           :aria-label="$t('chat.sidebar.expandSidebar')"
           @click="$emit('toggle-mobile-sidebar')"
         >
-          <i class="fas fa-bars"></i>
+          <Icon name="bars" />
         </button>
 
         <div class="w-7 h-7 sm:w-8 sm:h-8 bg-electric-600 rounded-full flex items-center justify-center shrink-0">
-          <i class="fas fa-robot text-white text-xs sm:text-sm"></i>
+          <Icon name="robot" class="text-white text-xs sm:text-sm" />
         </div>
         <div class="min-w-0">
           <h1 class="text-sm sm:text-lg font-semibold text-autobot-text-primary truncate">
@@ -28,17 +28,33 @@
 
       <!-- Right: Actions + connection status -->
       <div class="flex items-center gap-1 sm:gap-2 shrink-0">
+        <!-- GH#8990: context window usage indicator (hidden on mobile to save space) -->
+        <ContextWindowIndicator
+          v-if="contextWindowProps?.hasData"
+          class="hidden sm:flex"
+          v-bind="contextWindowProps"
+        />
+
         <!-- Custom Actions Slot -->
         <slot name="actions"></slot>
 
         <!-- Session Actions -->
         <button
           v-if="currentSessionId"
+          @click="$emit('open-settings')"
+          class="header-btn"
+          :title="$t('chat.openSettings')"
+        >
+          <Icon name="cog" />
+        </button>
+
+        <button
+          v-if="currentSessionId"
           @click="$emit('export-session')"
           class="header-btn"
           :title="$t('chat.exportChat')"
         >
-          <i class="fas fa-download"></i>
+          <Icon name="download" />
         </button>
 
         <button
@@ -47,12 +63,12 @@
           class="header-btn"
           :title="$t('chat.clearChat')"
         >
-          <i class="fas fa-trash"></i>
+          <Icon name="trash" />
         </button>
 
         <!-- Connection Status — icon only on mobile, full label on sm+ -->
         <div class="connection-status" :class="connectionStatusClass">
-          <i :class="connectionStatusIcon"></i>
+          <Icon :name="connectionStatusIcon" />
           <span class="text-sm hidden sm:inline">{{ connectionStatus }}</span>
         </div>
       </div>
@@ -61,7 +77,18 @@
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
+import ContextWindowIndicator from './ContextWindowIndicator.vue'
 import { computed } from 'vue'
+
+interface ContextWindowProps {
+  tokensUsed: number
+  contextWindow: number
+  usagePercent: number
+  isWarning: boolean
+  isCritical: boolean
+  hasData: boolean
+}
 
 interface Props {
   currentSessionId: string | null
@@ -69,18 +96,19 @@ interface Props {
   sessionInfo: string
   connectionStatus: string
   isConnected: boolean
+  contextWindowProps?: ContextWindowProps
 }
 
 interface Emits {
   (e: 'export-session'): void
   (e: 'clear-session'): void
   (e: 'toggle-mobile-sidebar'): void
+  (e: 'open-settings'): void
 }
 
 const props = defineProps<Props>()
 defineEmits<Emits>()
 
-// Computed properties for connection status
 const connectionStatusClass = computed(() => ({
   'text-green-600': props.isConnected,
   'text-red-600': !props.isConnected,
@@ -88,9 +116,9 @@ const connectionStatusClass = computed(() => ({
 }))
 
 const connectionStatusIcon = computed(() => {
-  if (!props.isConnected) return 'fas fa-exclamation-circle'
-  if (props.connectionStatus === 'Connecting') return 'fas fa-spinner fa-spin'
-  return 'fas fa-check-circle'
+  if (!props.isConnected) return 'exclamation-circle'
+  if (props.connectionStatus === 'Connecting') return 'spinner'
+  return 'check-circle'
 })
 </script>
 

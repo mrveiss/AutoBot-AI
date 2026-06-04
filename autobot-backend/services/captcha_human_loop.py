@@ -18,6 +18,7 @@ Features:
 
 Usage:
     from services.captcha_human_loop import CaptchaHumanLoop
+from autobot_shared.logging_manager import get_logger
 
     captcha_service = CaptchaHumanLoop(timeout_seconds=120)
     result = await captcha_service.request_human_intervention(
@@ -36,15 +37,15 @@ Related: Issue #206
 
 import asyncio
 import base64
-import logging
-import os
 import threading
 import time
 import uuid
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 from autobot_shared.time_utils import utc_timestamp
 
 try:
@@ -55,11 +56,10 @@ try:
 except ImportError:  # pragma: no cover
     from typing import Any as Page  # type: ignore[assignment, misc]
 
-from constants.network_constants import NetworkConstants
 from constants.threshold_constants import TimingConstants
-from event_manager import get_event_manager
+from events.bus import PersistStrategy, publish_event
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level tuple for unsupported CAPTCHA types (require human intervention)
 _UNSUPPORTED_CAPTCHA_TYPES = ("recaptcha", "hcaptcha", "cloudflare")
@@ -85,9 +85,9 @@ class CaptchaResolutionResult:
     captcha_id: str
     url: str
     duration_seconds: float
-    error_message: Optional[str] = None
-    auto_solution: Optional[str] = None  # Solution from automatic solver
-    auto_confidence: Optional[str] = None  # Confidence level (high/medium/low)
+    error_message: str | None = None
+    auto_solution: str | None = None  # Solution from automatic solver
+    auto_confidence: str | None = None  # Confidence level (high/medium/low)
 
 
 class CaptchaHumanLoop:
@@ -106,9 +106,9 @@ class CaptchaHumanLoop:
         self,
         timeout_seconds: float = 120.0,
         auto_skip_on_timeout: bool = True,
-        vnc_url: Optional[str] = None,
+        vnc_url: str | None = None,
         enable_auto_solve: bool = True,
-    ):
+    ) -> None:
         """
         Initialize the CAPTCHA handling service.
 
@@ -121,8 +121,8 @@ class CaptchaHumanLoop:
         self.timeout_seconds = timeout_seconds
         self.auto_skip_on_timeout = auto_skip_on_timeout
         # Use environment variable or NetworkConstants for VNC URL
-        vnc_host = os.getenv("AUTOBOT_VNC_HOST", NetworkConstants.LOCALHOST_IP)
-        vnc_port = os.getenv("AUTOBOT_VNC_PORT", str(NetworkConstants.VNC_PORT))
+        vnc_host = config.vnc_host
+        vnc_port = config.vnc_port
         self.vnc_url = vnc_url or f"http://{vnc_host}:{vnc_port}/vnc.html"
         self.enable_auto_solve = enable_auto_solve
         self._auto_solver = None
@@ -204,11 +204,11 @@ class CaptchaHumanLoop:
         page: Page,
         screenshot: bytes,
         captcha_type: str,
-        captcha_input_selector: Optional[str],
+        captcha_input_selector: str | None,
         captcha_id: str,
         url: str,
         start_time: float,
-    ) -> Optional[CaptchaResolutionResult]:
+    ) -> CaptchaResolutionResult | None:
         """
         Attempt automatic CAPTCHA solving.
 
@@ -368,11 +368,11 @@ class CaptchaHumanLoop:
         self,
         page: Page,
         captcha_type: str,
-        captcha_input_selector: Optional[str],
+        captcha_input_selector: str | None,
         captcha_id: str,
         url: str,
         start_time: float,
-    ) -> tuple[Optional[CaptchaResolutionResult], str]:
+    ) -> tuple[CaptchaResolutionResult | None, str]:
         """Attempt auto-solve and return result with screenshot base64.
 
         Args:
@@ -427,7 +427,7 @@ class CaptchaHumanLoop:
         page: Page,
         url: str,
         captcha_type: str = "unknown",
-        captcha_input_selector: Optional[str] = None,
+        captcha_input_selector: str | None = None,
     ) -> CaptchaResolutionResult:
         """Handle CAPTCHA with automatic solving attempt, then human fallback.
 
@@ -500,7 +500,8 @@ class CaptchaHumanLoop:
         screenshot_b64: str,
     ) -> None:
         """Send WebSocket notification that CAPTCHA was detected."""
-        await get_event_manager().publish(
+        await publish_event(
+            "global",
             "captcha_detected",
             {
                 "captcha_id": captcha_id,
@@ -512,11 +513,13 @@ class CaptchaHumanLoop:
                 "timestamp": utc_timestamp(),
                 "message": f"CAPTCHA detected at {url}. Please solve manually via VNC.",
             },
+            persist=PersistStrategy.NONE,
         )
 
     async def _notify_captcha_timeout(self, captcha_id: str, url: str) -> None:
         """Send WebSocket notification that CAPTCHA resolution timed out."""
-        await get_event_manager().publish(
+        await publish_event(
+            "global",
             "captcha_timeout",
             {
                 "captcha_id": captcha_id,
@@ -524,11 +527,13 @@ class CaptchaHumanLoop:
                 "timestamp": utc_timestamp(),
                 "message": f"CAPTCHA resolution timed out for {url}. Source will be skipped.",
             },
+            persist=PersistStrategy.NONE,
         )
 
     async def _notify_captcha_resolved(self, captcha_id: str, url: str, status: CaptchaResolutionStatus) -> None:
         """Send WebSocket notification that CAPTCHA was resolved."""
-        await get_event_manager().publish(
+        await publish_event(
+            "global",
             "captcha_resolved",
             {
                 "captcha_id": captcha_id,
@@ -536,6 +541,7 @@ class CaptchaHumanLoop:
                 "status": status.value,
                 "timestamp": utc_timestamp(),
             },
+            persist=PersistStrategy.NONE,
         )
 
     def get_pending_captchas(self) -> Dict[str, Any]:
@@ -545,7 +551,7 @@ class CaptchaHumanLoop:
             for captcha_id in self._pending_resolutions.keys()
         }
 
-    async def _attempt_auto_solve(self, screenshot: bytes, captcha_type: str) -> Optional[Dict[str, Any]]:
+    async def _attempt_auto_solve(self, screenshot: bytes, captcha_type: str) -> Dict[str, Any] | None:
         """
         Attempt to automatically solve the CAPTCHA using OCR.
 
@@ -599,7 +605,7 @@ class CaptchaHumanLoop:
 
 
 # Global singleton instance (thread-safe)
-_captcha_human_loop: Optional[CaptchaHumanLoop] = None
+_captcha_human_loop: CaptchaHumanLoop | None = None
 _captcha_human_loop_lock = threading.Lock()
 
 

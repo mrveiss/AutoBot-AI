@@ -10,18 +10,18 @@ Endpoints:
   GET /agent-diary/summary                          — recent entries for all known agents
 """
 
-import logging
 from typing import List
 
 from fastapi import APIRouter, Depends, Query
 
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from memory.agent_diary import AgentDiaryService, list_with_diaries
 from utils.response_helpers import create_success_response
 
 router = APIRouter()
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Canonical list of agent names known to the system (mirrors AGENT_CAPABILITIES in api/agent.py)
 _KNOWN_AGENTS: List[str] = [

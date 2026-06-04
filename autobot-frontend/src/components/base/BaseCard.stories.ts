@@ -4,7 +4,6 @@ import BaseCard from './BaseCard.vue';
 const meta = {
   title: 'Components/Base/BaseCard',
   component: BaseCard,
-  tags: ['autodocs'],
   argTypes: {
     variant: {
       control: 'select',

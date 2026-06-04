@@ -13,9 +13,6 @@ Provides API endpoints for:
 Related Issues: #59 (Advanced Analytics & Business Intelligence)
 """
 
-import logging
-from typing import Optional
-
 from fastapi import APIRouter, Depends, Query
 
 from api.schemas_analytics import (
@@ -34,9 +31,10 @@ from api.schemas_analytics import (
 )
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from services.agent_analytics import AgentType, TaskStatus, get_agent_analytics
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 router = APIRouter(prefix="/agents", tags=["analytics", "agents"])
 
 
@@ -192,7 +190,7 @@ async def get_recent_tasks(
     error_code_prefix="ANALYTICS_AGENTS",
 )
 async def compare_agents(
-    agent_ids: Optional[str] = Query(None, description="Comma-separated agent IDs to compare (all if not specified)"),
+    agent_ids: str | None = Query(None, description="Comma-separated agent IDs to compare (all if not specified)"),
     admin_check: bool = Depends(check_admin_permission),
 ):
     """
@@ -331,7 +329,7 @@ async def get_agent_recommendations(
     error_code_prefix="ANALYTICS_AGENTS",
 )
 async def get_performance_trends(
-    agent_id: Optional[str] = Query(None, description="Specific agent ID (all if not specified)"),
+    agent_id: str | None = Query(None, description="Specific agent ID (all if not specified)"),
     days: int = Query(default=7, ge=1, le=90, description="Number of days to analyze"),
     admin_check: bool = Depends(check_admin_permission),
 ):

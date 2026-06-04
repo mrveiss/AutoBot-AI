@@ -90,7 +90,7 @@ class TestCreateNode:
     """MeshDB.create_node returns the UUID string from the DB."""
 
     @pytest.mark.asyncio
-    async def test_returns_uuid_string(self):
+    async def test_returns_uuid_string(self) -> None:
         engine, conn = _make_engine(scalar=_NODE_UUID)
         db = MeshDB(engine)
 
@@ -105,7 +105,7 @@ class TestCreateNode:
         conn.execute.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_passes_correct_params(self):
+    async def test_passes_correct_params(self) -> None:
         engine, conn = _make_engine(scalar=_NODE_UUID)
         db = MeshDB(engine)
 
@@ -128,7 +128,7 @@ class TestCreateEdge:
     """MeshDB.create_edge returns the edge UUID string."""
 
     @pytest.mark.asyncio
-    async def test_returns_uuid_string(self):
+    async def test_returns_uuid_string(self) -> None:
         engine, conn = _make_engine(scalar=_EDGE_UUID)
         db = MeshDB(engine)
 
@@ -144,7 +144,7 @@ class TestCreateEdge:
         conn.execute.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_duplicate_raises_on_db_error(self):
+    async def test_duplicate_raises_on_db_error(self) -> None:
         """A unique-constraint violation from the DB propagates as an exception."""
         engine, conn = _make_engine()
         conn.execute = AsyncMock(side_effect=Exception("UniqueViolation"))
@@ -163,7 +163,7 @@ class TestGetEdge:
     """MeshDB.get_edge returns dict or None."""
 
     @pytest.mark.asyncio
-    async def test_returns_dict_when_found(self):
+    async def test_returns_dict_when_found(self) -> None:
         row = {
             "id": _EDGE_UUID,
             "from_node": _NODE_UUID,
@@ -184,7 +184,7 @@ class TestGetEdge:
         assert result["weight"] == 0.9
 
     @pytest.mark.asyncio
-    async def test_returns_none_when_absent(self):
+    async def test_returns_none_when_absent(self) -> None:
         engine, _ = _make_engine(fetchone=None)
         db = MeshDB(engine)
 
@@ -202,7 +202,7 @@ class TestGetNeighbors:
     """MeshDB.get_neighbors returns list of dicts."""
 
     @pytest.mark.asyncio
-    async def test_returns_correct_structure(self):
+    async def test_returns_correct_structure(self) -> None:
         rows = [
             {
                 "edge_id": _EDGE_UUID,
@@ -222,7 +222,7 @@ class TestGetNeighbors:
         assert result[0]["weight"] == 0.85
 
     @pytest.mark.asyncio
-    async def test_empty_when_no_neighbors(self):
+    async def test_empty_when_no_neighbors(self) -> None:
         engine, _ = _make_engine(mappings=[])
         db = MeshDB(engine)
 
@@ -240,7 +240,7 @@ class TestFetchEdges:
     """MeshDB.fetch_edges filters by min_weight and satisfies MeshEdgeSync Protocol."""
 
     @pytest.mark.asyncio
-    async def test_passes_min_weight_param(self):
+    async def test_passes_min_weight_param(self) -> None:
         engine, conn = _make_engine(mappings=[])
         db = MeshDB(engine)
 
@@ -250,7 +250,7 @@ class TestFetchEdges:
         assert params["min_weight"] == 0.7
 
     @pytest.mark.asyncio
-    async def test_returns_list_of_dicts(self):
+    async def test_returns_list_of_dicts(self) -> None:
         rows = [
             {
                 "id": _EDGE_UUID,
@@ -279,7 +279,7 @@ class TestLogEvolution:
     """MeshDB.log_evolution inserts an audit entry without raising."""
 
     @pytest.mark.asyncio
-    async def test_creates_audit_entry(self):
+    async def test_creates_audit_entry(self) -> None:
         engine, conn = _make_engine()
         db = MeshDB(engine)
 
@@ -298,7 +298,7 @@ class TestLogEvolution:
         assert json.loads(params["new_value"]) == {"weight": 0.8}
 
     @pytest.mark.asyncio
-    async def test_none_entity_id_allowed(self):
+    async def test_none_entity_id_allowed(self) -> None:
         """log_evolution must accept entity_id=None without raising."""
         engine, conn = _make_engine()
         db = MeshDB(engine)
@@ -326,7 +326,7 @@ class TestUpdateAccessCount:
     """MeshDB.update_access_count skips on empty list and fires SQL otherwise."""
 
     @pytest.mark.asyncio
-    async def test_skips_on_empty_list(self):
+    async def test_skips_on_empty_list(self) -> None:
         engine, conn = _make_engine()
         db = MeshDB(engine)
 
@@ -335,7 +335,7 @@ class TestUpdateAccessCount:
         conn.execute.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_calls_execute_with_node_ids(self):
+    async def test_calls_execute_with_node_ids(self) -> None:
         engine, conn = _make_engine()
         db = MeshDB(engine)
 
@@ -355,7 +355,7 @@ class TestDecayEdges:
     """MeshDB.decay_edges passes correct SQL params and returns rowcount."""
 
     @pytest.mark.asyncio
-    async def test_decay_edges_passes_correct_params(self):
+    async def test_decay_edges_passes_correct_params(self) -> None:
         from datetime import datetime, timezone
 
         engine, conn = _make_engine()
@@ -385,7 +385,7 @@ class TestDeleteEdges:
     """MeshDB.delete_edges returns rowcount of deleted rows."""
 
     @pytest.mark.asyncio
-    async def test_delete_edges_returns_count(self):
+    async def test_delete_edges_returns_count(self) -> None:
         engine, conn = _make_engine()
         conn.execute = AsyncMock(return_value=_rowcount_result(5))
         db = MeshDB(engine)
@@ -406,7 +406,7 @@ class TestGetPromotionCandidates:
     """MeshDB.get_promotion_candidates forwards min_access and min_edges."""
 
     @pytest.mark.asyncio
-    async def test_get_promotion_candidates_filters_correctly(self):
+    async def test_get_promotion_candidates_filters_correctly(self) -> None:
         rows = [
             {
                 "id": _NODE_UUID,
@@ -437,7 +437,7 @@ class TestPromoteToAnchor:
     """MeshDB.promote_to_anchor executes UPDATE with correct node_id."""
 
     @pytest.mark.asyncio
-    async def test_promote_to_anchor_updates_flag(self):
+    async def test_promote_to_anchor_updates_flag(self) -> None:
         engine, conn = _make_engine()
         db = MeshDB(engine)
 
@@ -457,7 +457,7 @@ class TestGetGraphDensity:
     """MeshDB.get_graph_density returns a float value."""
 
     @pytest.mark.asyncio
-    async def test_get_graph_density_returns_float(self):
+    async def test_get_graph_density_returns_float(self) -> None:
         engine, conn = _make_engine(scalar=2.5)
         db = MeshDB(engine)
 
@@ -467,7 +467,7 @@ class TestGetGraphDensity:
         assert density == 2.5
 
     @pytest.mark.asyncio
-    async def test_get_graph_density_returns_zero_when_empty(self):
+    async def test_get_graph_density_returns_zero_when_empty(self) -> None:
         engine, conn = _make_engine(scalar=None)
         db = MeshDB(engine)
 
@@ -485,7 +485,7 @@ class TestGetAnchorNeighbors:
     """MeshDB.get_anchor_neighbors returns anchor node IDs adjacent to seeds."""
 
     @pytest.mark.asyncio
-    async def test_get_anchor_neighbors_returns_anchor_nodes_adjacent_to_seeds(self):
+    async def test_get_anchor_neighbors_returns_anchor_nodes_adjacent_to_seeds(self) -> None:
         """get_anchor_neighbors returns UUIDs of anchor nodes reachable from seed_ids."""
         anchor_id = "aaaaaaaa-0000-0000-0000-000000000001"
         seed_id = "bbbbbbbb-0000-0000-0000-000000000002"
@@ -499,7 +499,7 @@ class TestGetAnchorNeighbors:
         assert result == [anchor_id]
 
     @pytest.mark.asyncio
-    async def test_get_anchor_neighbors_empty_seeds_returns_empty(self):
+    async def test_get_anchor_neighbors_empty_seeds_returns_empty(self) -> None:
         """get_anchor_neighbors returns [] without touching DB when seed_ids is empty."""
         engine, conn = _make_engine()
         db = MeshDB(engine)

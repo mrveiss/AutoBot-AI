@@ -8,13 +8,14 @@ Detects architectural issues, calculates metrics, and generates recommendations.
 Extracted from ArchitecturalPatternAnalyzer as part of Issue #394.
 """
 
-import logging
 from typing import Dict, List
+
+from autobot_shared.logging_manager import get_logger
 
 from .dependency_analyzer import DependencyAnalyzer
 from .types import ArchitecturalComponent, ArchitecturalIssue, ArchitecturalMetrics
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class IssueDetector:

@@ -9,17 +9,17 @@ Creates approval records and notifies SLM admin via Redis pub/sub.
 """
 
 import json
-import logging
 import uuid
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
-from skills.models import GovernanceMode, SkillPackage, TrustLevel
+from autobot_shared.logging_manager import get_logger
+from skills.models import GovernanceMode, SkillActivationLevel, SkillPackage
 
 if TYPE_CHECKING:
     pass  # future typing-only imports
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 REDIS_APPROVAL_CHANNEL = "skills:approvals:pending"
 
 
@@ -29,9 +29,9 @@ class ActivationResult:
 
     approved: bool
     requires_human_review: bool
-    approval_id: Optional[str] = None
+    approval_id: str | None = None
     reason: str = ""
-    trust_level: TrustLevel = TrustLevel.MONITORED
+    trust_level: SkillActivationLevel = SkillActivationLevel.MONITORED
 
 
 class GovernanceEngine:
@@ -40,7 +40,7 @@ class GovernanceEngine:
     def __init__(
         self,
         mode: GovernanceMode = GovernanceMode.SEMI_AUTO,
-        default_trust: TrustLevel = TrustLevel.MONITORED,
+        default_trust: SkillActivationLevel = SkillActivationLevel.MONITORED,
     ) -> None:
         """Initialize with governance mode and default trust level."""
         self.mode = mode
@@ -51,7 +51,7 @@ class GovernanceEngine:
         skill_name: str,
         requested_by: str,
         reason: str,
-        skill_id: Optional[str] = None,
+        skill_id: str | None = None,
     ) -> ActivationResult:
         """Process a skill activation request under the current governance mode."""
         if self.mode == GovernanceMode.LOCKED:
@@ -69,7 +69,7 @@ class GovernanceEngine:
         self,
         approval_id: str,
         admin_id: str,
-        trust_level: TrustLevel = TrustLevel.MONITORED,
+        trust_level: SkillActivationLevel = SkillActivationLevel.MONITORED,
         notes: str = "",
     ) -> ActivationResult:
         """Admin approves a pending skill activation."""
@@ -87,7 +87,7 @@ class GovernanceEngine:
         skill_name: str,
         requested_by: str,
         reason: str,
-        skill_id: Optional[str] = None,
+        skill_id: str | None = None,
     ) -> ActivationResult:
         """Create approval record in DB and notify admin (SEMI_AUTO mode).
 
@@ -134,13 +134,10 @@ async def _persist_approval(approval_id: str, skill_id: str, requested_by: str, 
     Helper for GovernanceEngine._create_pending_approval (Issue #951).
     """
     try:
-        from sqlalchemy.ext.asyncio import AsyncSession
-
-        from skills.db import get_skills_engine
+        from skills.db import skills_session_context
         from skills.models import SkillApproval
 
-        engine = get_skills_engine()
-        async with AsyncSession(engine) as session:
+        async with skills_session_context() as session:
             session.add(
                 SkillApproval(
                     id=approval_id,
@@ -149,7 +146,6 @@ async def _persist_approval(approval_id: str, skill_id: str, requested_by: str, 
                     reason=reason,
                 )
             )
-            await session.commit()
         logger.debug("SkillApproval %s persisted to DB", approval_id)
     except Exception as exc:
         logger.warning("Failed to persist SkillApproval to DB: %s", exc)

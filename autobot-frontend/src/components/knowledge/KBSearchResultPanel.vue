@@ -15,7 +15,7 @@
     <!-- Panel header -->
     <div class="panel-header">
       <div class="panel-title">
-        <i class="fas fa-search"></i>
+        <Icon name="search" />
         <span v-if="loading">Searching…</span>
         <span v-else-if="results.length">
           {{ results.length }} result{{ results.length === 1 ? '' : 's' }} for
@@ -28,7 +28,7 @@
         aria-label="Close search results"
         @click="emit('close')"
       >
-        <i class="fas fa-times"></i>
+        <Icon name="times" />
       </button>
     </div>
 
@@ -81,14 +81,14 @@
               class="rerank-badge"
               :title="`Re-rank score: ${Math.round(result.rerank_score * 100)}%`"
             >
-              <i class="fas fa-brain"></i>
+              <Icon name="brain" />
               {{ Math.round(result.rerank_score * 100) }}%
             </span>
           </div>
 
           <div class="result-item-meta">
-            <span><i class="fas fa-folder"></i> {{ result.document?.category || 'general' }}</span>
-            <span><i class="fas fa-file-alt"></i> {{ result.document?.type || 'text' }}</span>
+            <span><Icon name="folder" /> {{ result.document?.category || 'general' }}</span>
+            <span><Icon name="file-alt" /> {{ result.document?.type || 'text' }}</span>
           </div>
 
           <!-- Highlighted snippet -->
@@ -102,7 +102,7 @@
       <!-- Right: inline document viewer -->
       <div class="doc-viewer" role="complementary" aria-label="Document viewer">
         <div v-if="!activeResult" class="viewer-empty">
-          <i class="fas fa-hand-point-left"></i>
+          <Icon name="hand-paper" />
           <p>Select a result to view the document</p>
           <p class="viewer-hint">Use arrow keys to navigate, Enter to open</p>
         </div>
@@ -110,18 +110,18 @@
         <template v-else>
           <div class="viewer-header">
             <div class="viewer-title-row">
-              <i class="fas fa-file-alt viewer-icon"></i>
+              <Icon name="file-alt" class="viewer-icon" />
               <h4 class="viewer-title">{{ activeResult.document?.title || 'Untitled' }}</h4>
             </div>
             <div class="viewer-meta">
               <span v-if="activeResult.document?.category">
-                <i class="fas fa-folder"></i> {{ activeResult.document.category }}
+                <Icon name="folder" /> {{ activeResult.document.category }}
               </span>
               <span v-if="activeResult.document?.type">
-                <i class="fas fa-tag"></i> {{ activeResult.document.type }}
+                <Icon name="tag" /> {{ activeResult.document.type }}
               </span>
               <span v-if="activeResult.document?.updatedAt">
-                <i class="fas fa-clock"></i>
+                <Icon name="clock" />
                 {{ formatDate(activeResult.document.updatedAt) }}
               </span>
               <span
@@ -134,7 +134,7 @@
           </div>
 
           <div v-if="loadingDoc" class="viewer-loading">
-            <i class="fas fa-spinner fa-spin"></i>
+            <Icon name="spinner" class="animate-spin" />
             Loading document…
           </div>
 
@@ -153,10 +153,10 @@
               :disabled="!viewerContent"
               title="Copy content"
             >
-              <i class="fas fa-copy"></i> Copy
+              <Icon name="copy" /> Copy
             </button>
             <span v-if="copySuccess" class="copy-success">
-              <i class="fas fa-check"></i> Copied
+              <Icon name="check" /> Copied
             </span>
           </div>
         </template>
@@ -165,7 +165,7 @@
 
     <!-- Empty state -->
     <div v-else-if="!loading" class="empty-state">
-      <i class="fas fa-search"></i>
+      <Icon name="search" />
       <p>No results found for "{{ query }}"</p>
     </div>
   </div>
@@ -187,6 +187,7 @@
  * Issue #3940: Fixed `as any` cast and consolidated repository instance
  */
 
+import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, watch, nextTick } from 'vue'
 import { KnowledgeRepository } from '@/models/repositories'
 import type { SearchResult, KnowledgeDocument } from '@/stores/useKnowledgeStore'

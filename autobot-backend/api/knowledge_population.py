@@ -18,7 +18,6 @@ Related Issues: #185 (Split), #209 (Knowledge split)
 """
 
 import asyncio
-import logging
 import re
 from pathlib import Path as PathLib
 
@@ -27,6 +26,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import TimingConstants
 from knowledge.schemas.population import (
     JobStatusResponse,
@@ -41,7 +41,7 @@ from knowledge.schemas.population import (
 from knowledge_factory import get_or_create_knowledge_base
 from utils.template_loader import knowledge_data_exists, load_knowledge_data
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Pre-compiled regex for ANSI escape sequence removal
 _ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-9;]*m")

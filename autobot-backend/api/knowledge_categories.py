@@ -22,9 +22,7 @@ Endpoints:
 Related Issues: #77 (Organization), #411 (Categories)
 """
 
-import logging
 import re
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 
@@ -46,11 +44,12 @@ from api.schemas_knowledge import (
 )
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import QueryDefaults
 from knowledge_factory import get_or_create_knowledge_base
 from utils.catalog_http_exceptions import raise_internal_error, raise_invalid_input, raise_not_found
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #411: Pre-compiled regex for category ID validation
 _CATEGORY_ID_RE = re.compile(r"^[a-zA-Z0-9_-]+$")
@@ -139,7 +138,7 @@ async def create_category(
     error_code_prefix="KNOWLEDGE_CATEGORIES",
 )
 async def get_category_tree(
-    root_id: Optional[str] = Query(default=None, description="Start from specific category"),
+    root_id: str | None = Query(default=None, description="Start from specific category"),
     max_depth: int = Query(
         default=QueryDefaults.DEFAULT_SEARCH_LIMIT,
         ge=1,
@@ -346,7 +345,7 @@ async def update_category(
 async def delete_category(
     category_id: str = Path(..., description="Category UUID"),
     recursive: bool = Query(default=False, description="Delete descendants"),
-    reassign_to: Optional[str] = Query(default=None, description="Reassign facts to"),
+    reassign_to: str | None = Query(default=None, description="Reassign facts to"),
     req: Request = None,
 ):
     """
@@ -389,7 +388,7 @@ async def delete_category(
     _raise_delete_category_error(result)
 
 
-def _validate_delete_category_params(category_id: str, reassign_to: Optional[str]) -> tuple:
+def _validate_delete_category_params(category_id: str, reassign_to: str | None) -> tuple:
     """Helper for delete_category. Ref: #1088."""
     category_id = category_id.strip()
     if not _CATEGORY_ID_RE.match(category_id):

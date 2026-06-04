@@ -15,8 +15,7 @@ The actual router definitions are organized into domain-specific modules
 in the router_registry package to reduce coupling and improve maintainability.
 """
 
-import logging
-
+from autobot_shared.logging_manager import get_logger
 from initialization.router_registry import (
     load_analytics_routers,
     load_core_routers,
@@ -27,7 +26,7 @@ from initialization.router_registry import (
     load_terminal_routers,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def load_optional_routers():

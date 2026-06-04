@@ -16,13 +16,13 @@ Related Issues: #59 (Advanced Analytics & Business Intelligence)
 """
 
 import asyncio
-import logging
 import statistics
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import RedisDatabase
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
 from autobot_shared.time_utils import now_utc, utc_timestamp
@@ -37,7 +37,7 @@ from services.user_behavior_analytics import (
     get_behavior_analytics,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class MaintenancePriority(str, Enum):
@@ -145,11 +145,11 @@ class AnalyticsService(AsyncRedisClientMixin):
     OPTIMIZATION_KEY = f"{REDIS_PREFIX}optimization"
     _redis_database = RedisDatabase.ANALYTICS
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize analytics service with lazy-loaded dependencies."""
-        self._behavior: Optional[UserBehaviorAnalytics] = None
-        self._agents: Optional[AgentAnalytics] = None
-        self._cost: Optional[LLMCostTracker] = None
+        self._behavior: UserBehaviorAnalytics | None = None
+        self._agents: AgentAnalytics | None = None
+        self._cost: LLMCostTracker | None = None
 
     @property
     def behavior(self) -> UserBehaviorAnalytics:
@@ -352,7 +352,7 @@ class AnalyticsService(AsyncRedisClientMixin):
 
         return recommendations
 
-    def _make_agent_timeout_rec(self, agent: Any) -> Optional[MaintenanceRecommendation]:
+    def _make_agent_timeout_rec(self, agent: Any) -> MaintenanceRecommendation | None:
         """Helper for _check_agent_maintenance_issues. Ref: #1088."""
         if agent.timeout_tasks <= 5 or agent.total_tasks <= 0:
             return None
@@ -755,9 +755,9 @@ class AnalyticsService(AsyncRedisClientMixin):
     async def generate_custom_report(
         self,
         report_type: str,
-        start_date: Optional[datetime] = None,
-        end_date: Optional[datetime] = None,
-        include_sections: Optional[List[str]] = None,
+        start_date: datetime | None = None,
+        end_date: datetime | None = None,
+        include_sections: List[str] | None = None,
     ) -> Dict[str, Any]:
         """
         Generate a custom analytics report.
@@ -833,7 +833,7 @@ class AnalyticsService(AsyncRedisClientMixin):
 # Singleton instance (thread-safe)
 import threading
 
-_analytics_service: Optional[AnalyticsService] = None
+_analytics_service: AnalyticsService | None = None
 _analytics_service_lock = threading.Lock()
 
 

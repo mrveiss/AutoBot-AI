@@ -8,8 +8,9 @@ Issue #732: Unified Gateway for multi-channel communication.
 Contains configuration settings for the Gateway service.
 """
 
-import os
 from dataclasses import dataclass
+
+from autobot_shared.ssot_config import config
 
 
 @dataclass
@@ -41,14 +42,14 @@ class GatewayConfig:
     def from_env(cls) -> "GatewayConfig":
         """Load configuration from environment variables."""
         return cls(
-            rate_limit_per_user=int(os.getenv("GATEWAY_RATE_LIMIT_USER", "60")),
-            rate_limit_per_channel=int(os.getenv("GATEWAY_RATE_LIMIT_CHANNEL", "100")),
-            session_timeout_seconds=int(os.getenv("GATEWAY_SESSION_TIMEOUT", "1800")),
-            max_message_size_bytes=int(os.getenv("GATEWAY_MAX_MESSAGE_SIZE", str(1024 * 1024))),
-            max_sessions_per_user=int(os.getenv("GATEWAY_MAX_SESSIONS_USER", "5")),
-            enable_sandbox_mode=os.getenv("GATEWAY_ENABLE_SANDBOX", "false").lower() == "true",
-            heartbeat_interval_seconds=int(os.getenv("GATEWAY_HEARTBEAT_INTERVAL", "30")),
-            message_retention_hours=int(os.getenv("GATEWAY_MESSAGE_RETENTION_HOURS", "24")),
+            rate_limit_per_user=int(config.gateway_rate_limit_user),
+            rate_limit_per_channel=int(config.gateway_rate_limit_channel),
+            session_timeout_seconds=int(config.gateway_session_timeout),
+            max_message_size_bytes=int(config.gateway_max_message_size),
+            max_sessions_per_user=int(config.gateway_max_sessions_user),
+            enable_sandbox_mode=config.gateway_enable_sandbox.lower() == "true",
+            heartbeat_interval_seconds=int(config.gateway_heartbeat_interval),
+            message_retention_hours=int(config.gateway_message_retention_hours),
         )
 
 

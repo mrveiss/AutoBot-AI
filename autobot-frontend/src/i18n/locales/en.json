@@ -9,6 +9,7 @@
     "dismiss": "Dismiss",
     "confirm": "Confirm",
     "back": "Back",
+    "forward": "Forward",
     "next": "Next",
     "loading": "Loading...",
     "error": "Error",
@@ -17,6 +18,7 @@
     "clear": "Clear",
     "reset": "Reset",
     "copy": "Copy",
+    "saving": "Saving...",
     "share": "Share",
     "export": "Export",
     "import": "Import",
@@ -83,14 +85,47 @@
     "page": "Page",
     "previous": "Previous",
     "optional": "optional",
-    "remove": "Remove"
+    "remove": "Remove",
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out",
+    "fitToView": "Fit to view",
+    "toggleLayout": "Toggle layout",
+    "fullscreen": "Fullscreen",
+    "exitFullscreen": "Exit fullscreen",
+    "expand": "Expand",
+    "collapse": "Collapse",
+    "copyToClipboard": "Copy to clipboard",
+    "sortAscending": "Sort ascending",
+    "sortDescending": "Sort descending",
+    "moreOptions": "More options",
+    "exportJson": "Export as JSON",
+    "exportCsv": "Export as CSV",
+    "download": "Download",
+    "filterByCategory": "Filter by category"
   },
   "chat": {
+    "contextWindow": {
+      "ariaLabel": "{used} of {max} tokens used",
+      "tooltip": "{used} / {max} tokens used ({percent}% of context window)",
+      "warningToast": "Conversation approaching context limit ({percent}%). Older messages may be summarized.",
+      "compressedToast": "Context window optimized - older messages summarized",
+      "summaryTitle": "Context Summary",
+      "summaryToggle": "Show details"
+    },
     "sendMessage": "Send a message...",
     "newChat": "New Chat",
     "clearChat": "Clear chat",
     "exportChat": "Export chat",
     "deleteChat": "Delete chat",
+    "openSettings": "Chat settings",
+    "settings": {
+      "title": "Chat Settings",
+      "contextOverflowLabel": "Context Overflow Protection",
+      "contextOverflowDescription": "Choose how to handle conversations approaching the context limit",
+      "contextOverflowAuto": "Auto-summarize",
+      "contextOverflowWarn": "Warn only",
+      "contextOverflowDisabled": "Disabled"
+    },
     "editName": "Edit Name",
     "copyMessage": "Copy message",
     "editMessage": "Edit message",
@@ -187,6 +222,18 @@
       "deleteFailed": "Failed to delete some chats",
       "sharedSuccess": "Chat shared successfully"
     },
+    "folders": {
+      "folders": "Folders",
+      "newFolder": "New folder",
+      "folderName": "Folder name",
+      "rename": "Rename folder",
+      "addSubfolder": "Add subfolder",
+      "pin": "Pin folder",
+      "unpin": "Unpin folder",
+      "assignToFolder": "Move to folder",
+      "removeFromFolder": "Remove from folder",
+      "confirmDelete": "Delete folder \"{name}\"? Subfolders will be moved to root."
+    },
     "interface": {
       "loadFailed": "Failed to load chat interface",
       "voiceOutputOn": "Voice output on",
@@ -248,6 +295,7 @@
       "explain": "Explain",
       "attachFile": "Attach file",
       "analyzeImage": "Analyze image",
+      "managePresets": "Manage slash command presets",
       "voiceInput": "Voice input",
       "addEmoji": "Add emoji",
       "sending": "Sending...",
@@ -538,7 +586,8 @@
       "navigationFailed": "Navigation failed",
       "backFailed": "Back navigation failed",
       "forwardFailed": "Forward navigation failed",
-      "reloadFailed": "Reload failed"
+      "reloadFailed": "Reload failed",
+      "go": "Navigate"
     },
     "voice": {
       "title": "Voice Chat",
@@ -573,7 +622,10 @@
       "hintResponding": "AutoBot is responding...",
       "hintRespondingShort": "Responding...",
       "hintAutoStart": "Listening will start automatically",
-      "hintTapToSpeak": "Tap to speak"
+      "hintTapToSpeak": "Tap to speak",
+      "realtimeWebrtc": "Realtime WebRTC",
+      "realtimeConnecting": "Connecting to Realtime...",
+      "realtimeConnected": "Realtime — speak anytime"
     },
     "typing": {
       "aiAssistant": "AI Assistant",
@@ -586,6 +638,31 @@
       "formulating": "Formulating response...",
       "crafting": "Crafting detailed answer...",
       "reviewing": "Reviewing response quality..."
+    },
+    "presets": {
+      "modalTitle": "Slash Command Presets",
+      "newPreset": "New Preset",
+      "editPreset": "Edit Preset",
+      "fieldName": "Name",
+      "namePlaceholder": "my-preset",
+      "fieldDescription": "Description",
+      "descriptionPlaceholder": "What this preset does",
+      "fieldContent": "Content",
+      "contentPlaceholder": "Enter the prompt text...",
+      "cancel": "Cancel",
+      "create": "Create",
+      "update": "Update",
+      "delete": "Delete",
+      "listLabel": "Your presets",
+      "loading": "Loading presets...",
+      "empty": "No presets yet. Create one above.",
+      "editAriaLabel": "Edit preset {name}",
+      "deleteAriaLabel": "Delete preset {name}",
+      "deleteConfirmTitle": "Delete preset",
+      "deleteConfirmMessage": "Delete /{name}? This cannot be undone.",
+      "nameRequired": "Name is required",
+      "nameInvalid": "Only letters, numbers, hyphens, and underscores are allowed",
+      "contentRequired": "Content is required"
     }
   },
   "settings": {
@@ -627,6 +704,10 @@
       "statusMissing": "Missing",
       "statusSkipped": "Skipped (optional)",
       "manageInSecrets": "Manage all secrets in Settings"
+    },
+    "presets": {
+      "title": "Slash Presets",
+      "description": "Create reusable slash commands that expand into full prompts in the chat input. Type / followed by the preset name to trigger them."
     },
     "appearanceDesc": "Customize the look and feel of your workspace",
     "voiceDesc": "Configure text-to-speech voice and voice profiles",
@@ -1256,6 +1337,8 @@
         "evolutionAria": "Evolution analytics",
         "audit": "Audit",
         "auditAria": "Audit logs",
+        "devTools": "Dev Tools",
+        "devToolsAria": "Developer tools and utilities",
         "usage": "Usage",
         "usageAria": "Usage & Costs",
         "operations": "Operations",
@@ -2255,7 +2338,20 @@
       "subtitle": "Subtitle",
       "title": "Title",
       "traditionalDesc": "Traditional desc",
-      "traditionalSearch": "Traditional search"
+      "traditionalSearch": "Traditional search",
+      "accessPlatform": "Platform",
+      "accessPublic": "Public",
+      "accessSystem": "System",
+      "accessUser": "User",
+      "clickToView": "Click to view full document",
+      "close": "Close",
+      "copyContent": "Copy Content",
+      "defaultDocTitle": "Untitled Document",
+      "foundResults": "Found {count} results for \"{query}\"",
+      "loadingDocument": "Loading document content...",
+      "matchScore": "{value}% match",
+      "noContent": "No content available",
+      "rerankScore": "{value}% rerank"
     },
     "upload": {
       "tagsPlaceholder": "Enter tags separated by commas...",
@@ -2304,7 +2400,14 @@
       "visShared": "Vis shared",
       "visSystem": "Vis system",
       "visibility": "Visibility",
-      "visibilityHint": "Visibility hint"
+      "visibilityHint": "Visibility hint",
+      "errorAddText": "Failed to add text to knowledge base",
+      "errorFileTooLarge": "File \"{name}\" exceeds the maximum size limit",
+      "errorImportUrl": "Failed to import URL content",
+      "errorUnsupportedFormat": "File \"{name}\" has an unsupported format",
+      "errorUploadFiles": "Failed to upload files",
+      "successTextAdded": "Text added to knowledge base successfully",
+      "successUrlImported": "URL content imported successfully"
     },
     "documents": "Documents",
     "categories": {
@@ -2354,7 +2457,11 @@
       "maintenance": "Maintenance",
       "maintenanceAriaLabel": "Knowledge base maintenance",
       "analytics": "Analytics",
-      "statistics": "Statistics"
+      "statistics": "Statistics",
+      "webResearch": "Web Research",
+      "webResearchAriaLabel": "4-tab web research panel",
+      "openSidebar": "Open navigation menu",
+      "closeSidebar": "Close navigation menu"
     },
     "backup": {
       "title": "Backup & Restore",
@@ -3224,7 +3331,8 @@
       "vectorFramework": "Vector framework",
       "vectorIndexHealth": "Vector index health",
       "vectorNotGenerated": "Vector not generated",
-      "vectorizedForRag": "Vectorized for rag"
+      "vectorizedForRag": "Vectorized for rag",
+      "confirmOptimize": "This will optimize the database. Continue?"
     },
     "summaries": {
       "search": {
@@ -3355,7 +3463,11 @@
       "decisionsApplied": "{count} decision(s) applied successfully",
       "compiledSuccess": "Chat compiled successfully",
       "failedToLoad": "Failed to load knowledge items",
-      "decisionsApplyFailed": "Failed to apply decisions"
+      "decisionsApplyFailed": "Failed to apply decisions",
+      "compileFailed": "Failed to compile conversation",
+      "suggestionAddToKb": "Suggested: Add to Knowledge Base",
+      "suggestionDelete": "Suggested: Delete",
+      "suggestionKeepTemporary": "Suggested: Keep Temporarily"
     },
     "systemKnowledge": {
       "vectorizeTooltip": "Generate vector embeddings for all knowledge base entries to enable semantic search",
@@ -3388,7 +3500,14 @@
       "success": "Success",
       "targetHost": "Target host",
       "totalFacts": "Total facts",
-      "vectorizing": "Vectorizing"
+      "vectorizing": "Vectorizing",
+      "confirmIndexDocs": "Do you want to force reindex existing documents?",
+      "confirmInitialize": "This will initialize system knowledge for the selected host. This may take several minutes. Continue?",
+      "confirmRefreshManPages": "This will refresh man pages for the selected host. Continue?",
+      "confirmReindex": "This will reindex all documents for the selected host. Continue?",
+      "confirmVectorize": "This will vectorize {totalFacts} facts. Currently {totalVectors} vectors exist, {needsVectorization} need vectorization. Continue?",
+      "vectorizeComplete": "Vectorize Facts (✓ {vectors} vectors from {facts} facts)",
+      "vectorizePending": "Vectorize Facts ({pending} pending)"
     },
     "vectorization": {
       "actionVectorize": "Vectorize",
@@ -3407,7 +3526,15 @@
       "noDocuments": "No documents",
       "progressTitle": "Progress title",
       "retryFailed": "Retry failed",
-      "total": "Total"
+      "total": "Total",
+      "statusFailed": "Failed",
+      "statusPending": "Pending",
+      "statusUnknown": "Unknown",
+      "statusVectorized": "Vectorized",
+      "tooltipFailed": "Vectorization failed for this document",
+      "tooltipPending": "Document is pending vectorization",
+      "tooltipUnknown": "Vectorization status unknown",
+      "tooltipVectorized": "Document has been vectorized and is searchable via RAG"
     },
     "batchSelection": {
       "selected": "{count} selected",
@@ -3447,7 +3574,15 @@
       "warnings": "Warnings"
     },
     "manager": {
-      "errorFallback": "Error fallback"
+      "errorFallback": "Error fallback",
+      "tabAdvanced": "Advanced",
+      "tabCategories": "Categories",
+      "tabManage": "Manage",
+      "tabPromptEditor": "Prompts",
+      "tabSearch": "Search",
+      "tabStatistics": "Statistics",
+      "tabSystemDocs": "System Docs",
+      "tabUpload": "Upload"
     },
     "memoryOrphan": {
       "activeSessions": "Active sessions",
@@ -3612,7 +3747,8 @@
       "user": "User",
       "write": "Write",
       "searchError": "Search failed",
-      "searchUnavailable": "Search unavailable"
+      "searchUnavailable": "Search unavailable",
+      "unsavedConfirm": "You have unsaved changes. Are you sure you want to close?"
     },
     "systemDocs": {
       "copied": "Copied",
@@ -3628,7 +3764,13 @@
       "selectDocument": "Select document",
       "subtitle": "Subtitle",
       "title": "Title",
-      "words": "Words"
+      "words": "Words",
+      "errorCopy": "Failed to copy to clipboard",
+      "errorExport": "Failed to export document",
+      "errorExportAll": "Failed to export all documents",
+      "errorLoadCategories": "Failed to load documentation categories",
+      "errorLoadContent": "Failed to load document content",
+      "errorLoadDocs": "Failed to load documents"
     },
     "treeNode": {
       "itemsCount": "Items count",
@@ -3657,7 +3799,86 @@
       "selectAll": "Select all",
       "selectedCount": "Selected count",
       "title": "Title",
-      "untitled": "Untitled"
+      "untitled": "Untitled",
+      "typeConnector": "Connector",
+      "typeResearch": "Web Research",
+      "typeUpload": "Manual Upload",
+      "typeUrl": "URL Fetch"
+    },
+    "webResearch": {
+      "title": "Web Research",
+      "subtitle": "Fetch, crawl, discover, and extract data from the web",
+      "navLabel": "Web Research",
+      "navAriaLabel": "Web research panel",
+      "settingsNavLabel": "Research Settings",
+      "settingsNavAriaLabel": "Web research settings",
+      "tabListAriaLabel": "Web research tabs",
+      "renderLabel": "Render Mode",
+      "renderAuto": "Auto",
+      "renderFast": "Fast (no JS)",
+      "renderPlaywright": "Full JS (Playwright)",
+      "ingestLabel": "Save to Knowledge Base",
+      "respectRobotsLabel": "Respect robots.txt",
+      "reset": "Clear",
+      "retry": "Retry",
+      "fetching": "Fetching…",
+      "crawling": "Crawling…",
+      "discovering": "Discovering…",
+      "extracting": "Extracting…",
+      "indexed": "Saved to KB",
+      "failed": "Failed",
+      "schemaValid": "Schema Valid",
+      "schemaInvalid": "Schema Invalid",
+      "filterPlaceholder": "Filter URLs…",
+      "filterLabel": "Filter URLs",
+      "noFilterResults": "No URLs match the current filter.",
+      "depthLabel": "Depth {depth}",
+      "errorGeneric": "An unexpected error occurred. Please try again.",
+      "tabs": {
+        "scrape": "Fetch Page",
+        "scrapeAriaLabel": "Fetch Page — extract text from a single URL",
+        "crawl": "Crawl Site",
+        "crawlAriaLabel": "Crawl Site — follow links and index multiple pages",
+        "siteMap": "Find Pages",
+        "siteMapAriaLabel": "Find Pages — discover all URLs on a domain",
+        "extract": "Get Data",
+        "extractAriaLabel": "Get Data — extract structured data using a schema"
+      },
+      "scrape": {
+        "urlLabel": "URL",
+        "urlPlaceholder": "https://example.com/page",
+        "formatLabel": "Output Format",
+        "submitLabel": "Fetch Page",
+        "emptyState": "Enter a URL above and click Fetch Page to extract its text content."
+      },
+      "crawl": {
+        "seedLabel": "Seed URL",
+        "seedPlaceholder": "https://example.com",
+        "depthLabel": "Max Depth",
+        "maxPagesLabel": "Max Pages",
+        "sameOriginLabel": "Same origin only",
+        "submitLabel": "Crawl Site",
+        "emptyState": "Enter a starting URL and click Crawl Site to follow its links.",
+        "resultTitle": "{count} pages crawled",
+        "urlListLabel": "Crawled pages"
+      },
+      "siteMap": {
+        "domainLabel": "Domain",
+        "domainPlaceholder": "example.com",
+        "maxUrlsLabel": "Max URLs",
+        "submitLabel": "Find Pages",
+        "emptyState": "Enter a domain name and click Find Pages to discover its URLs.",
+        "resultTitle": "{count} URLs found on {domain}",
+        "urlListLabel": "Discovered URLs"
+      },
+      "extract": {
+        "urlLabel": "URL",
+        "urlPlaceholder": "https://example.com/page",
+        "schemaLabel": "JSON Schema",
+        "submitLabel": "Get Data",
+        "emptyState": "Enter a URL and a JSON Schema, then click Get Data to extract structured information.",
+        "resultTitle": "Extracted Data"
+      }
     }
   },
   "workflow": {
@@ -3702,6 +3923,7 @@
       "runner": "Runner",
       "runnerAriaLabel": "Workflow runner",
       "history": "History",
+      "historyAriaLabel": "Workflow execution history",
       "guiAutomation": "GUI Automation",
       "guiAutomationAriaLabel": "GUI automation from screen capture",
       "vision": "VISION",
@@ -3713,7 +3935,9 @@
       "mediaGalleryAriaLabel": "Media Gallery - browse captured media",
       "orchestration": "Orchestration",
       "visualizer": "Visualizer",
+      "visualizerAriaLabel": "Orchestration visualizer",
       "agents": "Agents",
+      "agentsAriaLabel": "Agent capabilities",
       "refresh": "Refresh",
       "loadingServices": "Loading workflow services...",
       "failedToLoad": "Failed to Load Data",
@@ -5275,6 +5499,7 @@
     "notFound": {
       "title": "404",
       "description": "The page you're looking for doesn't exist or has been moved.",
+      "goHome": "Go Home",
       "goToChat": "Go to Chat",
       "goBack": "Go Back",
       "quickLinks": "Quick Links",
@@ -5461,7 +5686,9 @@
       "done": "Done",
       "editLayout": "Edit Layout",
       "addWidget": "Add Widget",
-      "save": "Save",
+      "save": "Save Changes",
+      "saved": "Saved",
+      "dashboardSaved": "Dashboard saved",
       "createNewDashboard": "Create new dashboard",
       "availableWidgets": "Available Widgets",
       "configure": "Configure",
@@ -5703,6 +5930,22 @@
       "createBrowserSession": "Create Browser Session",
       "startingUrl": "Starting URL",
       "cancel": "Cancel"
+    },
+    "scrapeTemplates": {
+      "title": "Scrape Templates",
+      "refresh": "Refresh templates",
+      "emptyTitle": "No Saved Templates",
+      "emptyMessage": "Mark regions on a page and save a template to see it here.",
+      "run": "Re-run template",
+      "duplicate": "Duplicate template",
+      "delete": "Delete template",
+      "deleteConfirm": "Delete \"{name}\"? This cannot be undone.",
+      "targetUrl": "Target URL",
+      "runButton": "Run",
+      "running": "Running...",
+      "extractedResults": "Extracted results",
+      "noValue": "(not found)",
+      "noResults": "No regions extracted."
     }
   },
   "collaboration": {
@@ -6659,6 +6902,42 @@
       "unknown": "Unknown"
     }
   },
+  "llmKeys": {
+    "title": "LLM API Keys",
+    "issueKey": "Issue Key",
+    "revoke": "Revoke",
+    "rotate": "Rotate",
+    "unlimited": "Unlimited",
+    "empty": "No API keys found.",
+    "rawKeyWarning": "Copy this key now — it will not be shown again.",
+    "col": {
+      "prefix": "Key Prefix",
+      "team": "Team",
+      "label": "Label",
+      "budget": "Monthly Budget",
+      "spend": "Spend (MTD)",
+      "models": "Allowed Models",
+      "status": "Status",
+      "expires": "Expires"
+    },
+    "status": {
+      "active": "Active",
+      "revoked": "Revoked"
+    },
+    "form": {
+      "teamId": "Team ID",
+      "label": "Label",
+      "budget": "Monthly Budget (USD)",
+      "budgetHint": "Set to 0 for unlimited.",
+      "models": "Allowed Models (JSON array)",
+      "modelsHint": "E.g. [\"gpt-4\", \"claude-*\"]. Leave blank to allow all.",
+      "expiresAt": "Expires At (optional)"
+    },
+    "revokeConfirm": {
+      "title": "Revoke API Key",
+      "body": "Are you sure you want to revoke key {id}? This cannot be undone."
+    }
+  },
   "featureFlags": {
     "accessMetrics": {
       "title": "Access Control Metrics",
@@ -7028,7 +7307,8 @@
       "launchDesc": "This will open a live browser that you can control directly",
       "initializingSession": "Initializing browser session...",
       "sessionId": "Session ID: {id}",
-      "notAvailable": "Not available"
+      "notAvailable": "Not available",
+      "templates": "Scrape Templates"
     }
   },
   "serviceMessages": {
@@ -7054,6 +7334,7 @@
     "home": "Home",
     "about": "About",
     "chat": "Chat",
+    "canvas": "Canvas",
     "knowledge": "Knowledge",
     "automation": "Automation",
     "analytics": "Analytics",
@@ -7066,11 +7347,13 @@
     "devSpeedup": "Dev Tools",
     "desktop": "Desktop",
     "customDashboard": "Custom Dashboard",
+    "transcriber": "Transcriber",
     "agentRegistry": "Agents",
     "agentActivity": "Agent Activity",
     "experiments": "Experiments",
+    "llmApiKeys": "LLM API Keys",
     "slmAdmin": "SLM Admin",
-    "slmAdminTitle": "Open SLM Admin Panel",
+    "slmAdminTitle": "SLM Admin — opens in new tab",
     "profileSettings": "Profile Settings",
     "switchLanguage": "Switch language",
     "openMainMenu": "Open main menu",
@@ -7088,7 +7371,19 @@
     "loadingTimeout": "Loading Timed Out",
     "loadingTimeoutMessage": "Some content took too long to load. Try refreshing.",
     "more": "More",
-    "moreItems": "More navigation items"
+    "moreItems": "More navigation items",
+    "adminHosts": "Host Inventory",
+    "adminSandbox": "Sandbox",
+    "budgetPolicies": "Budget Policies",
+    "companyOs": "Company OS",
+    "llcDashboard": "Dashboard",
+    "llcOrgChart": "Org Chart",
+    "llcGoals": "Goals",
+    "llcCompanies": "Companies",
+    "llcPortability": "Portability",
+    "settingsAndTools": "Settings & Tools",
+    "adminPanel": "Admin Panel",
+    "documents": "AI Documents"
   },
   "reasoningTrace": {
     "title": "Reasoning trace",
@@ -7107,5 +7402,64 @@
     "newCodeDesc": "Start a code analysis session",
     "newAnalysis": "New Analysis",
     "newAnalysisDesc": "Start an analysis session"
+  },
+  "llc": {
+    "templates": {
+      "searchPlaceholder": "Search templates...",
+      "loading": "Loading templates...",
+      "noMatch": "No templates found matching your search",
+      "preview": "Preview template",
+      "select": "Select template",
+      "useTemplate": "Use this template"
+    },
+    "wizard": {
+      "step1": {
+        "title": "Choose a Starting Point",
+        "description": "Start with a template or build from scratch",
+        "startFromScratch": "Start from Scratch",
+        "startFromScratchDesc": "Build your company structure from the ground up",
+        "useTemplate": "Use a Template",
+        "useTemplateDesc": "Start with a pre-configured company template"
+      },
+      "step2": {
+        "title": "Configure Your Company",
+        "description": "Set up your company details and preferences",
+        "companyName": "Company Name",
+        "companyNamePlaceholder": "e.g., Acme Corporation",
+        "issuePrefix": "Issue Prefix",
+        "issuePrefixPlaceholder": "e.g., ACM",
+        "issuePrefixHint": "2-10 uppercase letters for issue identifiers (e.g., ACM-123)",
+        "mission": "Mission Statement",
+        "missionPlaceholder": "What is your company's mission?",
+        "monthlyBudget": "Monthly Budget",
+        "monthlyBudgetPlaceholder": "100",
+        "estimatedCost": "Estimated cost",
+        "brandColor": "Brand Color",
+        "brandColorPlaceholder": "#667eea",
+        "templateVariables": "Template Configuration"
+      },
+      "step3": {
+        "title": "Review & Create",
+        "description": "Review your configuration and create your company",
+        "companyDetails": "Company Details",
+        "template": "Template",
+        "agents": "Agents",
+        "goals": "Goals",
+        "workItems": "Work Items",
+        "kbCollections": "Knowledge Collections",
+        "createCompany": "Create Company"
+      }
+    }
+  },
+  "mobile": {
+    "pairing": {
+      "title": "Pair Mobile Device",
+      "instructions": "Scan this QR code with your mobile device",
+      "instructionsDetail": "Open the AutoBot mobile app and scan this code to pair your device",
+      "generating": "Generating QR code...",
+      "expired": "Expired",
+      "refresh": "Get New Code",
+      "retry": "Try Again"
+    }
   }
 }

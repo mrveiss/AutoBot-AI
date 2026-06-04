@@ -35,15 +35,15 @@ Usage:
 
 import asyncio
 import json
-import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, AsyncIterator, Callable, Optional
+from typing import Any, AsyncIterator, Callable
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from events.types import AgentEvent, EventType, ObservationContent, TaskArtifact
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # =============================================================================
@@ -85,8 +85,8 @@ class EventStreamManager(ABC):
     @abstractmethod
     async def subscribe(
         self,
-        event_types: Optional[list[EventType]] = None,
-        task_id: Optional[str] = None,
+        event_types: list[EventType] | None = None,
+        task_id: str | None = None,
     ) -> AsyncIterator[AgentEvent]:
         """Subscribe to events, optionally filtered by type or task"""
 
@@ -94,8 +94,8 @@ class EventStreamManager(ABC):
     async def get_latest(
         self,
         count: int = 10,
-        event_types: Optional[list[EventType]] = None,
-        task_id: Optional[str] = None,
+        event_types: list[EventType] | None = None,
+        task_id: str | None = None,
     ) -> list[AgentEvent]:
         """Get the most recent events"""
 
@@ -104,7 +104,7 @@ class EventStreamManager(ABC):
         """Get all events for a specific task"""
 
     @abstractmethod
-    async def get_event(self, event_id: str) -> Optional[AgentEvent]:
+    async def get_event(self, event_id: str) -> AgentEvent | None:
         """Get a specific event by ID"""
 
     @abstractmethod
@@ -124,7 +124,7 @@ class EventStreamManager(ABC):
 class RedisEventStreamManager(EventStreamManager):
     """Redis-based event stream using Streams and Pub/Sub"""
 
-    def __init__(self, config: Optional[EventStreamConfig] = None):
+    def __init__(self, config: EventStreamConfig | None = None):
         self.config = config or EventStreamConfig()
         self._redis: Any = None
         self._pubsub: Any = None
@@ -195,8 +195,8 @@ class RedisEventStreamManager(EventStreamManager):
 
     async def subscribe(
         self,
-        event_types: Optional[list[EventType]] = None,
-        task_id: Optional[str] = None,
+        event_types: list[EventType] | None = None,
+        task_id: str | None = None,
     ) -> AsyncIterator[AgentEvent]:
         """
         Subscribe to live events via Pub/Sub.
@@ -252,7 +252,7 @@ class RedisEventStreamManager(EventStreamManager):
             for k, v in entry_data.items()
         }
 
-    def _get_stream_key(self, task_id: Optional[str]) -> str:
+    def _get_stream_key(self, task_id: str | None) -> str:
         """Get the appropriate stream key based on task_id. Issue #620."""
         if task_id:
             return f"{self.config.task_stream_prefix}{task_id}"
@@ -261,8 +261,8 @@ class RedisEventStreamManager(EventStreamManager):
     async def get_latest(
         self,
         count: int = 10,
-        event_types: Optional[list[EventType]] = None,
-        task_id: Optional[str] = None,
+        event_types: list[EventType] | None = None,
+        task_id: str | None = None,
     ) -> list[AgentEvent]:
         """Get most recent events from stream.
 
@@ -333,7 +333,7 @@ class RedisEventStreamManager(EventStreamManager):
 
         return events
 
-    async def get_event(self, event_id: str) -> Optional[AgentEvent]:
+    async def get_event(self, event_id: str) -> AgentEvent | None:
         """
         Get a specific event by ID.
 
@@ -364,7 +364,7 @@ class RedisEventStreamManager(EventStreamManager):
     async def get_events_by_type(
         self,
         event_type: EventType,
-        task_id: Optional[str] = None,
+        task_id: str | None = None,
         count: int = 100,
     ) -> list[AgentEvent]:
         """
@@ -387,7 +387,7 @@ class RedisEventStreamManager(EventStreamManager):
     async def get_action_observation_pairs(
         self,
         task_id: str,
-    ) -> list[tuple[AgentEvent, Optional[AgentEvent]]]:
+    ) -> list[tuple[AgentEvent, AgentEvent | None]]:
         """
         Get ACTION events paired with their OBSERVATION events.
 
@@ -423,8 +423,8 @@ class RedisEventStreamManager(EventStreamManager):
 
     async def count_events(
         self,
-        task_id: Optional[str] = None,
-        event_types: Optional[list[EventType]] = None,
+        task_id: str | None = None,
+        event_types: list[EventType] | None = None,
     ) -> int:
         """
         Count events matching criteria.
@@ -569,8 +569,8 @@ class InMemoryEventStreamManager(EventStreamManager):
 
     async def subscribe(
         self,
-        event_types: Optional[list[EventType]] = None,
-        task_id: Optional[str] = None,
+        event_types: list[EventType] | None = None,
+        task_id: str | None = None,
     ) -> AsyncIterator[AgentEvent]:
         """Subscribe to events"""
         queue: asyncio.Queue = asyncio.Queue()
@@ -594,8 +594,8 @@ class InMemoryEventStreamManager(EventStreamManager):
     async def get_latest(
         self,
         count: int = 10,
-        event_types: Optional[list[EventType]] = None,
-        task_id: Optional[str] = None,
+        event_types: list[EventType] | None = None,
+        task_id: str | None = None,
     ) -> list[AgentEvent]:
         """Get recent events"""
         if task_id:
@@ -626,7 +626,7 @@ class InMemoryEventStreamManager(EventStreamManager):
         event_ids = self._task_events.get(task_id, [])
         return [self._events[eid] for eid in event_ids if eid in self._events]
 
-    async def get_event(self, event_id: str) -> Optional[AgentEvent]:
+    async def get_event(self, event_id: str) -> AgentEvent | None:
         """Get event by ID"""
         return self._events.get(event_id)
 

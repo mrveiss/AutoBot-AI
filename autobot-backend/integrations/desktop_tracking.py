@@ -9,27 +9,26 @@ Issue #873 - Activity Tracking Integration Hooks (#608 Phase 5)
 Integration hooks for tracking desktop automation activities (noVNC).
 """
 
-import logging
 import uuid
-from typing import Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.logging_manager import get_logger
 from utils.activity_tracker import track_desktop_activity
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 async def track_desktop_action(
     db: AsyncSession,
     user_id: uuid.UUID,
     action: str,
-    session_id: Optional[str] = None,
-    coordinates: Optional[tuple[int, int]] = None,
-    window_title: Optional[str] = None,
-    input_text: Optional[str] = None,
-    screenshot_path: Optional[str] = None,
-    app_name: Optional[str] = None,
+    session_id: str | None = None,
+    coordinates: tuple[int, int] | None = None,
+    window_title: str | None = None,
+    input_text: str | None = None,
+    screenshot_path: str | None = None,
+    app_name: str | None = None,
 ) -> uuid.UUID:
     """
     Track desktop automation action.
@@ -84,8 +83,8 @@ async def track_mouse_click(
     user_id: uuid.UUID,
     x: int,
     y: int,
-    session_id: Optional[str] = None,
-    window_title: Optional[str] = None,
+    session_id: str | None = None,
+    window_title: str | None = None,
 ) -> uuid.UUID:
     """
     Track mouse click.
@@ -115,8 +114,8 @@ async def track_keyboard_input(
     db: AsyncSession,
     user_id: uuid.UUID,
     text: str,
-    session_id: Optional[str] = None,
-    window_title: Optional[str] = None,
+    session_id: str | None = None,
+    window_title: str | None = None,
 ) -> uuid.UUID:
     """
     Track keyboard input.
@@ -145,8 +144,8 @@ async def track_screenshot_capture(
     db: AsyncSession,
     user_id: uuid.UUID,
     screenshot_path: str,
-    session_id: Optional[str] = None,
-    window_title: Optional[str] = None,
+    session_id: str | None = None,
+    window_title: str | None = None,
 ) -> uuid.UUID:
     """
     Track screenshot capture.
@@ -175,8 +174,8 @@ async def track_window_focus(
     db: AsyncSession,
     user_id: uuid.UUID,
     window_title: str,
-    session_id: Optional[str] = None,
-    app_name: Optional[str] = None,
+    session_id: str | None = None,
+    app_name: str | None = None,
 ) -> uuid.UUID:
     """
     Track window focus change.

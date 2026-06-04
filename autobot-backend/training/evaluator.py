@@ -7,13 +7,14 @@ Model Evaluator (Issue #904)
 Evaluation metrics for code completion model.
 """
 
-import logging
 from typing import Dict
 
 import torch
 from torchmetrics import Accuracy, Metric
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 
 
 class MeanReciprocalRank(Metric):

@@ -348,6 +348,7 @@ onUnmounted(() => {
       <button
         @click="emit('close')"
         class="text-gray-400 hover:text-gray-600 transition-colors"
+        aria-label="Close"
       >
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -358,7 +359,7 @@ onUnmounted(() => {
     <!-- Error Banner -->
     <div v-if="errorMessage" class="px-4 py-2 bg-red-50 border-b border-red-100 text-sm text-red-700 flex items-center justify-between">
       <span>{{ errorMessage }}</span>
-      <button @click="errorMessage = null" class="text-red-500 hover:text-red-700">
+      <button @click="errorMessage = null" class="text-red-500 hover:text-red-700" aria-label="Dismiss error">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
         </svg>
@@ -382,7 +383,7 @@ onUnmounted(() => {
 
       <!-- Status Filter -->
       <div class="flex items-center gap-2">
-        <label class="text-sm text-gray-600">Status:</label>
+        <label class="text-sm text-gray-600">{{ $t('fleet.nodeServicesPanel.status') }}</label>
         <select
           v-model="statusFilter"
           class="text-sm border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
@@ -412,7 +413,7 @@ onUnmounted(() => {
         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
       </svg>
-      <span>Loading services...</span>
+      <span>{{ $t('fleet.nodeServicesPanel.loadingServices') }}</span>
     </div>
 
     <!-- Empty State -->
@@ -423,8 +424,8 @@ onUnmounted(() => {
       <svg class="w-12 h-12 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" />
       </svg>
-      <p v-if="services.length === 0">No services discovered yet.</p>
-      <p v-else>No services match the current filters.</p>
+      <p v-if="services.length === 0">{{ $t('fleet.nodeServicesPanel.noServicesDiscoveredYet') }}</p>
+      <p v-else>{{ $t('fleet.nodeServicesPanel.noServicesMatchThe') }}</p>
     </div>
 
     <!-- Services Table -->
@@ -432,12 +433,12 @@ onUnmounted(() => {
       <table class="w-full">
         <thead class="bg-gray-50 sticky top-0">
           <tr>
-            <th class="w-12 px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
-            <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Service</th>
-            <th class="w-20 px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Enabled</th>
-            <th class="w-24 px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Memory</th>
-            <th class="w-28 px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Last Check</th>
-            <th class="w-36 px-4 py-2 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
+            <th class="w-12 px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">{{ $t('fleet.nodeServicesPanel.status1') }}</th>
+            <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">{{ $t('fleet.nodeServicesPanel.service') }}</th>
+            <th class="w-20 px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">{{ $t('fleet.nodeServicesPanel.enabled') }}</th>
+            <th class="w-24 px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">{{ $t('fleet.nodeServicesPanel.memory') }}</th>
+            <th class="w-28 px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">{{ $t('fleet.nodeServicesPanel.lastCheck') }}</th>
+            <th class="w-36 px-4 py-2 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">{{ $t('fleet.nodeServicesPanel.actions') }}</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-gray-100">
@@ -607,6 +608,7 @@ onUnmounted(() => {
             <button
               @click="closeLogsModal"
               class="text-gray-400 hover:text-gray-600 transition-colors"
+              aria-label="Close"
             >
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -621,7 +623,7 @@ onUnmounted(() => {
                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                 <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
               </svg>
-              Loading logs...
+              {{ $t('fleet.nodeServicesPanel.loadingLogs') }}
             </div>
             <pre v-else class="text-sm text-green-400 font-mono whitespace-pre-wrap">{{ logsContent }}</pre>
           </div>
@@ -632,7 +634,7 @@ onUnmounted(() => {
               @click="closeLogsModal"
               class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
             >
-              Close
+              {{ $t('fleet.nodeServicesPanel.close') }}
             </button>
           </div>
         </div>

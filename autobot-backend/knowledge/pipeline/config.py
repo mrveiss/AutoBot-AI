@@ -8,11 +8,12 @@ Issue #759: Knowledge Pipeline Foundation - Extract, Cognify, Load (ECL).
 """
 
 import copy
-import logging
 import re
 from typing import Any, Dict
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 
 # Default knowledge enrichment pipeline configuration
 DEFAULT_KNOWLEDGE_PIPELINE = {

@@ -9,7 +9,7 @@ Extracted from voice_processing_system.py as part of Issue #381 god class refact
 """
 
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List
 
 import numpy as np
 
@@ -22,7 +22,7 @@ class AudioInput:
     """Audio input data structure"""
 
     audio_id: str
-    audio_data: Union[bytes, np.ndarray]
+    audio_data: bytes | np.ndarray
     sample_rate: int
     duration: float
     format: str  # 'wav', 'mp3', 'raw', etc.
@@ -60,7 +60,7 @@ class VoiceCommandAnalysis:
     suggested_actions: List[str]
     requires_confirmation: bool
     context_needed: bool
-    metadata: Optional[Dict[str, Any]] = None  # Added for timestamp support
+    metadata: Dict[str, Any] | None = None  # Added for timestamp support
 
 
 @dataclass

@@ -29,15 +29,14 @@ export default defineConfig({
   reporter: process.env.CI ? 'github' : [['html', { open: 'never' }]],
 
   // The single test in storybook-stories.spec.ts loops through every
-  // discovered story (one iframe load + screenshot per story). Default
-  // 30s test timeout is exceeded once there are more than ~15 stories.
-  // Budget 5 minutes per project for headroom on slower CI runners.
-  timeout: 300_000,
+  // discovered story (one iframe load + screenshot per story). With 1154 stories
+  // at ~3-5s each = ~3462-5770s, we budget 150 minutes per project for headroom.
+  timeout: 9_000_000,
 
-  // Snapshot baselines live next to the tests, organized per OS to avoid
-  // cross-platform rendering noise. Engineers regenerate locally on the
-  // OS they develop on; CI runs Linux baselines.
-  snapshotPathTemplate: '{testDir}/__screenshots__/{testFilePath}/{arg}-{platform}{ext}',
+  // Snapshot baselines live next to the tests, organized per project (light/dark)
+  // and OS to avoid cross-platform rendering noise and theme conflicts.
+  // Engineers regenerate locally on the OS they develop on; CI runs Linux baselines.
+  snapshotPathTemplate: '{testDir}/__screenshots__/{projectName}/{testFilePath}/{arg}-{platform}{ext}',
 
   expect: {
     // Per-screenshot expect timeout. Default 5s is too tight for the

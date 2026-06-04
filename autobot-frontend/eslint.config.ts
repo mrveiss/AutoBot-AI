@@ -62,6 +62,25 @@ export default defineConfigWithVueTs(
       'vue/no-undef-components': ['error', {
         ignorePatterns: ['RouterLink', 'RouterView', 'Transition', 'TransitionGroup', 'KeepAlive', 'Teleport', 'Suspense'],
       }],
+      // Issue #6487: block new imports of deprecated useApi composable family.
+      // Migrate to useFetchEndpoint (data loading) or useApiClient from @/plugins/api (mutations).
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: '@/composables/useApi',
+              message: 'useApi is deprecated (#6487). Use useFetchEndpoint from @/composables/api/useFetchEndpoint for data loading, or useApiClient() from @/plugins/api for imperative HTTP calls.',
+            },
+          ],
+          patterns: [
+            {
+              group: ['*/composables/useApi'],
+              message: 'useApi is deprecated (#6487). Use useFetchEndpoint from @/composables/api/useFetchEndpoint for data loading, or useApiClient() from @/plugins/api for imperative HTTP calls.',
+            },
+          ],
+        },
+      ],
       // Issue #6784: block hardcoded VM-IP fallbacks in `||` / `??` expressions
       // and any other literal/template containing the deployment range.
       // Use SSOT (window.location.hostname / VITE_*_HOST env vars) instead.
@@ -77,6 +96,67 @@ export default defineConfigWithVueTs(
           message: 'Hardcoded AutoBot VM IP in template literal — use window.location.hostname or VITE_*_HOST env var (#6784).',
         },
       ],
+      // Issue #7085: forbid console.* in production code — use createLogger from @/utils/debugUtils instead.
+      // Note: you cannot suppress this rule with eslint-disable-next-line — reportUnusedDisableDirectives blocks that too.
+      'no-console': 'error',
+      // MVA-192 design-token spec — Phase 4: block re-introduction of deprecated size/color tokens.
+      // Use canonical tokens instead: size → sm|md|lg, danger → error.
+      // See src/design-tokens/tokens.ts for the full token registry.
+      'vue/no-restricted-static-attribute': [
+        'error',
+        { key: 'size', value: 'small',  message: "Deprecated size token 'small' — use 'sm' (MVA-192)." },
+        { key: 'size', value: 'medium', message: "Deprecated size token 'medium' — use 'md' (MVA-192)." },
+        { key: 'size', value: 'large',  message: "Deprecated size token 'large' — use 'lg' (MVA-192)." },
+        { key: 'variant', value: 'danger', message: "Deprecated color token 'danger' — use 'error' (MVA-192)." },
+      ],
+      // Catches the same deprecated values passed as bound string literals, e.g. :size="'small'".
+      // Scoped to VExpressionContainer inside VAttribute (template attribute expressions only).
+      'vue/no-restricted-syntax': [
+        'error',
+        {
+          selector: "VAttribute[directive=true] > VExpressionContainer > Literal[value='small']",
+          message: "Deprecated size token 'small' — use 'sm' (MVA-192).",
+        },
+        {
+          selector: "VAttribute[directive=true] > VExpressionContainer > Literal[value='medium']",
+          message: "Deprecated size token 'medium' — use 'md' (MVA-192).",
+        },
+        {
+          selector: "VAttribute[directive=true] > VExpressionContainer > Literal[value='large']",
+          message: "Deprecated size token 'large' — use 'lg' (MVA-192).",
+        },
+        {
+          selector: "VAttribute[directive=true] > VExpressionContainer > Literal[value='danger']",
+          message: "Deprecated color token 'danger' — use 'error' (MVA-192).",
+        },
+      ],
+    },
+  },
+  {
+    name: 'app/console-allowed-in-debug-utils',
+    files: [
+      'src/utils/debugUtils.ts',
+      'src/utils/RumConsoleHelper.ts',
+      'src/utils/chunkTestUtility.ts',
+    ],
+    rules: {
+      'no-console': 'off',
+    },
+  },
+  {
+    // Service workers run in a separate runtime context with no access to createLogger.
+    name: 'app/console-allowed-in-service-worker',
+    files: ['public/service-worker.ts', 'public/service-worker.js', 'public/sw-cache-bust.js'],
+    rules: {
+      'no-console': 'off',
+    },
+  },
+  {
+    // Build/check scripts and test fixtures run in Node.js, not the app bundle.
+    name: 'app/console-allowed-in-scripts',
+    files: ['scripts/**/*.{ts,js,mjs,mts}', 'scripts/**/__tests__/**'],
+    rules: {
+      'no-console': 'off',
     },
   },
   ...pluginOxlint.configs['flat/recommended'],

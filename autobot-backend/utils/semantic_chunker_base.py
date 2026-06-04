@@ -14,22 +14,24 @@ constraints, fallback chunking, document-format conversion) lives here.
 
 import os
 
+from autobot_shared.ssot_config import config
+
 # CRITICAL FIX: Force tf-keras usage before importing transformers/sentence-transformers.
 # The subclasses import torch/sentence_transformers lazily, but having these set at module
 # load time keeps behavior identical to the pre-refactor `semantic_chunker*.py` files.
-os.environ["TF_USE_LEGACY_KERAS"] = "1"
-os.environ["KERAS_BACKEND"] = "tensorflow"
+config.tf_use_legacy_keras = "1"
+config.keras_backend = "tensorflow"
 
 # Reduce Hugging Face rate limiting and improve caching
-os.environ["HF_HUB_DISABLE_PROGRESS_BARS"] = "1"
-os.environ["TRANSFORMERS_OFFLINE"] = "0"  # Allow downloads but cache aggressively
-os.environ["HF_HUB_CACHE"] = os.path.expanduser("~/.cache/huggingface")
-os.environ["HUGGINGFACE_HUB_CACHE"] = os.path.expanduser("~/.cache/huggingface")
+config.hf_hub_disable_progress_bars = "1"
+config.transformers_offline = "0"  # Allow downloads but cache aggressively
+config.hf_hub_cache = os.path.expanduser("~/.cache/huggingface")
+config.huggingface_hub_cache = os.path.expanduser("~/.cache/huggingface")
 
 import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import numpy as np
 
@@ -254,7 +256,7 @@ class SemanticChunkerBase(ABC):
     # ---- Single-sentence + metadata helpers ---------------------------
 
     def _create_single_sentence_chunk(
-        self, text: str, sentences: List[str], metadata: Optional[Dict[str, Any]]
+        self, text: str, sentences: List[str], metadata: Dict[str, Any] | None
     ) -> SemanticChunk:
         return SemanticChunk(
             content=text,
@@ -266,7 +268,7 @@ class SemanticChunkerBase(ABC):
         )
 
     def _build_chunk_metadata(
-        self, chunk_index: int, total_chunks: int, metadata: Optional[Dict[str, Any]]
+        self, chunk_index: int, total_chunks: int, metadata: Dict[str, Any] | None
     ) -> Dict[str, Any]:
         """Metadata fields shared by all backends. Subclasses add their own via _extra_chunk_metadata()."""
         base = {
@@ -282,7 +284,7 @@ class SemanticChunkerBase(ABC):
         """Subclass hook for backend-specific chunk metadata."""
         return {"chunking_method": "semantic", "percentile_threshold": self.percentile_threshold}
 
-    def _enrich_chunks_with_metadata(self, chunks: List[SemanticChunk], metadata: Optional[Dict[str, Any]]) -> None:
+    def _enrich_chunks_with_metadata(self, chunks: List[SemanticChunk], metadata: Dict[str, Any] | None) -> None:
         for i, chunk in enumerate(chunks):
             chunk.metadata.update(self._build_chunk_metadata(i, len(chunks), metadata))
 
@@ -293,7 +295,7 @@ class SemanticChunkerBase(ABC):
         sentences: List[str],
         start_index: int,
         end_index: int,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: Dict[str, Any] | None = None,
     ) -> SemanticChunk:
         chunk_content = " ".join(sentences)
         return SemanticChunk(
@@ -305,7 +307,7 @@ class SemanticChunkerBase(ABC):
             metadata={"fallback_chunking": True, **(metadata or {})},
         )
 
-    async def _fallback_chunking(self, text: str, metadata: Optional[Dict[str, Any]] = None) -> List[SemanticChunk]:
+    async def _fallback_chunking(self, text: str, metadata: Dict[str, Any] | None = None) -> List[SemanticChunk]:
         logger.warning("Using fallback chunking method")
 
         sentences = self._split_into_sentences(text)
@@ -338,7 +340,7 @@ class SemanticChunkerBase(ABC):
 
     # ---- Public entry points ------------------------------------------
 
-    async def chunk_text(self, text: str, metadata: Optional[Dict[str, Any]] = None) -> List[SemanticChunk]:
+    async def chunk_text(self, text: str, metadata: Dict[str, Any] | None = None) -> List[SemanticChunk]:
         """Chunk text using semantic analysis (Issue #620)."""
         try:
             logger.info("Starting semantic chunking of text (%d characters)", len(text))

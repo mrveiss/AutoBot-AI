@@ -1,8 +1,4 @@
 # AutoBot - AI-Powered Automation Platform
-import uuid
-
-# Copyright (c) 2025 mrveiss
-# Author: mrveiss
 """
 Image Analysis Agent - Specialized for vision tasks and image understanding.
 
@@ -11,9 +7,10 @@ LLM-based vision capabilities. Accepts image descriptions or base64-encoded
 image data for analysis.
 """
 
-import logging
-from typing import Any, Dict, List, Optional
+import uuid
+from typing import Any, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import (
     get_agent_endpoint_explicit,
@@ -26,7 +23,11 @@ from services.llm_service import get_llm_service
 from .base_agent import AgentRequest
 from .standardized_agent import ActionHandler, StandardizedAgent
 
-logger = logging.getLogger(__name__)
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+
+
+logger = get_logger(__name__)
 
 
 class ImageAnalysisAgent(StandardizedAgent):
@@ -104,7 +105,7 @@ class ImageAnalysisAgent(StandardizedAgent):
         instruction = type_instructions.get(analysis_type, type_instructions["general"])
         return f"{query}\n\n{instruction}\n\nImage data:\n{image_data}"
 
-    async def process_query(self, request_text: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async def process_query(self, request_text: str, context: Dict[str, Any] | None = None) -> Dict[str, Any]:
         """Process an image analysis query using the vLLM-optimised API (Issue #3389)."""
         try:
             logger.info("Image Analysis Agent processing: %s...", request_text[:50])

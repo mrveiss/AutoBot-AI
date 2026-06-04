@@ -14,8 +14,6 @@ executable.
 
 import asyncio
 import logging
-from typing import Optional
-
 import aiohttp
 
 
@@ -23,14 +21,14 @@ async def aiohttp_with_backoff(
     url: str,
     method: str = "GET",
     *,
-    json_body: Optional[dict] = None,
-    headers: Optional[dict] = None,
+    json_body: dict | None = None,
+    headers: dict | None = None,
     max_attempts: int = 3,
     initial_delay: float = 1.0,
     max_delay: float = 30.0,
     timeout_s: float = 10.0,
-    logger: Optional[logging.Logger] = None,
-) -> Optional[dict]:
+    logger: logging.Logger | None = None,
+) -> dict | None:
     """POST/GET via aiohttp with exponential backoff; returns JSON dict or None on failure.
 
     Each attempt opens a fresh ClientSession (appropriate for one-shot startup
@@ -64,9 +62,7 @@ async def aiohttp_with_backoff(
         try:
             timeout = aiohttp.ClientTimeout(total=timeout_s)
             async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with getattr(session, method.lower())(
-                    url, **req_kwargs
-                ) as resp:
+                async with getattr(session, method.lower())(url, **req_kwargs) as resp:
                     resp.raise_for_status()
                     return await resp.json()
         except Exception as exc:

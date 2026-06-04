@@ -20,10 +20,10 @@
           (analyzing || analyzingCodeSmells)
             ? 'fas fa-spinner fa-spin'
             : progressStatus.includes('completed') || progressStatus.includes('complete')
-              ? 'fas fa-check-circle'
+              ? 'check-circle'
               : progressStatus.includes('failed') || progressStatus.includes('cancelled')
-                ? 'fas fa-times-circle'
-                : 'fas fa-info-circle'
+                ? 'times-circle'
+                : 'info-circle'
         "></i>
         {{ analyzing ? $t('analytics.codebase.progress.indexingInProgress') : analyzingCodeSmells ? codeSmellsProgressTitle : $t('analytics.codebase.progress.indexingStatus') }}
       </div>
@@ -42,7 +42,7 @@
           'phase-pending': phase.status === 'pending'
         }"
       >
-        <i :class="getPhaseIcon(phase.status)"></i>
+        <Icon :name="getPhaseIcon(phase.status)" />
         <span>{{ phase.name }}</span>
       </div>
     </div>
@@ -74,23 +74,23 @@
     <!-- Live Stats (active indexing only) -->
     <div v-if="analyzing && jobStats" class="live-stats">
       <div class="stat-item">
-        <i class="fas fa-file-code"></i>
+        <Icon name="file-code" />
         <span>{{ jobStats.files_scanned }} {{ $t('analytics.codebase.progress.files') }}</span>
       </div>
       <div class="stat-item">
-        <i class="fas fa-exclamation-triangle"></i>
+        <Icon name="exclamation-triangle" />
         <span>{{ jobStats.problems_found }} {{ $t('analytics.codebase.progress.problems') }}</span>
       </div>
       <div class="stat-item">
-        <i class="fas fa-code"></i>
+        <Icon name="code" />
         <span>{{ jobStats.functions_found }} {{ $t('analytics.codebase.progress.functions') }}</span>
       </div>
       <div class="stat-item">
-        <i class="fas fa-cubes"></i>
+        <Icon name="cubes" />
         <span>{{ jobStats.classes_found }} {{ $t('analytics.codebase.progress.classes') }}</span>
       </div>
       <div class="stat-item" v-if="jobStats.items_stored > 0">
-        <i class="fas fa-database"></i>
+        <Icon name="database" />
         <span>{{ jobStats.items_stored }} {{ $t('analytics.codebase.progress.stored') }}</span>
       </div>
     </div>
@@ -100,7 +100,7 @@
   <div v-if="scanRunner.running.value || scanRunner.results.value.length > 0" class="scan-runner-progress">
     <div class="scan-runner-header">
       <span class="scan-runner-title">
-        <i :class="scanRunner.running.value ? 'fas fa-spinner fa-spin' : 'fas fa-check-circle'"></i>
+        <i :class="scanRunner.running.value ? 'fas fa-spinner fa-spin' : 'check-circle'"></i>
         {{ $t('analytics.codebase.scanRunner.title') }}
       </span>
       <span class="scan-runner-count">
@@ -119,10 +119,10 @@
       >
         <i :class="{
           'fas fa-spinner fa-spin': result.status === 'running',
-          'fas fa-check': result.status === 'completed',
-          'fas fa-times': result.status === 'failed',
-          'fas fa-forward': result.status === 'skipped',
-          'fas fa-clock': result.status === 'pending',
+          'check': result.status === 'completed',
+          'times': result.status === 'failed',
+          'forward': result.status === 'skipped',
+          'clock': result.status === 'pending',
         }"></i>
         <span class="scan-label">{{ result.label }}</span>
         <span v-if="result.durationMs != null" class="scan-duration">{{ result.durationMs }}ms</span>
@@ -145,6 +145,7 @@
  * Issue #1579: Extracted from CodebaseAnalytics.vue
  */
 
+import Icon from '@/components/ui/Icon.vue'
 import type { ScanRunnerReturn } from '@/composables/useAnalyticsScanRunner'
 
 interface JobPhase {
@@ -191,12 +192,12 @@ defineEmits<{
 function getPhaseIcon(status: string): string {
   switch (status) {
     case 'completed':
-      return 'fas fa-check-circle'
+      return 'check-circle'
     case 'running':
-      return 'fas fa-spinner fa-spin'
+      return 'spinner'
     case 'pending':
     default:
-      return 'fas fa-circle'
+      return 'circle'
   }
 }
 </script>

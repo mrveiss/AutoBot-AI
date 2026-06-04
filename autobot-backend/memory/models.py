@@ -8,7 +8,7 @@ Memory Manager Data Models - Structured data classes
 import json
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Tuple
 
 from .enums import MemoryCategory, TaskPriority, TaskStatus
 
@@ -34,18 +34,18 @@ class TaskExecutionRecord:
     status: TaskStatus
     priority: TaskPriority
     created_at: datetime
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
-    duration_seconds: Optional[float] = None
-    agent_type: Optional[str] = None
-    inputs: Optional[Dict[str, Any]] = None
-    outputs: Optional[Dict[str, Any]] = None
-    error_message: Optional[str] = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    duration_seconds: float | None = None
+    agent_type: str | None = None
+    inputs: Dict[str, Any] | None = None
+    outputs: Dict[str, Any] | None = None
+    error_message: str | None = None
     retry_count: int = 0
-    markdown_references: Optional[List[str]] = None
-    parent_task_id: Optional[str] = None
-    subtask_ids: Optional[List[str]] = None
-    metadata: Optional[Dict[str, Any]] = None
+    markdown_references: List[str] | None = None
+    parent_task_id: str | None = None
+    subtask_ids: List[str] | None = None
+    metadata: Dict[str, Any] | None = None
 
     def to_db_tuple(self) -> Tuple:
         """Convert to tuple for SQLite insertion (Issue #372 - reduces feature envy).
@@ -114,13 +114,13 @@ class MemoryEntry:
     - Reference path tracking
     """
 
-    id: Optional[int]
-    category: Union[MemoryCategory, str]
+    id: int | None
+    category: MemoryCategory | str
     content: str
     metadata: Dict[str, Any]
     timestamp: datetime
-    reference_path: Optional[str] = None
-    embedding: Optional[bytes] = None
+    reference_path: str | None = None
+    embedding: bytes | None = None
 
 
 __all__ = [

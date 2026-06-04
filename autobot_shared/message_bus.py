@@ -25,7 +25,7 @@ Usage::
 
 import logging
 from dataclasses import dataclass
-from typing import Any, AsyncIterator, Optional
+from typing import Any, AsyncIterator
 
 from autobot_shared.models.service_message import ServiceMessage
 from autobot_shared.redis_client import get_redis_client
@@ -54,7 +54,7 @@ class ServiceMessageBus:
     for real-time delivery.
     """
 
-    def __init__(self, config: Optional[ServiceMessageBusConfig] = None) -> None:
+    def __init__(self, config: ServiceMessageBusConfig | None = None) -> None:
         self.config = config or ServiceMessageBusConfig()
         self._redis: Any = None
 
@@ -128,7 +128,7 @@ class ServiceMessageBus:
     # Query
     # ------------------------------------------------------------------
 
-    async def get_message(self, msg_id: str) -> Optional[ServiceMessage]:
+    async def get_message(self, msg_id: str) -> ServiceMessage | None:
         """Retrieve a single message by ID from its hash key."""
         redis = await self._get_redis()
         hash_key = f"{self.config.message_hash_prefix}{msg_id}"
@@ -158,9 +158,9 @@ class ServiceMessageBus:
     async def get_latest(
         self,
         count: int = 50,
-        sender: Optional[str] = None,
-        receiver: Optional[str] = None,
-        msg_type: Optional[str] = None,
+        sender: str | None = None,
+        receiver: str | None = None,
+        msg_type: str | None = None,
     ) -> list[ServiceMessage]:
         """Return the *count* most recent messages, optionally filtered.
 
@@ -196,9 +196,9 @@ class ServiceMessageBus:
 
     async def subscribe(
         self,
-        sender: Optional[str] = None,
-        receiver: Optional[str] = None,
-        msg_type: Optional[str] = None,
+        sender: str | None = None,
+        receiver: str | None = None,
+        msg_type: str | None = None,
     ) -> AsyncIterator[ServiceMessage]:
         """Yield live messages via pub/sub, optionally filtered."""
         redis = await self._get_redis()
@@ -249,7 +249,7 @@ class ServiceMessageBus:
         return str(value)
 
     @staticmethod
-    def _deserialize(raw: Any) -> Optional[ServiceMessage]:
+    def _deserialize(raw: Any) -> ServiceMessage | None:
         """Parse raw Redis value into a ServiceMessage."""
         text = raw.decode("utf-8") if isinstance(raw, bytes) else raw
         try:
@@ -271,9 +271,9 @@ class ServiceMessageBus:
         actual_sender: str,
         actual_receiver: str,
         actual_msg_type: str,
-        sender: Optional[str],
-        receiver: Optional[str],
-        msg_type: Optional[str],
+        sender: str | None,
+        receiver: str | None,
+        msg_type: str | None,
     ) -> bool:
         """Check whether actual field values match optional filters."""
         if sender and actual_sender != sender:
@@ -284,7 +284,7 @@ class ServiceMessageBus:
             return False
         return True
 
-    def _parse_pubsub(self, raw_message: dict) -> Optional[ServiceMessage]:
+    def _parse_pubsub(self, raw_message: dict) -> ServiceMessage | None:
         """Parse a raw pub/sub message into a ServiceMessage."""
         data = raw_message.get("data")
         if data is None:
@@ -301,11 +301,11 @@ class ServiceMessageBus:
 # Singleton factory
 # ------------------------------------------------------------------
 
-_bus_instance: Optional[ServiceMessageBus] = None
+_bus_instance: ServiceMessageBus | None = None
 
 
 def get_message_bus(
-    config: Optional[ServiceMessageBusConfig] = None,
+    config: ServiceMessageBusConfig | None = None,
 ) -> ServiceMessageBus:
     """Return the singleton ``ServiceMessageBus`` instance.
 

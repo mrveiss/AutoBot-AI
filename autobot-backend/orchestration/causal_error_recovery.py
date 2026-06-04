@@ -12,17 +12,17 @@ Issue #2154: Enhanced error handling with root-cause analysis and recovery plann
 """
 
 import json
-import logging
 from dataclasses import asdict, dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.time_utils import now_utc
 from constants.ttl_constants import TTL_30_DAYS
 from orchestration.causal_error_analyzer import CausalErrorAnalysis
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Redis key patterns for failure patterns
 FAILURE_PATTERN_PREFIX = "failure:pattern:"
@@ -140,7 +140,7 @@ class CausalErrorRecovery:
     """
 
     def __init__(self):
-        self._redis: Optional[Any] = None
+        self._redis: Any | None = None
 
     def _get_redis(self) -> Any:
         """Lazy-init sync Redis client."""
@@ -152,7 +152,7 @@ class CausalErrorRecovery:
         self,
         error: Exception,
         causal_analysis: CausalErrorAnalysis,
-        execution_context: Optional[Dict[str, Any]] = None,
+        execution_context: Dict[str, Any] | None = None,
     ) -> RecoveryPlan:
         """
         Recommend recovery actions for an error.
@@ -223,7 +223,7 @@ class CausalErrorRecovery:
         """Hash a causal chain for pattern matching."""
         import hashlib
 
-        return hashlib.md5(causal_chain.encode()).hexdigest()[:16]
+        return hashlib.md5(causal_chain.encode(), usedforsecurity=False).hexdigest()[:16]
 
     def _check_pattern(self, pattern_hash: str) -> tuple[int, bool]:
         """Check if a pattern is known and return frequency."""
@@ -397,7 +397,7 @@ class CausalErrorRecovery:
         recovery_plan: RecoveryPlan,
         action_taken: RecoveryAction,
         success: bool,
-        outcome: Optional[str] = None,
+        outcome: str | None = None,
     ) -> None:
         """
         Record that we attempted a recovery action.

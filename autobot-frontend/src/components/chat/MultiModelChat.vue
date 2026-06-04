@@ -18,6 +18,11 @@
             :aria-label="model"
           />
           <span class="multi-model-chat__model-name">{{ model }}</span>
+          <span
+            v-if="contextWindowLabel[model]"
+            class="multi-model-chat__model-ctx"
+            :title="`Context window: ${contextWindowLabel[model]} tokens`"
+          >{{ contextWindowLabel[model] }}</span>
         </label>
       </div>
     </div>
@@ -40,7 +45,7 @@
         :aria-label="$t('chat.compare.sendLabel')"
       >
         <span v-if="isComparing">
-          <i class="fas fa-spinner fa-spin" aria-hidden="true"></i>
+          <Icon name="spinner" class="animate-spin" />
         </span>
         <span v-else>{{ $t('chat.compare.send') }}</span>
       </button>
@@ -91,8 +96,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import Icon from '@/components/ui/Icon.vue'
+import { ref, watch, computed } from 'vue'
 import { useMultiModelCompare } from '@/composables/useMultiModelCompare'
+// GH#8990: show per-model context window in picker
+import { useAvailableModels } from '@/composables/useAvailableModels'
 
 // ---------------------------------------------------------------------------
 // Defaults — user can change via the picker
@@ -104,8 +112,25 @@ const DEFAULT_MODELS = [
 ]
 
 const { responses, selectedModels, isComparing, compare, reset } = useMultiModelCompare()
+const { models: llmModels, fetchModels } = useAvailableModels()
+fetchModels().catch(() => {})
 
 const promptText = ref('')
+
+// Map model name → formatted context window label (GH#8990)
+const contextWindowLabel = computed(() => {
+  const map: Record<string, string> = {}
+  for (const m of llmModels.value) {
+    if (!m.context_window) continue
+    const cw = m.context_window
+    map[m.name] = cw >= 1_000_000
+      ? `${(cw / 1_000_000).toFixed(1)}M`
+      : cw >= 1_000
+      ? `${Math.round(cw / 1_000)}k`
+      : String(cw)
+  }
+  return map
+})
 
 // Populate defaults on first mount if localStorage is empty
 if (selectedModels.value.length === 0) {
@@ -180,6 +205,16 @@ defineExpose({ reset })
 .multi-model-chat__model-name {
   font-family: ui-monospace, monospace;
   font-size: 0.75rem;
+}
+
+.multi-model-chat__model-ctx {
+  font-size: 0.6875rem;
+  font-family: ui-monospace, monospace;
+  color: var(--color-text-muted, #9ca3af);
+  background: var(--color-bg-tertiary, #1a1a2e);
+  border-radius: 0.25rem;
+  padding: 0 0.25rem;
+  cursor: default;
 }
 
 /* ---- Input row ---- */

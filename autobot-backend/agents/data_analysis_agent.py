@@ -1,8 +1,4 @@
 # AutoBot - AI-Powered Automation Platform
-import uuid
-
-# Copyright (c) 2025 mrveiss
-# Author: mrveiss
 """
 Data Analysis Agent - Specialized for data analysis, statistics, and pattern detection.
 
@@ -10,10 +6,11 @@ Handles data analysis tasks using LLM to identify patterns, compute statistics,
 and provide insights from structured and unstructured data.
 """
 
-import logging
-import threading
-from typing import Any, Dict, List, Optional
+import uuid
+from typing import Any, Dict, List
 
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import (
     get_agent_endpoint_explicit,
     get_agent_model_explicit,
@@ -25,7 +22,11 @@ from services.llm_service import get_llm_service
 from .base_agent import AgentRequest, DeploymentMode
 from .standardized_agent import ActionHandler, StandardizedAgent
 
-logger = logging.getLogger(__name__)
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+
+
+logger = get_logger(__name__)
 
 
 class DataAnalysisAgent(StandardizedAgent):
@@ -35,7 +36,7 @@ class DataAnalysisAgent(StandardizedAgent):
 
     def __init__(
         self,
-        agent_type: Optional[str] = None,
+        agent_type: str | None = None,
         deployment_mode: DeploymentMode = DeploymentMode.LOCAL,
     ):
         """Initialize the Data Analysis Agent with LLM configuration.
@@ -100,7 +101,7 @@ class DataAnalysisAgent(StandardizedAgent):
         prompt = f"Detect {pattern_type} patterns in the following data:\n\n{data}"
         return await self.process_query(prompt)
 
-    async def process_query(self, request_text: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async def process_query(self, request_text: str, context: Dict[str, Any] | None = None) -> Dict[str, Any]:
         """Process a data analysis query using the vLLM-optimised API (Issue #3389)."""
         try:
             logger.info("Data Analysis Agent processing: %s...", request_text[:50])
@@ -166,15 +167,5 @@ class DataAnalysisAgent(StandardizedAgent):
         return str(response)
 
 
-_data_analysis_agent_instance = None
-_data_analysis_agent_lock = threading.Lock()
-
-
-def get_data_analysis_agent() -> DataAnalysisAgent:
-    """Get the singleton Data Analysis Agent instance (thread-safe)."""
-    global _data_analysis_agent_instance
-    if _data_analysis_agent_instance is None:
-        with _data_analysis_agent_lock:
-            if _data_analysis_agent_instance is None:
-                _data_analysis_agent_instance = DataAnalysisAgent()
-    return _data_analysis_agent_instance
+get_data_analysis_agent = lazy_singleton(DataAnalysisAgent)
+"""Get the singleton Data Analysis Agent instance (thread-safe)."""

@@ -21,9 +21,11 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from autobot_shared.logging_manager import get_logger
+
 # Configure logging for tests
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # Mock data models matching architecture specifications
@@ -35,7 +37,7 @@ class ServiceOperationResult:
         message: str,
         duration_seconds: float,
         new_status: str,
-    ):
+    ) -> None:
         self.success = success
         self.operation = operation
         self.message = message
@@ -52,7 +54,7 @@ class ServiceStatus:
         uptime_seconds: float = None,
         memory_mb: float = None,
         connections: int = None,
-    ):
+    ) -> None:
         self.status = status
         self.pid = pid
         self.uptime_seconds = uptime_seconds
@@ -68,7 +70,7 @@ class HealthStatus:
         service_running: bool = True,
         connectivity: bool = True,
         response_time_ms: float = 2.5,
-    ):
+    ) -> None:
         self.overall_status = overall_status
         self.service_running = service_running
         self.connectivity = connectivity
@@ -84,7 +86,7 @@ class RecoveryResult:
         strategy: str = "standard",
         reason: str = None,
         requires_manual_intervention: bool = False,
-    ):
+    ) -> None:
         self.success = success
         self.strategy = strategy
         self.reason = reason
@@ -93,7 +95,7 @@ class RecoveryResult:
 
 
 class RemoteCommandResult:
-    def __init__(self, success: bool, exit_code: int, stdout: str, stderr: str):
+    def __init__(self, success: bool, exit_code: int, stdout: str, stderr: str) -> None:
         self.success = success
         self.exit_code = exit_code
         self.stdout = stdout
@@ -174,7 +176,7 @@ class TestServiceControlOperations:
     """Test service control operations (start/stop/restart)."""
 
     @pytest.mark.asyncio
-    async def test_start_service_when_stopped(self, mock_ssh_manager):
+    async def test_start_service_when_stopped(self, mock_ssh_manager) -> None:
         """
         Test Case 1.1: Start Redis service when it's stopped
 
@@ -212,7 +214,7 @@ class TestServiceControlOperations:
         logger.info("=== Test 1.1: PASSED ===\n")
 
     @pytest.mark.asyncio
-    async def test_start_service_already_running(self, mock_ssh_manager):
+    async def test_start_service_already_running(self, mock_ssh_manager) -> None:
         """
         Test Case 1.2: Start Redis service when already running
 
@@ -239,7 +241,7 @@ class TestServiceControlOperations:
         logger.info("=== Test 1.2: PASSED ===\n")
 
     @pytest.mark.asyncio
-    async def test_start_service_failure(self, mock_ssh_manager):
+    async def test_start_service_failure(self, mock_ssh_manager) -> None:
         """
         Test Case 1.3: Start service fails
 
@@ -275,7 +277,7 @@ class TestServiceControlOperations:
         logger.info("=== Test 1.3: PASSED ===\n")
 
     @pytest.mark.asyncio
-    async def test_stop_service_with_confirmation(self, mock_ssh_manager):
+    async def test_stop_service_with_confirmation(self, mock_ssh_manager) -> None:
         """
         Test Case 1.4: Stop service with confirmation
 
@@ -306,7 +308,7 @@ class TestServiceControlOperations:
         logger.info("=== Test 1.4: PASSED ===\n")
 
     @pytest.mark.asyncio
-    async def test_stop_service_without_confirmation(self):
+    async def test_stop_service_without_confirmation(self) -> None:
         """
         Test Case 1.5: Stop service without confirmation fails
 
@@ -327,7 +329,7 @@ class TestServiceControlOperations:
         logger.info("=== Test 1.5: PASSED ===\n")
 
     @pytest.mark.asyncio
-    async def test_restart_service_success(self, mock_ssh_manager):
+    async def test_restart_service_success(self, mock_ssh_manager) -> None:
         """
         Test Case 1.6: Restart service successfully
 
@@ -364,7 +366,7 @@ class TestRBACEnforcement:
     """Test Role-Based Access Control enforcement."""
 
     @pytest.mark.asyncio
-    async def test_admin_can_start_service(self, test_config):
+    async def test_admin_can_start_service(self, test_config) -> None:
         """
         Test Case 2.1: Admin user can start service
 
@@ -385,7 +387,7 @@ class TestRBACEnforcement:
         logger.info("=== Test 2.1: PASSED ===\n")
 
     @pytest.mark.asyncio
-    async def test_operator_can_restart_service(self, test_config):
+    async def test_operator_can_restart_service(self, test_config) -> None:
         """
         Test Case 2.2: Operator can restart service
 
@@ -406,7 +408,7 @@ class TestRBACEnforcement:
         logger.info("=== Test 2.2: PASSED ===\n")
 
     @pytest.mark.asyncio
-    async def test_operator_cannot_stop_service(self, test_config):
+    async def test_operator_cannot_stop_service(self, test_config) -> None:
         """
         Test Case 2.3: Operator cannot stop service
 
@@ -427,7 +429,7 @@ class TestRBACEnforcement:
         logger.info("=== Test 2.3: PASSED ===\n")
 
     @pytest.mark.asyncio
-    async def test_only_admin_can_stop_service(self, test_config):
+    async def test_only_admin_can_stop_service(self, test_config) -> None:
         """
         Test Case 2.4: Only admin can stop service
 
@@ -452,7 +454,7 @@ class TestCommandValidation:
     """Test command validation and whitelisting."""
 
     @pytest.mark.asyncio
-    async def test_allowed_commands_validated(self):
+    async def test_allowed_commands_validated(self) -> None:
         """
         Test Case 3.1: Only whitelisted commands allowed
 
@@ -483,7 +485,7 @@ class TestCommandValidation:
         logger.info("=== Test 3.1: PASSED ===\n")
 
     @pytest.mark.asyncio
-    async def test_command_injection_prevention(self):
+    async def test_command_injection_prevention(self) -> None:
         """
         Test Case 3.2: Command injection prevented
 
@@ -515,7 +517,7 @@ class TestHealthMonitoring:
     """Test health monitoring and detection."""
 
     @pytest.mark.asyncio
-    async def test_health_check_success(self, mock_redis_client, mock_ssh_manager):
+    async def test_health_check_success(self, mock_redis_client, mock_ssh_manager) -> None:
         """
         Test Case 4.1: Successful health check
 
@@ -554,7 +556,7 @@ class TestHealthMonitoring:
         logger.info("=== Test 4.1: PASSED ===\n")
 
     @pytest.mark.asyncio
-    async def test_health_check_degraded_performance(self, mock_redis_client):
+    async def test_health_check_degraded_performance(self, mock_redis_client) -> None:
         """
         Test Case 4.2: Health check with degraded performance
 
@@ -584,7 +586,7 @@ class TestHealthMonitoring:
         logger.info("=== Test 4.2: PASSED ===\n")
 
     @pytest.mark.asyncio
-    async def test_health_check_critical_service_down(self, mock_redis_client):
+    async def test_health_check_critical_service_down(self, mock_redis_client) -> None:
         """
         Test Case 4.3: Health check with service down
 
@@ -618,7 +620,7 @@ class TestAutoRecovery:
     """Test auto-recovery mechanism."""
 
     @pytest.mark.asyncio
-    async def test_auto_recovery_standard_success(self, mock_ssh_manager):
+    async def test_auto_recovery_standard_success(self, mock_ssh_manager) -> None:
         """
         Test Case 5.1: Standard auto-recovery succeeds
 
@@ -644,7 +646,7 @@ class TestAutoRecovery:
         logger.info("=== Test 5.1: PASSED ===\n")
 
     @pytest.mark.asyncio
-    async def test_auto_recovery_max_attempts_exceeded(self, test_config):
+    async def test_auto_recovery_max_attempts_exceeded(self, test_config) -> None:
         """
         Test Case 5.2: Auto-recovery fails after max attempts
 
@@ -673,7 +675,7 @@ class TestAutoRecovery:
         logger.info("=== Test 5.2: PASSED ===\n")
 
     @pytest.mark.asyncio
-    async def test_auto_recovery_disabled_by_config(self, test_config):
+    async def test_auto_recovery_disabled_by_config(self, test_config) -> None:
         """
         Test Case 5.3: Auto-recovery disabled in config
 
@@ -701,7 +703,7 @@ class TestErrorHandling:
     """Test error handling and failure scenarios."""
 
     @pytest.mark.asyncio
-    async def test_ssh_connection_timeout(self, mock_ssh_manager):
+    async def test_ssh_connection_timeout(self, mock_ssh_manager) -> None:
         """
         Test Case 6.1: SSH connection timeout
 
@@ -725,7 +727,7 @@ class TestErrorHandling:
         logger.info("=== Test 6.1: PASSED ===\n")
 
     @pytest.mark.asyncio
-    async def test_ssh_connection_refused(self, mock_ssh_manager):
+    async def test_ssh_connection_refused(self, mock_ssh_manager) -> None:
         """
         Test Case 6.2: SSH connection refused
 
@@ -752,7 +754,7 @@ class TestAuditLogging:
     """Test audit logging functionality."""
 
     @pytest.mark.asyncio
-    async def test_audit_log_service_operation(self):
+    async def test_audit_log_service_operation(self) -> None:
         """
         Test Case 7.1: Service operation logged
 
@@ -781,7 +783,7 @@ class TestAuditLogging:
         logger.info("=== Test 7.1: PASSED ===\n")
 
     @pytest.mark.asyncio
-    async def test_audit_log_permission_denied(self):
+    async def test_audit_log_permission_denied(self) -> None:
         """
         Test Case 7.2: Permission denial logged
 

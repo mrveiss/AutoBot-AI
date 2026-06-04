@@ -16,7 +16,7 @@ import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Annotated, Optional
+from typing import Annotated
 
 _PROVISION_LOG = Path("/var/log/autobot/provision-wizard.log")
 
@@ -72,7 +72,7 @@ class StepCompleteRequest(BaseModel):
 class ProvisionRequest(BaseModel):
     """Request to provision fleet nodes."""
 
-    node_ids: Optional[list[str]] = None
+    node_ids: list[str] | None = None
 
 
 # -- Settings Helpers ─────────────────────────────────────────────────────────
@@ -188,14 +188,41 @@ def _build_infra_vars(
     return infra_vars
 
 
+def _sanitize_ansible_name(name: str) -> str:
+    """Sanitize a name to be Ansible group/host compliant (#9283).
+
+    Ansible group names (and host names, which create implicit groups)
+    must not start with numbers and should avoid hyphens to prevent
+    warnings. Converts names like '01-Backend' to 'node_01_Backend'.
+
+    Returns a name that:
+    - Contains only letters, numbers, and underscores
+    - Does not start with a number
+    - Does not contain hyphens
+    """
+    import re
+
+    # Replace hyphens with underscores
+    sanitized = name.replace("-", "_")
+    # Replace any other non-alphanumeric/underscore chars with underscores
+    sanitized = re.sub(r"[^a-zA-Z0-9_]", "_", sanitized)
+    # Prepend 'node_' if starts with a number
+    if sanitized and sanitized[0].isdigit():
+        sanitized = f"node_{sanitized}"
+    return sanitized
+
+
 def _build_host_entries(
     db_nodes: list,
     local_ips: set,
 ) -> tuple[dict[str, dict], dict[str, str], dict[str, str]]:
-    """Build per-host inventory entries from DB node records (#2823).
+    """Build per-host inventory entries from DB node records (#2823, #9283).
 
     Returns (hosts, node_id_to_hostname, node_id_to_ip).
     Sets ansible_connection=local for nodes whose IP is on this machine (#2722).
+
+    Issue #9283: Sanitizes inventory names to avoid Ansible warnings about
+    invalid group characters (host names create implicit groups).
     """
     hosts: dict[str, dict] = {}
     node_id_to_hostname: dict[str, str] = {}
@@ -210,7 +237,9 @@ def _build_host_entries(
             host_vars["ansible_connection"] = "local"
         if node.ssh_port and node.ssh_port != 22:
             host_vars["ansible_port"] = node.ssh_port
-        inventory_name = node.ansible_target  # #1814
+        # Issue #9283: Sanitize inventory name to avoid Ansible warnings
+        raw_name = node.ansible_target  # #1814
+        inventory_name = _sanitize_ansible_name(raw_name)
         hosts[inventory_name] = host_vars
         node_id_to_hostname[node.node_id] = inventory_name
         node_id_to_ip[node.node_id] = node.ip_address
@@ -371,8 +400,8 @@ def _build_inventory_dict(
 
 
 async def _fetch_inventory_data(
-    node_ids: Optional[list[str]],
-) -> Optional[
+    node_ids: list[str] | None,
+) -> (
     tuple[
         list,
         dict[str, dict],
@@ -384,7 +413,8 @@ async def _fetch_inventory_data(
         set,
         list[str],
     ]
-]:
+    | None
+):
     """Load all DB data needed to build the Ansible inventory (#2823).
 
     Returns (db_nodes, hosts, node_id_to_hostname, node_id_to_ip,
@@ -450,8 +480,8 @@ async def _fetch_inventory_data(
 
 
 async def _generate_dynamic_inventory(
-    node_ids: Optional[list[str]] = None,
-) -> Optional[Path]:
+    node_ids: list[str] | None = None,
+) -> Path | None:
     """Build Ansible inventory with role-based groups (#1346, #2823).
 
     Orchestrates focused helpers: _fetch_inventory_data, _build_inventory_children,
@@ -591,7 +621,7 @@ async def _check_node_reachability(inventory_path: Path) -> dict[str, bool]:
 
 
 async def _activate_provisioned_roles(
-    node_ids: Optional[list[str]],
+    node_ids: list[str] | None,
 ) -> None:
     """Mark all roles on provisioned nodes as 'active' (#2836, #2900).
 
@@ -666,7 +696,7 @@ def _handle_provision_result(result: dict) -> None:
 
 
 async def _create_wizard_deployments(
-    node_ids: Optional[list[str]],
+    node_ids: list[str] | None,
 ) -> dict[str, str]:
     """Create one Deployment record per provisioned node before playbook runs (#3032).
 
@@ -726,8 +756,8 @@ async def _complete_wizard_deployments(
     node_to_deployment: dict[str, str],
     success: bool,
     output: str,
-    error: Optional[str],
-    reachable_nodes: Optional[list[str]],
+    error: str | None,
+    reachable_nodes: list[str] | None,
 ) -> None:
     """Update Deployment records after wizard provisioning finishes (#3032).
 
@@ -763,7 +793,7 @@ async def _complete_wizard_deployments(
 
 
 async def _run_provisioning_task(
-    node_ids: Optional[list[str]],
+    node_ids: list[str] | None,
 ) -> None:
     """Run Ansible provisioning in background (#1384)."""
     _write_provision_log(
@@ -833,7 +863,7 @@ async def _run_provisioning_task(
             return
 
         # Build --limit to include only reachable nodes (#2897)
-        reachability_limit: Optional[list[str]] = None
+        reachability_limit: list[str] | None = None
         if unreachable:
             reachability_limit = reachable
             logger.info(

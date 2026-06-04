@@ -5,7 +5,6 @@
 Simple synchronous PTY implementation that works reliably
 """
 
-import logging
 import os
 import pty
 import queue
@@ -13,12 +12,12 @@ import select
 import signal
 import subprocess
 import threading
-from typing import Optional
 
+from autobot_shared.logging_manager import get_logger
 from constants.path_constants import PATH
 from constants.threshold_constants import TimingConstants
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #380: Module-level frozenset for PTY event types
 _PTY_OUTPUT_EVENTS = frozenset({"output", "eof"})
@@ -62,8 +61,8 @@ class SimplePTY:
         self,
         session_id: str,
         use_login_shell: bool = False,
-        custom_ps1: Optional[str] = None,
-    ):
+        custom_ps1: str | None = None,
+    ) -> None:
         """Initialize SimplePTY with session ID and optional shell configuration."""
         self.session_id = session_id
         self.use_login_shell = use_login_shell
@@ -179,7 +178,7 @@ class SimplePTY:
             self.cleanup()
             return False
 
-    def _read_loop(self):
+    def _read_loop(self) -> None:
         """Background thread to read from PTY (Issue #315: uses helper)."""
         while self.running and self.master_fd is not None:
             try:
@@ -205,7 +204,7 @@ class SimplePTY:
         self.output_queue.put(("close", ""))
         logger.info("PTY read loop ended for session %s", self.session_id)
 
-    def _write_loop(self):
+    def _write_loop(self) -> None:
         """Background thread to write to PTY"""
         while self.running and self.master_fd is not None:
             try:
@@ -243,7 +242,7 @@ class SimplePTY:
             logger.error("Error queuing input: %s", e)
             return False
 
-    def get_output(self) -> Optional[tuple]:
+    def get_output(self) -> tuple | None:
         """Get output from PTY (non-blocking)"""
         try:
             return self.output_queue.get_nowait()
@@ -316,7 +315,7 @@ class SimplePTY:
         """Check if PTY is alive"""
         return self.running and self.process and self.process.poll() is None and self.master_fd is not None
 
-    def cleanup(self):
+    def cleanup(self) -> None:
         """Clean up PTY"""
         self.running = False
 
@@ -364,7 +363,7 @@ class SimplePTY:
 class SimplePTYManager:
     """Simple PTY manager with thread-safe session management"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize PTY manager with empty sessions dict and thread lock."""
         self.sessions = {}
         self._lock = threading.Lock()  # CRITICAL: Protect concurrent session access
@@ -385,12 +384,12 @@ class SimplePTYManager:
                 return pty
             return None
 
-    def get_session(self, session_id: str) -> Optional[SimplePTY]:
+    def get_session(self, session_id: str) -> SimplePTY | None:
         """Get PTY session"""
         with self._lock:
             return self.sessions.get(session_id)
 
-    def close_session(self, session_id: str):
+    def close_session(self, session_id: str) -> None:
         """Close PTY session"""
         # CRITICAL: Atomic check-and-delete with lock
         with self._lock:
@@ -402,7 +401,7 @@ class SimplePTYManager:
         # Cleanup outside lock to avoid holding lock during I/O
         pty.cleanup()
 
-    def close_all(self):
+    def close_all(self) -> None:
         """Close all sessions"""
         # CRITICAL: Get list of sessions under lock, then close each
         with self._lock:

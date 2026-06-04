@@ -9,7 +9,7 @@ JWT-based authentication and user management.
 
 import logging
 from datetime import timedelta
-from typing import Optional
+from typing import Callable
 
 from fastapi import Depends, Header, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -17,6 +17,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.auth.jwt_core import decode_jwt_or_none, encode_jwt, hash_password
+from autobot_shared.auth.permissions import ROLE_PERMISSIONS, Permission, Role
 from config import settings
 from models.schemas import TokenResponse, UserCreate, UserResponse
 from user_management.models.user import User
@@ -33,7 +34,7 @@ class AuthService:
         """Hash a password."""
         return hash_password(password)
 
-    def create_access_token(self, data: dict, expires_delta: Optional[timedelta] = None) -> str:
+    def create_access_token(self, data: dict, expires_delta: timedelta | None = None) -> str:
         """Create a JWT access token."""
         default_delta = timedelta(minutes=settings.access_token_expire_minutes)
         return encode_jwt(
@@ -42,7 +43,7 @@ class AuthService:
             expires_delta=expires_delta if expires_delta is not None else default_delta,
         )
 
-    def decode_token(self, token: str) -> Optional[dict]:
+    def decode_token(self, token: str) -> dict | None:
         """Decode and validate a JWT token."""
         return decode_jwt_or_none(token, settings.secret_key)
 
@@ -71,14 +72,17 @@ class AuthService:
 
         return UserResponse.model_validate(user)
 
-    async def get_user_by_username(self, db: AsyncSession, username: str) -> Optional[User]:
+    async def get_user_by_username(self, db: AsyncSession, username: str) -> User | None:
         """Get a user by username."""
         result = await db.execute(select(User).where(User.username == username))
         return result.scalar_one_or_none()
 
     async def create_token_response(self, user: User) -> TokenResponse:
         """Create a token response for a user."""
-        access_token = self.create_access_token(data={"sub": user.username, "admin": user.is_platform_admin})
+        role = Role.ADMIN.value if user.is_platform_admin else Role.USER.value
+        access_token = self.create_access_token(
+            data={"sub": user.username, "admin": user.is_platform_admin, "role": role}
+        )
         return TokenResponse(
             access_token=access_token,
             token_type="bearer",  # nosec B106 - standard OAuth2 token type
@@ -106,8 +110,47 @@ async def get_current_user(
     return payload
 
 
+def require_permission(permission: Permission) -> Callable:
+    """FastAPI dependency factory requiring a specific permission.
+
+    Derives the user's role from the JWT 'role' field (preferred) or falls
+    back to the legacy 'admin' boolean flag for tokens issued before role was
+    included.  Raises 403 when the role lacks the required permission.
+
+    Usage::
+
+        @router.post("/endpoint")
+        async def endpoint(
+            _: dict = Depends(require_permission(Permission.ADMIN_CONFIG_WRITE)),
+        ): ...
+    """
+
+    async def _check(current_user: dict = Depends(get_current_user)) -> dict:
+        role_str = current_user.get("role")
+        if role_str:
+            try:
+                role = Role(role_str)
+            except ValueError:
+                role = Role.USER
+        else:
+            role = Role.ADMIN if current_user.get("admin", False) else Role.USER
+
+        if permission not in ROLE_PERMISSIONS.get(role, []):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Permission denied: {permission.value} required",
+            )
+        return current_user
+
+    return _check
+
+
 async def require_admin(current_user: dict = Depends(get_current_user)) -> dict:
-    """FastAPI dependency requiring admin privileges."""
+    """FastAPI dependency requiring admin privileges (legacy binary check).
+
+    Prefer require_permission(Permission.ADMIN_SYSTEM) for new endpoints.
+    Retained for backward compatibility with any callers not yet migrated.
+    """
     if not current_user.get("admin", False):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

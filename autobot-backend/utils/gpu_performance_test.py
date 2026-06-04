@@ -5,15 +5,16 @@ Tests semantic chunking performance and identifies optimization opportunities.
 """
 
 import asyncio
-import os
 import sys
 import time
 
 import psutil
 import torch
 
+from autobot_shared.ssot_config import config
+
 # Add AutoBot to path
-sys.path.insert(0, os.environ.get("AUTOBOT_PROJECT_ROOT", "/opt/autobot/code_source"))
+sys.path.insert(0, config.project_root)
 
 from utils.semantic_chunker import AutoBotSemanticChunker
 

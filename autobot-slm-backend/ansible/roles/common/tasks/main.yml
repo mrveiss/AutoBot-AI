@@ -39,7 +39,7 @@
       - iputils-ping
       - dnsutils
     state: present
-  become: yes
+  become: true
   tags: ['common', 'packages']
 
 - name: "Common | Create autobot user"
@@ -48,9 +48,9 @@
     comment: "AutoBot Service User"
     home: /home/autobot
     shell: /bin/bash
-    create_home: yes
+    create_home: true
     state: present
-  become: yes
+  become: true
   tags: ['common', 'users']
 
 - name: "Common | Create emergency admin user"
@@ -58,12 +58,12 @@
     name: "{{ emergency_admin_user }}"
     comment: "Emergency Admin User (fallback access)"
     shell: /bin/bash
-    create_home: yes
+    create_home: true
     groups: sudo
-    append: yes
+    append: true
     password: "{{ emergency_admin_password_hash }}"
     state: present
-  become: yes
+  become: true
   when: emergency_admin_password_hash is defined
   tags: ['common', 'users', 'emergency']
 
@@ -75,7 +75,7 @@
     group: root
     mode: '0440'
     validate: 'visudo -cf %s'
-  become: yes
+  become: true
   when: emergency_admin_password_hash is defined
   tags: ['common', 'users', 'emergency']
 
@@ -92,7 +92,7 @@
     - /opt/autobot/data
     - /opt/autobot/config
     - /opt/autobot/scripts
-  become: yes
+  become: true
   tags: ['common', 'directories']
 
 # Issue #2828: Use shared key path so any user in the autobot group can
@@ -102,7 +102,7 @@
     user: autobot
     key: "{{ lookup('file', '/etc/autobot/ssh/autobot_key.pub') }}"
     state: present
-  become: yes
+  become: true
   when: lookup('file', '/etc/autobot/ssh/autobot_key.pub', errors='ignore') is not none
   tags: ['common', 'ssh']
 
@@ -111,17 +111,17 @@
     - name: "Common | Disable UFW temporarily"
       ufw:
         state: disabled
-      become: yes
+      become: true
 
     - name: "Common | Reset UFW rules to defaults"
       command: ufw --force reset
-      become: yes
+      become: true
       changed_when: true
 
     - name: "Common | Re-enable UFW"
       ufw:
         state: enabled
-      become: yes
+      become: true
   when: ufw_reset_rules | default(false) | bool
   tags: ['common', 'firewall', 'firewall-reset']
 
@@ -134,7 +134,7 @@
     - { direction: 'incoming', policy: "{{ ufw_default_incoming_policy }}" }
     - { direction: 'outgoing', policy: "{{ ufw_default_outgoing_policy }}" }
     - { direction: 'routed', policy: "{{ ufw_default_routed_policy }}" }
-  become: yes
+  become: true
   tags: ['common', 'firewall']
 
 - name: "Common | Allow all localhost traffic (#2722)"
@@ -143,7 +143,7 @@
     from_ip: 127.0.0.1
     to_ip: 127.0.0.1
     comment: "Allow localhost"
-  become: yes
+  become: true
   tags: ['common', 'firewall']
 
 - name: "Common | Merge base and role-specific firewall rules (#894)"
@@ -160,7 +160,7 @@
     to_ip: "{{ item.dest | default('any') }}"
     comment: "{{ item.comment | default('AutoBot rule') }}"
   loop: "{{ merged_firewall_rules }}"
-  become: yes
+  become: true
   notify: reload firewall
   when: merged_firewall_rules | length > 0
   tags: ['common', 'firewall']
@@ -168,20 +168,20 @@
 - name: "Common | Configure firewall - Set logging level (#887)"
   ufw:
     logging: "{{ ufw_logging }}"
-  become: yes
+  become: true
   tags: ['common', 'firewall']
 
 - name: "Common | Enable firewall"
   ufw:
     state: enabled
-  become: yes
+  become: true
   when: ufw_enabled | bool
   tags: ['common', 'firewall']
 
 - name: "Common | Set hostname"
   hostname:
     name: "{{ inventory_hostname }}"
-  become: yes
+  become: true
   when:
     - inventory_hostname is defined
     - inventory_hostname != '00-SLM-Manager'
@@ -190,10 +190,10 @@
 - name: "Common | Update /etc/hosts"
   lineinfile:
     path: /etc/hosts
-    line: "{{ ansible_facts['default_ipv4'].address }} {{ inventory_hostname }} {{ inventory_hostname_short }}"
-    regexp: "^{{ ansible_facts['default_ipv4'].address }}"
+    line: "{{ ansible_facts['default_ipv4'].address | default(ansible_host) }} {{ inventory_hostname }} {{ inventory_hostname_short }}"
+    regexp: "^{{ ansible_facts['default_ipv4'].address | default(ansible_host) }}"
     state: present
-  become: yes
+  become: true
   when:
     - ansible_facts['default_ipv4'].address is defined
     - inventory_hostname != '00-SLM-Manager'
@@ -206,7 +206,7 @@
     owner: root
     group: root
     mode: '0644'
-  become: yes
+  become: true
   when: dns_servers is defined
   tags: ['common', 'dns']
 
@@ -227,7 +227,7 @@
       - wheel
     state: latest
     executable: pip3
-  become: yes
+  become: true
   environment:
     PIP_DEFAULT_TIMEOUT: "120"
   timeout: 120  # Issue #2835: prevent indefinite hang on network issues
@@ -241,7 +241,7 @@
     owner: autobot
     group: autobot
     mode: '0755'
-  become: yes
+  become: true
   tags: ['common', 'logging']
 
 - name: "Common | Display configuration summary"

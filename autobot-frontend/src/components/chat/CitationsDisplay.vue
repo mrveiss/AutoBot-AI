@@ -10,14 +10,11 @@
       @keydown.space.prevent="toggleExpanded"
     >
       <div class="citations-header-left">
-        <i class="fas fa-layer-group text-autobot-primary" aria-hidden="true"></i>
+        <Icon name="layer-group" class="text-autobot-primary" />
         <span class="citations-label">{{ $t('chat.citations.sources') }}</span>
         <span class="citations-count">{{ citations.length }}</span>
       </div>
-      <i
-        :class="isExpanded ? 'fas fa-chevron-up' : 'fas fa-chevron-down'"
-        aria-hidden="true"
-      ></i>
+      <Icon :name="isExpanded ? 'chevron-up' : 'chevron-down'" />
     </div>
     <Transition name="slide-fade">
       <div v-if="isExpanded" class="citations-list">
@@ -32,7 +29,7 @@
           @keydown.space.prevent="$emit('citation-click', citation)"
         >
           <div class="citation-rank">
-            <i :class="sourceIcon(citation)" aria-hidden="true"></i>
+            <Icon :name="sourceIcon(citation)" />
           </div>
           <div class="citation-content">
             <div class="citation-text">
@@ -70,14 +67,14 @@
                 class="citation-score"
                 :class="getScoreClass(citation.score!)"
               >
-                <i class="fas fa-chart-line" aria-hidden="true"></i>
+                <Icon name="chart-line" />
                 {{ formatScore(citation.score!) }}%
               </span>
               <span
                 v-if="citation.type === 'knowledge_base' && citation.source"
                 class="citation-source"
               >
-                <i class="fas fa-file-alt" aria-hidden="true"></i>
+                <Icon name="file-alt" />
                 {{ formatSourcePath(citation.source) }}
               </span>
             </div>
@@ -104,6 +101,7 @@
  * Issue #1186: Always-Visible Source Attribution — extended for type/reliability/web
  */
 
+import Icon from '@/components/ui/Icon.vue'
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
@@ -173,10 +171,10 @@ const formatSourcePath = (sourcePath: string): string => {
 
 const sourceIcon = (citation: Citation): string => {
   switch (citation.type) {
-    case 'knowledge_base': return 'fas fa-book'
-    case 'llm_training':   return 'fas fa-robot'
-    case 'web':            return 'fas fa-globe'
-    default:               return 'fas fa-file-alt'
+    case 'knowledge_base': return 'book'
+    case 'llm_training':   return 'robot'
+    case 'web':            return 'globe'
+    default:               return 'file-alt'
   }
 }
 

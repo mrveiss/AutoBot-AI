@@ -12,12 +12,10 @@ when the main asyncio thread pool is saturated by indexing operations.
 """
 
 import asyncio
-import logging
 import mimetypes
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
 
 import aiofiles
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
@@ -40,6 +38,7 @@ from api.schemas_system import (
 )
 from auth_middleware import get_auth_middleware
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.path_validator import validate_relative_path
 from constants.error_constants import (
     ERR_DIRECTORY_NOT_FOUND,
@@ -53,7 +52,7 @@ from utils.path_validation import is_invalid_name
 from utils.paths_manager import ensure_data_directory, get_data_path
 
 router = APIRouter()
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 security = HTTPBearer(auto_error=False)
 
 # Issue #380: Module-level tuple for dangerous content patterns in uploads
@@ -211,7 +210,7 @@ def _check_file_permission(request: Request, permission: str) -> dict:
     return user_data
 
 
-def _calculate_parent_path(path: str) -> Optional[str]:
+def _calculate_parent_path(path: str) -> str | None:
     """
     Calculate parent path from current path.
 
@@ -897,7 +896,7 @@ async def rename_file_or_directory(request: Request, path: str = Form(...), new_
     }
 
 
-def _determine_file_type(mime_type: Optional[str]) -> str:
+def _determine_file_type(mime_type: str | None) -> str:
     """
     Determine the preview file type from MIME type.
 

@@ -11,7 +11,7 @@ import asyncio
 import logging
 import os
 from datetime import datetime, timezone
-from typing import Optional, Tuple
+from typing import Tuple
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -58,8 +58,8 @@ class GitTracker:
         self.repo_path = repo_path
         self.remote = remote
         self.branch = branch
-        self.latest_commit: Optional[str] = None
-        self.last_fetch: Optional[datetime] = None
+        self.latest_commit: str | None = None
+        self.last_fetch: datetime | None = None
 
     async def _run_git_command(self, *args: str) -> Tuple[str, int]:
         """
@@ -94,7 +94,7 @@ class GitTracker:
             logger.error("Error running git command: %s", e)
             return "", 1
 
-    async def get_local_commit(self) -> Optional[str]:
+    async def get_local_commit(self) -> str | None:
         """
         Get the current commit hash of the local repository.
 
@@ -112,7 +112,7 @@ class GitTracker:
         # Fallback: read from DB setting (rsync deployments have no .git)
         return await self._get_commit_from_db()
 
-    async def _get_commit_from_db(self) -> Optional[str]:
+    async def _get_commit_from_db(self) -> str | None:
         """Read slm_agent_latest_commit from DB.
 
         Helper for get_local_commit (Issue #829).
@@ -142,7 +142,7 @@ class GitTracker:
             return True
         return False
 
-    async def get_remote_commit(self, branch: Optional[str] = None) -> Optional[str]:
+    async def get_remote_commit(self, branch: str | None = None) -> str | None:
         """
         Get the latest commit hash from the remote branch.
 
@@ -208,7 +208,7 @@ class GitTracker:
 
 
 # Singleton instance for the SLM agent code repository
-_tracker_instance: Optional[GitTracker] = None
+_tracker_instance: GitTracker | None = None
 
 
 def get_git_tracker(

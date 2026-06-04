@@ -59,7 +59,7 @@ def _make_entry(
 
 
 class TestPromptVariantModel:
-    def test_to_dict(self):
+    def test_to_dict(self) -> None:
         variant = PromptVariant(
             id="v1",
             prompt_text="test prompt",
@@ -73,7 +73,7 @@ class TestPromptVariantModel:
         assert d["scores"] == {"llm_judge": 0.8}
         assert d["final_score"] == 0.8
 
-    def test_from_dict_round_trip(self):
+    def test_from_dict_round_trip(self) -> None:
         v = _make_variant("v2", 0.5)
         restored = PromptVariant.from_dict(v.to_dict())
         assert restored.id == "v2"
@@ -87,7 +87,7 @@ class TestPromptVariantModel:
 
 
 class TestOptimizationSession:
-    def test_to_dict(self):
+    def test_to_dict(self) -> None:
         target = PromptOptTarget(
             agent_name="test_agent",
             current_prompt="base prompt",
@@ -108,13 +108,13 @@ class TestOptimizationSession:
 
 
 class TestArchive:
-    def test_add_retains_all_entries(self):
+    def test_add_retains_all_entries(self) -> None:
         archive = Archive()
         for i in range(5):
             archive.add(_make_entry(f"v{i}", score=float(i) * 0.1))
         assert archive.size == 5
 
-    def test_best_returns_highest_score(self):
+    def test_best_returns_highest_score(self) -> None:
         archive = Archive()
         archive.add(_make_entry("low", score=0.1))
         archive.add(_make_entry("high", score=0.9))
@@ -122,7 +122,7 @@ class TestArchive:
         assert archive.best is not None
         assert archive.best.variant_id == "high"
 
-    def test_valid_parents_excludes_invalid(self):
+    def test_valid_parents_excludes_invalid(self) -> None:
         archive = Archive()
         archive.add(_make_entry("good", score=0.8, valid_parent=True))
         archive.add(_make_entry("bad", score=0.2, valid_parent=False))
@@ -130,7 +130,7 @@ class TestArchive:
         assert len(parents) == 1
         assert parents[0].variant_id == "good"
 
-    def test_mark_invalid_excludes_entry(self):
+    def test_mark_invalid_excludes_entry(self) -> None:
         archive = Archive()
         archive.add(_make_entry("a", score=0.7))
         archive.add(_make_entry("b", score=0.3))
@@ -138,7 +138,7 @@ class TestArchive:
         parents = archive.valid_parents
         assert all(p.variant_id != "a" for p in parents)
 
-    def test_select_parent_returns_valid_entry(self):
+    def test_select_parent_returns_valid_entry(self) -> None:
         archive = Archive()
         archive.add(_make_entry("x", score=0.6))
         archive.add(_make_entry("y", score=0.0, valid_parent=False))
@@ -146,12 +146,12 @@ class TestArchive:
         assert result is not None
         assert result.variant_id == "x"
 
-    def test_select_parent_none_when_all_invalid(self):
+    def test_select_parent_none_when_all_invalid(self) -> None:
         archive = Archive()
         archive.add(_make_entry("z", score=0.5, valid_parent=False))
         assert archive.select_parent() is None
 
-    def test_select_parent_uniform_when_all_scores_zero(self):
+    def test_select_parent_uniform_when_all_scores_zero(self) -> None:
         archive = Archive()
         for i in range(10):
             archive.add(_make_entry(f"v{i}", score=0.0))
@@ -159,7 +159,7 @@ class TestArchive:
         result = archive.select_parent()
         assert result is not None
 
-    def test_prune_caps_size(self):
+    def test_prune_caps_size(self) -> None:
         archive = Archive(max_size=3)
         for i in range(5):
             archive.add(_make_entry(f"v{i}", score=float(i) * 0.1))
@@ -168,7 +168,7 @@ class TestArchive:
         ids = {e.variant_id for e in archive.valid_parents}
         assert "v4" in ids  # score 0.4 — top 3
 
-    def test_serialisation_round_trip(self):
+    def test_serialisation_round_trip(self) -> None:
         archive = Archive(max_size=10)
         archive.add(_make_entry("a", score=0.7))
         archive.add(_make_entry("b", score=0.3, valid_parent=False))
@@ -429,7 +429,42 @@ class TestPromptOptimizerLoop:
         assert len(invalid) == 3  # all variants failed scoring
 
     @pytest.mark.asyncio
-    async def test_load_archive_returns_none_when_missing(self, optimizer):
+    async def test_load_archive_returns_none_when_missing(self, optimizer) -> None:
         optimizer._redis.get.return_value = None
         result = await optimizer.load_archive("nonexistent-session-id")
         assert result is None
+
+    @pytest.mark.asyncio
+    async def test_multi_scorer_final_score_is_average(self, mock_llm) -> None:
+        """final_score must be the mean of all scorer scores — Issue #3211."""
+        scorer_a = AsyncMock()
+        scorer_a.name = "scorer_a"
+        scorer_a.score.return_value = ScorerResult(score=0.6, raw_score=6, metadata={}, scorer_name="scorer_a")
+
+        scorer_b = AsyncMock()
+        scorer_b.name = "scorer_b"
+        scorer_b.score.return_value = ScorerResult(score=0.8, raw_score=8, metadata={}, scorer_name="scorer_b")
+
+        opt = PromptOptimizer(
+            scorers={"scorer_a": scorer_a, "scorer_b": scorer_b},
+            llm_service=mock_llm,
+        )
+        opt._redis = AsyncMock()
+
+        target = PromptOptTarget(
+            agent_name="test",
+            current_prompt="base",
+            scorer_chain=["scorer_a", "scorer_b"],
+            mutation_count=1,
+            top_k=1,
+        )
+
+        async def benchmark_fn(prompt: str) -> str:
+            return "output"
+
+        session = await opt.optimize(target, benchmark_fn, max_rounds=1)
+
+        assert session.best_variant is not None
+        assert (
+            abs(session.best_variant.final_score - 0.7) < 1e-9
+        ), f"Expected final_score=0.7 (average of 0.6+0.8), got {session.best_variant.final_score}"

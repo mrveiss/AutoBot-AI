@@ -32,18 +32,21 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 import requests
 
+from autobot_shared.ssot_config import config
+
 # Add AutoBot paths
-sys.path.append(os.environ.get("AUTOBOT_PROJECT_ROOT", "/opt/autobot/code_source"))
+sys.path.append(config.project_root)
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from autobot_shared.logging_manager import get_logger
 from tests.test_helpers import get_test_backend_url
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -82,7 +85,7 @@ class DashboardValidation:
     data_accuracy: bool
     response_time: float
     widget_count: int
-    error_details: Optional[str] = None
+    error_details: str | None = None
 
 
 class MonitoringAndAlertingTester:

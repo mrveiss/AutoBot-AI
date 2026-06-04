@@ -108,14 +108,21 @@ def _parse_db_url(url: str) -> dict:
     }
 
 
-def get_connection(db_url: str = None) -> psycopg2.extensions.connection:
-    """Get a PostgreSQL connection (#786)."""
+def get_connection(db_url: str = None, timeout: int = 10) -> psycopg2.extensions.connection:
+    """Get a PostgreSQL connection (#786).
+
+    Args:
+        db_url: Database URL (defaults to get_db_url())
+        timeout: Connection timeout in seconds (default 10s)
+    """
     if db_url is None:
         db_url = get_db_url()
     params = _parse_db_url(db_url)
     # Remove None password to use peer auth if available
     if params["password"] is None:
         del params["password"]
+    # Add timeout to prevent indefinite hangs during startup
+    params["connect_timeout"] = timeout
     return psycopg2.connect(**params)
 
 
@@ -208,8 +215,17 @@ def run_all_migrations(db_url: str = None) -> List[Tuple[str, bool, str]]:
         db_url = get_db_url()
 
     results = []
+    conn = None
 
-    conn = get_connection(db_url)
+    try:
+        logger.debug("Connecting to PostgreSQL for migrations")
+        conn = get_connection(db_url)
+        logger.info("Database connection established")
+    except Exception as e:
+        logger.error("Failed to connect to database after 10s timeout: %s", e)
+        logger.error("Check that PostgreSQL is running and accepting connections on the configured host/port")
+        return [("database_connection", False, f"Connection failed: {e}")]
+
     try:
         ensure_migrations_table(conn)
         applied = get_applied_migrations(conn)
@@ -234,8 +250,13 @@ def run_all_migrations(db_url: str = None) -> List[Tuple[str, bool, str]]:
                 # Stop on first failure
                 break
 
+    except Exception as e:
+        logger.error("Migration execution failed: %s", e)
+        if results == []:
+            results.append(("migrations_execution", False, f"Execution error: {e}"))
     finally:
-        conn.close()
+        if conn:
+            conn.close()
 
     return results
 

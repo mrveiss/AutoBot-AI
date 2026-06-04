@@ -6,7 +6,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { nextTick } from 'vue'
 
-import { ref } from 'vue'
 
 // Mock useNetworkStatus so queue tests are isolated from real network probes
 vi.mock('../useNetworkStatus', () => {

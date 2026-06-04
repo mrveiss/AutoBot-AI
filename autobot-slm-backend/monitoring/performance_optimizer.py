@@ -10,7 +10,7 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import psutil
 import yaml
@@ -105,8 +105,8 @@ class OptimizationRecommendation:
     description: str
     impact_estimate: str  # Expected performance improvement
     auto_applicable: bool  # Can be applied automatically
-    command: Optional[str] = None  # Command to apply optimization
-    rollback_command: Optional[str] = None  # Command to rollback if needed
+    command: str | None = None  # Command to apply optimization
+    rollback_command: str | None = None  # Command to rollback if needed
     affected_services: List[str] = None
 
 
@@ -117,10 +117,10 @@ class OptimizationResult:
     recommendation: OptimizationRecommendation
     applied: bool
     success: bool
-    error_message: Optional[str] = None
-    metrics_before: Optional[Dict] = None
-    metrics_after: Optional[Dict] = None
-    improvement_percentage: Optional[float] = None
+    error_message: str | None = None
+    metrics_before: Dict | None = None
+    metrics_after: Dict | None = None
+    improvement_percentage: float | None = None
 
 
 class PerformanceOptimizer:
@@ -238,7 +238,7 @@ class PerformanceOptimizer:
         optimizer: str,
         services: List[str],
         severity_fn=None,
-    ) -> Optional[OptimizationRecommendation]:
+    ) -> OptimizationRecommendation | None:
         """Build a recommendation if resource exceeds threshold.
 
         Helper for _analyze_system_metrics (#825).
@@ -568,7 +568,7 @@ class PerformanceOptimizer:
         self.optimization_history.append(result)
         return result
 
-    def _calculate_improvement(self, before_metrics: Dict, after_metrics: Dict, category: str) -> Optional[float]:
+    def _calculate_improvement(self, before_metrics: Dict, after_metrics: Dict, category: str) -> float | None:
         """Calculate improvement percentage for an optimization."""
         try:
             if category == "system":

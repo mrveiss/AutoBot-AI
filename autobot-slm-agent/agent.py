@@ -45,7 +45,7 @@ def sd_notify(state: str) -> bool:
     Returns:
         True if notification was sent successfully, False otherwise.
     """
-    notify_socket = os.environ.get("NOTIFY_SOCKET")
+    notify_socket = os.environ.get("NOTIFY_SOCKET")  # ssot-config-exempt: systemd notify socket
     if not notify_socket:
         return False
 
@@ -68,7 +68,7 @@ def sd_notify(state: str) -> bool:
 logger = logging.getLogger(__name__)
 
 # Local notification server port (for git hooks)
-DEFAULT_NOTIFY_PORT = int(os.getenv("SLM_NOTIFY_PORT", "8000"))
+DEFAULT_NOTIFY_PORT = int(os.getenv("SLM_NOTIFY_PORT", "8000"))  # ssot-config-exempt: SLM agent module
 
 # Standalone agent defaults - agent runs on remote VMs, not AutoBot main host
 # These are configured via CLI args or environment variables at deployment
@@ -135,8 +135,7 @@ class SLMAgent:
         """Initialize SQLite buffer database."""
         Path(self.buffer_db).parent.mkdir(parents=True, exist_ok=True)
         conn = sqlite3.connect(self.buffer_db)
-        conn.execute(
-            """
+        conn.execute("""
             CREATE TABLE IF NOT EXISTS event_buffer (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 timestamp TEXT NOT NULL,
@@ -144,8 +143,7 @@ class SLMAgent:
                 data TEXT NOT NULL,
                 synced INTEGER DEFAULT 0
             )
-        """
-        )
+        """)
         conn.commit()
         conn.close()
         logger.info("Event buffer initialized at %s", self.buffer_db)
@@ -231,14 +229,9 @@ class SLMAgent:
         Returns a list of dictionaries with port, process, and pid info.
         Issue #620.
         """
-        return [
-            {"port": p.port, "process": p.process, "pid": p.pid}
-            for p in get_listening_ports()
-        ]
+        return [{"port": p.port, "process": p.process, "pid": p.pid} for p in get_listening_ports()]
 
-    def _build_heartbeat_payload(
-        self, health: dict, os_info: str, code_version: Optional[str]
-    ) -> dict:
+    def _build_heartbeat_payload(self, health: dict, os_info: str, code_version: Optional[str]) -> dict:
         """
         Build the complete heartbeat payload.
 
@@ -325,9 +318,7 @@ class SLMAgent:
     async def sync_buffered_events(self):
         """Sync buffered events to admin."""
         conn = sqlite3.connect(self.buffer_db)
-        cursor = conn.execute(
-            "SELECT id, event_type, data FROM event_buffer WHERE synced = 0 ORDER BY id LIMIT 100"
-        )
+        cursor = conn.execute("SELECT id, event_type, data FROM event_buffer WHERE synced = 0 ORDER BY id LIMIT 100")
         events = cursor.fetchall()
 
         if not events:
@@ -356,10 +347,7 @@ class SLMAgent:
                     if response.status == 200:
                         ids = [e[0] for e in events]
                         placeholders = ",".join("?" * len(ids))
-                        query = (
-                            "UPDATE event_buffer SET synced = 1 "
-                            f"WHERE id IN ({placeholders})"
-                        )
+                        query = "UPDATE event_buffer SET synced = 1 " f"WHERE id IN ({placeholders})"
                         conn.execute(query, ids)
                         conn.commit()
                         logger.info("Synced %d events", len(events))
@@ -375,14 +363,10 @@ class SLMAgent:
         finally:
             conn.close()
 
-    async def run(
-        self, enable_notify_server: bool = False, notify_port: int = DEFAULT_NOTIFY_PORT
-    ):
+    async def run(self, enable_notify_server: bool = False, notify_port: int = DEFAULT_NOTIFY_PORT):
         """Main agent loop."""
         self.running = True
-        logger.info(
-            "SLM Agent started (node_id=%s, admin=%s)", self.node_id, self.admin_url
-        )
+        logger.info("SLM Agent started (node_id=%s, admin=%s)", self.node_id, self.admin_url)
 
         # Notify systemd that we're ready
         sd_notify("READY=1")

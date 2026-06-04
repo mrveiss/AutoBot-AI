@@ -31,9 +31,6 @@ Overlap note (issue #3336):
     duplicate.
 """
 
-import logging
-from typing import Optional
-
 from fastapi import APIRouter, Depends, HTTPException
 
 from agents.kb_librarian_agent import get_kb_librarian
@@ -45,9 +42,10 @@ from api.schemas_knowledge import (
 )
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 
 router = APIRouter()
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @router.post("/query", response_model=KBQueryResponse)
@@ -145,10 +143,10 @@ async def get_kb_librarian_status(
     error_code_prefix="KB_LIBRARIAN",
 )
 async def configure_kb_librarian(
-    enabled: Optional[bool] = None,
-    similarity_threshold: Optional[float] = None,
-    max_results: Optional[int] = None,
-    auto_summarize: Optional[bool] = None,
+    enabled: bool | None = None,
+    similarity_threshold: float | None = None,
+    max_results: int | None = None,
+    auto_summarize: bool | None = None,
     current_user: dict = Depends(get_current_user),
 ):
     """Update KB Librarian Agent runtime parameters.

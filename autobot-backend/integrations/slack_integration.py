@@ -21,14 +21,14 @@ Error Handling (Issue #4161):
 """
 
 import json
-import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from integrations.base import IntegrationAction
 from integrations.communication_integration import SlackIntegration
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _CHANNEL_MAPPING_KEY_PREFIX = "slack:channel_mapping:"
 _APPROVAL_THREAD_KEY_PREFIX = "slack:approval_thread:"
@@ -42,9 +42,9 @@ class SlackChannelMapping:
         self,
         project_id: str,
         default_channel: str,
-        notifications_channel: Optional[str] = None,
-        approvals_channel: Optional[str] = None,
-        status_channel: Optional[str] = None,
+        notifications_channel: str | None = None,
+        approvals_channel: str | None = None,
+        status_channel: str | None = None,
     ) -> None:
         self.project_id = project_id
         self.default_channel = default_channel
@@ -584,7 +584,7 @@ class SlackNotificationIntegration(SlackIntegration):
             )
             return False
 
-    async def load_channel_mapping(self, project_id: str) -> Optional[SlackChannelMapping]:
+    async def load_channel_mapping(self, project_id: str) -> SlackChannelMapping | None:
         """Load a channel mapping from Redis.
 
         Wraps Redis get operation with error handling.
@@ -686,7 +686,7 @@ class SlackNotificationIntegration(SlackIntegration):
             )
             return False
 
-    async def _load_approval_thread(self, approval_id: str) -> Optional[Dict[str, str]]:
+    async def _load_approval_thread(self, approval_id: str) -> Dict[str, str] | None:
         """Load stored channel + thread_ts for an approval from Redis.
 
         Wraps Redis get operation with error handling.

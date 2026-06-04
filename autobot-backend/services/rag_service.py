@@ -13,16 +13,16 @@ import asyncio
 import json
 import time
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Set, Tuple
 
 from advanced_rag_optimizer import AdvancedRAGOptimizer, RAGMetrics, SearchResult
 from autobot_shared.logging_manager import get_llm_logger
 from autobot_shared.redis_client import get_async_redis_client
 from constants.ttl_constants import TTL_30_DAYS
+from events.bus import publish_event
 from events.event_types import RAG_RETRIEVAL
 from knowledge.search_components.query_classifier import get_query_classifier
 from knowledge.search_components.retrieval_learner import GLOBAL_USER, get_retrieval_learner
-from live_event_manager import publish_live_event
 from services.context_sufficiency import (
     SufficiencyVerdict,
     get_context_sufficiency_evaluator,
@@ -76,8 +76,8 @@ class RAGService:
     def __init__(
         self,
         knowledge_base: Any,
-        config: Optional[RAGConfig] = None,
-    ):
+        config: RAGConfig | None = None,
+    ) -> None:
         """
         Initialize RAG service.
 
@@ -87,12 +87,12 @@ class RAGService:
         """
         self.kb_adapter = KnowledgeBaseAdapter(knowledge_base)
         self.config = config or get_rag_config()
-        self.optimizer: Optional[AdvancedRAGOptimizer] = None
+        self.optimizer: AdvancedRAGOptimizer | None = None
         self._initialized = False
         self._cache: Dict[str, Tuple[List[SearchResult], float]] = {}
         self._cache_lock = asyncio.Lock()  # CRITICAL: Protect concurrent cache access
         # Neural Mesh RAG retriever (Issue #2059); injected at startup when Phase 3 is active.
-        self._mesh_retriever: Optional[Any] = None
+        self._mesh_retriever: Any | None = None
         # Issue #4690: Session-adaptive reranking weight adjuster.
         self._session_reranker = get_session_adaptive_reranker(
             default_semantic=self.config.hybrid_weight_semantic,
@@ -174,7 +174,7 @@ class RAGService:
         query: str,
         max_results: int,
         enable_reranking: bool,
-        categories: Optional[List[str]],
+        categories: List[str] | None,
     ) -> str:
         """Build cache key for search (Issue #665: extracted helper)."""
         categories_key = ",".join(sorted(categories)) if categories else "all"
@@ -225,7 +225,7 @@ class RAGService:
         max_results: int,
         enable_reranking: bool,
         timeout_seconds: float,
-        categories: Optional[List[str]],
+        categories: List[str] | None,
         cache_key: str,
     ) -> Tuple[List[SearchResult], RAGMetrics]:
         """Helper for advanced_search. Ref: #1088.
@@ -270,7 +270,7 @@ class RAGService:
                 return await self._fallback_basic_search(query, max_results)
             raise
 
-    async def _check_topic_cache(self, query: str) -> Optional[Tuple[List[SearchResult], RAGMetrics]]:
+    async def _check_topic_cache(self, query: str) -> Tuple[List[SearchResult], RAGMetrics] | None:
         """Check topic retrieval cache for related chunks. Issue #1376."""
         try:
             from knowledge.facts import _generate_embedding_with_npu_fallback
@@ -328,7 +328,7 @@ class RAGService:
         except Exception as exc:
             logger.debug("Topic cache store failed: %s", exc)
 
-    async def _check_semantic_cache(self, query: str) -> Optional[Tuple[List[SearchResult], RAGMetrics]]:
+    async def _check_semantic_cache(self, query: str) -> Tuple[List[SearchResult], RAGMetrics] | None:
         """Check semantic query cache for similar past queries. Issue #1372."""
         try:
             sem_cache = await get_semantic_query_cache()
@@ -388,9 +388,9 @@ class RAGService:
         self,
         query: str,
         complexity: str,
-        categories: Optional[List[str]],
-        user_id: Optional[str] = None,
-    ) -> Optional[str]:
+        categories: List[str] | None,
+        user_id: str | None = None,
+    ) -> str | None:
         """Query the retrieval learner for a matching historical pattern. Issue #2095.
 
         Issue #3240: user_id scopes the lookup to per-user patterns first, then
@@ -430,9 +430,9 @@ class RAGService:
 
     async def _record_retrieval_outcome(
         self,
-        pattern_hash: Optional[str],
+        pattern_hash: str | None,
         results: List[SearchResult],
-        user_id: Optional[str] = None,
+        user_id: str | None = None,
     ) -> None:
         """Record search outcome against the matched retrieval pattern. Issue #2095.
 
@@ -521,7 +521,7 @@ class RAGService:
             "timestamp": time.time(),
         }
         try:
-            await publish_live_event("global", RAG_RETRIEVAL, payload)
+            await publish_event("global", RAG_RETRIEVAL, payload)
         except Exception as exc:
             logger.debug("Live event publish failed (non-fatal): %s", exc)
 
@@ -531,7 +531,7 @@ class RAGService:
         retrieved_ids: List[str],
         ranked_ids: List[str],
         complexity: str = "simple",
-        user_id: Optional[str] = None,
+        user_id: str | None = None,
     ) -> None:
         """Append retrieval feedback to a dated, user-scoped Redis stream. Issue #1516.
 
@@ -576,8 +576,8 @@ class RAGService:
         query: str,
         max_results: int,
         enable_reranking: bool,
-        categories: Optional[List[str]],
-    ) -> Optional[Tuple[List[SearchResult], RAGMetrics, str]]:
+        categories: List[str] | None,
+    ) -> Tuple[List[SearchResult], RAGMetrics, str] | None:
         """Check all cache tiers before falling through to ChromaDB. Ref: #1376.
 
         Returns (results, metrics, cache_key) on hit, None on miss.
@@ -646,7 +646,7 @@ class RAGService:
         self,
         query: str,
         results: List[SearchResult],
-        user_id: Optional[str] = None,
+        user_id: str | None = None,
     ) -> None:
         """Classify query complexity and emit retrieval feedback to event + Redis stream.
 
@@ -681,10 +681,10 @@ class RAGService:
         query: str,
         max_results: int = 5,
         enable_reranking: bool = True,
-        timeout: Optional[float] = None,
-        categories: Optional[List[str]] = None,
-        user_id: Optional[str] = None,
-        session_id: Optional[str] = None,
+        timeout: float | None = None,
+        categories: List[str] | None = None,
+        user_id: str | None = None,
+        session_id: str | None = None,
     ) -> Tuple[List[SearchResult], RAGMetrics]:
         """Perform advanced RAG search with reranking.
 
@@ -721,8 +721,8 @@ class RAGService:
 
         # Issue #4690: Apply session-adapted weights before executing the search so
         # the optimizer uses weights refined by earlier hits/misses in this session.
-        _prev_semantic: Optional[float] = None
-        _prev_keyword: Optional[float] = None
+        _prev_semantic: float | None = None
+        _prev_keyword: float | None = None
         if self.config.enable_session_adaptive_reranking and session_id and self.optimizer:
             _prev_semantic = self.optimizer.hybrid_weight_semantic
             _prev_keyword = self.optimizer.hybrid_weight_keyword
@@ -802,7 +802,7 @@ class RAGService:
     async def get_optimized_context(
         self,
         query: str,
-        max_context_length: Optional[int] = None,
+        max_context_length: int | None = None,
     ) -> Tuple[str, RAGMetrics]:
         """
         Get optimized context for RAG-based response generation.
@@ -1110,7 +1110,7 @@ class RAGService:
         self,
         query: str,
         max_results: int,
-        categories: Optional[List[str]] = None,
+        categories: List[str] | None = None,
     ) -> Tuple[List[SearchResult], RAGMetrics]:
         """
         Fallback to basic search when advanced RAG fails.
@@ -1168,7 +1168,7 @@ class RAGService:
             logger.error("Basic search fallback failed: %s", e)
             return [], metrics
 
-    async def _get_from_cache(self, cache_key: str) -> Optional[Tuple[List[SearchResult], RAGMetrics]]:
+    async def _get_from_cache(self, cache_key: str) -> Tuple[List[SearchResult], RAGMetrics] | None:
         """Get results from cache if not expired."""
         # CRITICAL: Protect cache access with lock to prevent race conditions
         async with self._cache_lock:
@@ -1181,7 +1181,7 @@ class RAGService:
                     del self._cache[cache_key]
         return None
 
-    async def _add_to_cache(self, cache_key: str, results: Tuple[List[SearchResult], RAGMetrics]):
+    async def _add_to_cache(self, cache_key: str, results: Tuple[List[SearchResult], RAGMetrics]) -> None:
         """Add results to cache with timestamp.
 
         Args:
@@ -1201,7 +1201,7 @@ class RAGService:
                 for key, _ in sorted_cache[:20]:  # Remove oldest 20%
                     del self._cache[key]
 
-    async def clear_cache(self):
+    async def clear_cache(self) -> None:
         """Clear the result cache."""
         async with self._cache_lock:
             self._cache.clear()
@@ -1220,7 +1220,7 @@ class RAGService:
 # Shared mesh components — registered by lifespan at startup (#4765).
 # Each RAGService.initialize() builds its OWN NeuralMeshRetriever from these components so
 # the search closures are bound to THAT instance's optimizer, not to a shared singleton.
-_shared_mesh_components: Optional[Dict[str, Any]] = None
+_shared_mesh_components: Dict[str, Any] | None = None
 
 
 def register_shared_mesh_components(components: Dict[str, Any]) -> None:
@@ -1238,7 +1238,7 @@ def register_shared_mesh_components(components: Dict[str, Any]) -> None:
     logger.info("Mesh brain components registered for per-instance retriever (#4765)")
 
 
-def get_shared_mesh_components() -> Optional[Dict[str, Any]]:
+def get_shared_mesh_components() -> Dict[str, Any] | None:
     """Return the registered mesh components, or None if not yet registered."""
     return _shared_mesh_components
 
@@ -1248,7 +1248,7 @@ def get_shared_mesh_components() -> Optional[Dict[str, Any]]:
 # RAGService.initialize() (replaced by per-instance build from components above).
 # Retained so external callers importing this symbol don't break.
 # ---------------------------------------------------------------------------
-_shared_mesh_retriever: Optional[Any] = None
+_shared_mesh_retriever: Any | None = None
 
 
 def register_shared_mesh_retriever(retriever: Any) -> None:
@@ -1263,7 +1263,7 @@ def register_shared_mesh_retriever(retriever: Any) -> None:
 
 
 # Global service instance (lazily initialized per knowledge base)
-_rag_service_instance: Optional[RAGService] = None
+_rag_service_instance: RAGService | None = None
 _rag_service_lock = asyncio.Lock()
 
 

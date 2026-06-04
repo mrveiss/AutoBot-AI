@@ -68,7 +68,7 @@ class TestLogRun:
     """Tests for SynthesisProvenanceLog.log_run()."""
 
     @pytest.mark.asyncio
-    async def test_xadd_called_with_correct_stream_key(self):
+    async def test_xadd_called_with_correct_stream_key(self) -> None:
         """log_run writes to the kb:synthesis:log stream key."""
         mock_redis = _make_redis_mock()
         with patch(
@@ -89,7 +89,7 @@ class TestLogRun:
         assert key_used == _STREAM_KEY
 
     @pytest.mark.asyncio
-    async def test_xadd_entry_contains_run_id(self):
+    async def test_xadd_entry_contains_run_id(self) -> None:
         """log_run payload includes run_id."""
         mock_redis = _make_redis_mock()
         with patch(
@@ -109,7 +109,7 @@ class TestLogRun:
         assert fields["run_id"] == "run-42"
 
     @pytest.mark.asyncio
-    async def test_xadd_entry_source_docs_json_encoded(self):
+    async def test_xadd_entry_source_docs_json_encoded(self) -> None:
         """source_docs field is JSON-encoded in the stream entry."""
         mock_redis = _make_redis_mock()
         with patch(
@@ -129,7 +129,7 @@ class TestLogRun:
         assert json.loads(fields["source_docs"]) == ["doc-1", "doc-2"]
 
     @pytest.mark.asyncio
-    async def test_xadd_entry_synthesis_ids_json_encoded(self):
+    async def test_xadd_entry_synthesis_ids_json_encoded(self) -> None:
         """synthesis_ids field is JSON-encoded in the stream entry."""
         mock_redis = _make_redis_mock()
         with patch(
@@ -149,7 +149,7 @@ class TestLogRun:
         assert json.loads(fields["synthesis_ids"]) == ["ins-a", "ins-b"]
 
     @pytest.mark.asyncio
-    async def test_xadd_entry_duration_ms_as_string(self):
+    async def test_xadd_entry_duration_ms_as_string(self) -> None:
         """duration_ms stored as string (Redis requires string values)."""
         mock_redis = _make_redis_mock()
         with patch(
@@ -169,7 +169,7 @@ class TestLogRun:
         assert fields["duration_ms"] == "250"
 
     @pytest.mark.asyncio
-    async def test_log_run_swallows_redis_exception(self):
+    async def test_log_run_swallows_redis_exception(self) -> None:
         """log_run does not propagate Redis exceptions."""
         mock_redis = AsyncMock()
         pipe_mock = MagicMock()
@@ -202,7 +202,7 @@ class TestGetRecent:
     """Tests for SynthesisProvenanceLog.get_recent()."""
 
     @pytest.mark.asyncio
-    async def test_xrevrange_called_with_limit(self):
+    async def test_xrevrange_called_with_limit(self) -> None:
         """get_recent passes count=limit to xrevrange."""
         mock_redis = _make_redis_mock()
         with patch(
@@ -214,7 +214,7 @@ class TestGetRecent:
         mock_redis.xrevrange.assert_called_once_with(_STREAM_KEY, count=10)
 
     @pytest.mark.asyncio
-    async def test_returns_empty_list_when_no_entries(self):
+    async def test_returns_empty_list_when_no_entries(self) -> None:
         """get_recent returns [] when the stream is empty."""
         mock_redis = _make_redis_mock(xrevrange_result=[])
         with patch(
@@ -226,7 +226,7 @@ class TestGetRecent:
         assert result == []
 
     @pytest.mark.asyncio
-    async def test_deserializes_source_docs(self):
+    async def test_deserializes_source_docs(self) -> None:
         """get_recent decodes JSON-encoded source_docs list."""
         raw = [
             _raw_entry(
@@ -251,7 +251,7 @@ class TestGetRecent:
         assert result[0]["source_docs"] == ["doc-a"]
 
     @pytest.mark.asyncio
-    async def test_deserializes_synthesis_ids(self):
+    async def test_deserializes_synthesis_ids(self) -> None:
         """get_recent decodes JSON-encoded synthesis_ids list."""
         raw = [
             _raw_entry(
@@ -276,7 +276,7 @@ class TestGetRecent:
         assert result[0]["synthesis_ids"] == ["ins-1", "ins-2"]
 
     @pytest.mark.asyncio
-    async def test_duration_ms_cast_to_int(self):
+    async def test_duration_ms_cast_to_int(self) -> None:
         """get_recent casts duration_ms string to int."""
         raw = [
             _raw_entry(
@@ -302,7 +302,7 @@ class TestGetRecent:
         assert isinstance(result[0]["duration_ms"], int)
 
     @pytest.mark.asyncio
-    async def test_returns_empty_list_on_redis_error(self):
+    async def test_returns_empty_list_on_redis_error(self) -> None:
         """get_recent returns [] when Redis raises an exception."""
         mock_redis = AsyncMock()
         mock_redis.xrevrange = AsyncMock(side_effect=ConnectionError("Redis down"))
@@ -324,7 +324,7 @@ class TestSynthesisLogEndpoint:
     """Tests for GET /knowledge/synthesis/log endpoint."""
 
     @pytest.mark.asyncio
-    async def test_endpoint_returns_200(self):
+    async def test_endpoint_returns_200(self) -> None:
         """GET /synthesis/log returns HTTP 200."""
         from fastapi import FastAPI
         from fastapi.testclient import TestClient
@@ -345,7 +345,7 @@ class TestSynthesisLogEndpoint:
         assert response.status_code == 200
 
     @pytest.mark.asyncio
-    async def test_endpoint_returns_entries_and_count(self):
+    async def test_endpoint_returns_entries_and_count(self) -> None:
         """Response body contains 'entries' and 'count' keys."""
         from fastapi import FastAPI
         from fastapi.testclient import TestClient
@@ -368,7 +368,7 @@ class TestSynthesisLogEndpoint:
         assert body["count"] == 2
 
     @pytest.mark.asyncio
-    async def test_endpoint_respects_limit_param(self):
+    async def test_endpoint_respects_limit_param(self) -> None:
         """get_recent is called with the limit query parameter."""
         from fastapi import FastAPI
         from fastapi.testclient import TestClient
@@ -397,7 +397,7 @@ class TestGetBestRunIdForCollection:
     """Tests for SynthesisProvenanceLog.get_best_run_id_for_collection()."""
 
     @pytest.mark.asyncio
-    async def test_returns_none_when_no_entries(self):
+    async def test_returns_none_when_no_entries(self) -> None:
         """Returns None when the sorted set is empty."""
         mock_redis = AsyncMock()
         mock_redis.zrevrange = AsyncMock(return_value=[])
@@ -410,7 +410,7 @@ class TestGetBestRunIdForCollection:
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_returns_top_run_id(self):
+    async def test_returns_top_run_id(self) -> None:
         """Returns the decoded run_id at rank 0 of the sorted set."""
         mock_redis = AsyncMock()
         mock_redis.zrevrange = AsyncMock(return_value=[b"run-best"])
@@ -424,7 +424,7 @@ class TestGetBestRunIdForCollection:
         mock_redis.zrevrange.assert_called_once_with("kb:synthesis:best:kb_synthesis", 0, 0)
 
     @pytest.mark.asyncio
-    async def test_returns_none_on_redis_error(self):
+    async def test_returns_none_on_redis_error(self) -> None:
         """Returns None when Redis raises an exception."""
         mock_redis = AsyncMock()
         mock_redis.zrevrange = AsyncMock(side_effect=ConnectionError("Redis down"))
@@ -441,7 +441,7 @@ class TestLogRunCollectionIndex:
     """Tests that log_run maintains the kb:synthesis:best: sorted set."""
 
     @pytest.mark.asyncio
-    async def test_zadd_called_when_collection_name_provided(self):
+    async def test_zadd_called_when_collection_name_provided(self) -> None:
         """log_run writes to the sorted set when collection_name is set."""
         mock_redis = _make_redis_mock()
         with patch(
@@ -462,7 +462,7 @@ class TestLogRunCollectionIndex:
         mock_redis._pipe.zadd.assert_called_once_with("kb:synthesis:best:kb_synthesis", {"run-1": 0.75})
 
     @pytest.mark.asyncio
-    async def test_zadd_not_called_when_no_collection_name(self):
+    async def test_zadd_not_called_when_no_collection_name(self) -> None:
         """log_run skips sorted set write when collection_name is empty."""
         mock_redis = _make_redis_mock()
         with patch(

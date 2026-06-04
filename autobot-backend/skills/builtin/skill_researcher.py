@@ -11,16 +11,16 @@ build more accurate and complete skills.
 """
 
 import json
-import logging
 import re
 from typing import Any, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from skills.base_skill import BaseSkill, SkillManifest
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 try:
-    from services.llm_service import get_llm_service
+    from services.llm_service import get_llm_service  # nosemgrep: extension-no-core-internals
 except ImportError:
     get_llm_service = None  # type: ignore[assignment]
 

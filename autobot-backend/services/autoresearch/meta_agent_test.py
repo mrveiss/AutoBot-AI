@@ -38,29 +38,33 @@ def _write_module(path: Path, content: str) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_metapatch_has_changes_true():
+def test_metapatch_has_changes_true() -> None:
     patch = MetaPatch(original_content="a = 1\n", modified_content="a = 2\n")
     assert patch.has_changes is True
 
 
-def test_metapatch_has_changes_false_whitespace():
+def test_metapatch_has_changes_false_whitespace() -> None:
     patch = MetaPatch(original_content="a = 1\n", modified_content="a = 1")
     assert patch.has_changes is False
 
 
-def test_metapatch_to_dict_keys():
-    patch = MetaPatch(patch_id="abc", target_path="/tmp/foo.py", generation=3)
+def test_metapatch_to_dict_keys() -> None:
+    patch = MetaPatch(
+        patch_id="abc",
+        target_path="/tmp/foo.py",
+        generation=3,  # nosec B108 - test/controlled code uses tmpdir intentionally
+    )
     d = patch.to_dict()
     assert d["patch_id"] == "abc"
-    assert d["target_path"] == "/tmp/foo.py"
+    assert d["target_path"] == "/tmp/foo.py"  # nosec B108 - test/controlled code uses tmpdir intentionally
     assert d["generation"] == 3
     assert "has_changes" in d
 
 
-def test_metapatch_from_dict_roundtrip():
+def test_metapatch_from_dict_roundtrip() -> None:
     original = MetaPatch(
         patch_id="roundtrip-id",
-        target_path="/tmp/foo.py",
+        target_path="/tmp/foo.py",  # nosec B108 - test/controlled code uses tmpdir intentionally
         original_content="x = 1\n",
         modified_content="x = 2\n",
         rationale="test",
@@ -81,13 +85,13 @@ def test_metapatch_from_dict_roundtrip():
 # ---------------------------------------------------------------------------
 
 
-def test_validate_target_rejects_relative(tmp_path):
+def test_validate_target_rejects_relative(tmp_path) -> None:
     agent, _ = _make_agent()
     with pytest.raises(ValueError, match="absolute"):
         agent._validate_target(Path("relative/path.py"))
 
 
-def test_validate_target_rejects_non_py(tmp_path):
+def test_validate_target_rejects_non_py(tmp_path) -> None:
     agent, _ = _make_agent()
     f = tmp_path / "module.txt"
     f.touch()
@@ -95,7 +99,7 @@ def test_validate_target_rejects_non_py(tmp_path):
         agent._validate_target(f)
 
 
-def test_validate_target_rejects_test_prefix_file(tmp_path):
+def test_validate_target_rejects_test_prefix_file(tmp_path) -> None:
     agent, _ = _make_agent()
     f = tmp_path / "test_module.py"
     f.touch()
@@ -103,7 +107,7 @@ def test_validate_target_rejects_test_prefix_file(tmp_path):
         agent._validate_target(f)
 
 
-def test_validate_target_rejects_test_suffix_file(tmp_path):
+def test_validate_target_rejects_test_suffix_file(tmp_path) -> None:
     agent, _ = _make_agent()
     f = tmp_path / "module_test.py"
     f.touch()
@@ -111,7 +115,7 @@ def test_validate_target_rejects_test_suffix_file(tmp_path):
         agent._validate_target(f)
 
 
-def test_validate_target_accepts_protest_py(tmp_path):
+def test_validate_target_accepts_protest_py(tmp_path) -> None:
     """'protest.py' contains 'test' as substring but is NOT a test file."""
     agent, _ = _make_agent()
     f = tmp_path / "protest.py"
@@ -119,14 +123,14 @@ def test_validate_target_accepts_protest_py(tmp_path):
     agent._validate_target(f)  # should not raise
 
 
-def test_validate_target_rejects_missing(tmp_path):
+def test_validate_target_rejects_missing(tmp_path) -> None:
     agent, _ = _make_agent()
     f = tmp_path / "missing.py"
     with pytest.raises(FileNotFoundError):
         agent._validate_target(f)
 
 
-def test_validate_target_accepts_valid(tmp_path):
+def test_validate_target_accepts_valid(tmp_path) -> None:
     agent, _ = _make_agent()
     f = tmp_path / "module.py"
     f.touch()
@@ -138,13 +142,13 @@ def test_validate_target_accepts_valid(tmp_path):
 # ---------------------------------------------------------------------------
 
 
-def test_validate_size_ok(tmp_path):
+def test_validate_size_ok(tmp_path) -> None:
     agent, _ = _make_agent()
     content = "\n".join(["x = 1"] * 10)
     agent._validate_size(content, tmp_path / "mod.py")  # well within limit
 
 
-def test_validate_size_exceeded(tmp_path):
+def test_validate_size_exceeded(tmp_path) -> None:
     config = AutoResearchConfig()
     config.meta_agent_max_module_lines = 5
     agent = MetaAgent(config=config)
@@ -158,14 +162,14 @@ def test_validate_size_exceeded(tmp_path):
 # ---------------------------------------------------------------------------
 
 
-def test_build_prompt_no_context():
+def test_build_prompt_no_context() -> None:
     agent, _ = _make_agent()
     prompt = agent._build_prompt("def foo(): pass\n", [])
     assert "def foo(): pass" in prompt
     assert "Return the improved module now." in prompt
 
 
-def test_build_prompt_with_eval_context():
+def test_build_prompt_with_eval_context() -> None:
     agent, _ = _make_agent()
     context = [{"score": 0.9, "rationale": "faster loop"}]
     prompt = agent._build_prompt("x = 1\n", context)
@@ -173,7 +177,7 @@ def test_build_prompt_with_eval_context():
     assert "faster loop" in prompt
 
 
-def test_build_prompt_caps_context_at_five():
+def test_build_prompt_caps_context_at_five() -> None:
     agent, _ = _make_agent()
     context = [{"score": float(i), "rationale": f"r{i}"} for i in range(10)]
     prompt = agent._build_prompt("x = 1\n", context)
@@ -187,17 +191,17 @@ def test_build_prompt_caps_context_at_five():
 # ---------------------------------------------------------------------------
 
 
-def test_extract_rationale_present():
+def test_extract_rationale_present() -> None:
     content = "# RATIONALE: optimised inner loop\n\ndef foo(): pass\n"
     assert MetaAgent._extract_rationale(content) == "optimised inner loop"
 
 
-def test_extract_rationale_missing():
+def test_extract_rationale_missing() -> None:
     content = "def foo(): pass\n"
     assert MetaAgent._extract_rationale(content) == "no rationale provided"
 
 
-def test_extract_rationale_empty():
+def test_extract_rationale_empty() -> None:
     assert MetaAgent._extract_rationale("") == "no rationale provided"
 
 
@@ -207,7 +211,7 @@ def test_extract_rationale_empty():
 
 
 @pytest.mark.asyncio
-async def test_generate_patch_returns_metapatch(tmp_path):
+async def test_generate_patch_returns_metapatch(tmp_path) -> None:
     modified = "# RATIONALE: removed dead code\ndef foo(): return 42\n"
     agent, llm = _make_agent(llm_response=modified)
 
@@ -229,7 +233,7 @@ async def test_generate_patch_returns_metapatch(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_generate_patch_no_changes_logs(tmp_path, caplog):
+async def test_generate_patch_no_changes_logs(tmp_path, caplog) -> None:
     content = "def foo(): return 1\n"
     agent, _ = _make_agent(llm_response=content)
 
@@ -250,7 +254,7 @@ async def test_generate_patch_no_changes_logs(tmp_path, caplog):
 
 
 @pytest.mark.asyncio
-async def test_generate_patch_no_llm_raises(tmp_path):
+async def test_generate_patch_no_llm_raises(tmp_path) -> None:
     agent = MetaAgent()  # no llm_service
 
     target = tmp_path / "module.py"

@@ -62,7 +62,7 @@ def _make_mesh_result(chunk_ids):
 
 
 class TestMeshFeatureFlagsDefaultValues:
-    def test_defaults(self):
+    def test_defaults(self) -> None:
         from services.rag_config import RAGConfig
 
         cfg = RAGConfig()
@@ -70,14 +70,14 @@ class TestMeshFeatureFlagsDefaultValues:
         assert cfg.mesh_seed_edges is True
         assert cfg.mesh_edge_learner is False
 
-    def test_to_dict_includes_mesh_retriever_enabled(self):
+    def test_to_dict_includes_mesh_retriever_enabled(self) -> None:
         from services.rag_config import RAGConfig
 
         d = RAGConfig().to_dict()
         assert "mesh_retriever_enabled" in d
         assert d["mesh_retriever_enabled"] is False
 
-    def test_from_dict_round_trip(self):
+    def test_from_dict_round_trip(self) -> None:
         from services.rag_config import RAGConfig
 
         original = RAGConfig()
@@ -94,7 +94,7 @@ class TestMeshFeatureFlagsDefaultValues:
 
 class TestMeshFlagDisabled:
     @pytest.mark.asyncio
-    async def test_legacy_path_when_flag_off(self):
+    async def test_legacy_path_when_flag_off(self) -> None:
         from unittest.mock import patch
 
         svc = _make_service(mesh_retriever_enabled=False)
@@ -117,7 +117,7 @@ class TestMeshFlagDisabled:
 
 class TestMeshFlagEnabled:
     @pytest.mark.asyncio
-    async def test_mesh_path_when_flag_on_and_retriever_injected(self):
+    async def test_mesh_path_when_flag_on_and_retriever_injected(self) -> None:
         from unittest.mock import patch
 
         from advanced_rag_optimizer import RAGMetrics
@@ -149,7 +149,7 @@ class TestMeshFlagEnabled:
 
 class TestMeshFlagEnabledRetrieverNone:
     @pytest.mark.asyncio
-    async def test_falls_through_when_retriever_not_injected(self):
+    async def test_falls_through_when_retriever_not_injected(self) -> None:
         from unittest.mock import patch
 
         svc = _make_service(mesh_retriever_enabled=True)
@@ -174,13 +174,13 @@ class TestMeshFlagEnabledRetrieverNone:
 class TestSharedMeshComponentsPerInstanceBuild:
     """Per-instance NeuralMeshRetriever is built from shared components (#4765)."""
 
-    def setup_method(self):
+    def setup_method(self) -> None:
         import services.rag_service as _mod
 
         self._orig = _mod._shared_mesh_components
         _mod._shared_mesh_components = None
 
-    def teardown_method(self):
+    def teardown_method(self) -> None:
         import services.rag_service as _mod
 
         _mod._shared_mesh_components = self._orig
@@ -196,7 +196,7 @@ class TestSharedMeshComponentsPerInstanceBuild:
         }
 
     @pytest.mark.asyncio
-    async def test_builds_per_instance_retriever_on_initialize(self):
+    async def test_builds_per_instance_retriever_on_initialize(self) -> None:
         """initialize() builds a fresh NeuralMeshRetriever bound to this instance's optimizer."""
         from unittest.mock import AsyncMock, patch
 
@@ -282,7 +282,7 @@ class TestSharedMeshComponentsPerInstanceBuild:
         assert svc1._mesh_retriever is not svc2._mesh_retriever
 
     @pytest.mark.asyncio
-    async def test_already_set_retriever_not_overwritten(self):
+    async def test_already_set_retriever_not_overwritten(self) -> None:
         """An existing _mesh_retriever is NOT replaced even when components are registered."""
         from unittest.mock import AsyncMock, patch
 
@@ -317,7 +317,7 @@ class TestSharedMeshComponentsPerInstanceBuild:
         assert svc._mesh_retriever is existing
 
     @pytest.mark.asyncio
-    async def test_no_components_no_retriever_built(self):
+    async def test_no_components_no_retriever_built(self) -> None:
         """If components are not registered, no retriever is built."""
         from unittest.mock import AsyncMock, patch
 

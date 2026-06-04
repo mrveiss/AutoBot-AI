@@ -13,7 +13,7 @@ import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 # Issue #380: Pre-compiled regex patterns for code generation
 DEF_FUNCTION_RE = re.compile(r"\s*def\s+(\w+)")
@@ -84,11 +84,11 @@ class CodeContext:
     file_path: str
     code_snippet: str
     start_line: int = 1
-    end_line: Optional[int] = None
+    end_line: int | None = None
     language: str = "python"
     imports: List[str] = field(default_factory=list)
-    class_context: Optional[str] = None
-    function_context: Optional[str] = None
+    class_context: str | None = None
+    function_context: str | None = None
     surrounding_code: str = ""
     project_conventions: Dict[str, str] = field(default_factory=dict)
 
@@ -100,9 +100,9 @@ class RefactoringRequest:
     refactoring_type: RefactoringType
     context: CodeContext
     description: str = ""
-    target_name: Optional[str] = None
-    new_name: Optional[str] = None
-    pattern_template: Optional[str] = None
+    target_name: str | None = None
+    new_name: str | None = None
+    pattern_template: str | None = None
     constraints: List[str] = field(default_factory=list)
     preserve_behavior: bool = True
     add_tests: bool = False
@@ -117,7 +117,7 @@ class ValidationResult:
     is_valid: bool
     errors: List[str] = field(default_factory=list)
     warnings: List[str] = field(default_factory=list)
-    ast_node: Optional[ast.AST] = None
+    ast_node: ast.AST | None = None
     line_count: int = 0
     complexity_score: float = 0.0
 
@@ -147,10 +147,10 @@ class RefactoringResult:
     request_id: str
     status: GenerationStatus
     request: RefactoringRequest
-    generated_code: Optional[GeneratedCode] = None
-    rollback_code: Optional[str] = None
+    generated_code: GeneratedCode | None = None
+    rollback_code: str | None = None
     applied: bool = False
-    error_message: Optional[str] = None
+    error_message: str | None = None
     suggestions: List[str] = field(default_factory=list)
     timestamp: datetime = field(default_factory=datetime.now)
 

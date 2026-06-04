@@ -16,7 +16,7 @@ Security model
   bypassed via semicolons, &&, shell-newline chaining, python3 -c, eval,
   and many other vectors (#3421).
 - The node must be ONLINE before a job is accepted.
-- The endpoint requires admin privileges (require_admin dependency).
+- The endpoint requires admin.system permission (require_permission dependency).
 - All executions are audit-logged including the command and acting user.
 - SSH connections use a known_hosts file instead of StrictHostKeyChecking=no.
 """
@@ -35,8 +35,9 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.auth.permissions import Permission
 from models.database import EventSeverity, EventType, Node, NodeEvent, NodeStatus
-from services.auth import require_admin
+from services.auth import require_permission
 from services.database import get_db
 
 logger = logging.getLogger(__name__)
@@ -622,7 +623,7 @@ async def execute_on_node(
     node_id: str,
     body: NodeExecuteRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(require_admin),
+    current_user: dict = Depends(require_permission(Permission.ADMIN_SYSTEM)),
 ) -> NodeExecuteResponse:
     """Run *body.command* on the node identified by *node_id*.
 
@@ -630,7 +631,7 @@ async def execute_on_node(
     and the first token (executable name) must be present in
     ALLOWED_EXECUTABLES — any other command is rejected with HTTP 400.
 
-    Admin privileges are required (require_admin dependency).
+    Permission admin.system is required (require_permission dependency).
 
     Local nodes (manager host) execute via subprocess with shell=False;
     remote nodes execute via SSH using the SLM key (SLM_SSH_KEY env var)

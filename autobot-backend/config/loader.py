@@ -7,7 +7,7 @@ Configuration loading and merging logic.
 """
 
 import json
-import logging
+import logging  # stdlib: avoids deadlock — config is on the logging-manager init path (GH#7765 pattern)
 import os
 from pathlib import Path
 from typing import Any, Dict, List
@@ -72,19 +72,27 @@ ENV_VAR_MAPPINGS = {
 
 
 def load_yaml_config(config_file: Path) -> Dict[str, Any]:
-    """Load base configuration from YAML file"""
+    """Load base configuration from YAML file and merge with defaults.
+
+    Always starts with default config and merges the YAML on top.
+    This ensures all required config keys have sensible defaults even
+    if they're not present in the YAML file (Issue #9232).
+    """
+    defaults = get_default_config()
+
     if not config_file.exists():
         logger.info("Base configuration file not found: %s, using defaults", config_file)
-        return get_default_config()
+        return defaults
 
     try:
         with open(config_file, "r", encoding="utf-8") as f:
-            config = yaml.safe_load(f) or {}
+            yaml_config = yaml.safe_load(f) or {}
         logger.info("Base configuration loaded from %s", config_file)
-        return config
+        # Merge YAML config on top of defaults (YAML overrides defaults)
+        return deep_merge(defaults, yaml_config)
     except Exception as e:
         logger.error("Failed to load YAML configuration: %s", e)
-        return get_default_config()
+        return defaults
 
 
 def load_json_settings(settings_file: Path) -> Dict[str, Any]:
@@ -160,7 +168,7 @@ def apply_env_overrides(config: Dict[str, Any]) -> Dict[str, Any]:
     env_overrides = {}
 
     for env_var, config_path in ENV_VAR_MAPPINGS.items():
-        env_value = os.getenv(env_var)
+        env_value = os.getenv(env_var)  # ssot-config-exempt: dynamic config key mapped from ENV_VAR_MAPPINGS
         if env_value is not None:
             converted_value = _convert_env_value(env_value)
             set_nested_value(env_overrides, config_path, converted_value)

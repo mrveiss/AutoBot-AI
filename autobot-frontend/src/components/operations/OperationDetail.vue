@@ -18,7 +18,7 @@
         </div>
       </div>
       <button class="close-btn" @click="emit('close')" :title="$t('operations.detail.close')">
-        <i class="fas fa-times"></i>
+        <Icon name="times" />
       </button>
     </div>
 
@@ -42,7 +42,7 @@
         :processed-items="operation.processed_items"
         :estimated-items="operation.estimated_items"
         :current-step="operation.current_step"
-        size="large"
+        size="lg"
       />
     </div>
 
@@ -78,7 +78,7 @@
     <!-- Error message -->
     <div class="error-section" v-if="operation.error_message">
       <h4 class="section-title error-title">
-        <i class="fas fa-exclamation-triangle"></i>
+        <Icon name="exclamation-triangle" />
         {{ $t('operations.detail.errorTitle') }}
       </h4>
       <div class="error-message">{{ operation.error_message }}</div>
@@ -90,7 +90,7 @@
       <div class="checkpoints-info">
         <span class="checkpoints-count">{{ $t('operations.detail.checkpointsSaved', { count: operation.checkpoints_count }) }}</span>
         <span class="can-resume" v-if="operation.can_resume">
-          <i class="fas fa-redo"></i> {{ $t('operations.detail.canBeResumed') }}
+          <Icon name="redo" /> {{ $t('operations.detail.canBeResumed') }}
         </span>
       </div>
     </div>
@@ -98,7 +98,7 @@
     <!-- Context info (collapsible) -->
     <div class="context-section" v-if="hasContext">
       <button class="context-toggle" @click="showContext = !showContext">
-        <i :class="showContext ? 'fas fa-chevron-down' : 'fas fa-chevron-right'"></i>
+        <Icon :name="showContext ? 'chevron-down' : 'chevron-right'" />
         <h4 class="section-title">{{ $t('operations.detail.contextDetails') }}</h4>
       </button>
       <div class="context-content" v-if="showContext">
@@ -114,7 +114,7 @@
         @click="handleCancel"
         :disabled="actionLoading"
       >
-        <i class="fas fa-stop-circle"></i>
+        <Icon name="stop-circle" />
         {{ $t('operations.detail.cancelOperation') }}
       </button>
       <button
@@ -123,7 +123,7 @@
         @click="handleResume"
         :disabled="actionLoading"
       >
-        <i class="fas fa-play-circle"></i>
+        <Icon name="play-circle" />
         {{ $t('operations.detail.resumeOperation') }}
       </button>
       <button
@@ -131,7 +131,7 @@
         @click="handleRefresh"
         :disabled="actionLoading"
       >
-        <i class="fas fa-sync-alt" :class="{ 'fa-spin': actionLoading }"></i>
+        <Icon name="sync-alt" />
         {{ $t('operations.detail.refresh') }}
       </button>
     </div>
@@ -140,13 +140,14 @@
     <div class="detail-footer">
       <span class="operation-id">{{ $t('operations.detail.idLabel') }} {{ operation.operation_id }}</span>
       <button class="copy-id-btn" @click="copyId" :title="copied ? $t('operations.detail.copied') : $t('operations.detail.copyId')">
-        <i :class="copied ? 'fas fa-check' : 'fas fa-copy'"></i>
+        <Icon :name="copied ? 'check' : 'copy'" />
       </button>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { Operation } from '@/types/operations'

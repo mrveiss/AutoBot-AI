@@ -16,7 +16,6 @@ Endpoints:
 """
 
 import asyncio
-import logging
 from datetime import datetime, timezone
 from typing import Dict
 
@@ -24,6 +23,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from services.access_control_metrics import AccessControlMetrics, get_metrics_service
 from services.audit_logger import audit_log
 from services.feature_flags import FeatureFlags, get_feature_flags
@@ -42,7 +42,7 @@ from .schemas_system import (
     FeatureFlagStatusResponse,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(tags=["admin", "feature-flags"])
 

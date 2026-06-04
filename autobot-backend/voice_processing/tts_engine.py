@@ -9,14 +9,14 @@ Extracted from voice_processing_system.py as part of Issue #381 god class refact
 """
 
 import asyncio
-import logging
 
 import aiofiles
 
+from autobot_shared.logging_manager import get_logger
 from task_execution_tracker import get_task_tracker
 from voice_processing.models import SpeechSynthesisRequest
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class TextToSpeechEngine:

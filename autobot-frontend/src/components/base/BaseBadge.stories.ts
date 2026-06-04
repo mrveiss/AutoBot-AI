@@ -4,11 +4,10 @@ import BaseBadge from './BaseBadge.vue';
 const meta = {
   title: 'Components/Base/BaseBadge',
   component: BaseBadge,
-  tags: ['autodocs'],
   argTypes: {
     variant: {
       control: 'select',
-      options: ['primary', 'secondary', 'success', 'danger', 'warning', 'info', 'light', 'dark'],
+      options: ['primary', 'secondary', 'success', 'error', 'warning', 'info', 'light', 'dark'],
       description: 'Badge color variant',
     },
     size: {
@@ -58,7 +57,7 @@ export const Success: Story = {
 
 export const Danger: Story = {
   args: {
-    variant: 'danger',
+    variant: 'error',
     label: 'Danger',
   },
 };
@@ -125,7 +124,7 @@ export const AllVariants: Story = {
         <BaseBadge variant="primary" label="Primary" />
         <BaseBadge variant="secondary" label="Secondary" />
         <BaseBadge variant="success" label="Success" />
-        <BaseBadge variant="danger" label="Danger" />
+        <BaseBadge variant="error" label="Danger" />
         <BaseBadge variant="warning" label="Warning" />
         <BaseBadge variant="info" label="Info" />
         <BaseBadge variant="light" label="Light" />

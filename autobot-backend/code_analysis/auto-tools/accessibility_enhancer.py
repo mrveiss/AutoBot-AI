@@ -11,19 +11,17 @@ Focuses on:
 """
 
 import json
-import os
 import re
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import List, Tuple
+
+from autobot_shared.ssot_config import config
 
 # Default Vue root: resolves relative to this file so any machine works.
 # Override with AUTOBOT_VUE_ROOT env var. Issue #1183.
-_DEFAULT_VUE_ROOT = os.getenv(
-    "AUTOBOT_VUE_ROOT",
-    str(Path(__file__).resolve().parent.parent.parent / "autobot-frontend"),
-)
+_DEFAULT_VUE_ROOT = config.misc.vue_root or str(Path(__file__).resolve().parent.parent.parent / "autobot-frontend")
 
 # Static WCAG/implementation section for the markdown report. Issue #1183.
 _WCAG_REPORT_SECTION = """
@@ -212,7 +210,7 @@ class AccessibilityFixAgent:
         shutil.copy2(file_path, backup_path)
         return backup_path
 
-    def analyze_button_content(self, button_html: str) -> Optional[str]:
+    def analyze_button_content(self, button_html: str) -> str | None:
         """Analyze button content to generate appropriate label"""
 
         # Check for existing aria-label or title

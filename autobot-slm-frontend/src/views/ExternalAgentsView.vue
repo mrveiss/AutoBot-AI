@@ -193,16 +193,16 @@ onMounted(() => {
     <!-- Header -->
     <div class="flex items-center justify-between">
       <div>
-        <h1 class="text-2xl font-bold text-gray-900">External Agents</h1>
+        <h1 class="text-2xl font-bold text-gray-900">{{ $t('externalAgentsView.externalAgents') }}</h1>
         <p class="text-sm text-gray-600 mt-1">
-          Manage external A2A-compliant agents that AutoBot can route tasks to.
+          {{ $t('externalAgentsView.manageExternalA2ACompliant') }}
         </p>
       </div>
       <button
         class="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg text-sm font-medium transition-colors"
         @click="openCreate"
       >
-        + Register Agent
+        {{ $t('externalAgentsView.registerAgent') }}
       </button>
     </div>
 
@@ -216,7 +216,7 @@ onMounted(() => {
 
     <!-- Loading -->
     <div v-if="registry.isLoading" class="flex justify-center py-12 text-gray-400 text-sm">
-      Loading agents…
+      {{ $t('externalAgentsView.loadingAgents') }}
     </div>
 
     <!-- Empty state -->
@@ -224,7 +224,7 @@ onMounted(() => {
       v-else-if="!registry.isLoading && registry.agents.length === 0"
       class="text-center py-12 text-gray-500 text-sm"
     >
-      No external agents registered yet.
+      {{ $t('externalAgentsView.noExternalAgentsRegistered') }}
     </div>
 
     <!-- Agent table -->
@@ -232,12 +232,12 @@ onMounted(() => {
       <table class="w-full text-sm">
         <thead>
           <tr class="border-b border-gray-700 text-gray-400 text-left">
-            <th class="px-4 py-3 font-medium">Name</th>
+            <th class="px-4 py-3 font-medium">{{ $t('externalAgentsView.name') }}</th>
             <th class="px-4 py-3 font-medium">URL</th>
-            <th class="px-4 py-3 font-medium">Status</th>
-            <th class="px-4 py-3 font-medium">Skills</th>
-            <th class="px-4 py-3 font-medium">Tags</th>
-            <th class="px-4 py-3 font-medium">Actions</th>
+            <th class="px-4 py-3 font-medium">{{ $t('externalAgentsView.status') }}</th>
+            <th class="px-4 py-3 font-medium">{{ $t('externalAgentsView.skills') }}</th>
+            <th class="px-4 py-3 font-medium">{{ $t('externalAgentsView.tags') }}</th>
+            <th class="px-4 py-3 font-medium">{{ $t('externalAgentsView.actions') }}</th>
           </tr>
         </thead>
         <tbody>
@@ -300,13 +300,13 @@ onMounted(() => {
                   class="text-xs text-gray-400 hover:text-gray-200"
                   @click="openEdit(agent)"
                 >
-                  Edit
+                  {{ $t('externalAgentsView.edit') }}
                 </button>
                 <button
                   class="text-xs text-danger-400 hover:text-danger-300"
                   @click="deleteAgent(agent)"
                 >
-                  Delete
+                  {{ $t('externalAgentsView.delete') }}
                 </button>
               </div>
             </td>
@@ -328,7 +328,7 @@ onMounted(() => {
 
         <div class="space-y-3">
           <div>
-            <label class="block text-xs text-gray-400 mb-1">Name *</label>
+            <label class="block text-xs text-gray-400 mb-1">{{ $t('externalAgentsView.name1') }}</label>
             <input
               v-model="form.name"
               class="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-hidden focus:border-primary-500"
@@ -336,7 +336,7 @@ onMounted(() => {
             />
           </div>
           <div>
-            <label class="block text-xs text-gray-400 mb-1">Base URL *</label>
+            <label class="block text-xs text-gray-400 mb-1">{{ $t('externalAgentsView.baseURL') }}</label>
             <input
               v-model="form.base_url"
               class="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-hidden focus:border-primary-500 font-mono"
@@ -345,7 +345,7 @@ onMounted(() => {
             />
           </div>
           <div>
-            <label class="block text-xs text-gray-400 mb-1">Description</label>
+            <label class="block text-xs text-gray-400 mb-1">{{ $t('externalAgentsView.description') }}</label>
             <input
               v-model="form.description"
               class="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-hidden focus:border-primary-500"
@@ -353,7 +353,7 @@ onMounted(() => {
             />
           </div>
           <div>
-            <label class="block text-xs text-gray-400 mb-1">Tags (comma-separated)</label>
+            <label class="block text-xs text-gray-400 mb-1">{{ $t('externalAgentsView.tagsCommaSeparated') }}</label>
             <input
               v-model="form.tags"
               class="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-hidden focus:border-primary-500"
@@ -362,8 +362,8 @@ onMounted(() => {
           </div>
           <div>
             <label class="block text-xs text-gray-400 mb-1">
-              Bearer Token (API Key)
-              <span v-if="modalMode === 'edit'" class="text-gray-500">— leave blank to keep existing</span>
+              {{ $t('externalAgentsView.bearerTokenAPIKey') }}
+              <span v-if="modalMode === 'edit'" class="text-gray-500">{{ $t('externalAgentsView.leaveBlankToKeep') }}</span>
             </label>
             <input
               v-model="form.api_key"
@@ -375,11 +375,11 @@ onMounted(() => {
           <div class="flex items-center gap-6">
             <label class="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
               <input v-model="form.enabled" type="checkbox" class="accent-primary-500" />
-              Enabled
+              {{ $t('externalAgentsView.enabled') }}
             </label>
             <label class="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
               <input v-model="form.ssl_verify" type="checkbox" class="accent-primary-500" />
-              Verify SSL
+              {{ $t('externalAgentsView.verifySSL') }}
             </label>
           </div>
         </div>
@@ -396,7 +396,7 @@ onMounted(() => {
             class="px-4 py-2 text-sm text-gray-300 hover:text-gray-100 transition-colors"
             @click="closeModal"
           >
-            Cancel
+            {{ $t('externalAgentsView.cancel') }}
           </button>
           <button
             class="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
@@ -417,7 +417,7 @@ onMounted(() => {
     >
       <div class="bg-gray-800 rounded-xl border border-gray-700 w-full max-w-2xl p-6 space-y-4 max-h-[80vh] overflow-y-auto">
         <div v-if="isLoadingDetail" class="text-gray-400 text-sm text-center py-8">
-          Loading…
+          {{ $t('externalAgentsView.loading') }}
         </div>
         <template v-else-if="detailAgent">
           <div class="flex items-start justify-between">
@@ -436,21 +436,21 @@ onMounted(() => {
 
           <div class="grid grid-cols-2 gap-3 text-sm">
             <div>
-              <div class="text-xs text-gray-500 mb-0.5">Skills</div>
+              <div class="text-xs text-gray-500 mb-0.5">{{ $t('externalAgentsView.skills') }}</div>
               <div class="text-gray-200">{{ skillCountLabel(detailAgent) }}</div>
             </div>
             <div>
-              <div class="text-xs text-gray-500 mb-0.5">Card Fetched</div>
+              <div class="text-xs text-gray-500 mb-0.5">{{ $t('externalAgentsView.cardFetched') }}</div>
               <div class="text-gray-200">
                 {{ formatDateTime(detailAgent.card_fetched_at ?? null) }}
               </div>
             </div>
             <div>
-              <div class="text-xs text-gray-500 mb-0.5">Created By</div>
+              <div class="text-xs text-gray-500 mb-0.5">{{ $t('externalAgentsView.createdBy') }}</div>
               <div class="text-gray-200">{{ detailAgent.created_by || '—' }}</div>
             </div>
             <div>
-              <div class="text-xs text-gray-500 mb-0.5">Tags</div>
+              <div class="text-xs text-gray-500 mb-0.5">{{ $t('externalAgentsView.tags') }}</div>
               <div class="flex flex-wrap gap-1">
                 <span
                   v-for="tag in detailAgent.tags"
@@ -459,7 +459,7 @@ onMounted(() => {
                 >
                   {{ tag }}
                 </span>
-                <span v-if="!detailAgent.tags.length" class="text-gray-500">None</span>
+                <span v-if="!detailAgent.tags.length" class="text-gray-500">{{ $t('externalAgentsView.none') }}</span>
               </div>
             </div>
           </div>
@@ -469,7 +469,7 @@ onMounted(() => {
           </div>
 
           <div v-if="detailCardJson">
-            <div class="text-xs text-gray-500 mb-1">Agent Card (JSON)</div>
+            <div class="text-xs text-gray-500 mb-1">{{ $t('externalAgentsView.agentCardJSON') }}</div>
             <pre class="bg-gray-900 rounded-lg p-3 text-xs text-gray-300 overflow-x-auto max-h-64">{{ detailCardJson }}</pre>
           </div>
         </template>

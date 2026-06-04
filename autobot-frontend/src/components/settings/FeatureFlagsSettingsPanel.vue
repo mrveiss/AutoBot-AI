@@ -17,16 +17,27 @@ Issue #4273: Wire orphaned components EnforcementModeSelector, FlagChangeHistory
 
     <!-- Error State -->
     <div v-else-if="error" class="error-state">
-      <i class="fas fa-exclamation-circle"></i>
-      <p>{{ error }}</p>
-      <button @click="loadData" class="retry-btn">
-        <i class="fas fa-redo"></i>
-        {{ $t('featureFlags.retry') }}
-      </button>
+      <BaseAlert variant="error" :message="error">
+        <template #actions>
+          <button @click="loadData" class="retry-btn">
+            <Icon name="redo" />
+            {{ $t('featureFlags.retry') }}
+          </button>
+        </template>
+      </BaseAlert>
     </div>
 
     <!-- Main Content -->
     <div v-else class="settings-content">
+      <!-- Operation Error -->
+      <BaseAlert
+        v-if="operationError"
+        variant="error"
+        :message="operationError"
+        dismissible
+        @dismiss="operationError = null"
+      />
+
       <!-- Enforcement Mode Selector -->
       <section class="settings-section">
         <EnforcementModeSelector
@@ -78,7 +89,7 @@ Issue #4273: Wire orphaned components EnforcementModeSelector, FlagChangeHistory
 import { ref, onMounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { createLogger } from '@/utils/debugUtils';
-import { useToast } from '@/composables/useToast';
+import { useNotificationBus } from '@/composables/useNotificationBus';
 import featureFlagsApiClient, {
   type EnforcementMode,
   type FeatureFlagsStatus,
@@ -89,16 +100,19 @@ import EndpointEnforcement from '@/components/feature-flags/EndpointEnforcement.
 import FlagChangeHistory from '@/components/feature-flags/FlagChangeHistory.vue';
 import AccessMetrics from '@/components/feature-flags/AccessMetrics.vue';
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue';
+import Icon from '@/components/ui/Icon.vue';
+import BaseAlert from '@/components/ui/BaseAlert.vue';
 
 const logger = createLogger('FeatureFlagsSettingsPanel');
 const { t } = useI18n();
-const { showToast } = useToast();
+const { showToast } = useNotificationBus();
 
 // State
 const loading = ref(false);
 const updating = ref(false);
 const loadingMetrics = ref(false);
 const error = ref('');
+const operationError = ref<string | null>(null);
 const featureFlagsStatus = ref<FeatureFlagsStatus | null>(null);
 const accessMetrics = ref<ViolationStatistics | null>(null);
 
@@ -125,7 +139,6 @@ const loadData = async () => {
   } catch (err) {
     logger.error('Failed to load feature flags data:', err);
     error.value = err instanceof Error ? err.message : t('featureFlags.loadError');
-    showToast(error.value, 'error', 5000);
   } finally {
     loading.value = false;
   }
@@ -147,13 +160,13 @@ const handleModeChange = async (mode: EnforcementMode) => {
     }
 
     showToast(t('featureFlags.modeUpdatedSuccess'), 'success', 3000);
+    operationError.value = null;
 
     // Reload data to reflect changes
     await loadData();
   } catch (err) {
     logger.error('Failed to update enforcement mode:', err);
-    const errorMsg = err instanceof Error ? err.message : t('featureFlags.updateModeError');
-    showToast(errorMsg, 'error', 5000);
+    operationError.value = err instanceof Error ? err.message : t('featureFlags.updateModeError');
   } finally {
     updating.value = false;
   }
@@ -175,10 +188,10 @@ const handleAddEndpointOverride = async (endpoint: string, mode: EnforcementMode
     }
 
     showToast(t('featureFlags.overrideAddedSuccess'), 'success', 3000);
+    operationError.value = null;
   } catch (err) {
     logger.error('Failed to add endpoint override:', err);
-    const errorMsg = err instanceof Error ? err.message : t('featureFlags.addOverrideError');
-    showToast(errorMsg, 'error', 5000);
+    operationError.value = err instanceof Error ? err.message : t('featureFlags.addOverrideError');
   } finally {
     updating.value = false;
   }
@@ -200,10 +213,10 @@ const handleUpdateEndpointOverride = async (endpoint: string, mode: EnforcementM
     }
 
     showToast(t('featureFlags.overrideUpdatedSuccess'), 'success', 3000);
+    operationError.value = null;
   } catch (err) {
     logger.error('Failed to update endpoint override:', err);
-    const errorMsg = err instanceof Error ? err.message : t('featureFlags.updateOverrideError');
-    showToast(errorMsg, 'error', 5000);
+    operationError.value = err instanceof Error ? err.message : t('featureFlags.updateOverrideError');
   } finally {
     updating.value = false;
   }
@@ -225,10 +238,10 @@ const handleRemoveEndpointOverride = async (endpoint: string) => {
     }
 
     showToast(t('featureFlags.overrideRemovedSuccess'), 'success', 3000);
+    operationError.value = null;
   } catch (err) {
     logger.error('Failed to remove endpoint override:', err);
-    const errorMsg = err instanceof Error ? err.message : t('featureFlags.removeOverrideError');
-    showToast(errorMsg, 'error', 5000);
+    operationError.value = err instanceof Error ? err.message : t('featureFlags.removeOverrideError');
   } finally {
     updating.value = false;
   }
@@ -250,10 +263,10 @@ const handleRefreshMetrics = async (days?: number) => {
 
     accessMetrics.value = response.data || null;
     showToast(t('featureFlags.metricsRefreshed'), 'success', 2000);
+    operationError.value = null;
   } catch (err) {
     logger.error('Failed to refresh metrics:', err);
-    const errorMsg = err instanceof Error ? err.message : t('featureFlags.refreshMetricsError');
-    showToast(errorMsg, 'error', 5000);
+    operationError.value = err instanceof Error ? err.message : t('featureFlags.refreshMetricsError');
   } finally {
     loadingMetrics.value = false;
   }

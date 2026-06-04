@@ -9,27 +9,27 @@ Handles checkpoint save/load/resume functionality.
 """
 
 import json
-import logging
 import pickle  # nosec B403 - pickle used for internal checkpoint serialization only
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import aiofiles
 import redis.asyncio as redis
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import parse_utc_iso
 from constants.path_constants import PATH
 from constants.ttl_constants import TTL_7_DAYS
 
 from .types import OperationCheckpoint
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class OperationCheckpointManager:
     """Manages operation checkpoints for pause/resume capability."""
 
-    def __init__(self, redis_client: Optional[redis.Redis] = None):
+    def __init__(self, redis_client: redis.Redis | None = None):
         """Initialize checkpoint manager with optional Redis client."""
         self.redis_client = redis_client
         self.checkpoint_dir = PATH.PROJECT_ROOT / "data" / "operation_checkpoints"
@@ -113,7 +113,7 @@ class OperationCheckpointManager:
         checkpoint_id: str,
         progress_percent: float,
         state_data: Dict[str, Any],
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: Dict[str, Any] | None = None,
     ) -> OperationCheckpoint:
         """
         Save a checkpoint for an operation.
@@ -160,7 +160,7 @@ class OperationCheckpointManager:
 
         return checkpoint
 
-    async def load_checkpoint(self, checkpoint_id: str) -> Optional[OperationCheckpoint]:
+    async def load_checkpoint(self, checkpoint_id: str) -> OperationCheckpoint | None:
         """
         Load a checkpoint by ID.
 
@@ -349,7 +349,7 @@ class OperationCheckpointManager:
 
         return deleted
 
-    async def get_latest_checkpoint(self, operation_id: str) -> Optional[OperationCheckpoint]:
+    async def get_latest_checkpoint(self, operation_id: str) -> OperationCheckpoint | None:
         """
         Get the most recent checkpoint for an operation.
 

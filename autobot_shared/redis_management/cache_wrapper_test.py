@@ -64,7 +64,7 @@ class _PydanticV1Like:
 class TestJsonDefault:
     """Issue #6696: the json.dumps default= fallback."""
 
-    def test_serializes_dataclass(self):
+    def test_serializes_dataclass(self) -> None:
         m = _Metric(timestamp=1.0, name="cpu", value=42.0, metadata={"host": "vm1"})
         assert _json_default(m) == {
             "timestamp": 1.0,
@@ -73,20 +73,20 @@ class TestJsonDefault:
             "metadata": {"host": "vm1"},
         }
 
-    def test_serializes_pydantic_v2_model(self):
+    def test_serializes_pydantic_v2_model(self) -> None:
         assert _json_default(_PydanticV2Like("k", 7)) == {"name": "k", "value": 7}
 
-    def test_serializes_pydantic_v1_model(self):
+    def test_serializes_pydantic_v1_model(self) -> None:
         assert _json_default(_PydanticV1Like("k", 7)) == {"name": "k", "value": 7}
 
-    def test_raises_typeerror_for_unknown_type(self):
+    def test_raises_typeerror_for_unknown_type(self) -> None:
         class Custom:
             pass
 
         with pytest.raises(TypeError, match="Custom"):
             _json_default(Custom())
 
-    def test_does_not_treat_dataclass_class_itself_as_instance(self):
+    def test_does_not_treat_dataclass_class_itself_as_instance(self) -> None:
         # is_dataclass returns True for both the class and its instances —
         # we only want to serialise instances.
         with pytest.raises(TypeError):
@@ -148,10 +148,10 @@ class TestRedisCacheRoundTrip:
         assert (await cache.get_json("p:1")) == {"name": "ratio", "value": 99}
 
     @pytest.mark.asyncio
-    async def test_unknown_type_still_logs_and_returns_false(self):
+    async def test_unknown_type_still_logs_and_returns_false(self) -> None:
         """Custom unknown classes must surface the failure as before."""
 
-        async def failing_set(*args, **kwargs):
+        async def failing_set(*args, **kwargs) -> None:
             raise AssertionError("set() should never be called with bad payload")
 
         client = AsyncMock()

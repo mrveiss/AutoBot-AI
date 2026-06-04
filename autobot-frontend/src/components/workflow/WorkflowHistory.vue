@@ -3,7 +3,7 @@
     <!-- Filters -->
     <div class="history-filters">
       <div class="search-box">
-        <i class="fas fa-search"></i>
+        <Icon name="search" />
         <input v-model="searchQuery" :placeholder="$t('workflow.history.searchPlaceholder')" />
       </div>
       <div class="filter-group">
@@ -23,7 +23,7 @@
 
     <!-- History List -->
     <div v-if="filteredWorkflows.length === 0" class="empty-state">
-      <i class="fas fa-history"></i>
+      <Icon name="history" />
       <h3>{{ $t('workflow.history.noHistory') }}</h3>
       <p>{{ $t('workflow.history.noHistoryDescription') }}</p>
     </div>
@@ -31,15 +31,15 @@
     <div v-else class="history-list">
       <div v-for="wf in filteredWorkflows" :key="wf.workflow_id" class="history-item" @click="$emit('view-workflow', wf.workflow_id)">
         <div class="item-status" :class="getStatusClass(wf)">
-          <i :class="getStatusIcon(wf)"></i>
+          <Icon :name="getStatusIcon(wf)" />
         </div>
         <div class="item-info">
           <span class="item-name">{{ wf.name }}</span>
           <span class="item-desc">{{ wf.description }}</span>
           <div class="item-meta">
-            <span><i class="fas fa-list-ol"></i> {{ $t('workflow.history.stepsCount', { count: wf.total_steps }) }}</span>
-            <span><i class="fas fa-clock"></i> {{ formatDuration(wf) }}</span>
-            <span><i class="fas fa-calendar"></i> {{ formatDate(wf.created_at) }}</span>
+            <span><Icon name="list-ol" /> {{ $t('workflow.history.stepsCount', { count: wf.total_steps }) }}</span>
+            <span><Icon name="clock" /> {{ formatDuration(wf) }}</span>
+            <span><Icon name="calendar" /> {{ formatDate(wf.created_at) }}</span>
           </div>
         </div>
         <div class="item-stats">
@@ -48,11 +48,11 @@
           <div class="stat skipped" v-if="getSkippedCount(wf) > 0"><span>{{ getSkippedCount(wf) }}</span> {{ $t('workflow.history.skipped') }}</div>
         </div>
         <div class="item-actions">
-          <button class="btn-icon" @click.stop="$emit('view-workflow', wf.workflow_id)" :title="$t('workflow.history.viewDetails')">
-            <i class="fas fa-eye"></i>
+          <button class="btn-icon" @click.stop="$emit('view-workflow', wf.workflow_id)" :title="$t('workflow.history.viewDetails')" :aria-label="$t('workflow.history.viewDetails')">
+            <Icon name="eye" />
           </button>
-          <button class="btn-icon" @click.stop="$emit('re-run', wf.workflow_id)" :title="$t('workflow.history.reRun')">
-            <i class="fas fa-redo"></i>
+          <button class="btn-icon" @click.stop="$emit('re-run', wf.workflow_id)" :title="$t('workflow.history.reRun')" :aria-label="$t('workflow.history.reRun')">
+            <Icon name="redo" />
           </button>
         </div>
       </div>
@@ -60,15 +60,16 @@
 
     <!-- Pagination -->
     <div v-if="totalPages > 1" class="pagination">
-      <button :disabled="currentPage === 1" @click="currentPage--"><i class="fas fa-chevron-left"></i></button>
+      <button :disabled="currentPage === 1" @click="currentPage--" :aria-label="$t('common.previous')"><Icon name="chevron-left" /></button>
       <span>{{ $t('workflow.history.pageOf', { current: currentPage, total: totalPages }) }}</span>
-      <button :disabled="currentPage === totalPages" @click="currentPage++"><i class="fas fa-chevron-right"></i></button>
+      <button :disabled="currentPage === totalPages" @click="currentPage++" :aria-label="$t('common.next')"><Icon name="chevron-right" /></button>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 // Issue #1367: Merge active (finished) + persisted completed workflows
+import Icon from '@/components/ui/Icon.vue'
 import { ref, computed } from 'vue';
 import type { ActiveWorkflow } from '@/composables/useWorkflowBuilder';
 
@@ -149,9 +150,9 @@ function getStatusClass(wf: ActiveWorkflow): string {
 }
 
 function getStatusIcon(wf: ActiveWorkflow): string {
-  if (wf.is_cancelled) return 'fas fa-times';
-  if (getFailedCount(wf) > 0) return 'fas fa-exclamation-triangle';
-  return 'fas fa-check';
+  if (wf.is_cancelled) return 'times';
+  if (getFailedCount(wf) > 0) return 'exclamation-triangle';
+  return 'check';
 }
 
 function getCompletedCount(wf: ActiveWorkflow): number {

@@ -4,8 +4,8 @@
     <div class="controls-bar">
       <div class="controls-left">
         <button @click="captureAndAnalyze" class="btn-capture" :disabled="analyzing">
-          <i v-if="analyzing" class="fas fa-spinner fa-spin"></i>
-          <i v-else class="fas fa-camera"></i>
+          <Icon name="spinner" class="animate-spin" v-if="analyzing" />
+          <Icon name="camera" v-else />
           {{ analyzing ? t('vision.screenCapture.analyzing') : t('vision.screenCapture.captureAndAnalyze') }}
         </button>
 
@@ -49,6 +49,15 @@
       </div>
     </div>
 
+    <!-- Capture Error -->
+    <BaseAlert
+      v-if="analyzeError"
+      variant="error"
+      :message="analyzeError"
+      dismissible
+      @dismiss="analyzeError = null"
+    />
+
     <!-- Main Content -->
     <div class="viewer-content">
       <!-- Analysis View -->
@@ -57,15 +66,15 @@
           <h4>{{ t('vision.screenCapture.screenAnalysis') }}</h4>
           <div class="analysis-meta">
             <span class="element-count">
-              <i class="fas fa-cube"></i>
+              <Icon name="cube" />
               {{ t('vision.screenCapture.elements', { count: filteredElements.length }) }}
             </span>
             <span class="confidence">
-              <i class="fas fa-chart-line"></i>
+              <Icon name="chart-line" />
               {{ t('vision.screenCapture.confidenceScore', { score: (analysisResult.confidence_score * 100).toFixed(1) }) }}
             </span>
             <span class="timestamp">
-              <i class="fas fa-clock"></i>
+              <Icon name="clock" />
               {{ formatTimestamp(analysisResult.timestamp) }}
             </span>
           </div>
@@ -83,7 +92,7 @@
               @click="selectElement(element)"
             >
               <div class="element-icon" :style="{ backgroundColor: getElementColor(element.element_type) }">
-                <i :class="getElementIcon(element.element_type)"></i>
+                <Icon :name="getElementIcon(element.element_type)" />
               </div>
               <div class="element-info">
                 <span class="element-type">{{ element.element_type }}</span>
@@ -97,7 +106,7 @@
             </div>
 
             <div v-if="filteredElements.length === 0" class="no-elements">
-              <i class="fas fa-search"></i>
+              <Icon name="search" />
               <span>{{ t('vision.screenCapture.noElementsMatch') }}</span>
             </div>
           </div>
@@ -129,7 +138,7 @@
       <!-- Empty State -->
       <div v-else class="empty-state">
         <div class="empty-icon">
-          <i class="fas fa-desktop"></i>
+          <Icon name="desktop" />
         </div>
         <h3>{{ t('vision.screenCapture.noScreenAnalysis') }}</h3>
         <p>{{ t('vision.screenCapture.noScreenAnalysisHint') }}</p>
@@ -142,7 +151,7 @@
         <div class="modal-header">
           <h4>{{ t('vision.screenCapture.elementDetails') }}</h4>
           <button @click="selectedElement = null" class="btn-close">
-            <i class="fas fa-times"></i>
+            <Icon name="times" />
           </button>
         </div>
         <div class="modal-content">
@@ -199,10 +208,11 @@
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue';
+import BaseAlert from '@/components/ui/BaseAlert.vue';
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { createLogger } from '@/utils/debugUtils';
-import { useToast } from '@/composables/useToast';
 import { usePollingJob } from '@/composables/usePollingJob';
 import {
   visionMultimodalApiClient,
@@ -213,7 +223,6 @@ import {
 
 const { t } = useI18n();
 const logger = createLogger('ScreenCaptureViewer');
-const { showToast } = useToast();
 
 // Emits
 const emit = defineEmits<{
@@ -230,6 +239,7 @@ const emit = defineEmits<{
 
 // State
 const analyzing = ref(false);
+const analyzeError = ref<string | null>(null);
 const analysisResult = ref<ScreenAnalysisResponse | null>(null);
 const selectedElement = ref<UIElement | null>(null);
 const elementTypes = ref<ElementTypeInfo[]>([]);
@@ -268,15 +278,16 @@ const captureAndAnalyze = async () => {
     });
 
     if (response.success && response.data) {
+      analyzeError.value = null;
       analysisResult.value = response.data;
       emit('analysis-complete', response.data);
       logger.debug('Screen analysis complete:', response.data);
     } else {
-      showToast(response.error || t('vision.screenCapture.toastAnalysisFailed'), 'error');
+      analyzeError.value = response.error || t('vision.screenCapture.toastAnalysisFailed');
       logger.error('Analysis failed:', response.error);
     }
   } catch (err) {
-    showToast(t('vision.screenCapture.toastFailedToAnalyze'), 'error');
+    analyzeError.value = t('vision.screenCapture.toastFailedToAnalyze');
     logger.error('Analysis error:', err);
   } finally {
     analyzing.value = false;
@@ -325,18 +336,18 @@ const getElementColor = (elementType: string): string => {
 
 const getElementIcon = (elementType: string): string => {
   const icons: Record<string, string> = {
-    button: 'fas fa-square',
-    input: 'fas fa-i-cursor',
-    text: 'fas fa-font',
-    image: 'fas fa-image',
-    link: 'fas fa-link',
-    checkbox: 'fas fa-check-square',
-    dropdown: 'fas fa-caret-down',
-    menu: 'fas fa-bars',
-    icon: 'fas fa-icons',
-    window: 'fas fa-window-maximize',
+    button: 'square',
+    input: 'i-cursor',
+    text: 'font',
+    image: 'image',
+    link: 'link',
+    checkbox: 'check-square',
+    dropdown: 'caret-down',
+    menu: 'bars',
+    icon: 'icons',
+    window: 'window-maximize',
   };
-  return icons[elementType.toLowerCase()] || 'fas fa-cube';
+  return icons[elementType.toLowerCase()] || 'cube';
 };
 
 // Auto-refresh watcher

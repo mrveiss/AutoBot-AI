@@ -13,13 +13,13 @@ Autoresearch (Karpathy) outputs lines like:
 
 from __future__ import annotations
 
-import logging
 import re
-from typing import Optional
+
+from autobot_shared.logging_manager import get_logger
 
 from .models import ExperimentResult
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Regex patterns for autoresearch output
 _STEP_PATTERN = re.compile(
@@ -65,7 +65,7 @@ class ExperimentOutputParser:
 
         return result
 
-    def _parse_last_step(self, output: str) -> Optional[dict]:
+    def _parse_last_step(self, output: str) -> dict | None:
         """Extract metrics from the last step line in output."""
         matches = _STEP_PATTERN.findall(output)
         if not matches:
@@ -78,14 +78,14 @@ class ExperimentOutputParser:
             "val_bpb": float(last[3]),
         }
 
-    def _parse_tokens_per_second(self, output: str) -> Optional[float]:
+    def _parse_tokens_per_second(self, output: str) -> float | None:
         """Extract tokens/sec throughput."""
         match = _TOKENS_PATTERN.search(output)
         if match:
             return float(match.group(1))
         return None
 
-    def _detect_error(self, output: str) -> Optional[str]:
+    def _detect_error(self, output: str) -> str | None:
         """Detect error patterns in output."""
         for line in output.splitlines():
             if _ERROR_PATTERN.search(line):

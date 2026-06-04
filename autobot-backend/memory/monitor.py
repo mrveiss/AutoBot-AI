@@ -6,7 +6,9 @@ Memory Monitor - System memory usage monitoring
 """
 
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict
+
+from autobot_shared.logging_manager import get_logger
 
 try:
     import psutil
@@ -16,7 +18,7 @@ except ImportError:
     PSUTIL_AVAILABLE = False
     logging.warning("psutil not available - memory monitoring disabled")
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class MemoryMonitor:
@@ -32,7 +34,7 @@ class MemoryMonitor:
         if not self.enabled:
             logger.warning("Memory monitoring disabled (psutil not available)")
 
-    def get_usage(self) -> Optional[Dict[str, Any]]:
+    def get_usage(self) -> Dict[str, Any] | None:
         """Get current system memory usage"""
         if not self.enabled:
             return None

@@ -1,7 +1,7 @@
 <template>
   <div class="enforcement-mode-selector">
     <div class="selector-header">
-      <h3><i class="fas fa-shield-alt"></i> {{ $t('featureFlags.modeSelector.title') }}</h3>
+      <h3><Icon name="shield-alt" /> {{ $t('featureFlags.modeSelector.title') }}</h3>
       <p class="description">
         {{ $t('featureFlags.modeSelector.description') }}
       </p>
@@ -19,7 +19,7 @@
         @click="selectMode(option.value)"
       >
         <div class="option-icon" :class="option.value">
-          <i :class="option.icon"></i>
+          <Icon :name="option.icon" />
         </div>
         <div class="option-content">
           <div class="option-header">
@@ -35,7 +35,7 @@
               class="detail-item"
               :class="detail.type"
             >
-              <i :class="detail.icon"></i>
+              <Icon :name="detail.icon" />
               {{ detail.text }}
             </span>
           </div>
@@ -49,7 +49,7 @@
     </div>
 
     <div class="mode-warning" v-if="currentMode === 'enforced'">
-      <i class="fas fa-exclamation-triangle"></i>
+      <Icon name="exclamation-triangle" />
       <div class="warning-content">
         <strong>{{ $t('featureFlags.modeSelector.warningTitle') }}</strong>
         <p>{{ $t('featureFlags.modeSelector.warningDesc') }}</p>
@@ -57,7 +57,7 @@
     </div>
 
     <div class="mode-info" v-if="currentMode === 'log_only'">
-      <i class="fas fa-info-circle"></i>
+      <Icon name="info-circle" />
       <div class="info-content">
         <strong>{{ $t('featureFlags.modeSelector.infoTitle') }}</strong>
         <p>{{ $t('featureFlags.modeSelector.infoDesc') }}</p>
@@ -67,6 +67,7 @@
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { ref, computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import type { EnforcementMode } from '@/utils/FeatureFlagsApiClient';
@@ -89,34 +90,34 @@ const modeOptions = computed(() => [
   {
     value: 'disabled' as EnforcementMode,
     label: t('featureFlags.modeSelector.modeDisabled'),
-    icon: 'fas fa-ban',
+    icon: 'ban',
     description: t('featureFlags.modeSelector.modeDisabledDesc'),
     details: [
-      { type: 'neutral', icon: 'fas fa-times', text: t('featureFlags.modeSelector.modeDisabledDetail1') },
-      { type: 'neutral', icon: 'fas fa-times', text: t('featureFlags.modeSelector.modeDisabledDetail2') },
-      { type: 'neutral', icon: 'fas fa-times', text: t('featureFlags.modeSelector.modeDisabledDetail3') },
+      { type: 'neutral', icon: 'times', text: t('featureFlags.modeSelector.modeDisabledDetail1') },
+      { type: 'neutral', icon: 'times', text: t('featureFlags.modeSelector.modeDisabledDetail2') },
+      { type: 'neutral', icon: 'times', text: t('featureFlags.modeSelector.modeDisabledDetail3') },
     ],
   },
   {
     value: 'log_only' as EnforcementMode,
     label: t('featureFlags.modeSelector.modeLogOnly'),
-    icon: 'fas fa-clipboard-list',
+    icon: 'clipboard-list',
     description: t('featureFlags.modeSelector.modeLogOnlyDesc'),
     details: [
-      { type: 'success', icon: 'fas fa-check', text: t('featureFlags.modeSelector.modeLogOnlyDetail1') },
-      { type: 'success', icon: 'fas fa-check', text: t('featureFlags.modeSelector.modeLogOnlyDetail2') },
-      { type: 'warning', icon: 'fas fa-times', text: t('featureFlags.modeSelector.modeLogOnlyDetail3') },
+      { type: 'success', icon: 'check', text: t('featureFlags.modeSelector.modeLogOnlyDetail1') },
+      { type: 'success', icon: 'check', text: t('featureFlags.modeSelector.modeLogOnlyDetail2') },
+      { type: 'warning', icon: 'times', text: t('featureFlags.modeSelector.modeLogOnlyDetail3') },
     ],
   },
   {
     value: 'enforced' as EnforcementMode,
     label: t('featureFlags.modeSelector.modeEnforced'),
-    icon: 'fas fa-shield-alt',
+    icon: 'shield-alt',
     description: t('featureFlags.modeSelector.modeEnforcedDesc'),
     details: [
-      { type: 'success', icon: 'fas fa-check', text: t('featureFlags.modeSelector.modeEnforcedDetail1') },
-      { type: 'success', icon: 'fas fa-check', text: t('featureFlags.modeSelector.modeEnforcedDetail2') },
-      { type: 'error', icon: 'fas fa-ban', text: t('featureFlags.modeSelector.modeEnforcedDetail3') },
+      { type: 'success', icon: 'check', text: t('featureFlags.modeSelector.modeEnforcedDetail1') },
+      { type: 'success', icon: 'check', text: t('featureFlags.modeSelector.modeEnforcedDetail2') },
+      { type: 'error', icon: 'ban', text: t('featureFlags.modeSelector.modeEnforcedDetail3') },
     ],
   },
 ]);

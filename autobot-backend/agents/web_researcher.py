@@ -18,11 +18,12 @@ import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, FrozenSet, List, Optional
+from typing import Any, Dict, FrozenSet, List
 from urllib.parse import urlparse
 
 from pydantic import BaseModel
 
+from autobot_shared.logging_manager import get_logger
 from circuit_breaker import CircuitBreaker, CircuitBreakerConfig
 from constants.security_constants import SecurityConstants
 from constants.threshold_constants import CircuitBreakerDefaults, TimingConstants
@@ -52,7 +53,7 @@ except ImportError:
     logging.warning("aiohttp not available. Install with: pip install aiohttp")
     get_http_client = None
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -152,7 +153,7 @@ class CaptchaSolver:
         self.service = config.get("service", "2captcha")
         self.timeout = config.get("timeout", 120)
 
-    async def solve_recaptcha(self, site_key: str, page_url: str, invisible: bool = False) -> Optional[str]:
+    async def solve_recaptcha(self, site_key: str, page_url: str, invisible: bool = False) -> str | None:
         """Solve reCAPTCHA using solving service."""
         if not self.api_key:
             logger.warning("No CAPTCHA API key configured")  # codeql[py/clear-text-logging-sensitive-data]
@@ -169,7 +170,7 @@ class CaptchaSolver:
             logger.error("CAPTCHA solving failed: %s", str(e))
             return None
 
-    async def _solve_2captcha(self, site_key: str, page_url: str, invisible: bool) -> Optional[str]:
+    async def _solve_2captcha(self, site_key: str, page_url: str, invisible: bool) -> str | None:
         """Solve reCAPTCHA using 2captcha service."""
         if not AIOHTTP_AVAILABLE:
             return None
@@ -211,7 +212,7 @@ class CaptchaSolver:
         logger.error("CAPTCHA solving timeout")
         return None
 
-    async def _solve_anticaptcha(self, site_key: str, page_url: str, invisible: bool) -> Optional[str]:
+    async def _solve_anticaptcha(self, site_key: str, page_url: str, invisible: bool) -> str | None:
         """Solve reCAPTCHA using AntiCaptcha service (placeholder)."""
         logger.info("AntiCaptcha integration not implemented yet")
         return None
@@ -311,15 +312,15 @@ class WebResearcher:
     WebResearchAssistant, WebResearchIntegration (Issue #1443).
     """
 
-    def __init__(self, config: Optional[Dict[str, Any]] = None):
+    def __init__(self, config: Dict[str, Any] | None = None):
         """Initialize web researcher with all subsystems."""
         self.config = config or {}
 
         # Browser engine
         self.fingerprint = BrowserFingerprint()
         self.captcha_solver = CaptchaSolver(self.config.get("captcha", {}))
-        self.browser: Optional[Browser] = None
-        self.context: Optional[BrowserContext] = None
+        self.browser: Browser | None = None
+        self.context: BrowserContext | None = None
         self._domain_rate_limiter: Dict[str, float] = {}
         self._domain_rate_lock = asyncio.Lock()
 
@@ -537,7 +538,7 @@ class WebResearcher:
             await page.close()
         return results
 
-    async def _extract_ddg_result(self, element) -> Optional[Dict]:
+    async def _extract_ddg_result(self, element) -> Dict | None:
         """Extract a single DuckDuckGo search result."""
         try:
             title_el = await element.query_selector("h2 a")
@@ -580,7 +581,7 @@ class WebResearcher:
             await page.close()
         return results
 
-    async def _extract_bing_result(self, element) -> Optional[Dict]:
+    async def _extract_bing_result(self, element) -> Dict | None:
         """Extract a single Bing search result."""
         try:
             title_el = await element.query_selector("h2 a")
@@ -610,7 +611,7 @@ class WebResearcher:
         except Exception as e:
             logger.debug("Cookie dialog not found: %s", e)
 
-    async def _extract_google_result(self, element) -> Optional[Dict[str, Any]]:
+    async def _extract_google_result(self, element) -> Dict[str, Any] | None:
         """Extract single Google search result (Issue #334)."""
         parent = await element.evaluate('el => el.closest("div[data-ved]")')
         if not parent:
@@ -933,9 +934,9 @@ class WebResearcher:
     async def conduct_research(
         self,
         query: str,
-        research_type: Optional[ResearchType] = None,
-        max_results: Optional[int] = None,
-        timeout: Optional[int] = None,
+        research_type: ResearchType | None = None,
+        max_results: int | None = None,
+        timeout: int | None = None,
     ) -> Dict[str, Any]:
         """
         Conduct web research with circuit breaker, rate limiting,
@@ -1312,15 +1313,15 @@ class WebResearcher:
     def _generate_cache_key(
         self,
         query: str,
-        research_type: Optional[ResearchType],
-        max_results: Optional[int],
+        research_type: ResearchType | None,
+        max_results: int | None,
     ) -> str:
         """Generate cache key for research result."""
         method = research_type.value if research_type else "default"
         results = max_results or self.max_results_default
         return f"research:{hash(query)}:{method}:{results}"
 
-    def _get_cached_result(self, cache_key: str) -> Optional[Dict[str, Any]]:
+    def _get_cached_result(self, cache_key: str) -> Dict[str, Any] | None:
         """Get cached research result if still valid."""
         if cache_key in self._cache:
             cached_data = self._cache[cache_key]
@@ -1392,7 +1393,7 @@ class WebResearcher:
 # Global singleton (from web_research_integration.py)
 # ---------------------------------------------------------------------------
 
-_global_researcher: Optional[WebResearcher] = None
+_global_researcher: WebResearcher | None = None
 _global_researcher_lock = threading.Lock()
 
 
@@ -1408,7 +1409,7 @@ def _load_web_research_config() -> Dict[str, Any]:
 
 
 def get_web_researcher(
-    config: Optional[Dict[str, Any]] = None,
+    config: Dict[str, Any] | None = None,
 ) -> WebResearcher:
     """Get or create global web researcher instance (thread-safe)."""
     global _global_researcher
@@ -1437,7 +1438,7 @@ async def conduct_web_research(query: str, **kwargs) -> Dict[str, Any]:
 
 # Factory function
 async def create_web_researcher(
-    config: Optional[Dict[str, Any]] = None,
+    config: Dict[str, Any] | None = None,
 ) -> WebResearcher:
     """Create and initialize a web researcher instance."""
     researcher = WebResearcher(config)

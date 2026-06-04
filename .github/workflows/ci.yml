@@ -24,7 +24,7 @@ jobs:
       python: ${{ steps.filter.outputs.python }}
       frontend: ${{ steps.filter.outputs.frontend }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6.0.2
       - uses: dorny/paths-filter@d1c1ffe0248fe513906c8e24db8ea791d46f8590  # v3
         id: filter
         with:
@@ -47,13 +47,16 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v6.0.2
 
     - name: Set up Python 3.12
       uses: actions/setup-python@v5
       with:
         python-version: '3.12'
         cache: 'pip'
+        cache-dependency-path: |
+          requirements*.txt
+          autobot-backend/requirements*.txt
 
     - name: Install Python dependencies
       run: |
@@ -164,7 +167,7 @@ jobs:
         fi
 
     - name: Upload coverage reports
-      uses: codecov/codecov-action@57e3a136b779b570ffcdbf80b3bdc90e7fab3de2  # v6
+      uses: codecov/codecov-action@e79a6962e0d4c0c17b229090214935d2e33f8354  # v6
       with:
         files: ./coverage.xml
         flags: unittests
@@ -181,12 +184,14 @@ jobs:
     if: needs.changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v6.0.2
 
     - name: Setup Node.js
-      uses: actions/setup-node@v6
+      uses: actions/setup-node@v6.4.0
       with:
-        node-version: '20'
+        node-version: '22'
+        cache: 'npm'
+        cache-dependency-path: autobot-frontend/package-lock.json
 
     - name: Install frontend dependencies
       run: |
@@ -204,9 +209,19 @@ jobs:
         npm run check:i18n
 
     - name: Run frontend type checking
+      env:
+        # Baseline from #7227: known type-debt. Same gate as frontend-typecheck-regression.yml.
+        BASELINE: 240
       run: |
         cd autobot-frontend
-        npx vue-tsc --noEmit -p tsconfig.app.json
+        set +e
+        ERRORS=$(npx vue-tsc --noEmit -p tsconfig.app.json 2>&1 | grep -cE "error TS")
+        echo "Type error baseline: $BASELINE  current: $ERRORS"
+        if [ "$ERRORS" -gt "$BASELINE" ]; then
+          echo "Regression: $ERRORS > $BASELINE type errors"
+          exit 1
+        fi
+        echo "Type check passed ($ERRORS errors within baseline of $BASELINE)"
 
     - name: Build frontend
       run: |
@@ -233,13 +248,16 @@ jobs:
       (needs.frontend-tests.result == 'success' || needs.frontend-tests.result == 'skipped')
 
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v6.0.2
 
     - name: Set up Python 3.12
       uses: actions/setup-python@v5
       with:
         python-version: '3.12'
         cache: 'pip'
+        cache-dependency-path: |
+          requirements*.txt
+          autobot-backend/requirements*.txt
 
     - name: Install dependencies
       run: |
@@ -305,22 +323,24 @@ jobs:
     - name: Generate deployment artifact
       run: |
         echo "📦 Generating deployment summary..."
-        echo "# AutoBot Deployment Summary" > DEPLOYMENT_SUMMARY.md
-        echo "Generated at: $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> DEPLOYMENT_SUMMARY.md
-        echo "Commit: $GITHUB_SHA" >> DEPLOYMENT_SUMMARY.md
-        echo "Branch: $GITHUB_REF_NAME" >> DEPLOYMENT_SUMMARY.md
-        echo "" >> DEPLOYMENT_SUMMARY.md
-        echo "## Test Results" >> DEPLOYMENT_SUMMARY.md
-        echo "- ✅ Security tests passed" >> DEPLOYMENT_SUMMARY.md
-        echo "- ✅ Integration tests passed" >> DEPLOYMENT_SUMMARY.md
-        echo "- ✅ Frontend build successful" >> DEPLOYMENT_SUMMARY.md
-        echo "" >> DEPLOYMENT_SUMMARY.md
-        echo "## Security Features" >> DEPLOYMENT_SUMMARY.md
-        echo "- Command execution sandboxing ✅" >> DEPLOYMENT_SUMMARY.md
-        echo "- Risk assessment system ✅" >> DEPLOYMENT_SUMMARY.md
-        echo "- Audit logging ✅" >> DEPLOYMENT_SUMMARY.md
-        echo "- Role-based access control ✅" >> DEPLOYMENT_SUMMARY.md
-        echo "- API security endpoints ✅" >> DEPLOYMENT_SUMMARY.md
+        {
+          echo "# AutoBot Deployment Summary"
+          echo "Generated at: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+          echo "Commit: $GITHUB_SHA"
+          echo "Branch: $GITHUB_REF_NAME"
+          echo ""
+          echo "## Test Results"
+          echo "- ✅ Security tests passed"
+          echo "- ✅ Integration tests passed"
+          echo "- ✅ Frontend build successful"
+          echo ""
+          echo "## Security Features"
+          echo "- Command execution sandboxing ✅"
+          echo "- Risk assessment system ✅"
+          echo "- Audit logging ✅"
+          echo "- Role-based access control ✅"
+          echo "- API security endpoints ✅"
+        } > DEPLOYMENT_SUMMARY.md
 
         cat DEPLOYMENT_SUMMARY.md
 

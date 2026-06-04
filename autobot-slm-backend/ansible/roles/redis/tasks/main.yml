@@ -15,7 +15,7 @@
   apt_key:
     url: https://packages.redis.io/gpg
     state: present
-  become: yes
+  become: true
   when: _redis_installed.rc != 0
   tags: ['redis', 'packages']
 
@@ -61,7 +61,7 @@
     name:
       - redis-stack-server
     state: present
-  become: yes
+  become: true
   when: _redis_installed.rc != 0
   tags: ['redis', 'packages']
 
@@ -70,7 +70,7 @@
     name: redis
     system: true
     state: present
-  become: yes
+  become: true
   tags: ['redis', 'packages']
 
 - name: "Redis | Create redis system user"
@@ -82,7 +82,7 @@
     home: /var/lib/redis-stack
     create_home: false
     state: present
-  become: yes
+  become: true
   tags: ['redis', 'packages']
 
 # Issue #3396: Add autobot to the redis group as defense-in-depth so that
@@ -92,8 +92,8 @@
   user:
     name: autobot
     groups: redis
-    append: yes
-  become: yes
+    append: true
+  become: true
   tags: ['redis', 'ownership']
 
 # Issue #3396: Ownership is set to autobot:autobot (not redis:redis) so the
@@ -110,7 +110,7 @@
     owner: autobot
     group: autobot
     mode: '0750'
-  become: yes
+  become: true
   tags: ['redis', 'ownership']
 
 - name: "Redis | Enforce autobot:autobot ownership on Redis data files (recursive)"
@@ -119,8 +119,8 @@
     state: directory
     owner: autobot
     group: autobot
-    recurse: yes
-  become: yes
+    recurse: true
+  become: true
   tags: ['redis', 'ownership']
 
 - name: "Redis | Set vm.overcommit_memory for background saves"
@@ -130,7 +130,7 @@
     state: present
     sysctl_set: true
     reload: true
-  become: yes
+  become: true
   tags: ['redis', 'configuration']
 
 # #6701 + #7272: Stat each TLS cert before rendering redis.conf so the
@@ -152,8 +152,8 @@
     owner: autobot
     group: autobot
     mode: '0640'
-    backup: yes
-  become: yes
+    backup: true
+  become: true
   notify: restart redis-stack
   tags: ['redis', 'configuration']
 
@@ -164,7 +164,7 @@
     proto: tcp
     from_ip: "{{ network_subnet }}"
     comment: "Redis Stack"
-  become: yes
+  become: true
   notify: reload firewall
   tags: ['redis', 'firewall']
 
@@ -175,7 +175,7 @@
     proto: tcp
     from_ip: "{{ network_subnet }}"
     comment: "RedisInsight"
-  become: yes
+  become: true
   notify: reload firewall
   tags: ['redis', 'firewall']
 
@@ -186,14 +186,14 @@
   ansible.builtin.stat:
     path: /etc/systemd/system/redis-stack-server.service
   register: _redis_service_file
-  become: yes
+  become: true
   tags: ['redis', 'systemd']
 
 - name: "Redis | Restore missing dpkg conffile (--force-confmiss)"
   ansible.builtin.shell: >
     apt-get -o Dpkg::Options::="--force-confmiss"
     install --reinstall redis-stack-server -y
-  become: yes
+  become: true
   when: not _redis_service_file.stat.exists
   tags: ['redis', 'systemd']
 
@@ -202,7 +202,7 @@
     path: /etc/systemd/system/redis-stack-server.service.d
     state: directory
     mode: '0755'
-  become: yes
+  become: true
   tags: ['redis', 'systemd']
 
 - name: "Redis | Configure systemd service override"
@@ -210,7 +210,7 @@
     src: redis-stack-override.conf.j2
     dest: /etc/systemd/system/redis-stack-server.service.d/override.conf
     mode: '0644'
-  become: yes
+  become: true
   notify:
     - reload systemd
     - restart redis-stack
@@ -219,10 +219,10 @@
 - name: "Redis | Enable and start Redis Stack"
   systemd:
     name: redis-stack-server
-    enabled: yes
+    enabled: true
     state: started
-    daemon_reload: yes
-  become: yes
+    daemon_reload: true
+  become: true
   tags: ['redis', 'service']
 
 - name: "Redis | Wait for Redis to be ready (retry-based)"
@@ -246,7 +246,7 @@
     owner: autobot
     group: autobot
     mode: '0755'
-  become: yes
+  become: true
   tags: ['redis', 'backup']
 
 - name: "Redis | Create backup script"
@@ -256,7 +256,7 @@
     mode: '0755'
     owner: root
     group: root
-  become: yes
+  become: true
   tags: ['redis', 'backup']
 
 - name: "Redis | Schedule daily backups"
@@ -266,7 +266,7 @@
     hour: "2"
     minute: "0"
     user: root
-  become: yes
+  become: true
   tags: ['redis', 'backup']
 
 # Prometheus exporter - scrape target for SLM monitoring
@@ -274,11 +274,16 @@
   ansible.builtin.import_tasks: redis_exporter.yml
   tags: ['redis', 'redis_exporter']
 
+# ChromaDB vector database — co-located on database nodes (MVA-1319 / GH#8786)
+- name: "Redis | Deploy ChromaDB vector database"
+  ansible.builtin.import_tasks: chromadb.yml
+  tags: ['redis', 'chromadb']
+
 - name: "Redis | Display configuration summary"
   debug:
     msg:
       - "=== Redis Stack Configuration Complete ==="
-      - "Redis Host: {{ ansible_facts['default_ipv4'].address }}"
+      - "Redis Host: {{ ansible_facts['default_ipv4'].address | default(ansible_host) }}"
       - "Redis Port: {{ redis_port }}"
       - "RedisInsight Port: {{ redis_insight_port }}"
       - "Memory Limit: {{ redis_memory_limit }}"

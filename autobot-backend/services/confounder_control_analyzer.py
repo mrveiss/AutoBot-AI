@@ -19,15 +19,15 @@ Related Issues: #59 (Advanced Analytics & Business Intelligence)
 """
 
 import json
-import logging
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import RedisDatabase
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
 from autobot_shared.singleton_factory import lazy_singleton
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -122,9 +122,9 @@ class ConfounderControlAnalyzer(AsyncRedisClientMixin):
         agent_a: str,
         agent_b: str,
         metric: str = "success_rate",
-        confounders: Optional[List[str]] = None,
+        confounders: List[str] | None = None,
         limit: int = 1000,
-    ) -> Optional[StratifiedComparison]:
+    ) -> StratifiedComparison | None:
         """
         Compare two agents with confounder control via stratification.
 
@@ -238,7 +238,7 @@ class ConfounderControlAnalyzer(AsyncRedisClientMixin):
 
         return strata
 
-    def _extract_confounder_value(self, task: Dict[str, Any], confounder: str) -> Optional[str]:
+    def _extract_confounder_value(self, task: Dict[str, Any], confounder: str) -> str | None:
         """Extract and bin confounder value from task record."""
         metadata = task.get("metadata", {})
 
@@ -295,7 +295,7 @@ class ConfounderControlAnalyzer(AsyncRedisClientMixin):
         tasks: List[Dict[str, Any]],
         metric: str,
         stratum_value: str,
-    ) -> Optional[StratumMetrics]:
+    ) -> StratumMetrics | None:
         """Compute metrics for a stratum."""
         if not tasks:
             return None

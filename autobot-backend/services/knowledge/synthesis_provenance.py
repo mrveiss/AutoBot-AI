@@ -12,13 +12,13 @@ evolutionary lineage tracking.
 from __future__ import annotations
 
 import json
-import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.time_utils import now_utc
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _STREAM_KEY = "kb:synthesis:log"
 _RUN_KEY_PREFIX = "kb:synthesis:run:"
@@ -36,11 +36,11 @@ class SynthesisProvenanceLog:
         llm_model: str,
         prompt_template: str,
         duration_ms: int,
-        parent_run_id: Optional[str] = None,
-        source_doc_ids: Optional[List[str]] = None,
-        prompt_variant: Optional[str] = None,
+        parent_run_id: str | None = None,
+        source_doc_ids: List[str] | None = None,
+        prompt_variant: str | None = None,
         score: float = 0.0,
-        collection_name: Optional[str] = None,
+        collection_name: str | None = None,
     ) -> None:
         """Append a provenance entry to the Redis stream.
 
@@ -86,7 +86,7 @@ class SynthesisProvenanceLog:
         except Exception:
             logger.exception("Failed to write provenance log for run %s", run_id)
 
-    async def get_by_run_id(self, run_id: str) -> Optional[Dict[str, Any]]:
+    async def get_by_run_id(self, run_id: str) -> Dict[str, Any] | None:
         """Return the provenance entry for a single run by its ID.
 
         Uses a Redis hash key (O(1)) instead of scanning the full stream.
@@ -131,7 +131,7 @@ class SynthesisProvenanceLog:
         entry.setdefault("collection_name", "")
         return entry
 
-    async def get_best_run_id_for_collection(self, collection_name: str) -> Optional[str]:
+    async def get_best_run_id_for_collection(self, collection_name: str) -> str | None:
         """Return the run_id with the highest score for *collection_name*.
 
         Uses the ``kb:synthesis:best:{collection_name}`` sorted set for an O(1)

@@ -14,15 +14,15 @@ Supports:
 
 import asyncio
 import json
-import logging
-from typing import List, Optional
+from typing import List
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
 from constants.ttl_constants import TTL_24_HOURS
 from models.command_execution import CommandExecution, CommandState
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def _decode_command_ids(command_ids: set) -> List[str]:
@@ -30,9 +30,7 @@ def _decode_command_ids(command_ids: set) -> List[str]:
     return [cid.decode("utf-8") for cid in command_ids]
 
 
-def _parse_command_data_safe(
-    command_data: bytes, state_filter: Optional[CommandState] = None
-) -> Optional[CommandExecution]:
+def _parse_command_data_safe(command_data: bytes, state_filter: CommandState | None = None) -> CommandExecution | None:
     """Parse command JSON data safely. (Issue #315 - extracted)"""
     if not command_data:
         return None
@@ -54,12 +52,12 @@ class CommandExecutionQueue:
     Indexed by command_id, terminal_session_id, and chat_id for fast lookups.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize command queue with Redis backend"""
         self.redis_client = None
         self._initialize_redis()
 
-    def _initialize_redis(self):
+    def _initialize_redis(self) -> None:
         """Initialize Redis connection"""
         try:
             # Use 'main' database for command queue
@@ -111,7 +109,7 @@ class CommandExecutionQueue:
             pending_key = self._get_pending_approvals_key()
 
             # Run all Redis operations in thread pool (Issue #361 - avoid blocking)
-            def _add_command_ops():
+            def _add_command_ops() -> None:
                 self.redis_client.setex(command_key, TTL_24_HOURS, command_data)  # 24 hour TTL
                 self.redis_client.sadd(session_key, command.command_id)
                 self.redis_client.expire(session_key, TTL_24_HOURS)
@@ -133,7 +131,7 @@ class CommandExecutionQueue:
             logger.error("Failed to add command to queue: %s", e)
             return False
 
-    async def get_command(self, command_id: str) -> Optional[CommandExecution]:
+    async def get_command(self, command_id: str) -> CommandExecution | None:
         """
         Get command by ID.
 
@@ -183,7 +181,7 @@ class CommandExecutionQueue:
             cmd_id = command.command_id
 
             # Run all Redis operations in thread pool (Issue #361 - avoid blocking)
-            def _update_command_ops():
+            def _update_command_ops() -> None:
                 self.redis_client.setex(command_key, TTL_24_HOURS, command_data)
                 if is_pending:
                     self.redis_client.sadd(pending_key, cmd_id)
@@ -200,7 +198,7 @@ class CommandExecutionQueue:
             return False
 
     async def get_terminal_commands(
-        self, terminal_session_id: str, state_filter: Optional[CommandState] = None
+        self, terminal_session_id: str, state_filter: CommandState | None = None
     ) -> List[CommandExecution]:
         """
         Get all commands for a terminal session.
@@ -245,9 +243,7 @@ class CommandExecutionQueue:
             logger.error(f"Failed to get terminal commands for {terminal_session_id}: {e}")
             return []
 
-    async def get_chat_commands(
-        self, chat_id: str, state_filter: Optional[CommandState] = None
-    ) -> List[CommandExecution]:
+    async def get_chat_commands(self, chat_id: str, state_filter: CommandState | None = None) -> List[CommandExecution]:
         """
         Get all commands for a chat session.
 
@@ -331,7 +327,7 @@ class CommandExecutionQueue:
             logger.error("Failed to get pending approvals: %s", e)
             return []
 
-    async def get_latest_pending_for_chat(self, chat_id: str) -> Optional[CommandExecution]:
+    async def get_latest_pending_for_chat(self, chat_id: str) -> CommandExecution | None:
         """
         Get the most recent pending approval for a chat.
 
@@ -344,7 +340,7 @@ class CommandExecutionQueue:
         commands = await self.get_chat_commands(chat_id, state_filter=CommandState.PENDING_APPROVAL)
         return commands[0] if commands else None
 
-    async def approve_command(self, command_id: str, user_id: str, comment: Optional[str] = None) -> bool:
+    async def approve_command(self, command_id: str, user_id: str, comment: str | None = None) -> bool:
         """
         Approve a pending command.
 
@@ -368,7 +364,7 @@ class CommandExecutionQueue:
         command.approve(user_id, comment)
         return await self.update_command(command)
 
-    async def deny_command(self, command_id: str, user_id: str, comment: Optional[str] = None) -> bool:
+    async def deny_command(self, command_id: str, user_id: str, comment: str | None = None) -> bool:
         """
         Deny a pending command.
 

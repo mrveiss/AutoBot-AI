@@ -6,37 +6,37 @@
 <template>
   <div class="agent-cost-panel">
     <div class="section-header">
-      <h3><i class="fas fa-robot"></i> {{ $t('analytics.bi.agentCosts.title') }}</h3>
+      <h3><Icon name="robot" /> {{ $t('analytics.bi.agentCosts.title') }}</h3>
       <BaseButton variant="outline-solid" size="sm" @click="fetchAgentCosts">
-        <i class="fas fa-refresh"></i> {{ $t('analytics.bi.refresh') }}
+        <Icon name="refresh" /> {{ $t('analytics.bi.refresh') }}
       </BaseButton>
     </div>
 
     <!-- Summary Cards -->
     <div class="cost-summary-row" v-if="agents.length > 0">
       <div class="summary-card">
-        <i class="fas fa-dollar-sign"></i>
+        <Icon name="dollar-sign" />
         <div class="summary-content">
           <div class="summary-value">${{ totalCost.toFixed(2) }}</div>
           <div class="summary-label">{{ $t('analytics.bi.agentCosts.totalSpend') }}</div>
         </div>
       </div>
       <div class="summary-card">
-        <i class="fas fa-robot"></i>
+        <Icon name="robot" />
         <div class="summary-content">
           <div class="summary-value">{{ agents.length }}</div>
           <div class="summary-label">{{ $t('analytics.bi.agentCosts.activeAgents') }}</div>
         </div>
       </div>
       <div class="summary-card">
-        <i class="fas fa-exchange-alt"></i>
+        <Icon name="exchange-alt" />
         <div class="summary-content">
           <div class="summary-value">{{ formatNumber(totalCalls) }}</div>
           <div class="summary-label">{{ $t('analytics.bi.agentCosts.totalCalls') }}</div>
         </div>
       </div>
       <div class="summary-card">
-        <i class="fas fa-exclamation-triangle"></i>
+        <Icon name="exclamation-triangle" />
         <div class="summary-content">
           <div class="summary-value" :class="{ 'text-error': exceededCount > 0 }">
             {{ exceededCount }}
@@ -63,7 +63,7 @@
         <tbody>
           <tr v-for="agent in agents" :key="agent.agent_id">
             <td class="agent-name">
-              <i class="fas fa-robot agent-icon"></i>
+              <Icon name="robot" class="agent-icon" />
               {{ agent.agent_id }}
             </td>
             <td class="text-right cost-cell">
@@ -98,7 +98,7 @@
                 @click="openBudgetDialog(agent.agent_id)"
                 :title="$t('analytics.bi.agentCosts.setBudget')"
               >
-                <i class="fas fa-edit"></i>
+                <Icon name="edit" />
               </BaseButton>
             </td>
           </tr>
@@ -144,6 +144,7 @@
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
 
+import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseButton from '@/components/base/BaseButton.vue'

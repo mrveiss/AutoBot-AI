@@ -1,0 +1,14 @@
+-----BEGIN PUBLIC KEY-----
+# PLACEHOLDER — Replace this file with the real cosign public key.
+#
+# One-time setup (repo admin):
+#   cosign generate-key-pair
+#   # This creates cosign.key (PRIVATE — never commit) and cosign.pub (commit this file)
+#   # Add to GitHub Actions secrets:
+#   #   COSIGN_PRIVATE_KEY = $(base64 -w0 cosign.key)
+#   #   COSIGN_PASSWORD    = <passphrase used during generate-key-pair>
+#   git add cosign.pub && git commit -m "chore(security): add cosign public key"
+#
+# Verification (deployers):
+#   cosign verify --key cosign.pub ghcr.io/mrveiss/autobot-backend:v1.2.3
+-----END PUBLIC KEY-----

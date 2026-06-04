@@ -8,17 +8,27 @@ Core plugin infrastructure including manifest schema, base plugin class,
 and plugin registry for managing plugin lifecycle.
 
 Issue #730 - Plugin SDK for extensible tool architecture.
+Issue #6971 - PluginLoadError for declarative required_env validation.
+Issue #9049 - Plugin capability manifest system.
 """
+
+from __future__ import annotations
 
 import logging
 import re
 from abc import ABC, abstractmethod
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from pydantic import BaseModel, Field, field_validator
 
+from .capabilities import Capability, TrustTier
+
 logger = logging.getLogger(__name__)
+
+
+class PluginLoadError(RuntimeError):
+    """Raised when a plugin fails to load due to missing required configuration."""
 
 
 class RequiredEnvVar(BaseModel):
@@ -47,7 +57,7 @@ class RequiredEnvVar(BaseModel):
         min_length=1,
         description="One-line purpose of the variable",
     )
-    docs_url: Optional[str] = Field(
+    docs_url: str | None = Field(
         None,
         description="URL where the credential is obtained",
     )
@@ -82,13 +92,14 @@ class PluginManifest(BaseModel):
     """
     Plugin manifest schema.
 
-    Defines plugin metadata, dependencies, and configuration.
+    Defines plugin metadata, dependencies, configuration, and capabilities.
     """
 
     name: str = Field(..., description="Unique plugin identifier")
     version: str = Field(..., description="Semantic version (e.g., 1.0.0)")
     display_name: str = Field(..., description="Human-readable plugin name")
     description: str = Field(..., description="Plugin description")
+    kind: str = Field("plugin", description="Manifest kind — always 'plugin' for PluginManifest")
     author: str = Field(..., description="Plugin author")
     entry_point: str = Field(..., description="Python module path (e.g., 'plugins.hello_plugin.main')")
     dependencies: List[str] = Field(default_factory=list, description="Required plugin names")
@@ -97,6 +108,16 @@ class PluginManifest(BaseModel):
     required_env: List[RequiredEnvVar] = Field(
         default_factory=list,
         description="Environment variables this plugin needs at runtime",
+    )
+
+    # Capability declarations (Issue #9049)
+    capabilities: List[Capability] = Field(
+        default_factory=list,
+        description="Required capabilities (e.g. kb:read, llm:call, network:outbound)",
+    )
+    trust_tier: TrustTier = Field(
+        default=TrustTier.COMMUNITY,
+        description="Plugin trust level: official, verified, community, unverified",
     )
 
     @field_validator("version")
@@ -127,7 +148,7 @@ class BasePlugin(ABC):
     Plugins must inherit from this class and implement lifecycle methods.
     """
 
-    def __init__(self, manifest: PluginManifest, config: Optional[Dict] = None):
+    def __init__(self, manifest: PluginManifest, config: Dict | None = None) -> None:
         """
         Initialize plugin.
 
@@ -207,7 +228,7 @@ class PluginRegistry:
     Provides centralized plugin management and lifecycle control.
     """
 
-    _instance: Optional["PluginRegistry"] = None
+    _instance: "PluginRegistry" | None = None
     _plugins: Dict[str, BasePlugin] = {}
 
     def __new__(cls):
@@ -244,7 +265,7 @@ class PluginRegistry:
             del self._plugins[name]
             logger.info("Unregistered plugin: %s", name)
 
-    def get_plugin(self, name: str) -> Optional[BasePlugin]:
+    def get_plugin(self, name: str) -> BasePlugin | None:
         """
         Get plugin by name.
 

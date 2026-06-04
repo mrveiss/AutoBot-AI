@@ -1,7 +1,7 @@
 <template>
   <div class="flag-change-history">
     <div class="section-header">
-      <h3><i class="fas fa-history"></i> {{ $t('featureFlags.changeHistory.title') }}</h3>
+      <h3><Icon name="history" /> {{ $t('featureFlags.changeHistory.title') }}</h3>
       <p class="description">
         {{ $t('featureFlags.changeHistory.description') }}
       </p>
@@ -15,7 +15,7 @@
     <!-- Empty State -->
     <div v-else-if="!history.length" class="empty-state">
       <div class="empty-icon">
-        <i class="fas fa-clock"></i>
+        <Icon name="clock" />
       </div>
       <h4>{{ $t('featureFlags.changeHistory.noChanges') }}</h4>
       <p>{{ $t('featureFlags.changeHistory.noChanges') }}</p>
@@ -31,7 +31,7 @@
       >
         <div class="timeline-marker">
           <div class="marker-dot" :class="entry.mode">
-            <i :class="getModeIcon(entry.mode)"></i>
+            <Icon :name="getModeIcon(entry.mode)" />
           </div>
           <div class="marker-line" v-if="index < history.length - 1"></div>
         </div>
@@ -48,7 +48,7 @@
             <p class="action-text">{{ getActionText(entry.mode) }}</p>
             <div class="meta-info">
               <span class="changed-by">
-                <i class="fas fa-user"></i>
+                <Icon name="user" />
                 {{ entry.changed_by || t('featureFlags.changeHistory.system') }}
               </span>
               <span class="relative-time">
@@ -82,6 +82,7 @@
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { useI18n } from 'vue-i18n';
 import type { EnforcementMode } from '@/utils/FeatureFlagsApiClient';
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue';
@@ -111,11 +112,11 @@ const getModeLabel = (mode: EnforcementMode) => {
 
 const getModeIcon = (mode: EnforcementMode) => {
   const icons: Record<EnforcementMode, string> = {
-    disabled: 'fas fa-ban',
-    log_only: 'fas fa-clipboard-list',
-    enforced: 'fas fa-shield-alt',
+    disabled: 'ban',
+    log_only: 'clipboard-list',
+    enforced: 'shield-alt',
   };
-  return icons[mode] || 'fas fa-question';
+  return icons[mode] || 'question';
 };
 
 const getActionText = (mode: EnforcementMode) => {

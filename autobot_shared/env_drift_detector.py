@@ -35,7 +35,7 @@ import logging
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 logger = logging.getLogger(__name__)
 
@@ -50,8 +50,8 @@ class DriftItem:
 
     env_key: str
     severity: str  # "missing", "type_mismatch", "unknown"
-    expected_default: Optional[str]
-    actual_value: Optional[str]
+    expected_default: str | None
+    actual_value: str | None
     message: str
 
 
@@ -64,7 +64,7 @@ class DriftReport:
     env_keys: List[str] = field(default_factory=list)
     drifted: List[DriftItem] = field(default_factory=list)
     unknown_keys: List[str] = field(default_factory=list)
-    error: Optional[str] = None
+    error: str | None = None
 
     @property
     def has_drift(self) -> bool:
@@ -149,12 +149,12 @@ def _collect_ssot_field_defaults() -> Dict[str, str]:
 
             # First definition wins — avoids AutoBotConfig sub-field duplication
             if alias not in result:
-                result[alias] = default
+                result[alias] = default or ""
 
     return result
 
 
-def _get_env_alias(field_info) -> Optional[str]:
+def _get_env_alias(field_info) -> str | None:
     """Extract the env-var alias from a pydantic FieldInfo."""
     # pydantic v2: alias is a string on FieldInfo
     alias = getattr(field_info, "alias", None)
@@ -179,7 +179,7 @@ def _is_settings_field(field_info) -> bool:
         return False
 
 
-def _default_as_str(field_info) -> Optional[str]:
+def _default_as_str(field_info) -> str | None:
     """Return the field default as a string, or None if no default."""
     from pydantic_core import PydanticUndefinedType
 
@@ -276,7 +276,7 @@ def _find_unknown_keys(ssot_defaults: Dict[str, str], env_values: Dict[str, str]
 # ---------------------------------------------------------------------------
 
 
-def check_env_drift(env_path: Optional[str] = None) -> DriftReport:
+def check_env_drift(env_path: str | None = None) -> DriftReport:
     """Compare .env file against SSOT config field definitions.
 
     Args:
@@ -326,7 +326,7 @@ def check_env_drift(env_path: Optional[str] = None) -> DriftReport:
     return report
 
 
-def _resolve_env_path(env_path: Optional[str]) -> Path:
+def _resolve_env_path(env_path: str | None) -> Path:
     """Return a resolved Path for the .env file."""
     if env_path:
         return Path(env_path).resolve()
@@ -338,7 +338,9 @@ def _resolve_env_path(env_path: Optional[str]) -> Path:
     for candidate in [current] + list(current.parents):
         if (candidate / ".env").exists():
             return candidate / ".env"
-    fallback = Path(os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot")) / ".env"
+    fallback = Path(
+        os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot")
+    )  # ssot-config-exempt: bootstrap before config available / ".env"
     return fallback
 
 

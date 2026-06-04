@@ -103,23 +103,23 @@ def _patch_chromadb(analyzer: AnalyzerService, collection: AsyncMock) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_lesson_id_stable():
+def test_lesson_id_stable() -> None:
     lsn = Lesson(content="Use shorter prompts.", domain="synthesis", score_delta=0.5)
     assert lsn.lesson_id() == lsn.lesson_id()
 
 
-def test_lesson_id_starts_with_prefix():
+def test_lesson_id_starts_with_prefix() -> None:
     lsn = Lesson(content="abc", domain="synthesis", score_delta=0.3)
     assert lsn.lesson_id().startswith("lesson_")
 
 
-def test_lesson_id_differs_by_content():
+def test_lesson_id_differs_by_content() -> None:
     a = Lesson(content="foo", domain="synthesis", score_delta=0.3)
     b = Lesson(content="bar", domain="synthesis", score_delta=0.3)
     assert a.lesson_id() != b.lesson_id()
 
 
-def test_lesson_to_metadata_keys():
+def test_lesson_to_metadata_keys() -> None:
     lsn = Lesson(content="abc", domain="retrieval", score_delta=0.7, tags=["a", "b"], run_id="r1")
     meta = lsn.to_metadata()
     assert meta["domain"] == "retrieval"
@@ -134,7 +134,7 @@ def test_lesson_to_metadata_keys():
 
 
 @pytest.mark.asyncio
-async def test_analyze_synthesis_run_happy_path():
+async def test_analyze_synthesis_run_happy_path() -> None:
     llm = _make_llm("Lesson one.\nLesson two.")
     svc = AnalyzerService(llm)
     lessons = await svc.analyze_synthesis_run(
@@ -151,7 +151,7 @@ async def test_analyze_synthesis_run_happy_path():
 
 
 @pytest.mark.asyncio
-async def test_analyze_synthesis_run_below_threshold():
+async def test_analyze_synthesis_run_below_threshold() -> None:
     llm = _make_llm("Should not be called.")
     svc = AnalyzerService(llm)
     lessons = await svc.analyze_synthesis_run(
@@ -165,7 +165,7 @@ async def test_analyze_synthesis_run_below_threshold():
 
 
 @pytest.mark.asyncio
-async def test_analyze_synthesis_run_llm_failure():
+async def test_analyze_synthesis_run_llm_failure() -> None:
     llm = MagicMock()
     llm.chat = AsyncMock(side_effect=RuntimeError("LLM down"))
     svc = AnalyzerService(llm)
@@ -185,7 +185,7 @@ async def test_analyze_synthesis_run_llm_failure():
 
 
 @pytest.mark.asyncio
-async def test_analyze_rag_session_happy_path():
+async def test_analyze_rag_session_happy_path() -> None:
     llm = _make_llm("Prefer source diversity.\nApply reranking always.")
     svc = AnalyzerService(llm)
 
@@ -202,7 +202,7 @@ async def test_analyze_rag_session_happy_path():
 
 
 @pytest.mark.asyncio
-async def test_analyze_rag_session_empty_results():
+async def test_analyze_rag_session_empty_results() -> None:
     llm = _make_llm("Lesson.")
     svc = AnalyzerService(llm)
     lessons = await svc.analyze_rag_session(query="q", results=[])
@@ -211,7 +211,7 @@ async def test_analyze_rag_session_empty_results():
 
 
 @pytest.mark.asyncio
-async def test_analyze_rag_session_higher_score_with_feedback():
+async def test_analyze_rag_session_higher_score_with_feedback() -> None:
     llm = _make_llm("One lesson.")
     svc = AnalyzerService(llm)
     result = MagicMock()
@@ -228,7 +228,7 @@ async def test_analyze_rag_session_higher_score_with_feedback():
 
 
 @pytest.mark.asyncio
-async def test_store_lessons_calls_upsert():
+async def test_store_lessons_calls_upsert() -> None:
     llm = _make_llm()
     svc = AnalyzerService(llm)
     col = _make_collection()
@@ -247,7 +247,7 @@ async def test_store_lessons_calls_upsert():
 
 
 @pytest.mark.asyncio
-async def test_store_lessons_empty_no_op():
+async def test_store_lessons_empty_no_op() -> None:
     llm = _make_llm()
     svc = AnalyzerService(llm)
     col = _make_collection()
@@ -257,7 +257,7 @@ async def test_store_lessons_empty_no_op():
 
 
 @pytest.mark.asyncio
-async def test_store_lessons_chromadb_error_graceful():
+async def test_store_lessons_chromadb_error_graceful() -> None:
     llm = _make_llm()
     svc = AnalyzerService(llm)
     col = _make_collection()
@@ -274,7 +274,7 @@ async def test_store_lessons_chromadb_error_graceful():
 
 
 @pytest.mark.asyncio
-async def test_get_lessons_context_returns_formatted_string():
+async def test_get_lessons_context_returns_formatted_string() -> None:
     llm = _make_llm()
     svc = AnalyzerService(llm)
     query_results = {
@@ -291,7 +291,7 @@ async def test_get_lessons_context_returns_formatted_string():
 
 
 @pytest.mark.asyncio
-async def test_get_lessons_context_empty_when_no_results():
+async def test_get_lessons_context_empty_when_no_results() -> None:
     llm = _make_llm()
     svc = AnalyzerService(llm)
     col = _make_collection()  # default empty results
@@ -302,7 +302,7 @@ async def test_get_lessons_context_empty_when_no_results():
 
 
 @pytest.mark.asyncio
-async def test_get_lessons_context_chromadb_error_returns_empty():
+async def test_get_lessons_context_chromadb_error_returns_empty() -> None:
     llm = _make_llm()
     svc = AnalyzerService(llm)
     # Make chromadb client raise
@@ -316,7 +316,7 @@ async def test_get_lessons_context_chromadb_error_returns_empty():
 # ---------------------------------------------------------------------------
 
 
-def test_get_analyzer_service_singleton():
+def test_get_analyzer_service_singleton() -> None:
     import services.knowledge.analyzer_service as _mod
 
     # Reset singleton for isolation

@@ -24,13 +24,13 @@ Part of EPIC #217 - Advanced Code Intelligence Methods
 import asyncio
 import hashlib
 import json
-import logging
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #640 / #5231: NPU availability caching now lives inside the canonical
 # ``services.npu_client`` helpers (``generate_embedding_with_fallback`` and
@@ -242,7 +242,7 @@ class AnalyticsInfrastructureMixin:
                         self._embedding_cache = None
         return self._embedding_cache
 
-    async def _get_embedding(self, text: str) -> Optional[List[float]]:
+    async def _get_embedding(self, text: str) -> List[float] | None:
         """
         Get embedding for text via the canonical NPU/Ollama fallback helper.
 
@@ -292,7 +292,7 @@ class AnalyticsInfrastructureMixin:
 
         return None
 
-    async def _get_embeddings_batch(self, texts: List[str], max_concurrent: int = 5) -> List[Optional[List[float]]]:
+    async def _get_embeddings_batch(self, texts: List[str], max_concurrent: int = 5) -> List[List[float] | None]:
         """
         Generate embeddings for multiple texts via the canonical batch helper.
 
@@ -330,7 +330,7 @@ class AnalyticsInfrastructureMixin:
 
         return results
 
-    def _sanitize_redis_key(self, key: str, prefix: str = "") -> Optional[str]:
+    def _sanitize_redis_key(self, key: str, prefix: str = "") -> str | None:
         """
         Sanitize and validate Redis key.
 
@@ -371,7 +371,7 @@ class AnalyticsInfrastructureMixin:
         self,
         key: str,
         result: Any,
-        ttl: Optional[int] = None,
+        ttl: int | None = None,
         prefix: str = "",
     ) -> bool:
         """Cache result in Redis."""
@@ -394,7 +394,7 @@ class AnalyticsInfrastructureMixin:
             self._metrics.add_error(f"Redis cache failed: {e}")
             return False
 
-    async def _get_cached_result(self, key: str, prefix: str = "") -> Optional[Any]:
+    async def _get_cached_result(self, key: str, prefix: str = "") -> Any | None:
         """Get cached result from Redis."""
         redis = await self._get_redis_client()
         if not redis:
@@ -424,7 +424,7 @@ class AnalyticsInfrastructureMixin:
         ids: List[str],
         embeddings: List[List[float]],
         documents: List[str],
-        metadatas: Optional[List[Dict[str, Any]]] = None,
+        metadatas: List[Dict[str, Any]] | None = None,
     ) -> int:
         """Store vectors in ChromaDB with error recovery."""
         collection = await self._get_chromadb_collection()
@@ -464,7 +464,7 @@ class AnalyticsInfrastructureMixin:
         self,
         embedding: List[float],
         n_results: int = 5,
-        where: Optional[Dict[str, Any]] = None,
+        where: Dict[str, Any] | None = None,
         min_similarity: float = SIMILARITY_LOW,
     ) -> List[Dict[str, Any]]:
         """Query for similar vectors in ChromaDB."""
@@ -526,7 +526,7 @@ class SemanticAnalysisMixin(AnalyticsInfrastructureMixin):
 
     def _compute_batch_similarities(
         self,
-        embeddings: List[Optional[List[float]]],
+        embeddings: List[List[float] | None],
         min_similarity: float = SIMILARITY_MEDIUM,
     ) -> List[tuple]:
         """
@@ -733,7 +733,7 @@ class SemanticAnalysisMixin(AnalyticsInfrastructureMixin):
         code_extractors: List[str],
         metadata_keys: Dict[str, str],
         min_code_length: int,
-    ) -> Optional[Dict[str, Any]]:
+    ) -> Dict[str, Any] | None:
         """
         Extract code and metadata from an item for duplicate detection.
 

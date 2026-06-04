@@ -10,13 +10,13 @@ workflows.
 """
 
 import asyncio
-import logging
 import re
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import aiohttp
 
+from autobot_shared.logging_manager import get_logger
 from integrations.base import (
     BaseIntegration,
     IntegrationAction,
@@ -31,7 +31,7 @@ from integrations.rate_limiter import (
 )
 from integrations.rate_limiter import integration_rate_limiter as _shared_rate_limiter
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # In-memory limiter retained solely for apply_response_headers() (Retry-After
 # header parsing on HTTP 429).  Distributed acquire() uses _shared_rate_limiter
@@ -226,8 +226,8 @@ class SlackIntegration(BaseIntegration):
         self,
         method: str,
         url: str,
-        headers: Optional[Dict[str, str]] = None,
-        data: Optional[Dict[str, Any]] = None,
+        headers: Dict[str, str] | None = None,
+        data: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
         """Rate-limited HTTP request to the Slack API.
 
@@ -278,7 +278,7 @@ class SlackIntegration(BaseIntegration):
         status: IntegrationStatus,
         latency: float,
         message: str,
-        details: Optional[Dict[str, Any]] = None,
+        details: Dict[str, Any] | None = None,
     ) -> IntegrationHealth:
         """Create IntegrationHealth response."""
         return IntegrationHealth(
@@ -412,7 +412,7 @@ class TeamsIntegration(BaseIntegration):
         self,
         method: str,
         url: str,
-        headers: Optional[Dict[str, str]] = None,
+        headers: Dict[str, str] | None = None,
     ) -> Dict[str, Any]:
         """Make HTTP request to Microsoft Graph API."""
         try:
@@ -527,8 +527,8 @@ class DiscordIntegration(BaseIntegration):
         self,
         method: str,
         url: str,
-        headers: Optional[Dict[str, str]] = None,
-        data: Optional[Dict[str, Any]] = None,
+        headers: Dict[str, str] | None = None,
+        data: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
         """Make HTTP request to Discord API."""
         try:
@@ -554,7 +554,7 @@ class DiscordIntegration(BaseIntegration):
         status: IntegrationStatus,
         latency: float,
         message: str,
-        details: Optional[Dict[str, Any]] = None,
+        details: Dict[str, Any] | None = None,
     ) -> IntegrationHealth:
         """Create IntegrationHealth response."""
         return IntegrationHealth(

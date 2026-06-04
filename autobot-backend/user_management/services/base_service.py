@@ -7,15 +7,15 @@ Base Service Class
 Provides tenant context management and common service patterns.
 """
 
-import logging
 import uuid
 from dataclasses import dataclass
-from typing import Optional
 
 from sqlalchemy import Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -28,8 +28,8 @@ class TenantContext:
     In multi_company/provider modes, org_id is set from JWT/session.
     """
 
-    org_id: Optional[uuid.UUID] = None
-    user_id: Optional[uuid.UUID] = None
+    org_id: uuid.UUID | None = None
+    user_id: uuid.UUID | None = None
     is_platform_admin: bool = False
 
     @property
@@ -50,7 +50,7 @@ class BaseService:
     All tenant-scoped services should inherit from this.
     """
 
-    def __init__(self, session: AsyncSession, context: Optional[TenantContext] = None):
+    def __init__(self, session: AsyncSession, context: TenantContext | None = None):
         """
         Initialize service with database session and tenant context.
 

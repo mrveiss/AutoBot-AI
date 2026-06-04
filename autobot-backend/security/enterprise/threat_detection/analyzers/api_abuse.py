@@ -9,7 +9,7 @@ Detects API abuse patterns such as rate limit violations and unusual usage.
 Part of Issue #381 - God Class Refactoring
 """
 
-from typing import List, Optional
+from typing import List
 
 from ..models import AnalysisContext, SecurityEvent, ThreatEvent
 from ..types import ThreatCategory, ThreatLevel
@@ -77,7 +77,7 @@ class APIAbuseAnalyzer(ThreatAnalyzer):
             ],
         )
 
-    async def analyze(self, event: SecurityEvent, context: AnalysisContext) -> Optional[ThreatEvent]:
+    async def analyze(self, event: SecurityEvent, context: AnalysisContext) -> ThreatEvent | None:
         """
         Detect API abuse patterns.
 

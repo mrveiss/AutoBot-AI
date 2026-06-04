@@ -7,17 +7,18 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
 import os
 import sys
 import time
 from pathlib import Path
 from typing import Any, Dict
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.monitoring.prometheus_metrics import get_metrics_manager
+from autobot_shared.ssot_config import config
 from services.mcp_isolation_config import BridgePolicy, IsolationMode, policy_for
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _JSONRPC = "2.0"
 _WORKER_SCRIPT = str(Path(__file__).parent / "mcp_bridge_workers" / "worker_entrypoint.py")
@@ -50,7 +51,7 @@ class IsolatedBridgeClient:
         self._last_restart_ts = 0.0
         self._permanently_failed = False
 
-    async def start(self):
+    async def start(self) -> None:
         """Spawn the worker subprocess with scrubbed env."""
         if self._proc is not None and self._proc.returncode is None:
             return
@@ -61,7 +62,7 @@ class IsolatedBridgeClient:
         env["MCP_WORKER_CPU_SECONDS"] = str(self._policy.cpu_seconds)
         env["MCP_WORKER_MEM_MB"] = str(self._policy.memory_mb)
         env["MCP_WORKER_NOFILE"] = str(self._policy.nofile)
-        env["MCP_WORKER_LOG_LEVEL"] = os.environ.get("LOG_LEVEL", "INFO")
+        env["MCP_WORKER_LOG_LEVEL"] = config.log_level
 
         logger.info(
             "mcp_isolation: spawning worker bridge=%s cpu=%ss mem=%sMB nofile=%s",
@@ -85,7 +86,7 @@ class IsolatedBridgeClient:
         metrics.set_mcp_worker_uptime(self._bridge, 0.0)
         metrics.set_mcp_worker_permanently_failed(self._bridge, False)
 
-    async def stop(self):
+    async def stop(self) -> None:
         """Send shutdown RPC then terminate if still alive."""
         if self._proc is None:
             return
@@ -101,7 +102,7 @@ class IsolatedBridgeClient:
                 self._proc.kill()
         self._proc = None
 
-    async def _ensure_alive(self):
+    async def _ensure_alive(self) -> None:
         """Restart worker if it died; honour circuit breaker."""
         if self._proc is None or self._proc.returncode is not None:
             if self._proc is not None:
@@ -152,16 +153,33 @@ class IsolatedBridgeClient:
             raise EOFError("bridge " + self._bridge + " closed stdout")
         return json.loads(raw.decode("utf-8"))
 
-    async def call_tool(self, tool_name: str, arguments: Dict[str, Any], timeout: float = 30.0) -> Dict[str, Any]:
-        """Invoke a tool on the isolated bridge."""
+    async def call_tool(
+        self,
+        tool_name: str,
+        arguments: Dict[str, Any],
+        timeout: float = 30.0,
+        run_jwt: str | None = None,
+    ) -> Dict[str, Any]:
+        """Invoke a tool on the isolated bridge.
+
+        Args:
+            tool_name: MCP tool to invoke.
+            arguments: Tool arguments dict.
+            timeout: Per-request timeout in seconds.
+            run_jwt: Optional run-scoped JWT (minted by ``services.run_jwt``).
+                When provided, it is forwarded in the RPC params so the worker
+                can validate it before dispatching the tool.  Workers that have
+                JWT enforcement enabled will reject calls with an invalid or
+                missing token.
+        """
         async with self._lock:
             await self._ensure_alive()
+            params: Dict[str, Any] = {"tool": tool_name, "arguments": arguments}
+            if run_jwt:
+                params["run_jwt"] = run_jwt
             try:
                 resp = await self._raw_request(
-                    {
-                        "method": "call",
-                        "params": {"tool": tool_name, "arguments": arguments},
-                    },
+                    {"method": "call", "params": params},
                     timeout=timeout,
                 )
             except (TimeoutError, EOFError) as exc:
@@ -209,7 +227,7 @@ class IsolatedBridgeClient:
 class IsolatedBridgeRegistry:
     """Singleton registry of IsolatedBridgeClient per bridge name."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialise empty registry."""
         self._clients = {}
         self._lock = asyncio.Lock()
@@ -226,7 +244,7 @@ class IsolatedBridgeRegistry:
                 self._clients[bridge] = client
             return client
 
-    async def shutdown_all(self):
+    async def shutdown_all(self) -> None:
         """Stop every managed worker; used on backend graceful shutdown."""
         async with self._lock:
             for client in self._clients.values():

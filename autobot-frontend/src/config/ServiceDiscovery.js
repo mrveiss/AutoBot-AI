@@ -466,7 +466,7 @@ export default class ServiceDiscovery {
       let serviceUrl = 'unknown';
       try {
         serviceUrl = await this.getServiceUrl(serviceName);
-      } catch (_urlError) {
+      } catch {
         // URL resolution also failed
       }
 

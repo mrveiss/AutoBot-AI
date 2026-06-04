@@ -4,19 +4,20 @@
 """Redis Memory Provider (Issue #4344)"""
 
 import json
-import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.redis_management.types import DATABASE_MAPPING
+from autobot_shared.ssot_constants import TTL_24_HOURS
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class RedisMemoryProvider:
     """Redis-backed memory provider for fast memory retrieval."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.redis = None
         self.db = DATABASE_MAPPING.get("main", 0)
         self.prefix = "autobot:memory"
@@ -66,14 +67,12 @@ class RedisMemoryProvider:
                 "entity_updates": turn.get("entity_updates", []),
                 "relation_updates": turn.get("relation_updates", []),
             }
-            await self.redis.setex(cache_key, 86400, json.dumps(cache_data, default=str))
+            await self.redis.setex(cache_key, TTL_24_HOURS, json.dumps(cache_data, default=str))
             logger.debug(f"Cached turn data for {conversation_id}")
         except Exception as e:
             logger.error(f"Error syncing to Redis: {e}")
 
-    async def search(
-        self, query: str, limit: int = 10, filters: Optional[Dict[str, Any]] = None
-    ) -> List[Dict[str, Any]]:
+    async def search(self, query: str, limit: int = 10, filters: Dict[str, Any] | None = None) -> List[Dict[str, Any]]:
         if not self.redis:
             return []
         try:
@@ -88,7 +87,7 @@ class RedisMemoryProvider:
             logger.error(f"Error searching Redis cache: {e}")
             return []
 
-    async def get_entity(self, entity_id: str) -> Optional[Dict[str, Any]]:
+    async def get_entity(self, entity_id: str) -> Dict[str, Any] | None:
         if not self.redis:
             return None
         try:
@@ -110,7 +109,7 @@ class RedisMemoryProvider:
             entity = await self.get_entity(entity_id)
             if entity:
                 entity.update(updates)
-                await self.redis.setex(cache_key, 86400, json.dumps(entity, default=str))
+                await self.redis.setex(cache_key, TTL_24_HOURS, json.dumps(entity, default=str))
         except Exception as e:
             logger.error(f"Error updating entity in Redis: {e}")
 

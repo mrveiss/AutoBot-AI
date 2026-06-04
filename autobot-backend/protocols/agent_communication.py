@@ -11,7 +11,6 @@ and interaction patterns for inter-agent communication within AutoBot.
 
 import asyncio
 import json
-import logging
 import os
 import sys
 import time
@@ -19,7 +18,9 @@ import uuid
 from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass, field
 from enum import Enum
-from typing import Any, Awaitable, Callable, Dict, List, Optional
+from typing import Any, Awaitable, Callable, Dict, List
+
+from autobot_shared.logging_manager import get_logger
 
 # Add project root to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -58,7 +59,7 @@ from autobot_shared.async_compat import run_or_schedule
 # noqa: E402
 from autobot_shared.redis_client import get_redis_client  # noqa: E402
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class MessageType(Enum):
@@ -117,12 +118,12 @@ class MessageHeader:
     message_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     message_type: MessageType = MessageType.REQUEST
     priority: MessagePriority = MessagePriority.NORMAL
-    sender: Optional[AgentIdentity] = None
-    recipient: Optional[str] = None  # Agent ID
-    correlation_id: Optional[str] = None  # For request/response correlation
-    reply_to: Optional[str] = None  # For response routing
+    sender: AgentIdentity | None = None
+    recipient: str | None = None  # Agent ID
+    correlation_id: str | None = None  # For request/response correlation
+    reply_to: str | None = None  # For response routing
     timestamp: float = field(default_factory=time.time)
-    expires_at: Optional[float] = None
+    expires_at: float | None = None
     retry_count: int = 0
     max_retries: int = RetryConfig.DEFAULT_RETRIES
 
@@ -188,7 +189,7 @@ class CommunicationChannel(ABC):
         """Send a message through the channel"""
 
     @abstractmethod
-    async def receive(self, timeout: Optional[float] = None) -> Optional[StandardMessage]:
+    async def receive(self, timeout: float | None = None) -> StandardMessage | None:
         """Receive a message from the channel"""
 
     @abstractmethod
@@ -256,7 +257,7 @@ class RedisCommunicationChannel(CommunicationChannel):
             logger.error("Failed to send message: %s", e)
             return False
 
-    async def receive(self, timeout: Optional[float] = None) -> Optional[StandardMessage]:
+    async def receive(self, timeout: float | None = None) -> StandardMessage | None:
         """Receive a message from the channel"""
         try:
             if timeout:
@@ -307,7 +308,7 @@ class DirectCommunicationChannel(CommunicationChannel):
             logger.error("Failed to send direct message: %s", e)
             return False
 
-    async def receive(self, timeout: Optional[float] = None) -> Optional[StandardMessage]:
+    async def receive(self, timeout: float | None = None) -> StandardMessage | None:
         """Receive a message from the direct queue"""
         try:
             if timeout:
@@ -396,7 +397,7 @@ class AgentCommunicationProtocol:
     def register_message_handler(
         self,
         message_type: MessageType,
-        handler: Callable[[StandardMessage], Awaitable[Optional[StandardMessage]]],
+        handler: Callable[[StandardMessage], Awaitable[StandardMessage | None]],
     ):
         """Register a handler for specific message types"""
         if message_type not in self.message_handlers:
@@ -404,7 +405,7 @@ class AgentCommunicationProtocol:
         self.message_handlers[message_type].append(handler)
         logger.info("Registered handler for %s messages", message_type.value)
 
-    async def send_message(self, message: StandardMessage, channel_id: Optional[str] = None) -> bool:
+    async def send_message(self, message: StandardMessage, channel_id: str | None = None) -> bool:
         """Send a message through a specific or default channel"""
 
         # Set sender information
@@ -435,8 +436,8 @@ class AgentCommunicationProtocol:
         self,
         request: StandardMessage,
         timeout: float = TimingConstants.SHORT_TIMEOUT,
-        channel_id: Optional[str] = None,
-    ) -> Optional[StandardMessage]:
+        channel_id: str | None = None,
+    ) -> StandardMessage | None:
         """Send a request and wait for response"""
 
         # Set up response correlation
@@ -478,7 +479,7 @@ class AgentCommunicationProtocol:
         self,
         response: StandardMessage,
         original_request: StandardMessage,
-        channel_id: Optional[str] = None,
+        channel_id: str | None = None,
     ) -> bool:
         """Send a response to a request"""
 
@@ -672,7 +673,7 @@ class AgentCommunicationManager:
             await protocol.stop()
             logger.info("Unregistered agent communication protocol: %s", agent_id)
 
-    def get_protocol(self, agent_id: str) -> Optional[AgentCommunicationProtocol]:
+    def get_protocol(self, agent_id: str) -> AgentCommunicationProtocol | None:
         """Get communication protocol for an agent"""
         return self.protocols.get(agent_id)
 
@@ -694,7 +695,7 @@ async def send_agent_request(
     recipient_id: str,
     request_data: Any,
     timeout: float = TimingConstants.SHORT_TIMEOUT,
-) -> Optional[Any]:
+) -> Any | None:
     """Send a request from one agent to another"""
 
     manager = get_communication_manager()

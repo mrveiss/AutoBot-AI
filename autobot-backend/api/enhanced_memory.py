@@ -9,9 +9,8 @@ Issue #357: Converted to use AsyncEnhancedMemoryManager to fix blocking I/O in a
 """
 
 import asyncio
-import logging
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import List
 
 from fastapi import APIRouter, HTTPException, Query
 
@@ -34,6 +33,7 @@ from api.schemas_knowledge import (
     TaskUpdateRequest,
 )
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from enhanced_memory_manager_async import (
     AsyncEnhancedMemoryManager,
     TaskEntry,
@@ -44,7 +44,7 @@ from enhanced_memory_manager_async import (
 from markdown_reference_system import MarkdownReferenceSystem
 from task_execution_tracker import get_task_tracker
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(tags=["enhanced_memory"])
 
@@ -152,8 +152,8 @@ async def get_memory_statistics(days_back: int = Query(30, ge=1, le=365)):
     error_code_prefix="ENHANCED_MEMORY",
 )
 async def get_task_history(
-    agent_type: Optional[str] = Query(None),
-    status: Optional[str] = Query(None),
+    agent_type: str | None = Query(None),
+    status: str | None = Query(None),
     limit: int = Query(100, ge=1, le=1000),
     days_back: int = Query(30, ge=1, le=365),
 ):
@@ -366,8 +366,8 @@ async def scan_markdown_system():
 )
 async def search_markdown(
     query: str = Query(..., min_length=2),
-    document_type: Optional[str] = Query(None),
-    tags: Optional[List[str]] = Query(None),
+    document_type: str | None = Query(None),
+    tags: List[str] | None = Query(None),
     limit: int = Query(20, ge=1, le=100),
 ):
     """Search markdown content and sections.

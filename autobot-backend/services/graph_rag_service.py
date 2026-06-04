@@ -50,7 +50,7 @@ Usage:
 import asyncio
 import time
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Set, Tuple
 
 from advanced_rag_optimizer import RAGMetrics, SearchResult
 from autobot_memory_graph import AutoBotMemoryGraph
@@ -163,7 +163,7 @@ class GraphRAGService:
         memory_graph: AutoBotMemoryGraph,
         graph_weight: float = 0.3,
         enable_entity_extraction: bool = True,
-    ):
+    ) -> None:
         """
         Initialize Graph-RAG service via composition.
 
@@ -197,7 +197,7 @@ class GraphRAGService:
         error: Exception,
         metrics: GraphRAGMetrics,
         start_time: float,
-        timeout: Optional[float],
+        timeout: float | None,
     ) -> Tuple[List[SearchResult], GraphRAGMetrics]:
         """Handle errors during graph-aware search. Issue #620."""
         if isinstance(error, asyncio.TimeoutError):
@@ -214,11 +214,11 @@ class GraphRAGService:
     async def graph_aware_search(
         self,
         query: str,
-        start_entity: Optional[str] = None,
+        start_entity: str | None = None,
         max_depth: int = 2,
         max_results: int = 5,
         enable_reranking: bool = True,
-        timeout: Optional[float] = None,
+        timeout: float | None = None,
     ) -> Tuple[List[SearchResult], GraphRAGMetrics]:
         """
         Perform graph-aware RAG search with relationship-based expansion.
@@ -286,7 +286,7 @@ class GraphRAGService:
     async def _expand_via_graph(
         self,
         query: str,
-        start_entity: Optional[str],
+        start_entity: str | None,
         entity_matches: List[EntityMatch],
         max_depth: int,
         max_results: int,
@@ -472,7 +472,7 @@ class GraphRAGService:
         query: str,
         max_results: int,
         enable_reranking: bool,
-        timeout: Optional[float],
+        timeout: float | None,
         metrics: GraphRAGMetrics,
     ) -> List[SearchResult]:
         """
@@ -501,7 +501,7 @@ class GraphRAGService:
         self,
         query: str,
         rag_results: List[SearchResult],
-        start_entity: Optional[str],
+        start_entity: str | None,
         max_depth: int,
         max_results: int,
         metrics: GraphRAGMetrics,
@@ -591,7 +591,7 @@ class GraphRAGService:
 
     def _get_graph_starting_points(
         self,
-        start_entity: Optional[str],
+        start_entity: str | None,
         entity_matches: List[EntityMatch],
     ) -> List[Tuple[str, float]]:
         """
@@ -617,7 +617,7 @@ class GraphRAGService:
         direction: str,
         base_score: float,
         max_depth: int,
-    ) -> Optional[SearchResult]:
+    ) -> SearchResult | None:
         """
         Create SearchResult from a related graph entity.
 

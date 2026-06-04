@@ -9,11 +9,11 @@ Phase 2 — Atomic Facts Extraction: Extract atomic factual statements from docu
 as discrete retrievable units alongside full chunks.
 """
 
-import logging
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 from uuid import UUID
 
+from autobot_shared.logging_manager import get_logger
 from knowledge.pipeline.base import BaseCognifier, PipelineContext
 from knowledge.pipeline.cognifiers.llm_utils import parse_llm_json_response
 from knowledge.pipeline.models.chunk import ProcessedChunk
@@ -21,7 +21,7 @@ from knowledge.pipeline.models.fact import AtomicFact
 from knowledge.pipeline.registry import TaskRegistry
 from services.llm_service import get_llm_service
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 FACT_EXTRACTION_PROMPT = """Extract atomic facts from the following text.
 
@@ -127,7 +127,7 @@ class FactExtractor(BaseCognifier):
             return self.mode
         return "nlp" if len(chunks) > self.nlp_threshold else "llm"
 
-    def _nlp_extract(self, chunks: List[ProcessedChunk], document_id: Optional[UUID]) -> List[AtomicFact]:
+    def _nlp_extract(self, chunks: List[ProcessedChunk], document_id: UUID | None) -> List[AtomicFact]:
         """
         Extract facts from chunks using NLP patterns (Issue #3395).
 

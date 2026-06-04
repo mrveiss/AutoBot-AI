@@ -17,14 +17,14 @@
 
     <!-- Empty state -->
     <div class="empty-state" v-if="operations.length === 0 && !loading">
-      <i class="fas fa-tasks empty-icon"></i>
+      <Icon name="tasks" class="empty-icon" />
       <h3 class="empty-title">{{ $t('operations.list.noOperations') }}</h3>
       <p class="empty-text">{{ emptyMessage || $t('operations.list.defaultEmptyMessage') }}</p>
     </div>
 
     <!-- Loading state -->
     <div class="loading-state" v-if="loading">
-      <i class="fas fa-spinner fa-spin loading-icon"></i>
+      <Icon name="spinner" class="animate-spin loading-icon" />
       <span>{{ $t('operations.list.loadingOperations') }}</span>
     </div>
 
@@ -73,7 +73,7 @@
                   :show-info="false"
                   :show-items="false"
                   :show-step="false"
-                  size="small"
+                  size="sm"
                 />
                 <span class="progress-text">{{ operation.progress }}%</span>
               </div>
@@ -95,7 +95,7 @@
                   @click.stop="emit('cancel', operation.operation_id)"
                   :title="$t('operations.list.cancel')"
                 >
-                  <i class="fas fa-stop"></i>
+                  <Icon name="stop" />
                 </button>
                 <button
                   class="action-btn resume-btn"
@@ -103,14 +103,14 @@
                   @click.stop="emit('resume', operation.operation_id)"
                   :title="$t('operations.list.resume')"
                 >
-                  <i class="fas fa-play"></i>
+                  <Icon name="play" />
                 </button>
                 <button
                   class="action-btn view-btn"
                   @click.stop="emit('select', operation)"
                   :title="$t('operations.list.viewDetails')"
                 >
-                  <i class="fas fa-eye"></i>
+                  <Icon name="eye" />
                 </button>
               </div>
             </td>
@@ -126,6 +126,7 @@
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import type { Operation, OperationsFilter } from '@/types/operations'
 import {
   STATUS_CONFIG,

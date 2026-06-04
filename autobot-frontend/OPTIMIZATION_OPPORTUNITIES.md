@@ -194,13 +194,6 @@ Comprehensive `useWebSocket.ts` composable with features:
    - **After**: useWebSocket with callbacks
    - **Saved**: ~45 lines of boilerplate
 
-### Components Using Global WebSocket
-
-These components use the existing GlobalWebSocketService (different pattern):
-- `MCPDashboard.vue` - Uses useGlobalWebSocket
-- `OptimizedRumDashboard.vue` - Uses useGlobalWebSocket
-- `NPUWorkersSettings.vue` - Uses useGlobalWebSocket
-
 ### Components with Specialized Patterns
 
 These components have unique WebSocket patterns that may benefit from custom implementation:

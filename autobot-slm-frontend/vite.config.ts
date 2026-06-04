@@ -56,6 +56,12 @@ export default defineConfig(({ mode }) => {
     base: '/slm/',
     plugins: [vue(), coLocatedApiUrlGuard()],
     resolve: {
+      // preserveSymlinks: true keeps module resolution relative to the symlink
+      // path (node_modules/@autobot/vnc, @autobot/terminal) rather than the
+      // real path (../../autobot-plugins/…). Without this, rolldown walks up
+      // from the real plugin path and never finds pinia/vue in the frontend's
+      // own node_modules. Required for file: workspace packages (MVA-893).
+      preserveSymlinks: true,
       alias: {
         '@': fileURLToPath(new URL('./src', import.meta.url)),
         '@shared': fileURLToPath(new URL('../autobot_shared', import.meta.url))

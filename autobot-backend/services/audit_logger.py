@@ -30,25 +30,25 @@ Security Operations Logged:
 
 import asyncio
 import json
-import logging
-import os
 import socket
 import uuid
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal
 
 import aiofiles
 import redis.asyncio as async_redis
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.ssot_config import config
 from constants.network_constants import NetworkConstants
 from models.task_context import AuditQueryContext
 from type_defs.common import Metadata
 from utils.async_initializable import AsyncInitializable
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Audit result types
 AuditResult = Literal["success", "denied", "failed", "error"]
@@ -112,21 +112,21 @@ class AuditEntry:
     # OWASP Required Fields
     operation: str = ""
     result: AuditResult = "success"
-    user_id: Optional[str] = None
-    ip_address: Optional[str] = None
+    user_id: str | None = None
+    ip_address: str | None = None
 
     # Context Fields
-    session_id: Optional[str] = None
-    user_role: Optional[str] = None
-    resource: Optional[str] = None
+    session_id: str | None = None
+    user_role: str | None = None
+    resource: str | None = None
 
     # Distributed System Fields
-    vm_source: Optional[str] = None
-    vm_name: Optional[str] = None
+    vm_source: str | None = None
+    vm_name: str | None = None
 
     # Additional Metadata
     details: Metadata = field(default_factory=dict)
-    performance_ms: Optional[float] = None
+    performance_ms: float | None = None
 
     def to_json(self) -> str:
         """Serialize to JSON for Redis storage"""
@@ -201,7 +201,7 @@ class AuditLogger(AsyncInitializable):
         batch_size: int = 50,
         batch_timeout_seconds: float = 1.0,
         fallback_log_dir: str = "logs/audit",
-    ):
+    ) -> None:
         """
         Initialize audit logger
 
@@ -217,13 +217,13 @@ class AuditLogger(AsyncInitializable):
         self.batch_timeout_seconds = batch_timeout_seconds
 
         # Get VM identification
-        self.vm_source = os.getenv("AUTOBOT_BACKEND_HOST", NetworkConstants.MAIN_MACHINE_IP)
+        self.vm_source = config.backend_host
         self.vm_name = self._get_vm_name()
 
         # Batch processing
         self._batch_queue: List[AuditEntry] = []
         self._batch_lock = asyncio.Lock()
-        self._batch_task: Optional[asyncio.Task] = None
+        self._batch_task: asyncio.Task | None = None
 
         # Fallback logging — directory creation deferred to _initialize_impl
         self.fallback_log_dir = Path(fallback_log_dir)
@@ -256,7 +256,7 @@ class AuditLogger(AsyncInitializable):
         }
         return vm_mapping.get(self.vm_source, socket.gethostname())
 
-    async def _get_audit_db(self) -> Optional[async_redis.Redis]:
+    async def _get_audit_db(self) -> async_redis.Redis | None:
         """Get Redis audit database (DB 10)"""
         try:
             # Use canonical Redis client pattern with 'audit' database
@@ -270,13 +270,13 @@ class AuditLogger(AsyncInitializable):
         self,
         operation: str,
         result: AuditResult,
-        user_id: Optional[str],
-        session_id: Optional[str],
-        ip_address: Optional[str],
-        resource: Optional[str],
-        user_role: Optional[str],
-        details: Optional[Metadata],
-        performance_ms: Optional[float],
+        user_id: str | None,
+        session_id: str | None,
+        ip_address: str | None,
+        resource: str | None,
+        user_role: str | None,
+        details: Metadata | None,
+        performance_ms: float | None,
     ) -> AuditEntry:
         """
         Create and sanitize an audit entry.
@@ -336,13 +336,13 @@ class AuditLogger(AsyncInitializable):
         self,
         operation: str,
         result: AuditResult = "success",
-        user_id: Optional[str] = None,
-        session_id: Optional[str] = None,
-        ip_address: Optional[str] = None,
-        resource: Optional[str] = None,
-        user_role: Optional[str] = None,
-        details: Optional[Metadata] = None,
-        performance_ms: Optional[float] = None,
+        user_id: str | None = None,
+        session_id: str | None = None,
+        ip_address: str | None = None,
+        resource: str | None = None,
+        user_role: str | None = None,
+        details: Metadata | None = None,
+        performance_ms: float | None = None,
     ) -> bool:
         """
         Log a security-sensitive operation. Ref: #1088.
@@ -384,7 +384,7 @@ class AuditLogger(AsyncInitializable):
             await self._fallback_log(entry, error=str(e))
             return False
 
-    async def _batch_timer(self):
+    async def _batch_timer(self) -> None:
         """Wait for batch timeout then flush"""
         try:
             await asyncio.sleep(self.batch_timeout_seconds)
@@ -396,7 +396,7 @@ class AuditLogger(AsyncInitializable):
         except Exception as e:
             logger.error("Batch timer error: %s", e)
 
-    async def _flush_batch(self):
+    async def _flush_batch(self) -> None:
         """
         Flush batched audit entries to Redis
         Uses Redis pipeline for atomic multi-index writes
@@ -433,7 +433,7 @@ class AuditLogger(AsyncInitializable):
                 return_exceptions=True,
             )
 
-    async def _write_entry_to_redis(self, pipe, entry: AuditEntry):
+    async def _write_entry_to_redis(self, pipe, entry: AuditEntry) -> None:
         """
         Write audit entry to Redis with multi-index support
 
@@ -481,7 +481,7 @@ class AuditLogger(AsyncInitializable):
             await pipe.expire(f"audit:vm:{entry.vm_name}:{date}", retention_seconds)
         await pipe.expire(f"audit:result:{entry.result}:{date}", retention_seconds)
 
-    async def _fallback_log(self, entry: Optional[AuditEntry], error: Optional[str] = None):
+    async def _fallback_log(self, entry: AuditEntry | None, error: str | None = None) -> None:
         """Write audit entry to file as fallback when Redis unavailable"""
         try:
             fallback_file = self.fallback_log_dir / f"audit_{datetime.now(tz=timezone.utc).strftime('%Y-%m-%d')}.jsonl"
@@ -509,11 +509,11 @@ class AuditLogger(AsyncInitializable):
         end_time: datetime,
         limit: int,
         offset: int,
-        session_id: Optional[str] = None,
-        user_id: Optional[str] = None,
-        operation: Optional[str] = None,
-        vm_name: Optional[str] = None,
-        result: Optional[AuditResult] = None,
+        session_id: str | None = None,
+        user_id: str | None = None,
+        operation: str | None = None,
+        vm_name: str | None = None,
+        result: AuditResult | None = None,
     ) -> List[AuditEntry]:
         """Execute appropriate query based on filters (Issue #315 - reduces nesting)."""
         # Issue #322: Create AuditQueryContext to eliminate data clump
@@ -539,13 +539,13 @@ class AuditLogger(AsyncInitializable):
 
     async def query(
         self,
-        start_time: Optional[datetime] = None,
-        end_time: Optional[datetime] = None,
-        operation: Optional[str] = None,
-        user_id: Optional[str] = None,
-        session_id: Optional[str] = None,
-        vm_name: Optional[str] = None,
-        result: Optional[AuditResult] = None,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
+        operation: str | None = None,
+        user_id: str | None = None,
+        session_id: str | None = None,
+        vm_name: str | None = None,
+        result: AuditResult | None = None,
         limit: int = 100,
         offset: int = 0,
     ) -> List[AuditEntry]:
@@ -805,7 +805,7 @@ class AuditLogger(AsyncInitializable):
         entry_id: str,
         start_time: datetime,
         end_time: datetime,
-    ) -> Optional[AuditEntry]:
+    ) -> AuditEntry | None:
         """Fetch full audit entry from primary log by ID"""
         # Use batch method for single ID
         entries = await self._fetch_entries_by_ids_batch(audit_db, [entry_id], start_time, end_time)
@@ -883,7 +883,7 @@ class AuditLogger(AsyncInitializable):
                 "total_failed": self._total_failed,
             }
 
-    async def cleanup_old_logs(self, days_to_keep: Optional[int] = None):
+    async def cleanup_old_logs(self, days_to_keep: int | None = None) -> None:
         """
         Clean up audit logs older than retention period
 
@@ -927,12 +927,12 @@ class AuditLogger(AsyncInitializable):
         except Exception as e:
             logger.error("Audit cleanup failed: %s", e)
 
-    async def flush(self):
+    async def flush(self) -> None:
         """Force flush any pending batched entries"""
         async with self._batch_lock:
             await self._flush_batch()
 
-    async def close(self):
+    async def close(self) -> None:
         """Shutdown audit logger gracefully"""
         logger.info("Shutting down audit logger...")
 
@@ -955,7 +955,7 @@ class AuditLogger(AsyncInitializable):
 
 
 # Global audit logger instance
-_audit_logger: Optional[AuditLogger] = None
+_audit_logger: AuditLogger | None = None
 _logger_lock = asyncio.Lock()
 
 
@@ -981,7 +981,7 @@ async def get_audit_logger() -> AuditLogger:
     return _audit_logger
 
 
-async def close_audit_logger():
+async def close_audit_logger() -> None:
     """Close global audit logger"""
     global _audit_logger
 

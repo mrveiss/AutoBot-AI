@@ -8,7 +8,6 @@ Handles full terminal emulation with PTY support, sudo handling, and user takeov
 
 import asyncio
 import fcntl
-import logging
 import os
 import pty
 import select
@@ -16,15 +15,16 @@ import struct
 import termios
 import time
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import TimingConstants
-from event_manager import get_event_manager
+from events.bus import PersistStrategy, publish_event
 
 from .base_agent import AgentRequest
 from .standardized_agent import ActionHandler, StandardizedAgent
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class InteractiveTerminalAgent(StandardizedAgent):
@@ -38,9 +38,9 @@ class InteractiveTerminalAgent(StandardizedAgent):
         """Initialize interactive terminal agent with PTY session management."""
         super().__init__("interactive_terminal")
         self.chat_id = chat_id
-        self.master_fd: Optional[int] = None
-        self.slave_fd: Optional[int] = None
-        self.process: Optional[asyncio.subprocess.Process] = None
+        self.master_fd: int | None = None
+        self.slave_fd: int | None = None
+        self.process: asyncio.subprocess.Process | None = None
         self.session_active = False
         self.input_mode = "agent"  # "agent" or "user"
         self.pending_sudo = False
@@ -154,7 +154,7 @@ class InteractiveTerminalAgent(StandardizedAgent):
         flags = fcntl.fcntl(self.master_fd, fcntl.F_GETFL)
         fcntl.fcntl(self.master_fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
 
-    def _prepare_env_vars(self, env: Optional[dict]) -> dict:
+    def _prepare_env_vars(self, env: dict | None) -> dict:
         """Prepare environment variables for terminal session. Issue #620."""
         env_vars = os.environ.copy()
         if env:
@@ -162,7 +162,7 @@ class InteractiveTerminalAgent(StandardizedAgent):
         env_vars["TERM"] = "xterm-256color"
         return env_vars
 
-    async def _spawn_process(self, command: str, env_vars: dict, cwd: Optional[str]) -> None:
+    async def _spawn_process(self, command: str, env_vars: dict, cwd: str | None) -> None:
         """Spawn the subprocess attached to PTY. Issue #620."""
         self.process = await asyncio.create_subprocess_exec(
             "/bin/bash",
@@ -178,7 +178,8 @@ class InteractiveTerminalAgent(StandardizedAgent):
 
     async def _notify_session_started(self, command: str) -> None:
         """Publish session started event. Issue #620."""
-        await get_event_manager().publish(
+        await publish_event(
+            "global",
             "terminal_session",
             {
                 "chat_id": self.chat_id,
@@ -186,6 +187,7 @@ class InteractiveTerminalAgent(StandardizedAgent):
                 "command": command,
                 "pid": self.process.pid,
             },
+            persist=PersistStrategy.NONE,
         )
 
     async def start_session(self, command: str, env: dict = None, cwd: str = None) -> None:
@@ -207,7 +209,7 @@ class InteractiveTerminalAgent(StandardizedAgent):
             await self._send_error(f"Failed to start terminal: {str(e)}")
             raise
 
-    async def _read_terminal_data(self) -> Optional[bytes]:
+    async def _read_terminal_data(self) -> bytes | None:
         """Read data from terminal (Issue #334 - extracted helper).
 
         Returns:
@@ -308,7 +310,8 @@ class InteractiveTerminalAgent(StandardizedAgent):
 
     async def _handle_sudo_prompt(self, prompt_data: str):
         """Handle sudo password prompts"""
-        await get_event_manager().publish(
+        await publish_event(
+            "global",
             "terminal_output",
             {
                 "chat_id": self.chat_id,
@@ -318,6 +321,7 @@ class InteractiveTerminalAgent(StandardizedAgent):
                 "input_type": "password",
                 "message": ("🔐 Sudo password required. " "Click 'Send Input' to provide password."),
             },
+            persist=PersistStrategy.NONE,
         )
 
         # Switch to user input mode for password
@@ -325,7 +329,8 @@ class InteractiveTerminalAgent(StandardizedAgent):
 
     async def _handle_input_prompt(self, prompt_data: str):
         """Handle interactive prompts"""
-        await get_event_manager().publish(
+        await publish_event(
+            "global",
             "terminal_output",
             {
                 "chat_id": self.chat_id,
@@ -335,11 +340,13 @@ class InteractiveTerminalAgent(StandardizedAgent):
                 "input_type": "text",
                 "message": "⌨️ Input required. Enter your response.",
             },
+            persist=PersistStrategy.NONE,
         )
 
     async def _send_to_chat(self, output: str):
         """Send regular output to chat"""
-        await get_event_manager().publish(
+        await publish_event(
+            "global",
             "terminal_output",
             {
                 "chat_id": self.chat_id,
@@ -347,11 +354,13 @@ class InteractiveTerminalAgent(StandardizedAgent):
                 "type": "output",
                 "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             },
+            persist=PersistStrategy.NONE,
         )
 
     async def _send_error(self, error: str):
         """Send error message to chat"""
-        await get_event_manager().publish(
+        await publish_event(
+            "global",
             "terminal_output",
             {
                 "chat_id": self.chat_id,
@@ -359,6 +368,7 @@ class InteractiveTerminalAgent(StandardizedAgent):
                 "type": "error",
                 "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             },
+            persist=PersistStrategy.NONE,
         )
 
     async def send_input(self, user_input: str, is_password: bool = False):
@@ -392,25 +402,29 @@ class InteractiveTerminalAgent(StandardizedAgent):
     async def take_control(self):
         """Allow user to take full control of terminal"""
         self.input_mode = "user"
-        await get_event_manager().publish(
+        await publish_event(
+            "global",
             "terminal_control",
             {
                 "chat_id": self.chat_id,
                 "status": "user_control",
                 "message": ("🎮 You now have control of the terminal. " "Type commands directly."),
             },
+            persist=PersistStrategy.NONE,
         )
 
     async def return_control(self):
         """Return control to agent"""
         self.input_mode = "agent"
-        await get_event_manager().publish(
+        await publish_event(
+            "global",
             "terminal_control",
             {
                 "chat_id": self.chat_id,
                 "status": "agent_control",
                 "message": "🤖 Agent has resumed control of the terminal.",
             },
+            persist=PersistStrategy.NONE,
         )
 
     async def resize_terminal(self, cols: int, rows: int):
@@ -460,7 +474,8 @@ class InteractiveTerminalAgent(StandardizedAgent):
         async with self._buffer_lock:
             output_lines = len(self.output_buffer)
 
-        await get_event_manager().publish(
+        await publish_event(
+            "global",
             "terminal_session",
             {
                 "chat_id": self.chat_id,
@@ -469,12 +484,13 @@ class InteractiveTerminalAgent(StandardizedAgent):
                 "duration": duration,
                 "output_lines": output_lines,
             },
+            persist=PersistStrategy.NONE,
         )
 
         # Cleanup
         await self.cleanup()
 
-    async def wait_for_completion(self, timeout: Optional[float] = None) -> Dict[str, Any]:
+    async def wait_for_completion(self, timeout: float | None = None) -> Dict[str, Any]:
         """Wait for the terminal session to complete (thread-safe)"""
         try:
             if self.process:

@@ -9,15 +9,15 @@ Contains GPU performance benchmarking functionality.
 """
 
 import asyncio
-import logging
 import time
 from typing import Any, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import TimingConstants
 
 from .types import GPUCapabilities
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 async def benchmark_memory_bandwidth() -> Dict[str, Any]:

@@ -42,6 +42,8 @@ const tabs = [
   { id: 'log-forwarding', name: 'Log Forwarding', path: '/settings/admin/log-forwarding', icon: 'M12 19l9 2-9-18-9 18 9-2zm0 0v-8' },
   // Issue #2371: LLM config moved from main frontend to SLM admin
   { id: 'llm', name: 'LLM', path: '/settings/admin/llm', icon: 'M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z' },
+  // MVA-1735: SSO/OIDC provider configuration
+  { id: 'sso', name: 'SSO / OIDC', path: '/settings/admin/sso', icon: 'M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z' },
   // Issue: NPU Workers consolidated to Fleet Overview /fleet/npu (Worker Registry sub-tab)
 ]
 
@@ -71,8 +73,8 @@ onMounted(() => {
     <div class="bg-white border-b border-gray-200 px-6 py-4">
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-4">
-          <h1 class="text-2xl font-bold text-gray-900">Settings</h1>
-          <p class="text-sm text-gray-500">Configure system settings and infrastructure</p>
+          <h1 class="text-2xl font-bold text-gray-900">{{ $t('settingsView.settings') }}</h1>
+          <p class="text-sm text-gray-500">{{ $t('settingsView.configureSystemSettingsAnd') }}</p>
         </div>
       </div>
 

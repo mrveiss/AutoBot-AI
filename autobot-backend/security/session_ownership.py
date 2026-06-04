@@ -14,14 +14,15 @@ FEATURE FLAG SUPPORT:
 - ENFORCED: Full enforcement with access blocking
 """
 
-import logging
-from typing import Dict, Optional
+from typing import Dict
 
 from fastapi import HTTPException, Request
 
 from auth_middleware import get_auth_middleware
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_constants import TTL_30_DAYS
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class SessionOwnershipValidator:
@@ -95,7 +96,7 @@ class SessionOwnershipValidator:
             # Add to user's session set
             user_sessions_key = self._get_user_sessions_key(username)
             await self.redis.sadd(user_sessions_key, session_id)
-            await self.redis.expire(user_sessions_key, 2592000)  # 30 days
+            await self.redis.expire(user_sessions_key, TTL_30_DAYS)  # 30 days
 
             # Issue #684: Store org/team indices
             if org_id:
@@ -116,13 +117,13 @@ class SessionOwnershipValidator:
         """Store session in organization's session set (#684)."""
         org_key = self._get_org_sessions_key(org_id)
         await self.redis.sadd(org_key, session_id)
-        await self.redis.expire(org_key, 2592000)  # 30 days
+        await self.redis.expire(org_key, TTL_30_DAYS)  # 30 days
 
     async def _store_team_session_index(self, session_id: str, team_id: str) -> None:
         """Store session in team's session set (#684)."""
         team_key = self._get_team_sessions_key(team_id)
         await self.redis.sadd(team_key, session_id)
-        await self.redis.expire(team_key, 2592000)  # 30 days
+        await self.redis.expire(team_key, TTL_30_DAYS)  # 30 days
 
     async def _store_session_context(self, session_id: str, org_id: str | None, team_id: str | None) -> None:
         """Store org/team context for a session (#684)."""
@@ -136,7 +137,7 @@ class SessionOwnershipValidator:
             await self.redis.hset(ctx_key, mapping=context)
             await self.redis.expire(ctx_key, self.ownership_ttl)
 
-    async def get_session_owner(self, session_id: str) -> Optional[str]:
+    async def get_session_owner(self, session_id: str) -> str | None:
         """
         Get the owner of a chat session.
 
@@ -423,7 +424,7 @@ class SessionOwnershipValidator:
         self,
         session_id: str,
         user_data: Dict,
-    ) -> Optional[Dict]:
+    ) -> Dict | None:
         """Helper for validate_ownership. Ref: #1088.
 
         Checks the two early-exit conditions that bypass ownership lookup:
@@ -617,9 +618,9 @@ class SessionOwnershipValidator:
                 await self.redis.sadd(shared_key, user_id)
                 user_key = self._get_user_shared_sessions_key(user_id)
                 await self.redis.sadd(user_key, session_id)
-                await self.redis.expire(user_key, 2592000)  # 30 days
+                await self.redis.expire(user_key, TTL_30_DAYS)  # 30 days
 
-            await self.redis.expire(shared_key, 2592000)  # 30 days
+            await self.redis.expire(shared_key, TTL_30_DAYS)  # 30 days
             logger.info(
                 "Session %s... shared by %s with %d users",
                 session_id[:8],

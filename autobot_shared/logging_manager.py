@@ -11,7 +11,7 @@ import logging.handlers
 import os
 import threading
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Dict
 
 if TYPE_CHECKING:
     from config.manager import ConfigManager
@@ -30,7 +30,9 @@ def _get_config_manager() -> "ConfigManager":
     logging_manager -> config -> manager -> loader -> model_constants -> (back).
     Ref: issue #1862.
     """
-    from config import config_manager as _cm  # noqa: PLC0415
+    from config import (  # type: ignore[attr-defined]  # GH#7105: local backend import  # noqa: PLC0415
+        config_manager as _cm,
+    )
 
     return _cm
 
@@ -41,7 +43,7 @@ class LoggingManager:
     """
 
     _initialized = False
-    _loggers = {}
+    _loggers: Dict[str, logging.Logger] = {}
     _lock = threading.Lock()
 
     @classmethod
@@ -95,7 +97,7 @@ class LoggingManager:
             return logger
 
     @classmethod
-    def _setup_logging_internal(cls):
+    def _setup_logging_internal(cls) -> None:
         """Setup basic logging configuration (internal, called under lock)"""
         # Create logs directory if it doesn't exist
         logs_dir_path = os.getenv("AUTOBOT_LOGS_DIR", "logs")
@@ -103,21 +105,21 @@ class LoggingManager:
         logs_dir.mkdir(exist_ok=True)
 
         # Create backup directory
-        backup_dir_name = os.getenv("AUTOBOT_LOGS_BACKUP_DIR", "backup")
+        backup_dir_name = os.getenv("AUTOBOT_LOGS_BACKUP_DIR", "backup")  # ssot-config-exempt: pre-init logging
         backup_dir = logs_dir / backup_dir_name
         backup_dir.mkdir(exist_ok=True)
 
         cls._initialized = True
 
     @classmethod
-    def _setup_logging(cls):
+    def _setup_logging(cls) -> None:
         """Setup basic logging configuration (thread-safe public method)"""
         with cls._lock:
             if not cls._initialized:
                 cls._setup_logging_internal()
 
     @classmethod
-    def _get_file_handler(cls, log_type: str) -> Optional[logging.Handler]:
+    def _get_file_handler(cls, log_type: str) -> logging.Handler | None:
         """Get file handler for specific log type"""
         log_file = _get_config_manager().get(f"logging.file_handlers.{log_type}")
         if not log_file:
@@ -159,7 +161,7 @@ class LoggingManager:
         return cls.get_logger(component_name, log_type)
 
     @classmethod
-    def rotate_logs(cls, log_type: Optional[str] = None):
+    def rotate_logs(cls, log_type: str | None = None) -> None:
         """
         Manually rotate log files
 
@@ -232,6 +234,6 @@ def get_audit_logger(name: str) -> logging.Logger:
 
 
 # Maintain backward compatibility with existing logging setup
-def setup_logging():
+def setup_logging() -> None:
     """Setup logging - backward compatibility function"""
     LoggingManager._setup_logging()

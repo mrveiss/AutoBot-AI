@@ -6,21 +6,29 @@ Robust task queue system for AutoBot with Redis backend.
 
 This module provides a comprehensive task queue implementation with
 priority handling, retry logic, and distributed task execution.
+
+Architecture note — #6505 carve-out (#6468):
+  The Phase 1 async-consolidation plan (GH#6505) migrates most task-queue
+  work onto Celery.  This module is explicitly retained as a carve-out
+  because the NPU worker manager (initialization/lifespan.py) needs atomic
+  Redis Streams claim semantics (SETNX-based exclusive ownership per
+  GH#6468) that Celery does not expose.  Do NOT migrate or delete this
+  file until GH#6468 is resolved.  See docs/architecture/async-work.md
+  for the decision tree.
 """
 
 import asyncio
 import json
-import logging
 import time
 import traceback
 import uuid
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
-from enum import Enum
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List
 
 from autobot_shared.missing_dep import MissingDep as _MissingDep
 from autobot_shared.singleton_factory import lazy_singleton
+from autobot_shared.status_enums import Priority as TaskPriority  # #7504 consolidation
 from autobot_shared.status_enums import TaskStatus
 from autobot_shared.time_utils import parse_utc_iso
 
@@ -32,6 +40,7 @@ except ImportError as _e:
     RedisError = Exception  # Fallback if redis not available
     get_redis_client = _MissingDep("get_redis_client", _e)  # type: ignore[assignment]
 
+from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import RetryConfig, TimingConstants
 
 # Temporary implementations until proper modules are created
@@ -49,15 +58,6 @@ def log_performance_metric(*args, **kwargs):
     """Log performance metric placeholder until logging_config module is created."""
 
 
-class TaskPriority(Enum):
-    """Task priority levels."""
-
-    LOW = 1
-    NORMAL = 2
-    HIGH = 3
-    CRITICAL = 4
-
-
 @dataclass
 class TaskResult:
     """Task execution result."""
@@ -65,11 +65,11 @@ class TaskResult:
     task_id: str
     status: TaskStatus
     result: Any = None
-    error: Optional[str] = None
-    error_traceback: Optional[str] = None
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
-    execution_time: Optional[float] = None
+    error: str | None = None
+    error_traceback: str | None = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    execution_time: float | None = None
     retry_count: int = 0
 
     def to_dict(self) -> Dict[str, Any]:
@@ -101,15 +101,15 @@ class Task:
     id: str
     function_name: str
     args: tuple = ()
-    kwargs: Optional[Dict[str, Any]] = None
+    kwargs: Dict[str, Any] | None = None
     priority: TaskPriority = TaskPriority.NORMAL
     max_retries: int = RetryConfig.DEFAULT_RETRIES
     retry_delay: float = 1.0  # seconds
-    timeout: Optional[float] = None
-    created_at: Optional[datetime] = None
-    scheduled_at: Optional[datetime] = None
-    expires_at: Optional[datetime] = None
-    metadata: Optional[Dict[str, Any]] = None
+    timeout: float | None = None
+    created_at: datetime | None = None
+    scheduled_at: datetime | None = None
+    expires_at: datetime | None = None
+    metadata: Dict[str, Any] | None = None
 
     def __post_init__(self):
         """Initialize default values for kwargs, created_at, and metadata."""
@@ -136,7 +136,9 @@ class Task:
     def from_dict(cls, data: Dict[str, Any]) -> "Task":
         """Create from dictionary."""
         if "priority" in data:
-            data["priority"] = TaskPriority(data["priority"])
+            val = data["priority"]
+            # Backward compat: old queue stored integer priority scores (1-4)
+            data["priority"] = TaskPriority.from_numeric(val) if isinstance(val, int) else TaskPriority(val)
         if "created_at" in data:
             data["created_at"] = parse_utc_iso(data["created_at"])
         if "scheduled_at" in data and data["scheduled_at"]:
@@ -184,7 +186,7 @@ class TaskQueue:
         # Worker management
         self.workers: List[asyncio.Task] = []
         self.is_running = False
-        self.logger = logging.getLogger(__name__)
+        self.logger = get_logger(__name__)
 
         # Optional NPUWorkerManager reference for per-worker task tracking (#2944).
         # Set externally after construction: queue.npu_worker_manager = manager
@@ -228,7 +230,7 @@ class TaskQueue:
 
         return decorator
 
-    def _calculate_task_timing(self, delay: Optional[float], expires_in: Optional[float]) -> tuple:
+    def _calculate_task_timing(self, delay: float | None, expires_in: float | None) -> tuple:
         """
         Calculate scheduled_at and expires_at timestamps for a task.
 
@@ -251,7 +253,7 @@ class TaskQueue:
 
         return scheduled_at, expires_at
 
-    async def _add_task_to_queue(self, task_id: str, scheduled_at: Optional[datetime], priority: TaskPriority) -> None:
+    async def _add_task_to_queue(self, task_id: str, scheduled_at: datetime | None, priority: TaskPriority) -> None:
         """
         Add task to appropriate queue (scheduled or pending).
 
@@ -270,7 +272,7 @@ class TaskQueue:
                 score = scheduled_at.timestamp()
                 await self.redis.zadd(self.scheduled_key, {task_id: score})
             else:
-                priority_score = priority.value * 1000000 + int(time.time())
+                priority_score = TaskPriority.to_numeric(priority) * 1000000 + int(time.time())
                 await self.redis.zadd(self.pending_key, {task_id: priority_score})
         except RedisError as e:
             self.logger.error("Failed to enqueue task %s: %s", task_id, e)
@@ -281,11 +283,11 @@ class TaskQueue:
         function_name: str,
         *args,
         priority: TaskPriority = TaskPriority.NORMAL,
-        delay: Optional[float] = None,
-        timeout: Optional[float] = None,
+        delay: float | None = None,
+        timeout: float | None = None,
         max_retries: int = RetryConfig.DEFAULT_RETRIES,
-        expires_in: Optional[float] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        expires_in: float | None = None,
+        metadata: Dict[str, Any] | None = None,
         **kwargs,
     ) -> str:
         """
@@ -341,7 +343,7 @@ class TaskQueue:
             self.logger.error("Failed to store task %s: %s", task.id, e)
             raise RuntimeError(f"Failed to store task: {e}")
 
-    async def _get_task(self, task_id: str) -> Optional[Task]:
+    async def _get_task(self, task_id: str) -> Task | None:
         """Retrieve task data from Redis."""
         if not self.redis:
             return None
@@ -475,7 +477,7 @@ class TaskQueue:
 
         self.logger.info("Scheduler stopped")
 
-    async def _get_next_task(self) -> Optional[str]:
+    async def _get_next_task(self) -> str | None:
         """Get next task from pending queue."""
         if not self.redis:
             return None
@@ -523,7 +525,7 @@ class TaskQueue:
         result: TaskResult,
         error: str,
         start_time: float,
-        error_traceback: Optional[str] = None,
+        error_traceback: str | None = None,
     ) -> None:
         """
         Record task failure.
@@ -687,7 +689,7 @@ class TaskQueue:
                 retry_count=result.retry_count,
             )
 
-    async def get_task_result(self, task_id: str) -> Optional[TaskResult]:
+    async def get_task_result(self, task_id: str) -> TaskResult | None:
         """Get task execution result."""
         if not self.redis:
             return None
@@ -704,7 +706,7 @@ class TaskQueue:
         except RedisError:
             return False
 
-    async def get_task_status(self, task_id: str) -> Optional[TaskStatus]:
+    async def get_task_status(self, task_id: str) -> TaskStatus | None:
         """Get current task status (Issue #315 - uses dispatch table pattern)."""
         if not self.redis:
             return None
@@ -838,7 +840,7 @@ def initialize_task_queue(**kwargs) -> TaskQueue:
 
 
 # Convenience decorators
-def task(name: Optional[str] = None, **task_kwargs):
+def task(name: str | None = None, **task_kwargs):
     """
     Decorator to register and configure task functions.
 

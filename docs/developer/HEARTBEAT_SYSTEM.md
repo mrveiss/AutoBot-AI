@@ -3,6 +3,11 @@
 > Issue #1407. Backend: `autobot-backend/services/heartbeat_scheduler.py` and
 > `autobot-backend/api/heartbeat.py`. Frontend: `autobot-frontend/src/components/agents/HeartbeatPanel.vue`.
 
+> **All background schedulers** (including HeartbeatScheduler) are enumerated in
+> `autobot-backend/services/scheduler_registry.py` — the canonical source of truth for
+> runtime model, tick interval, and owner file. The full list is also available at runtime via
+> `GET /api/admin/schedulers`. See GH#6594.
+
 ---
 
 ## What HeartbeatPanel Does

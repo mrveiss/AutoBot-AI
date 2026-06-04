@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -40,7 +40,7 @@ class McpSearchResponse(BaseModel):
     results: List[Dict[str, Any]] = Field(default_factory=list)
     query: str = ""
     count: int = 0
-    error: Optional[str] = None
+    error: str | None = None
 
 
 class McpAddDocumentResponse(BaseModel):
@@ -49,9 +49,9 @@ class McpAddDocumentResponse(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     success: bool
-    document_id: Optional[str] = None
-    message: Optional[str] = None
-    error: Optional[str] = None
+    document_id: str | None = None
+    message: str | None = None
+    error: str | None = None
 
 
 class McpKnowledgeStatsResponse(BaseModel):
@@ -61,7 +61,7 @@ class McpKnowledgeStatsResponse(BaseModel):
 
     success: bool
     stats: Dict[str, Any] = Field(default_factory=dict)
-    error: Optional[str] = None
+    error: str | None = None
 
 
 class McpSummarizeTopicResponse(BaseModel):
@@ -71,9 +71,9 @@ class McpSummarizeTopicResponse(BaseModel):
 
     success: bool
     summary: str = ""
-    topic: Optional[str] = None
+    topic: str | None = None
     source_count: int = 0
-    error: Optional[str] = None
+    error: str | None = None
 
 
 class McpVectorSimilarityResponse(BaseModel):
@@ -83,9 +83,9 @@ class McpVectorSimilarityResponse(BaseModel):
 
     success: bool
     results: List[Dict[str, Any]] = Field(default_factory=list)
-    query: Optional[str] = None
-    threshold: Optional[float] = None
-    error: Optional[str] = None
+    query: str | None = None
+    threshold: float | None = None
+    error: str | None = None
 
 
 class McpQaChainResponse(BaseModel):
@@ -95,9 +95,9 @@ class McpQaChainResponse(BaseModel):
 
     success: bool
     answer: str = ""
-    question: Optional[str] = None
+    question: str | None = None
     sources: List[str] = Field(default_factory=list)
-    error: Optional[str] = None
+    error: str | None = None
 
 
 class McpRedisVectorOpsResponse(BaseModel):
@@ -106,10 +106,10 @@ class McpRedisVectorOpsResponse(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     success: bool
-    operation: Optional[str] = None
-    data: Optional[Dict[str, Any]] = None
-    message: Optional[str] = None
-    error: Optional[str] = None
+    operation: str | None = None
+    data: Dict[str, Any] | None = None
+    message: str | None = None
+    error: str | None = None
 
 
 class McpSchemaBackends(BaseModel):
@@ -142,7 +142,7 @@ class McpHealthResponse(BaseModel):
     status: str
     knowledge_base_initialized: bool = False
     vector_store_connected: bool = False
-    error: Optional[str] = None
+    error: str | None = None
 
 
 class RagFeedbackResponse(BaseModel):
@@ -151,9 +151,9 @@ class RagFeedbackResponse(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     status: str
-    stream_key: Optional[str] = None
-    decision: Optional[str] = None
-    reason: Optional[str] = None
+    stream_key: str | None = None
+    decision: str | None = None
+    reason: str | None = None
 
 
 class KnowledgeSearchRequest(BaseModel):
@@ -161,15 +161,15 @@ class KnowledgeSearchRequest(BaseModel):
 
     query: str = Field(..., description="Search query")
     top_k: int = Field(5, description="Number of results to return")
-    filters: Optional[Dict[str, Any]] = Field(None, description="Optional filters")
+    filters: Dict[str, Any] | None = Field(None, description="Optional filters")
 
 
 class DocumentAddRequest(BaseModel):
     """Request body for POST /mcp/add_to_knowledge_base."""
 
     content: str = Field(..., description="Document content")
-    metadata: Optional[Dict[str, Any]] = Field(None, description="Document metadata")
-    source: Optional[str] = Field(None, description="Document source")
+    metadata: Dict[str, Any] | None = Field(None, description="Document metadata")
+    source: str | None = Field(None, description="Document source")
 
 
 class KnowledgeStatsRequest(BaseModel):

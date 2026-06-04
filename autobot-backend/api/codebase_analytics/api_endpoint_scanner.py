@@ -9,11 +9,12 @@ frontend TypeScript/Vue files for API calls.
 """
 
 import ast
-import logging
 import re
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Set
+
+from autobot_shared.logging_manager import get_logger
 
 from .endpoints.shared import get_project_root
 from .models import (
@@ -24,7 +25,7 @@ from .models import (
     FrontendAPICallItem,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # =============================================================================
@@ -124,7 +125,7 @@ class BackendEndpointScanner:
     # Global API prefix applied to all routers in app_factory.py
     API_PREFIX = "/api"
 
-    def __init__(self, project_root: Optional[Path] = None):
+    def __init__(self, project_root: Path | None = None):
         self.project_root = project_root or get_project_root()
         self.backend_path = self.project_root / "api"
         self._router_prefixes: Dict[str, str] = {}
@@ -256,7 +257,7 @@ class BackendEndpointScanner:
         child_module: str,
         parent_prefix: str,
         parent_module: str,
-        child_dir: Optional[str] = None,
+        child_dir: str | None = None,
     ) -> None:
         """
         Register nested router with parent's prefix if not already registered.
@@ -335,7 +336,7 @@ class BackendEndpointScanner:
                 relative_modules[f"{name}.router"] = name
         return relative_modules
 
-    def _get_prefix_for_subdir_file(self, py_file: Path) -> tuple[str, Optional[str]]:
+    def _get_prefix_for_subdir_file(self, py_file: Path) -> tuple[str, str | None]:
         """
         Determine the parent prefix and child_dir for a subdirectory router file.
 
@@ -668,7 +669,7 @@ class BackendEndpointScanner:
         decorator: ast.expr,
         func_node: ast.AST,
         file_path: str,
-    ) -> Optional[APIEndpointItem]:
+    ) -> APIEndpointItem | None:
         """Parse a decorator AST node for route information."""
         # Handle @router.get("/path") style
         if isinstance(decorator, ast.Call):
@@ -731,7 +732,7 @@ class BackendEndpointScanner:
 
         return endpoints
 
-    def _get_file_router_prefix(self, content: str) -> Optional[str]:
+    def _get_file_router_prefix(self, content: str) -> str | None:
         """Extract router prefix from file content."""
         match = _APIROUTER_PREFIX_RE.search(content)
         if match:
@@ -747,7 +748,7 @@ class BackendEndpointScanner:
 class FrontendAPICallScanner:
     """Scans frontend TypeScript/Vue files for API calls."""
 
-    def __init__(self, project_root: Optional[Path] = None):
+    def __init__(self, project_root: Path | None = None):
         self.project_root = project_root or get_project_root()
         self.frontend_path = self.project_root / "autobot-frontend" / "src"
 
@@ -834,7 +835,7 @@ class FrontendAPICallScanner:
         line: str,
         line_number: int,
         file_path: str,
-    ) -> Optional[FrontendAPICallItem]:
+    ) -> FrontendAPICallItem | None:
         """Parse a regex match into an API call item."""
         groups = match.groups()
 
@@ -1085,7 +1086,7 @@ class APIEndpointChecker:
         analysis = checker.run_full_analysis()
     """
 
-    def __init__(self, project_root: Optional[Path] = None):
+    def __init__(self, project_root: Path | None = None):
         self.project_root = project_root or get_project_root()
         self.backend_scanner = BackendEndpointScanner(self.project_root)
         self.frontend_scanner = FrontendAPICallScanner(self.project_root)

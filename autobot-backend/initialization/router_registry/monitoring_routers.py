@@ -12,10 +12,11 @@ Issue #729: Infrastructure routers removed - now served by slm-server.
 """
 
 import importlib
-import logging
 from typing import List, Tuple
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 
 # Router configurations: (module_path, router_name, prefix, tags, display_name)
 # Issue #281: Centralized router configuration for maintainability

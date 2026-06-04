@@ -12,14 +12,14 @@ This module contains Issue #608 secret management operations:
 Part of the modular autobot_memory_graph package (Issue #716).
 """
 
-import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import utc_timestamp
 
 from .core import AutoBotMemoryGraphCore
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class SecretManagementMixin:
@@ -36,7 +36,7 @@ class SecretManagementMixin:
         self: AutoBotMemoryGraphCore,
         secret_type: str,
         scope: str,
-        session_id: Optional[str],
+        session_id: str | None,
     ) -> None:
         """Issue #665: Validate secret creation parameters."""
         valid_secret_types = {"api_key", "token", "password", "ssh_key", "certificate"}
@@ -70,8 +70,8 @@ class SecretManagementMixin:
         self: AutoBotMemoryGraphCore,
         entity_id: str,
         scope: str,
-        session_id: Optional[str],
-        shared_with: Optional[List[str]],
+        session_id: str | None,
+        shared_with: List[str] | None,
     ) -> None:
         """Issue #665: Create scope-based relationships for a secret entity."""
         if scope == "session" and session_id:
@@ -94,9 +94,9 @@ class SecretManagementMixin:
         owner_id: str,
         secret_type: str,
         scope: str,
-        session_id: Optional[str],
-        shared_with: Optional[List[str]],
-        base_metadata: Optional[Dict[str, Any]],
+        session_id: str | None,
+        shared_with: List[str] | None,
+        base_metadata: Dict[str, Any] | None,
     ) -> Dict[str, Any]:
         """Build metadata dictionary for a secret entity. Issue #620.
 
@@ -131,9 +131,9 @@ class SecretManagementMixin:
         secret_type: str,
         owner_id: str,
         scope: str,
-        session_id: Optional[str],
-        shared_with: Optional[List[str]],
-        metadata: Optional[Dict[str, Any]],
+        session_id: str | None,
+        shared_with: List[str] | None,
+        metadata: Dict[str, Any] | None,
     ) -> Dict[str, Any]:
         """Create secret entity and its relations. Issue #620."""
         secret_metadata = self._build_secret_metadata(owner_id, secret_type, scope, session_id, shared_with, metadata)
@@ -154,9 +154,9 @@ class SecretManagementMixin:
         secret_type: str,
         owner_id: str,
         scope: str = "user",
-        session_id: Optional[str] = None,
-        shared_with: Optional[List[str]] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        session_id: str | None = None,
+        shared_with: List[str] | None = None,
+        metadata: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
         """Create a secret entity with ownership and scoping. Issue #620."""
         self.ensure_initialized()
@@ -222,8 +222,8 @@ class SecretManagementMixin:
     def _secret_matches_filters(
         self: AutoBotMemoryGraphCore,
         secret: Dict[str, Any],
-        scope: Optional[str],
-        session_id: Optional[str],
+        scope: str | None,
+        session_id: str | None,
     ) -> bool:
         """Issue #665: Check if a secret matches the provided filters."""
         secret_scope = secret.get("metadata", {}).get("scope")
@@ -240,8 +240,8 @@ class SecretManagementMixin:
     async def _get_owned_secrets(
         self: AutoBotMemoryGraphCore,
         user_id: str,
-        scope: Optional[str],
-        session_id: Optional[str],
+        scope: str | None,
+        session_id: str | None,
     ) -> List[Dict[str, Any]]:
         """Issue #665: Get secrets owned by a user with optional filtering."""
         secrets = []
@@ -261,7 +261,7 @@ class SecretManagementMixin:
     async def _get_shared_secrets(
         self: AutoBotMemoryGraphCore,
         user_id: str,
-        scope: Optional[str],
+        scope: str | None,
         existing_secrets: List[Dict[str, Any]],
     ) -> List[Dict[str, Any]]:
         """Issue #665: Get secrets shared with a user."""
@@ -283,8 +283,8 @@ class SecretManagementMixin:
     async def get_user_secrets(
         self: AutoBotMemoryGraphCore,
         user_id: str,
-        scope: Optional[str] = None,
-        session_id: Optional[str] = None,
+        scope: str | None = None,
+        session_id: str | None = None,
     ) -> List[Dict[str, Any]]:
         """
         Get secrets accessible to a user.

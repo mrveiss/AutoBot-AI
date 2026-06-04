@@ -28,16 +28,15 @@ Usage:
 
 import asyncio
 import json
-import logging
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Optional
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
 from constants.threshold_constants import StringParsingConstants
 from type_defs.common import Metadata
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class EnforcementMode(str, Enum):
@@ -58,7 +57,7 @@ class FeatureFlags(AsyncRedisClientMixin):
 
     _redis_database = "cache"
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize feature flags service"""
         self._cache = {}
         self._cache_ttl = 5  # seconds
@@ -130,7 +129,7 @@ class FeatureFlags(AsyncRedisClientMixin):
             logger.error("Failed to set enforcement mode: %s", e)
             return False
 
-    async def get_endpoint_enforcement(self, endpoint: str) -> Optional[EnforcementMode]:
+    async def get_endpoint_enforcement(self, endpoint: str) -> EnforcementMode | None:
         """
         Get enforcement mode for specific endpoint (allows per-endpoint control)
 
@@ -156,7 +155,7 @@ class FeatureFlags(AsyncRedisClientMixin):
             logger.error("Failed to get endpoint enforcement for %s: %s", endpoint, e)
             return None
 
-    async def set_endpoint_enforcement(self, endpoint: str, mode: Optional[EnforcementMode]) -> bool:
+    async def set_endpoint_enforcement(self, endpoint: str, mode: EnforcementMode | None) -> bool:
         """
         Set enforcement mode for specific endpoint
 
@@ -344,7 +343,7 @@ class FeatureFlags(AsyncRedisClientMixin):
 
 
 # Global feature flags instance
-_feature_flags: Optional[FeatureFlags] = None
+_feature_flags: FeatureFlags | None = None
 _flags_lock = asyncio.Lock()
 
 

@@ -92,7 +92,7 @@ class AlertTier(Enum):
     PRIORITY = ("priority", 4, 30 * 60)  # warning  — 4/hr, 30 min cooldown
     ROUTINE = ("routine", 2, 60 * 60)  # info     — 2/hr, 60 min cooldown
 
-    def __init__(self, tier_name: str, max_per_hour: int, base_cooldown_seconds: int):
+    def __init__(self, tier_name: str, max_per_hour: int, base_cooldown_seconds: int) -> None:
         self.tier_name = tier_name
         self.max_per_hour = max_per_hour
         self.base_cooldown_seconds = base_cooldown_seconds

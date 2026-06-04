@@ -392,9 +392,9 @@ const formatLastSeen = formatRelativeTime
     <!-- Header -->
     <div class="flex items-center justify-between mb-6">
       <div>
-        <h1 class="text-2xl font-bold text-gray-900">Fleet Overview</h1>
+        <h1 class="text-2xl font-bold text-gray-900">{{ $t('fleetOverview.fleetOverview') }}</h1>
         <p class="text-sm text-gray-500 mt-1 flex items-center gap-2">
-          Real-time health status of all managed nodes
+          {{ $t('fleetOverview.realTimeHealthStatus') }}
           <!-- WebSocket Connection Indicator (Issue #754: aria) -->
           <span
             role="status"
@@ -429,7 +429,7 @@ const formatLastSeen = formatRelativeTime
           <svg :class="['w-4 h-4', isLoading ? 'animate-spin' : '']" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
           </svg>
-          Refresh
+          {{ $t('fleetOverview.refresh') }}
         </button>
         <button
           v-if="activeTab === 'nodes'"
@@ -440,7 +440,7 @@ const formatLastSeen = formatRelativeTime
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
           </svg>
-          Add Node
+          {{ $t('fleetOverview.addNode') }}
         </button>
       </div>
     </div>
@@ -464,7 +464,7 @@ const formatLastSeen = formatRelativeTime
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2" />
             </svg>
-            Nodes
+            {{ $t('fleetOverview.nodes') }}
           </div>
         </button>
         <button
@@ -483,7 +483,7 @@ const formatLastSeen = formatRelativeTime
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
             </svg>
-            NPU Workers
+            {{ $t('fleetOverview.nPUWorkers') }}
           </div>
         </button>
         <button
@@ -502,7 +502,7 @@ const formatLastSeen = formatRelativeTime
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
             </svg>
-            Infrastructure
+            {{ $t('fleetOverview.infrastructure') }}
           </div>
         </button>
       </nav>
@@ -527,15 +527,15 @@ const formatLastSeen = formatRelativeTime
         <svg class="w-16 h-16 mx-auto text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" />
         </svg>
-        <h3 class="text-lg font-medium text-gray-900 mb-2">No nodes registered</h3>
-        <p class="text-gray-500 mb-4">Add a node to start managing your infrastructure.</p>
-        <button @click="openAddNodeModal" class="btn btn-primary">Add First Node</button>
+        <h3 class="text-lg font-medium text-gray-900 mb-2">{{ $t('fleetOverview.noNodesRegistered') }}</h3>
+        <p class="text-gray-500 mb-4">{{ $t('fleetOverview.addANodeTo') }}</p>
+        <button @click="openAddNodeModal" class="btn btn-primary">{{ $t('fleetOverview.addFirstNode') }}</button>
       </div>
 
       <!-- Loading State -->
       <div v-if="isLoading && nodes.length === 0" class="flex items-center justify-center py-12" role="status" aria-label="Loading fleet data">
         <div class="animate-spin w-8 h-8 border-4 border-primary-600 border-t-transparent rounded-full"></div>
-        <span class="sr-only">Loading fleet data...</span>
+        <span class="sr-only">{{ $t('fleetOverview.loadingFleetData') }}</span>
       </div>
     </div>
 
@@ -586,17 +586,16 @@ const formatLastSeen = formatRelativeTime
                 </svg>
               </div>
               <div>
-                <h3 id="delete-dialog-title" class="text-lg font-semibold text-gray-900">Delete Node</h3>
-                <p class="text-sm text-gray-500">This action cannot be undone.</p>
+                <h3 id="delete-dialog-title" class="text-lg font-semibold text-gray-900">{{ $t('fleetOverview.deleteNode') }}</h3>
+                <p class="text-sm text-gray-500">{{ $t('fleetOverview.thisActionCannotBe') }}</p>
               </div>
             </div>
             <p class="text-gray-700 mb-6">
-              Are you sure you want to delete
-              <span class="font-medium">{{ selectedNode?.hostname }}</span>?
-              All associated data will be permanently removed.
+              {{ $t('fleetOverview.areYouSureYou') }}
+              <span class="font-medium">{{ selectedNode?.hostname }}</span>{{ $t('fleetOverview.allAssociatedDataWill') }}
             </p>
             <div class="flex justify-end gap-3">
-              <button @click="closeDeleteConfirm" :disabled="isDeleting" class="btn btn-secondary">Cancel</button>
+              <button @click="closeDeleteConfirm" :disabled="isDeleting" class="btn btn-secondary">{{ $t('fleetOverview.cancel') }}</button>
               <button @click="confirmDelete" :disabled="isDeleting" class="btn bg-red-600 text-white hover:bg-red-700 disabled:opacity-50">
                 {{ isDeleting ? 'Deleting...' : 'Delete Node' }}
               </button>
@@ -665,7 +664,7 @@ const formatLastSeen = formatRelativeTime
             </div>
             <div v-if="connectionTestResult?.success" class="space-y-2 mb-6">
               <div v-if="connectionTestResult.latency_ms" class="flex justify-between text-sm">
-                <span class="text-gray-500">Latency:</span>
+                <span class="text-gray-500">{{ $t('fleetOverview.latency') }}</span>
                 <span class="font-medium">{{ connectionTestResult.latency_ms }}ms</span>
               </div>
               <div v-if="connectionTestResult.message" class="text-sm text-gray-700">
@@ -678,7 +677,7 @@ const formatLastSeen = formatRelativeTime
               </p>
             </div>
             <div class="flex justify-end">
-              <button @click="closeConnectionTestResult" class="btn btn-primary">Close</button>
+              <button @click="closeConnectionTestResult" class="btn btn-primary">{{ $t('fleetOverview.close') }}</button>
             </div>
           </div>
         </div>
@@ -717,7 +716,7 @@ const formatLastSeen = formatRelativeTime
                 <div class="h-full flex flex-col bg-white shadow-xl">
                   <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200">
                     <div>
-                      <h2 class="text-lg font-semibold text-gray-900">Node Details</h2>
+                      <h2 class="text-lg font-semibold text-gray-900">{{ $t('fleetOverview.nodeDetails') }}</h2>
                       <p class="text-sm text-gray-500">{{ selectedNode?.hostname }}</p>
                     </div>
                     <button @click="closeLifecyclePanel" aria-label="Close node details panel" class="rounded-md text-gray-400 hover:text-gray-600">
@@ -742,7 +741,7 @@ const formatLastSeen = formatRelativeTime
                         </span>
                       </div>
                       <div class="text-xs text-gray-500 mb-3">
-                        Last seen:
+                        {{ $t('fleetOverview.lastSeen') }}
                         <span class="text-gray-700 font-medium">
                           {{ formatLastSeen(selectedNode.health?.last_heartbeat ?? selectedNode.updated_at) }}
                         </span>
@@ -753,11 +752,11 @@ const formatLastSeen = formatRelativeTime
                           <p class="text-sm font-semibold text-gray-900">{{ selectedNode.health.cpu_percent.toFixed(1) }}%</p>
                         </div>
                         <div class="rounded-md border border-gray-200 px-3 py-2 text-center">
-                          <p class="text-xs text-gray-500">Memory</p>
+                          <p class="text-xs text-gray-500">{{ $t('fleetOverview.memory') }}</p>
                           <p class="text-sm font-semibold text-gray-900">{{ selectedNode.health.memory_percent.toFixed(1) }}%</p>
                         </div>
                         <div class="rounded-md border border-gray-200 px-3 py-2 text-center">
-                          <p class="text-xs text-gray-500">Disk</p>
+                          <p class="text-xs text-gray-500">{{ $t('fleetOverview.disk') }}</p>
                           <p class="text-sm font-semibold text-gray-900">{{ selectedNode.health.disk_percent.toFixed(1) }}%</p>
                         </div>
                       </div>
@@ -813,7 +812,7 @@ const formatLastSeen = formatRelativeTime
                 <div class="h-full flex flex-col bg-white shadow-xl">
                   <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200">
                     <div>
-                      <h2 class="text-lg font-semibold text-gray-900">Services</h2>
+                      <h2 class="text-lg font-semibold text-gray-900">{{ $t('fleetOverview.services') }}</h2>
                       <p class="text-sm text-gray-500">{{ selectedNode?.hostname }}</p>
                     </div>
                     <button @click="closeServicesPanel" aria-label="Close services panel" class="rounded-md text-gray-400 hover:text-gray-600">

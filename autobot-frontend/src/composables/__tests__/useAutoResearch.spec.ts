@@ -8,11 +8,31 @@ import { useAutoResearch } from '../useAutoResearch'
 const mockGet = vi.fn()
 const mockPost = vi.fn()
 
-vi.mock('../useApi', () => ({
-  useApi: () => ({
+// useAutoResearch was migrated from useApi → useApiClient (GH#7446).
+// Mock the canonical surface so the stale vi.mock('../useApi') doesn't survive.
+vi.mock('@/plugins/api', () => ({
+  useApiClient: () => ({
     get: mockGet,
     post: mockPost,
   }),
+}))
+
+// ApiClient.ts loads AppConfig which initialises ServiceDiscovery at module
+// level. Stub the default export so that init chain never runs in tests.
+vi.mock('@/utils/ApiClient', () => ({
+  default: {
+    get: mockGet,
+    post: mockPost,
+    checkHealth: vi.fn(),
+    getConfiguration: vi.fn(() => ({ baseUrl: '' })),
+    setBaseUrl: vi.fn(),
+    setTimeout: vi.fn(),
+    rawRequest: vi.fn(),
+  },
+  ApiClient: class {
+    get = mockGet
+    post = mockPost
+  },
 }))
 
 vi.mock('@/utils/debugUtils', () => ({
@@ -20,6 +40,7 @@ vi.mock('@/utils/debugUtils', () => ({
     error: vi.fn(),
     warn: vi.fn(),
     info: vi.fn(),
+    debug: vi.fn(),
   }),
 }))
 
@@ -27,6 +48,30 @@ const mockShowSubtleErrorNotification = vi.fn()
 vi.mock('@/utils/cacheManagement', () => ({
   showSubtleErrorNotification: (...args: unknown[]) =>
     mockShowSubtleErrorNotification(...args),
+}))
+
+vi.mock('@/config/ssot-config', () => ({
+  getApiBase: () => '',
+}))
+
+vi.mock('@/composables/usePollingJob', () => ({
+  usePollingJob: () => ({
+    start: vi.fn(),
+    stop: vi.fn(),
+    isRunning: { value: false },
+  }),
+}))
+
+vi.mock('@/composables/useLoadingState', () => ({
+  useLoadingState: () => ({
+    isLoading: { value: false },
+    wrap: async (fn: () => Promise<void>) => fn(),
+  }),
+}))
+
+vi.mock('@/utils/errorExtract', () => ({
+  extractApiErrorMessage: (err: unknown, fallback: string) =>
+    err instanceof Error ? err.message : fallback,
 }))
 
 describe('useAutoResearch', () => {
@@ -71,7 +116,7 @@ describe('useAutoResearch', () => {
     await approveExperiment('s1', 'e1')
 
     expect(mockPost).toHaveBeenCalledWith(
-      '/api/autoresearch/approvals/s1/e1',
+      '/autoresearch/approvals/s1/e1',
       { decision: 'approved' },
     )
   })

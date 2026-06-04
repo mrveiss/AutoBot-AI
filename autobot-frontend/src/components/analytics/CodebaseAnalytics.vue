@@ -31,20 +31,20 @@
     <div v-if="selectedSource" class="project-header-card">
       <div class="project-header-info">
         <div class="project-header-name">
-          <i :class="selectedSource.source_type === 'github' ? 'fab fa-github' : 'fas fa-folder'"></i>
+          <i :class="selectedSource.source_type === 'github' ? 'github' : 'folder'"></i>
           {{ selectedSource.name }}
         </div>
         <div class="project-header-meta">
           <span v-if="selectedSource.repo" class="project-meta-item">
-            <i class="fas fa-code-branch"></i>
+            <Icon name="code-branch" />
             {{ selectedSource.repo }}
           </span>
           <span v-if="selectedSource.branch" class="project-meta-item">
-            <i class="fas fa-tag"></i>
+            <Icon name="tag" />
             {{ selectedSource.branch }}
           </span>
           <span class="project-meta-item" :class="'status-' + (selectedSource.status || 'unknown')">
-            <i class="fas fa-circle" style="font-size: 0.5em; vertical-align: middle;"></i>
+            <Icon name="circle" />
             {{ selectedSource.status || 'unknown' }}
           </span>
         </div>
@@ -75,7 +75,7 @@
       >
         <template #actions>
           <button @click="indexCodebase" class="btn-primary btn-lg">
-            <i class="fas fa-database"></i>
+            <Icon name="database" />
             {{ $t('analytics.codebase.buttons.indexNow') }}
           </button>
         </template>
@@ -104,7 +104,7 @@
           {{ $t('analytics.codebase.actions.realTimeUpdates') }}
         </label>
         <button @click="refreshAllMetrics" class="refresh-all-btn">
-          <i class="fas fa-sync-alt"></i> {{ $t('analytics.codebase.actions.refreshAll') }}
+          <Icon name="sync-alt" /> {{ $t('analytics.codebase.actions.refreshAll') }}
         </button>
       </div>
 
@@ -303,7 +303,7 @@
     <!-- Issue #1133: Knowledge Base Opt-in Banner -->
     <div v-if="showKnowledgeBaseOptIn" class="kb-optin-banner">
       <div class="kb-optin-content">
-        <i class="fas fa-book"></i>
+        <Icon name="book" />
         <div class="kb-optin-text">
           <strong>{{ $t('analytics.codebase.knowledgeBase.indexingComplete') }}</strong>
           {{ $t('analytics.codebase.knowledgeBase.addDescription') }}
@@ -313,11 +313,11 @@
           @click="addToKnowledgeBase"
           :disabled="knowledgeBaseAdding"
         >
-          <i :class="knowledgeBaseAdding ? 'fas fa-spinner fa-spin' : 'fas fa-plus'"></i>
+          <i :class="knowledgeBaseAdding ? 'fas fa-spinner fa-spin' : 'plus'"></i>
           {{ knowledgeBaseAdding ? $t('analytics.codebase.knowledgeBase.adding') : $t('analytics.codebase.knowledgeBase.addToKnowledgeBase') }}
         </button>
         <button class="kb-optin-dismiss" @click="showKnowledgeBaseOptIn = false" :aria-label="$t('analytics.codebase.actions.dismiss')">
-          <i class="fas fa-times"></i>
+          <Icon name="times" />
         </button>
       </div>
     </div>
@@ -441,12 +441,13 @@
  *   useDashboardLoaders    - Dashboard overview panel loaders (pre-existing)
  *   useCodebaseExport      - Report/section export (pre-existing)
  */
+import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted, onUnmounted, type Ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import PatternAnalysis from '@/components/analytics/PatternAnalysis.vue'
-import { useToast } from '@/composables/useToast'
+import { useNotificationBus } from '@/composables/useNotificationBus'
 import { getCssVar } from '@/composables/useCssVars'
 import { useCodebaseExport, type SectionType } from '@/composables/analytics/useCodebaseExport'
 import type { ScanDefinition } from '@/composables/useAnalyticsScanRunner'
@@ -500,7 +501,7 @@ const isEvolutionTabActive = computed(() => route.path.endsWith('/evolution'))
 const isCodeGenerationTabActive = computed(() => route.path.includes('/code-generation'))
 
 // Toast notifications
-const { showToast } = useToast()
+const { showToast } = useNotificationBus()
 
 // Notification helper
 const notify = (message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info') => {

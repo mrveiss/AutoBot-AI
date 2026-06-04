@@ -15,18 +15,16 @@ Usage:
         wav_bytes = await client.synthesize("Hello world", voice_id="alba")
 """
 
-import logging
-import os
-
 import aiohttp
 
-from autobot_shared.ssot_config import get_config
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config, get_config
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _ssot = get_config()
-TTS_WORKER_HOST = os.getenv("AUTOBOT_TTS_WORKER_HOST", _ssot.vm.tts)
-TTS_WORKER_PORT = os.getenv("AUTOBOT_TTS_WORKER_PORT", str(_ssot.port.tts))
+TTS_WORKER_HOST = config.tts_worker_host
+TTS_WORKER_PORT = config.tts_worker_port
 TTS_WORKER_URL = f"http://{TTS_WORKER_HOST}:{TTS_WORKER_PORT}"
 
 HEALTH_TIMEOUT = 2.0

@@ -13,9 +13,10 @@ Part of the modular autobot_memory_graph package (Issue #716).
 """
 
 import asyncio
-import logging
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
+
+from autobot_shared.logging_manager import get_logger
 
 from .core import (
     INCOMING_DIRECTIONS,
@@ -24,7 +25,7 @@ from .core import (
     AutoBotMemoryGraphCore,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class RelationOperationsMixin:
@@ -41,7 +42,7 @@ class RelationOperationsMixin:
         to_id: str,
         relation_type: str,
         strength: float,
-        metadata: Optional[Dict[str, Any]],
+        metadata: Dict[str, Any] | None,
     ) -> tuple:
         """
         Build outgoing and reverse relation dictionaries.
@@ -100,7 +101,7 @@ class RelationOperationsMixin:
         relation_type: str,
         bidirectional: bool = False,
         strength: float = 1.0,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
         """Create relationship between two entities.
 
@@ -142,7 +143,7 @@ class RelationOperationsMixin:
         from_entity_id: str,
         to_entity_id: str,
         relation_type: str,
-        metadata: Optional[Dict[str, Any]],
+        metadata: Dict[str, Any] | None,
     ) -> tuple:
         """Build relation objects for create_relation_by_id. Issue #620."""
         timestamp = int(datetime.now(tz=timezone.utc).timestamp() * 1000)
@@ -169,7 +170,7 @@ class RelationOperationsMixin:
         from_entity_id: str,
         to_entity_id: str,
         relation_type: str,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: Dict[str, Any] | None = None,
     ) -> bool:
         """Create relationship between entities using IDs. Issue #620."""
         self.ensure_initialized()
@@ -277,7 +278,7 @@ class RelationOperationsMixin:
     async def get_relations(
         self: AutoBotMemoryGraphCore,
         entity_id: str,
-        relation_types: Optional[List[str]] = None,
+        relation_types: List[str] | None = None,
         direction: str = "both",
     ) -> Dict[str, Any]:
         """Get relations for an entity. Issue #620."""
@@ -305,7 +306,7 @@ class RelationOperationsMixin:
     async def _process_outgoing(
         self: AutoBotMemoryGraphCore,
         current_id: str,
-        relation_type: Optional[str],
+        relation_type: str | None,
         depth: int,
         max_depth: int,
         queue: List,
@@ -319,7 +320,7 @@ class RelationOperationsMixin:
     async def _process_incoming(
         self: AutoBotMemoryGraphCore,
         current_id: str,
-        relation_type: Optional[str],
+        relation_type: str | None,
         depth: int,
         max_depth: int,
         queue: List,
@@ -334,7 +335,7 @@ class RelationOperationsMixin:
         self: AutoBotMemoryGraphCore,
         current_id: str,
         direction: str,
-        relation_type: Optional[str],
+        relation_type: str | None,
         depth: int,
         max_depth: int,
         queue: List,
@@ -378,7 +379,7 @@ class RelationOperationsMixin:
     async def _process_direction_relations(
         self: AutoBotMemoryGraphCore,
         relations: List[Dict[str, Any]],
-        relation_type: Optional[str],
+        relation_type: str | None,
         direction: str,
         id_field: str,
         depth: int,
@@ -408,7 +409,7 @@ class RelationOperationsMixin:
     async def get_related_entities(
         self: AutoBotMemoryGraphCore,
         entity_name: str,
-        relation_type: Optional[str] = None,
+        relation_type: str | None = None,
         direction: str = "both",
         max_depth: int = 1,
     ) -> List[Dict[str, Any]]:
@@ -530,7 +531,7 @@ class RelationOperationsMixin:
         from_id: str,
         relation_type: str,
         to_id: str,
-        ended_at: Optional[str] = None,
+        ended_at: str | None = None,
     ) -> bool:
         """Mark a specific relation as no longer valid by setting valid_to.
 

@@ -2,7 +2,7 @@
 <template>
   <div class="pipeline-runner">
     <div class="runner-header">
-      <h4><i class="fas fa-play-circle"></i> {{ $t('knowledge.pipeline.runner.title') }}</h4>
+      <h4><Icon name="play-circle" /> {{ $t('knowledge.pipeline.runner.title') }}</h4>
       <p class="header-description">
         {{ $t('knowledge.pipeline.runner.description') }}
       </p>
@@ -50,7 +50,7 @@
             class="config-toggle-btn"
             @click="showConfigEditor = !showConfigEditor"
           >
-            <i :class="showConfigEditor ? 'fas fa-code' : 'fas fa-sliders-h'"></i>
+            <Icon :name="showConfigEditor ? 'code' : 'sliders-h'" />
             {{ showConfigEditor ? $t('knowledge.pipeline.runner.jsonEditor') : $t('knowledge.pipeline.runner.visualConfig') }}
           </button>
         </div>
@@ -78,17 +78,17 @@
         class="submit-btn"
         :disabled="loading"
       >
-        <i :class="loading ? 'fas fa-spinner fa-spin' : 'fas fa-play'"></i>
+        <Icon :name="loading ? 'spinner' : 'play'" :spin="loading" />
         {{ loading ? $t('knowledge.pipeline.runner.running') : $t('knowledge.pipeline.runner.runPipeline') }}
       </button>
     </form>
 
     <!-- Error Display -->
     <div v-if="error" class="error-banner">
-      <i class="fas fa-exclamation-triangle"></i>
+      <Icon name="exclamation-triangle" />
       <span>{{ error }}</span>
       <button class="dismiss-btn" :aria-label="$t('knowledge.pipeline.runner.dismissError')" @click="clearError">
-        <i class="fas fa-times"></i>
+        <Icon name="times" />
       </button>
     </div>
 
@@ -96,7 +96,7 @@
     <div v-if="result" class="result-panel">
       <div class="result-header">
         <h5>
-          <i class="fas fa-check-circle"></i>
+          <Icon name="check-circle" />
           {{ $t('knowledge.pipeline.runner.pipelineComplete') }}
         </h5>
         <span class="result-duration">
@@ -158,6 +158,7 @@ import {
 import { createLogger } from '@/utils/debugUtils'
 import PipelineConfig from './PipelineConfig.vue'
 import { useI18n } from 'vue-i18n'
+import Icon from '@/components/ui/Icon.vue'
 
 const logger = createLogger('PipelineRunner')
 const { t } = useI18n()

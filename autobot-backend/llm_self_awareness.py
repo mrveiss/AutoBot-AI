@@ -9,20 +9,20 @@ Provides context injection for LLM agents to be aware of current system state, c
 
 import asyncio
 import json
-import logging
-import os
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import aiofiles
 
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 from constants.ttl_constants import TTL_5_MINUTES
 from enhanced_project_state_tracker import get_state_tracker
 from phase_progression_manager import get_progression_manager
 from project_state_manager import get_project_state_manager
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # O(1) lookup optimization constants (Issue #326)
 CORE_KEYWORDS = {"api", "endpoint", "service"}
@@ -143,7 +143,7 @@ class LLMSelfAwareness:
         """
         return {
             "timestamp": datetime.now(tz=timezone.utc).isoformat(),
-            "environment": os.getenv("AUTOBOT_ENVIRONMENT", "production"),
+            "environment": config.environment,
             "api_endpoints_available": await self._get_available_endpoints_async(),
             "data_sources": [
                 "knowledge_base",
@@ -332,7 +332,7 @@ class LLMSelfAwareness:
         # Remove empty categories
         return {k: v for k, v in categories.items() if v}
 
-    def _find_explicit_category(self, capability: str, rules: Dict[str, List[str]]) -> Optional[str]:
+    def _find_explicit_category(self, capability: str, rules: Dict[str, List[str]]) -> str | None:
         """Find category from explicit rules (Issue #315)."""
         for category, keywords in rules.items():
             if capability in keywords:
@@ -593,7 +593,7 @@ You should be aware of your current capabilities and limitations based on the sy
 
         return response
 
-    async def export_awareness_data(self, output_path: Optional[str] = None) -> str:
+    async def export_awareness_data(self, output_path: str | None = None) -> str:
         """Export system awareness data for analysis"""
         if not output_path:
             timestamp = datetime.now(tz=timezone.utc).strftime("%Y%m%d_%H%M%S")

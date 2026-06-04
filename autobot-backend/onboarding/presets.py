@@ -14,10 +14,9 @@ prompt, and a recommended LLM tier.
 
 from __future__ import annotations
 
-import logging
-from typing import Optional
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # Preset catalogue — 7 entries covering the most common first-run scenarios
@@ -143,7 +142,7 @@ def get_all_presets() -> list[dict]:
     return [dict(p) for p in _PRESETS]
 
 
-def get_preset(name: str) -> Optional[dict]:
+def get_preset(name: str) -> dict | None:
     """Return a single preset by name, or None if not found."""
     preset = _PRESET_INDEX.get(name)
     return dict(preset) if preset else None

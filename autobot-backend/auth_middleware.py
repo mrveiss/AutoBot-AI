@@ -8,13 +8,11 @@ Provides JWT-based authentication, session management, and role-based access con
 
 import datetime
 import json
-import logging
-import os
 import secrets
 from datetime import timezone
-from typing import Dict, Optional, Tuple
+from typing import Dict, Tuple
 
-from fastapi import Request
+from fastapi import HTTPException, Request, status
 
 from autobot_shared.auth.jwt_core import (
     decode_jwt_or_none,
@@ -22,6 +20,7 @@ from autobot_shared.auth.jwt_core import (
     hash_password,
     verify_password,
 )
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import config as ssot_config
 from autobot_shared.time_utils import parse_utc_iso
@@ -29,7 +28,7 @@ from config.manager import get_config_manager
 from security_layer import SecurityLayer
 from utils.catalog_http_exceptions import raise_auth_error
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 config = get_config_manager()
 
@@ -77,12 +76,12 @@ class AuthenticationMiddleware:
         # Priority order: AUTOBOT_JWT_SECRET -> SECRET_KEY -> Config file -> Generated secret
 
         # 1. Check dedicated JWT secret env var first (most specific)
-        secret = os.getenv("AUTOBOT_JWT_SECRET")
+        secret = config.jwt_secret
         if secret:
             return secret
 
         # 2. Fall back to SECRET_KEY env var (stable across restarts)
-        secret = os.getenv("SECRET_KEY")
+        secret = config.secret_key
         if secret:
             return secret
 
@@ -101,7 +100,7 @@ class AuthenticationMiddleware:
         try:
             # Update the config in memory using the correct method
             config.set_nested("security_config.jwt_secret", secure_secret)
-            logger.info("Generated and stored secure JWT secret")  # codeql[py/clear-text-logging-sensitive-data]
+            logger.info("Generated and stored secure JWT secret")  # noqa: codeql[py/clear-text-logging-sensitive-data]
             return secure_secret
         except Exception as e:
             # codeql[py/clear-text-logging-sensitive-data]
@@ -230,7 +229,7 @@ class AuthenticationMiddleware:
             "last_login": user_config["last_login"],
         }
 
-    def authenticate_user(self, username: str, password: str, ip_address: str = "unknown") -> Optional[Dict]:
+    def authenticate_user(self, username: str, password: str, ip_address: str = "unknown") -> Dict | None:
         """Authenticate user with enhanced security measures.
 
         Returns:
@@ -271,7 +270,7 @@ class AuthenticationMiddleware:
 
         return encode_jwt(payload, secret=self.jwt_secret, expiry_hours=self.jwt_expiry_hours)
 
-    def verify_jwt_token(self, token: str) -> Optional[Dict]:
+    def verify_jwt_token(self, token: str) -> Dict | None:
         """Verify and decode JWT token."""
         payload = decode_jwt_or_none(token, self.jwt_secret)
         if payload is None:
@@ -316,7 +315,7 @@ class AuthenticationMiddleware:
 
         return session_id
 
-    def get_session(self, session_id: str) -> Optional[Dict]:
+    def get_session(self, session_id: str) -> Dict | None:
         """Get active session data from Redis or in-memory store"""
         # Try Redis first
         if self.redis_client:
@@ -389,7 +388,7 @@ class AuthenticationMiddleware:
             details={"session_id": session_id[:16] + "..."},  # Partial ID for audit
         )
 
-    def _extract_user_from_jwt(self, request: Request) -> Optional[Dict]:
+    def _extract_user_from_jwt(self, request: Request) -> Dict | None:
         """
         Extract user from JWT token in Authorization header.
 
@@ -420,7 +419,7 @@ class AuthenticationMiddleware:
 
         return user
 
-    def _extract_user_from_session(self, request: Request) -> Optional[Dict]:
+    def _extract_user_from_session(self, request: Request) -> Dict | None:
         """
         Extract user from session ID in header.
 
@@ -439,7 +438,7 @@ class AuthenticationMiddleware:
         user_data["auth_method"] = "session"
         return user_data
 
-    def _extract_user_from_dev_header(self, request: Request) -> Optional[Dict]:
+    def _extract_user_from_dev_header(self, request: Request) -> Dict | None:
         """
         Extract user from development mode X-User-Role header.
 
@@ -461,7 +460,44 @@ class AuthenticationMiddleware:
             "auth_method": "development",
         }
 
-    def get_user_from_request(self, request: Request) -> Optional[Dict]:
+    async def _extract_user_from_run_jwt(self, request: Request) -> Dict | None:
+        """Try to authenticate the request with a run-scoped JWT (SEC-2 #6473).
+
+        Called as a fallback when user-JWT and session auth both fail.
+        Uses the run JWT secret (separate from the user JWT secret) so
+        forged tokens from one domain cannot authenticate in the other.
+
+        Scope validation is intentionally NOT enforced here — the run JWT
+        proves identity; individual endpoints apply scope checks if needed.
+
+        Returns:
+            Synthetic user dict with ``auth_method="run_jwt"`` on success,
+            or ``None`` if the Bearer token is absent or not a valid run JWT.
+        """
+        auth_header = request.headers.get("Authorization")
+        if not auth_header or not auth_header.startswith("Bearer "):
+            return None
+
+        token = auth_header.split(" ", 1)[1]
+        try:
+            from services.run_jwt import validate_run_jwt
+
+            claims = await validate_run_jwt(token)
+        except Exception:
+            return None
+
+        run_id = str(claims.get("run_id", ""))
+        agent_id = str(claims.get("agent_id", ""))
+        return {
+            "username": f"run:{run_id}",
+            "role": "run_jwt",
+            "run_id": run_id,
+            "agent_id": agent_id,
+            "scope": list(claims.get("scope", [])),
+            "auth_method": "run_jwt",
+        }
+
+    def get_user_from_request(self, request: Request) -> Dict | None:
         """
         Extract and validate user from request using multiple authentication methods.
 
@@ -568,7 +604,7 @@ class AuthenticationMiddleware:
             },
         )
 
-    def check_file_permissions(self, request: Request, operation: str) -> Tuple[bool, Optional[Dict]]:
+    def check_file_permissions(self, request: Request, operation: str) -> Tuple[bool, Dict | None]:
         """
         Enhanced permission checking with comprehensive security measures.
 
@@ -607,7 +643,7 @@ class AuthenticationMiddleware:
 get_auth_middleware = lazy_singleton(AuthenticationMiddleware)
 
 
-def get_current_user(request: Request) -> Dict:
+async def get_current_user(request: Request) -> Dict:
     """
     Dependency for FastAPI endpoints to get current authenticated user.
 
@@ -615,17 +651,39 @@ def get_current_user(request: Request) -> Dict:
     service-to-service calls (e.g. SLM frontend via nginx proxy).
     Returns a synthetic admin user dict when the internal key matches.
 
+    SEC-2 #6473: Also accepts a run-scoped JWT (``Bearer <run-jwt>``) so
+    MCP bridge workers and long-running tasks can authenticate without a
+    full user session.  Scope enforcement is left to individual endpoints.
+
     Raises HTTPException if authentication fails.
     """
     # Issue #1779: Allow trusted internal services via API key
-    _internal_key = os.getenv("AUTOBOT_INTERNAL_API_KEY", "")
+    _internal_key = config.internal_api_key
     if _internal_key and request.headers.get("X-Internal-API-Key") == _internal_key:
         return {"username": "service:slm", "role": "admin", "service": True}
 
-    user_data = get_auth_middleware().get_user_from_request(request)
-    if not user_data:
-        raise_auth_error("AUTH_0002", "Authentication required")
-    return user_data
+    middleware = get_auth_middleware()
+
+    # Primary: user JWT / session / dev-header auth (sync, no Redis needed)
+    user_data = middleware.get_user_from_request(request)
+    if user_data:
+        return user_data
+
+    # Fallback: run-scoped JWT — async because it hits the Redis denylist.
+    # SEC-2 #6473: run JWTs are valid ONLY on the refresh endpoint and MCP
+    # bridge routes. Presenting a run JWT to any other REST endpoint returns
+    # 403 so a scoped token cannot reach chat/knowledge/LLM write paths.
+    run_user = await middleware._extract_user_from_run_jwt(request)
+    if run_user:
+        _RUN_JWT_ALLOWED_PREFIXES = ("/api/runs/", "/api/mcp/")
+        if not any(request.url.path.startswith(p) for p in _RUN_JWT_ALLOWED_PREFIXES):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Run JWT not permitted on this endpoint",
+            )
+        return run_user
+
+    raise_auth_error("AUTH_0002", "Authentication required")
 
 
 def check_admin_permission(request: Request) -> bool:
@@ -645,7 +703,7 @@ def check_admin_permission(request: Request) -> bool:
     """
     # Issue #1145: Allow trusted internal services (e.g. SLM backend) via API key.
     # The key is set via AUTOBOT_INTERNAL_API_KEY env var on both services.
-    _internal_key = os.getenv("AUTOBOT_INTERNAL_API_KEY", "")
+    _internal_key = config.internal_api_key
     if _internal_key and request.headers.get("X-Internal-API-Key") == _internal_key:
         logger.debug("Internal API key auth: granting admin access")
         return True
@@ -674,7 +732,7 @@ def check_admin_permission(request: Request) -> bool:
     return True
 
 
-async def authenticate_websocket(websocket) -> Optional[dict]:
+async def authenticate_websocket(websocket) -> dict | None:
     """Authenticate a WebSocket connection.
 
     Checks for JWT token in query params. Falls back to synthetic admin
@@ -697,12 +755,17 @@ async def authenticate_websocket(websocket) -> Optional[dict]:
             auth = AuthenticationMiddleware()
             token_data = auth.verify_jwt_token(token)
             if token_data:
-                return {
+                result = {
                     "username": token_data["username"],
                     "role": token_data["role"],
                     "email": token_data.get("email", ""),
                     "auth_method": "jwt_websocket",
                 }
+                if token_data.get("user_id") is not None:
+                    result["user_id"] = token_data["user_id"]
+                if token_data.get("org_id") is not None:
+                    result["org_id"] = token_data["org_id"]
+                return result
         except Exception:
             logger.warning("WebSocket JWT authentication failed")
             return None

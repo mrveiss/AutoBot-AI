@@ -6,7 +6,7 @@ Detects and formats network interface information for the NPU worker
 import logging
 import platform
 import socket
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 logger = logging.getLogger(__name__)
 
@@ -141,7 +141,7 @@ def _is_primary_interface(ip: str) -> bool:
     return False
 
 
-def get_primary_ip() -> Optional[str]:
+def get_primary_ip() -> str | None:
     """Get the primary IP address for backend connectivity"""
     interfaces = get_network_interfaces()
 
@@ -288,9 +288,7 @@ def format_connection_info_box(
             iface_type = iface["type"]
             iface_ip = iface["ip"]
             primary_mark = " ★" if iface.get("is_primary") else ""
-            lines.append(
-                f"  • {iface_type:15} ({iface_name}): {iface_ip}{primary_mark}"
-            )
+            lines.append(f"  • {iface_type:15} ({iface_name}): {iface_ip}{primary_mark}")
     else:
         lines.append("  (No network interfaces detected)")
 

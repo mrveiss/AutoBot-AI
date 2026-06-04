@@ -7,35 +7,23 @@ LLM Provider Switching API endpoints (Issue #536).
 Provides runtime provider switching, provider listing, and per-provider testing.
 """
 
-import logging
-
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 
 from api.schemas_common import DataResponse
+from api.schemas_system import LLMProviderListData, LLMProviderSwitchData, LLMProviderTestData
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from services.llm_service import get_llm_service
 from utils.advanced_cache_manager import cache_response
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter()
 
 
-def _get_llm_interface():
-    """Return the LLMService singleton (#3185).
-
-    Name retained for backwards compatibility — LLMService exposes
-    ``provider_routing`` and ``is_provider_healthy`` matching the
-    LLMInterface surface this module previously used.
-    """
-    from services.llm_service import get_llm_service
-
-    return get_llm_service()
-
-
-@router.post("/switch", response_model=DataResponse)
+@router.post("/switch", response_model=DataResponse[LLMProviderSwitchData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="switch_llm_provider",
@@ -64,7 +52,7 @@ async def switch_llm_provider(
     return JSONResponse(status_code=200, content=result)
 
 
-@router.get("/providers", response_model=DataResponse)
+@router.get("/providers", response_model=DataResponse[LLMProviderListData])
 @cache_response(cache_key="llm_providers_list", ttl=30)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -83,7 +71,7 @@ async def list_llm_providers(
     )
 
 
-@router.post("/providers/{provider_name}/test", response_model=DataResponse)
+@router.post("/providers/{provider_name}/test", response_model=DataResponse[LLMProviderTestData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="test_llm_provider",
@@ -94,7 +82,7 @@ async def test_llm_provider(
     current_user: dict = Depends(get_current_user),
 ):
     """Test a specific LLM provider connection."""
-    llm = _get_llm_interface()
+    llm = get_llm_service()
     if provider_name not in llm.provider_routing:
         raise HTTPException(
             status_code=404,

@@ -8,9 +8,7 @@ Issue #759: ECL Pipeline endpoints for entity extraction, temporal events,
 hierarchical summarization, and document processing.
 """
 
-import logging
 import re
-from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -28,8 +26,9 @@ from api.schemas_knowledge import (
 )
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter()
 
@@ -98,8 +97,8 @@ async def run_pipeline(
     error_code_prefix="KNOWLEDGE_GRAPH_ROUTES",
 )
 async def list_entities(
-    entity_type: Optional[str] = Query(None),
-    query: Optional[str] = Query(None),
+    entity_type: str | None = Query(None),
+    query: str | None = Query(None),
     limit: int = Query(50, ge=1, le=200),
     current_user: dict = Depends(get_current_user),
 ):
@@ -124,7 +123,7 @@ async def list_entities(
 )
 async def get_entity_relationships(
     entity_id: str,
-    relationship_type: Optional[str] = Query(None),
+    relationship_type: str | None = Query(None),
     limit: int = Query(50, ge=1, le=200),
     current_user: dict = Depends(get_current_user),
 ):
@@ -155,10 +154,10 @@ async def get_entity_relationships(
     error_code_prefix="KNOWLEDGE_GRAPH_ROUTES",
 )
 async def search_events(
-    start_date: Optional[str] = Query(None),
-    end_date: Optional[str] = Query(None),
-    event_types: Optional[str] = Query(None, description="Comma-separated event types"),
-    entity_name: Optional[str] = Query(None),
+    start_date: str | None = Query(None),
+    end_date: str | None = Query(None),
+    event_types: str | None = Query(None, description="Comma-separated event types"),
+    entity_name: str | None = Query(None),
     limit: int = Query(100, ge=1, le=500),
     current_user: dict = Depends(get_current_user),
 ):
@@ -234,7 +233,7 @@ async def get_event_timeline(
 )
 async def search_summaries(
     query: str = Query(..., description="Search query"),
-    level: Optional[str] = Query(
+    level: str | None = Query(
         None,
         description="Filter by level: chunk, section, document",
     ),

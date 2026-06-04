@@ -104,7 +104,7 @@
             content: |
               role: {{ role_name }}
               hostname: {{ ansible_facts['hostname'] }}
-              ip_address: {{ ansible_facts['default_ipv4'].address }}
+              ip_address: {{ ansible_facts['default_ipv4'].address | default(ansible_host) }}
               timestamp: {{ ansible_facts['date_time'].iso8601 }}
               directories: {{ _existing_dirs | to_json }}
             mode: '0640'
@@ -189,7 +189,7 @@
       ansible.builtin.debug:
         msg: |
           Role removal complete: {{ role_name }}
-          - Host: {{ ansible_facts['hostname'] }} ({{ ansible_facts['default_ipv4'].address }})
+          - Host: {{ ansible_facts['hostname'] }} ({{ ansible_facts['default_ipv4'].address | default(ansible_host) }})
           - Service: {{ 'stopped and removed' if _service_file.stat.exists else 'not present' }}
           - Service file: {{ 'skipped (dpkg conffile)' if (_dpkg_check.stdout_lines | default([]) | last | default('')) == 'dpkg_owned' else 'removed' }}
           - Disk cleanup: {{ '/opt/autobot/' + role_target_dir + ' removed' if (role_target_dir is defined and role_target_dir | length > 0) else 'skipped (no target dir)' }}

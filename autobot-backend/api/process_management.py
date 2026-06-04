@@ -8,15 +8,16 @@ Endpoints for spawning background processes, querying their status,
 streaming logs, sending signals, and listing processes per agent.
 """
 
-import logging
 import os
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket
 from fastapi.responses import JSONResponse, PlainTextResponse
 
 from api.schemas_common import DataResponse
 from api.schemas_system import (
+    AgentProcessesData,
+    ProcessSignalData,
+    ProcessStatusData,
     SignalRequest,
     SpawnRequest,
     SpawnResponse,
@@ -24,14 +25,15 @@ from api.schemas_system import (
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.error_utils import safe_http_detail
+from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import TimingConstants
 from services.process_adapter_service import ProcessAdapterService
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 router = APIRouter()
 
 # Module-level singleton; initialised by application lifespan or DI.
-_process_svc: Optional[ProcessAdapterService] = None
+_process_svc: ProcessAdapterService | None = None
 
 
 def set_process_adapter_service(svc: ProcessAdapterService) -> None:
@@ -77,7 +79,7 @@ async def spawn_process(
     )
 
 
-@router.get("/processes/{process_id}", response_model=DataResponse)
+@router.get("/processes/{process_id}", response_model=DataResponse[ProcessStatusData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_process_status",
@@ -116,7 +118,7 @@ async def get_process_logs(
     return PlainTextResponse(content=_read_log_file(log_path), status_code=200)
 
 
-@router.post("/processes/{process_id}/signal", response_model=DataResponse)
+@router.post("/processes/{process_id}/signal", response_model=DataResponse[ProcessSignalData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="signal_process",
@@ -144,7 +146,7 @@ async def signal_process(
     )
 
 
-@router.get("/agents/{agent_id}/processes", response_model=DataResponse)
+@router.get("/agents/{agent_id}/processes", response_model=DataResponse[AgentProcessesData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_agent_processes",
@@ -152,7 +154,7 @@ async def signal_process(
 )
 async def list_agent_processes(
     agent_id: str,
-    status: Optional[str] = Query(default=None, description="Filter by status"),
+    status: str | None = Query(default=None, description="Filter by status"),
     limit: int = Query(default=20, ge=1, le=200),
     current_user: dict = Depends(get_current_user),
 ) -> JSONResponse:

@@ -56,7 +56,7 @@
       ansible.builtin.copy:
         src: /etc/apt/sources.list
         dest: "{{ backup_base_path }}/system/sources.list-{{ ansible_facts['date_time'].iso8601_basic }}"
-        remote_src: yes
+        remote_src: true
       when: backup_enabled
 
     - name: Record pre-update state
@@ -88,7 +88,7 @@
 
     - name: Update apt cache
       ansible.builtin.apt:
-        update_cache: yes
+        update_cache: true
         cache_valid_time: 300
       register: apt_cache_result
       retries: 3
@@ -111,8 +111,8 @@
     - name: Perform full system update
       ansible.builtin.apt:
         upgrade: safe
-        autoremove: yes
-        autoclean: yes
+        autoremove: true
+        autoclean: true
       when: not (security_only | default(false))
       register: full_update_result
       timeout: "{{ system_update_timeout }}"
@@ -150,7 +150,7 @@
       ansible.builtin.systemd:
         name: "{{ current_service.service_name }}"
         state: started
-        daemon_reload: yes
+        daemon_reload: true
       when:
         - current_service.service_name is defined
         - restart_service_after_update

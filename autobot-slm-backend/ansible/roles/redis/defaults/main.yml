@@ -54,3 +54,8 @@ slm_admin_url: "https://{{ slm_host | default('127.0.0.1') }}"
 # Health check (retry-based polling instead of fixed timeout)
 redis_health_check_retries: 60       # Max attempts (60 × 5s = 300s)
 redis_health_check_delay: 5          # Seconds between retries
+
+# ChromaDB (vector database, co-located with Redis on database nodes — MVA-1319)
+chromadb_port: 8100
+chromadb_install_dir: /opt/autobot/autobot-db-stack/chromadb
+chromadb_data_dir: /opt/autobot/autobot-db-stack/chromadb/data

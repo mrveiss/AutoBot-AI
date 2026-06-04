@@ -150,14 +150,14 @@ async function handleSyncNode(node: PendingNode): Promise<void> {
     // Issue #1231: SLM self-sync is fire-and-forget — backend returns
     // before the background task completes and restarts the service.
     // Show a banner and auto-refresh after the restart window.
-    const isSLMSelfSync = result.message?.includes('SLM update queued')
+    const isSLMSelfSync = result.message?.includes('update queued')
     if (isSLMSelfSync) {
       slmRestartPending.value = true
       if (slmRefreshTimer) clearTimeout(slmRefreshTimer)
       slmRefreshTimer = setTimeout(async () => {
         slmRestartPending.value = false
         await handleRefresh()
-      }, 35000)
+      }, 65000)
     }
 
     logger.info('Node sync completed:', node.node_id)
@@ -226,6 +226,32 @@ async function handleSyncAll(): Promise<void> {
     await handleRefresh()
   } else {
     codeSync.setError(result.message || 'Fleet sync failed')
+  }
+}
+
+// =============================================================================
+// SLM Self-Update (#9073)
+// =============================================================================
+
+const selfUpdating = ref(false)
+
+async function handleSelfUpdate(): Promise<void> {
+  selfUpdating.value = true
+  codeSync.clearError()
+  successMessage.value = null
+
+  const result = await codeSync.selfUpdate()
+  selfUpdating.value = false
+
+  if (result.success) {
+    slmRestartPending.value = true
+    if (slmRefreshTimer) clearTimeout(slmRefreshTimer)
+    slmRefreshTimer = setTimeout(async () => {
+      slmRestartPending.value = false
+      await handleRefresh()
+    }, 65000)
+  } else {
+    codeSync.setError(result.message || 'Self-update failed')
   }
 }
 
@@ -420,9 +446,9 @@ onUnmounted(() => {
     <!-- Header -->
     <div class="flex items-center justify-between mb-6">
       <div>
-        <h2 class="text-lg font-semibold text-gray-900">Code Sync</h2>
+        <h2 class="text-lg font-semibold text-gray-900">{{ $t('codeSyncView.codeSync') }}</h2>
         <p class="text-sm text-gray-500 mt-1">
-          Manage agent code versions across the fleet
+          {{ $t('codeSyncView.manageAgentCodeVersions') }}
         </p>
       </div>
       <div class="flex items-center gap-2">
@@ -445,6 +471,27 @@ onUnmounted(() => {
             />
           </svg>
           {{ isPulling ? 'Pulling...' : 'Pull from Source' }}
+        </button>
+        <button
+          @click="handleSelfUpdate"
+          :disabled="selfUpdating || slmRestartPending"
+          class="btn btn-primary flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          title="Sync code from source and restart this SLM server"
+        >
+          <svg
+            :class="['w-4 h-4', selfUpdating ? 'animate-spin' : '']"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
+            />
+          </svg>
+          {{ selfUpdating ? 'Updating...' : 'Update This Server' }}
         </button>
         <button
           @click="handleRefresh"
@@ -473,7 +520,7 @@ onUnmounted(() => {
     <div class="card p-5 mb-6">
       <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
         <div>
-          <span class="text-sm text-gray-500 block mb-1">Latest Version</span>
+          <span class="text-sm text-gray-500 block mb-1">{{ $t('codeSyncView.latestVersion') }}</span>
           <a
             v-if="getCommitUrl(codeSync.latestVersion.value)"
             :href="getCommitUrl(codeSync.latestVersion.value)!"
@@ -492,13 +539,13 @@ onUnmounted(() => {
           </span>
         </div>
         <div>
-          <span class="text-sm text-gray-500 block mb-1">Last Fetch</span>
+          <span class="text-sm text-gray-500 block mb-1">{{ $t('codeSyncView.lastFetch') }}</span>
           <span class="text-lg font-semibold text-gray-900">
             {{ formatDate(codeSync.status.value?.last_fetch ?? null) }}
           </span>
         </div>
         <div>
-          <span class="text-sm text-gray-500 block mb-1">Outdated Nodes</span>
+          <span class="text-sm text-gray-500 block mb-1">{{ $t('codeSyncView.outdatedNodes') }}</span>
           <span
             class="text-lg font-semibold"
             :class="codeSync.hasOutdatedNodes.value ? 'text-yellow-600' : 'text-gray-900'"
@@ -514,7 +561,7 @@ onUnmounted(() => {
             <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
             </svg>
-            Updates Available
+            {{ $t('codeSyncView.updatesAvailable') }}
           </span>
           <span
             v-else
@@ -523,7 +570,7 @@ onUnmounted(() => {
             <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
             </svg>
-            All Up To Date
+            {{ $t('codeSyncView.allUpToDate') }}
           </span>
         </div>
       </div>
@@ -539,7 +586,7 @@ onUnmounted(() => {
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
         </svg>
         <div class="flex-1">
-          <div class="font-medium text-blue-900">Sync in Progress</div>
+          <div class="font-medium text-blue-900">{{ $t('codeSyncView.syncInProgress') }}</div>
           <div class="text-sm text-blue-700">
             {{ Array.from(syncProgress.values())[0] }}
           </div>
@@ -557,9 +604,9 @@ onUnmounted(() => {
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
         </svg>
         <div class="flex-1">
-          <div class="font-medium text-amber-900">SLM Manager Restarting</div>
+          <div class="font-medium text-amber-900">{{ $t('codeSyncView.sLMManagerRestarting') }}</div>
           <div class="text-sm text-amber-700">
-            Code synced successfully. Backend is restarting and will auto-refresh in ~30 seconds.
+            {{ $t('codeSyncView.codeSyncedSuccessfullyBackend') }}
           </div>
         </div>
       </div>
@@ -568,7 +615,7 @@ onUnmounted(() => {
     <!-- Code Source Card (Issue #779) -->
     <div class="card p-5 mb-6">
       <div class="flex items-center justify-between mb-4">
-        <h2 class="text-lg font-semibold text-gray-900">Code Source</h2>
+        <h2 class="text-lg font-semibold text-gray-900">{{ $t('codeSyncView.codeSource') }}</h2>
         <button
           @click="showCodeSourceModal = true"
           class="btn btn-primary text-sm"
@@ -582,7 +629,7 @@ onUnmounted(() => {
           <p class="font-medium text-gray-900">{{ codeSourceData.hostname || codeSourceData.node_id }}</p>
           <p class="text-sm text-gray-500">{{ codeSourceData.repo_path }} ({{ codeSourceData.branch }})</p>
           <p class="text-sm text-gray-500">
-            Last commit:
+            {{ $t('codeSyncView.lastCommit') }}
             <a
               v-if="getCommitUrl(codeSourceCommit.full)"
               :href="getCommitUrl(codeSourceCommit.full)!"
@@ -603,11 +650,11 @@ onUnmounted(() => {
           </p>
         </div>
         <button @click="handleRemoveCodeSource" class="btn btn-danger text-sm">
-          Remove
+          {{ $t('codeSyncView.remove') }}
         </button>
       </div>
       <div v-else class="text-gray-500">
-        No code source configured. Assign a node that has git access to the repository.
+        {{ $t('codeSyncView.noCodeSourceConfigured') }}
       </div>
     </div>
 
@@ -615,13 +662,13 @@ onUnmounted(() => {
     <div class="card p-5 mb-6">
       <div class="flex items-center justify-between mb-4">
         <div>
-          <h2 class="text-lg font-semibold text-gray-900">File Drift Check</h2>
+          <h2 class="text-lg font-semibold text-gray-900">{{ $t('codeSyncView.fileDriftCheck') }}</h2>
           <p class="text-sm text-gray-500 mt-1">
-            Compare checksums between code_source and deployed files to detect manual patches.
+            {{ $t('codeSyncView.compareChecksumsBetweenCode') }}
           </p>
         </div>
         <div class="flex items-center gap-3">
-          <label for="drift-component-select" class="text-sm text-gray-600 font-medium whitespace-nowrap">Component:</label>
+          <label for="drift-component-select" class="text-sm text-gray-600 font-medium whitespace-nowrap">{{ $t('codeSyncView.component') }}</label>
           <select
             id="drift-component-select"
             v-model="selectedDriftComponent"
@@ -683,9 +730,8 @@ onUnmounted(() => {
         </div>
 
         <div class="text-xs text-gray-400 mb-3">
-          Source: <code class="font-mono">{{ driftReport.source_dir }}</code>
-          &nbsp;&rarr;&nbsp;
-          Deployed: <code class="font-mono">{{ driftReport.deployed_dir }}</code>
+          {{ $t('codeSyncView.source') }} <code class="font-mono">{{ driftReport.source_dir }}</code>
+          {{ $t('codeSyncView.nbspRarrNbspDeployed') }} <code class="font-mono">{{ driftReport.deployed_dir }}</code>
         </div>
 
         <!-- Action row: Resync (#7149) + Toggle details -->
@@ -724,10 +770,10 @@ onUnmounted(() => {
           <table class="min-w-full text-sm">
             <thead>
               <tr class="text-left text-gray-500 border-b">
-                <th class="pb-2 pr-4 font-medium">Status</th>
-                <th class="pb-2 pr-4 font-medium">File</th>
-                <th class="pb-2 pr-4 font-medium">Source SHA-256</th>
-                <th class="pb-2 font-medium">Deployed SHA-256</th>
+                <th class="pb-2 pr-4 font-medium">{{ $t('codeSyncView.status') }}</th>
+                <th class="pb-2 pr-4 font-medium">{{ $t('codeSyncView.file') }}</th>
+                <th class="pb-2 pr-4 font-medium">{{ $t('codeSyncView.sourceSHA256') }}</th>
+                <th class="pb-2 font-medium">{{ $t('codeSyncView.deployedSHA256') }}</th>
               </tr>
             </thead>
             <tbody>
@@ -762,7 +808,7 @@ onUnmounted(() => {
 
       <!-- Placeholder when not yet checked -->
       <div v-else class="text-sm text-gray-400">
-        Click "Check Drift" to compare file checksums between the code source and deployed directories.
+        {{ $t('codeSyncView.clickCheckDriftTo') }}
       </div>
     </div>
 
@@ -781,7 +827,7 @@ onUnmounted(() => {
         @click="codeSync.clearError()"
         class="text-red-600 hover:text-red-800 font-medium text-sm"
       >
-        Dismiss
+        {{ $t('codeSyncView.dismiss') }}
       </button>
     </div>
 
@@ -800,23 +846,23 @@ onUnmounted(() => {
         @click="successMessage = null"
         class="text-green-600 hover:text-green-800 font-medium text-sm"
       >
-        Dismiss
+        {{ $t('codeSyncView.dismiss') }}
       </button>
     </div>
 
     <!-- Sync Options -->
     <div class="card p-5 mb-6">
-      <h2 class="text-lg font-semibold text-gray-800 mb-4">Sync Options</h2>
+      <h2 class="text-lg font-semibold text-gray-800 mb-4">{{ $t('codeSyncView.syncOptions') }}</h2>
       <div class="flex flex-wrap items-center gap-6">
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Restart Strategy</label>
+          <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('codeSyncView.restartStrategy') }}</label>
           <select
             v-model="syncStrategy"
             class="px-3 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
           >
-            <option value="graceful">Graceful (wait for tasks)</option>
-            <option value="immediate">Immediate</option>
-            <option value="manual">Manual (no restart)</option>
+            <option value="graceful">{{ $t('codeSyncView.gracefulWaitForTasks') }}</option>
+            <option value="immediate">{{ $t('codeSyncView.immediate') }}</option>
+            <option value="manual">{{ $t('codeSyncView.manualNoRestart') }}</option>
           </select>
         </div>
         <div class="flex items-center">
@@ -826,7 +872,7 @@ onUnmounted(() => {
               v-model="restartAfterSync"
               class="w-4 h-4 text-primary-600 rounded-sm focus:ring-primary-500"
             />
-            <span class="text-sm text-gray-700">Restart service after sync</span>
+            <span class="text-sm text-gray-700">{{ $t('codeSyncView.restartServiceAfterSync') }}</span>
           </label>
         </div>
       </div>
@@ -836,7 +882,7 @@ onUnmounted(() => {
     <div class="card overflow-hidden">
       <!-- Section Header -->
       <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-        <h2 class="text-lg font-semibold text-gray-800">Pending Updates</h2>
+        <h2 class="text-lg font-semibold text-gray-800">{{ $t('codeSyncView.pendingUpdates') }}</h2>
         <div v-if="codeSync.pendingNodes.value.length > 0" class="flex items-center gap-3">
           <button
             @click="handleSyncSelected"
@@ -853,7 +899,7 @@ onUnmounted(() => {
             :disabled="codeSync.loading.value"
             class="btn btn-secondary flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Sync All
+            {{ $t('codeSyncView.syncAll') }}
           </button>
         </div>
       </div>
@@ -866,9 +912,9 @@ onUnmounted(() => {
         <svg class="w-16 h-16 mx-auto text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
         </svg>
-        <h3 class="text-lg font-medium text-gray-900 mb-2">All nodes are up to date</h3>
+        <h3 class="text-lg font-medium text-gray-900 mb-2">{{ $t('codeSyncView.allNodesAreUp') }}</h3>
         <p class="text-gray-500">
-          No code updates are pending. Click "Refresh" to check for new versions.
+          {{ $t('codeSyncView.noCodeUpdatesAre') }}
         </p>
       </div>
 
@@ -890,11 +936,11 @@ onUnmounted(() => {
                 class="w-4 h-4 text-primary-600 rounded-sm focus:ring-primary-500"
               />
             </th>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Hostname</th>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">IP Address</th>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Current Version</th>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('codeSyncView.hostname') }}</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('codeSyncView.iPAddress') }}</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('codeSyncView.currentVersion') }}</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('codeSyncView.status') }}</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('codeSyncView.actions') }}</th>
           </tr>
         </thead>
         <tbody class="bg-white divide-y divide-gray-200">
@@ -934,7 +980,7 @@ onUnmounted(() => {
             </td>
             <td class="px-6 py-4 whitespace-nowrap">
               <span class="px-2 py-1 text-xs font-medium rounded-full bg-yellow-100 text-yellow-800">
-                Outdated
+                {{ $t('codeSyncView.outdated') }}
               </span>
             </td>
             <td class="px-6 py-4">
@@ -964,12 +1010,12 @@ onUnmounted(() => {
     <!-- Role-Based Sync Section (Issue #779) -->
     <div class="card p-5 mt-6">
       <div class="flex items-center justify-between mb-4">
-        <h2 class="text-lg font-semibold text-gray-900">Role-Based Sync</h2>
+        <h2 class="text-lg font-semibold text-gray-900">{{ $t('codeSyncView.roleBasedSync') }}</h2>
         <!-- Pull from Source button moved to page header next to Refresh -->
       </div>
 
       <div v-if="codeSync.roles.value.length === 0" class="text-gray-500">
-        No roles configured. Add roles via the API.
+        {{ $t('codeSyncView.noRolesConfiguredAdd') }}
       </div>
 
       <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -1006,8 +1052,8 @@ onUnmounted(() => {
       <!-- Section Header -->
       <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
         <div>
-          <h2 class="text-lg font-semibold text-gray-800">Scheduled Updates</h2>
-          <p class="text-sm text-gray-500 mt-0.5">Configure automatic code sync schedules</p>
+          <h2 class="text-lg font-semibold text-gray-800">{{ $t('codeSyncView.scheduledUpdates') }}</h2>
+          <p class="text-sm text-gray-500 mt-0.5">{{ $t('codeSyncView.configureAutomaticCodeSync') }}</p>
         </div>
         <button
           @click="openCreateScheduleModal"
@@ -1016,7 +1062,7 @@ onUnmounted(() => {
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
           </svg>
-          Add Schedule
+          {{ $t('codeSyncView.addSchedule') }}
         </button>
       </div>
 
@@ -1028,15 +1074,15 @@ onUnmounted(() => {
         <svg class="w-16 h-16 mx-auto text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
-        <h3 class="text-lg font-medium text-gray-900 mb-2">No schedules configured</h3>
+        <h3 class="text-lg font-medium text-gray-900 mb-2">{{ $t('codeSyncView.noSchedulesConfigured') }}</h3>
         <p class="text-gray-500 mb-4">
-          Create a schedule to automatically sync code at specific times.
+          {{ $t('codeSyncView.createAScheduleTo') }}
         </p>
         <button
           @click="openCreateScheduleModal"
           class="btn btn-primary"
         >
-          Create First Schedule
+          {{ $t('codeSyncView.createFirstSchedule') }}
         </button>
       </div>
 
@@ -1044,11 +1090,11 @@ onUnmounted(() => {
       <table v-if="codeSync.schedules.value.length > 0" class="min-w-full divide-y divide-gray-200">
         <thead class="bg-gray-50">
           <tr>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Schedule</th>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Next Run</th>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('codeSyncView.name') }}</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('codeSyncView.schedule') }}</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('codeSyncView.nextRun') }}</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('codeSyncView.status') }}</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('codeSyncView.actions') }}</th>
           </tr>
         </thead>
         <tbody class="bg-white divide-y divide-gray-200">
@@ -1097,14 +1143,14 @@ onUnmounted(() => {
                   @click="openEditScheduleModal(schedule)"
                   class="text-gray-600 hover:text-gray-800 font-medium"
                 >
-                  Edit
+                  {{ $t('codeSyncView.edit') }}
                 </button>
                 <span class="text-gray-300">|</span>
                 <button
                   @click="handleDeleteSchedule(schedule)"
                   class="text-red-600 hover:text-red-800 font-medium"
                 >
-                  Delete
+                  {{ $t('codeSyncView.delete') }}
                 </button>
               </div>
             </td>

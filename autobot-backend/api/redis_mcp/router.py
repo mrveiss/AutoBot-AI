@@ -8,7 +8,6 @@ Issue #2511: Provides /api/redis/mcp/tools listing and per-tool POST endpoints.
 Integrates RBAC filtering and routes to the appropriate handler module.
 """
 
-import logging
 from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -54,10 +53,11 @@ from api.redis_mcp.vector_search import (
 )
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_management.types import DATABASE_MAPPING
 from type_defs.common import Metadata
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Valid database names for parameter validation (#2511)
 _VALID_DATABASES = frozenset(DATABASE_MAPPING.keys())

@@ -13,7 +13,6 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Optional
 
 from autobot_shared.time_utils import now_utc, parse_utc_iso
 
@@ -61,9 +60,9 @@ class PlanStep:
     blocks: list[str] = field(default_factory=list)  # Step IDs blocked by this
 
     # Tracking
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
-    reflection: Optional[str] = None  # Assessment after completion/failure
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    reflection: str | None = None  # Assessment after completion/failure
 
     # Tool associations
     tools_used: list[str] = field(default_factory=list)
@@ -71,7 +70,7 @@ class PlanStep:
 
     # Metrics
     estimated_complexity: str = "medium"  # low, medium, high
-    actual_duration_ms: Optional[float] = None
+    actual_duration_ms: float | None = None
 
     def to_dict(self) -> dict:
         return {
@@ -135,8 +134,8 @@ class ExecutionPlan:
 
     # Timing
     created_at: datetime = field(default_factory=now_utc)
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
 
     # Tracking
     version: int = 1  # Increments when plan is updated
@@ -147,7 +146,7 @@ class ExecutionPlan:
     completed_steps: int = 0
     failed_steps: int = 0
 
-    def get_current_step(self) -> Optional[PlanStep]:
+    def get_current_step(self) -> PlanStep | None:
         """Get the currently active step"""
         for step in self.steps:
             if step.status == StepStatus.IN_PROGRESS:
@@ -187,14 +186,14 @@ class ExecutionPlan:
 
         return parallel
 
-    def get_step_by_id(self, step_id: str) -> Optional[PlanStep]:
+    def get_step_by_id(self, step_id: str) -> PlanStep | None:
         """Find a step by its ID"""
         for step in self.steps:
             if step.step_id == step_id:
                 return step
         return None
 
-    def get_step_by_number(self, step_number: int) -> Optional[PlanStep]:
+    def get_step_by_number(self, step_number: int) -> PlanStep | None:
         """Find a step by its number"""
         for step in self.steps:
             if step.step_number == step_number:

@@ -9,8 +9,6 @@ between soft errors (LLM can retry with different approach) and hard errors
 (task must fail).
 """
 
-from typing import Optional
-
 
 class RepairableException(Exception):
     """
@@ -44,8 +42,8 @@ class RepairableException(Exception):
     def __init__(
         self,
         message: str,
-        suggestion: Optional[str] = None,
-        original_exception: Optional[Exception] = None,
+        suggestion: str | None = None,
+        original_exception: Exception | None = None,
     ):
         """
         Initialize RepairableException.
@@ -106,8 +104,8 @@ class CriticalException(Exception):
     def __init__(
         self,
         message: str,
-        error_code: Optional[str] = None,
-        original_exception: Optional[Exception] = None,
+        error_code: str | None = None,
+        original_exception: Exception | None = None,
     ):
         """
         Initialize CriticalException.
@@ -174,7 +172,7 @@ REPAIRABLE_EXCEPTIONS = {
 
 def wrap_as_repairable(
     exception: Exception,
-    context: Optional[str] = None,
+    context: str | None = None,
 ) -> RepairableException:
     """
     Wrap a standard exception as RepairableException if appropriate.

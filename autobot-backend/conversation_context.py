@@ -19,12 +19,13 @@ Related Issue: #4338 - Autonomous skill extraction from conversations
 """
 
 import asyncio
-import logging
 import re
 from dataclasses import dataclass
-from typing import Callable, Dict, List, Optional
+from typing import Callable, Dict, List
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 
 # Issue #380: Module-level tuple for engagement keyword detection (O(1) iteration)
 _ENGAGEMENT_KEYWORDS = ("how", "what", "why", "create", "make", "build")
@@ -48,8 +49,8 @@ class ConversationContext:
     has_active_task: bool  # Is there an ongoing task?
     has_confusion_signals: bool  # Did user express confusion?
     user_engagement_level: str  # low, medium, high
-    last_assistant_message: Optional[str]
-    conversation_topic: Optional[str]  # Current topic being discussed
+    last_assistant_message: str | None
+    conversation_topic: str | None  # Current topic being discussed
 
 
 class ConversationContextAnalyzer:
@@ -99,7 +100,7 @@ class ConversationContextAnalyzer:
         "deploying",
     }
 
-    def __init__(self, on_conversation_complete: Optional[Callable] = None):
+    def __init__(self, on_conversation_complete: Callable | None = None):
         """
         Initialize analyzer with optional completion hook.
 
@@ -173,7 +174,7 @@ class ConversationContextAnalyzer:
             conversation_topic=topic,
         )
 
-    def _has_question(self, message: Optional[str]) -> bool:
+    def _has_question(self, message: str | None) -> bool:
         """Check if message contains a question"""
         if not message:
             return False
@@ -237,7 +238,7 @@ class ConversationContextAnalyzer:
         # Default to medium
         return "medium"
 
-    def _determine_topic(self, conversation_history: List[Dict[str, str]]) -> Optional[str]:
+    def _determine_topic(self, conversation_history: List[Dict[str, str]]) -> str | None:
         """
         Determine current conversation topic.
 

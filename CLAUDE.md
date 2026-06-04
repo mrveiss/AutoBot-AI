@@ -57,6 +57,8 @@ You are the world's best AI developer working on AutoBot. Every decision must op
 
 **Cache TTL overrides:** Hard-coded Redis TTLs are bugs (#6743). For tunable surfaces use a module-level constant resolved from an env var with a logged-fallback default — e.g. `AUTOBOT_CHAT_SESSION_CACHE_TTL` → `chat_history.cache._CHAT_SESSION_CACHE_TTL` (24h default). See [`autobot-backend/chat_history/cache.py`](autobot-backend/chat_history/cache.py) for the canonical resolver pattern.
 
+**LEDGER vs EXECUTOR (Issue #7380):** Coordination tools (workflow_plan, agent_register, memory_store, swarm_init) return *records* and complete instantly—they do NOT execute deliverables. After any coordination call, IMMEDIATELY continue with actual work using your execution tools (file I/O, shell commands, code generation). Do NOT wait for the coordinator to "finish" (it already did). The rule is injected into all agent system prompts automatically via `LEDGER_VS_EXECUTOR_RULE` constant from `autobot_shared/prompt_rules.py`. This is critical for preventing agents from waiting for non-existent "executor" processes. See the constant definition for full semantics.
+
 **Copyright:** `mrveiss` is sole owner/author of all AutoBot code.
 
 ---
@@ -66,6 +68,7 @@ You are the world's best AI developer working on AutoBot. Every decision must op
 - **Branch target:** `Dev_new_gui` for all PRs unless told otherwise
 - **Commit format:** `<type>(scope): <description> (#issue-number)`
 - **Pre-commit:** Never `--no-verify`. PostToolUse hook auto-formats `.py` files.
+- **Hook scripts:** Before committing any change to `.claude/hooks/block-dangerous-commands.sh`, run `bash .claude/hooks/block-dangerous-commands_test.sh` (must be 27/27). Add new test cases for new rules. Test with `bash`, never interactively — the shell's `grep` alias is `ugrep` (PCRE2) but bash uses GNU grep 3.7 (no variable-length lookbehinds). See #8262.
 - **Branching discipline:** Direct commits on `main`/`master` are blocked by pre-commit hook (Issue #4113). All development flows through `Dev_new_gui` first.
 - **Worktrees:** No nesting. Manual creation for PRs (not `isolation: "worktree"`). Clean up after issue closure.
 - **Agents:** Prefer direct implementation. Reserve subagents for research/exploration. Subagents can't acquire Bash permission.
@@ -185,6 +188,27 @@ Default behavior:
 **Only stop to ask** if: a specific issue has unresolved dependencies, an architectural decision is needed, or the pre-flight checklist finds a problem (dirty branch, unresolved PRs, etc.).
 
 **Domain schema files (resolved #5799):** `schemas_common.py` now has only 5 cross-domain classes. Domain schemas live in `schemas_terminal.py`, `schemas_analytics.py`, `schemas_knowledge.py`, `schemas_agent.py`, `schemas_system.py`, `schemas_workflows.py`, `schemas_code.py`. New response schemas go in the matching domain file — parallel batches targeting different domain files can now run concurrently without conflicts.
+
+---
+
+## Code Review Agent Requirements (MANDATORY)
+
+**Before dispatching any parallel review agents:**
+
+Every finder and verifier agent prompt MUST contain all three of the following — refuse to dispatch if any is missing:
+
+1. **Exact file list** from the PR diff:
+   ```bash
+   gh pr diff $PR_NUMBER --name-only > /tmp/review-files.txt
+   cat /tmp/review-files.txt
+   ```
+   Pass the full output as a literal list in the agent prompt.
+
+2. **Scope restriction:** Include verbatim: *"Use Read on these paths only. Do NOT Glob for other files in the repo."*
+
+3. **Role description:** State the agent's specific angle (e.g., "You are a security reviewer. Focus on: authz bypasses, IDOR, injection, secrets.") AND its output format (structured JSON with file, line, severity, evidence).
+
+**Why:** Without the file list, agents verify against stale repo files instead of PR diff. Without scope restriction, agents Glob unrelated files and produce noise. Both failures were observed in production reviews.
 
 ---
 
@@ -328,21 +352,21 @@ done
    - Are all edge cases handled? (review code, check error handling)
    - Are tests passing? (run test suite for changed modules)
    - Is documentation updated if needed? (check docs/)
-   - **Integration check (#6836 gate):** for every NEW module added by this issue, at least one production caller must import it:
+   - **Integration check (#6836 gate):** for every NEW module added by this issue, at least one production caller must import it. Run the unified wiring check:
 
      ```bash
-     NEW_FILES=$(git diff --name-only --diff-filter=A origin/Dev_new_gui...HEAD \
-       | grep -E '\.(py|ts|vue)$' | grep -vE '(_test\.|\.test\.|/tests/|/__tests__/)')
-     for f in $NEW_FILES; do
-       stem=$(basename "$f" | sed 's/\.[^.]*$//')
-       grep -rn "from .*\b${stem}\b\|import .*\b${stem}\b" \
-         autobot-backend autobot-frontend --include="*.py" --include="*.ts" --include="*.vue" \
-         | grep -v __pycache__ | grep -vE '(_test\.|\.test\.|/tests/)' | grep -v "^${f}:" | wc -l
-     done
+     ./pipeline-scripts/check-new-module-callers.sh
      ```
 
-     Result must be ≥1 for each new module. **Zero callers ⇒ closure blocked**, even if tests pass — see #6836 for the orchestration audit that proved this gap (3,906 LOC of completed-but-unwired features whose trackers had been closed prematurely).
-   - **Deliberate-deferral override:** if a new module is genuinely infrastructure-only (Protocol, scaffold) and has no caller *by design*, file a follow-up wire-in issue *first* and reference it in the closure comment under `### Wire-in deferred to #NNNN`.
+     The script exits 0 if all new modules have callers, 1 if any have zero callers. **Zero callers ⇒ closure blocked**, even if tests pass — see #6836 for the orchestration audit that proved this gap (3,906 LOC of completed-but-unwired features whose trackers had been closed prematurely).
+   - **Deliberate-deferral override:** if a new module is genuinely infrastructure-only (Protocol, scaffold) and has no caller *by design*, file a follow-up wire-in issue *first*, then re-run with:
+
+     ```bash
+     echo "#NNNN" >> .wiring-deferral.txt
+     ./pipeline-scripts/check-new-module-callers.sh --allow-deferral .wiring-deferral.txt
+     ```
+
+     Then document in the closure comment: `### Wire-in deferred to #NNNN`.
 4. **Document the proof**
    - Commit hash(es): `<hash>: <commit message>`
    - Acceptance criteria met: `✅ Criterion 1`, `✅ Criterion 2`, etc.
@@ -391,3 +415,38 @@ gh issue create --title "discovery(<area>): <what you found>" --body "..." --lab
 ✅ Feature tested end-to-end in dev environment  
 ✅ All edge cases documented as handled  
 ✅ Follow-up issues filed for any gaps found
+
+---
+
+## Issue Ownership & Posting
+
+- Before posting review findings or comments to any Paperclip/MVA issue, **verify the target issue is assigned to this agent**. Attempting to post to another agent's issue wastes a heartbeat and silently fails.
+- If the correct target is unclear, pivot to an agent-owned tracking issue (e.g. the review's source issue) rather than guessing.
+- When the current agent is the **PR author**, GitHub blocks self-approval and self-requested-changes. Post a detailed review comment instead of using the approve/request-changes API. Never attempt self-approval.
+
+---
+
+## Code Review Methodology
+
+All substantive PR reviews must follow the **3-angle recall-biased protocol**:
+
+1. **Dispatch 3 parallel finder agents** covering distinct angles: (a) security/auth/tenancy, (b) correctness/logic, (c) data-layer/edge-cases.
+2. **Ground every finding in the live diff.** Finder and verifier agents MUST read the actual PR diff (`gh pr diff <number>` or `git diff <base>..<head>`) — never reason about files that are not confirmed on disk. Files added by the PR may not exist on disk until checked out.
+3. **Run a verification pass.** A dedicated verifier agent re-reads each cited location from the actual files and rejects any finding it cannot ground in real code. Findings without a real line citation are discarded.
+4. **Post to the correct issue.** Confirm ownership before posting (see Issue Ownership & Posting above).
+
+---
+
+## Git Push Recovery
+
+- Before pushing, always check whether the remote branch has diverged: `git status` and `git log --oneline origin/<branch>..HEAD`.
+- If a push is rejected due to a diverged branch, **do not force-push blindly**. Instead: fetch, rebase (`git rebase origin/<branch>`), resolve any conflicts, then push.
+- If the rebase fails with conflicts you cannot resolve cleanly, stop and report rather than force-pushing and losing upstream changes.
+
+---
+
+## Model Tier Routing
+
+- Route **lightweight heartbeat tasks** (status checks, acknowledgments, quota monitoring, label updates, simple status transitions) to **Claude Haiku** (`claude-haiku-4-5-20251001`) to preserve Sonnet quota.
+- Reserve **Sonnet** for deep code reviews, multi-file bug fixes, feature implementation, and any task requiring extended reasoning.
+- This distinction should be reflected in agent runtime config (`useLightweightMode: true`) or explicit model selection in skill invocations where possible.

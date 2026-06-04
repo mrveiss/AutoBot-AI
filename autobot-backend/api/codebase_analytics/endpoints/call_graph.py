@@ -8,22 +8,22 @@ Function call graph analysis endpoints
 import ast
 import asyncio
 import json
-import logging
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 import aiofiles
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 from constants.ttl_constants import TTL_5_MINUTES
 from utils.io_executor import get_analytics_executor
 
 from .shared import COMMON_THIRD_PARTY, STDLIB_MODULES, ImportContext, get_project_root
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #711: Cache configuration for call graph
 CALL_GRAPH_CACHE_PREFIX = "codebase:call_graph:cache"
@@ -45,7 +45,7 @@ def _get_cache_key(project_root: str) -> str:
     """
     import hashlib
 
-    path_hash = hashlib.md5(project_root.encode()).hexdigest()[:12]
+    path_hash = hashlib.md5(project_root.encode(), usedforsecurity=False).hexdigest()[:12]
     return f"{CALL_GRAPH_CACHE_PREFIX}:{path_hash}"
 
 
@@ -353,7 +353,7 @@ def _resolve_callee_id(
     module_path: str,
     current_class: str,
     functions: Dict,
-    import_context: Optional[ImportContext] = None,
+    import_context: ImportContext | None = None,
 ) -> tuple[str | None, bool]:
     """
     Resolve a callee name to its full function ID.
@@ -437,7 +437,7 @@ def _build_function_info(
     }
 
 
-def _compute_func_identity(node_name: str, module_path: str, current_class: Optional[str]) -> tuple:
+def _compute_func_identity(node_name: str, module_path: str, current_class: str | None) -> tuple:
     """
     Compute function ID and full display name.
 
@@ -503,8 +503,8 @@ class FunctionCallVisitor(ast.NodeVisitor):
         module_path: str,
         functions: Dict,
         call_edges: List,
-        external_calls: Optional[List] = None,
-        import_context: Optional[ImportContext] = None,
+        external_calls: List | None = None,
+        import_context: ImportContext | None = None,
     ):
         """Initialize visitor with file path, module context, and data stores."""
         self.file_path = file_path
@@ -590,7 +590,7 @@ class FunctionCallVisitor(ast.NodeVisitor):
 # =============================================================================
 
 
-async def _get_cached_call_graph(project_root: str) -> Optional[dict]:
+async def _get_cached_call_graph(project_root: str) -> dict | None:
     """
     Get cached call graph from Redis.
 
@@ -644,7 +644,7 @@ async def _analyze_python_files(
     project_root: Path,
     functions: Dict[str, Dict],
     call_edges: List[Dict],
-    external_calls: Optional[List[Dict]] = None,
+    external_calls: List[Dict] | None = None,
 ) -> None:
     """Analyze Python files and populate functions/call_edges.
 
@@ -723,7 +723,7 @@ def _build_call_graph_response(
 )
 async def get_call_graph(
     refresh: bool = Query(False, description="Force refresh, bypass cache"),
-    source_id: Optional[str] = Query(None, description="#1772: source_id for API consistency"),
+    source_id: str | None = Query(None, description="#1772: source_id for API consistency"),
 ):
     """Get function call graph.
 

@@ -14,11 +14,11 @@ import ast
 import asyncio
 import html
 import json
-import logging
 import re
 from typing import TYPE_CHECKING, Any
 
 from async_chat_workflow import WorkflowMessage
+from autobot_shared.logging_manager import get_logger
 from tools.code_interpreter import CODE_INTERPRETER_SCHEMA
 from utils.errors import RepairableException
 
@@ -36,7 +36,7 @@ from chat_workflow.session_handler import (
     _emit_approval_required,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Issue #4482: Default retry count for schema self-correction loop.
 _DEFAULT_SCHEMA_RETRIES = 3
@@ -838,8 +838,7 @@ class ToolHandlerMixin:
     def _init_terminal_tool(self):
         """Initialize terminal tool for command execution."""
         try:
-            import backend.api.agent_terminal as agent_terminal_api
-
+            import api.agent_terminal as agent_terminal_api
             from tools.terminal_tool import TerminalTool
 
             # CRITICAL: Access the global singleton instance directly

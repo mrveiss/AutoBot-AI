@@ -5,19 +5,29 @@
 Health Collector for SLM Agent
 
 Collects system and service health metrics for reporting to admin.
+Publishes state-change events to Redis pub/sub (#3404).
 """
 
+import json
 import logging
 import os
 import platform
 import socket
 import subprocess  # nosec B404 - required for systemctl interaction
+import time
 from datetime import datetime, timezone
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 import psutil
 
+from autobot_shared.redis_client import get_redis_client
+
 logger = logging.getLogger(__name__)
+
+_STATE_CHANGE_CHANNEL_TEMPLATE = "autobot:services:{service}:state_change"
+
+# Subprocess-heavy service sweep is cached this long to reduce system load (#9086)
+_SERVICE_DISCOVERY_TTL = 300  # seconds
 
 
 class HealthCollector:
@@ -33,8 +43,8 @@ class HealthCollector:
 
     def __init__(
         self,
-        services: Optional[List[str]] = None,
-        ports: Optional[List[Dict]] = None,
+        services: List[str] | None = None,
+        ports: List[Dict] | None = None,
         discover_services: bool = True,
     ):
         """
@@ -49,6 +59,13 @@ class HealthCollector:
         self.ports = ports or []
         self.hostname = platform.node()
         self.discover_services = discover_services
+        # Tracks the last known status per service name for state-change detection.
+        # Populated on first collect(); events are only published on transitions.
+        self._last_known_status: Dict[str, str] = {}
+        # Cache for discover_all_services() — avoids spawning 100+ subprocesses
+        # every heartbeat (#9086)
+        self._service_cache: List[Dict] = []
+        self._service_cache_ts: float = 0.0
 
     def collect(self) -> Dict:
         """Collect all health metrics."""
@@ -77,11 +94,21 @@ class HealthCollector:
                 key = f"{host}:{port}"
                 health["ports"][key] = self.check_port(host, port)
 
-        # Discover all systemd services (for Issue #728)
+        # Discover all systemd services (for Issue #728).
+        # Result is cached for _SERVICE_DISCOVERY_TTL seconds — the sweep
+        # spawns 100+ subprocesses and must not run every heartbeat (#9086).
         if self.discover_services:
-            health["discovered_services"] = self.discover_all_services()
+            health["discovered_services"] = self._get_discovered_services()
 
         return health
+
+    def _get_discovered_services(self) -> List[Dict]:
+        """Return cached service list, refreshing when TTL has expired."""
+        now = time.monotonic()
+        if now - self._service_cache_ts >= _SERVICE_DISCOVERY_TTL:
+            self._service_cache = self.discover_all_services()
+            self._service_cache_ts = now
+        return self._service_cache
 
     def check_service(self, service_name: str) -> Dict:
         """Check systemd service status."""
@@ -145,14 +172,18 @@ class HealthCollector:
 
         except subprocess.TimeoutExpired:
             logger.warning("Timeout discovering services")
+            return services
         except FileNotFoundError:
             logger.warning("systemctl not found - not a systemd system")
+            return services
         except Exception as e:
             logger.warning("Error discovering services: %s", e)
+            return services
 
+        self._detect_and_publish_state_changes(services)
         return services
 
-    def _run_systemctl_list_units(self) -> Optional[str]:
+    def _run_systemctl_list_units(self) -> str | None:
         """Run systemctl list-units command. Issue #620."""
         result = subprocess.run(  # nosec B607 - systemctl is trusted
             [
@@ -173,7 +204,7 @@ class HealthCollector:
             return None
         return result.stdout
 
-    def _parse_service_line(self, line: str) -> Optional[Dict]:
+    def _parse_service_line(self, line: str) -> Dict | None:
         """Parse a single line of systemctl output. Issue #620."""
         if not line.strip():
             return None
@@ -276,7 +307,79 @@ class HealthCollector:
             logger.debug("Could not get error context for %s: %s", service_name, e)
         return ""
 
-    def is_healthy(self, thresholds: Optional[Dict] = None) -> bool:
+    def _publish_state_change(
+        self,
+        service_name: str,
+        prev_state: str,
+        new_state: str,
+        error_context: str,
+    ) -> None:
+        """Publish a service state-change event to Redis pub/sub.
+
+        Channel: autobot:services:{service_name}:state_change
+        Payload keys: service, hostname, prev_state, new_state, error_context.
+
+        Failure is logged at WARNING level and never propagates — a Redis
+        outage must not interrupt health collection (#3404).
+        """
+        try:
+            client = get_redis_client(database="main")
+            if client is None:
+                logger.warning(
+                    "Redis unavailable — state-change event not published " "(service=%s %s->%s)",
+                    service_name,
+                    prev_state,
+                    new_state,
+                )
+                return
+            channel = _STATE_CHANGE_CHANNEL_TEMPLATE.format(service=service_name)
+            payload = json.dumps(
+                {
+                    "service": service_name,
+                    "hostname": self.hostname,
+                    "prev_state": prev_state,
+                    "new_state": new_state,
+                    "error_context": error_context,
+                }
+            )
+            client.publish(channel, payload)
+            logger.info(
+                "Published state-change event: service=%s %s->%s",
+                service_name,
+                prev_state,
+                new_state,
+            )
+        except Exception as exc:
+            logger.warning("Failed to publish state-change event for %s: %s", service_name, exc)
+
+    def _detect_and_publish_state_changes(self, services: List[Dict]) -> None:
+        """Compare discovered service statuses against last known state.
+
+        Publishes a Redis pub/sub event for each service whose status has
+        changed since the previous call.  Updates ``_last_known_status`` so
+        only real transitions trigger events (#3404).
+        """
+        for svc in services:
+            name = svc.get("name")
+            new_state = svc.get("status", "unknown")
+            if name is None:
+                continue
+            prev_state = self._last_known_status.get(name)
+            if prev_state is None:
+                # First observation — record state but do not emit an event.
+                self._last_known_status[name] = new_state
+                continue
+            if prev_state == new_state:
+                continue
+            self._last_known_status[name] = new_state
+            self._publish_state_change(
+                service_name=name,
+                prev_state=prev_state,
+                new_state=new_state,
+                error_context=svc.get("error_message", ""),
+            )
+
+    def is_healthy(self, thresholds: Dict | None = None) -> bool:
         """Quick health check against thresholds."""
         defaults = {
             "cpu_percent": 90,

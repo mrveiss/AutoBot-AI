@@ -4,7 +4,6 @@ import LoginForm from './LoginForm.vue';
 const meta = {
   title: 'Components/Auth/LoginForm',
   component: LoginForm,
-  tags: ['autodocs'],
 } as Meta<typeof LoginForm>;
 
 export default meta;

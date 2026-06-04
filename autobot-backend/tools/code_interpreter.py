@@ -15,16 +15,16 @@ Security notes:
 - The temp file is always removed after execution, even on timeout/error.
 """
 
-import logging
 import os
 import subprocess
 import sys
 import tempfile
 from typing import Any, Dict
 
+from autobot_shared.logging_manager import get_logger
 from services.tool_output_filter import get_tool_output_filter
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 MAX_OUTPUT_BYTES = 10 * 1024  # 10 KB per stream
 

@@ -26,7 +26,7 @@ UI renderers.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -68,18 +68,18 @@ class KnowledgeBasicStatsEnvelope(BaseModel):
     categories: List[str] = Field(default_factory=list)
     db_size: int = 0
     status: str = "unknown"
-    last_updated: Optional[str] = None
-    redis_db: Optional[Any] = None
-    vector_store: Optional[str] = None
-    chromadb_collection: Optional[str] = None
-    initialized: Optional[bool] = None
-    llama_index_configured: Optional[bool] = None
-    embedding_model: Optional[str] = None
-    embedding_dimensions: Optional[int] = None
-    index_available: Optional[bool] = None
-    indexed_documents: Optional[int] = None
-    chromadb_path: Optional[str] = None
-    embedding_cache: Optional[Dict[str, Any]] = None
+    last_updated: str | None = None
+    redis_db: Any | None = None
+    vector_store: str | None = None
+    chromadb_collection: str | None = None
+    initialized: bool | None = None
+    llama_index_configured: bool | None = None
+    embedding_model: str | None = None
+    embedding_dimensions: int | None = None
+    index_available: bool | None = None
+    indexed_documents: int | None = None
+    chromadb_path: str | None = None
+    embedding_cache: Dict[str, Any] | None = None
 
 
 class DetailedKnowledgeSizeMetrics(BaseModel):
@@ -110,7 +110,7 @@ class DetailedKnowledgeStats(BaseModel):
     size_metrics: DetailedKnowledgeSizeMetrics = Field(default_factory=DetailedKnowledgeSizeMetrics)
     rag_available: bool = False
     # Offline branch adds this; populated branch omits it.
-    message: Optional[str] = None
+    message: str | None = None
 
 
 class KnowledgeCategoryEntry(BaseModel):

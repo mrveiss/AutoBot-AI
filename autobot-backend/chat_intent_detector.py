@@ -25,12 +25,12 @@ Related Issue: #40 - Chat/Conversation Targeted Refactoring
 Created: 2025-01-14 (Phase 2)
 """
 
-import logging
-from typing import Dict, List, Optional
+from typing import Dict, List
 
+from autobot_shared.logging_manager import get_logger
 from prompt_manager import get_prompt
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # =============================================================================
 # Constants
@@ -289,7 +289,7 @@ def _calculate_intent_scores(message_lower: str) -> Dict[str, float]:
 
 def _boost_scores_from_context(
     intent_scores: Dict[str, float],
-    conversation_history: Optional[List[Dict[str, str]]],
+    conversation_history: List[Dict[str, str]] | None,
 ) -> None:
     """
     Boost intent scores based on conversation context (in-place).
@@ -311,7 +311,7 @@ def _boost_scores_from_context(
             intent_scores[intent] += 0.5
 
 
-def detect_user_intent(message: str, conversation_history: Optional[List[Dict[str, str]]] = None) -> str:
+def detect_user_intent(message: str, conversation_history: List[Dict[str, str]] | None = None) -> str:
     """
     Detect user's intent to select appropriate context prompt.
 

@@ -87,16 +87,16 @@
         @click="bulkApprove"
         :loading="bulkProcessing"
       >
-        <i class="fas fa-check"></i>
+        <Icon name="check" />
         {{ $t('knowledge.verification.approveSelected') }}
       </BaseButton>
       <BaseButton
-        variant="danger"
+        variant="error"
         size="sm"
         @click="bulkReject"
         :loading="bulkProcessing"
       >
-        <i class="fas fa-times"></i>
+        <Icon name="times" />
         {{ $t('knowledge.verification.rejectSelected') }}
       </BaseButton>
       <BaseButton
@@ -110,7 +110,7 @@
 
     <!-- Loading State -->
     <div v-if="store.verificationLoading" class="loading-state">
-      <i class="fas fa-spinner fa-spin"></i>
+      <Icon name="spinner" :spin="true" />
       <p>{{ $t('knowledge.verification.loading') }}</p>
     </div>
 
@@ -193,16 +193,16 @@
             @click="approveSource(source.fact_id)"
             :loading="actionLoadingId === source.fact_id"
           >
-            <i class="fas fa-check"></i>
+            <Icon name="check" />
             {{ $t('knowledge.verification.approve') }}
           </BaseButton>
           <BaseButton
-            variant="danger"
+            variant="error"
             size="sm"
             @click="rejectSource(source.fact_id)"
             :loading="actionLoadingId === source.fact_id"
           >
-            <i class="fas fa-times"></i>
+            <Icon name="times" />
             {{ $t('knowledge.verification.reject') }}
           </BaseButton>
         </div>
@@ -220,7 +220,7 @@
         :disabled="currentPage === 1"
         @click="goToPage(currentPage - 1)"
       >
-        <i class="fas fa-chevron-left"></i>
+        <Icon name="chevron-left" />
       </BaseButton>
       <span class="page-info">
         {{ $t('knowledge.verification.pageInfo', { current: currentPage, total: totalPages }) }}
@@ -231,7 +231,7 @@
         :disabled="currentPage === totalPages"
         @click="goToPage(currentPage + 1)"
       >
-        <i class="fas fa-chevron-right"></i>
+        <Icon name="chevron-right" />
       </BaseButton>
     </div>
   </div>
@@ -250,6 +250,7 @@ import BaseButton from '@/components/base/BaseButton.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import QualityScoreBadge from './QualityScoreBadge.vue'
 import { createLogger } from '@/utils/debugUtils'
+import Icon from '@/components/ui/Icon.vue'
 
 const logger = createLogger('KnowledgeVerificationQueue')
 

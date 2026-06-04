@@ -17,7 +17,7 @@
 
     <!-- Status Cards -->
     <div class="status-cards">
-      <BasePanel variant="elevated" size="small">
+      <BasePanel variant="elevated" size="sm">
         <div class="status-card-content">
           <div class="status-icon">📚</div>
           <div class="status-content">
@@ -27,7 +27,7 @@
         </div>
       </BasePanel>
 
-      <BasePanel variant="elevated" size="small">
+      <BasePanel variant="elevated" size="sm">
         <div class="status-card-content">
           <div class="status-icon">🔍</div>
           <div class="status-content">
@@ -37,7 +37,7 @@
         </div>
       </BasePanel>
 
-      <BasePanel variant="elevated" size="small">
+      <BasePanel variant="elevated" size="sm">
         <div class="status-card-content">
           <div class="status-icon">⚙️</div>
           <div class="status-content">
@@ -47,7 +47,7 @@
         </div>
       </BasePanel>
 
-      <BasePanel variant="elevated" size="small">
+      <BasePanel variant="elevated" size="sm">
         <div class="status-card-content">
           <div class="status-icon">📄</div>
           <div class="status-content">
@@ -156,7 +156,7 @@
     </div>
 
     <!-- Info Section -->
-    <BasePanel variant="bordered" size="medium">
+    <BasePanel variant="bordered" size="md">
       <template #header>
         <h3>ℹ️ {{ $t('knowledge.systemKnowledge.aboutTitle') }}</h3>
       </template>

@@ -9,7 +9,7 @@ Every autobot-infrastructure/autobot-<role>/manifest.yml must conform to this sc
 """
 
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -77,13 +77,11 @@ class ManifestService(BaseModel):
 
     name: str = Field(description="systemd unit name (without .service suffix)")
     type: ServiceType = Field(default=ServiceType.SYSTEMD)
-    system_service: Optional[str] = Field(
-        default=None, description="Underlying system service (e.g. nginx, postgresql)"
-    )
+    system_service: str | None = Field(default=None, description="Underlying system service (e.g. nginx, postgresql)")
     start_order: int = Field(default=1, description="Start order (lower = starts first)")
-    exec_start: Optional[str] = Field(default=None, description="Override ExecStart command")
-    user: Optional[str] = Field(default=None, description="Override service user (default: autobot-<role>)")
-    environment_file: Optional[str] = Field(default=None, description="Override environment file path")
+    exec_start: str | None = Field(default=None, description="Override ExecStart command")
+    user: str | None = Field(default=None, description="Override service user (default: autobot-<role>)")
+    environment_file: str | None = Field(default=None, description="Override environment file path")
 
 
 class ManifestPort(BaseModel):
@@ -93,7 +91,7 @@ class ManifestPort(BaseModel):
     protocol: ProtocolType = ProtocolType.HTTPS
     public: bool = Field(default=False, description="Exposed through firewall to external traffic")
     loopback_only: bool = Field(default=False, description="Bind 127.0.0.1 only (no external access)")
-    description: Optional[str] = None
+    description: str | None = None
 
 
 class ManifestHealth(BaseModel):
@@ -159,7 +157,7 @@ class RoleManifest(BaseModel):
     version: str = Field(default="1.0.0")
 
     # Node targeting
-    target_node: Optional[str] = Field(
+    target_node: str | None = Field(
         default=None,
         description="Canonical target node name. None means 'all nodes' (e.g. slm-agent, shared).",
     )
@@ -173,7 +171,7 @@ class RoleManifest(BaseModel):
 
     # System requirements
     system_dependencies: List[str] = Field(default_factory=list, description="apt packages required on the node")
-    python_version: Optional[str] = Field(default=None, description="Required Python version (e.g. 3.10)")
+    python_version: str | None = Field(default=None, description="Required Python version (e.g. 3.10)")
 
     # Services
     services: List[ManifestService] = Field(default_factory=list)
@@ -182,14 +180,14 @@ class RoleManifest(BaseModel):
     ports: List[ManifestPort] = Field(default_factory=list)
 
     # Health
-    health: Optional[ManifestHealth] = None
+    health: ManifestHealth | None = None
 
     # Secrets
     secrets: ManifestSecrets = Field(default_factory=ManifestSecrets)
 
     # Security
-    tls: Optional[ManifestTLS] = None
-    service_account: Optional[str] = Field(
+    tls: ManifestTLS | None = None
+    service_account: str | None = Field(
         default=None,
         description="Linux service account. Defaults to autobot-<role> if unset.",
     )
@@ -207,11 +205,11 @@ class RoleManifest(BaseModel):
     )
 
     # Extra metadata
-    ansible_role: Optional[str] = Field(
+    ansible_role: str | None = Field(
         default=None,
         description="Ansible role name (defaults to last segment of role, e.g. 'backend')",
     )
-    notes: Optional[str] = None
+    notes: str | None = None
 
     @field_validator("role")
     @classmethod

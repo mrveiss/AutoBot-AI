@@ -7,11 +7,10 @@ Handles workflow approvals, progress tracking, and coordination
 """
 
 import asyncio
-import logging
 import time
 import uuid
 from datetime import datetime, timezone
-from typing import Awaitable, Callable, Dict, Optional
+from typing import Awaitable, Callable, Dict
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 
@@ -29,8 +28,9 @@ from api.schemas_workflows import (
 from api.workflow_state import get_workflow_state_machine
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from constants.error_constants import ERR_WORKFLOW_NOT_FOUND
-from event_manager import get_event_manager as _get_event_manager
+from events.bus import PersistStrategy, publish_event
 from metrics.system_monitor import system_monitor
 from metrics.workflow_metrics import workflow_metrics
 from models.task_context import WorkflowStepContext
@@ -38,7 +38,7 @@ from monitoring.prometheus_metrics import get_metrics_manager
 from patterns.conversation_patterns import conversation_patterns
 from type_defs.common import Metadata
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter()
 
@@ -253,7 +253,7 @@ def _validate_orchestrator(request: Request):
 _conversation_patterns = conversation_patterns
 
 
-def _try_simple_response(user_message: str) -> Optional[Dict]:
+def _try_simple_response(user_message: str) -> Dict | None:
     """Return a canned response for trivial messages, or None for complex ones.
 
     Consolidated from LightweightOrchestrator (Issue #2181).  Uses the
@@ -547,7 +547,8 @@ async def approve_workflow_step(
     await _update_step_status_and_metrics(workflow_id, approval)
 
     # Publish approval event
-    await _get_event_manager().publish(
+    await publish_event(
+        "global",
         "workflow_approval",
         {
             "workflow_id": workflow_id,
@@ -555,6 +556,7 @@ async def approve_workflow_step(
             "approved": approval.approved,
             "user_input": approval.user_input,
         },
+        persist=PersistStrategy.NONE,
     )
 
     return {
@@ -637,7 +639,8 @@ async def _wait_for_step_approval(workflow_id: str, workflow: dict, step: dict) 
         pending_approvals[approval_key] = approval_future
 
     # Publish approval request event
-    await _get_event_manager().publish(
+    await publish_event(
+        "global",
         "workflow_approval_required",
         {
             "workflow_id": workflow_id,
@@ -649,6 +652,7 @@ async def _wait_for_step_approval(workflow_id: str, workflow: dict, step: dict) 
                 "action": step["action"],
             },
         },
+        persist=PersistStrategy.NONE,
     )
 
     try:
@@ -673,7 +677,8 @@ async def _publish_step_started(workflow_id: str, step: Metadata, step_index: in
         step_index: Current step index
         total_steps: Total number of steps
     """
-    await _get_event_manager().publish(
+    await publish_event(
+        "global",
         "workflow_step_started",
         {
             "workflow_id": workflow_id,
@@ -682,6 +687,7 @@ async def _publish_step_started(workflow_id: str, step: Metadata, step_index: in
             "step_index": step_index,
             "total_steps": total_steps,
         },
+        persist=PersistStrategy.NONE,
     )
 
 
@@ -695,7 +701,8 @@ async def _publish_step_completed(workflow_id: str, step: Metadata) -> None:
         workflow_id: Workflow identifier
         step: Step data with result
     """
-    await _get_event_manager().publish(
+    await publish_event(
+        "global",
         "workflow_step_completed",
         {
             "workflow_id": workflow_id,
@@ -703,6 +710,7 @@ async def _publish_step_completed(workflow_id: str, step: Metadata) -> None:
             "description": step["description"],
             "result": step.get("result", "Step completed successfully"),
         },
+        persist=PersistStrategy.NONE,
     )
 
 
@@ -820,7 +828,8 @@ async def _finalize_workflow_completed(workflow_id: str, workflow: Metadata, ste
     # Record metrics (Issue #281: uses helper)
     _record_workflow_metrics(workflow_type, workflow_start_time, "success")
 
-    await _get_event_manager().publish(
+    await publish_event(
+        "global",
         "workflow_completed",
         {
             "workflow_id": workflow_id,
@@ -828,6 +837,7 @@ async def _finalize_workflow_completed(workflow_id: str, workflow: Metadata, ste
             "total_steps": len(steps),
             "execution_time": "calculated_time_here",
         },
+        persist=PersistStrategy.NONE,
     )
 
 
@@ -846,13 +856,15 @@ async def _finalize_workflow_failed(workflow_id: str, workflow: Metadata, error:
     # Record metrics (Issue #281: uses helper)
     _record_workflow_metrics(workflow_type, workflow_start_time, "failed")
 
-    await _get_event_manager().publish(
+    await publish_event(
+        "global",
         "workflow_failed",
         {
             "workflow_id": workflow_id,
             "error": str(error),
             "current_step": workflow.get("current_step", 0),
         },
+        persist=PersistStrategy.NONE,
     )
 
 
@@ -964,9 +976,11 @@ async def cancel_workflow(workflow_id: str, admin_check: bool = Depends(check_ad
                 if not future.done():
                     future.cancel()
 
-    await _get_event_manager().publish(
+    await publish_event(
+        "global",
         "workflow_cancelled",
         {"workflow_id": workflow_id, "user_message": user_message},
+        persist=PersistStrategy.NONE,
     )
 
     return {"success": True, "message": "Workflow cancelled successfully"}

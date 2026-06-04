@@ -56,7 +56,7 @@ class TestIsolatedBridgeClient:
     """IsolatedBridgeClient behaviour with mocked subprocess."""
 
     @pytest.mark.asyncio
-    async def test_call_tool_success(self):
+    async def test_call_tool_success(self) -> None:
         """Successful JSON-RPC call returns success=True and result payload."""
         resp = json.dumps({"jsonrpc": "2.0", "id": 1, "result": {"ok": 1}}) + "\n"
         fake_proc = _make_fake_proc(resp.encode("utf-8"))
@@ -66,13 +66,15 @@ class TestIsolatedBridgeClient:
             "asyncio.create_subprocess_exec",
             new=AsyncMock(return_value=fake_proc),
         ):
-            result = await client.call_tool("read_file", {"path": "/tmp/x"})
+            result = await client.call_tool(
+                "read_file", {"path": "/tmp/x"}  # nosec B108 - test/controlled code uses tmpdir intentionally
+            )
         assert result["success"] is True
         assert result["result"] == {"ok": 1}
         assert result["bridge"] == "filesystem_mcp"
 
     @pytest.mark.asyncio
-    async def test_call_tool_bridge_error(self):
+    async def test_call_tool_bridge_error(self) -> None:
         """JSON-RPC error response surfaces as success=False."""
         resp = (
             json.dumps(
@@ -96,7 +98,7 @@ class TestIsolatedBridgeClient:
         assert "boom" in result["result"]
 
     @pytest.mark.asyncio
-    async def test_worker_restart_on_crash(self):
+    async def test_worker_restart_on_crash(self) -> None:
         """If the worker exited, next call respawns it."""
         resp = json.dumps({"jsonrpc": "2.0", "id": 1, "result": {}}) + "\n"
         fake_proc = _make_fake_proc(resp.encode("utf-8"))
@@ -114,7 +116,7 @@ class TestIsolatedBridgeClient:
         assert client._restart_count == 1
 
     @pytest.mark.asyncio
-    async def test_circuit_breaker_permanent_failure(self):
+    async def test_circuit_breaker_permanent_failure(self) -> None:
         """After restart_max crashes, further calls raise."""
         policy = _make_policy()
         client = IsolatedBridgeClient("filesystem_mcp", policy)
@@ -124,7 +126,7 @@ class TestIsolatedBridgeClient:
             await client.start()
 
     @pytest.mark.asyncio
-    async def test_timeout_kills_worker(self):
+    async def test_timeout_kills_worker(self) -> None:
         """A readline timeout marks the worker dead and returns failure."""
         proc = MagicMock()
         proc.returncode = None
@@ -133,7 +135,7 @@ class TestIsolatedBridgeClient:
         proc.stdin.drain = AsyncMock()
         proc.stdout = MagicMock()
 
-        async def _never():
+        async def _never() -> None:
             await asyncio.sleep(10)
 
         proc.stdout.readline = AsyncMock(side_effect=asyncio.TimeoutError())
@@ -204,7 +206,7 @@ class TestConcurrentRequestIds:
     # ------------------------------------------------------------------
 
     @pytest.mark.asyncio
-    async def test_next_id_uniqueness_direct(self):
+    async def test_next_id_uniqueness_direct(self) -> None:
         """N concurrent _next_id() calls each return a distinct integer.
 
         ``_next_id`` does a simple ``self._req_id += 1`` with no explicit
@@ -224,7 +226,7 @@ class TestConcurrentRequestIds:
     # ------------------------------------------------------------------
 
     @pytest.mark.asyncio
-    async def test_call_tool_unique_request_ids(self):
+    async def test_call_tool_unique_request_ids(self) -> None:
         """N concurrent call_tool() invocations send N unique JSON-RPC ids.
 
         The asyncio.Lock inside IsolatedBridgeClient serialises access to
@@ -241,7 +243,11 @@ class TestConcurrentRequestIds:
             "asyncio.create_subprocess_exec",
             new=AsyncMock(return_value=fake_proc),
         ):
-            await asyncio.gather(*[client.call_tool("read_file", {"path": f"/tmp/f{i}"}) for i in range(self._N)])
+            await asyncio.gather(
+                *[
+                    client.call_tool("read_file", {"path": f"/tmp/f{i}"}) for i in range(self._N)
+                ]  # nosec B108 - test/controlled code uses tmpdir intentionally
+            )
 
         # Filter out the "shutdown" or "ping" requests emitted by _ensure_alive
         # (those also get ids but belong to internal housekeeping, not tool calls).
@@ -258,7 +264,7 @@ class TestConcurrentRequestIds:
     # ------------------------------------------------------------------
 
     @pytest.mark.asyncio
-    async def test_mixed_concurrent_call_tool_and_health_check(self):
+    async def test_mixed_concurrent_call_tool_and_health_check(self) -> None:
         """Concurrent call_tool() and health_check() share the same id counter.
 
         Both methods acquire the same asyncio.Lock and call _raw_request,
@@ -275,7 +281,10 @@ class TestConcurrentRequestIds:
             "asyncio.create_subprocess_exec",
             new=AsyncMock(return_value=fake_proc),
         ):
-            tool_coros = [client.call_tool("list_dir", {"path": f"/tmp/{i}"}) for i in range(half)]
+            tool_coros = [
+                client.call_tool("list_dir", {"path": f"/tmp/{i}"})
+                for i in range(half)  # nosec B108 - test/controlled code uses tmpdir intentionally
+            ]
             health_coros = [client.health_check() for _ in range(half)]
             await asyncio.gather(*tool_coros, *health_coros)
 
@@ -290,7 +299,7 @@ class TestIsolatedBridgeRegistry:
     """Registry mode routing."""
 
     @pytest.mark.asyncio
-    async def test_inprocess_bridge_returns_none(self):
+    async def test_inprocess_bridge_returns_none(self) -> None:
         """Registry returns None for bridges with INPROCESS mode."""
         reg = IsolatedBridgeRegistry()
         with patch.dict(os.environ, {}, clear=True):
@@ -298,7 +307,7 @@ class TestIsolatedBridgeRegistry:
         assert client is None
 
     @pytest.mark.asyncio
-    async def test_subprocess_bridge_creates_client(self):
+    async def test_subprocess_bridge_creates_client(self) -> None:
         """Registry creates a cached client for SUBPROCESS bridges."""
         reg = IsolatedBridgeRegistry()
         with patch.dict(os.environ, {}, clear=True):
@@ -307,6 +316,6 @@ class TestIsolatedBridgeRegistry:
         assert c1 is not None
         assert c1 is c2
 
-    def test_singleton_instance(self):
+    def test_singleton_instance(self) -> None:
         """get_isolated_registry returns the same object."""
         assert get_isolated_registry() is get_isolated_registry()

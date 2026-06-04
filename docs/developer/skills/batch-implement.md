@@ -188,6 +188,8 @@ A standard "Behavioral grep audit" block, as shown above, immediately after the 
 
 ## 1a. Create Isolated Worktrees
 
+**CRITICAL (#6512): Parallel agents MUST use worktrees. This prevents commits landing on wrong branches.**
+
 **For each issue in WORK_QUEUE:**
 
 ```bash
@@ -199,17 +201,23 @@ if git worktree list | grep -q "issue-<number>"; then
   git branch -D "issue-<number>" 2>/dev/null
 fi
 
-# Create fresh worktree
+# Create fresh worktree — AGENTS MUST RUN INSIDE THIS
 git worktree add "$WORKTREE_PATH" -b "issue-<number>" origin/Dev_new_gui
+cd "$WORKTREE_PATH"
+git branch --unset-upstream
 
-# Verify branch is correct
-cd "$WORKTREE_PATH" && git branch --show-current  # should print: issue-<number>
+# Verify isolated from main session
+echo "Agent will work in: $(pwd)"
+echo "Branch is: $(git branch --show-current)"  # should print: issue-<number>
+echo "Main session remains on Dev_new_gui — checked separately"
 ```
 
-**Key rules:**
+**Key rules (non-negotiable):**
 - Absolute paths: `/home/martins/AutoBot-Ai/AutoBot-AI/.worktrees/issue-XXXX`
 - Each issue gets dedicated branch `issue-XXXX`
 - All worktrees isolated — no shared directories
+- **Agents MUST cd into the worktree BEFORE making any git commits**
+- **Agents MUST NEVER call `git checkout` on the main tree**
 
 ## 1b. Initialize Retry State Table
 
@@ -244,7 +252,20 @@ Take up to 3 from the queue. Spawn in parallel — each agent:
 4. Reports: `RESULT: SUCCESS|FAILURE`, `COMMIT_SHA: <sha>`, `TESTS: PASS|FAIL`, `ERROR: <if any>`
 
 **Agent prompt must include:**
-> "You have Bash, Read, Edit, Write, Grep, Glob permissions. Commit only — do NOT push. If you lose Bash permissions, STOP and report. Required tools: Bash, Read, Edit, Write, Grep, Glob."
+> "You have Bash, Read, Edit, Write, Grep, Glob permissions. Commit only — do NOT push. If you lose Bash permissions, STOP and report. Required tools: Bash, Read, Edit, Write, Grep, Glob.
+>
+> **CRITICAL — Worktree Isolation (Issue #6512):**
+> - NEVER call `git checkout` on the main working tree
+> - BEFORE making any changes, create an isolated worktree:
+>   ```bash
+>   ISSUE_NUM=<issue-number>
+>   git worktree add .worktrees/issue-$ISSUE_NUM -b issue-$ISSUE_NUM origin/Dev_new_gui
+>   cd .worktrees/issue-$ISSUE_NUM
+>   git branch --unset-upstream
+>   ```
+> - Make all edits, commits, and git operations INSIDE that worktree directory
+> - Your commit will land on the correct branch automatically
+> - Do NOT switch branches or checkout anywhere else"
 
 **Main session then pushes each successful branch and creates PR.**
 
@@ -308,9 +329,8 @@ for removed in $(git diff origin/Dev_new_gui...$PR_BRANCH --diff-filter=D --name
   grep -r "$(basename $removed .py)" autobot-backend/ --include="*.py" | grep -v "_test.py" | grep -v "$removed"
 done
 
-# 2d. Wiring check — for any NEW class or function added, verify it has a production caller
-# New symbols have zero existing callers → this is fine IF the PR also adds the caller
-# If new symbol with zero callers and PR adds no caller → flag as NOT WIRED
+# 2d. Wiring check — hard-block if any new module has 0 production callers
+cd $(git rev-parse --show-toplevel) && pipeline-scripts/check-new-module-callers.sh
 
 # 2e. Linting
 python -m black --check $(git diff origin/Dev_new_gui...$PR_BRANCH --name-only | grep "\.py$") 2>&1
@@ -318,7 +338,21 @@ python -m black --check $(git diff origin/Dev_new_gui...$PR_BRANCH --name-only |
 
 **If validation fails:** Fix inline in the worktree, push update to the branch, re-validate. Do not merge a failing PR.
 
-**If wiring check flags unwired code:** Comment on the issue: "⚠️ New code has no production callers — wiring needed before merge." Do not close the issue after merge.
+**If wiring check exits 1 (unwired modules):** **HARD BLOCK** — do not merge and do not close the issue. Either wire the module in, or file a follow-up wire-in issue and re-run with `pipeline-scripts/check-new-module-callers.sh --allow-deferral .wiring-deferral.txt`. Document the deferral in the closure comment under `### Wire-in deferred to #NNNN`.
+
+---
+
+# Phase 2.5: Anti-Polling Rule (PR Wait)
+
+**batch-implement is a self-contained session**: you review and merge your own PRs in the same run. Do **not** create PRs and then exit, leaving the batch issue `in_progress` for the next heartbeat to re-check.
+
+If the batch session must exit before all PRs are merged (e.g. budget limit, rate limit after 3× retries):
+- Update the batch issue to `in_review`, not `in_progress`.
+- Post ONE comment listing which PRs are open: "Batch paused — PRs #N, #M await merge."
+- Use `ScheduleWakeup` with `delaySeconds: 900` for a single deferred re-check.
+- Do **not** spin with repeated identical "PRs still open" comments on every heartbeat.
+
+This avoids the polling anti-pattern: an agent re-running every 2–5 min posting "PR open, awaiting merge" 11 times in 1h (GH#7623 / MVA-315).
 
 ---
 

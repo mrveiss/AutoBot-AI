@@ -7,7 +7,6 @@ Provides real-time metrics for AutoBot system components.
 """
 
 import asyncio
-import logging
 import time
 from dataclasses import dataclass
 from typing import Any, Dict
@@ -16,6 +15,7 @@ import aiohttp
 import psutil
 
 from autobot_shared.http_client import get_http_client
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import config as ssot_config
 from config.manager import get_config_manager
@@ -47,7 +47,7 @@ class SystemMetricsCollector:
 
     def __init__(self):
         """Initialize system metrics collector with Prometheus integration."""
-        self.logger = logging.getLogger(__name__)
+        self.logger = get_logger(__name__)
         self._collection_interval = config.get("monitoring.metrics.collection_interval", 5)
         self._is_collecting = False
         self._auth_error_logged = False  # Track if auth error was already logged

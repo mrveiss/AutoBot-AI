@@ -16,7 +16,7 @@ Part of Issue #381 - God Class Refactoring
 """
 
 import ast
-from typing import List, Optional, Tuple
+from typing import List, Tuple
 
 from ..models import AntiPatternResult
 from ..severity_utils import (
@@ -146,7 +146,7 @@ class BloaterDetector:
         file_path: str,
         method_count: int,
         class_lines: int,
-    ) -> Optional[AntiPatternResult]:
+    ) -> AntiPatternResult | None:
         """
         Check if a class is a god class based on method count or line count.
 
@@ -190,8 +190,8 @@ class BloaterDetector:
         self,
         node: ast.FunctionDef,
         file_path: str,
-        param_count: Optional[int] = None,
-    ) -> Optional[AntiPatternResult]:
+        param_count: int | None = None,
+    ) -> AntiPatternResult | None:
         """
         Check if a function has too many parameters.
 
@@ -234,7 +234,7 @@ class BloaterDetector:
         self,
         node: ast.FunctionDef,
         file_path: str,
-    ) -> Optional[AntiPatternResult]:
+    ) -> AntiPatternResult | None:
         """
         Check if a method/function is too long.
 
@@ -309,7 +309,7 @@ class BloaterDetector:
         self,
         node: ast.FunctionDef,
         file_path: str,
-    ) -> Optional[AntiPatternResult]:
+    ) -> AntiPatternResult | None:
         """
         Check if a function has excessive nesting.
 
@@ -350,7 +350,7 @@ class BloaterDetector:
         self,
         file_path: str,
         line_count: int,
-    ) -> Optional[AntiPatternResult]:
+    ) -> AntiPatternResult | None:
         """
         Check if a file is too large.
 

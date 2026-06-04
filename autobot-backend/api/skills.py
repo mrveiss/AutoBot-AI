@@ -10,14 +10,15 @@ configure, execute, and monitor skills.
 Includes metrics and health tracking (Issue #4339).
 """
 
-import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from fastapi import APIRouter, HTTPException, Query, Request
 
 from api.schemas_agent import (
     SkillActionRequest,
+    SkillCatalogInstallData,
     SkillConfigUpdate,
+    SkillFeedbackData,
     SkillFeedbackRequest,
     SkillInstallRequest,
 )
@@ -33,7 +34,6 @@ from api.schemas_workflows import (
     SkillDetailResponse,
     SkillHealthResponse,
     SkillMetricsResponse,
-    SkillsAllHealthResponse,
     SkillsCategoriesResponse,
     SkillsInitializeResponse,
     SkillsListResponse,
@@ -42,15 +42,16 @@ from api.schemas_workflows import (
 )
 from api.system_health import ComponentHealth, register_health_probe
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from skills.manager import SkillManager
 from skills.registry import get_skill_registry
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 router = APIRouter()
 
-_manager: Optional[SkillManager] = None
+_manager: SkillManager | None = None
 
 
 def _get_manager() -> SkillManager:
@@ -74,8 +75,8 @@ def _get_manager() -> SkillManager:
     error_code_prefix="SKILLS",
 )
 async def list_skills(
-    category: Optional[str] = Query(None, description="Filter by category"),
-    search: Optional[str] = Query(None, description="Search query"),
+    category: str | None = Query(None, description="Filter by category"),
+    search: str | None = Query(None, description="Search query"),
     enabled_only: bool = Query(False, description="Only show enabled skills"),
 ) -> Dict[str, Any]:
     """List all registered skills with optional filtering."""
@@ -114,7 +115,7 @@ async def list_categories() -> Dict[str, Any]:
 
 @register_health_probe("skills")
 async def probe_skills(
-    request: Optional[Request] = None,
+    request: Request | None = None,
 ) -> ComponentHealth:
     """Issue #3333: probe registration for skills module."""
     try:
@@ -132,18 +133,6 @@ async def probe_skills(
             status="down",
             detail=f"probe error: {type(exc).__name__}",
         )
-
-
-@router.get("/health", summary="Get health of all skills", response_model=SkillsAllHealthResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_all_health",
-    error_code_prefix="SKILLS",
-)
-async def get_all_health() -> Dict[str, Any]:
-    """Get health status for all registered skills."""
-    registry = get_skill_registry()
-    return {"skills": registry.get_all_health()}
 
 
 @router.post("/initialize", summary="Initialize skills system", response_model=SkillsInitializeResponse)
@@ -166,7 +155,7 @@ async def initialize_skills() -> Dict[str, Any]:
     error_code_prefix="SKILLS",
 )
 async def get_skill_traces(
-    skill: Optional[str] = Query(None, description="Filter by skill name"),
+    skill: str | None = Query(None, description="Filter by skill name"),
     limit: int = Query(50, ge=1, le=500, description="Maximum number of traces to return"),
 ) -> Dict[str, Any]:
     """Return recent MCP tool-call spans from Redis (Issue #4413).
@@ -248,7 +237,11 @@ async def list_catalog(
     return {"catalog_url": catalog_url, "page": page, "page_size": page_size, "skills": entries, "total": len(entries)}
 
 
-@router.post("/catalog/{name}/install", summary="Install a skill from an HTTP catalog", response_model=DataResponse)
+@router.post(
+    "/catalog/{name}/install",
+    summary="Install a skill from an HTTP catalog",
+    response_model=DataResponse[SkillCatalogInstallData],
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="install_catalog_skill",
@@ -444,7 +437,7 @@ async def get_skill_metrics(
         raise HTTPException(status_code=500, detail="Failed to retrieve metrics")
 
 
-@router.post("/{name}/feedback", summary="Submit skill feedback", response_model=DataResponse)
+@router.post("/{name}/feedback", summary="Submit skill feedback", response_model=DataResponse[SkillFeedbackData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="submit_skill_feedback",
@@ -453,7 +446,7 @@ async def get_skill_metrics(
 async def submit_skill_feedback(
     name: str,
     body: SkillFeedbackRequest,
-    action: Optional[str] = Query(None, description="Action that was invoked"),
+    action: str | None = Query(None, description="Action that was invoked"),
 ) -> Dict[str, Any]:
     """Submit user feedback for a skill (Issue #4339)."""
     try:

@@ -30,7 +30,13 @@
       <span v-else class="expand-spacer"></span>
 
       <!-- Node icon -->
-      <button class="node-icon-btn" @click.stop="$emit('select', node)" type="button">
+      <button
+        class="node-icon-btn"
+        @click.stop="$emit('select', node)"
+        type="button"
+        :aria-label="node.name"
+        :title="node.name"
+      >
         <i :class="['node-icon', nodeIcon]"></i>
       </button>
 
@@ -52,9 +58,9 @@
         :title="$t('knowledge.treeNode.vectorizeFolderTitle', { count: unvectorizedCount, plural: unvectorizedCount !== 1 ? 's' : '' })"
         @click.stop="$emit('vectorize-folder', node)"
       >
-        <i class="fas fa-exclamation-circle"></i>
+        <Icon name="exclamation-circle" />
         {{ $t('knowledge.treeNode.unvectorized', { count: unvectorizedCount }) }}
-        <i class="fas fa-play-circle"></i>
+        <Icon name="play-circle" />
       </button>
 
       <!-- Vectorization status badge for files -->
@@ -71,7 +77,7 @@
         :title="vectorizationStatus === 'failed' ? $t('knowledge.treeNode.retryTitle') : $t('knowledge.treeNode.vectorizeTitle')"
         @click.stop="$emit('vectorize', node.id)"
       >
-        <i :class="vectorizationStatus === 'failed' ? 'fas fa-redo' : 'fas fa-cube'"></i>
+        <Icon :name="vectorizationStatus === 'failed' ? 'redo' : 'cube'" />
       </button>
     </div>
 
@@ -99,6 +105,7 @@
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { computed } from 'vue'
 import VectorizationStatusBadge from './VectorizationStatusBadge.vue'
 import { useKnowledgeVectorization } from '@/composables/useKnowledgeVectorization'
@@ -145,9 +152,9 @@ const { getDocumentStatus } = useKnowledgeVectorization()
 // Computed properties
 const nodeIcon = computed(() => {
   if (props.node.type === 'folder') {
-    return props.expandedNodes.has(props.node.id) ? 'fas fa-folder-open' : 'fas fa-folder'
+    return props.expandedNodes.has(props.node.id) ? 'folder-open' : 'folder'
   }
-  return 'fas fa-file-alt'
+  return 'file-alt'
 })
 
 const isSelected = computed(() => {

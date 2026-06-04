@@ -17,7 +17,7 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useSlmApi } from '@/composables/useSlmApi'
-import type { TLSEndpointResponse } from '@/types/api-responses'
+import type { TLSEndpointResponse, FleetCert } from '@/types/api-responses'
 import { createLogger } from '@/utils/debugUtils'
 import { formatRelativeTime } from '@/utils/dateUtils'
 import config from '@/config/ssot-config'
@@ -25,11 +25,8 @@ import type {
   SecurityEventResponse,
   SecurityOverviewResponse,
   AuditLogResponse,
-  AuditLogListResponse,
-  SecurityEventListResponse,
   ThreatSummary as ThreatSummaryType,
   SecurityPolicyResponse,
-  SecurityPolicyListResponse,
 } from '@/types/slm'
 
 const logger = createLogger('SecurityView')
@@ -44,19 +41,6 @@ type SecurityPolicy = SecurityPolicyResponse
 type SecurityOverview = SecurityOverviewResponse
 type ThreatSummary = ThreatSummaryType
 
-
-interface FleetCert {
-  cert_id: string
-  node_id: string
-  subject: string | null
-  issuer: string | null
-  serial_number: string | null
-  fingerprint: string | null
-  not_before: string | null
-  not_after: string | null
-  status: string
-  days_until_expiry: number | null
-}
 
 // Active tab — route-based
 type SecurityTab = 'overview' | 'tls-settings' | 'certificates' | 'audit' | 'threats' | 'policies'
@@ -534,9 +518,9 @@ const scoreColor = computed(() => {
   <div class="p-6">
     <!-- Header -->
     <div class="mb-6">
-      <h1 class="text-2xl font-bold text-gray-900">Security Analytics</h1>
+      <h1 class="text-2xl font-bold text-gray-900">{{ $t('securityView.securityAnalytics') }}</h1>
       <p class="text-sm text-gray-500 mt-1">
-        Monitor security events and manage security policies
+        {{ $t('securityView.monitorSecurityEventsAnd') }}
       </p>
     </div>
 
@@ -578,23 +562,23 @@ const scoreColor = computed(() => {
         <!-- Security Score -->
         <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
           <div class="card p-4">
-            <div class="text-sm text-gray-500 mb-1">Security Score</div>
+            <div class="text-sm text-gray-500 mb-1">{{ $t('securityView.securityScore') }}</div>
             <div :class="['text-3xl font-bold', scoreColor]">{{ overview.security_score }}%</div>
           </div>
           <div class="card p-4">
-            <div class="text-sm text-gray-500 mb-1">Active Threats</div>
+            <div class="text-sm text-gray-500 mb-1">{{ $t('securityView.activeThreats') }}</div>
             <div :class="['text-3xl font-bold', overview.active_threats > 0 ? 'text-error-600' : 'text-gray-900']">
               {{ overview.active_threats }}
             </div>
           </div>
           <div class="card p-4">
-            <div class="text-sm text-gray-500 mb-1">Failed Logins (24h)</div>
+            <div class="text-sm text-gray-500 mb-1">{{ $t('securityView.failedLogins24h') }}</div>
             <div :class="['text-3xl font-bold', overview.failed_logins_24h > 5 ? 'text-warning-600' : 'text-gray-900']">
               {{ overview.failed_logins_24h }}
             </div>
           </div>
           <div class="card p-4">
-            <div class="text-sm text-gray-500 mb-1">Policy Violations</div>
+            <div class="text-sm text-gray-500 mb-1">{{ $t('securityView.policyViolations') }}</div>
             <div :class="['text-3xl font-bold', overview.policy_violations > 0 ? 'text-warning-600' : 'text-gray-900']">
               {{ overview.policy_violations }}
             </div>
@@ -604,10 +588,10 @@ const scoreColor = computed(() => {
         <!-- Recent Events -->
         <div class="card">
           <div class="px-6 py-4 border-b border-gray-200">
-            <h2 class="text-lg font-semibold">Recent Security Events</h2>
+            <h2 class="text-lg font-semibold">{{ $t('securityView.recentSecurityEvents') }}</h2>
           </div>
           <div v-if="overview.recent_events.length === 0" class="p-6 text-center text-gray-500">
-            No recent security events
+            {{ $t('securityView.noRecentSecurityEvents') }}
           </div>
           <div v-else class="divide-y divide-gray-200">
             <div

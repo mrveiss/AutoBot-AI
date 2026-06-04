@@ -29,33 +29,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
-def _make_fake_redis() -> AsyncMock:
-    """Build an AsyncMock that mimics ``redis.asyncio.Redis`` for our needs."""
-    fake = AsyncMock()
-    fake._store = {}
-    fake._published: list = []
-
-    async def _set(key, value, *args, **kwargs):
-        fake._store[key] = value
-        return True
-
-    async def _get(key):
-        return fake._store.get(key)
-
-    async def _publish(channel, message):
-        fake._published.append((channel, message))
-        return 1
-
-    fake.set.side_effect = _set
-    fake.get.side_effect = _get
-    fake.publish.side_effect = _publish
-    return fake
-
+from tests.fixtures.mocks import make_stateful_redis
 
 # ---------------------------------------------------------------------------
 # TaskExecutionTracker.update_progress / get_progress
@@ -68,7 +42,7 @@ async def test_update_progress_writes_snapshot_and_publishes_both_channels():
     import task_execution_tracker as tet
 
     tracker = tet.TaskExecutionTracker(memory_manager=AsyncMock())
-    fake_redis = _make_fake_redis()
+    fake_redis = make_stateful_redis()
 
     with patch.object(tet, "get_async_redis_client", AsyncMock(return_value=fake_redis)):
         await tracker.update_progress(
@@ -137,7 +111,7 @@ async def test_get_progress_round_trips_snapshot():
     import task_execution_tracker as tet
 
     tracker = tet.TaskExecutionTracker(memory_manager=AsyncMock())
-    fake_redis = _make_fake_redis()
+    fake_redis = make_stateful_redis()
 
     with patch.object(tet, "get_async_redis_client", AsyncMock(return_value=fake_redis)):
         await tracker.update_progress(task_id="task-rt", progress_percent=75.0, current_step="Almost done")
@@ -155,7 +129,7 @@ async def test_get_progress_returns_none_when_missing():
     import task_execution_tracker as tet
 
     tracker = tet.TaskExecutionTracker(memory_manager=AsyncMock())
-    fake_redis = _make_fake_redis()
+    fake_redis = make_stateful_redis()
 
     with patch.object(tet, "get_async_redis_client", AsyncMock(return_value=fake_redis)):
         snapshot = await tracker.get_progress("task-missing")

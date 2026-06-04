@@ -5,17 +5,22 @@
 /**
  * useHostSelector - Composable for the ui/HostSelector component
  *
- * Wraps the GET /api/infrastructure/hosts endpoint through useFetchEndpoint
- * so the component is free of inline fetchWithAuth calls.
+ * ✅ GH#9063 consolidation COMPLETE: delegates host loading to useHostSelection
+ * (same /api/infrastructure/hosts source) instead of making a separate
+ * useFetchEndpoint call. Maps InfrastructureHost → SelectorHost shape.
+ *
+ * This composable is a THIN WRAPPER around useHostSelection that:
+ * - Provides the SelectorHost type shape for UI components
+ * - Applies client-side capability filtering
+ * - Maintains backward compatibility for components using the old API
+ *
+ * Data flow: useHostSelector → useHostSelection → /api/infrastructure/hosts
  *
  * Issue #6087
  */
 
-import { computed, ref } from 'vue'
-import { createLogger } from '@/utils/debugUtils'
-import { useFetchEndpoint } from '@/composables/api/useFetchEndpoint'
-
-const logger = createLogger('useHostSelector')
+import { computed } from 'vue'
+import { useHostSelection, type InfrastructureHost } from '@/composables/useHostSelection'
 
 export interface SelectorHost {
   id: string
@@ -30,10 +35,6 @@ export interface SelectorHost {
   tags?: string[]
 }
 
-interface HostsApiResponse {
-  hosts?: SelectorHost[]
-}
-
 export interface UseHostSelectorOptions {
   /** Only return hosts with this capability (passed as ?capability=). */
   requiredCapability?: string
@@ -42,42 +43,33 @@ export interface UseHostSelectorOptions {
 }
 
 export function useHostSelector(options: UseHostSelectorOptions = {}) {
-  const hostsEndpoint = useFetchEndpoint<HostsApiResponse, SelectorHost[]>({
-    path: '/api/infrastructure/hosts',
-    label: 'Infrastructure hosts',
-    pickData: (raw) => raw.hosts ?? [],
-    onSuccess: (data) => {
-      logger.info(`Loaded ${data.length} infrastructure hosts`)
-    },
-    onError: (msg) => {
-      logger.error('Failed to load infrastructure hosts:', msg)
-    },
+  const { hosts: infraHosts, loading, error, loadHosts: loadInfraHosts } = useHostSelection()
+
+  // Map InfrastructureHost → SelectorHost; apply client-side capability filter when set
+  const hosts = computed<SelectorHost[]>(() => {
+    let list: SelectorHost[] = infraHosts.value.map((h: InfrastructureHost) => ({
+      id: h.id,
+      name: h.name,
+      host: h.host,
+      ssh_port: h.ssh_port,
+      username: h.username,
+      os: h.os,
+      capabilities: h.capabilities,
+      description: h.purpose,
+    }))
+    if (options.requiredCapability) {
+      list = list.filter((h: SelectorHost) => h.capabilities?.includes(options.requiredCapability!))
+    }
+    return list
   })
 
-  /**
-   * Build query-string extras from the current options and trigger a fetch.
-   * Accepts a one-off capability override for composable reuse without
-   * reconstructing.
-   */
-  const loadHosts = async (capability?: string, chatId?: string): Promise<void> => {
-    const extras: Record<string, string> = {}
-    const cap = capability ?? options.requiredCapability
-    const chat = chatId ?? options.chatId
-    if (cap) extras['capability'] = cap
-    if (chat) extras['chat_id'] = chat
-    await hostsEndpoint.load(Object.keys(extras).length ? extras : undefined)
+  const loadHosts = async (capability?: string, _chatId?: string): Promise<void> => {
+    await loadInfraHosts()
+    // Re-assign so the filter in the computed picks up any runtime override
+    if (capability) options.requiredCapability = capability
   }
 
-  const hosts = computed<SelectorHost[]>(() => hostsEndpoint.data.value ?? [])
-  const loading = hostsEndpoint.loading
-  const error = hostsEndpoint.error
-
-  return {
-    hosts,
-    loading,
-    error,
-    loadHosts,
-  }
+  return { hosts, loading, error, loadHosts }
 }
 
 export default useHostSelector
