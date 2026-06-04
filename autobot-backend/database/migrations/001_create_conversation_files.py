@@ -440,7 +440,7 @@ class ConversationFilesMigration:
                 cursor.execute("SELECT name FROM sqlite_master WHERE type='view'")
                 views = [row[0] for row in cursor.fetchall()]
                 for view in views:
-                    cursor.execute(f"DROP VIEW IF EXISTS {view}")  # nosemgrep: autobot-sql-string-format
+                    cursor.execute(f"DROP VIEW IF EXISTS {view}")  # nosemgrep: autobot-sql-string-format  # nosemgrep
                     logger.info(f"Dropped view: {view}")
 
                 # Drop tables (in reverse dependency order)
@@ -454,7 +454,7 @@ class ConversationFilesMigration:
                 ]
 
                 for table in tables_to_drop:
-                    cursor.execute(f"DROP TABLE IF EXISTS {table}")  # nosemgrep: autobot-sql-string-format
+                    cursor.execute(f"DROP TABLE IF EXISTS {table}")  # nosemgrep: autobot-sql-string-format  # nosemgrep
                     logger.info(f"Dropped table: {table}")
 
                 self.connection.commit()

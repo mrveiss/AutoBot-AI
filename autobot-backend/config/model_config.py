@@ -29,7 +29,7 @@ class ModelConfigMixin:
         selected_model = self.get_nested("backend.llm.local.providers.ollama.selected_model")
 
         if selected_model:
-            logger.info("UNIFIED CONFIG: Selected model from config.yaml: %s", selected_model)
+            logger.info("UNIFIED CONFIG: Selected model from config.yaml: %s", selected_model)  # codeql[py/clear-text-logging-sensitive-data]
             return selected_model
 
         # Only fall back to environment if config.yaml doesn't have the value

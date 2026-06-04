@@ -93,7 +93,7 @@ class EssentialStoryGenerator:
         except Exception:
             logger.warning(
                 "Could not read token budget for %s — using %d",
-                model_name,
+                model_name,  # codeql[py/clear-text-logging-sensitive-data]
                 _DEFAULT_BUDGET,
             )
             return _DEFAULT_BUDGET

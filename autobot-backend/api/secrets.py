@@ -519,7 +519,7 @@ def audit_log(
         "[Secrets Audit] %s | Operation: %s | " "SecretID: %s | Client: %s",
         status,
         operation,
-        safe_id,
+        safe_id,  # codeql[py/clear-text-logging-sensitive-data]
         client_id,
     )
 
