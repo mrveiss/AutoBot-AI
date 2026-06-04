@@ -18,8 +18,6 @@ from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
 
-from autobot_shared.async_compat import run_or_schedule
-
 # Import the centralized ConfigManager
 from config import config as global_config_manager
 from secure_command_executor import CommandRisk, SecureCommandExecutor, SecurityPolicy

@@ -8,7 +8,7 @@ import uuid
 from pathlib import Path
 
 import aiofiles
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, UploadFile, File
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, Response, UploadFile
 
 from autobot_shared.logging_manager import get_logger
 from transcriber.database import Database

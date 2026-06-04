@@ -5,6 +5,7 @@
 """Export transcript to Word (.docx) format using python-docx."""
 
 import io
+
 from docx import Document
 from docx.shared import Pt, RGBColor
 
