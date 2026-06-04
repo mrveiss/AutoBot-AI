@@ -165,7 +165,7 @@ class OpenRouterProvider(BaseProvider):
         except Exception as exc:
             self._total_errors += 1
             logger.error("OpenRouter stream error: %s", exc)
-            yield f"Error: {exc}"
+            yield "Error: Stream completion failed"
 
     async def is_available(self) -> bool:
         """Check if OpenRouter is reachable and properly configured."""

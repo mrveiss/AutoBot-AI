@@ -42,7 +42,7 @@
 
     <!-- Empty State -->
     <div v-else-if="filteredTemplates.length === 0" class="empty-state">
-      <Icon name="building" />
+      <Icon name="briefcase" />
       <p>{{ $t('llc.templates.noMatch') }}</p>
     </div>
 
@@ -56,7 +56,7 @@
         @click="selectTemplate(template)"
       >
         <div class="template-icon" :class="getCategoryClass(template.category)">
-          <Icon :name="template.icon || getDefaultIcon(template.category)" />
+          <Icon :name="(template.icon as any) || getDefaultIcon(template.category)" />
         </div>
         <div class="template-info">
           <h4>{{ template.name }}</h4>
@@ -64,7 +64,7 @@
           <div class="template-meta">
             <span class="category-badge">{{ getCategoryLabel(template.category) }}</span>
             <span v-if="template.estimated_agents" class="agents-count">
-              <Icon name="user-tie" /> {{ template.estimated_agents }} agents
+              <Icon name="users" /> {{ template.estimated_agents }} agents
             </span>
             <span v-if="template.estimated_monthly_cost_cents" class="cost">
               <Icon name="dollar-sign" />
@@ -119,7 +119,7 @@
               <span>{{ getCategoryLabel(previewTemplate.category) }}</span>
             </div>
             <div v-if="previewTemplate.estimated_agents" class="meta-item">
-              <Icon name="user-tie" />
+              <Icon name="users" />
               <span>{{ previewTemplate.estimated_agents }} agents</span>
             </div>
             <div v-if="previewTemplate.estimated_monthly_cost_cents" class="meta-item">
@@ -130,7 +130,7 @@
 
           <!-- Agents -->
           <div v-if="previewTemplate.agents?.length" class="preview-section">
-            <h4><Icon name="user-tie" /> Agents Included</h4>
+            <h4><Icon name="users" /> Agents Included</h4>
             <div class="agent-list">
               <div v-for="agent in previewTemplate.agents" :key="agent.name" class="agent-item">
                 <span class="agent-name">{{ agent.title }}</span>
@@ -281,13 +281,13 @@ function getCategoryClass(cat: TemplateCategory): string {
 function getDefaultIcon(cat: TemplateCategory): string {
   const icons: Record<TemplateCategory, string> = {
     'software-team': 'code',
-    'marketing-agency': 'bullhorn',
+    'marketing-agency': 'comments',
     'consulting-firm': 'briefcase',
-    'research-lab': 'flask',
+    'research-lab': 'lightbulb',
     startup: 'rocket',
-    custom: 'wrench',
+    custom: 'cog',
   }
-  return icons[cat] || 'building'
+  return icons[cat] || 'briefcase'
 }
 
 function selectTemplate(template: CompanyTemplate) {

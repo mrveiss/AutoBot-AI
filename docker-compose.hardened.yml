@@ -113,6 +113,7 @@ services:
     read_only: true
     tmpfs:
       - /tmp
+      - /app/config:mode=1777  # config_manager creates config dir on init
       - /app/autobot-backend/.cache:mode=1777
       - /app/autobot-backend/logs:mode=1777  # logging_manager creates logs/backup dirs on init
     deploy:
@@ -126,6 +127,7 @@ services:
     read_only: true
     tmpfs:
       - /tmp
+      - /app/config:mode=1777  # config_manager creates config dir on init
       - /app/autobot-backend/.cache:mode=1777
       - /app/autobot-backend/logs:mode=1777  # logging_manager creates logs/backup dirs on init
     deploy:
@@ -141,6 +143,7 @@ services:
       - /tmp
       - /var/run
       - /app/data/tmp:mode=1777
+      - /app/logs:mode=1777  # SLM Dockerfile creates /app/logs at build time
     secrets:
       - slm_admin_password
       - slm_jwt_secret

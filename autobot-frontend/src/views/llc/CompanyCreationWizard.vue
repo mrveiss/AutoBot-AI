@@ -229,7 +229,7 @@
                 >
                   <Icon
                     :name="
-                      selectedTemplate.icon || getDefaultIcon(selectedTemplate.category)
+                      (selectedTemplate.icon as any) || getDefaultIcon(selectedTemplate.category)
                     "
                   />
                 </div>

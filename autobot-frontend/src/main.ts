@@ -34,6 +34,8 @@ import './assets/base.css'
 // Initialize theme early to prevent flash of unstyled content
 import { initializeTheme } from '@/composables/useTheme'
 initializeTheme()
+import { initializeThemeVariant } from '@/composables/useThemeVariant'
+initializeThemeVariant()
 // Import xterm CSS globally to avoid dependency resolution issues
 import '@xterm/xterm/css/xterm.css'
 

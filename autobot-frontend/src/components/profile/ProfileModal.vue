@@ -203,6 +203,11 @@
             </div>
           </div>
         </div>
+
+        <!-- Devices Tab -->
+        <div v-if="activeTab === 'devices'" id="panel-devices" role="tabpanel">
+          <DeviceManagementPanel />
+        </div>
       </div>
 
       <!-- Success Toast -->
@@ -226,6 +231,7 @@ import { useUserStore } from '@/stores/useUserStore'
 import PreferencesPanel from '@/components/ui/PreferencesPanel.vue'
 import VoiceSettingsPanel from '@/components/settings/VoiceSettingsPanel.vue'
 import LanguageSettingsPanel from '@/components/settings/LanguageSettingsPanel.vue'
+import DeviceManagementPanel from '@/components/profile/DeviceManagementPanel.vue'
 import { usePreferences } from '@/composables/usePreferences'
 import { useFocusTrap } from '@/composables/useFocusTrap'
 import { useFocusRestore } from '@/composables/useFocusRestore'
@@ -247,13 +253,14 @@ const emit = defineEmits<{
   close: []
 }>()
 
-type TabKey = 'general' | 'appearance' | 'language' | 'security'
+type TabKey = 'general' | 'appearance' | 'language' | 'security' | 'devices'
 
 const tabs = computed<{ key: TabKey; label: string; icon: string }[]>(() => [
   { key: 'general', label: t('profile.tabGeneral'), icon: 'user' },
   { key: 'appearance', label: t('profile.tabAppearance'), icon: 'palette' },
   { key: 'language', label: t('profile.tabLanguage'), icon: 'globe' },
-  { key: 'security', label: t('profile.tabSecurity'), icon: 'shield-alt' }
+  { key: 'security', label: t('profile.tabSecurity'), icon: 'shield-alt' },
+  { key: 'devices', label: t('profile.tabDevices'), icon: 'smartphone' }
 ])
 
 const { t } = useI18n()

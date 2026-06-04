@@ -6,9 +6,11 @@
         <button class="tool-btn" @click="addStepNode" :title="$t('workflow.canvas.addStep')">
           <Icon name="plus" /> {{ $t('workflow.canvas.addStep') }}
         </button>
-        <button class="tool-btn" @click="addConditionNode" :title="$t('workflow.canvas.addCondition') + ' (coming soon — #2140)'" :class="{ 'btn-experimental': true }">
+        <button class="tool-btn" @click="addConditionNode" :title="$t('workflow.canvas.addCondition')">
           <Icon name="code-branch" /> {{ $t('workflow.canvas.condition') }}
-          <span class="badge-experimental">beta</span>
+        </button>
+        <button class="tool-btn" @click="addSwitchNode" :title="$t('workflow.canvas.addSwitch')">
+          <Icon name="random" /> {{ $t('workflow.canvas.switch') }}
         </button>
         <div class="toolbar-divider"></div>
         <div class="dropdown-container">
@@ -82,7 +84,27 @@
               </div>
             </template>
             <template v-else-if="node.type === 'condition'">
-              <input v-model="(node.data as any).condition" :placeholder="$t('workflow.canvas.conditionPlaceholder')" @click.stop />
+              <select v-model="(node.data as any).condition_type" @click.stop>
+                <option value="expression">{{ $t('workflow.canvas.conditionExpr') }}</option>
+                <option value="jsonpath">JSONPath</option>
+                <option value="compare">{{ $t('workflow.canvas.conditionCompare') }}</option>
+              </select>
+              <input v-model="(node.data as any).condition" :placeholder="(node.data as any).condition_type === 'jsonpath' ? '$.result.status == &quot;ok&quot;' : $t('workflow.canvas.conditionPlaceholder')" class="mono" @click.stop />
+              <div class="branch-labels">
+                <span class="branch-true">✓ True</span>
+                <span class="branch-false">✗ False</span>
+              </div>
+            </template>
+            <template v-else-if="node.type === 'switch'">
+              <input v-model="(node.data as any).switch_on" :placeholder="$t('workflow.canvas.switchOnPlaceholder')" class="mono" @click.stop />
+              <div class="switch-cases">
+                <div v-for="(c, i) in ((node.data as any).cases || [])" :key="i" class="switch-case-row">
+                  <input v-model="(node.data as any).cases[i]" :placeholder="`case ${i + 1}`" class="mono" @click.stop />
+                  <button class="delete-case-btn" @click.stop="removeCase(node, i)">×</button>
+                </div>
+                <button class="add-case-btn" @click.stop="addCase(node)">+ {{ $t('workflow.canvas.addCase') }}</button>
+              </div>
+              <span class="hint">{{ $t('workflow.canvas.switchDefaultHint') }}</span>
             </template>
             <template v-else-if="node.type.startsWith('vision-')">
               <div class="node-row">
@@ -172,6 +194,7 @@ const showVisionDropdown = ref(false);
 const nodeIcons: Record<string, string> = {
   step: 'terminal',
   condition: 'code-branch',
+  switch: 'random',
   parallel: 'columns',
   'vision-capture': 'camera',
   'vision-find-element': 'search',
@@ -183,6 +206,7 @@ const nodeIcons: Record<string, string> = {
 const nodeLabels = computed(() => ({
   step: t('workflow.canvas.stepLabel'),
   condition: t('workflow.canvas.conditionLabel'),
+  switch: t('workflow.canvas.switchLabel'),
   parallel: t('workflow.canvas.parallelLabel'),
   'vision-capture': t('workflow.canvas.visionCapture'),
   'vision-find-element': t('workflow.canvas.visionFindElement'),
@@ -252,6 +276,30 @@ function addConditionNode() {
   };
   emit('node-added', node);
   emit('node-selected', node.id);
+}
+
+function addSwitchNode() {
+  const node: WorkflowNode = {
+    id: genId(), type: 'switch',
+    position: { x: 100 + props.nodes.length * 40, y: 100 + props.nodes.length * 30 },
+    data: { switch_on: '', cases: [''] }, connections: []
+  };
+  emit('node-added', node);
+  emit('node-selected', node.id);
+}
+
+function addCase(node: WorkflowNode) {
+  const data = node.data as Record<string, unknown>;
+  const cases = (data.cases as string[]) || [];
+  cases.push('');
+  data.cases = cases;
+}
+
+function removeCase(node: WorkflowNode, index: number) {
+  const data = node.data as Record<string, unknown>;
+  const cases = (data.cases as string[]) || [];
+  cases.splice(index, 1);
+  data.cases = cases;
 }
 
 function addVisionNode(type: WorkflowNode['type']) {
@@ -374,7 +422,18 @@ function confirmSave() { emit('save-workflow', saveName.value, saveDesc.value); 
 .workflow-node.selected { border-color: var(--color-primary); box-shadow: 0 0 0 3px var(--color-primary-bg); }
 .workflow-node.step .node-header { background: var(--color-primary); }
 .workflow-node.condition .node-header { background: var(--color-warning); }
+.workflow-node.switch .node-header { background: #0891b2; }
 .workflow-node[class*="vision-"] .node-header { background: linear-gradient(135deg, #7c3aed, #6d28d9); }
+.branch-labels { display: flex; justify-content: space-between; font-size: var(--text-xs); margin-top: var(--spacing-1); }
+.branch-true { color: var(--color-success, #22c55e); font-weight: 600; }
+.branch-false { color: var(--color-error, #ef4444); font-weight: 600; }
+.switch-cases { display: flex; flex-direction: column; gap: var(--spacing-1); }
+.switch-case-row { display: flex; gap: var(--spacing-1); align-items: center; }
+.switch-case-row input { flex: 1; }
+.delete-case-btn { padding: 2px 6px; background: var(--bg-tertiary); border: 1px solid var(--border-default); border-radius: var(--radius-default); color: var(--text-secondary); cursor: pointer; font-size: var(--text-xs); line-height: 1; }
+.delete-case-btn:hover { color: var(--color-error, #ef4444); }
+.add-case-btn { padding: var(--spacing-1) var(--spacing-2); background: transparent; border: 1px dashed var(--border-default); border-radius: var(--radius-default); color: var(--text-secondary); cursor: pointer; font-size: var(--text-xs); text-align: left; }
+.add-case-btn:hover { border-color: var(--color-primary); color: var(--color-primary); }
 
 .dropdown-container { position: relative; display: inline-block; }
 .dropdown-menu { position: absolute; top: 100%; left: 0; z-index: 10; background: var(--bg-secondary, #1e293b); border: 1px solid var(--border-color, #334155); border-radius: var(--radius-md); padding: var(--spacing-1) var(--spacing-0); min-width: 180px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }

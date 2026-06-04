@@ -36,6 +36,8 @@ from api.schemas_chat import (
     ChatPreferences,
     ChatSaveData,
     ChatStatsData,
+    ConversationSummarizeData,
+    ConversationSummarizeRequest,
     DetectLanguageData,
     DetectLanguageRequest,
     EnhancedChatCapabilitiesData,
@@ -73,6 +75,9 @@ from utils.chat_utils import (
     log_chat_event,
     validate_chat_session_id,
 )
+
+# Import context overflow protection (#9043)
+from chat_history.overflow_integration import handle_message_completion, create_summary_message
 
 # Import models - DISABLED: Models don't exist yet
 # from backend.models.conversation import ConversationModel
@@ -547,11 +552,12 @@ def _build_llm_context(
     return llm_context
 
 
-async def _generate_ai_response(llm_service, llm_context: List[Dict], session_id: str, request_id: str) -> Dict:
+async def _generate_ai_response(llm_service, llm_context: List[Dict], session_id: str, request_id: str) -> tuple[Dict, Any]:
     """
     Generate AI response using LLM service with fallback handling.
 
     Issue #281: Extracted helper for AI response generation.
+    Issue #9043: Returns full LLMResponse for token tracking.
 
     Args:
         llm_service: LLM service instance
@@ -560,7 +566,7 @@ async def _generate_ai_response(llm_service, llm_context: List[Dict], session_id
         request_id: Request ID
 
     Returns:
-        AI response dict with content and role
+        Tuple of (AI response dict with content and role, LLMResponse object or None)
     """
     try:
         # LLMService.chat() accepts OpenAI-format messages and uses
@@ -576,14 +582,14 @@ async def _generate_ai_response(llm_service, llm_context: List[Dict], session_id
             return {
                 "content": "I encountered an error processing your message. Please try again.",
                 "role": "assistant",
-            }
-        return {"content": response.content, "role": "assistant"}
+            }, None
+        return {"content": response.content, "role": "assistant"}, response
     except Exception as e:
         logger.error("LLM generation failed: %s", e)
         return {
             "content": "I encountered an error processing your message. Please try again.",
             "role": "assistant",
-        }
+        }, None
 
 
 async def _store_and_log_ai_response(
@@ -653,7 +659,8 @@ async def process_chat_message(
     author_id: str | None = None,
 ) -> ChatMessageData:
     """Process a chat message and generate response (Issue #398: refactored,
-    Issue #3282: author_id for multi-user attribution, Issue #6502: typed return)."""
+    Issue #3282: author_id for multi-user attribution, Issue #6502: typed return,
+    Issue #9043: context overflow protection)."""
     _validate_session_id(message.session_id)
 
     session_id = message.session_id
@@ -668,11 +675,54 @@ async def process_chat_message(
     # Build LLM context (Issue #281: uses helper)
     llm_context = _build_llm_context(chat_context, message, chat_history_manager, model_name)
 
-    # Generate AI response (Issue #281: uses helper)
-    ai_response = await _generate_ai_response(llm_service, llm_context, session_id, request_id)
+    # Generate AI response (Issue #281: uses helper, Issue #9043: returns LLMResponse for token tracking)
+    ai_response, llm_response = await _generate_ai_response(llm_service, llm_context, session_id, request_id)
 
     # Store AI response (Issue #281: uses helper)
     ai_message_id = await _store_and_log_ai_response(ai_response, session_id, request_id, chat_history_manager)
+
+    # Issue #9043: Check for context overflow and handle auto-summarization
+    overflow_status = await handle_message_completion(
+        session_id=session_id,
+        model_name=model_name or "gpt-4",  # Fallback to default if not specified
+        llm_response=llm_response,
+        messages=chat_context,  # Full history for summarization
+    )
+
+    # Handle context overflow summary injection
+    if overflow_status.get("summary_created"):
+        summary_msg = await create_summary_message(overflow_status["summary_text"])
+        if hasattr(chat_history_manager, "add_messages_batch"):
+            await chat_history_manager.add_messages_batch(
+                session_id,
+                [_to_persisted_message(summary_msg, "context_summary")]
+            )
+        logger.info(
+            "Context overflow: auto-summarized session %s (%d%% full)",
+            session_id,
+            int(overflow_status.get("current_fill_percentage", 0) * 100),
+        )
+
+    # Add overflow warning to metadata if triggered
+    metadata = ai_response.get("metadata", {})
+    if overflow_status.get("warning_triggered"):
+        metadata["context_warning"] = {
+            "fill_percentage": overflow_status.get("current_fill_percentage", 0),
+            "total_tokens": overflow_status.get("total_tokens", 0),
+            "context_limit": overflow_status.get("context_limit", 0),
+        }
+
+    # MVA-3090: Extract thinking metadata from LLM response
+    thinking_metadata = None
+    if llm_response and llm_response.usage:
+        # Check for thinking_tokens in usage dict (Anthropic extended thinking)
+        thinking_tokens = llm_response.usage.get("thinking_tokens") or llm_response.usage.get("cache_read_input_tokens")
+        if thinking_tokens and thinking_tokens > 0:
+            from api.schemas_chat import ThinkingMetadata
+            thinking_metadata = ThinkingMetadata(used=True, tokens_used=thinking_tokens)
+        else:
+            from api.schemas_chat import ThinkingMetadata
+            thinking_metadata = ThinkingMetadata(used=False, tokens_used=None)
 
     return ChatMessageData(
         content=ai_response.get("content", ""),
@@ -680,7 +730,8 @@ async def process_chat_message(
         session_id=session_id,
         message_id=ai_message_id,
         timestamp=utc_timestamp(),
-        metadata=ai_response.get("metadata", {}),
+        metadata=metadata,
+        thinking_metadata=thinking_metadata,
     )
 
 
@@ -695,12 +746,20 @@ async def _generate_llm_stream(
     llm_service,
     request_id: str,
 ):
-    """Generate LLM streaming response chunks (Issue #398: extracted)."""
+    """Generate LLM streaming response chunks (Issue #398: extracted, MVA-3090: thinking metadata).
+
+    Note: thinking_metadata is included in non-streaming responses via process_chat_message.
+    For streaming responses, thinking_metadata would need to be extracted from the LLM stream's
+    final usage information and included in the 'end' event. Currently not implemented for
+    the streaming path due to llm_service.stream_response() only yielding text chunks.
+    """
     try:
         session_id = message.session_id
         yield f"data: {json.dumps({'type': 'start', 'session_id': session_id})}\n\n"
 
         if hasattr(llm_service, "stream_response"):
+            # MVA-3090: Streaming path - thinking_metadata not yet extracted from stream
+            # TODO: Extract usage/thinking_metadata from stream final message and include in end event
             async for chunk in llm_service.stream_response(message.content, session_id):
                 chunk_data = {
                     "type": "chunk",
@@ -710,11 +769,13 @@ async def _generate_llm_stream(
                 }
                 yield f"data: {json.dumps(chunk_data)}\n\n"
         else:
+            # Non-streaming path - thinking_metadata included via process_chat_message
             response_data = await process_chat_message(
                 message, chat_history_manager, llm_service, None, None, {}, request_id
             )
             yield f"data: {json.dumps({'type': 'complete', **response_data.model_dump()})}\n\n"
 
+        # MVA-3090: End event could include thinking_metadata here for streaming responses
         yield f"data: {json.dumps({'type': 'end'})}\n\n"
 
     except Exception as e:
@@ -2151,3 +2212,88 @@ async def detect_language(
     )
     result = await agent.handle_detect_language(req)
     return JSONResponse(content=result, media_type="application/json; charset=utf-8")  # codeql[py/stack-trace-exposure]
+
+
+@router.post("/chat/summarize", response_model=DataResponse[Dict[str, Any]])
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="summarize_conversation",
+    error_code_prefix="CHAT_SUMMARIZE",
+)
+async def summarize_conversation(
+    body: "ConversationSummarizeRequest",
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Summarize a range of conversation messages for context overflow protection (GH#9043).
+
+    When a conversation approaches the model's context window limit, this endpoint
+    generates a compact summary of the earliest messages to enable a rolling window
+    approach without losing essential context.
+    """
+    from api.schemas_chat import ConversationSummarizeData, ConversationSummarizeRequest
+
+    request_id = generate_request_id()
+    logger.info("[%s] Summarizing %d messages from session %s", request_id, len(body.message_ids), body.session_id)
+
+    # Validate session ownership
+    await validate_chat_ownership(body.session_id, request)
+
+    # Get chat history manager and retrieve messages
+    chat_history = get_chat_history_manager()
+    all_messages = await chat_history.get_messages(body.session_id)
+
+    # Filter to requested message IDs
+    messages_to_summarize = [msg for msg in all_messages if msg.get("message_id") in body.message_ids]
+
+    if not messages_to_summarize:
+        raise HTTPException(status_code=404, detail="No messages found with the provided IDs")
+
+    # Build prompt for summarization
+    conversation_text = "\n\n".join(
+        [f"{msg.get('role', 'unknown').upper()}: {msg.get('content', '')}" for msg in messages_to_summarize]
+    )
+
+    summarization_prompt = f"""Summarize the following conversation segment concisely. Preserve key context, decisions, and technical details that would be needed to continue the conversation naturally.
+
+Target length: approximately {body.target_length or 500} tokens.
+
+Conversation:
+{conversation_text}
+
+Summary:"""
+
+    # Get LLM service and generate summary
+    llm_service = get_llm_service(request)
+
+    try:
+        summary_response = await llm_service.generate_response(
+            messages=[{"role": "user", "content": summarization_prompt}],
+            model="gpt-4o-mini",  # Fast, cheap model for summarization
+            max_tokens=body.target_length or 500,
+            temperature=0.3,  # Lower temperature for focused summarization
+        )
+
+        summary_text = summary_response.get("content", "")
+        summary_tokens = summary_response.get("usage", {}).get("total_tokens", 0)
+
+    except Exception as e:
+        logger.exception("[%s] Failed to generate summary", request_id)
+        raise HTTPException(status_code=500, detail=f"Summarization failed: {str(e)}")
+
+    result_data = ConversationSummarizeData(
+        summary=summary_text,
+        original_message_count=len(messages_to_summarize),
+        summary_token_count=summary_tokens,
+        timestamp=utc_timestamp(),
+    )
+
+    logger.info(
+        "[%s] Generated summary: %d messages → %d tokens",
+        request_id,
+        result_data.original_message_count,
+        result_data.summary_token_count or 0,
+    )
+
+    return DataResponse(data=result_data.model_dump())

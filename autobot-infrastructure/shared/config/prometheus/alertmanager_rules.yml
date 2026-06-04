@@ -494,3 +494,111 @@ groups:
             Check backend startup logs:
             journalctl -u autobot-backend | grep "Knowledge base initialization"
             If persistent, restart backend: sudo systemctl restart autobot-backend
+
+  # Mobile Device Pairing Alerts (GH#4463)
+  - name: autobot_mobile_devices
+    rules:
+      # High pairing failure rate
+      - alert: HighDevicePairingFailureRate
+        expr: |
+          (
+            rate(autobot_device_pairing_attempts_total{status=~"expired|invalid"}[5m])
+            /
+            rate(autobot_device_pairing_attempts_total[5m])
+          ) > 0.1
+        for: 10m
+        labels:
+          severity: warning
+          component: mobile_devices
+          feature: pairing
+        annotations:
+          summary: "High Mobile Device Pairing Failure Rate"
+          description: "Pairing failure rate is {{ $value | humanizePercentage }} (threshold: 10%)"
+          recommendation: |
+            1. Check Redis availability for QR challenge token storage
+            2. Review pairing logs: journalctl -u autobot-backend | grep "paired for user"
+            3. Verify QR code TTL settings (5 minutes default)
+            4. Check for clock skew between mobile and backend
+
+      # Critical pairing failure rate
+      - alert: CriticalDevicePairingFailureRate
+        expr: |
+          (
+            rate(autobot_device_pairing_attempts_total{status=~"expired|invalid"}[5m])
+            /
+            rate(autobot_device_pairing_attempts_total[5m])
+          ) > 0.3
+        for: 5m
+        labels:
+          severity: critical
+          component: mobile_devices
+          feature: pairing
+        annotations:
+          summary: "Critical Mobile Device Pairing Failure Rate"
+          description: "Pairing failure rate is {{ $value | humanizePercentage }} (threshold: 30%)"
+          recommendation: |
+            IMMEDIATE ACTION REQUIRED:
+            1. Check Redis service: sudo systemctl status autobot-redis
+            2. Verify backend health: curl http://localhost:8000/health
+            3. Check for network issues between mobile clients and backend
+            4. Review recent code deployments to pairing endpoints
+
+      # High push notification failure rate
+      - alert: HighPushNotificationFailureRate
+        expr: |
+          (
+            rate(autobot_device_push_sent_total{status="failure"}[5m])
+            /
+            rate(autobot_device_push_sent_total[5m])
+          ) > 0.1
+        for: 10m
+        labels:
+          severity: warning
+          component: mobile_devices
+          feature: push_notifications
+        annotations:
+          summary: "High Push Notification Failure Rate"
+          description: "Push notification failure rate is {{ $value | humanizePercentage }} (threshold: 10%)"
+          recommendation: |
+            1. Check APNs/FCM service status
+            2. Verify device tokens are valid and not expired
+            3. Review push notification logs
+            4. Check for network issues to APNs/FCM endpoints
+
+      # No cleanup activity for extended period
+      - alert: DeviceCleanupStalled
+        expr: increase(autobot_device_cleanup_removed_total[2d]) == 0
+        for: 1h
+        labels:
+          severity: low
+          component: mobile_devices
+          feature: cleanup
+        annotations:
+          summary: "No Device Cleanup Activity in 2 Days"
+          description: "Mobile device cleanup job has not removed any devices in the past 2 days"
+          recommendation: |
+            This may be normal if no devices have expired. Verify:
+            1. Check cleanup job is scheduled: celery -A celery_app inspect active
+            2. Review cleanup task logs
+            3. Query stale devices manually to confirm expected count
+
+      # Sudden spike in active devices
+      - alert: UnusualActiveDeviceIncrease
+        expr: |
+          (
+            sum(autobot_device_active_count) - sum(autobot_device_active_count offset 1h)
+          ) > 100
+        for: 5m
+        labels:
+          severity: warning
+          component: mobile_devices
+          feature: monitoring
+        annotations:
+          summary: "Unusual Increase in Active Devices"
+          description: "Active device count increased by {{ $value }} in the past hour (threshold: 100)"
+          recommendation: |
+            Potential bulk pairing or data anomaly:
+            1. Check for bulk device registration events
+            2. Review recent user sign-ups
+            3. Verify metrics are accurate: check DB device count vs metric gauge
+            4. Investigate for potential abuse or testing activity

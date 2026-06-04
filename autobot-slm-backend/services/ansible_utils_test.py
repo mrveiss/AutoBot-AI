@@ -8,6 +8,20 @@ import pytest
 from services.ansible_utils import _extract_failure_summary
 
 
+def test_regular_task_failure():
+    """Regular task failures are attributed correctly."""
+    output = """
+TASK [backend : Backend | Check cognition_seed.yaml exists (#4679)] ****
+fatal: [00-SLM-Manager]: FAILED! => {
+  "msg": "File not found"
+}
+"""
+    result = _extract_failure_summary(output)
+    assert "00-SLM-Manager" in result
+    assert "backend : Backend | Check cognition_seed.yaml exists (#4679)" in result
+    assert "File not found" in result
+
+
 def test_handler_failure_attribution():
     """Handler failures should show the handler name, not the last task (#9286)."""
     output = """
@@ -24,7 +38,6 @@ PLAY RECAP *****
 """
     result = _extract_failure_summary(output)
 
-    # Should report the handler, not the previous task
     assert "restart backend" in result
     assert "cognition_seed.yaml" not in result
     assert "00-SLM-Manager" in result
@@ -116,7 +129,6 @@ fatal: [host-01]: FAILED! => {
 """
     result = _extract_failure_summary(output)
 
-    # Both failures should be reported with correct task names
     assert "restart service" in result
     assert "Verify deployment" in result or "verification" in result.lower()
 
@@ -131,7 +143,6 @@ fatal: [host-01]: FAILED! => {
 """
     result = _extract_failure_summary(output)
 
-    # Should still report the failure even without a message
     assert "host-01" in result
     assert "Complex operation" in result
     assert "failed" in result.lower()

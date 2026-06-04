@@ -263,7 +263,9 @@ class UnifiedLLMInterface:
                 model="failed",
                 error="All providers unavailable",
             )
-        return await selected.chat_completion(request)
+        from llm_shared.model_fallback_coordinator import get_fallback_coordinator
+
+        return await get_fallback_coordinator().execute_with_fallback(request, registry)
 
     async def generate_response(self, prompt: str, llm_type: str = "task", **kwargs: Any) -> str:
         """Legacy helper: run a single-turn prompt and return the text."""

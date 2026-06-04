@@ -338,6 +338,8 @@ async def chat_completions(
     registry = get_provider_registry()
     llm_request = _build_llm_request(body, resolved_model=resolved_model)
 
+    from llm_shared.model_fallback_coordinator import get_fallback_coordinator
+
     provider = await registry.get_provider_for_request(request=llm_request)
     if provider is None:
         raise HTTPException(status_code=503, detail="No LLM providers available")
@@ -378,8 +380,10 @@ async def chat_completions(
             headers=stream_headers,
         )
 
-    # Non-streaming path
-    llm_response = await provider.chat_completion(llm_request)
+    # Non-streaming path — use fallback coordinator for quota-triggered model switch
+    from llm_shared.model_fallback_coordinator import get_fallback_coordinator
+
+    llm_response = await get_fallback_coordinator().execute_with_fallback(llm_request, registry)
     if llm_response.error:
         raise HTTPException(status_code=502, detail=llm_response.error)
 

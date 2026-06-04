@@ -295,6 +295,31 @@ if "llm_shared" not in sys.modules:
     _tr_real_path = str(backend_root / "llm_shared" / "tiered_routing")
     sys.modules["llm_shared.tiered_routing"].__path__ = [_tr_real_path]  # type: ignore[attr-defined]
 
+    # GH#8998: Register real fallback_chain and model_fallback_coordinator modules
+    # so tests inside llm_shared/ can import them without the full heavy __init__.py chain.
+    # Load in dependency order: types → models → optimization.rate_limiter → fallback_chain → coordinator.
+    import importlib.util as _ilu
+
+    _llm_root = backend_root / "llm_shared"
+
+    def _load_real_mod(name: str, path: "Path") -> None:  # type: ignore[name-defined]
+        if name in sys.modules:
+            return
+        _spec = _ilu.spec_from_file_location(name, str(path))
+        if _spec and _spec.loader:
+            _mod = _ilu.module_from_spec(_spec)
+            sys.modules[name] = _mod
+            try:
+                _spec.loader.exec_module(_mod)  # type: ignore[union-attr]
+            except Exception:
+                sys.modules.pop(name, None)
+
+    _load_real_mod("llm_shared.types", _llm_root / "types.py")
+    _load_real_mod("llm_shared.models", _llm_root / "models.py")
+    _load_real_mod("llm_shared.optimization.rate_limiter", _llm_root / "optimization" / "rate_limiter.py")
+    _load_real_mod("llm_shared.fallback_chain", _llm_root / "fallback_chain.py")
+    _load_real_mod("llm_shared.model_fallback_coordinator", _llm_root / "model_fallback_coordinator.py")
+
     # Stub llm_shared.optimization.model_inspector so complexity_router.py can
     # load without the full optimization stack (inspect_model is only called in
     # model_fits_in_vram which tests don't exercise).

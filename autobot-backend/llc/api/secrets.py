@@ -141,7 +141,7 @@ async def get_secret(
     try:
         plaintext = await svc.get(session=session, company_id=company_id, name=name)
     except SecretNotFound as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error") from exc
 
     result = await session.execute(
         select(LLCSecret).where(
@@ -165,5 +165,5 @@ async def revoke_secret(
     try:
         await svc.revoke(session=session, company_id=company_id, name=name, actor=actor)
     except SecretNotFound as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error") from exc
     await session.commit()

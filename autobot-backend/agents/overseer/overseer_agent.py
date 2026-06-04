@@ -462,7 +462,8 @@ Examples:
 
         except Exception as e:
             logger.error("[OverseerAgent] Step %d failed: %s", task.step_number, e)
-            yield ("update", _build_error_update(plan_id, task, str(e)))
+            # Issue #9410: Never leak exception details in SSE streams
+            yield ("update", _build_error_update(plan_id, task, "Task execution failed"))
 
     def _build_plan_update(self, plan: TaskPlan) -> OverseerUpdate:
         """

@@ -15,6 +15,8 @@ import uuid
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+
+from autobot_shared.logging_manager import get_logger
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -26,6 +28,8 @@ from user_management.services import TenantContext
 from ..models.heartbeat_run import LLCHeartbeatRun
 from ..scheduler.heartbeat_scheduler import get_heartbeat_scheduler
 
+
+logger = get_logger(__name__)
 router = APIRouter(prefix="/agents", tags=["llc-agents"])
 
 
@@ -101,7 +105,8 @@ async def trigger_heartbeat(
     try:
         run, agent_cfg = await sched.trigger_manual(session, agent_id)
     except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc))
+        logger.error("Exception in API handler: %s", exc, exc_info=True)
+        raise HTTPException(status_code=404, detail="Internal server error")
 
     agent_company = agent_cfg.get("company_id")
     if agent_company is not None and agent_company != ctx.org_id:

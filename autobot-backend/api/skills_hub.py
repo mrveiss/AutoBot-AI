@@ -94,9 +94,11 @@ async def install_skill(body: InstallRequest) -> InstalledSkillOut:
     try:
         installed = await hub.install(body.skill_id)
     except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        logger.error("Exception in API handler: %s", exc, exc_info=True)
+        raise HTTPException(status_code=404, detail="Internal server error") from exc
     except PermissionError as exc:
-        raise HTTPException(status_code=403, detail=str(exc)) from exc
+        logger.error("Exception in API handler: %s", exc, exc_info=True)
+        raise HTTPException(status_code=403, detail="Internal server error") from exc
     except Exception as exc:
         logger.exception("Hub install failed for '%s'", body.skill_id)
         raise HTTPException(status_code=500, detail=f"Install failed: {exc}") from exc
@@ -110,7 +112,8 @@ async def uninstall_skill(skill_id: str) -> dict:
     try:
         await hub.uninstall(skill_id)
     except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        logger.error("Exception in API handler: %s", exc, exc_info=True)
+        raise HTTPException(status_code=404, detail="Internal server error") from exc
     except Exception as exc:
         logger.exception("Hub uninstall failed for '%s'", skill_id)
         raise HTTPException(status_code=500, detail=f"Uninstall failed: {exc}") from exc

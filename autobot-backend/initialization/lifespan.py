@@ -382,6 +382,40 @@ async def _init_builtin_extensions(app: FastAPI) -> None:
         logger.warning("Built-in extension registration failed (non-critical): %s", ext_error)
 
 
+async def _init_transcriber_db(app: FastAPI) -> None:
+    """Initialize the transcriber SQLite database (GH#9044).
+
+    Non-critical: a failure logs a warning but does not block startup.
+    Skipped entirely when TRANSCRIBER_ENABLED != true.
+    Sets ``app.state.transcriber_db``, ``app.state.transcriber_upload_dir``,
+    and ``app.state.transcriber_export_dir`` for use by the dependency
+    injection layer (``transcriber.deps.get_db``).
+    """
+    import os
+    from pathlib import Path as _Path
+
+    enabled = os.getenv("TRANSCRIBER_ENABLED", "true").lower() == "true"
+    if not enabled:
+        logger.info("Transcriber DB init skipped (TRANSCRIBER_ENABLED != true)")
+        return
+    try:
+        from transcriber.database import Database
+
+        data_dir = _Path(os.getenv("TRANSCRIBER_DATA_DIR", "data/transcriber"))
+        data_dir.mkdir(parents=True, exist_ok=True)
+        (data_dir / "uploads").mkdir(exist_ok=True)
+        (data_dir / "processed").mkdir(exist_ok=True)
+        (data_dir / "exports").mkdir(exist_ok=True)
+        db = Database(str(data_dir / "transcriber.db"))
+        await db.connect()
+        app.state.transcriber_db = db
+        app.state.transcriber_upload_dir = str(data_dir / "uploads")
+        app.state.transcriber_export_dir = str(data_dir / "exports")
+        logger.info("Transcriber DB initialized")
+    except Exception as _tc_err:
+        logger.warning("Transcriber DB init failed (non-critical): %s", _tc_err)
+
+
 async def initialize_critical_services(app: FastAPI):
     """
     Phase 1: Initialize critical services (BLOCKING).
@@ -442,10 +476,12 @@ async def initialize_critical_services(app: FastAPI):
         # --- Tier 3: non-critical services (parallel) ---
         # Issue #743: Register caches with CacheCoordinator for memory optimization
         # Issue #3009: Register built-in extensions (permission enforcement)
+        # GH#9044: Transcriber DB
         await asyncio.gather(
             _init_cache_coordinator(),
             _init_skills(app),
             _init_builtin_extensions(app),
+            _init_transcriber_db(app),
         )
 
         logger.info("✅ [ 60%] PHASE 1 COMPLETE: All critical services operational")
@@ -1658,6 +1694,12 @@ async def cleanup_services(app: FastAPI):
     """
     logger.info("🛑 AutoBot Backend shutting down...")
     try:
+        # GH#9044: Close transcriber DB connection
+        transcriber_db = getattr(app.state, "transcriber_db", None)
+        if transcriber_db is not None:
+            await transcriber_db.close()
+            logger.info("Transcriber DB closed")
+
         if hasattr(app.state, "background_llm_sync") and app.state.background_llm_sync:
             await app.state.background_llm_sync.stop()
         if hasattr(app.state, "memory_graph") and app.state.memory_graph:

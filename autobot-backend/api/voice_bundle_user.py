@@ -19,7 +19,7 @@ from api.voice_bundle_constants import (
     VALID_BUNDLES,
     BundleAssignRequest,
 )
-from auth_middleware import get_current_user
+from auth_middleware import get_current_user, get_auth_middleware
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from services.audit.unified_audit import AuditCategory, AuditEvent, emit
@@ -74,6 +74,16 @@ async def _count_tools_for_bundle(bundle: str, is_admin: bool) -> int:
 
 def _is_admin(user: dict) -> bool:
     return user.get("role") == "admin"
+
+
+def _require_admin(request: Request) -> dict:
+    """Verify current user is admin, return user_data or raise."""
+    user_data = get_auth_middleware().get_user_from_request(request)
+    if not user_data:
+        raise_auth_error("AUTH_0002", "Authentication required")
+    if user_data.get("role") != "admin":
+        raise_auth_error("AUTH_0003", "Admin permission required")
+    return user_data
 
 
 def _get_user_id(user: dict) -> str:
@@ -185,7 +195,7 @@ async def set_user_bundle(
     user_id: str,
     body: BundleAssignRequest,
     request: Request,
-    current_user: dict = Depends(get_current_user),
+    admin_user: dict = Depends(_require_admin),
 ) -> UserBundleResponse:
     """Assign or clear a voice bundle override for a user.
 
@@ -193,16 +203,13 @@ async def set_user_bundle(
     self-service is explicitly prohibited to prevent privilege escalation
     (GH#8969).
     """
-    if not _is_admin(current_user):
-        raise_auth_error("AUTH_0003", "Only admins may assign voice bundles")
-
     if body.bundle_name is not None and body.bundle_name not in VALID_BUNDLES:
         raise HTTPException(
             status_code=422,
             detail=f"Invalid bundle_name '{body.bundle_name}'. Valid: {sorted(VALID_BUNDLES)}",
         )
 
-    current_user_id = _get_user_id(current_user)
+    current_user_id = _get_user_id(admin_user)
 
     _audit_meta = {
         "target_user_id": user_id,

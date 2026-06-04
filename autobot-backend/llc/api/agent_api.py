@@ -175,7 +175,8 @@ async def agent_upload_attachment(
             "text_extracted": row.text_extracted,
         }
     except AttachmentTooLarge as exc:
-        raise HTTPException(status_code=413, detail=str(exc))
+        logger.error("Exception in API handler: %s", exc, exc_info=True)
+        raise HTTPException(status_code=413, detail="Internal server error")
 
 
 @router.get("/context/{item_id}")

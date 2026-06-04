@@ -322,6 +322,8 @@ import { useToolApproval, type PendingToolApproval } from '@/composables/useTool
 import MultiModelChat from './MultiModelChat.vue'
 // GH#8990: context window usage indicator
 import { useContextWindow } from '@/composables/chat/useContextWindow'
+// GH#9043: context overflow protection — auto-summarize on overflow
+import { useContextOverflowProtection } from '@/composables/chat/useContextOverflowProtection'
 
 // i18n
 const { t } = useI18n()
@@ -354,7 +356,30 @@ const contextWindowProps = computed(() => ({
   isWarning: _ctxWindow.isWarning.value,
   isCritical: _ctxWindow.isCritical.value,
   hasData: _ctxWindow.hasData.value,
+  isSummarizing: isSummarizing.value, // GH#9043: show summarization progress
 }))
+
+// GH#9043: context overflow protection — auto-summarize when approaching limit
+const { isProtectionActive, isSummarizing } = useContextOverflowProtection({
+  sessionId: computed(() => store.currentSessionId),
+  messages: computed(() => store.currentSession?.messages ?? []),
+  modelName: computed(() => store.settings.model),
+  enabled: computed(() => store.settings.persistHistory), // Only when history is persistent
+  onSummarize: (summaryMessage) => {
+    // Replace old messages with summary in the current session
+    if (store.currentSession) {
+      const summarizedIds = summaryMessage.metadata?.summarized_message_ids as string[] || []
+      // Keep messages that weren't summarized, plus the new summary
+      store.currentSession.messages = [
+        summaryMessage,
+        ...store.currentSession.messages.filter(
+          msg => !msg.message_id || !summarizedIds.includes(msg.message_id)
+        )
+      ]
+      logger.info('Replaced %d messages with summary', summarizedIds.length)
+    }
+  },
+})
 
 // Issue #4952: agent-loop tool approval via POST /api/agent-terminal/tools/approve/{id}
 const {

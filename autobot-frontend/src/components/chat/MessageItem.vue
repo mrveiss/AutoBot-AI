@@ -108,6 +108,13 @@
             <Icon name="clock" />
             {{ message.metadata.duration }}ms
           </span>
+          <span
+            v-if="message.thinking_metadata?.used"
+            class="metadata-item thinking-badge"
+            :title="$t('chat.message.thinking.tooltip')"
+          >
+            {{ $t('chat.message.thinking.badge', { count: message.thinking_metadata.tokens_used || 0 }) }}
+          </span>
         </div>
       </div>
 
@@ -522,6 +529,11 @@ const formattedContent = computed(() => {
 
 .metadata-item {
   @apply flex items-center gap-1;
+}
+
+.metadata-item.thinking-badge {
+  @apply font-semibold;
+  color: var(--color-primary);
 }
 
 .streaming-content {

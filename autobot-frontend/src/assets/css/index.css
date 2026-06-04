@@ -22,5 +22,8 @@
 /* Accent colors - Custom accent color presets (Issue #8988) */
 @import './themes/accents.css';
 
+/* Ember theme variant - Warm palette (Issue #9274 / MVA-3096) */
+@import './themes/ember.css';
+
 /* Global component patterns — shared UI classes for all views (Issue #901) */
 @import './components.css';

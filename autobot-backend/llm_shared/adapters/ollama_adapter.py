@@ -143,7 +143,8 @@ class OllamaAdapter(AdapterBase):
                         logger.debug("OllamaAdapter.pull_model: non-JSON line: %s", line)
         except Exception as exc:
             logger.warning("OllamaAdapter.pull_model failed: %s", exc)
-            yield {"status": "error", "error": str(exc)}
+            # Issue #9410: Never leak exception details in SSE streams
+            yield {"status": "error", "error": "Model pull failed"}
 
 
 __all__ = ["OllamaAdapter"]

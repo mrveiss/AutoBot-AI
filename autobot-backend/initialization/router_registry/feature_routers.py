@@ -671,17 +671,20 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         ["voice", "rbac"],
         "voice_bundle_user",
     ),
-    # GH#4463: Mobile device pairing for push notifications and offline sync
-    (
-        "api.mobile_devices",
-        "/devices",
-        ["mobile-devices", "push-notifications"],
-        "mobile_devices",
-    ),
+    # NOTE (MVA-3022): mobile_devices removed — already registered in core_routers.py
+    # as a system router. Duplicate registration caused routes to appear twice.
     # GH#4459: Web push notification endpoints (subscribe/unsubscribe/vapid-key)
     ("api.push", "/push", ["push", "notifications"], "push"),
-    # MVA-2176: Transcript AI analysis and KB integration
-    ("api.transcripts", "/transcripts", ["transcripts"], "transcripts"),
+    # GH#9044: Transcriber module — project + recording CRUD under /api/transcriber
+    # Guarded by TRANSCRIBER_ENABLED env var (defaults to true).
+    # The combined router in transcriber_extension carries its own /api/transcriber
+    # prefix so we use "" here to avoid a double-prefix.
+    (
+        "extensions.builtin.transcriber_extension",
+        "",
+        ["transcriber"],
+        "transcriber",
+    ),
 ]
 
 

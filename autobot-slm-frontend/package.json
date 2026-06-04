@@ -24,18 +24,18 @@
     "pinia": "^3.0.4",
     "vue": "^3.5.32",
     "vue-i18n": "^11.4.4",
-    "vue-router": "^5.0.6"
+    "vue-router": "^5.1.0"
   },
   "devDependencies": {
     "@storybook/addon-docs": "^10.4.0",
-    "@storybook/vue3": "^10.4.0",
+    "@storybook/vue3": "^10.4.2",
     "@storybook/vue3-vite": "^10.4.1",
     "@tailwindcss/postcss": "^4.2.2",
     "@types/node": "^25.9.0",
     "@vitejs/plugin-vue": "^6.0.6",
     "@vue/tsconfig": "^0.9.1",
     "eslint": "^10.3.0",
-    "eslint-plugin-vue": "^10.9.1",
+    "eslint-plugin-vue": "^10.9.2",
     "postcss": "^8.5.15",
     "storybook": "^10.4.0",
     "tailwindcss": "^4.3.0",

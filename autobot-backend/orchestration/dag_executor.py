@@ -55,6 +55,7 @@ class NodeType(str, Enum):
     CONDITION = "condition"
     PARALLEL = "parallel"
     DISTRIBUTED_SHELL = "distributed_shell"  # Issue #3406: fleet fan-out
+    SWITCH = "switch"
 
     @classmethod
     def _missing_(cls, value: object) -> "NodeType":
@@ -74,7 +75,9 @@ class DAGEdge:
 
     source: str
     target: str
-    label: bool | None = None  # None = unconditional; True/False = condition branch
+    label: bool | str | None = None
+    # None = unconditional; True/False = condition branch;
+    # str = switch-case label ("default" is the catch-all case)
 
 
 @dataclass
@@ -142,7 +145,9 @@ class WorkflowDAG:
     and one with ``label=False``.
     """
 
-    def __init__(self, nodes: List[Dict[str, Any]], edges: List[Dict[str, Any]]) -> None:
+    def __init__(
+        self, nodes: List[Dict[str, Any]], edges: List[Dict[str, Any]]
+    ) -> None:
         self._nodes: Dict[str, DAGNode] = {}
         self._successors: Dict[str, List[DAGEdge]] = {}
         self._predecessors: Dict[str, List[str]] = {}
@@ -160,7 +165,9 @@ class WorkflowDAG:
         for raw in edges:
             src, tgt = raw["source"], raw["target"]
             if src not in self._nodes or tgt not in self._nodes:
-                logger.warning("DAG edge (%s → %s) references unknown node; skipping", src, tgt)
+                logger.warning(
+                    "DAG edge (%s → %s) references unknown node; skipping", src, tgt
+                )
                 continue
             label_raw = raw.get("label")
             label: bool | None = None if label_raw is None else bool(label_raw)
@@ -260,15 +267,97 @@ class WorkflowDAG:
 # ---------------------------------------------------------------------------
 
 
+_JSONPATH_OPS = (">=", "<=", "!=", "==", ">", "<")
+
+
+def _resolve_jsonpath(path: str, data: Dict[str, Any]) -> Any:
+    """Resolve a JSONPath expression against *data*, with graceful fallback.
+
+    Tries jsonpath_ng first; on ImportError falls back to dotted-key
+    navigation so the feature works without the optional dependency.
+    """
+    try:
+        from jsonpath_ng import parse as jp_parse  # type: ignore[import]
+
+        matches = jp_parse(path).find(data)
+        if not matches:
+            return None
+        return matches[0].value
+    except ImportError:
+        logger.warning(
+            "jsonpath_ng not installed; using simple dotted-key fallback for %r", path
+        )
+        # Strip leading $. or $[ prefix for the fallback
+        stripped = path.lstrip("$").lstrip(".").lstrip("[").rstrip("]").strip("'\"")
+        obj: Any = data
+        for part in stripped.split("."):
+            if not isinstance(obj, dict):
+                return None
+            obj = obj.get(part)
+        return obj
+
+
+def _evaluate_jsonpath_expr(expr: str, ctx: DAGExecutionContext) -> bool:
+    """Evaluate a JSONPath comparison expression of the form ``$.x.y OP value``."""
+    op_used = None
+    for op in _JSONPATH_OPS:
+        if op in expr:
+            op_used = op
+            break
+    if op_used is None:
+        logger.warning(
+            "JSONPath expression %r has no comparison operator; defaulting False", expr
+        )
+        return False
+
+    lhs_raw, rhs_raw = expr.split(op_used, 1)
+    lhs_path = lhs_raw.strip()
+    rhs_raw = rhs_raw.strip()
+
+    lhs_value = _resolve_jsonpath(lhs_path, ctx.step_results)
+
+    # Coerce rhs to a comparable Python type
+    try:
+        rhs: Any = int(rhs_raw)
+    except ValueError:
+        try:
+            rhs = float(rhs_raw)
+        except ValueError:
+            rhs = rhs_raw.strip('"').strip("'")
+
+    try:
+        if op_used == "==":
+            return lhs_value == rhs
+        if op_used == "!=":
+            return lhs_value != rhs
+        if op_used == ">":
+            return lhs_value > rhs  # type: ignore[operator]
+        if op_used == "<":
+            return lhs_value < rhs  # type: ignore[operator]
+        if op_used == ">=":
+            return lhs_value >= rhs  # type: ignore[operator]
+        if op_used == "<=":
+            return lhs_value <= rhs  # type: ignore[operator]
+    except TypeError as exc:
+        logger.warning(
+            "JSONPath comparison failed for %r: %s; defaulting False", expr, exc
+        )
+    return False
+
+
 def _evaluate_condition(node: DAGNode, ctx: DAGExecutionContext) -> bool:
     """
     Evaluate a condition expression stored in *node.data["condition"]*.
 
-    The expression is a Python expression string evaluated against a
-    restricted namespace containing:
+    Supports two expression styles:
 
-    - ``results`` — mapping of step_id → step result dict
-    - ``True`` / ``False`` / ``len`` / ``str`` / ``int`` / ``float``
+    1. **JSONPath comparison** — expression starts with ``$.`` or ``$[``:
+       ``$.step1.status == "success"`` — parsed into lhs/op/rhs and the
+       lhs path is resolved via jsonpath_ng (or dotted-key fallback).
+
+    2. **Python eval** — any other expression is evaluated against a
+       restricted namespace containing ``results``, ``True``, ``False``,
+       ``len``, ``str``, ``int``, ``float``, ``bool``.
 
     Returns True if the condition is truthy, False otherwise.  On any
     evaluation error the condition defaults to False and a warning is
@@ -279,8 +368,17 @@ def _evaluate_condition(node: DAGNode, ctx: DAGExecutionContext) -> bool:
     """
     expr: str = node.data.get("condition", "")
     if not expr:
-        logger.warning("Condition node %s has empty expression; defaulting False", node.node_id)
+        logger.warning(
+            "Condition node %s has empty expression; defaulting False", node.node_id
+        )
         return False
+
+    if expr.startswith("$.") or expr.startswith("$["):
+        result = _evaluate_jsonpath_expr(expr, ctx)
+        logger.debug(
+            "Condition node %s (JSONPath): expr=%r → %s", node.node_id, expr, result
+        )
+        return result
 
     safe_globals: Dict[str, Any] = {"__builtins__": {}}
     safe_locals: Dict[str, Any] = {
@@ -296,7 +394,9 @@ def _evaluate_condition(node: DAGNode, ctx: DAGExecutionContext) -> bool:
 
     try:
         result = eval(expr, safe_globals, safe_locals)  # noqa: S307  # nosec B307
-        logger.debug("Condition node %s: expr=%r → %s", node.node_id, expr, bool(result))
+        logger.debug(
+            "Condition node %s: expr=%r → %s", node.node_id, expr, bool(result)
+        )
         return bool(result)
     except Exception as exc:
         logger.warning(
@@ -306,6 +406,51 @@ def _evaluate_condition(node: DAGNode, ctx: DAGExecutionContext) -> bool:
             exc,
         )
         return False
+
+
+def _evaluate_switch(node: DAGNode, ctx: DAGExecutionContext) -> str:
+    """
+    Resolve the switch discriminant for *node* and return it as a string.
+
+    Reads ``node.data["switch_on"]`` — a variable reference compatible with
+    the condition node's safe eval namespace (e.g.
+    ``results["step1"]["output"]`` or a bare key name).  Returns
+    ``"default"`` on any error so routing always has a valid case to match.
+    """
+    switch_on: str = node.data.get("switch_on", "")
+    if not switch_on:
+        logger.warning(
+            "Switch node %s has no 'switch_on' key; routing to default", node.node_id
+        )
+        return "default"
+
+    safe_globals: Dict[str, Any] = {"__builtins__": {}}
+    safe_locals: Dict[str, Any] = {
+        "results": ctx.step_results,
+        "True": True,
+        "False": False,
+        "len": len,
+        "str": str,
+        "int": int,
+        "float": float,
+        "bool": bool,
+    }
+
+    try:
+        value = eval(switch_on, safe_globals, safe_locals)  # noqa: S307  # nosec B307
+        case_value = str(value)
+        logger.debug(
+            "Switch node %s: switch_on=%r → %r", node.node_id, switch_on, case_value
+        )
+        return case_value
+    except Exception as exc:
+        logger.warning(
+            "Switch node %s: switch_on=%r raised %s; routing to default",
+            node.node_id,
+            switch_on,
+            exc,
+        )
+        return "default"
 
 
 # ---------------------------------------------------------------------------
@@ -393,7 +538,9 @@ class DAGExecutor:
 
         visited: Set[str] = set()
         try:
-            await self._visit_nodes([r.node_id for r in roots], dag, ctx, visited, context or {})
+            await self._visit_nodes(
+                [r.node_id for r in roots], dag, ctx, visited, context or {}
+            )
         except Exception as exc:
             logger.error("Workflow %s DAG execution raised: %s", workflow_id, exc)
             ctx.status = TaskStatus.FAILED.value
@@ -406,10 +553,14 @@ class DAGExecutor:
             ctx.status = TaskStatus.PARTIALLY_COMPLETED.value
 
         if self._criteria_evaluator and context and context.get("structured_criteria"):
-            eval_result = await self._criteria_evaluator.evaluate(context["structured_criteria"], ctx.step_results)
+            eval_result = await self._criteria_evaluator.evaluate(
+                context["structured_criteria"], ctx.step_results
+            )
             ctx.criteria_evaluation = eval_result.to_dict()
 
-        logger.info("Workflow %s DAG execution finished: status=%s", workflow_id, ctx.status)
+        logger.info(
+            "Workflow %s DAG execution finished: status=%s", workflow_id, ctx.status
+        )
         return ctx
 
     # ------------------------------------------------------------------
@@ -437,7 +588,12 @@ class DAGExecutor:
         if len(unvisited) == 1:
             await self._visit_single(unvisited[0], dag, ctx, visited, context)
         else:
-            await asyncio.gather(*(self._visit_single(nid, dag, ctx, visited, context) for nid in unvisited))
+            await asyncio.gather(
+                *(
+                    self._visit_single(nid, dag, ctx, visited, context)
+                    for nid in unvisited
+                )
+            )
 
     async def _visit_single(
         self,
@@ -459,7 +615,9 @@ class DAGExecutor:
 
         if node_id in ctx.skipped_nodes:
             logger.debug("Skipping node %s (marked skipped by branch pruning)", node_id)
-            next_ids = self._get_next_node_ids(node, dag, condition_result=None, skipped=True)
+            next_ids = self._get_next_node_ids(
+                node, dag, condition_result=None, skipped=True
+            )
             await self._visit_nodes(next_ids, dag, ctx, visited, context)
             return
 
@@ -483,6 +641,9 @@ class DAGExecutor:
         """
         if node.node_type == NodeType.CONDITION:
             return await self._execute_condition_node(node, dag, ctx)
+
+        if node.node_type == NodeType.SWITCH:
+            return await self._execute_switch_node(node, dag, ctx)
 
         # Issue #3406: distributed_shell has its own fan-out executor
         if node.node_type == NodeType.DISTRIBUTED_SHELL:
@@ -550,6 +711,63 @@ class DAGExecutor:
         self._mark_descendants_skipped(pruned, dag, ctx)
 
         return taken + unconditional_targets
+
+    async def _execute_switch_node(
+        self,
+        node: DAGNode,
+        dag: WorkflowDAG,
+        ctx: DAGExecutionContext,
+    ) -> List[str]:
+        """
+        Route execution to the edge whose label matches the switch discriminant.
+
+        Edge matching order:
+        1. Edges with ``label == case_value`` (exact string match).
+        2. If none, edges with ``label == "default"`` (catch-all).
+        3. If still none, log a warning and fall through to all unconditional
+           edges (``label is None``) so the workflow is never silently stuck.
+
+        All labeled edges whose label was not selected are passed to
+        ``_mark_descendants_skipped`` for branch pruning.
+        """
+        case_value = _evaluate_switch(node, ctx)
+        ctx.step_results[node.node_id] = {
+            "success": True,
+            "switch_on": node.data.get("switch_on", ""),
+            "case_value": case_value,
+            "node_id": node.node_id,
+        }
+
+        logger.info("Switch node %s evaluated to case %r", node.node_id, case_value)
+
+        labeled_by_case: Dict[str, List[str]] = {}
+        unconditional_targets: List[str] = []
+
+        for edge in dag.successors(node.node_id):
+            if edge.label is None:
+                unconditional_targets.append(edge.target)
+            else:
+                key = str(edge.label)
+                labeled_by_case.setdefault(key, []).append(edge.target)
+
+        taken_targets = labeled_by_case.get(case_value)
+        if taken_targets is None:
+            taken_targets = labeled_by_case.get("default")
+        if taken_targets is None:
+            logger.warning(
+                "Switch node %s: no edge for case %r and no default; using unconditional targets",
+                node.node_id,
+                case_value,
+            )
+            return unconditional_targets
+
+        pruned_targets: List[str] = []
+        for key, targets in labeled_by_case.items():
+            if targets is not taken_targets:
+                pruned_targets.extend(targets)
+
+        self._mark_descendants_skipped(pruned_targets, dag, ctx)
+        return taken_targets + unconditional_targets
 
     def _mark_descendants_skipped(
         self,
@@ -632,8 +850,12 @@ async def _execute_on_node(
     connector = aiohttp.TCPConnector(ssl=ssl_ctx)
 
     try:
-        async with aiohttp.ClientSession(headers=headers, connector=connector) as session:
-            async with session.post(url, json=payload, timeout=aiohttp.ClientTimeout(total=timeout + 30)) as resp:
+        async with aiohttp.ClientSession(
+            headers=headers, connector=connector
+        ) as session:
+            async with session.post(
+                url, json=payload, timeout=aiohttp.ClientTimeout(total=timeout + 30)
+            ) as resp:
                 if resp.status == 200:
                     data = await resp.json()
                     return {
@@ -665,7 +887,9 @@ async def _execute_on_node(
         }
 
 
-async def execute_distributed_shell(node: DAGNode, ctx: DAGExecutionContext) -> Dict[str, Any]:
+async def execute_distributed_shell(
+    node: DAGNode, ctx: DAGExecutionContext
+) -> Dict[str, Any]:
     """Fan out *node.data* shell script to all listed fleet nodes in parallel.
 
     Expected ``node.data`` schema::
@@ -719,7 +943,10 @@ async def execute_distributed_shell(node: DAGNode, ctx: DAGExecutionContext) -> 
     t0 = time.monotonic()
 
     results: List[Dict[str, Any]] = await asyncio.gather(
-        *(_execute_on_node(slm_url, auth_token, nid, script, language, timeout) for nid in target_nodes)
+        *(
+            _execute_on_node(slm_url, auth_token, nid, script, language, timeout)
+            for nid in target_nodes
+        )
     )
 
     total_ms = int((time.monotonic() - t0) * 1000)
@@ -750,7 +977,9 @@ async def execute_distributed_shell(node: DAGNode, ctx: DAGExecutionContext) -> 
 # ---------------------------------------------------------------------------
 
 
-def workflow_has_condition_nodes(steps: List[Dict[str, Any]], edges: List[Dict[str, Any]]) -> bool:
+def workflow_has_condition_nodes(
+    steps: List[Dict[str, Any]], edges: List[Dict[str, Any]]
+) -> bool:
     """
     Return True when the step/edge list describes a branching workflow.
 
@@ -792,7 +1021,9 @@ def build_dag(steps: List[Dict[str, Any]], edges: List[Dict[str, Any]]) -> Workf
             continue
         if "from" in raw and "to" in raw:
             label = _condition_to_label(raw.get("condition"))
-            normalized.append({"source": raw["from"], "target": raw["to"], "label": label})
+            normalized.append(
+                {"source": raw["from"], "target": raw["to"], "label": label}
+            )
             continue
         # Malformed entry — let WorkflowDAG's warn-and-skip handle it.
         normalized.append(raw)

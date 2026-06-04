@@ -181,6 +181,13 @@ class SessionCheckpointClearData(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+class ThinkingMetadata(BaseModel):
+    """Thinking mode metadata for Claude 3.7+ reasoning models (MVA-3090)."""
+
+    used: bool = Field(..., description="Whether thinking mode was used for this response")
+    tokens_used: int | None = Field(None, description="Number of thinking tokens consumed (null if thinking not used)")
+
+
 class ChatMessageData(BaseModel):
     """data payload for POST /chat and POST /chat/message (alias).
 
@@ -194,6 +201,9 @@ class ChatMessageData(BaseModel):
     message_id: str | None = None
     timestamp: str | None = None
     metadata: Dict[str, Any] | None = None
+    thinking_metadata: ThinkingMetadata | None = Field(
+        None, description="Thinking mode metadata (Claude 3.7+ reasoning models)"
+    )
 
 
 class ChatHealthComponents(BaseModel):
@@ -669,3 +679,25 @@ class SessionFolderAssign(BaseModel):
     """Request body for PUT /chat/sessions/{session_id}/folder."""
 
     folder_id: str | None = Field(None, description="Folder ID to assign; None removes from folder")
+
+
+# ── Context Overflow Protection schemas (GH#9043) ────────────────────────────
+
+
+class ConversationSummarizeRequest(BaseModel):
+    """Request body for POST /chat/summarize."""
+
+    session_id: str = Field(..., description="Chat session ID")
+    message_ids: List[str] = Field(..., min_length=1, description="Message IDs to summarize")
+    target_length: int | None = Field(
+        500, ge=100, le=2000, description="Target summary length in tokens (default: 500)"
+    )
+
+
+class ConversationSummarizeData(BaseModel):
+    """data payload for POST /chat/summarize."""
+
+    summary: str = Field(..., description="Generated summary of the conversation segment")
+    original_message_count: int = Field(..., description="Number of messages summarized")
+    summary_token_count: int | None = Field(None, description="Token count of the summary")
+    timestamp: str = Field(..., description="ISO timestamp when summary was generated")
