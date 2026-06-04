@@ -95,6 +95,13 @@ Issue #753: User preference management interface
           <Icon name="bell" />
           Notifications
         </button>
+        <button
+          @click="activeTab = 'devices'"
+          :class="['settings-tab', { active: activeTab === 'devices' }]"
+        >
+          <Icon name="mobile" />
+          Mobile Devices
+        </button>
       </div>
 
       <!-- Tab Content -->
