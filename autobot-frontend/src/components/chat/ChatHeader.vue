@@ -41,6 +41,15 @@
         <!-- Session Actions -->
         <button
           v-if="currentSessionId"
+          @click="$emit('open-settings')"
+          class="header-btn"
+          :title="$t('chat.openSettings')"
+        >
+          <Icon name="cog" />
+        </button>
+
+        <button
+          v-if="currentSessionId"
           @click="$emit('export-session')"
           class="header-btn"
           :title="$t('chat.exportChat')"
@@ -94,6 +103,7 @@ interface Emits {
   (e: 'export-session'): void
   (e: 'clear-session'): void
   (e: 'toggle-mobile-sidebar'): void
+  (e: 'open-settings'): void
 }
 
 const props = defineProps<Props>()

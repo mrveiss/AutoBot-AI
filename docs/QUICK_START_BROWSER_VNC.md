@@ -1,6 +1,9 @@
-> **IP addresses** in this document use role placeholders (e.g. `<backend-ip>`). Replace with your actual VM IPs. See [VM_ROLES.md](architecture/VM_ROLES.md) for role definitions.
+---
+title: Quick Start — Browser VNC
+nav_order: 3
+---
 
-# Quick Start: Browser VNC Real-Time Viewing
+> **IP addresses** in this document use role placeholders (e.g. `<backend-ip>`). Replace with your actual VM IPs. See [VM_ROLES.md](architecture/VM_ROLES.md) for role definitions.
 
 ## TL;DR - Using the System
 

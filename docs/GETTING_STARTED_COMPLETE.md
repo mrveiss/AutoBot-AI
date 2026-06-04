@@ -1,4 +1,7 @@
-# AutoBot: Complete Getting Started Guide
+---
+title: Getting Started
+nav_order: 2
+---
 
 ## 🎯 **Choose Your Path**
 

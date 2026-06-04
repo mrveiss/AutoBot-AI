@@ -72,6 +72,7 @@ DEFAULT_EMBEDDING_MODEL = "nomic-embed-text:latest"
 
 # Per-role model defaults (6-tier mapping, #2553)
 # Each tier is optimised for its workload class — see docs/developer/TIERED_MODEL_ROUTING.md
+TRIVIAL_MODEL = "llama3.2:1b"  # Trivial tier: simplest queries, no tools/RAG/memory (GH#9050)
 ROUTING_MODEL = "llama3.2:1b"  # Orchestrator only, no tool use
 CLASSIFICATION_MODEL = "gemma2:2b"  # Intent detection, classification
 LIGHT_PROCESSING_MODEL = "phi3:mini"  # Extraction, formatting, lightweight tasks
@@ -161,6 +162,7 @@ class LLMConfig(BaseSettings):
     # Primary models — each role maps to its optimal 6-tier (#2553)
     default_model: str = Field(default=DEFAULT_LLM_MODEL, alias="AUTOBOT_DEFAULT_LLM_MODEL")
     embedding_model: str = Field(default=DEFAULT_EMBEDDING_MODEL, alias="AUTOBOT_EMBEDDING_MODEL")
+    trivial_model: str = Field(default=TRIVIAL_MODEL, alias="AUTOBOT_TRIVIAL_MODEL")  # GH#9050
     classification_model: str = Field(default=CLASSIFICATION_MODEL, alias="AUTOBOT_CLASSIFICATION_MODEL")
     reasoning_model: str = Field(default=QUALITY_MODEL, alias="AUTOBOT_REASONING_MODEL")
     rag_model: str = Field(default=INSTRUCTION_MODEL, alias="AUTOBOT_RAG_MODEL")

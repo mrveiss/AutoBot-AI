@@ -10,7 +10,7 @@ Admin endpoints for managing SSO provider configurations.
 import logging
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.auth.permissions import Permission
@@ -178,3 +178,13 @@ async def test_provider(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Internal server error",
         ) from e
+
+
+@router.get("/provider-templates/{provider_type}", response_model=dict)
+async def get_provider_template(
+    provider_type: str,
+    domain: str = Query("", description="Domain or tenant ID for endpoint URL construction"),
+    current_user: dict = Depends(require_permission(Permission.SECURITY_MANAGE)),
+) -> dict:
+    """Get pre-filled endpoint template for a known SSO provider type."""
+    return SSOService.get_provider_endpoint_template(provider_type, domain)

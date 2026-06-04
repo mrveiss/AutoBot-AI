@@ -5,6 +5,8 @@
   "description": "Example plugin demonstrating MCP tool integration via plugin system",
   "author": "AutoBot Team",
   "entry_point": "plugins.core_plugins.mcp_wrapper_plugin.main",
+  "capabilities": ["system:env"],
+  "trust_tier": "official",
   "dependencies": [],
   "config_schema": {
     "type": "object",

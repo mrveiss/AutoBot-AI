@@ -85,8 +85,8 @@ async def test_env_status_endpoint_with_real_loader_no_mock(monkeypatch):
     field or gains an unrelated one, this test fails at the
     PluginEnvStatusEntry(**v) boundary.
     """
-    from plugin_sdk.base import PluginManifest, PluginRegistry, PluginStatus
-    from plugin_sdk.loader import PluginLoader
+    from autobot_shared.plugin_sdk.base import PluginManifest, PluginRegistry, PluginStatus
+    from autobot_shared.plugin_sdk.loader import PluginLoader
 
     # Set the real env var so configured=True
     monkeypatch.setenv("REAL_INTEGRATION_VAR", "any_value")

@@ -16,6 +16,10 @@ from typing import List
 
 from fastapi import APIRouter, Depends
 
+from api.schemas_code import (
+    SubscribeResourceRequest,
+    UnsubscribeResourceRequest,
+)
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
@@ -1022,3 +1026,421 @@ async def mcp_health():
         logger.exception("Unexpected error")
 
         return {"status": "unhealthy", "error": "Internal server error"}
+
+
+# ---------------------------------------------------------------------------
+# MCP Resources and Prompts (Issue MVA-2165)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/mcp/resources")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_kb_resources",
+    error_code_prefix="KNOWLEDGE_MCP",
+)
+async def list_kb_resources(
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    List available knowledge base resources as MCP resources.
+
+    Issue MVA-2165: Exposes KB documents and chunks as browseable resources.
+    Issue #744: Requires authenticated user.
+
+    Resources use kb:// URI scheme:
+    - kb://doc/<ID> - specific document
+    - kb://chunk/<ID> - specific chunk
+    """
+    try:
+        kb = get_knowledge_base()
+        resources = []
+
+        # Get recent documents as resources
+        # Note: This is a simplified implementation - in production,
+        # you'd want pagination and proper document listing
+        stats = {
+            "total_documents": await kb.get_document_count(),
+        }
+
+        # For now, expose the document count as metadata
+        # Individual documents would be accessed via kb://doc/<id> URIs
+        resources.append(
+            {
+                "uri": "kb://stats",
+                "name": "Knowledge Base Statistics",
+                "description": f"Total documents: {stats['total_documents']}",
+                "mime_type": "application/json",
+            }
+        )
+
+        return {
+            "success": True,
+            "resources": resources,
+            "total": len(resources),
+        }
+
+    except Exception as e:
+        logger.error("Error listing KB resources: %s", e)
+        return {"success": False, "error": "Internal server error", "resources": []}
+
+
+@router.post("/mcp/resources/read")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="read_kb_resource",
+    error_code_prefix="KNOWLEDGE_MCP",
+)
+async def read_kb_resource(
+    request: Metadata,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Read a knowledge base resource by its URI.
+
+    Issue MVA-2165: Implements MCP resource reading via kb:// URIs.
+    Issue #744: Requires authenticated user.
+
+    Supports:
+    - kb://doc/<ID> - retrieve document by ID
+    - kb://chunk/<ID> - retrieve chunk by ID
+    - kb://stats - retrieve knowledge base statistics
+    """
+    uri = request.get("uri", "")
+    if not uri.startswith("kb://"):
+        return {"success": False, "error": "Only kb:// URIs are supported"}
+
+    # Parse URI: kb://type/identifier
+    parts = uri[5:].split("/", 1)  # Remove 'kb://'
+    if len(parts) < 1:
+        return {"success": False, "error": "Invalid kb:// URI format"}
+
+    resource_type = parts[0]
+    identifier = parts[1] if len(parts) > 1 else None
+
+    try:
+        kb = get_knowledge_base()
+
+        if resource_type == "stats":
+            # Return KB statistics as JSON
+            stats = {
+                "total_documents": await kb.get_document_count(),
+                "index_name": kb.redis_index_name,
+                "vector_store_type": kb.vector_store_type,
+                "embedding_model": kb.embedding_model_name,
+                "chunk_size": kb.chunk_size,
+            }
+            content = str(stats)
+            mime_type = "application/json"
+
+        elif resource_type == "doc":
+            if not identifier:
+                return {"success": False, "error": "Document ID required"}
+            # Retrieve document by ID
+            # Note: This is a simplified implementation - you'd need to
+            # implement document retrieval by ID in the knowledge base
+            results = await kb.search(query=f"id:{identifier}", top_k=1)
+            if results:
+                content = results[0].get("content", "")
+                mime_type = "text/plain"
+            else:
+                return {"success": False, "error": f"Document not found: {identifier}"}
+
+        elif resource_type == "chunk":
+            if not identifier:
+                return {"success": False, "error": "Chunk ID required"}
+            # Retrieve chunk by ID
+            results = await kb.search(query=f"chunk_id:{identifier}", top_k=1)
+            if results:
+                content = results[0].get("content", "")
+                mime_type = "text/plain"
+            else:
+                return {"success": False, "error": f"Chunk not found: {identifier}"}
+
+        else:
+            return {"success": False, "error": f"Unknown resource type: {resource_type}"}
+
+        return {
+            "success": True,
+            "uri": uri,
+            "content": content,
+            "mime_type": mime_type,
+            "size_bytes": len(content),
+        }
+
+    except Exception as e:
+        logger.error("Error reading KB resource: %s", e)
+        return {"success": False, "error": "Internal server error"}
+
+
+@router.post("/mcp/resources/subscribe")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="subscribe_kb_resource",
+    error_code_prefix="KNOWLEDGE_MCP",
+)
+async def subscribe_kb_resource(
+    request: SubscribeResourceRequest,
+    current_user: dict = Depends(get_current_user),
+) -> Metadata:
+    """
+    Subscribe to knowledge base resource change notifications.
+
+    Issue MVA-2166: Implements MCP resource subscriptions for real-time updates.
+    Issue #744: Requires authenticated user.
+
+    Clients can subscribe to kb:// URIs and receive notifications when:
+    - Documents are added or updated
+    - Chunks are reindexed
+    - Knowledge base statistics change
+
+    Note: Active change detection for knowledge base updates will be implemented in a follow-up.
+    For now, subscriptions are registered but notifications must be manually triggered
+    via the MCPSubscriptionManager.publish_change() method.
+
+    Args:
+        request: Subscription request with URI and session_id
+        current_user: Authenticated user
+
+    Returns:
+        Subscription confirmation with WebSocket channel
+    """
+    from services.mcp_subscription_manager import get_mcp_subscription_manager
+
+    # Validate URI
+    if not request.uri.startswith("kb://"):
+        return {"success": False, "error": "Only kb:// URIs are supported for knowledge base subscriptions"}
+
+    # Parse URI to validate format
+    parts = request.uri[5:].split("/", 1)  # Remove 'kb://'
+    if len(parts) < 1:
+        return {"success": False, "error": "Invalid kb:// URI format. Expected: kb://type[/identifier]"}
+
+    resource_type = parts[0]
+
+    if resource_type not in ["doc", "chunk", "stats"]:
+        return {"success": False, "error": f"Unknown resource type: {resource_type}"}
+
+    # Subscribe via subscription manager
+    success = await get_mcp_subscription_manager().subscribe(request.session_id, request.uri)
+
+    if not success:
+        return {"success": False, "error": "Failed to create subscription"}
+
+    # Generate channel name for WebSocket subscription
+    import hashlib
+
+    uri_hash = hashlib.sha256(request.uri.encode()).hexdigest()[:16]
+    channel = f"mcp:resource:{uri_hash}"
+
+    logger.info(
+        "Created KB subscription: session=%s, uri=%s, channel=%s",
+        request.session_id[:8],
+        request.uri,
+        channel,
+    )
+
+    return {
+        "success": True,
+        "uri": request.uri,
+        "session_id": request.session_id,
+        "channel": channel,
+        "message": f"Subscribed to {request.uri}. Connect to WebSocket at /ws/live and subscribe to channel: {channel}",
+    }
+
+
+@router.post("/mcp/resources/unsubscribe")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="unsubscribe_kb_resource",
+    error_code_prefix="KNOWLEDGE_MCP",
+)
+async def unsubscribe_kb_resource(
+    request: UnsubscribeResourceRequest,
+    current_user: dict = Depends(get_current_user),
+) -> Metadata:
+    """
+    Unsubscribe from knowledge base resource change notifications.
+
+    Issue MVA-2166: Implements MCP resource subscriptions for real-time updates.
+    Issue #744: Requires authenticated user.
+
+    Removes a subscription for a specific session and resource URI.
+
+    Args:
+        request: Unsubscription request with URI and session_id
+        current_user: Authenticated user
+
+    Returns:
+        Unsubscription confirmation
+    """
+    from services.mcp_subscription_manager import get_mcp_subscription_manager
+
+    # Validate URI
+    if not request.uri.startswith("kb://"):
+        return {"success": False, "error": "Only kb:// URIs are supported for knowledge base subscriptions"}
+
+    # Unsubscribe via subscription manager
+    success = await get_mcp_subscription_manager().unsubscribe(request.session_id, request.uri)
+
+    if not success:
+        return {"success": False, "error": "Failed to remove subscription"}
+
+    logger.info(
+        "Removed KB subscription: session=%s, uri=%s",
+        request.session_id[:8],
+        request.uri,
+    )
+
+    return {
+        "success": True,
+        "uri": request.uri,
+        "session_id": request.session_id,
+        "message": f"Unsubscribed from {request.uri}",
+    }
+
+
+@router.get("/mcp/prompts")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_kb_prompts",
+    error_code_prefix="KNOWLEDGE_MCP",
+)
+async def list_kb_prompts(
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    List available knowledge base prompt templates.
+
+    Issue MVA-2165: Exposes predefined prompt templates for common
+    knowledge base operations.
+    Issue #744: Requires authenticated user.
+
+    Templates can be invoked via the /mcp/prompts/get endpoint with
+    appropriate arguments to generate contextual prompts.
+    """
+    prompts = [
+        {
+            "name": "search_knowledge",
+            "description": "Search the knowledge base for information on a topic",
+            "arguments": [
+                {
+                    "name": "topic",
+                    "description": "Topic or query to search for",
+                    "required": True,
+                },
+                {
+                    "name": "depth",
+                    "description": "Search depth: 'quick' (top 3), 'normal' (top 5), 'deep' (top 10)",
+                    "required": False,
+                },
+            ],
+        },
+        {
+            "name": "summarize_topic",
+            "description": "Generate a comprehensive summary of knowledge on a topic",
+            "arguments": [
+                {
+                    "name": "topic",
+                    "description": "Topic to summarize",
+                    "required": True,
+                },
+                {
+                    "name": "format",
+                    "description": "Output format: 'brief', 'detailed', or 'technical'",
+                    "required": False,
+                },
+            ],
+        },
+    ]
+
+    return {
+        "success": True,
+        "prompts": prompts,
+        "total": len(prompts),
+    }
+
+
+@router.post("/mcp/prompts/get")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_kb_prompt",
+    error_code_prefix="KNOWLEDGE_MCP",
+)
+async def get_kb_prompt(
+    request: Metadata,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Get a specific knowledge base prompt template with arguments interpolated.
+
+    Issue MVA-2165: Returns formatted prompt messages for common
+    knowledge base operations.
+    Issue #744: Requires authenticated user.
+
+    The template arguments are validated and interpolated into the
+    prompt to generate contextual instructions for LLMs.
+    """
+    name = request.get("name", "")
+    arguments = request.get("arguments", {})
+
+    if name == "search_knowledge":
+        topic = arguments.get("topic")
+        if not topic:
+            return {"success": False, "error": "Missing required argument: topic"}
+
+        depth = arguments.get("depth", "normal")
+        depth_map = {"quick": 3, "normal": 5, "deep": 10}
+        top_k = depth_map.get(depth, 5)
+
+        return {
+            "success": True,
+            "name": name,
+            "description": "Search knowledge base for a topic",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": f"Search the knowledge base for information about: {topic}\n"
+                    f"Provide a comprehensive answer based on the top {top_k} most relevant sources.\n"
+                    f"Include:\n"
+                    f"- Key concepts and definitions\n"
+                    f"- Important details and context\n"
+                    f"- Relevant examples or use cases\n"
+                    f"- Cite sources when possible",
+                }
+            ],
+        }
+
+    elif name == "summarize_topic":
+        topic = arguments.get("topic")
+        if not topic:
+            return {"success": False, "error": "Missing required argument: topic"}
+
+        format_type = arguments.get("format", "detailed")
+        format_guidance = {
+            "brief": "Keep it concise - 2-3 paragraphs maximum",
+            "detailed": "Provide comprehensive coverage with examples",
+            "technical": "Focus on technical details, specifications, and implementation notes",
+        }
+        guidance = format_guidance.get(format_type, format_guidance["detailed"])
+
+        return {
+            "success": True,
+            "name": name,
+            "description": "Summarize knowledge on a topic",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": f"Generate a {format_type} summary of: {topic}\n"
+                    f"Guidelines: {guidance}\n"
+                    f"Structure:\n"
+                    f"- Overview\n"
+                    f"- Key points\n"
+                    f"- Important considerations\n"
+                    f"- Related topics or next steps",
+                }
+            ],
+        }
+
+    else:
+        return {"success": False, "error": f"Unknown prompt template: {name}"}

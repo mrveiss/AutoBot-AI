@@ -15,11 +15,11 @@ import logging
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
-from pathlib import Path
 
 from fastapi import FastAPI
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_constants import STARTUP_ERROR_FILE
 from autobot_shared.tracing import (
     instrument_aiohttp,
     instrument_redis,
@@ -61,11 +61,6 @@ app_state: Metadata = {
     "initialization_message": "Backend starting...",
     "startup_error": None,  # GH#8947: capture startup errors for health visibility
 }
-
-# GH#8947: Persist Phase 1 startup errors across process exit so /api/health
-# can report them even when the server never bound to port.
-# /run/autobot/ is created by Ansible and owned by the autobot user.
-_STARTUP_ERROR_FILE = Path("/run/autobot/startup-error.json")
 
 
 async def update_app_state(key: str, value) -> None:
@@ -470,8 +465,8 @@ async def initialize_critical_services(app: FastAPI):
         # unreachable. The file survives process exit and lets /api/health report
         # the failure when the next (probe) process reads it.
         try:
-            _STARTUP_ERROR_FILE.parent.mkdir(parents=True, exist_ok=True)
-            _STARTUP_ERROR_FILE.write_text(
+            STARTUP_ERROR_FILE.parent.mkdir(parents=True, exist_ok=True)
+            STARTUP_ERROR_FILE.write_text(
                 json.dumps(
                     {
                         "error_type": error_type,
@@ -1559,8 +1554,8 @@ async def _init_plugin_manager(app: FastAPI) -> None:
     try:
         from pathlib import Path
 
+        from autobot_shared.plugin_sdk import PluginManager
         from autobot_shared.ssot_config import config as ssot_config
-        from plugin_sdk.plugin_manager import PluginManager
 
         plugins_root = ssot_config.path.plugins_path
         plugin_dirs = [
@@ -1644,7 +1639,7 @@ async def initialize_background_services(app: FastAPI):
         # GH#8947: Successful startup — remove the Phase 1 error file if it exists
         # from a previous failed boot attempt.
         try:
-            _STARTUP_ERROR_FILE.unlink(missing_ok=True)
+            STARTUP_ERROR_FILE.unlink(missing_ok=True)
         except Exception:
             pass
         logger.info("✅ [100%] PHASE 2 COMPLETE: All background services initialized")
@@ -1820,6 +1815,17 @@ async def cleanup_services(app: FastAPI):
             logger.info("✅ Isolated MCP bridge workers shutdown")
         except Exception as mcp_err:
             logger.warning("Isolated MCP bridge shutdown failed: %s", mcp_err)
+
+        # GH#9012: Flush LangFuse / LangSmith observer buffers before exit
+        try:
+            from llm_shared.observability.registry import _registry
+
+            for _obs in _registry:
+                if callable(getattr(_obs, "flush", None)):
+                    _obs.flush()
+            logger.info("✅ LLM observer buffers flushed")
+        except Exception as obs_err:
+            logger.warning("LLM observer flush failed: %s", obs_err)
 
         # Redis connections automatically managed by get_redis_client()
         logger.info("✅ Cleanup completed successfully")

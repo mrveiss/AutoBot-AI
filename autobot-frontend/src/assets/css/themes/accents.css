@@ -1,0 +1,233 @@
+/**
+ * AutoBot - AI-Powered Automation Platform
+ * Copyright (c) 2025 mrveiss
+ * Author: mrveiss
+ *
+ * accents.css - Theme Accent Colors
+ * Issue #8988: User-Selectable Theme System
+ *
+ * Provides custom accent color presets that override the primary color tokens.
+ * Applied via [data-accent="<color>"] on document root.
+ *
+ * Architecture:
+ * - Base theme (dark/light) controls backgrounds, text, borders
+ * - Accent color controls primary/interactive element colors
+ * - Both attributes can be combined: data-theme="dark" data-accent="green"
+ */
+
+/* ============================================
+ * BLUE ACCENT (Default)
+ * Electric Blue - Technical Precision
+ * ============================================ */
+
+[data-accent="blue"],
+:root {
+  --color-primary: #3b82f6;
+  --color-primary-hover: #2563eb;
+  --color-primary-active: #1d4ed8;
+  --color-primary-light: #93c5fd;
+  --color-primary-dark: #1d4ed8;
+  --color-primary-bg: rgba(59, 130, 246, 0.1);
+  --color-primary-bg-hover: rgba(59, 130, 246, 0.15);
+}
+
+/* ============================================
+ * GREEN ACCENT
+ * Emerald - Growth & Success
+ * ============================================ */
+
+[data-accent="green"] {
+  --color-primary: #10b981;
+  --color-primary-hover: #059669;
+  --color-primary-active: #047857;
+  --color-primary-light: #34d399;
+  --color-primary-dark: #047857;
+  --color-primary-bg: rgba(16, 185, 129, 0.1);
+  --color-primary-bg-hover: rgba(16, 185, 129, 0.15);
+}
+
+/* ============================================
+ * PURPLE ACCENT
+ * Violet - Creative & Premium
+ * ============================================ */
+
+[data-accent="purple"] {
+  --color-primary: #9333ea;
+  --color-primary-hover: #7c3aed;
+  --color-primary-active: #6b21a8;
+  --color-primary-light: #a855f7;
+  --color-primary-dark: #6b21a8;
+  --color-primary-bg: rgba(147, 51, 234, 0.1);
+  --color-primary-bg-hover: rgba(147, 51, 234, 0.15);
+}
+
+/* ============================================
+ * ORANGE ACCENT
+ * Amber - Energy & Innovation
+ * ============================================ */
+
+[data-accent="orange"] {
+  --color-primary: #f97316;
+  --color-primary-hover: #ea580c;
+  --color-primary-active: #c2410c;
+  --color-primary-light: #fb923c;
+  --color-primary-dark: #c2410c;
+  --color-primary-bg: rgba(249, 115, 22, 0.1);
+  --color-primary-bg-hover: rgba(249, 115, 22, 0.15);
+}
+
+/* ============================================
+ * PINK ACCENT
+ * Rose - Friendly & Approachable
+ * ============================================ */
+
+[data-accent="pink"] {
+  --color-primary: #ec4899;
+  --color-primary-hover: #db2777;
+  --color-primary-active: #be185d;
+  --color-primary-light: #f472b6;
+  --color-primary-dark: #be185d;
+  --color-primary-bg: rgba(236, 72, 153, 0.1);
+  --color-primary-bg-hover: rgba(236, 72, 153, 0.15);
+}
+
+/* ============================================
+ * TEAL ACCENT
+ * Cyan - Modern & Professional
+ * ============================================ */
+
+[data-accent="teal"] {
+  --color-primary: #14b8a6;
+  --color-primary-hover: #0d9488;
+  --color-primary-active: #0f766e;
+  --color-primary-light: #2dd4bf;
+  --color-primary-dark: #0f766e;
+  --color-primary-bg: rgba(20, 184, 166, 0.1);
+  --color-primary-bg-hover: rgba(20, 184, 166, 0.15);
+}
+
+/* ============================================
+ * INDIGO ACCENT
+ * Deep Blue - Trust & Stability
+ * ============================================ */
+
+[data-accent="indigo"] {
+  --color-primary: #6366f1;
+  --color-primary-hover: #4f46e5;
+  --color-primary-active: #4338ca;
+  --color-primary-light: #818cf8;
+  --color-primary-dark: #4338ca;
+  --color-primary-bg: rgba(99, 102, 241, 0.1);
+  --color-primary-bg-hover: rgba(99, 102, 241, 0.15);
+}
+
+/* ============================================
+ * RED ACCENT
+ * Crimson - Bold & Urgent
+ * ============================================ */
+
+[data-accent="red"] {
+  --color-primary: #ef4444;
+  --color-primary-hover: #dc2626;
+  --color-primary-active: #b91c1c;
+  --color-primary-light: #f87171;
+  --color-primary-dark: #b91c1c;
+  --color-primary-bg: rgba(239, 68, 68, 0.1);
+  --color-primary-bg-hover: rgba(239, 68, 68, 0.15);
+}
+
+/* ============================================
+ * OKLCH COLOR OVERRIDES (CSS Level 4)
+ * Perceptually uniform color space for better gradients
+ * ============================================ */
+
+@supports (color: oklch(0 0 0)) {
+  /* Blue (default) */
+  [data-accent="blue"],
+  :root {
+    --color-primary: oklch(62.3% 0.188 259.8);
+    --color-primary-hover: oklch(54.6% 0.215 262.9);
+    --color-primary-active: oklch(48.8% 0.217 264.4);
+    --color-primary-light: oklch(80.9% 0.096 251.8);
+    --color-primary-dark: oklch(48.8% 0.217 264.4);
+    --color-primary-bg: oklch(62.3% 0.188 259.8 / 0.1);
+    --color-primary-bg-hover: oklch(62.3% 0.188 259.8 / 0.15);
+  }
+
+  /* Green */
+  [data-accent="green"] {
+    --color-primary: oklch(69.6% 0.149 162.5);
+    --color-primary-hover: oklch(59.6% 0.127 163.2);
+    --color-primary-active: oklch(50.8% 0.105 165.6);
+    --color-primary-light: oklch(77.3% 0.154 163.2);
+    --color-primary-dark: oklch(50.8% 0.105 165.6);
+    --color-primary-bg: oklch(69.6% 0.149 162.5 / 0.1);
+    --color-primary-bg-hover: oklch(69.6% 0.149 162.5 / 0.15);
+  }
+
+  /* Purple */
+  [data-accent="purple"] {
+    --color-primary: oklch(55.8% 0.253 302.3);
+    --color-primary-hover: oklch(54.1% 0.247 293.0);
+    --color-primary-active: oklch(43.8% 0.198 303.7);
+    --color-primary-light: oklch(62.7% 0.233 303.9);
+    --color-primary-dark: oklch(43.8% 0.198 303.7);
+    --color-primary-bg: oklch(55.8% 0.253 302.3 / 0.1);
+    --color-primary-bg-hover: oklch(55.8% 0.253 302.3 / 0.15);
+  }
+
+  /* Orange */
+  [data-accent="orange"] {
+    --color-primary: oklch(70.5% 0.187 47.6);
+    --color-primary-hover: oklch(63.0% 0.194 38.8);
+    --color-primary-active: oklch(52.7% 0.177 32.8);
+    --color-primary-light: oklch(75.8% 0.159 55.9);
+    --color-primary-dark: oklch(52.7% 0.177 32.8);
+    --color-primary-bg: oklch(70.5% 0.187 47.6 / 0.1);
+    --color-primary-bg-hover: oklch(70.5% 0.187 47.6 / 0.15);
+  }
+
+  /* Pink */
+  [data-accent="pink"] {
+    --color-primary: oklch(65.6% 0.212 354.3);
+    --color-primary-hover: oklch(57.6% 0.212 352.5);
+    --color-primary-active: oklch(48.9% 0.178 352.6);
+    --color-primary-light: oklch(72.5% 0.175 349.8);
+    --color-primary-dark: oklch(48.9% 0.178 352.6);
+    --color-primary-bg: oklch(65.6% 0.212 354.3 / 0.1);
+    --color-primary-bg-hover: oklch(65.6% 0.212 354.3 / 0.15);
+  }
+
+  /* Teal */
+  [data-accent="teal"] {
+    --color-primary: oklch(70.4% 0.123 182.5);
+    --color-primary-hover: oklch(61.3% 0.101 186.0);
+    --color-primary-active: oklch(53.3% 0.076 189.6);
+    --color-primary-light: oklch(77.7% 0.129 184.7);
+    --color-primary-dark: oklch(53.3% 0.076 189.6);
+    --color-primary-bg: oklch(70.4% 0.123 182.5 / 0.1);
+    --color-primary-bg-hover: oklch(70.4% 0.123 182.5 / 0.15);
+  }
+
+  /* Indigo */
+  [data-accent="indigo"] {
+    --color-primary: oklch(58.5% 0.204 277.1);
+    --color-primary-hover: oklch(50.8% 0.220 278.6);
+    --color-primary-active: oklch(45.7% 0.215 277.0);
+    --color-primary-light: oklch(68.0% 0.158 276.9);
+    --color-primary-dark: oklch(45.7% 0.215 277.0);
+    --color-primary-bg: oklch(58.5% 0.204 277.1 / 0.1);
+    --color-primary-bg-hover: oklch(58.5% 0.204 277.1 / 0.15);
+  }
+
+  /* Red */
+  [data-accent="red"] {
+    --color-primary: oklch(63.7% 0.208 25.3);
+    --color-primary-hover: oklch(57.7% 0.215 27.3);
+    --color-primary-active: oklch(50.5% 0.191 27.5);
+    --color-primary-light: oklch(71.1% 0.166 22.2);
+    --color-primary-dark: oklch(50.5% 0.191 27.5);
+    --color-primary-bg: oklch(63.7% 0.208 25.3 / 0.1);
+    --color-primary-bg-hover: oklch(63.7% 0.208 25.3 / 0.15);
+  }
+}

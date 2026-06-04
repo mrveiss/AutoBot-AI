@@ -339,20 +339,20 @@ DEFAULT_ROLES = (
 # in setup_wizard.py to build role-based host groups.
 # ---------------------------------------------------------------------------
 ROLE_ANSIBLE_GROUPS: Dict[str, str] = {
-    "backend": "01-Backend",
-    "celery": "01-Backend",
-    "vnc": "01-Backend",
-    "frontend": "02-Frontend",
-    "ai-stack": "03-AI-Stack",
-    "chromadb": "03-AI-Stack",
-    "redis": "04-Databases",
-    "npu-worker": "npu-worker",
-    "browser-service": "browser-automation",
+    "backend": "backend",
+    "celery": "backend",
+    "vnc": "backend",
+    "frontend": "frontend",
+    "ai-stack": "ai_stack",
+    "chromadb": "ai_stack",
+    "redis": "databases",
+    "npu-worker": "npu_worker",
+    "browser-service": "browser_automation",
     "autobot-llm-cpu": "llm_nodes",
     "autobot-llm-gpu": "llm_nodes",
     # tts-worker has Phase 5c in provision-fleet-roles.yml (#2959);
     # it co-locates with npu-worker in the inventory group.
-    "tts-worker": "npu-worker",
+    "tts-worker": "npu_worker",
     # SLM roles run on the manager node (#1455, #3266)
     # Group name must differ from host name 00-SLM-Manager to avoid Ansible warning.
     "slm-backend": "slm_server",
