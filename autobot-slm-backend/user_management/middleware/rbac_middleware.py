@@ -333,9 +333,7 @@ def require_permission(permission: Union[Permission, str]):
             has_perm = await rbac_middleware.check_permission(user_id, perm_str, org_id)
             if not has_perm:
                 logger.warning("RBAC: permission denied user=%s perm=%s", user_id, perm_str)
-                asyncio.ensure_future(
-                    _emit_permission_denied_audit(user_id, perm_str, str(request.url.path))
-                )
+                asyncio.ensure_future(_emit_permission_denied_audit(user_id, perm_str, str(request.url.path)))
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail=f"Permission '{perm_str}' required",
@@ -362,9 +360,7 @@ def require_any_permission(permissions: List[Union[Permission, str]]):
             has_perm = await rbac_middleware.check_any_permission(user_id, permissions, org_id)
             if not has_perm:
                 logger.warning("RBAC: permission denied user=%s required_any=%s", user_id, perm_strs)
-                asyncio.ensure_future(
-                    _emit_permission_denied_audit(user_id, str(perm_strs), str(request.url.path))
-                )
+                asyncio.ensure_future(_emit_permission_denied_audit(user_id, str(perm_strs), str(request.url.path)))
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail=f"One of these permissions required: {perm_strs}",
@@ -391,9 +387,7 @@ def require_all_permissions(permissions: List[Union[Permission, str]]):
             has_perm = await rbac_middleware.check_all_permissions(user_id, permissions, org_id)
             if not has_perm:
                 logger.warning("RBAC: permission denied user=%s required_all=%s", user_id, perm_strs)
-                asyncio.ensure_future(
-                    _emit_permission_denied_audit(user_id, str(perm_strs), str(request.url.path))
-                )
+                asyncio.ensure_future(_emit_permission_denied_audit(user_id, str(perm_strs), str(request.url.path)))
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail=f"All of these permissions required: {perm_strs}",
