@@ -127,7 +127,9 @@ class ContextWindowManager:
             model_name: Name of the LLM model to use
         """
         if model_name not in self.config["models"]:
-            logger.warning("Unknown model %s, using default", model_name)  # codeql[py/clear-text-logging-sensitive-data]
+            logger.warning(
+                "Unknown model %s, using default", model_name
+            )  # codeql[py/clear-text-logging-sensitive-data]
             self.current_model = self.config["models"]["default"]["name"]
         else:
             self.current_model = model_name

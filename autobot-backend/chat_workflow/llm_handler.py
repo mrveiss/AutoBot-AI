@@ -518,7 +518,9 @@ class LLMHandlerMixin:
                 if not endpoint.endswith(PATH_OLLAMA_GENERATE):
                     endpoint = endpoint.rstrip("/") + PATH_OLLAMA_GENERATE
                 return endpoint
-            logger.error("Invalid endpoint URL: %s, using config-based default", endpoint)  # codeql[py/clear-text-logging-sensitive-data]
+            logger.error(
+                "Invalid endpoint URL: %s, using config-based default", endpoint
+            )  # codeql[py/clear-text-logging-sensitive-data]
             return self._get_ollama_endpoint_fallback()
         except Exception as e:
             logger.error("Failed to load Ollama endpoint from config: %s", e)
@@ -695,7 +697,9 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
             if selected and isinstance(selected, str):
                 logger.info("Using LLM model from config: %s", selected)  # codeql[py/clear-text-logging-sensitive-data]
                 return selected
-            logger.error("Invalid model selection: %s, using default", selected)  # codeql[py/clear-text-logging-sensitive-data]
+            logger.error(
+                "Invalid model selection: %s, using default", selected
+            )  # codeql[py/clear-text-logging-sensitive-data]
             return default_model
         except Exception as e:
             logger.error("Failed to load model from config: %s", e)
@@ -820,8 +824,12 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
             {"session_id": session.session_id, "message": message},
         )
 
-        logger.info("[ChatWorkflowManager] Making Ollama request to: %s", ollama_endpoint)  # codeql[py/clear-text-logging-sensitive-data]
-        logger.info("[ChatWorkflowManager] Using model: %s", selected_model)  # codeql[py/clear-text-logging-sensitive-data]
+        logger.info(
+            "[ChatWorkflowManager] Making Ollama request to: %s", ollama_endpoint
+        )  # codeql[py/clear-text-logging-sensitive-data]
+        logger.info(
+            "[ChatWorkflowManager] Using model: %s", selected_model
+        )  # codeql[py/clear-text-logging-sensitive-data]
 
         return {
             "endpoint": ollama_endpoint,

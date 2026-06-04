@@ -119,7 +119,9 @@ class BedrockProvider(BaseProvider):
             client_kwargs["aws_secret_access_key"] = secret_key
 
         self._runtime_client = boto3.client(**client_kwargs)
-        logger.info("Initialized Bedrock runtime client in region %s", region)  # codeql[py/clear-text-logging-sensitive-data]
+        logger.info(
+            "Initialized Bedrock runtime client in region %s", region
+        )  # codeql[py/clear-text-logging-sensitive-data]
         return self._runtime_client
 
     def _resolve_model_id(self, model_name: str) -> str:

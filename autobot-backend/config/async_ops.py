@@ -76,7 +76,9 @@ class AsyncOperationsMixin:
                     # Check if field name contains sensitive pattern
                     if any(pattern in key_lower for pattern in sensitive_patterns):
                         obj[key] = "***REDACTED***"
-                        logger.debug("Redacted sensitive field: %s", current_path)  # codeql[py/clear-text-logging-sensitive-data]
+                        logger.debug(
+                            "Redacted sensitive field: %s", current_path
+                        )  # codeql[py/clear-text-logging-sensitive-data]
                     elif isinstance(value, _CONTAINER_TYPES):  # Issue #380
                         obj[key] = redact_sensitive_fields(value, current_path)
 
