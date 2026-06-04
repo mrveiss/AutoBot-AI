@@ -6,7 +6,6 @@ import { fileURLToPath, URL } from 'node:url'
 import { copyFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { defineConfig, loadEnv } from 'vite'
-import type { Plugin } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import vueDevTools from 'vite-plugin-vue-devtools'
 import pkg from './package.json'
@@ -18,8 +17,8 @@ import pkg from './package.json'
  * MicVAD (@ricky0123/vad-web) fetches these files at runtime via fetch()
  * from a configurable baseAssetPath. They must be served as static files.
  */
-function vadAssetsPlugin(): Plugin {
-  const assets: [string, string][] = [
+function vadAssetsPlugin() {
+  const assets = [
     ['node_modules/@ricky0123/vad-web/dist/vad.worklet.bundle.min.js', 'vad.worklet.bundle.min.js'],
     ['node_modules/@ricky0123/vad-web/dist/silero_vad_legacy.onnx', 'silero_vad_legacy.onnx'],
     ['node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.mjs', 'ort-wasm-simd-threaded.mjs'],
@@ -63,12 +62,6 @@ export default defineConfig(({ mode }) => {
     },
     css: { devSourcemap: true, postcss: './postcss.config.js' },
     resolve: {
-      // preserveSymlinks: true resolves modules relative to the symlink path
-      // (node_modules/@autobot/terminal) not the real path (../../autobot-plugins/…).
-      // Without this, rolldown walks up from the real plugin path and misses
-      // pinia/vue in the frontend's node_modules. Required for file: workspace
-      // packages (same fix applied to slm-frontend in #8482 / MVA-893).
-      preserveSymlinks: true,
       alias: { '@': fileURLToPath(new URL('./src', import.meta.url)), 'vue': 'vue/dist/vue.esm-bundler.js' }
     },
     server: {
