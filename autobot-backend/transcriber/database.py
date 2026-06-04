@@ -2,6 +2,7 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """Transcriber SQLite sidecar — all CRUD for projects, recordings, speakers, segments, notes, kb_pushes."""
+
 import os
 
 import aiosqlite
@@ -14,7 +15,9 @@ logger = get_logger(__name__)
 # existing pre-migration database — tables already present are left untouched
 # and the version row is inserted, bringing the DB under version-tracked control.
 _MIGRATIONS: list[tuple[int, str]] = [
-    (1, """
+    (
+        1,
+        """
 CREATE TABLE IF NOT EXISTS projects (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
@@ -70,15 +73,19 @@ CREATE TABLE IF NOT EXISTS kb_pushes (
     pushed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     pushed_by TEXT NOT NULL
 );
-"""),
-    (2, """
+""",
+    ),
+    (
+        2,
+        """
 CREATE INDEX IF NOT EXISTS idx_recordings_project_id ON recordings(project_id);
 CREATE INDEX IF NOT EXISTS idx_speakers_recording_id ON speakers(recording_id);
 CREATE INDEX IF NOT EXISTS idx_segments_recording_id ON segments(recording_id);
 CREATE INDEX IF NOT EXISTS idx_segments_speaker_id ON segments(speaker_id);
 CREATE INDEX IF NOT EXISTS idx_notes_recording_id ON notes(recording_id);
 CREATE INDEX IF NOT EXISTS idx_notes_segment_id ON notes(segment_id);
-"""),
+""",
+    ),
 ]
 
 
@@ -107,18 +114,14 @@ class Database:
             "(version INTEGER PRIMARY KEY, applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
         )
         await self._db().commit()
-        cur = await self._db().execute(
-            "SELECT COALESCE(MAX(version), 0) FROM _schema_migrations"
-        )
+        cur = await self._db().execute("SELECT COALESCE(MAX(version), 0) FROM _schema_migrations")
         row = await cur.fetchone()
         current: int = row[0]
         for version, sql in _MIGRATIONS:
             if version <= current:
                 continue
             await self._db().executescript(sql)
-            await self._db().execute(
-                "INSERT INTO _schema_migrations (version) VALUES (?)", (version,)
-            )
+            await self._db().execute("INSERT INTO _schema_migrations (version) VALUES (?)", (version,))
             await self._db().commit()
             logger.info("Transcriber DB: applied migration %d", version)
 
@@ -142,9 +145,7 @@ class Database:
         row = await cur.fetchone()
         return dict(row) if row else None
 
-    async def list_projects(
-        self, user_id: str, *, limit: int = 200, offset: int = 0
-    ) -> list[dict]:
+    async def list_projects(self, user_id: str, *, limit: int = 200, offset: int = 0) -> list[dict]:
         cur = await self._db().execute(
             "SELECT * FROM projects WHERE user_id=? ORDER BY created_at DESC LIMIT ? OFFSET ?",
             (user_id, limit, offset),
@@ -168,9 +169,7 @@ class Database:
 
     # ── Recordings ────────────────────────────────────────────────────────────
 
-    async def create_recording(
-        self, project_id: int, filename: str, filepath: str, user_id: str
-    ) -> int:
+    async def create_recording(self, project_id: int, filename: str, filepath: str, user_id: str) -> int:
         if not os.path.isabs(filepath):
             raise ValueError(f"filepath must be absolute, got: {filepath!r}")
         cur = await self._db().execute(
@@ -185,9 +184,7 @@ class Database:
         row = await cur.fetchone()
         return dict(row) if row else None
 
-    async def list_recordings(
-        self, project_id: int, *, limit: int = 200, offset: int = 0
-    ) -> list[dict]:
+    async def list_recordings(self, project_id: int, *, limit: int = 200, offset: int = 0) -> list[dict]:
         cur = await self._db().execute(
             "SELECT * FROM recordings WHERE project_id=? ORDER BY uploaded_at DESC LIMIT ? OFFSET ?",
             (project_id, limit, offset),
@@ -216,8 +213,14 @@ class Database:
                failure_reason=COALESCE(?,failure_reason)
                WHERE id=?""",
             (
-                status, engine_used, language_detected, speaker_count,
-                process_seconds, failure_stage, failure_reason, recording_id,
+                status,
+                engine_used,
+                language_detected,
+                speaker_count,
+                process_seconds,
+                failure_stage,
+                failure_reason,
+                recording_id,
             ),
         )
         await self._db().commit()
@@ -232,9 +235,7 @@ class Database:
 
     # ── Speakers ──────────────────────────────────────────────────────────────
 
-    async def create_speaker(
-        self, recording_id: int, label: str, display_name: str, language: str | None
-    ) -> int:
+    async def create_speaker(self, recording_id: int, label: str, display_name: str, language: str | None) -> int:
         cur = await self._db().execute(
             "INSERT INTO speakers (recording_id, label, display_name, language) VALUES (?,?,?,?)",
             (recording_id, label, display_name, language),
@@ -242,9 +243,7 @@ class Database:
         await self._db().commit()
         return cur.lastrowid
 
-    async def list_speakers(
-        self, recording_id: int, *, limit: int = 200, offset: int = 0
-    ) -> list[dict]:
+    async def list_speakers(self, recording_id: int, *, limit: int = 200, offset: int = 0) -> list[dict]:
         cur = await self._db().execute(
             "SELECT * FROM speakers WHERE recording_id=? ORDER BY id LIMIT ? OFFSET ?",
             (recording_id, limit, offset),
@@ -257,9 +256,7 @@ class Database:
         return dict(row) if row else None
 
     async def update_speaker(self, speaker_id: int, display_name: str) -> None:
-        cur = await self._db().execute(
-            "UPDATE speakers SET display_name=? WHERE id=?", (display_name, speaker_id)
-        )
+        cur = await self._db().execute("UPDATE speakers SET display_name=? WHERE id=?", (display_name, speaker_id))
         await self._db().commit()
         if cur.rowcount == 0:
             raise KeyError(f"no speaker with id={speaker_id}")
@@ -285,8 +282,7 @@ class Database:
 
         # Update all segments that reference source speaker to point to target speaker
         await self._db().execute(
-            "UPDATE segments SET speaker_id=? WHERE speaker_id=?",
-            (target_speaker_id, source_speaker_id)
+            "UPDATE segments SET speaker_id=? WHERE speaker_id=?", (target_speaker_id, source_speaker_id)
         )
 
         # Delete the source speaker
@@ -313,9 +309,7 @@ class Database:
         await self._db().commit()
         return cur.lastrowid
 
-    async def list_segments(
-        self, recording_id: int, *, limit: int = 200, offset: int = 0
-    ) -> list[dict]:
+    async def list_segments(self, recording_id: int, *, limit: int = 200, offset: int = 0) -> list[dict]:
         cur = await self._db().execute(
             "SELECT * FROM segments WHERE recording_id=? ORDER BY start_time LIMIT ? OFFSET ?",
             (recording_id, limit, offset),
@@ -328,9 +322,7 @@ class Database:
         return dict(row) if row else None
 
     async def update_segment_text(self, segment_id: int, text: str) -> None:
-        cur = await self._db().execute(
-            "UPDATE segments SET text=?, is_edited=1 WHERE id=?", (text, segment_id)
-        )
+        cur = await self._db().execute("UPDATE segments SET text=?, is_edited=1 WHERE id=?", (text, segment_id))
         await self._db().commit()
         if cur.rowcount == 0:
             raise KeyError(f"no segment with id={segment_id}")
@@ -350,9 +342,7 @@ class Database:
         row = await cur.fetchone()
         return dict(row) if row else None
 
-    async def list_notes(
-        self, recording_id: int, *, limit: int = 200, offset: int = 0
-    ) -> list[dict]:
+    async def list_notes(self, recording_id: int, *, limit: int = 200, offset: int = 0) -> list[dict]:
         cur = await self._db().execute(
             "SELECT * FROM notes WHERE recording_id=? ORDER BY created_at LIMIT ? OFFSET ?",
             (recording_id, limit, offset),
@@ -360,9 +350,7 @@ class Database:
         return [dict(r) for r in await cur.fetchall()]
 
     async def update_note(self, note_id: int, content: str) -> None:
-        cur = await self._db().execute(
-            "UPDATE notes SET content=? WHERE id=?", (content, note_id)
-        )
+        cur = await self._db().execute("UPDATE notes SET content=? WHERE id=?", (content, note_id))
         await self._db().commit()
         if cur.rowcount == 0:
             raise KeyError(f"no note with id={note_id}")
@@ -375,9 +363,7 @@ class Database:
 
     # ── KB Pushes ─────────────────────────────────────────────────────────────
 
-    async def create_kb_push(
-        self, recording_id: int, kb_collection_id: str, pushed_by: str
-    ) -> int:
+    async def create_kb_push(self, recording_id: int, kb_collection_id: str, pushed_by: str) -> int:
         cur = await self._db().execute(
             "INSERT INTO kb_pushes (recording_id, kb_collection_id, pushed_by) VALUES (?,?,?)",
             (recording_id, kb_collection_id, pushed_by),
@@ -401,7 +387,7 @@ _db_instance: Database | None = None
 
 async def get_transcriber_db() -> Database:
     """Get or create the singleton transcriber database instance.
-    
+
     Returns:
         Database: The shared database connection instance
     """
