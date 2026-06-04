@@ -295,6 +295,26 @@ if "llm_shared" not in sys.modules:
     _tr_real_path = str(backend_root / "llm_shared" / "tiered_routing")
     sys.modules["llm_shared.tiered_routing"].__path__ = [_tr_real_path]  # type: ignore[attr-defined]
 
+    # GH#8998: Register real fallback_chain and model_fallback_coordinator modules
+    # so tests inside llm_shared/ can import them without the full heavy __init__.py chain.
+    _llm_root = backend_root / "llm_shared"
+    for _real_mod_name, _real_mod_file in [
+        ("llm_shared.fallback_chain", _llm_root / "fallback_chain.py"),
+        ("llm_shared.model_fallback_coordinator", _llm_root / "model_fallback_coordinator.py"),
+    ]:
+        if _real_mod_name not in sys.modules:
+            import importlib.util as _ilu
+
+            _spec = _ilu.spec_from_file_location(_real_mod_name, str(_real_mod_file))
+            if _spec and _spec.loader:
+                _mod = _ilu.module_from_spec(_spec)
+                sys.modules[_real_mod_name] = _mod
+                try:
+                    _spec.loader.exec_module(_mod)  # type: ignore[union-attr]
+                except Exception:
+                    # Fallback: leave stub in place if real load fails
+                    del sys.modules[_real_mod_name]
+
     # Stub llm_shared.optimization.model_inspector so complexity_router.py can
     # load without the full optimization stack (inspect_model is only called in
     # model_fits_in_vram which tests don't exercise).

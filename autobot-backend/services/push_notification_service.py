@@ -188,38 +188,6 @@ async def _remove_stale_subscriptions(endpoints: list[str]) -> None:
         logger.exception("Failed to remove stale push subscriptions")
 
 
-async def _get_mobile_devices(user_id: str) -> list[dict]:
-    """Fetch all paired mobile devices for user_id from the database."""
-    try:
-        from datetime import timedelta
-
-        from sqlalchemy import select
-
-        from models.mobile_device import MobileDevice
-        from user_management.database import get_async_session_factory
-
-        factory = get_async_session_factory()
-        async with factory() as session:
-            result = await session.execute(select(MobileDevice).where(MobileDevice.user_id == user_id))
-            devices = result.scalars().all()
-
-            # Filter to only active devices (seen within 90 days)
-            from autobot_shared.time_utils import now_utc
-
-            cutoff = now_utc() - timedelta(days=90)
-            active = [
-                {
-                    "id": str(d.id),
-                    "device_token": d.device_token,  # property auto-decrypts
-                    "platform": d.platform,
-                }
-                for d in devices
-                if d.last_seen_at is None or d.last_seen_at >= cutoff
-            ]
-            return active
-    except Exception:
-        logger.exception("Failed to load mobile devices for user %s", user_id)
-        return []
 
 
 async def _send_mobile_push(
@@ -230,49 +198,24 @@ async def _send_mobile_push(
 ) -> int:
     """Send push notifications to paired mobile devices (APNs/FCM).
 
-    TODO(GH#4463): Implement actual APNs and FCM delivery.
-    Currently logs what would be sent; add apns2 and firebase-admin
-    dependencies and implement platform-specific dispatch.
+    MVA-2994: Delegates to push_notifications.mobile_push module for actual delivery.
     """
-    devices = await _get_mobile_devices(user_id)
-    if not devices:
+    try:
+        from push_notifications.mobile_push import send_push_to_user
+
+        results = await send_push_to_user(
+            user_id=user_id,
+            title=title,
+            body=body,
+            url=url,
+        )
+        return results["ios"] + results["android"]
+    except ImportError:
+        logger.warning("push_notifications.mobile_push not available — mobile push skipped")
         return 0
-
-    dispatched = 0
-    for device in devices:
-        platform = device["platform"]
-
-        if platform == "ios":
-            # TODO: Implement APNs delivery with apns2 library
-            logger.info(
-                "[STUB] Would send APNs notification to device %s: title=%s, body=%s",
-                device["id"],
-                title,
-                body,
-            )
-            dispatched += 1
-            # GH#4463: Record successful push notification (stub)
-            metrics.record_device_push_sent("ios", "success")
-        elif platform == "android":
-            # TODO: Implement FCM delivery with firebase-admin library
-            logger.info(
-                "[STUB] Would send FCM notification to device %s: title=%s, body=%s",
-                device["id"],
-                title,
-                body,
-            )
-            dispatched += 1
-            # GH#4463: Record successful push notification (stub)
-            metrics.record_device_push_sent("android", "success")
-        elif platform == "pwa":
-            # PWA uses web push — already handled by _send_web_push
-            logger.debug("PWA device %s uses web push, skipping mobile push", device["id"])
-        else:
-            logger.warning("Unknown platform %s for device %s", platform, device["id"])
-            # GH#4463: Record failed push for unknown platform
-            metrics.record_device_push_sent(platform, "failure")
-
-    return dispatched
+    except Exception:
+        logger.exception("Unexpected error in mobile push delivery")
+        return 0
 
 
 def register_celery_task_success_hook() -> None:
