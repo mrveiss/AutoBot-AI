@@ -10,7 +10,7 @@
 
 import { ref, computed } from 'vue'
 import { useApi } from '@/composables/useApi'
-import { createLogger } from '@/utils/logger'
+import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('useWatchFolders')
 

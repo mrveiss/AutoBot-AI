@@ -64,6 +64,7 @@ class AuditAction(str, Enum):
     RUN_JWT_MINT = "run_jwt.mint"
     RUN_JWT_REVOKE = "run_jwt.revoke"
     RUN_JWT_REFRESH = "run_jwt.refresh"
+    DEVICE_JWT_MINT = "device_jwt.mint"  # GH#9493
 
 
 async def record_event(
