@@ -381,3 +381,4 @@ class WorkflowPlan:
         kwargs["fallback_plans"] = fallback_plans
         kwargs["strategy"] = strategy
         return cls(**kwargs)
+# Trigger CI
