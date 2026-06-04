@@ -41,6 +41,7 @@ class SuccessDataResponse(BaseModel):
     message: str
     data: Dict[str, Any] | None = None
 
+
 class SuccessResponse(BaseModel):
     """Minimal success/failure envelope used by several endpoints."""
 
