@@ -139,6 +139,8 @@ services:
 
   autobot-slm:
     read_only: true
+    volumes:
+      - slm_data:/app/data
     tmpfs:
       - /tmp
       - /var/run
