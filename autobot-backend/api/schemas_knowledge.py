@@ -145,6 +145,7 @@ class KnowledgeCollectionCreateResponse(BaseModel):
     collection: Dict[str, Any] | None = None
     message: str | None = None
 
+
 class KnowledgeCollectionListResponse(BaseModel):
     """Response for GET /collections."""
 
@@ -163,12 +164,14 @@ class KnowledgeCollectionDetailResponse(BaseModel):
     status: str
     collection: Dict[str, Any] | None = None
 
+
 class KnowledgeCollectionUpdateResponse(BaseModel):
     """Response for PUT /collections/{collection_id}."""
 
     status: str
     collection: Dict[str, Any] | None = None
     message: str | None = None
+
 
 class KnowledgeCollectionDeleteResponse(BaseModel):
     """Response for DELETE /collections/{collection_id}."""
@@ -178,6 +181,7 @@ class KnowledgeCollectionDeleteResponse(BaseModel):
     facts_in_collection: int
     facts_deleted: int
     message: str | None = None
+
 
 class KnowledgeCollectionAddFactsResponse(BaseModel):
     """Response for POST /collections/{collection_id}/facts."""
@@ -190,6 +194,7 @@ class KnowledgeCollectionAddFactsResponse(BaseModel):
     total_facts: int
     message: str | None = None
 
+
 class KnowledgeCollectionRemoveFactsResponse(BaseModel):
     """Response for DELETE /collections/{collection_id}/facts."""
 
@@ -199,6 +204,7 @@ class KnowledgeCollectionRemoveFactsResponse(BaseModel):
     not_in_collection: int
     total_facts: int
     message: str | None = None
+
 
 class KnowledgeCollectionFactsListResponse(BaseModel):
     """Response for GET /collections/{collection_id}/facts."""
@@ -232,6 +238,7 @@ class KnowledgeCollectionExportResponse(BaseModel):
     total_count: int
     exported_at: str | None = None
 
+
 class KnowledgeCollectionBulkDeleteResponse(BaseModel):
     """Response for POST /collections/{collection_id}/bulk-delete."""
 
@@ -255,6 +262,7 @@ class KnowledgeCategoryCreateResponse(BaseModel):
     category: Dict[str, Any] | None = None
     message: str | None = None
 
+
 class KnowledgeCategoryTreeResponse(BaseModel):
     """Response for GET /categories/tree."""
 
@@ -269,12 +277,14 @@ class KnowledgeCategoryDetailResponse(BaseModel):
     status: str
     category: Dict[str, Any] | None = None
 
+
 class KnowledgeCategoryUpdateResponse(BaseModel):
     """Response for PUT /categories/{category_id}."""
 
     status: str
     category: Dict[str, Any] | None = None
     message: str | None = None
+
 
 class KnowledgeCategoryDeleteResponse(BaseModel):
     """Response for DELETE /categories/{category_id}."""
@@ -283,6 +293,7 @@ class KnowledgeCategoryDeleteResponse(BaseModel):
     deleted_count: int
     facts_reassigned: int
     message: str | None = None
+
 
 class KnowledgeCategoryChildrenResponse(BaseModel):
     """Response for GET /categories/{category_id}/children."""
@@ -325,6 +336,7 @@ class KnowledgeFactAssignCategoryResponse(BaseModel):
     category_id: str | None = None
     category_path: str | None = None
     message: str | None = None
+
 
 class KnowledgeCategorySearchResponse(BaseModel):
     """Response for POST /categories/search."""
@@ -385,6 +397,7 @@ class KnowledgeDocumentationSearchResponse(BaseModel):
     total_results: int | None = None
     message: str | None = None
 
+
 class KnowledgeDocumentationStatsResponse(BaseModel):
     """Response for GET /unified/documentation/stats."""
 
@@ -394,6 +407,7 @@ class KnowledgeDocumentationStatsResponse(BaseModel):
     how_to_index: str | None = None
     collection_name: str | None = None
     document_count: int | None = None
+
 
 class KnowledgeUnifiedGraphResponse(BaseModel):
     """Response for POST /unified/graph and GET /unified/graph."""
@@ -437,6 +451,7 @@ class KnowledgeScopedFactsResponse(BaseModel):
     facts: List[Any]
     count: int
     total: int | None = None
+
 
 class KnowledgeShareResponse(BaseModel):
     """Response for POST /knowledge/collaboration/facts/{id}/share."""
@@ -497,6 +512,7 @@ class KnowledgeAuditEventsResponse(BaseModel):
     fact_id: str | None = None
     organization_id: str | None = None
 
+
 class KnowledgePermissionChangesResponse(BaseModel):
     """Response for GET /knowledge/audit/permission-changes."""
 
@@ -540,6 +556,7 @@ class KnowledgeVerificationApproveResponse(BaseModel):
     verified_at: str | None = None
     message: str | None = None
 
+
 class KnowledgeVerificationRejectResponse(BaseModel):
     """Response for POST /verification/{fact_id}/reject."""
 
@@ -547,6 +564,7 @@ class KnowledgeVerificationRejectResponse(BaseModel):
     fact_id: str
     deleted: bool
     message: str | None = None
+
 
 class KnowledgeVerificationConfigResponse(BaseModel):
     """Response for GET/PUT /verification/config."""
@@ -573,6 +591,7 @@ class KnowledgeSuggestionsTagsResponse(BaseModel):
     suggestions: List[Any] | None = None
     similar_docs_analyzed: int | None = None
 
+
 class KnowledgeSuggestionsCategoriesResponse(BaseModel):
     """Response for POST /suggestions/categories."""
 
@@ -581,6 +600,7 @@ class KnowledgeSuggestionsCategoriesResponse(BaseModel):
     success: bool
     suggestions: List[Any] | None = None
     similar_docs_analyzed: int | None = None
+
 
 class KnowledgeSuggestionsAllResponse(BaseModel):
     """Response for POST /suggestions/all."""
@@ -598,6 +618,7 @@ class KnowledgeSuggestionsContextResponse(BaseModel):
     success: bool
     suggestions: List[Any] | None = None
     total_candidates: int | None = None
+
 
 class KnowledgeAutoApplySuggestionsResponse(BaseModel):
     """Response for POST /facts/{fact_id}/auto-apply."""
@@ -620,6 +641,7 @@ class KnowledgeShareFactResponse(BaseModel):
     shared_with: List[Any]
     visibility: str | None = None
 
+
 class KnowledgeUnshareFactResponse(BaseModel):
     """Response for DELETE /api/knowledge/facts/{fact_id}/share/{user_id_to_remove}."""
 
@@ -628,12 +650,14 @@ class KnowledgeUnshareFactResponse(BaseModel):
     shared_with: List[Any]
     visibility: str | None = None
 
+
 class KnowledgeUpdateVisibilityResponse(BaseModel):
     """Response for PUT /api/knowledge/facts/{fact_id}/visibility."""
 
     success: bool
     fact_id: str
     visibility: str | None = None
+
 
 class KnowledgeMyFactsResponse(BaseModel):
     """Response for GET /api/knowledge/facts/mine."""
@@ -677,6 +701,7 @@ class KnowledgeVerifyClaimResponse(BaseModel):
     evidence: List[Any] | None = None
     verification_method: str | None = None
     kb_source: str | None = None
+
 
 class KnowledgeConflictsListResponse(BaseModel):
     """Response for GET /api/kb-conflicts."""
@@ -728,6 +753,7 @@ class KnowledgeOrganizationPolicyResponse(BaseModel):
     require_approval_for_system: bool
     retention_days: int | None = None
 
+
 class KnowledgeOrganizationStatsResponse(BaseModel):
     """Response for GET /knowledge/organization/stats."""
 
@@ -767,6 +793,7 @@ class KnowledgeScopedSearchResponse(BaseModel):
     mode: str | None = None
     user_id: str | None = None
     filtered_by_permissions: bool | None = None
+
 
 class KnowledgeAccessibleScopesResponse(BaseModel):
     """Response for GET /knowledge/search/accessible-scopes."""

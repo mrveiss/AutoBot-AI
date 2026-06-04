@@ -169,6 +169,7 @@ class FeatureFlagStatusResponse(BaseModel):
     success: bool
     data: Any | None = None
 
+
 class FeatureFlagEnforcementModeResponse(SuccessDataResponse):
     """Response for PUT /feature-flags/enforcement-mode."""
 
@@ -377,6 +378,7 @@ class FilePreviewResponse(BaseModel):
     mime_type: str | None = None
     size: int | None = None
     name: str | None = None
+
 
 class FileDeleteResponse(BaseModel):
     """Response for DELETE /files/delete.
@@ -592,6 +594,7 @@ class VisionOCRResponse(BaseModel):
     text_regions: List[Any]
     total_text_regions: int
     region: Dict[str, Any] | None = None
+
 
 class VisionAutomationOpportunitiesResponse(BaseModel):
     """Response for GET /vision/automation-opportunities."""
