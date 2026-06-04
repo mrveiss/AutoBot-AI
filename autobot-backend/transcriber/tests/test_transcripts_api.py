@@ -2,14 +2,16 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
+from types import SimpleNamespace
+
 import pytest
 import pytest_asyncio
-from types import SimpleNamespace
-from httpx import AsyncClient, ASGITransport
 from fastapi import FastAPI
-from transcriber.routes.transcripts import router
+from httpx import ASGITransport, AsyncClient
+
 from transcriber.database import Database
 from transcriber.deps import get_db
+from transcriber.routes.transcripts import router
 
 
 def _make_app(tmp_path, user_id: str = "u1"):

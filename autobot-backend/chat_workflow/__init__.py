@@ -24,8 +24,6 @@ Usage:
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 
-from autobot_shared.singleton_factory import lazy_singleton
-
 from .manager import ChatWorkflowManager
 from .models import WorkflowSession
 

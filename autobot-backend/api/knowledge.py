@@ -3006,6 +3006,7 @@ async def create_watch_folder(
     into the knowledge base.
     """
     import uuid
+
     from services.kb_folder_watcher import WatchFolderConfig, get_kb_folder_watcher
 
     try:
