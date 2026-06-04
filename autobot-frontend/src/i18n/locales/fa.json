@@ -7143,5 +7143,16 @@
       "selectHost": "Select a host to connect",
       "selectHostDesc": "Choose a VNC-capable host from the list to open a remote desktop session."
     }
+  },
+  "mobile": {
+    "pairing": {
+      "title": "جفت کردن دستگاه تلفن همراه",
+      "instructions": "این کد QR را با دستگاه تلفن همراه خود اسکن کنید",
+      "instructionsDetail": "برنامه تلفن همراه AutoBot را باز کنید و این کد را اسکن کنید تا دستگاه خود را جفت کنید",
+      "generating": "در حال تولید کد QR...",
+      "expired": "منقضی شده",
+      "refresh": "دریافت کد جدید",
+      "retry": "تلاش مجدد"
+    }
   }
 }

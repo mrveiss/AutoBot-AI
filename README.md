@@ -225,6 +225,13 @@ Key settings:
 - `AUTOBOT_LLM_PROVIDER` — `ollama` (default) or others
 - `AUTOBOT_SINGLE_USER_MODE` — `true` (development) or `false` (multi-user)
 
+### LLM Providers and Fallback
+
+AutoBot supports Ollama, OpenAI, Anthropic Claude, Groq, vLLM, HuggingFace, and OpenRouter. When a model hits a rate limit or quota cap, requests automatically route to a backup model via configurable fallback chains.
+
+- [LLM Fallback Configuration](docs/backend/llm-fallback.md) — configure fallback chains, tune rate limits, and troubleshoot quota issues
+- [Environment Variables Reference](docs/configuration/environment-variables.md) — full variable listing including `AUTOBOT_FALLBACK_CHAIN_*` and `AUTOBOT_LLM_RL_*`
+
 ---
 
 ## Contributing

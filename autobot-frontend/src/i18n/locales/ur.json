@@ -7143,5 +7143,16 @@
       "selectHost": "Select a host to connect",
       "selectHostDesc": "Choose a VNC-capable host from the list to open a remote desktop session."
     }
+  },
+  "mobile": {
+    "pairing": {
+      "title": "موبائل ڈیوائس کو جوڑ دیں",
+      "instructions": "اپنے موبائل ڈیوائس سے یہ QR کوڈ اسکین کریں",
+      "instructionsDetail": "AutoBot موبائل ایپ کھولیں اور اپنے ڈیوائس کو جوڑنے کے لیے یہ کوڈ اسکین کریں",
+      "generating": "QR کوڈ بنایا جا رہا ہے...",
+      "expired": "ختم شدہ",
+      "refresh": "نیا کوڈ حاصل کریں",
+      "retry": "دوبارہ کوشش کریں"
+    }
   }
 }

@@ -7450,5 +7450,16 @@
         "createCompany": "Create Company"
       }
     }
+  },
+  "mobile": {
+    "pairing": {
+      "title": "Pair Mobile Device",
+      "instructions": "Scan this QR code with your mobile device",
+      "instructionsDetail": "Open the AutoBot mobile app and scan this code to pair your device",
+      "generating": "Generating QR code...",
+      "expired": "Expired",
+      "refresh": "Get New Code",
+      "retry": "Try Again"
+    }
   }
 }
