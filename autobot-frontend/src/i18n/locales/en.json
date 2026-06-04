@@ -101,7 +101,8 @@
     "exportJson": "Export as JSON",
     "exportCsv": "Export as CSV",
     "download": "Download",
-    "filterByCategory": "Filter by category"
+    "filterByCategory": "Filter by category",
+    "copied": "Copied"
   },
   "chat": {
     "contextWindow": {
@@ -318,7 +319,20 @@
       "explainDesc": "Explain a concept in detail",
       "sendingMessage": "Sending message...",
       "aiResponding": "AI is responding...",
-      "typeMessage": "Type a message..."
+      "typeMessage": "Type a message...",
+      "generate": "Generate",
+      "generateImage": "Generate image",
+      "generateImageTitle": "generate Image",
+      "generating": "Generating",
+      "imagePromptLabel": "image Prompt",
+      "imagePromptPlaceholder": "Enter image prompt...",
+      "imageProvider": "Image provider",
+      "selectPromptTemplate": "Select prompt template",
+      "thinkingBudget": "Thinking budget",
+      "thinkingOff": "Thinking off",
+      "thinkingOffLabel": "thinking Off",
+      "thinkingOn": "Thinking on",
+      "thinkingOnLabel": "thinking On"
     },
     "translate": {
       "title": "Translate Text",
@@ -361,7 +375,8 @@
       "statusSending": "Sending...",
       "statusSent": "Sent",
       "statusFailed": "Failed to send",
-      "confirmDelete": "Delete this message? This action cannot be undone."
+      "confirmDelete": "Delete this message? This action cannot be undone.",
+      "thinkingUsed": "Thinking used"
     },
     "approval": {
       "autoApproved": "Auto-Approved",
@@ -547,7 +562,35 @@
       "selectAll": "Select All",
       "deselectAll": "Deselect All",
       "share": "Share",
-      "sharing": "Sharing..."
+      "sharing": "Sharing...",
+      "createAnother": "Create another",
+      "createLink": "Create link",
+      "creating": "Creating",
+      "emptyConversation": "Empty conversation",
+      "enterPassword": "Enter password",
+      "expiry": "Expiry",
+      "expiry1d": "Expiry1d",
+      "expiry1h": "Expiry1h",
+      "expiry30d": "Expiry30d",
+      "expiry7d": "Expiry7d",
+      "expiryNever": "Expiry never",
+      "linkExpired": "Link expired",
+      "linkExpires": "Link expires",
+      "linkNotFound": "Link not found",
+      "linkPasswordProtected": "Link password protected",
+      "linkReady": "Link ready",
+      "optionalPassword": "Optional password",
+      "passwordGate": "Password gate",
+      "passwordGateHint": "Password gate hint",
+      "passwordPlaceholder": "Enter password...",
+      "publicLink": "Public link",
+      "publicView": "Public view",
+      "readOnlyNote": "Read only note",
+      "revokeLink": "Revoke link",
+      "revoking": "Revoking",
+      "shareWithUsers": "Share with users",
+      "unlock": "Unlock",
+      "wrongPassword": "Wrong password"
     },
     "vision": {
       "title": "Image Analysis",
@@ -668,7 +711,9 @@
       "nameRequired": "Name is required",
       "nameInvalid": "Only letters, numbers, hyphens, and underscores are allowed",
       "contentRequired": "Content is required"
-    }
+    },
+    "lightweightMode": "Lightweight mode",
+    "lightweightModeTooltip": "lightweight Mode tooltip"
   },
   "settings": {
     "title": "Settings",
@@ -4110,7 +4155,15 @@
       "visionClick": "Click Element",
       "visionTypeText": "Type Text",
       "visionOcr": "OCR Extract",
-      "visionWait": "Wait for Element"
+      "visionWait": "Wait for Element",
+      "addCase": "Add case",
+      "addSwitch": "Add switch",
+      "conditionCompare": "Condition compare",
+      "conditionExpr": "Condition expr",
+      "switch": "Switch",
+      "switchDefaultHint": "Switch default hint",
+      "switchLabel": "switch",
+      "switchOnPlaceholder": "Enter switch on..."
     },
     "editStep": {
       "title": "Edit Step {step}",
@@ -4353,7 +4406,8 @@
     "notFound": "Not found.",
     "serverError": "Server error. Please try again later.",
     "timeout": "Request timed out.",
-    "validation": "Please check your input."
+    "validation": "Please check your input.",
+    "genericError": "Generic error"
   },
   "status": {
     "online": "Online",
@@ -4635,7 +4689,8 @@
     "never": "Never",
     "themeLight": "Light",
     "themeDark": "Dark",
-    "themeAuto": "Auto"
+    "themeAuto": "Auto",
+    "tabDevices": "Tab devices"
   },
   "redis": {
     "title": "Redis Service",
@@ -4846,7 +4901,12 @@
       "seriesName": "Problems",
       "xAxisTitle": "Number of Problems",
       "tooltipProblems": "problems"
-    }
+    },
+    "ariaLabel": "Accessible label",
+    "cellPlaceholder": "Loading...",
+    "defaultAriaLabel": "default (accessible)",
+    "renderError": "Render error",
+    "viewData": "View data"
   },
   "_meta": {
     "dir": "ltr",
@@ -5833,7 +5893,9 @@
       "noConfig": "No configuration stored for this plugin.",
       "invalidJson": "Invalid JSON — please fix before saving.",
       "saveFailed": "Failed to save configuration.",
-      "marketplace": "Marketplace"
+      "marketplace": "Marketplace",
+      "auditLog": "Audit log",
+      "trustTier": "Trust tier"
     },
     "marketplace": {
       "title": "Plugin Marketplace",
@@ -6608,7 +6670,8 @@
       "recentTasks": "Recent Tasks",
       "detailsBtn": "Details",
       "pauseBtn": "Pause",
-      "liveActivityFeed": "Live Activity Feed"
+      "liveActivityFeed": "Live Activity Feed",
+      "abstained": "Abstained"
     },
     "resourceHeatmap": {
       "defaultTitle": "Resource Utilization Heatmap",
@@ -7313,7 +7376,9 @@
       "initializingSession": "Initializing browser session...",
       "sessionId": "Session ID: {id}",
       "notAvailable": "Not available",
-      "templates": "Scrape Templates"
+      "templates": "Scrape Templates",
+      "exitRegionMode": "Exit region mode",
+      "markRegions": "Mark regions"
     }
   },
   "serviceMessages": {
@@ -7388,8 +7453,7 @@
     "llcPortability": "Portability",
     "settingsAndTools": "Settings & Tools",
     "adminPanel": "Admin Panel",
-    "documents": "AI Documents",
-    "transcriber": "Transcriber"
+    "documents": "AI Documents"
   },
   "reasoningTrace": {
     "title": "Reasoning trace",
@@ -7466,6 +7530,69 @@
       "expired": "Expired",
       "refresh": "Get New Code",
       "retry": "Try Again"
+    }
+  },
+  "code": {
+    "cellPlaceholder": "Loading...",
+    "copied": "Copied",
+    "copy": "Copy",
+    "copyCodeAriaLabel": "copy Code (accessible)",
+    "copyFailed": "Copy failed"
+  },
+  "devices": {
+    "addDevice": "Add device",
+    "confirmDelete": "Confirm delete",
+    "daysAgo": "Days ago",
+    "error": "Error",
+    "hoursAgo": "Hours ago",
+    "justNow": "Just now",
+    "lastSeen": "Last seen",
+    "loading": "Loading",
+    "minutesAgo": "Minutes ago",
+    "noDevices": "No devices",
+    "pairDevice": "Pair device",
+    "pairFirst": "Pair first",
+    "pairNewDevice": "Pair new device",
+    "paired": "Paired",
+    "pairedDevices": "Paired devices",
+    "pairingInstructions": "Pairing instructions",
+    "pairingNote": "Pairing note",
+    "step1": "Step1",
+    "step2": "Step2",
+    "step3": "Step3",
+    "step4": "Step4",
+    "unpair": "Unpair"
+  },
+  "imageCell": {
+    "copyUrl": "Copy url",
+    "download": "Download",
+    "downloadLabel": "download",
+    "generated": "Generated",
+    "lightbox": "Lightbox",
+    "loadError": "Load error",
+    "placeholder": "Placeholder",
+    "viewFull": "View full"
+  },
+  "plugins": {
+    "capabilities": {
+      "approvalDescription": "Approval description",
+      "approvalTitle": "approval",
+      "approveAll": "Approve all",
+      "approveSelected": "Approve selected",
+      "approving": "Approving",
+      "auditLogTitle": "audit Log",
+      "capability": "Capability",
+      "denied": "Denied",
+      "filterByPlugin": "Filter by plugin",
+      "granted": "Granted",
+      "loading": "Loading",
+      "loadingAudit": "Loading audit",
+      "noAuditEntries": "No audit entries",
+      "noPending": "No pending",
+      "operation": "Operation",
+      "plugin": "Plugin",
+      "status": "Status",
+      "timestamp": "Timestamp"
     }
   }
 }

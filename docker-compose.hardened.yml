@@ -143,7 +143,7 @@ services:
       - /tmp
       - /var/run
       - /app/data/tmp:mode=1777
-      - /app/logs:mode=1777  # SLM Dockerfile creates /app/logs at build time
+      # Note: /app/logs is already mounted as slm_logs volume in base compose
     secrets:
       - slm_admin_password
       - slm_jwt_secret
