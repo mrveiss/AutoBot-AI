@@ -1,7 +1,7 @@
 // AutoBot - AI-Powered Automation Platform
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
-import { ref, toValue, type MaybeRefOrGetter } from 'vue'
+import { ref } from 'vue'
 import { getBackendUrl } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 
@@ -18,7 +18,7 @@ export interface AskOptions {
  * Composable for AI analysis SSE streaming
  * Handles fetch-based SSE stream parsing for transcriber AI analysis
  */
-export function useAiAnalysis(recordingId: MaybeRefOrGetter<number>) {
+export function useAiAnalysis(recordingId: number) {
   const streaming = ref(false)
   const content = ref('')
   const activeAction = ref<AiAnalysisAction | ''>('')
@@ -29,7 +29,7 @@ export function useAiAnalysis(recordingId: MaybeRefOrGetter<number>) {
     streaming.value = true
     content.value = ''
 
-    const url = `${getBackendUrl()}/api/transcriber/recordings/${toValue(recordingId)}/ai/ask`
+    const url = `${getBackendUrl()}/api/transcriber/recordings/${recordingId}/ai/ask`
 
     try {
       const resp = await fetch(url, {
