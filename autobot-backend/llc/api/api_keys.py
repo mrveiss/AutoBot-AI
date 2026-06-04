@@ -25,7 +25,6 @@ from llc.services.api_key import ApiKeyService
 from user_management.database import get_async_session
 from user_management.services import TenantContext
 
-
 logger = get_logger(__name__)
 router = APIRouter(prefix="/agents", tags=["llc-api-keys"])
 _svc = ApiKeyService()

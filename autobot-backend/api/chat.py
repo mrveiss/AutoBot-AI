@@ -552,7 +552,9 @@ def _build_llm_context(
     return llm_context
 
 
-async def _generate_ai_response(llm_service, llm_context: List[Dict], session_id: str, request_id: str) -> tuple[Dict, Any]:
+async def _generate_ai_response(
+    llm_service, llm_context: List[Dict], session_id: str, request_id: str
+) -> tuple[Dict, Any]:
     """
     Generate AI response using LLM service with fallback handling.
 
@@ -694,8 +696,7 @@ async def process_chat_message(
         summary_msg = await create_summary_message(overflow_status["summary_text"])
         if hasattr(chat_history_manager, "add_messages_batch"):
             await chat_history_manager.add_messages_batch(
-                session_id,
-                [_to_persisted_message(summary_msg, "context_summary")]
+                session_id, [_to_persisted_message(summary_msg, "context_summary")]
             )
         logger.info(
             "Context overflow: auto-summarized session %s (%d%% full)",
@@ -719,9 +720,11 @@ async def process_chat_message(
         thinking_tokens = llm_response.usage.get("thinking_tokens") or llm_response.usage.get("cache_read_input_tokens")
         if thinking_tokens and thinking_tokens > 0:
             from api.schemas_chat import ThinkingMetadata
+
             thinking_metadata = ThinkingMetadata(used=True, tokens_used=thinking_tokens)
         else:
             from api.schemas_chat import ThinkingMetadata
+
             thinking_metadata = ThinkingMetadata(used=False, tokens_used=None)
 
     return ChatMessageData(
