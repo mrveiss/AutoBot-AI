@@ -22,7 +22,6 @@ adapter_config schema (future)::
 
 from __future__ import annotations
 
-
 from autobot_shared.logging_manager import get_logger
 
 from ..models.enums import LLCRunStatus
