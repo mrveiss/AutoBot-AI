@@ -35,11 +35,13 @@ from autobot_shared.logging_manager import get_logger
 
 from __future__ import annotations
 
+import json
 import time
 import uuid
 from typing import Any, AsyncIterator, Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.redis_client import get_redis_client
 from autobot_shared.tracing import get_tracer
 from llm_shared import ProviderRegistry, get_provider_registry
 from llm_shared.cache import CachedResponse, get_llm_cache
@@ -254,6 +256,17 @@ class LLMService:
                         attempt_key,
                         len(attempted_models),
                         " → ".join(attempted_models),
+                    )
+                    # GH#8998 - MVA-2999: Track successful fallback in Redis
+                    primary_attempt = attempted_models[0]
+                    primary_provider_name = primary_attempt.split(":")[0]
+                    primary_model_name = primary_attempt.split(":", 1)[1] if ":" in primary_attempt else ""
+                    self._track_fallback_event(
+                        conversation_id=conversation_id,
+                        primary_model=primary_model_name,
+                        fallback_model=current_model or "",
+                        primary_provider=primary_provider_name,
+                        fallback_provider=provider.provider_name,
                     )
                 self._track_usage(response, conversation_id)
                 return response
@@ -501,6 +514,53 @@ class LLMService:
                 logger.warning("list_models failed for %s: %s", name, exc)
                 results[name] = []
         return results
+
+    def _track_fallback_event(
+        self,
+        conversation_id: str | None,
+        primary_model: str,
+        fallback_model: str,
+        primary_provider: str,
+        fallback_provider: str,
+    ) -> None:
+        """
+        Track a successful fallback event in Redis.
+
+        GH#8998 - MVA-2999: Store active fallback events in Redis with 1h TTL
+        for visibility in the Admin UI.
+        """
+        try:
+            redis_client = get_redis_client(database="main")
+            fallback_key = f"llm:fallback:active:{conversation_id or 'system'}"
+
+            event_data = {
+                "conversation_id": conversation_id or "system",
+                "primary_model": primary_model,
+                "fallback_model": fallback_model,
+                "primary_provider": primary_provider,
+                "fallback_provider": fallback_provider,
+                "timestamp": int(time.time()),
+            }
+
+            # Store with 1 hour TTL
+            redis_client.setex(
+                fallback_key,
+                3600,  # 1 hour TTL
+                json.dumps(event_data),
+            )
+
+            logger.debug(
+                "Tracked fallback event: %s → %s (conversation: %s)",
+                primary_model,
+                fallback_model,
+                conversation_id or "system",
+            )
+        except Exception as exc:
+            logger.warning(
+                "Failed to track fallback event in Redis: %s",
+                exc,
+                exc_info=True,
+            )
 
     def get_stats(self) -> Dict[str, Any]:
         """Return service-level statistics."""
