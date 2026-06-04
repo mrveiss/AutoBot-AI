@@ -163,7 +163,7 @@ class TestLdapInjectionPrevention:
         from autobot_shared.security.input_sanitizer import sanitize_ldap_dn, sanitize_ldap_filter
 
         # Test 1: DN escaping with DN-specific dangerous chars (RFC 4514)
-        dn_malicious = 'cn=admin,ou=users'  # comma is special in DNs
+        dn_malicious = "cn=admin,ou=users"  # comma is special in DNs
         safe_dn = sanitize_ldap_dn(dn_malicious)
         # Comma must be escaped in DN attribute values
         assert "\\2c" in safe_dn
