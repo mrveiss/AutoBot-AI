@@ -7,7 +7,7 @@ WebVTT format specification:
 - Empty line between entries
 """
 
-from services.transcript_export.base import BaseExporter, Transcript
+from services.transcript_export.base import BaseExporter
 
 
 class VTTExporter(BaseExporter):

@@ -239,9 +239,12 @@ class ExternalSkillImporter:
             await _run_git("checkout", ref, cwd=clone_dir)
         else:
             logger.info("Cloning %s (ref=%s) -> %s", url, ref, clone_dir)
+            # codeql[py/full-ssrf] SSRF mitigated: url validated by
+            # _validate_git_url() enforcing https/ssh scheme and blocking
+            # private IP ranges
             await _run_git(
                 "clone", "--depth=1", "--branch", ref, url, clone_dir
-            )  # codeql[py/full-ssrf] SSRF mitigated: url validated by _validate_git_url() enforcing https/ssh scheme and blocking private IP ranges
+            )
 
         skill_md_paths = _walk_skill_mds(clone_dir)
         logger.info("Found %d SKILL.md file(s) in %s", len(skill_md_paths), clone_dir)
