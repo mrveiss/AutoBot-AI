@@ -31,8 +31,6 @@ from autobot_shared.error_boundaries import error_boundary
 from autobot_shared.logging_manager import get_logger
 
 # Issue #5064: prompt-injection sanitizer applied pre-embedding.
-from knowledge.query_sanitizer import sanitize_query as _sanitize_query
-
 # Issue #5064: prompt-injection sanitizer applied pre-embedding.
 from knowledge.query_sanitizer import sanitize_query as _sanitize_query
 

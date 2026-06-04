@@ -6,17 +6,19 @@ Provides endpoints to export transcripts in various formats:
 - SRT (SubRip subtitles)
 - VTT (WebVTT subtitles)
 """
-from fastapi import APIRouter, HTTPException, Depends
+
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
+
+from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
-from auth_middleware import check_admin_permission
 from services.transcript_export import (
-    Transcript,
-    Segment,
     DOCXExporter,
     PDFExporter,
+    Segment,
     SRTExporter,
+    Transcript,
     VTTExporter,
 )
 
