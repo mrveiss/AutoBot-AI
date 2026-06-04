@@ -29,7 +29,6 @@ from ..services.approval import (
     ApprovalStateError,
 )
 
-
 logger = get_logger(__name__)
 router = APIRouter(prefix="/approvals", tags=["llc-approvals"])
 _get_service = lazy_singleton(ApprovalService)

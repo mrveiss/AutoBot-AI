@@ -269,16 +269,12 @@ class TestGoogleDriveConnector:
 
     def test_get_file_extension_gdoc(self):
         """Test file extension detection for Google Doc."""
-        ext = GoogleDriveConnector._get_file_extension(
-            "My Document", "application/vnd.google-apps.document"
-        )
+        ext = GoogleDriveConnector._get_file_extension("My Document", "application/vnd.google-apps.document")
         assert ext == ".gdoc"
 
     def test_get_file_extension_gsheet(self):
         """Test file extension detection for Google Sheet."""
-        ext = GoogleDriveConnector._get_file_extension(
-            "My Spreadsheet", "application/vnd.google-apps.spreadsheet"
-        )
+        ext = GoogleDriveConnector._get_file_extension("My Spreadsheet", "application/vnd.google-apps.spreadsheet")
         assert ext == ".gsheet"
 
     def test_get_file_extension_regular_file(self):

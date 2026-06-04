@@ -3001,19 +3001,19 @@ async def create_watch_folder(
 ):
     """
     Create a new watch folder for auto-ingestion.
-    
+
     Issue #9000: Register a filesystem path to automatically ingest new files
     into the knowledge base.
     """
     import uuid
     from services.kb_folder_watcher import WatchFolderConfig, get_kb_folder_watcher
-    
+
     try:
         watcher = get_kb_folder_watcher()
-        
+
         # Generate unique folder ID
         folder_id = str(uuid.uuid4())
-        
+
         # Create config
         config = WatchFolderConfig(
             folder_id=folder_id,
@@ -3025,10 +3025,10 @@ async def create_watch_folder(
             category=request.category,
             tags=request.tags,
         )
-        
+
         # Add watch folder
         success = await watcher.add_watch_folder(config)
-        
+
         if success:
             return {
                 "success": True,
@@ -3041,7 +3041,7 @@ async def create_watch_folder(
                 "success": False,
                 "message": "Failed to create watch folder",
             }
-            
+
     except Exception as e:
         logger.error("Error creating watch folder: %s", e)
         return {
@@ -3062,26 +3062,26 @@ async def list_watch_folders(
 ):
     """
     List all configured watch folders.
-    
+
     Issue #9000: Get all watch folders with their configurations and stats.
     """
     from services.kb_folder_watcher import get_kb_folder_watcher
-    
+
     try:
         watcher = get_kb_folder_watcher()
-        
+
         # Initialize if not already done
         if not watcher._is_running:
             await watcher.initialize()
-        
+
         folders = watcher.get_watch_folders()
-        
+
         return {
             "success": True,
             "folders": folders,
             "total": len(folders),
         }
-        
+
     except Exception as e:
         logger.error("Error listing watch folders: %s", e)
         return {
@@ -3104,20 +3104,20 @@ async def delete_watch_folder(
 ):
     """
     Delete a watch folder.
-    
+
     Issue #9000: Remove a watch folder and stop monitoring it.
     """
     from services.kb_folder_watcher import get_kb_folder_watcher
-    
+
     try:
         watcher = get_kb_folder_watcher()
         success = await watcher.remove_watch_folder(folder_id)
-        
+
         return {
             "success": success,
             "message": "Watch folder deleted" if success else "Failed to delete watch folder",
         }
-        
+
     except Exception as e:
         logger.error("Error deleting watch folder: %s", e)
         return {
@@ -3140,22 +3140,24 @@ async def control_watch_folder(
 ):
     """
     Enable or disable a watch folder.
-    
+
     Issue #9000: Control whether a watch folder is actively monitoring for changes.
     """
     from services.kb_folder_watcher import get_kb_folder_watcher
-    
+
     try:
         watcher = get_kb_folder_watcher()
-        
+
         enabled = request.action == "enable"
         success = await watcher.update_watch_folder(folder_id, enabled)
-        
+
         return {
             "success": success,
-            "message": f"Watch folder {'enabled' if enabled else 'disabled'}" if success else "Failed to update watch folder",
+            "message": (
+                f"Watch folder {'enabled' if enabled else 'disabled'}" if success else "Failed to update watch folder"
+            ),
         }
-        
+
     except Exception as e:
         logger.error("Error controlling watch folder: %s", e)
         return {
@@ -3176,29 +3178,28 @@ async def get_watch_folder_stats(
 ):
     """
     Get overall watch folder statistics.
-    
+
     Issue #9000: Get aggregated stats across all watch folders.
     """
     from services.kb_folder_watcher import get_kb_folder_watcher
-    
+
     try:
         watcher = get_kb_folder_watcher()
-        
+
         # Initialize if not already done
         if not watcher._is_running:
             await watcher.initialize()
-        
+
         stats = watcher.get_stats()
-        
+
         return {
             "success": True,
             "stats": stats,
         }
-        
+
     except Exception as e:
         logger.error("Error getting watch folder stats: %s", e)
         return {
             "success": False,
             "stats": {},
         }
-
