@@ -1,4 +1,5 @@
 """Tests for DOCX (Microsoft Word) exporter."""
+
 import io
 import pytest
 from docx import Document

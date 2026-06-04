@@ -6,6 +6,7 @@ Provides endpoints to export transcripts in various formats:
 - SRT (SubRip subtitles)
 - VTT (WebVTT subtitles)
 """
+
 from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import Response
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling

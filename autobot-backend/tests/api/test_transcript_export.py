@@ -3,6 +3,7 @@
 Tests verify that the mock _get_transcript_mock function and export endpoints
 are correctly wired up and would work in production.
 """
+
 import io
 import pytest
 from docx import Document
@@ -58,9 +59,7 @@ async def test_export_docx_generates_valid_document(sample_transcript):
     assert len(doc.paragraphs) > 0
 
     # Verify MIME type and extension
-    assert exporter.get_mime_type() == (
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-    )
+    assert exporter.get_mime_type() == ("application/vnd.openxmlformats-officedocument.wordprocessingml.document")
     assert exporter.get_file_extension() == ".docx"
 
     # Verify content includes transcript data
@@ -132,12 +131,15 @@ async def test_filename_sanitization(sample_transcript):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("exporter_class,extension", [
-    (DOCXExporter, ".docx"),
-    (PDFExporter, ".pdf"),
-    (SRTExporter, ".srt"),
-    (VTTExporter, ".vtt"),
-])
+@pytest.mark.parametrize(
+    "exporter_class,extension",
+    [
+        (DOCXExporter, ".docx"),
+        (PDFExporter, ".pdf"),
+        (SRTExporter, ".srt"),
+        (VTTExporter, ".vtt"),
+    ],
+)
 async def test_all_exporters_functional(sample_transcript, exporter_class, extension):
     """Test all export formats are functional."""
     exporter = exporter_class(sample_transcript)

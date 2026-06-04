@@ -2,6 +2,7 @@
 
 Provides abstract exporter interface and Pydantic models for transcript data.
 """
+
 from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import List, Optional
@@ -85,6 +86,6 @@ class BaseExporter(ABC):
             str: Sanitized filename
         """
         # Sanitize title: remove special characters
-        safe_title = "".join(c for c in self.transcript.title if c.isalnum() or c in (' ', '-', '_'))
-        safe_title = safe_title.strip().replace(' ', '_')
+        safe_title = "".join(c for c in self.transcript.title if c.isalnum() or c in (" ", "-", "_"))
+        safe_title = safe_title.strip().replace(" ", "_")
         return f"{safe_title}{self.get_file_extension()}"

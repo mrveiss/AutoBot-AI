@@ -96,13 +96,6 @@ Issue #753: User preference management interface
           Notifications
         </button>
         <button
-          @click="activeTab = 'devices'"
-          :class="['settings-tab', { active: activeTab === 'devices' }]"
-        >
-          <Icon name="mobile" />
-          Mobile Devices
-        </button>
-        <button
           @click="activeTab = 'privacy'"
           :class="['settings-tab', { active: activeTab === 'privacy' }]"
         >
