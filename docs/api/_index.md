@@ -22,6 +22,7 @@ aliases:
 
 | Document | Description |
 | --- | --- |
+| [chat-reasoning-effort](chat-reasoning-effort.md) | Reasoning effort parameter for chat API |
 | [WEBSOCKET_INTEGRATION_GUIDE](WEBSOCKET_INTEGRATION_GUIDE.md) | WebSocket integration |
 | [Terminal_API_Consolidated](Terminal_API_Consolidated.md) | Terminal API |
 | [AGENT_TERMINAL_API](AGENT_TERMINAL_API.md) | Agent terminal API |
