@@ -84,7 +84,7 @@ scikit-learn>=1.8.0           # Issue #2027: RAPTOR clustering
 
 # Live Canvas export (MVA-359)
 bleach>=6.0.0           # HTML sanitization for canvas HTML/PDF export (XSS prevention — security-critical)
-weasyprint>=68.1        # HTML→PDF rendering for canvas PDF export
+weasyprint>=69.0        # HTML→PDF rendering for canvas PDF export
 
 # Media processing pipelines (Issue #932)
 aiohttp>=3.13.4         # Async HTTP client - SECURITY UPDATE
