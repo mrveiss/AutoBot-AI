@@ -20,7 +20,7 @@ from pathlib import Path
 from fastapi import APIRouter
 
 from autobot_shared.logging_manager import get_logger
-from extensions.base import Extension, HookContext
+from extensions.base import Extension
 
 logger = get_logger(__name__)
 

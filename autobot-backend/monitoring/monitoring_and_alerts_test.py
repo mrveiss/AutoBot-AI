@@ -24,7 +24,6 @@ import argparse
 import asyncio
 import json
 import logging
-import os
 import statistics
 import subprocess
 import sys

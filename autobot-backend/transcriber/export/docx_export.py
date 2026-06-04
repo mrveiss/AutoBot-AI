@@ -7,7 +7,7 @@
 import io
 
 from docx import Document
-from docx.shared import Pt, RGBColor
+from docx.shared import RGBColor
 
 _SPEAKER_COLORS = [
     RGBColor(0x1A, 0x73, 0xE8),

@@ -18,7 +18,6 @@ import pathlib as _pathlib
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from fastapi import HTTPException
 from redis.exceptions import RedisError
 
 from api.users import (

@@ -5,9 +5,7 @@
 Unit tests for Google Drive Knowledge Connector (Issue #9003)
 """
 
-import asyncio
-from datetime import datetime
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 

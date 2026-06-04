@@ -9,7 +9,7 @@ Provides:
 - PATCH /api/users/me/preferences - Update user preferences
 """
 
-from typing import Any, Dict
+from typing import Dict
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field

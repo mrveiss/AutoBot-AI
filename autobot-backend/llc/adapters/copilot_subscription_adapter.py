@@ -28,7 +28,6 @@ import asyncio
 import json
 import os
 import re
-import signal
 import time
 import uuid
 from typing import Optional

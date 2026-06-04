@@ -1,7 +1,5 @@
 """Tests for transcript export base classes and data models."""
 
-import pytest
-
 from services.transcript_export.base import Segment, Transcript
 
 
