@@ -111,7 +111,8 @@ async def _stream_single_model(
 
     except Exception as exc:
         logger.warning("compare stream error for %s: %s", model_spec, exc)
-        yield _sse({"model": model_spec, "error": str(exc), "done": True})
+        # Issue #9410: Never leak exception details in SSE streams
+        yield _sse({"model": model_spec, "error": "Model comparison failed", "done": True})
 
 
 def _sse(payload: Dict) -> str:
