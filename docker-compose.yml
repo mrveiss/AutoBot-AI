@@ -337,6 +337,7 @@ services:
       - SLM_USERS_DATABASE_URL=postgresql+asyncpg://${AUTOBOT_DB_USER:-autobot}:${AUTOBOT_DB_PASSWORD:-autobot}@autobot-postgres:5432/slm_users
       - SLM_POSTGRES_HOST=autobot-postgres
       - SLM_ADMIN_PASSWORD=${SLM_ADMIN_PASSWORD:-admin}
+      - SLM_DATA_DIR=/app/data
     depends_on:
       autobot-redis:
         condition: service_healthy
