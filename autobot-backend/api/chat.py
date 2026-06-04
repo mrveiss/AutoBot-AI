@@ -74,6 +74,9 @@ from utils.chat_utils import (
     validate_chat_session_id,
 )
 
+# Import context overflow protection (#9043)
+from chat_history.overflow_integration import handle_message_completion, create_summary_message
+
 # Import models - DISABLED: Models don't exist yet
 # from backend.models.conversation import ConversationModel
 # from backend.models.message import MessageModel
@@ -547,11 +550,12 @@ def _build_llm_context(
     return llm_context
 
 
-async def _generate_ai_response(llm_service, llm_context: List[Dict], session_id: str, request_id: str) -> Dict:
+async def _generate_ai_response(llm_service, llm_context: List[Dict], session_id: str, request_id: str) -> tuple[Dict, Any]:
     """
     Generate AI response using LLM service with fallback handling.
 
     Issue #281: Extracted helper for AI response generation.
+    Issue #9043: Returns full LLMResponse for token tracking.
 
     Args:
         llm_service: LLM service instance
@@ -560,7 +564,7 @@ async def _generate_ai_response(llm_service, llm_context: List[Dict], session_id
         request_id: Request ID
 
     Returns:
-        AI response dict with content and role
+        Tuple of (AI response dict with content and role, LLMResponse object or None)
     """
     try:
         # LLMService.chat() accepts OpenAI-format messages and uses
@@ -576,14 +580,14 @@ async def _generate_ai_response(llm_service, llm_context: List[Dict], session_id
             return {
                 "content": "I encountered an error processing your message. Please try again.",
                 "role": "assistant",
-            }
-        return {"content": response.content, "role": "assistant"}
+            }, None
+        return {"content": response.content, "role": "assistant"}, response
     except Exception as e:
         logger.error("LLM generation failed: %s", e)
         return {
             "content": "I encountered an error processing your message. Please try again.",
             "role": "assistant",
-        }
+        }, None
 
 
 async def _store_and_log_ai_response(
@@ -653,7 +657,8 @@ async def process_chat_message(
     author_id: str | None = None,
 ) -> ChatMessageData:
     """Process a chat message and generate response (Issue #398: refactored,
-    Issue #3282: author_id for multi-user attribution, Issue #6502: typed return)."""
+    Issue #3282: author_id for multi-user attribution, Issue #6502: typed return,
+    Issue #9043: context overflow protection)."""
     _validate_session_id(message.session_id)
 
     session_id = message.session_id
@@ -668,11 +673,42 @@ async def process_chat_message(
     # Build LLM context (Issue #281: uses helper)
     llm_context = _build_llm_context(chat_context, message, chat_history_manager, model_name)
 
-    # Generate AI response (Issue #281: uses helper)
-    ai_response = await _generate_ai_response(llm_service, llm_context, session_id, request_id)
+    # Generate AI response (Issue #281: uses helper, Issue #9043: returns LLMResponse for token tracking)
+    ai_response, llm_response = await _generate_ai_response(llm_service, llm_context, session_id, request_id)
 
     # Store AI response (Issue #281: uses helper)
     ai_message_id = await _store_and_log_ai_response(ai_response, session_id, request_id, chat_history_manager)
+
+    # Issue #9043: Check for context overflow and handle auto-summarization
+    overflow_status = await handle_message_completion(
+        session_id=session_id,
+        model_name=model_name or "gpt-4",  # Fallback to default if not specified
+        llm_response=llm_response,
+        messages=chat_context,  # Full history for summarization
+    )
+
+    # Handle context overflow summary injection
+    if overflow_status.get("summary_created"):
+        summary_msg = await create_summary_message(overflow_status["summary_text"])
+        if hasattr(chat_history_manager, "add_messages_batch"):
+            await chat_history_manager.add_messages_batch(
+                session_id,
+                [_to_persisted_message(summary_msg, "context_summary")]
+            )
+        logger.info(
+            "Context overflow: auto-summarized session %s (%d%% full)",
+            session_id,
+            int(overflow_status.get("current_fill_percentage", 0) * 100),
+        )
+
+    # Add overflow warning to metadata if triggered
+    metadata = ai_response.get("metadata", {})
+    if overflow_status.get("warning_triggered"):
+        metadata["context_warning"] = {
+            "fill_percentage": overflow_status.get("current_fill_percentage", 0),
+            "total_tokens": overflow_status.get("total_tokens", 0),
+            "context_limit": overflow_status.get("context_limit", 0),
+        }
 
     return ChatMessageData(
         content=ai_response.get("content", ""),
@@ -680,7 +716,7 @@ async def process_chat_message(
         session_id=session_id,
         message_id=ai_message_id,
         timestamp=utc_timestamp(),
-        metadata=ai_response.get("metadata", {}),
+        metadata=metadata,
     )
 
 
