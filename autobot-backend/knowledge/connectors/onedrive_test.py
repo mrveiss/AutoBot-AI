@@ -168,6 +168,10 @@ class TestOneDriveConnector:
             "size": 12345,
             "lastModifiedDateTime": "2026-06-04T08:00:00Z",
             "webUrl": "https://onedrive.live.com/file-123",
+            "parentReference": {
+                "path": "/drive/root:/Documents",
+                "driveId": "drive-abc",
+            },
         }
 
         source_info = connector._file_to_source_info(file_item)
@@ -175,9 +179,13 @@ class TestOneDriveConnector:
         assert source_info is not None
         assert source_info.source_id == "onedrive:test-onedrive-1:file:file-123"
         assert source_info.name == "document.docx"
-        assert "document.docx" in source_info.description
+        assert source_info.path == "/Documents/document.docx"
+        assert source_info.content_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        assert source_info.size_bytes == 12345
         assert source_info.metadata["file_id"] == "file-123"
         assert source_info.metadata["file_extension"] == ".docx"
+        assert source_info.metadata["web_url"] == "https://onedrive.live.com/file-123"
+        assert source_info.metadata["drive_id"] == "drive-abc"
 
     @pytest.mark.asyncio
     async def test_file_to_source_info_unsupported_extension(self, onedrive_config):
@@ -208,7 +216,6 @@ class TestOneDriveConnector:
         assert change.source_id == source_id
         assert change.change_type == "added"
         assert change.details["last_modified"] == last_modified
-
 
     @pytest.mark.asyncio
     async def test_max_concurrency_default(self, onedrive_config):
