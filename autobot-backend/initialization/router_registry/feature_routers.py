@@ -671,13 +671,8 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         ["voice", "rbac"],
         "voice_bundle_user",
     ),
-    # GH#4463: Mobile device pairing for push notifications and offline sync
-    (
-        "api.mobile_devices",
-        "/devices",
-        ["mobile-devices", "push-notifications"],
-        "mobile_devices",
-    ),
+    # NOTE (MVA-3022): mobile_devices removed — already registered in core_routers.py
+    # as a system router. Duplicate registration caused routes to appear twice.
     # GH#4459: Web push notification endpoints (subscribe/unsubscribe/vapid-key)
     ("api.push", "/push", ["push", "notifications"], "push"),
     # GH#9044: Transcriber module — project + recording CRUD under /api/transcriber
