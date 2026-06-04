@@ -6,6 +6,7 @@ WebVTT format specification:
 - Voice tags: <v Speaker Name>text
 - Empty line between entries
 """
+
 from services.transcript_export.base import BaseExporter, Transcript
 
 

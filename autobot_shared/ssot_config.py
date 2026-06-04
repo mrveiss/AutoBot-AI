@@ -56,9 +56,7 @@ def _find_project_root() -> Path:
         if (parent / ".env").exists():
             return parent
     # Fallback to runtime location (env var or /opt/autobot)
-    return Path(
-        os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot")
-    )  # ssot-config-exempt: bootstrap self-reference
+    return Path(os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot"))  # ssot-config-exempt: bootstrap self-reference
 
 
 PROJECT_ROOT = _find_project_root()
@@ -74,15 +72,11 @@ DEFAULT_EMBEDDING_MODEL = "nomic-embed-text:latest"
 
 # Per-role model defaults (6-tier mapping, #2553)
 # Each tier is optimised for its workload class — see docs/developer/TIERED_MODEL_ROUTING.md
-TRIVIAL_MODEL = (
-    "llama3.2:1b"  # Trivial tier: simplest queries, no tools/RAG/memory (GH#9050)
-)
+TRIVIAL_MODEL = "llama3.2:1b"  # Trivial tier: simplest queries, no tools/RAG/memory (GH#9050)
 ROUTING_MODEL = "llama3.2:1b"  # Orchestrator only, no tool use
 CLASSIFICATION_MODEL = "gemma2:2b"  # Intent detection, classification
 LIGHT_PROCESSING_MODEL = "phi3:mini"  # Extraction, formatting, lightweight tasks
-INSTRUCTION_MODEL = (
-    "mistral:7b-instruct"  # RAG, entity extraction, instruction following
-)
+INSTRUCTION_MODEL = "mistral:7b-instruct"  # RAG, entity extraction, instruction following
 SYSTEM_MODEL = "dolphin-llama3:8b"  # System commands, security (uncensored)
 QUALITY_MODEL = DEFAULT_LLM_MODEL  # User-facing chat, research, code analysis
 
@@ -134,23 +128,15 @@ class PortConfig(BaseSettings):
     redis: int = Field(default=6379, alias="AUTOBOT_REDIS_PORT")
     ollama: int = Field(default=11434, alias="AUTOBOT_OLLAMA_PORT")
     vnc: int = Field(default=6080, alias="AUTOBOT_VNC_PORT")
-    browser: int = Field(
-        default=9001, alias="AUTOBOT_BROWSER_SERVICE_PORT"
-    )  # Issue #4052: 9001; 3000 is Grafana
+    browser: int = Field(default=9001, alias="AUTOBOT_BROWSER_SERVICE_PORT")  # Issue #4052: 9001; 3000 is Grafana
     aistack: int = Field(default=8080, alias="AUTOBOT_AI_STACK_PORT")
-    chromadb: int = Field(
-        default=8100, alias="AUTOBOT_CHROMADB_PORT"
-    )  # Issue #3094: 8100 matches Ansible deploy
+    chromadb: int = Field(default=8100, alias="AUTOBOT_CHROMADB_PORT")  # Issue #3094: 8100 matches Ansible deploy
     npu: int = Field(default=8081, alias="AUTOBOT_NPU_WORKER_PORT")
-    tts: int = Field(
-        default=8083, alias="AUTOBOT_TTS_WORKER_PORT"
-    )  # Issue #928; #3431: 8082 WSL2/Hyper-V reserved
+    tts: int = Field(default=8083, alias="AUTOBOT_TTS_WORKER_PORT")  # Issue #928; #3431: 8082 WSL2/Hyper-V reserved
     slm: int = Field(default=8000, alias="AUTOBOT_SLM_PORT")  # Issue #768
     prometheus: int = Field(default=9090, alias="AUTOBOT_PROMETHEUS_PORT")
     grafana: int = Field(default=3000, alias="AUTOBOT_GRAFANA_PORT")
-    chrome_cdp: int = Field(
-        default=9222, alias="AUTOBOT_CHROME_CDP_PORT"
-    )  # Issue #3829: Chrome DevTools Protocol
+    chrome_cdp: int = Field(default=9222, alias="AUTOBOT_CHROME_CDP_PORT")  # Issue #3829: Chrome DevTools Protocol
 
 
 class LLMConfig(BaseSettings):
@@ -174,35 +160,21 @@ class LLMConfig(BaseSettings):
     )
 
     # Primary models — each role maps to its optimal 6-tier (#2553)
-    default_model: str = Field(
-        default=DEFAULT_LLM_MODEL, alias="AUTOBOT_DEFAULT_LLM_MODEL"
-    )
-    embedding_model: str = Field(
-        default=DEFAULT_EMBEDDING_MODEL, alias="AUTOBOT_EMBEDDING_MODEL"
-    )
-    trivial_model: str = Field(
-        default=TRIVIAL_MODEL, alias="AUTOBOT_TRIVIAL_MODEL"
-    )  # GH#9050
-    classification_model: str = Field(
-        default=CLASSIFICATION_MODEL, alias="AUTOBOT_CLASSIFICATION_MODEL"
-    )
+    default_model: str = Field(default=DEFAULT_LLM_MODEL, alias="AUTOBOT_DEFAULT_LLM_MODEL")
+    embedding_model: str = Field(default=DEFAULT_EMBEDDING_MODEL, alias="AUTOBOT_EMBEDDING_MODEL")
+    trivial_model: str = Field(default=TRIVIAL_MODEL, alias="AUTOBOT_TRIVIAL_MODEL")  # GH#9050
+    classification_model: str = Field(default=CLASSIFICATION_MODEL, alias="AUTOBOT_CLASSIFICATION_MODEL")
     reasoning_model: str = Field(default=QUALITY_MODEL, alias="AUTOBOT_REASONING_MODEL")
     rag_model: str = Field(default=INSTRUCTION_MODEL, alias="AUTOBOT_RAG_MODEL")
     coding_model: str = Field(default=QUALITY_MODEL, alias="AUTOBOT_CODING_MODEL")
 
     # 6-tier model fields (#2553)
-    light_processing_model: str = Field(
-        default=LIGHT_PROCESSING_MODEL, alias="AUTOBOT_LIGHT_PROCESSING_MODEL"
-    )
-    instruction_model: str = Field(
-        default=INSTRUCTION_MODEL, alias="AUTOBOT_INSTRUCTION_MODEL"
-    )
+    light_processing_model: str = Field(default=LIGHT_PROCESSING_MODEL, alias="AUTOBOT_LIGHT_PROCESSING_MODEL")
+    instruction_model: str = Field(default=INSTRUCTION_MODEL, alias="AUTOBOT_INSTRUCTION_MODEL")
     system_model: str = Field(default=SYSTEM_MODEL, alias="AUTOBOT_SYSTEM_MODEL")
 
     # Agent/workflow models — each maps to its optimal tier (#2553)
-    orchestrator_model: str = Field(
-        default=ROUTING_MODEL, alias="AUTOBOT_ORCHESTRATOR_MODEL"
-    )
+    orchestrator_model: str = Field(default=ROUTING_MODEL, alias="AUTOBOT_ORCHESTRATOR_MODEL")
     agent_model: str = Field(default=QUALITY_MODEL, alias="AUTOBOT_AGENT_MODEL")
     research_model: str = Field(default=QUALITY_MODEL, alias="AUTOBOT_RESEARCH_MODEL")
     analysis_model: str = Field(default=QUALITY_MODEL, alias="AUTOBOT_ANALYSIS_MODEL")
@@ -215,15 +187,9 @@ class LLMConfig(BaseSettings):
     provider: str = Field(default="ollama", alias="AUTOBOT_LLM_PROVIDER")
 
     # Provider-specific endpoints (each provider can have its own URL)
-    ollama_endpoint: str = Field(
-        default="http://127.0.0.1:11434", alias="AUTOBOT_OLLAMA_ENDPOINT"
-    )
-    openai_endpoint: str = Field(
-        default="https://api.openai.com/v1", alias="AUTOBOT_OPENAI_ENDPOINT"
-    )
-    anthropic_endpoint: str = Field(
-        default="https://api.anthropic.com/v1", alias="AUTOBOT_ANTHROPIC_ENDPOINT"
-    )
+    ollama_endpoint: str = Field(default="http://127.0.0.1:11434", alias="AUTOBOT_OLLAMA_ENDPOINT")
+    openai_endpoint: str = Field(default="https://api.openai.com/v1", alias="AUTOBOT_OPENAI_ENDPOINT")
+    anthropic_endpoint: str = Field(default="https://api.anthropic.com/v1", alias="AUTOBOT_ANTHROPIC_ENDPOINT")
     custom_endpoint: str = Field(default="", alias="AUTOBOT_CUSTOM_LLM_ENDPOINT")
     lmstudio_host: str = Field(default="http://127.0.0.1:1234", alias="LMSTUDIO_HOST")
 
@@ -234,9 +200,7 @@ class LLMConfig(BaseSettings):
     # Connection pool size for Ollama requests (#1154)
     # Default 6 matches typical concurrent capacity for RTX 4070 (8GB VRAM)
     # Override with AUTOBOT_OLLAMA_POOL_MAX_CONNECTIONS
-    ollama_pool_max_connections: int = Field(
-        default=6, alias="AUTOBOT_OLLAMA_POOL_MAX_CONNECTIONS"
-    )
+    ollama_pool_max_connections: int = Field(default=6, alias="AUTOBOT_OLLAMA_POOL_MAX_CONNECTIONS")
 
     # API keys (optional - can also come from provider-specific env vars)
     openai_api_key: str = Field(default="", alias="OPENAI_API_KEY")
@@ -244,27 +208,15 @@ class LLMConfig(BaseSettings):
 
     # Claude escalation feature flag (#8171): disabled by default so local LLM
     # path is unchanged unless AUTOBOT_CLAUDE_ESCALATION_ENABLED=true is set.
-    claude_escalation_enabled: bool = Field(
-        default=False, alias="AUTOBOT_CLAUDE_ESCALATION_ENABLED"
-    )
-    claude_escalation_threshold: float = Field(
-        default=7.0, alias="AUTOBOT_CLAUDE_ESCALATION_THRESHOLD"
-    )
+    claude_escalation_enabled: bool = Field(default=False, alias="AUTOBOT_CLAUDE_ESCALATION_ENABLED")
+    claude_escalation_threshold: float = Field(default=7.0, alias="AUTOBOT_CLAUDE_ESCALATION_THRESHOLD")
 
     # LlamaIndex-specific configuration for RAG/vectorization
     # These are explicit settings - no fallbacks. Must be configured correctly.
-    llamaindex_llm_provider: str = Field(
-        default="ollama", alias="AUTOBOT_LLAMAINDEX_LLM_PROVIDER"
-    )
-    llamaindex_llm_endpoint: str = Field(
-        default="http://127.0.0.1:11434", alias="AUTOBOT_LLAMAINDEX_LLM_ENDPOINT"
-    )
-    llamaindex_llm_model: str = Field(
-        default=DEFAULT_LLM_MODEL, alias="AUTOBOT_LLAMAINDEX_LLM_MODEL"
-    )
-    llamaindex_embedding_provider: str = Field(
-        default="ollama", alias="AUTOBOT_LLAMAINDEX_EMBEDDING_PROVIDER"
-    )
+    llamaindex_llm_provider: str = Field(default="ollama", alias="AUTOBOT_LLAMAINDEX_LLM_PROVIDER")
+    llamaindex_llm_endpoint: str = Field(default="http://127.0.0.1:11434", alias="AUTOBOT_LLAMAINDEX_LLM_ENDPOINT")
+    llamaindex_llm_model: str = Field(default=DEFAULT_LLM_MODEL, alias="AUTOBOT_LLAMAINDEX_LLM_MODEL")
+    llamaindex_embedding_provider: str = Field(default="ollama", alias="AUTOBOT_LLAMAINDEX_EMBEDDING_PROVIDER")
     llamaindex_embedding_endpoint: str = Field(
         default="http://127.0.0.1:11434", alias="AUTOBOT_LLAMAINDEX_EMBEDDING_ENDPOINT"
     )
@@ -284,11 +236,7 @@ class LLMConfig(BaseSettings):
             Ollama base URL (no /api suffix)
         """
         if self.ollama_gpu_endpoint and self.ollama_gpu_models:
-            gpu_set = {
-                m.strip().lower()
-                for m in self.ollama_gpu_models.split(",")
-                if m.strip()
-            }
+            gpu_set = {m.strip().lower() for m in self.ollama_gpu_models.split(",") if m.strip()}
             if model_name.strip().lower() in gpu_set:
                 return self.ollama_gpu_endpoint
         return self.ollama_endpoint
@@ -514,22 +462,16 @@ class TimeoutConfig(BaseSettings):
     # ------------------------------------------------------------------ #
 
     # Quick subprocess (health query, lspci, xrandr, …)
-    subprocess_short: float = Field(
-        default=5.0, alias="AUTOBOT_TIMEOUT_SUBPROCESS_SHORT"
-    )
+    subprocess_short: float = Field(default=5.0, alias="AUTOBOT_TIMEOUT_SUBPROCESS_SHORT")
 
     # Standard subprocess (git operations, rsync small payload)
     subprocess: float = Field(default=30.0, alias="AUTOBOT_TIMEOUT_SUBPROCESS")
 
     # Long-running subprocess (Ansible playbook, large rsync, deploy)
-    subprocess_long: float = Field(
-        default=300.0, alias="AUTOBOT_TIMEOUT_SUBPROCESS_LONG"
-    )
+    subprocess_long: float = Field(default=300.0, alias="AUTOBOT_TIMEOUT_SUBPROCESS_LONG")
 
     # Very long subprocess (full deployment pipeline, TLS provisioning)
-    subprocess_deploy: float = Field(
-        default=600.0, alias="AUTOBOT_TIMEOUT_SUBPROCESS_DEPLOY"
-    )
+    subprocess_deploy: float = Field(default=600.0, alias="AUTOBOT_TIMEOUT_SUBPROCESS_DEPLOY")
 
     # ------------------------------------------------------------------ #
     # MCP / skill processes (seconds)                                      #
@@ -552,9 +494,7 @@ class TimeoutConfig(BaseSettings):
     # ------------------------------------------------------------------ #
 
     # Default cap for a background task before it is considered hung
-    background_task: float = Field(
-        default=600.0, alias="AUTOBOT_TIMEOUT_BACKGROUND_TASK"
-    )
+    background_task: float = Field(default=600.0, alias="AUTOBOT_TIMEOUT_BACKGROUND_TASK")
 
     # ------------------------------------------------------------------ #
     # A2A task manager (seconds)                                           #
@@ -590,9 +530,7 @@ class TimeoutConfig(BaseSettings):
     # ------------------------------------------------------------------ #
 
     connection_pool_read: float = Field(default=60.0, alias="AUTOBOT_POOL_READ_TIMEOUT")
-    connection_pool_write: float = Field(
-        default=30.0, alias="AUTOBOT_POOL_WRITE_TIMEOUT"
-    )
+    connection_pool_write: float = Field(default=30.0, alias="AUTOBOT_POOL_WRITE_TIMEOUT")
     connection_pool: float = Field(default=30.0, alias="AUTOBOT_POOL_TIMEOUT")
 
     # ------------------------------------------------------------------ #
@@ -764,9 +702,7 @@ class CacheL1Config(BaseSettings):
         alias="AUTOBOT_CACHE_L1_LLM_RESPONSE",
         description="Max items in LLM response cache",
     )
-    ast: int = Field(
-        default=1000, alias="AUTOBOT_CACHE_L1_AST", description="Max items in AST cache"
-    )
+    ast: int = Field(default=1000, alias="AUTOBOT_CACHE_L1_AST", description="Max items in AST cache")
     file_content: int = Field(
         default=500,
         alias="AUTOBOT_CACHE_L1_FILE_CONTENT",
@@ -1041,20 +977,14 @@ class TLSConfig(BaseSettings):
     mode: TLSMode = Field(default=TLSMode.DISABLED, alias="AUTOBOT_TLS_MODE")
     cert_dir: str = Field(default="certs", alias="AUTOBOT_TLS_CERT_DIR")
     ca_cert: str = Field(default="certs/ca/ca-cert.pem", alias="AUTOBOT_TLS_CA_CERT")
-    remote_cert_dir: str = Field(
-        default="/etc/autobot/certs", alias="AUTOBOT_TLS_REMOTE_CERT_DIR"
-    )
+    remote_cert_dir: str = Field(default="/etc/autobot/certs", alias="AUTOBOT_TLS_REMOTE_CERT_DIR")
     # Service-specific TLS settings
     redis_tls_enabled: bool = Field(default=False, alias="AUTOBOT_REDIS_TLS_ENABLED")
     redis_tls_port: int = Field(default=6380, alias="AUTOBOT_REDIS_TLS_PORT")
-    backend_tls_enabled: bool = Field(
-        default=False, alias="AUTOBOT_BACKEND_TLS_ENABLED"
-    )
+    backend_tls_enabled: bool = Field(default=False, alias="AUTOBOT_BACKEND_TLS_ENABLED")
     backend_tls_port: int = Field(default=8443, alias="AUTOBOT_BACKEND_TLS_PORT")
     # Issue #164: Frontend TLS (HTTPS) support
-    frontend_tls_enabled: bool = Field(
-        default=False, alias="AUTOBOT_FRONTEND_TLS_ENABLED"
-    )
+    frontend_tls_enabled: bool = Field(default=False, alias="AUTOBOT_FRONTEND_TLS_ENABLED")
     frontend_tls_port: int = Field(default=443, alias="AUTOBOT_FRONTEND_TLS_PORT")
     # SLM TLS settings (admin server)
     slm_tls_enabled: bool = Field(default=False, alias="AUTOBOT_SLM_TLS_ENABLED")
@@ -1068,12 +998,7 @@ class TLSConfig(BaseSettings):
     @property
     def any_service_tls_enabled(self) -> bool:
         """Check if any service has TLS enabled."""
-        return (
-            self.redis_tls_enabled
-            or self.backend_tls_enabled
-            or self.frontend_tls_enabled
-            or self.slm_tls_enabled
-        )
+        return self.redis_tls_enabled or self.backend_tls_enabled or self.frontend_tls_enabled or self.slm_tls_enabled
 
 
 class DatabasePoolConfig(BaseSettings):
@@ -1159,15 +1084,11 @@ class PathConfig(BaseSettings):
     # code_source lives at /opt/autobot/code_source, a sibling of autobot-backend/ —
     # NOT inside base_dir. Absolute default ensures correct resolution regardless
     # of what AUTOBOT_BASE_DIR is set to.
-    code_source_dir: str = Field(
-        default="/opt/autobot/code_source", alias="AUTOBOT_CODE_SOURCE"
-    )
+    code_source_dir: str = Field(default="/opt/autobot/code_source", alias="AUTOBOT_CODE_SOURCE")
 
     # VNC password file — absolute path, not relative to base_dir.
     # Override via AUTOBOT_VNC_PASSWD_FILE env var.
-    vnc_passwd_file: str = Field(
-        default="/home/autobot/.vnc/x11vnc.passwd", alias="AUTOBOT_VNC_PASSWD_FILE"
-    )
+    vnc_passwd_file: str = Field(default="/home/autobot/.vnc/x11vnc.passwd", alias="AUTOBOT_VNC_PASSWD_FILE")
 
     def resolve(self, relative: str) -> Path:
         """Resolve a path relative to base_dir."""
@@ -1229,43 +1150,19 @@ class MiscConfig(BaseSettings):
     anthropic_api_base_url: str = Field(default="", alias="ANTHROPIC_API_BASE_URL")
     api_key: str = Field(default="", alias="API_KEY")
     ast_cache_max_size: int = Field(default=0, alias="AST_CACHE_MAX_SIZE")
-    audit_log_file: str = Field(
-        default="/opt/autobot/logs/audit.log", alias="AUTOBOT_AUDIT_LOG_FILE"
-    )
-    autoresearch_docker_cpus: str = Field(
-        default="", alias="AUTOBOT_AUTORESEARCH_DOCKER_CPUS"
-    )
-    autoresearch_data_dir: str = Field(
-        default="", alias="AUTOBOT_AUTORESEARCH_DATA_DIR"
-    )
+    audit_log_file: str = Field(default="/opt/autobot/logs/audit.log", alias="AUTOBOT_AUDIT_LOG_FILE")
+    autoresearch_docker_cpus: str = Field(default="", alias="AUTOBOT_AUTORESEARCH_DOCKER_CPUS")
+    autoresearch_data_dir: str = Field(default="", alias="AUTOBOT_AUTORESEARCH_DATA_DIR")
     autoresearch_dir: str = Field(default="", alias="AUTOBOT_AUTORESEARCH_DIR")
-    autoresearch_docker_enabled: bool = Field(
-        default=False, alias="AUTOBOT_AUTORESEARCH_DOCKER_ENABLED"
-    )
-    autoresearch_docker_image: str = Field(
-        default="", alias="AUTOBOT_AUTORESEARCH_DOCKER_IMAGE"
-    )
-    autoresearch_docker_memory: str = Field(
-        default="", alias="AUTOBOT_AUTORESEARCH_DOCKER_MEMORY"
-    )
-    autoresearch_docker_timeout: int = Field(
-        default=0, alias="AUTOBOT_AUTORESEARCH_DOCKER_TIMEOUT"
-    )
-    autoresearch_improvement_threshold: float = Field(
-        default=0.0, alias="AUTOBOT_AUTORESEARCH_IMPROVEMENT_THRESHOLD"
-    )
-    autoresearch_max_steps: str = Field(
-        default="", alias="AUTOBOT_AUTORESEARCH_MAX_STEPS"
-    )
-    autoresearch_significant_threshold: float = Field(
-        default=0.0, alias="AUTOBOT_AUTORESEARCH_SIGNIFICANT_THRESHOLD"
-    )
-    autoresearch_staged_eval_fraction: str = Field(
-        default="", alias="AUTOBOT_AUTORESEARCH_STAGED_EVAL_FRACTION"
-    )
-    autoresearch_staged_eval_threshold: float = Field(
-        default=0.0, alias="AUTOBOT_AUTORESEARCH_STAGED_EVAL_THRESHOLD"
-    )
+    autoresearch_docker_enabled: bool = Field(default=False, alias="AUTOBOT_AUTORESEARCH_DOCKER_ENABLED")
+    autoresearch_docker_image: str = Field(default="", alias="AUTOBOT_AUTORESEARCH_DOCKER_IMAGE")
+    autoresearch_docker_memory: str = Field(default="", alias="AUTOBOT_AUTORESEARCH_DOCKER_MEMORY")
+    autoresearch_docker_timeout: int = Field(default=0, alias="AUTOBOT_AUTORESEARCH_DOCKER_TIMEOUT")
+    autoresearch_improvement_threshold: float = Field(default=0.0, alias="AUTOBOT_AUTORESEARCH_IMPROVEMENT_THRESHOLD")
+    autoresearch_max_steps: str = Field(default="", alias="AUTOBOT_AUTORESEARCH_MAX_STEPS")
+    autoresearch_significant_threshold: float = Field(default=0.0, alias="AUTOBOT_AUTORESEARCH_SIGNIFICANT_THRESHOLD")
+    autoresearch_staged_eval_fraction: str = Field(default="", alias="AUTOBOT_AUTORESEARCH_STAGED_EVAL_FRACTION")
+    autoresearch_staged_eval_threshold: float = Field(default=0.0, alias="AUTOBOT_AUTORESEARCH_STAGED_EVAL_THRESHOLD")
     autoresearch_timeout: int = Field(default=0, alias="AUTOBOT_AUTORESEARCH_TIMEOUT")
     cache_enabled: bool = Field(default=False, alias="AUTOBOT_CACHE_ENABLED")
     cache_size: int = Field(default=0, alias="AUTOBOT_CACHE_SIZE")
@@ -1279,20 +1176,12 @@ class MiscConfig(BaseSettings):
         alias="AUTOBOT_CACHE_L2_TTL",
         description="L2 Redis LLM response cache TTL in seconds",
     )
-    celery_result_expires: str = Field(
-        default="", alias="AUTOBOT_CELERY_RESULT_EXPIRES"
-    )
-    celery_visibility_timeout: int = Field(
-        default=0, alias="AUTOBOT_CELERY_VISIBILITY_TIMEOUT"
-    )
+    celery_result_expires: str = Field(default="", alias="AUTOBOT_CELERY_RESULT_EXPIRES")
+    celery_visibility_timeout: int = Field(default=0, alias="AUTOBOT_CELERY_VISIBILITY_TIMEOUT")
     chats_directory: str = Field(default="", alias="AUTOBOT_CHATS_DIRECTORY")
     chat_history_file: str = Field(default="", alias="AUTOBOT_CHAT_HISTORY_FILE")
-    chat_recent_max_entries: str = Field(
-        default="", alias="AUTOBOT_CHAT_RECENT_MAX_ENTRIES"
-    )
-    chat_session_cache_ttl: str = Field(
-        default="", alias="AUTOBOT_CHAT_SESSION_CACHE_TTL"
-    )
+    chat_recent_max_entries: str = Field(default="", alias="AUTOBOT_CHAT_RECENT_MAX_ENTRIES")
+    chat_session_cache_ttl: str = Field(default="", alias="AUTOBOT_CHAT_SESSION_CACHE_TTL")
     contradiction_surface_threshold: str = Field(
         default="",
         alias="AUTOBOT_CONTRADICTION_SURFACE_THRESHOLD",
@@ -1301,25 +1190,13 @@ class MiscConfig(BaseSettings):
     chat_timeout: int = Field(default=0, alias="AUTOBOT_CHAT_TIMEOUT")
     chromadb_collection: str = Field(default="", alias="AUTOBOT_CHROMADB_COLLECTION")
     chromadb_path: str = Field(default="", alias="AUTOBOT_CHROMADB_PATH")
-    cloud_batch_window_ms: str = Field(
-        default="", alias="AUTOBOT_CLOUD_BATCH_WINDOW_MS"
-    )
-    cloud_connection_pool_size: int = Field(
-        default=0, alias="AUTOBOT_CLOUD_CONNECTION_POOL_SIZE"
-    )
+    cloud_batch_window_ms: str = Field(default="", alias="AUTOBOT_CLOUD_BATCH_WINDOW_MS")
+    cloud_connection_pool_size: int = Field(default=0, alias="AUTOBOT_CLOUD_CONNECTION_POOL_SIZE")
     cloud_max_batch_size: int = Field(default=0, alias="AUTOBOT_CLOUD_MAX_BATCH_SIZE")
-    cloud_retry_base_delay: str = Field(
-        default="", alias="AUTOBOT_CLOUD_RETRY_BASE_DELAY"
-    )
-    cloud_retry_max_attempts: str = Field(
-        default="", alias="AUTOBOT_CLOUD_RETRY_MAX_ATTEMPTS"
-    )
-    cloud_retry_max_delay: str = Field(
-        default="", alias="AUTOBOT_CLOUD_RETRY_MAX_DELAY"
-    )
-    concurrent_limiter_timeout: int = Field(
-        default=0, alias="AUTOBOT_CONCURRENT_LIMITER_TIMEOUT"
-    )
+    cloud_retry_base_delay: str = Field(default="", alias="AUTOBOT_CLOUD_RETRY_BASE_DELAY")
+    cloud_retry_max_attempts: str = Field(default="", alias="AUTOBOT_CLOUD_RETRY_MAX_ATTEMPTS")
+    cloud_retry_max_delay: str = Field(default="", alias="AUTOBOT_CLOUD_RETRY_MAX_DELAY")
+    concurrent_limiter_timeout: int = Field(default=0, alias="AUTOBOT_CONCURRENT_LIMITER_TIMEOUT")
     coqui_model: str = Field(default="", alias="AUTOBOT_COQUI_MODEL")
     database_url: str = Field(default="", alias="AUTOBOT_DATABASE_URL")
     data_db: str = Field(default="", alias="AUTOBOT_DATA_DB")
@@ -1344,9 +1221,7 @@ class MiscConfig(BaseSettings):
     dev_mode: str = Field(default="", alias="AUTOBOT_DEV_MODE")
     encryption_key: str = Field(default="", alias="AUTOBOT_ENCRYPTION_KEY")
     env: str = Field(default="", alias="AUTOBOT_ENV")
-    feature_routers_strict: str = Field(
-        default="1", alias="AUTOBOT_FEATURE_ROUTERS_STRICT"
-    )
+    feature_routers_strict: str = Field(default="1", alias="AUTOBOT_FEATURE_ROUTERS_STRICT")
     gc_threshold_0: int = Field(default=0, alias="AUTOBOT_GC_THRESHOLD_0")
     gc_threshold_1: int = Field(default=0, alias="AUTOBOT_GC_THRESHOLD_1")
     gc_threshold_2: int = Field(default=0, alias="AUTOBOT_GC_THRESHOLD_2")
@@ -1368,24 +1243,16 @@ class MiscConfig(BaseSettings):
     internal_api_key: str = Field(default="", alias="AUTOBOT_INTERNAL_API_KEY")
     jaeger_endpoint: str = Field(default="", alias="AUTOBOT_JAEGER_ENDPOINT")
     jwt_secret: str = Field(default="", alias="AUTOBOT_JWT_SECRET")
-    llm_key_rotation_grace_secs: str = Field(
-        default="", alias="AUTOBOT_LLM_KEY_ROTATION_GRACE_SECS"
-    )
-    llm_key_rotation_interval_minutes: str = Field(
-        default="", alias="AUTOBOT_LLM_KEY_ROTATION_INTERVAL_MINUTES"
-    )
+    llm_key_rotation_grace_secs: str = Field(default="", alias="AUTOBOT_LLM_KEY_ROTATION_GRACE_SECS")
+    llm_key_rotation_interval_minutes: str = Field(default="", alias="AUTOBOT_LLM_KEY_ROTATION_INTERVAL_MINUTES")
     llm_models_yaml: str = Field(default="", alias="AUTOBOT_LLM_MODELS_YAML")
     llm_temperature: str = Field(default="", alias="AUTOBOT_LLM_TEMPERATURE")
     log_backup_count: int = Field(default=0, alias="AUTOBOT_LOG_BACKUP_COUNT")
     log_max_bytes: int = Field(default=0, alias="AUTOBOT_LOG_MAX_BYTES")
     mcp_token: str = Field(default="", alias="AUTOBOT_MCP_TOKEN")
-    voice_toolset_bundle: str = Field(
-        default="voice_safe", alias="AUTOBOT_VOICE_TOOLSETS"
-    )
+    voice_toolset_bundle: str = Field(default="voice_safe", alias="AUTOBOT_VOICE_TOOLSETS")
     voice_disabled_tools: str = Field(default="", alias="AUTOBOT_VOICE_DISABLED_TOOLS")
-    voice_realtime_model: str = Field(
-        default="gpt-realtime-2", alias="AUTOBOT_VOICE_REALTIME_MODEL"
-    )
+    voice_realtime_model: str = Field(default="gpt-realtime-2", alias="AUTOBOT_VOICE_REALTIME_MODEL")
     voice_realtime_max_seconds: int = Field(
         default=1800,
         alias="AUTOBOT_VOICE_REALTIME_MAX_SECONDS",
@@ -1401,21 +1268,13 @@ class MiscConfig(BaseSettings):
         alias="AUTOBOT_VOICE_REALTIME_SESSION_TTL_DAYS",
         description="Redis TTL (days) for voice_realtime_session:* keys. Default 90 days.",
     )
-    memory_log_threshold_mb: int = Field(
-        default=0, alias="AUTOBOT_MEMORY_LOG_THRESHOLD_MB"
-    )
+    memory_log_threshold_mb: int = Field(default=0, alias="AUTOBOT_MEMORY_LOG_THRESHOLD_MB")
     memory_pool_size: int = Field(default=0, alias="AUTOBOT_MEMORY_POOL_SIZE")
     memory_threshold_mb: int = Field(default=0, alias="AUTOBOT_MEMORY_THRESHOLD_MB")
-    meta_agent_approval_threshold: float = Field(
-        default=0.0, alias="AUTOBOT_META_AGENT_APPROVAL_THRESHOLD"
-    )
+    meta_agent_approval_threshold: float = Field(default=0.0, alias="AUTOBOT_META_AGENT_APPROVAL_THRESHOLD")
     meta_agent_llm_model: str = Field(default="", alias="AUTOBOT_META_AGENT_LLM_MODEL")
-    meta_agent_max_module_lines: str = Field(
-        default="", alias="AUTOBOT_META_AGENT_MAX_MODULE_LINES"
-    )
-    meta_agent_test_timeout: int = Field(
-        default=0, alias="AUTOBOT_META_AGENT_TEST_TIMEOUT"
-    )
+    meta_agent_max_module_lines: str = Field(default="", alias="AUTOBOT_META_AGENT_MAX_MODULE_LINES")
+    meta_agent_test_timeout: int = Field(default=0, alias="AUTOBOT_META_AGENT_TEST_TIMEOUT")
     ollama_url: str = Field(default="", alias="AUTOBOT_OLLAMA_URL")
     postgres_db: str = Field(default="", alias="AUTOBOT_POSTGRES_DB")
     postgres_host: str = Field(default="", alias="AUTOBOT_POSTGRES_HOST")
@@ -1423,28 +1282,16 @@ class MiscConfig(BaseSettings):
     postgres_port: int = Field(default=0, alias="AUTOBOT_POSTGRES_PORT")
     postgres_user: str = Field(default="", alias="AUTOBOT_POSTGRES_USER")
     project_root: str = Field(default="", alias="AUTOBOT_PROJECT_ROOT")
-    project_state_db_path: str = Field(
-        default="", alias="AUTOBOT_PROJECT_STATE_DB_PATH"
-    )
-    prompt_compression_enabled: bool = Field(
-        default=False, alias="AUTOBOT_PROMPT_COMPRESSION_ENABLED"
-    )
-    prompt_compression_min_length: str = Field(
-        default="", alias="AUTOBOT_PROMPT_COMPRESSION_MIN_LENGTH"
-    )
-    prompt_compression_ratio: float = Field(
-        default=0.0, alias="AUTOBOT_PROMPT_COMPRESSION_RATIO"
-    )
+    project_state_db_path: str = Field(default="", alias="AUTOBOT_PROJECT_STATE_DB_PATH")
+    prompt_compression_enabled: bool = Field(default=False, alias="AUTOBOT_PROMPT_COMPRESSION_ENABLED")
+    prompt_compression_min_length: str = Field(default="", alias="AUTOBOT_PROMPT_COMPRESSION_MIN_LENGTH")
+    prompt_compression_ratio: float = Field(default=0.0, alias="AUTOBOT_PROMPT_COMPRESSION_RATIO")
     quantization_type: str = Field(default="", alias="AUTOBOT_QUANTIZATION_TYPE")
     redis_memory_db: str = Field(default="", alias="AUTOBOT_REDIS_MEMORY_DB")
     redis_task_db: str = Field(default="", alias="AUTOBOT_REDIS_TASK_DB")
     redis_url: str = Field(default="", alias="AUTOBOT_REDIS_URL")
-    research_checkpoints_enabled: bool = Field(
-        default=False, alias="AUTOBOT_RESEARCH_CHECKPOINTS_ENABLED"
-    )
-    research_checkpoint_timeout: int = Field(
-        default=0, alias="AUTOBOT_RESEARCH_CHECKPOINT_TIMEOUT"
-    )
+    research_checkpoints_enabled: bool = Field(default=False, alias="AUTOBOT_RESEARCH_CHECKPOINTS_ENABLED")
+    research_checkpoint_timeout: int = Field(default=0, alias="AUTOBOT_RESEARCH_CHECKPOINT_TIMEOUT")
     routing_model: str = Field(default="", alias="AUTOBOT_ROUTING_MODEL")
     run_jwt: str = Field(default="", alias="AUTOBOT_RUN_JWT")
     schema_dir: str = Field(default="", alias="AUTOBOT_SCHEMA_DIR")
@@ -1456,18 +1303,10 @@ class MiscConfig(BaseSettings):
     smtp_port: int = Field(default=0, alias="AUTOBOT_SMTP_PORT")
     smtp_tls: str = Field(default="", alias="AUTOBOT_SMTP_TLS")
     smtp_user: str = Field(default="", alias="AUTOBOT_SMTP_USER")
-    speculation_draft_model: str = Field(
-        default="", alias="AUTOBOT_SPECULATION_DRAFT_MODEL"
-    )
-    speculation_enabled: bool = Field(
-        default=False, alias="AUTOBOT_SPECULATION_ENABLED"
-    )
-    speculation_num_tokens: str = Field(
-        default="", alias="AUTOBOT_SPECULATION_NUM_TOKENS"
-    )
-    speculation_use_ngram: str = Field(
-        default="", alias="AUTOBOT_SPECULATION_USE_NGRAM"
-    )
+    speculation_draft_model: str = Field(default="", alias="AUTOBOT_SPECULATION_DRAFT_MODEL")
+    speculation_enabled: bool = Field(default=False, alias="AUTOBOT_SPECULATION_ENABLED")
+    speculation_num_tokens: str = Field(default="", alias="AUTOBOT_SPECULATION_NUM_TOKENS")
+    speculation_use_ngram: str = Field(default="", alias="AUTOBOT_SPECULATION_USE_NGRAM")
     test_backend_url: str = Field(default="", alias="AUTOBOT_TEST_BACKEND_URL")
     test_email: str = Field(default="", alias="AUTOBOT_TEST_EMAIL")
     test_mode: str = Field(default="", alias="AUTOBOT_TEST_MODE")
@@ -1493,25 +1332,13 @@ class MiscConfig(BaseSettings):
     celery_result_backend: str = Field(default="", alias="CELERY_RESULT_BACKEND")
     ci: str = Field(default="", alias="CI")
     codebase_index_batch_size: int = Field(default=0, alias="CODEBASE_INDEX_BATCH_SIZE")
-    codebase_index_embedding_mode: int = Field(
-        default=0, alias="CODEBASE_INDEX_EMBEDDING_MODE"
-    )
-    codebase_index_embed_batch_size: int = Field(
-        default=0, alias="CODEBASE_INDEX_EMBED_BATCH_SIZE"
-    )
-    codebase_index_incremental: str = Field(
-        default="", alias="CODEBASE_INDEX_INCREMENTAL"
-    )
-    codebase_index_parallel_batches: str = Field(
-        default="", alias="CODEBASE_INDEX_PARALLEL_BATCHES"
-    )
-    codebase_index_parallel_files: str = Field(
-        default="", alias="CODEBASE_INDEX_PARALLEL_FILES"
-    )
+    codebase_index_embedding_mode: int = Field(default=0, alias="CODEBASE_INDEX_EMBEDDING_MODE")
+    codebase_index_embed_batch_size: int = Field(default=0, alias="CODEBASE_INDEX_EMBED_BATCH_SIZE")
+    codebase_index_incremental: str = Field(default="", alias="CODEBASE_INDEX_INCREMENTAL")
+    codebase_index_parallel_batches: str = Field(default="", alias="CODEBASE_INDEX_PARALLEL_BATCHES")
+    codebase_index_parallel_files: str = Field(default="", alias="CODEBASE_INDEX_PARALLEL_FILES")
     codebase_parallel_mode: str = Field(default="", alias="CODEBASE_PARALLEL_MODE")
-    codebase_scan_parallel_files: str = Field(
-        default="", alias="CODEBASE_SCAN_PARALLEL_FILES"
-    )
+    codebase_scan_parallel_files: str = Field(default="", alias="CODEBASE_SCAN_PARALLEL_FILES")
     config: str = Field(default="", alias="CONFIG")
     content_cache_max_size: int = Field(default=0, alias="CONTENT_CACHE_MAX_SIZE")
     context_enabled: bool = Field(default=False, alias="CONTEXT_ENABLED")
@@ -1521,9 +1348,7 @@ class MiscConfig(BaseSettings):
     cuda_launch_blocking: str = Field(default="", alias="CUDA_LAUNCH_BLOCKING")
     custom_openai_api_key: str = Field(default="", alias="CUSTOM_OPENAI_API_KEY")
     custom_openai_base_url: str = Field(default="", alias="CUSTOM_OPENAI_BASE_URL")
-    custom_openai_default_model: str = Field(
-        default="", alias="CUSTOM_OPENAI_DEFAULT_MODEL"
-    )
+    custom_openai_default_model: str = Field(default="", alias="CUSTOM_OPENAI_DEFAULT_MODEL")
     database_password: str = Field(default="", alias="DATABASE_PASSWORD")
     display: str = Field(default="", alias="DISPLAY")
     display_height: str = Field(default="", alias="DISPLAY_HEIGHT")
@@ -1531,28 +1356,18 @@ class MiscConfig(BaseSettings):
     encryption_key: str = Field(default="", alias="ENCRYPTION_KEY")  # type: ignore[no-redef]  # GH#7105
     file_cache_ttl_seconds: int = Field(default=0, alias="FILE_CACHE_TTL_SECONDS")
     gateway_enable_sandbox: str = Field(default="", alias="GATEWAY_ENABLE_SANDBOX")
-    gateway_heartbeat_interval: str = Field(
-        default="", alias="GATEWAY_HEARTBEAT_INTERVAL"
-    )
+    gateway_heartbeat_interval: str = Field(default="", alias="GATEWAY_HEARTBEAT_INTERVAL")
     gateway_max_message_size: int = Field(default=0, alias="GATEWAY_MAX_MESSAGE_SIZE")
-    gateway_max_sessions_user: str = Field(
-        default="", alias="GATEWAY_MAX_SESSIONS_USER"
-    )
-    gateway_message_retention_hours: str = Field(
-        default="", alias="GATEWAY_MESSAGE_RETENTION_HOURS"
-    )
-    gateway_rate_limit_channel: int = Field(
-        default=0, alias="GATEWAY_RATE_LIMIT_CHANNEL"
-    )
+    gateway_max_sessions_user: str = Field(default="", alias="GATEWAY_MAX_SESSIONS_USER")
+    gateway_message_retention_hours: str = Field(default="", alias="GATEWAY_MESSAGE_RETENTION_HOURS")
+    gateway_rate_limit_channel: int = Field(default=0, alias="GATEWAY_RATE_LIMIT_CHANNEL")
     gateway_rate_limit_user: int = Field(default=0, alias="GATEWAY_RATE_LIMIT_USER")
     gateway_session_timeout: int = Field(default=0, alias="GATEWAY_SESSION_TIMEOUT")
     github_actions: str = Field(default="", alias="GITHUB_ACTIONS")
     google_api_key: str = Field(default="", alias="GOOGLE_API_KEY")
     groq_api_key: str = Field(default="", alias="GROQ_API_KEY")
     hf_hub_cache: str = Field(default="", alias="HF_HUB_CACHE")
-    hf_hub_disable_progress_bars: bool = Field(
-        default=False, alias="HF_HUB_DISABLE_PROGRESS_BARS"
-    )
+    hf_hub_disable_progress_bars: bool = Field(default=False, alias="HF_HUB_DISABLE_PROGRESS_BARS")
     hf_token: str = Field(default="", alias="HF_TOKEN")
     home: str = Field(default="", alias="HOME")
     huggingface_api_token: str = Field(default="", alias="HUGGINGFACE_API_TOKEN")
@@ -1563,9 +1378,7 @@ class MiscConfig(BaseSettings):
     log_level: str = Field(default="", alias="LOG_LEVEL")
     master_key: str = Field(default="", alias="MASTER_KEY")
     mcp_isolation_mode: str = Field(default="", alias="MCP_ISOLATION_MODE")
-    mcp_registry_cache_enabled: bool = Field(
-        default=False, alias="MCP_REGISTRY_CACHE_ENABLED"
-    )
+    mcp_registry_cache_enabled: bool = Field(default=False, alias="MCP_REGISTRY_CACHE_ENABLED")
     mcp_registry_cache_ttl: str = Field(default="", alias="MCP_REGISTRY_CACHE_TTL")
     mcp_run_jwt: str = Field(default="", alias="MCP_RUN_JWT")
     mcp_run_jwt_enforce: str = Field(default="", alias="MCP_RUN_JWT_ENFORCE")
@@ -1590,30 +1403,18 @@ class MiscConfig(BaseSettings):
     redis_node_id: str = Field(default="", alias="REDIS_NODE_ID")
     redis_port: int = Field(default=0, alias="REDIS_PORT")
     secret_key: str = Field(default="", alias="SECRET_KEY")
-    service_auth_circuit_breaker_percentage: float = Field(
-        default=0.0, alias="SERVICE_AUTH_CIRCUIT_BREAKER_PERCENTAGE"
-    )
-    service_auth_enforcement_mode: str = Field(
-        default="", alias="SERVICE_AUTH_ENFORCEMENT_MODE"
-    )
-    service_auth_override_token: str = Field(
-        default="", alias="SERVICE_AUTH_OVERRIDE_TOKEN"
-    )
-    service_auth_rate_limit_max_failures: int = Field(
-        default=0, alias="SERVICE_AUTH_RATE_LIMIT_MAX_FAILURES"
-    )
-    service_auth_rate_limit_window: int = Field(
-        default=0, alias="SERVICE_AUTH_RATE_LIMIT_WINDOW"
-    )
+    service_auth_circuit_breaker_percentage: float = Field(default=0.0, alias="SERVICE_AUTH_CIRCUIT_BREAKER_PERCENTAGE")
+    service_auth_enforcement_mode: str = Field(default="", alias="SERVICE_AUTH_ENFORCEMENT_MODE")
+    service_auth_override_token: str = Field(default="", alias="SERVICE_AUTH_OVERRIDE_TOKEN")
+    service_auth_rate_limit_max_failures: int = Field(default=0, alias="SERVICE_AUTH_RATE_LIMIT_MAX_FAILURES")
+    service_auth_rate_limit_window: int = Field(default=0, alias="SERVICE_AUTH_RATE_LIMIT_WINDOW")
     service_id: str = Field(default="", alias="SERVICE_ID")
     service_key: str = Field(default="", alias="SERVICE_KEY")
     service_key_file: str = Field(default="", alias="SERVICE_KEY_FILE")
     shell: str = Field(default="", alias="SHELL")
     slack_approvals_channel: str = Field(default="", alias="SLACK_APPROVALS_CHANNEL")
     slack_bot_token: str = Field(default="", alias="SLACK_BOT_TOKEN")
-    slack_notifications_channel: str = Field(
-        default="", alias="SLACK_NOTIFICATIONS_CHANNEL"
-    )
+    slack_notifications_channel: str = Field(default="", alias="SLACK_NOTIFICATIONS_CHANNEL")
     slm_auth_token: str = Field(default="", alias="SLM_AUTH_TOKEN")
     slm_url: str = Field(default="", alias="SLM_URL")
     skill_hub_url: str = Field(default="", alias="AUTOBOT_SKILL_HUB_URL")
@@ -1629,18 +1430,12 @@ class MiscConfig(BaseSettings):
     username: str = Field(default="", alias="USERNAME")
     virustotal_api_key: str = Field(default="", alias="VIRUSTOTAL_API_KEY")
     virustotal_rate_limit: int = Field(default=0, alias="VIRUSTOTAL_RATE_LIMIT")
-    vertex_ai_default_model: str = Field(
-        default="gemini-2.5-flash", alias="VERTEX_AI_DEFAULT_MODEL"
-    )
+    vertex_ai_default_model: str = Field(default="gemini-2.5-flash", alias="VERTEX_AI_DEFAULT_MODEL")
     vertex_ai_location: str = Field(default="us-central1", alias="VERTEX_AI_LOCATION")
     vertex_ai_project: str = Field(default="", alias="VERTEX_AI_PROJECT")
-    vertex_ai_service_account_json: str = Field(
-        default="", alias="VERTEX_AI_SERVICE_ACCOUNT_JSON"
-    )
+    vertex_ai_service_account_json: str = Field(default="", alias="VERTEX_AI_SERVICE_ACCOUNT_JSON")
     vllm_dtype: str = Field(default="", alias="VLLM_DTYPE")
-    vllm_gpu_memory_utilization: str = Field(
-        default="", alias="VLLM_GPU_MEMORY_UTILIZATION"
-    )
+    vllm_gpu_memory_utilization: str = Field(default="", alias="VLLM_GPU_MEMORY_UTILIZATION")
     vllm_host: str = Field(default="", alias="VLLM_HOST")
     vllm_model: str = Field(default="", alias="VLLM_MODEL")
     vllm_tensor_parallel_size: int = Field(default=0, alias="VLLM_TENSOR_PARALLEL_SIZE")
@@ -1661,18 +1456,14 @@ class FeatureConfig(BaseSettings):
     debug_mode: bool = Field(default=False, alias="AUTOBOT_DEBUG_MODE")
     hot_reload: bool = Field(default=True, alias="AUTOBOT_HOT_RELOAD")
     single_user_mode: bool = Field(default=True, alias="AUTOBOT_SINGLE_USER_MODE")
-    permission_system_v2: bool = Field(
-        default=False, alias="AUTOBOT_PERMISSION_SYSTEM_V2"
-    )
+    permission_system_v2: bool = Field(default=False, alias="AUTOBOT_PERMISSION_SYSTEM_V2")
 
     # Subsystem feature flags — issue #3017
     # Set AUTOBOT_FEATURE_<NAME>=false to disable a subsystem on a given node.
     npu_enabled: bool = Field(default=True, alias="AUTOBOT_FEATURE_NPU")
     voice_enabled: bool = Field(default=True, alias="AUTOBOT_FEATURE_VOICE")
     browser_enabled: bool = Field(default=True, alias="AUTOBOT_FEATURE_BROWSER")
-    computer_vision_enabled: bool = Field(
-        default=True, alias="AUTOBOT_FEATURE_COMPUTER_VISION"
-    )
+    computer_vision_enabled: bool = Field(default=True, alias="AUTOBOT_FEATURE_COMPUTER_VISION")
     training_enabled: bool = Field(default=True, alias="AUTOBOT_FEATURE_TRAINING")
     osint_enabled: bool = Field(default=True, alias="AUTOBOT_FEATURE_OSINT")
 
@@ -1685,12 +1476,8 @@ class FeatureConfig(BaseSettings):
     # are already claimed by those fields).
     npu: bool = Field(default=True, alias="AUTOBOT_FEATURE_NPU_2")
     voice: bool = Field(default=True, alias="AUTOBOT_FEATURE_VOICE_2")
-    browser_automation: bool = Field(
-        default=True, alias="AUTOBOT_FEATURE_BROWSER_AUTOMATION"
-    )
-    computer_vision: bool = Field(
-        default=False, alias="AUTOBOT_FEATURE_COMPUTER_VISION_CV"
-    )
+    browser_automation: bool = Field(default=True, alias="AUTOBOT_FEATURE_BROWSER_AUTOMATION")
+    computer_vision: bool = Field(default=False, alias="AUTOBOT_FEATURE_COMPUTER_VISION_CV")
     training: bool = Field(default=False, alias="AUTOBOT_FEATURE_TRAINING_TR")
     graph_rag: bool = Field(default=True, alias="AUTOBOT_FEATURE_GRAPH_RAG")
     mcp: bool = Field(default=True, alias="AUTOBOT_FEATURE_MCP")
@@ -1845,10 +1632,7 @@ class AutoBotConfig(BaseSettings):
         This allows flexibility: use the configured endpoint or build from host/port.
         """
         # If ollama_endpoint is set and not the default, use it directly
-        if (
-            self.llm.ollama_endpoint
-            and self.llm.ollama_endpoint != "http://127.0.0.1:11434"
-        ):
+        if self.llm.ollama_endpoint and self.llm.ollama_endpoint != "http://127.0.0.1:11434":
             return self.llm.ollama_endpoint
         # Otherwise construct from VM config (allows using different Ollama host)
         return f"http://{self.vm.ollama}:{self.port.ollama}"
@@ -2157,9 +1941,7 @@ class AutoBotConfig(BaseSettings):
                 if (
                     sub_name == "misc"
                     and val == ""
-                    and name.endswith(
-                        ("_timeout", "_port", "_size", "_ttl", "_max", "_min")
-                    )
+                    and name.endswith(("_timeout", "_port", "_size", "_ttl", "_max", "_min"))
                 ):
                     continue
                 return val

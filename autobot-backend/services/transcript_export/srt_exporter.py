@@ -6,6 +6,7 @@ SRT format specification:
 - Speaker label and text
 - Empty line between entries
 """
+
 from services.transcript_export.base import BaseExporter, Transcript
 
 
