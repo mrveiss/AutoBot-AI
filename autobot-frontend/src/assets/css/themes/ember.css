@@ -1,0 +1,274 @@
+/* =============================================================================
+   AutoBot-AI — "Ember" theme  ·  warm, rich, original
+   -----------------------------------------------------------------------------
+   The warm flame/cream/plum direction — rebuilt with original values so no
+   colour is lifted from Ubuntu, Claude, or Mistral. Same character, own system.
+     · Accent     — marigold orange (own hue & scale)
+     · Light       — apricot-linen "wax" neutrals
+     · Dark        — mulberry-cocoa "plum" neutrals (warm, not magenta)
+     · Secondaries — russet CLAY · mulberry WINE
+     · Showpiece   — original ember gradient (marigold → tangerine → wine)
+   Switch with data-theme="light|dark" + data-theme-variant="ember" on <html>
+============================================================================= */
+
+/* ----------------------------------------------------------------------------
+   1. PRIMITIVES  (don't reference directly in components)
+---------------------------------------------------------------------------- */
+:root {
+  /* Marigold orange — signature accent */
+  --orange-50:  #fcefe0;
+  --orange-100: #f8d8b6;
+  --orange-200: #f1bb83;
+  --orange-300: #e99e55;
+  --orange-400: #e2842e;
+  --orange-500: #d6731f;
+  --orange-600: #c4651a;
+  --orange-700: #a35214;
+  --orange-800: #824010;
+
+  /* Wax — apricot-linen light neutrals */
+  --wax-0:   #ffffff;
+  --wax-25:  #fdfaf4;
+  --wax-50:  #f9f3e8;
+  --wax-75:  #f5eede;
+  --wax-100: #ede2d1;
+  --wax-150: #e2d4bf;
+  --wax-200: #d2c1a6;
+  --wax-300: #b8a586;
+  --wax-400: #8f8068;
+  --wax-500: #6c5f4d;
+  --wax-600: #4f4639;
+  --wax-700: #372f26;
+
+  /* Plum — mulberry-cocoa dark neutrals (warm, not magenta) */
+  --plum-975: #150d11;
+  --plum-950: #1e1418;
+  --plum-900: #281a20;
+  --plum-850: #322229;
+  --plum-800: #402c34;
+  --plum-700: #523944;
+  --plum-cream:#f1e8de;
+
+  /* Russet clay — secondary */
+  --clay-300: #daa07a;
+  --clay-400: #cd7e57;
+  --clay-500: #bd6444;
+  --clay-600: #9e4f33;
+
+  /* Mulberry wine — secondary */
+  --wine-300: #c98ba6;
+  --wine-500: #8a2f57;
+  --wine-700: #5a1d39;
+
+  /* Amber-gold — gradient + highlight */
+  --gold-300: #fbd98c;
+  --gold-400: #f7b94a;
+  --gold-500: #eca22a;
+  --gold-600: #cf8417;
+
+  /* Functional */
+  --green-500:#2f8a5f; --green-300:#5fb78f; --green-bg:#e3f1e9; --green-bg-dk:#12281e;
+  --red-500:#cb3326;   --red-300:#ff6f5e;   --red-bg:#fae5e1;   --red-bg-dk:#311410;
+}
+
+/* ----------------------------------------------------------------------------
+   2. SEMANTIC TOKENS — LIGHT (apricot linen)
+---------------------------------------------------------------------------- */
+[data-theme-variant="ember"]:root,
+[data-theme-variant="ember"][data-theme="light"] {
+  color-scheme: light;
+
+  --bg-primary: var(--wax-75);
+  --bg-secondary: var(--wax-25);
+  --bg-tertiary: var(--wax-50);
+  --bg-elevated: var(--wax-0);
+  --bg-surface: var(--wax-25);
+  --bg-card: var(--wax-0);
+  --bg-input: var(--wax-0);
+  --bg-hover: var(--wax-50);
+  --bg-active: var(--wax-100);
+  --bg-overlay: rgba(36, 28, 20, 0.7);
+
+  --text-primary: #241c14;
+  --text-secondary: var(--wax-500);
+  --text-tertiary: var(--wax-400);
+  --text-muted: var(--wax-400);
+  --text-inverse: var(--wax-0);
+  --text-link: var(--orange-700);
+  --text-link-hover: var(--orange-800);
+
+  --border-default: var(--wax-150);
+  --border-subtle: var(--wax-150);
+  --border-strong: var(--wax-200);
+
+  /* Accent · marigold orange */
+  --color-accent: var(--orange-600);
+  --color-accent-hover: var(--orange-700);
+  --color-accent-active: var(--orange-800);
+  --color-accent-text: var(--orange-700);
+  --color-accent-subtle: var(--orange-50);
+  --color-accent-border: var(--orange-200);
+  --color-on-accent: #ffffff;
+
+  /* Secondary · russet clay */
+  --color-clay: var(--clay-500);
+  --color-clay-text: var(--clay-600);
+  --color-clay-subtle: #f4e3d6;
+
+  /* Secondary · mulberry wine (doubles as "info") */
+  --color-grape: var(--wine-500);
+  --color-grape-text: var(--wine-500);
+  --color-grape-subtle: #f3e2ea;
+
+  /* Highlight · gold */
+  --color-highlight: var(--gold-500);
+  --color-highlight-text: #a86c0e;
+  --color-highlight-subtle: #fcefd5;
+
+  /* Status */
+  --color-success: var(--green-500);
+  --color-success-bg: var(--green-bg);
+  --color-danger: var(--red-500);
+  --color-danger-bg: var(--red-bg);
+  --color-info: var(--wine-500);
+  --color-info-bg: #f3e2ea;
+
+  --color-ring: color-mix(in srgb, var(--orange-600) 42%, transparent);
+
+  /* Original ember gradient — marigold → tangerine → burnt → wine */
+  --gradient-ember: linear-gradient(135deg,
+    var(--gold-400) 0%, var(--orange-400) 42%, #cf5f22 72%, #a2374a 100%);
+
+  --shadow-xs: 0 1px 2px rgba(44, 28, 14, 0.06);
+  --shadow-sm: 0 1px 3px rgba(44, 28, 14, 0.08), 0 1px 2px rgba(44, 28, 14, 0.05);
+  --shadow-md: 0 4px 12px rgba(44, 28, 14, 0.10), 0 2px 4px rgba(44, 28, 14, 0.05);
+  --shadow-lg: 0 12px 32px rgba(44, 28, 14, 0.14), 0 4px 8px rgba(44, 28, 14, 0.06);
+}
+
+/* ----------------------------------------------------------------------------
+   2. SEMANTIC TOKENS — DARK (mulberry cocoa)
+---------------------------------------------------------------------------- */
+[data-theme-variant="ember"][data-theme="dark"] {
+  color-scheme: dark;
+
+  --bg-primary: var(--plum-950);
+  --bg-secondary: var(--plum-900);
+  --bg-tertiary: var(--plum-850);
+  --bg-elevated: var(--plum-850);
+  --bg-surface: var(--plum-900);
+  --bg-card: var(--plum-850);
+  --bg-input: var(--plum-900);
+  --bg-hover: var(--plum-850);
+  --bg-active: var(--plum-800);
+  --bg-overlay: rgba(0, 0, 0, 0.7);
+
+  --text-primary: var(--plum-cream);
+  --text-secondary: #b3a596;
+  --text-tertiary: #82737a;
+  --text-muted: #82737a;
+  --text-inverse: var(--plum-950);
+  --text-link: var(--orange-300);
+  --text-link-hover: var(--orange-200);
+
+  --border-default: var(--plum-800);
+  --border-subtle: var(--plum-800);
+  --border-strong: var(--plum-700);
+
+  --color-accent: var(--orange-400);
+  --color-accent-hover: var(--orange-300);
+  --color-accent-active: var(--orange-600);
+  --color-accent-text: var(--orange-300);
+  --color-accent-subtle: #3a2210;
+  --color-accent-border: color-mix(in srgb, var(--orange-400) 40%, transparent);
+  --color-on-accent: #20140c;   /* dark text on bright marigold = legible */
+
+  --color-clay: var(--clay-300);
+  --color-clay-text: #e3b08e;
+  --color-clay-subtle: #311c12;
+
+  --color-grape: var(--wine-300);
+  --color-grape-text: #d4a3b9;
+  --color-grape-subtle: #2e1822;
+
+  --color-highlight: var(--gold-400);
+  --color-highlight-text: var(--gold-400);
+  --color-highlight-subtle: #2f2410;
+
+  --color-success: var(--green-300);
+  --color-success-bg: var(--green-bg-dk);
+  --color-danger: var(--red-300);
+  --color-danger-bg: var(--red-bg-dk);
+  --color-info: var(--wine-300);
+  --color-info-bg: #2e1822;
+
+  --color-ring: color-mix(in srgb, var(--orange-400) 55%, transparent);
+
+  --gradient-ember: linear-gradient(135deg,
+    var(--gold-400) 0%, var(--orange-400) 42%, #cf5f22 72%, #a2374a 100%);
+
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.55), 0 1px 2px rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.6), 0 2px 4px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 14px 36px rgba(0, 0, 0, 0.65), 0 4px 8px rgba(0, 0, 0, 0.45);
+}
+
+/* ----------------------------------------------------------------------------
+   3. SCALES — radius / spacing / type / motion / icons
+---------------------------------------------------------------------------- */
+[data-theme-variant="ember"] {
+  --font-display: "Fraunces", Georgia, "Times New Roman", serif;
+  --font-sans: "Schibsted Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", monospace;
+
+  --text-xs: 0.75rem;  --text-sm: 0.875rem; --text-base: 1rem;
+  --text-lg: 1.125rem; --text-xl: 1.375rem; --text-2xl: 1.75rem;
+  --leading-tight: 1.25; --leading-normal: 1.55;
+  --weight-normal: 400; --weight-medium: 500; --weight-semibold: 600;
+
+  --radius-sm: 6px; --radius-md: 10px; --radius-lg: 14px;
+  --radius-xl: 20px; --radius-full: 999px;
+
+  --space-1: 4px;  --space-2: 8px;  --space-3: 12px; --space-4: 16px;
+  --space-5: 24px; --space-6: 32px; --space-8: 48px;
+
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --duration-fast: 120ms; --duration: 200ms; --duration-slow: 320ms;
+
+  /* Icons — pair with the custom rounded-stroke SVG set (icons.svg) */
+  --icon-size: 20px;
+  --icon-stroke: 1.75;
+}
+
+/* ----------------------------------------------------------------------------
+   Custom icon helper: <svg class="ember-icon"><use href="#i-chat"/></svg>
+---------------------------------------------------------------------------- */
+[data-theme-variant="ember"] .ember-icon {
+  width: var(--icon-size); height: var(--icon-size);
+  fill: none; stroke: currentColor;
+  stroke-width: var(--icon-stroke);
+  stroke-linecap: round; stroke-linejoin: round;
+  flex: none;
+}
+
+/* Smooth theme transitions */
+[data-theme-variant="ember"],
+[data-theme-variant="ember"] * {
+  transition:
+    background-color var(--duration) var(--ease),
+    border-color var(--duration) var(--ease),
+    color var(--duration) var(--ease);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-theme-variant="ember"] *,
+  [data-theme-variant="ember"] *::before,
+  [data-theme-variant="ember"] *::after {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
+[data-theme-variant="ember"] :focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
