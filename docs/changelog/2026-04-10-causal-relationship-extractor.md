@@ -1,3 +1,9 @@
+---
+tags: [type/reference, status/current]
+date: 2026-04-10
+issue: 3395
+---
+
 # CausalRelationshipExtractor Implementation Summary
 
 **Issue:** #3395 - RAG: semantic chunking, fact extraction, entity resolution

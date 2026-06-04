@@ -5,18 +5,19 @@
 """KB push and status routes."""
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+
 from transcriber.database import Database
-from transcriber.deps import get_db
+from transcriber.deps import DEFAULT_USER, get_db
+from transcriber.knowledge.kb_push import push_to_kb
 from transcriber.models import KbPushRequest, KbPushStatus
 from transcriber.routes.export import _build_segment_list
-from transcriber.knowledge.kb_push import push_to_kb
 
 router = APIRouter(tags=["transcriber-kb"])
 
 
 def _user_id(request: Request) -> str:
     user = getattr(request.state, "user", None)
-    return user.id if user else "default"
+    return user.id if user else DEFAULT_USER
 
 
 @router.post("/recordings/{recording_id}/kb/push")

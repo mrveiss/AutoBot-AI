@@ -28,16 +28,15 @@ import asyncio
 import json
 import os
 import re
-import signal
 import time
 import uuid
 from typing import Optional
 
 from autobot_shared.logging_manager import get_logger
 
-from .copilot_local_adapter import CopilotLocalAdapter, _output_path, _resolve_gh_cli, _state_path
-from .base import AdapterRunStatus
 from ..models.enums import LLCRunStatus
+from .base import AdapterRunStatus
+from .copilot_local_adapter import CopilotLocalAdapter, _output_path, _resolve_gh_cli, _state_path
 
 logger = get_logger(__name__)
 

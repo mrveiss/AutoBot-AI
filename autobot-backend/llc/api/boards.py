@@ -15,18 +15,16 @@ import uuid
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-
-from autobot_shared.logging_manager import get_logger
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from user_management.database import get_async_session_factory
 
 from ..exceptions import WipLimitExceeded
 from ..services.board import BoardService
 from ..services.work_item_service import InvalidTransition
-
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/boards", tags=["llc-boards"])

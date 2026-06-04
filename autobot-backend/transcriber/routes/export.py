@@ -6,10 +6,12 @@
 
 import re
 import urllib.parse
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import Response
+
 from transcriber.database import Database
-from transcriber.deps import get_db
+from transcriber.deps import DEFAULT_USER, get_db
 from transcriber.models import ExportRequest
 
 router = APIRouter(tags=["transcriber-export"])
@@ -18,7 +20,7 @@ router = APIRouter(tags=["transcriber-export"])
 # Development fallback — auth middleware populates request.state.user in production
 def _user_id(request: Request) -> str:
     user = getattr(request.state, "user", None)
-    return user.id if user else "default"
+    return user.id if user else DEFAULT_USER
 
 
 _MIME = {

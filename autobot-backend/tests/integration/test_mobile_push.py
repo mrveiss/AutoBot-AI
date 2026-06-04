@@ -13,26 +13,23 @@ Comprehensive end-to-end tests for push notification delivery to mobile devices:
 - Stale device cleanup during push operations
 """
 
-import uuid
 from datetime import timedelta
 from typing import AsyncGenerator
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import patch
 
 import pytest
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.ext.asyncio.session import async_sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from autobot_shared.time_utils import now_utc
 from models.mobile_device import MobileDevice
-from push_notifications.mobile_push import _get_target_devices, send_push_to_user
+from push_notifications.mobile_push import _get_target_devices
 from services.push_notification_service import (
     _send_mobile_push,
     send_push_notification,
 )
 from user_management.models.base import Base
-
 
 # Test database setup
 TEST_DB_URL = "sqlite+aiosqlite:///:memory:"
@@ -108,9 +105,7 @@ async def test_get_target_devices_no_devices(mock_session_factory, test_user_id)
 
 
 @pytest.mark.asyncio
-async def test_get_target_devices_with_active_devices(
-    mock_session_factory, test_db_session, test_user_id
-):
+async def test_get_target_devices_with_active_devices(mock_session_factory, test_db_session, test_user_id):
     """Test retrieving active mobile devices."""
     # Create active devices
     devices = [
@@ -147,9 +142,7 @@ async def test_get_target_devices_with_active_devices(
 
 
 @pytest.mark.asyncio
-async def test_get_target_devices_filters_expired(
-    mock_session_factory, test_db_session, test_user_id
-):
+async def test_get_target_devices_filters_expired(mock_session_factory, test_db_session, test_user_id):
     """Test that expired devices (90+ days inactive) are filtered out."""
     cutoff = now_utc() - timedelta(days=90)
 
@@ -182,9 +175,7 @@ async def test_get_target_devices_filters_expired(
 
 
 @pytest.mark.asyncio
-async def test_get_target_devices_handles_null_last_seen(
-    mock_session_factory, test_db_session, test_user_id
-):
+async def test_get_target_devices_handles_null_last_seen(mock_session_factory, test_db_session, test_user_id):
     """Test devices with NULL last_seen_at are included (newly paired)."""
     device = MobileDevice(
         user_id=test_user_id,
@@ -425,9 +416,7 @@ async def test_send_mobile_push_handles_db_errors_gracefully(test_user_id):
 
 
 @pytest.mark.asyncio
-async def test_send_mobile_push_handles_decryption_errors(
-    mock_session_factory, test_db_session, test_user_id
-):
+async def test_send_mobile_push_handles_decryption_errors(mock_session_factory, test_db_session, test_user_id):
     """Test push service handles token decryption errors."""
     # Create device with invalid encrypted token
     device = MobileDevice(
@@ -444,7 +433,7 @@ async def test_send_mobile_push_handles_decryption_errors(
     with patch("push_notifications.mobile_push.get_async_session_factory", return_value=mock_session_factory):
         # Should handle decryption error gracefully
         try:
-            devices = await _get_target_devices(test_user_id)
+            await _get_target_devices(test_user_id)
             # May raise during token access, or return with error
             # Either way, should not crash the service
         except Exception:
@@ -490,9 +479,7 @@ async def test_send_mobile_push_unknown_platform(mock_session_factory, test_db_s
 
 
 @pytest.mark.asyncio
-async def test_send_push_only_to_user_devices(
-    mock_session_factory, test_db_session, test_user_id
-):
+async def test_send_push_only_to_user_devices(mock_session_factory, test_db_session, test_user_id):
     """Test push notifications are only sent to target user's devices."""
     other_user_id = "other-user-999"
 
@@ -552,9 +539,7 @@ async def test_celery_task_success_hook_triggers_push():
 
 
 @pytest.mark.asyncio
-async def test_send_push_to_many_devices_is_efficient(
-    mock_session_factory, test_db_session, test_user_id
-):
+async def test_send_push_to_many_devices_is_efficient(mock_session_factory, test_db_session, test_user_id):
     """Test push notification scales to many devices."""
     # Create 50 devices
     devices = [

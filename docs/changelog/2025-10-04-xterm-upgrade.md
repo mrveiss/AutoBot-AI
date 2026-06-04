@@ -1,3 +1,8 @@
+---
+tags: [type/reference, status/current, component/frontend]
+date: 2025-10-04
+---
+
 # xterm.js Terminal Upgrade Implementation Summary
 
 **Date:** 2025-10-04

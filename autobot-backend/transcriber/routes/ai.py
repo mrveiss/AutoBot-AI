@@ -5,15 +5,17 @@
 """Streaming AI analysis route — delegates to AutoBot llm_shared."""
 
 import json
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
-from transcriber.database import Database
-from transcriber.deps import get_db
-from transcriber.models import AiAskRequest
-from transcriber.ai.prompts import get_system_prompt
-from transcriber.ai.context import build_context
-from transcriber.routes.export import _build_segment_list
+
 from autobot_shared.logging_manager import get_logger
+from transcriber.ai.context import build_context
+from transcriber.ai.prompts import get_system_prompt
+from transcriber.database import Database
+from transcriber.deps import DEFAULT_USER, get_db
+from transcriber.models import AiAskRequest
+from transcriber.routes.export import _build_segment_list
 
 logger = get_logger(__name__)
 router = APIRouter(tags=["transcriber-ai"])
@@ -22,7 +24,7 @@ router = APIRouter(tags=["transcriber-ai"])
 # Development fallback — auth middleware populates request.state.user in production
 def _user_id(request: Request) -> str:
     user = getattr(request.state, "user", None)
-    return user.id if user else "default"
+    return user.id if user else DEFAULT_USER
 
 
 @router.post("/recordings/{recording_id}/ai/ask")
@@ -49,7 +51,7 @@ async def ai_ask(
                 user=f"Transcript:\n\n{context}",
             ):
                 yield f"data: {json.dumps({'content': chunk})}\n\n"
-        except Exception as exc:
+        except Exception:
             logger.exception("AI analysis failed for recording=%s", recording_id)
             yield f"data: {json.dumps({'error': 'AI analysis failed'})}\n\n"
         yield "data: [DONE]\n\n"

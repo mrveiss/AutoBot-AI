@@ -4,20 +4,18 @@
 # Author: mrveiss
 """Project CRUD routes for the transcriber module."""
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 
 from transcriber.database import Database
-from transcriber.deps import get_db
+from transcriber.deps import DEFAULT_USER, get_db
 from transcriber.models import ProjectCreate, ProjectOut, ProjectUpdate
 
 router = APIRouter(tags=["transcriber-projects"])
 
-_DEFAULT_USER = "default"  # replaced by real auth in Plan 2
-
 
 def _user_id(request: Request) -> str:
     user = getattr(request.state, "user", None)
-    return user.id if user else _DEFAULT_USER
+    return user.id if user else DEFAULT_USER
 
 
 @router.post("/projects", response_model=ProjectOut, status_code=201)

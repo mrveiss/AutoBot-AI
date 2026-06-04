@@ -32,7 +32,7 @@ class SecretRequirement(Enum):
     PASSWORD = (  # nosemgrep: autobot-hardcoded-secret-key  # nosemgrep
         "password"  # nosec B105 - secret type enum, not actual password
     )
-    TOKEN = "token"  # nosec B105 - secret type enum, not actual token  # nosemgrep: autobot-hardcoded-secret-key  # nosemgrep
+    TOKEN = "token"  # nosec B105 - secret type enum, not actual token  # nosemgrep: autobot-hardcoded-secret-key  # noqa: E501
     CERTIFICATE = "certificate"
     DATABASE_URL = "database_url"
     ANY = "any"  # Agent can use any available secrets

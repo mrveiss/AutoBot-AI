@@ -3,8 +3,6 @@
 # Author: mrveiss
 """Tests for ansible_utils._extract_failure_summary (Issue #9286)."""
 
-import pytest
-
 from services.ansible_utils import _extract_failure_summary
 
 

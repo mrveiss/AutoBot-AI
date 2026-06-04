@@ -13,28 +13,25 @@ Comprehensive end-to-end tests for the mobile device pairing flow:
 - Security: token encryption, one-time use, user isolation
 """
 
-import asyncio
-import time
 import uuid
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import AsyncGenerator
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import delete, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.ext.asyncio.session import async_sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from api.mobile_devices import router as mobile_router
 from api.mobile_devices import _QR_CHALLENGE_TTL_SECONDS, _redis_challenge_key
+from api.mobile_devices import router as mobile_router
 from api.user_management.dependencies import get_db_session
 from auth_middleware import get_current_user
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.time_utils import now_utc
-from models.mobile_device import DevicePlatform, MobileDevice
+from models.mobile_device import MobileDevice
 from user_management.models.base import Base
-
 
 # Test database setup
 TEST_DB_URL = "sqlite+aiosqlite:///:memory:"
@@ -184,7 +181,6 @@ async def test_qr_challenge_token_uniqueness(test_client):
 async def test_qr_challenge_without_user_returns_401(test_client):
     """Test QR challenge generation fails without authenticated user."""
     # Override to return invalid user
-    from api.user_management.dependencies import get_db_session
     from auth_middleware import get_current_user
 
     def override_no_user():
@@ -225,9 +221,7 @@ async def test_pair_device_success(test_client, test_db_session, redis_client, t
     assert data["message"] == "Device paired successfully"
 
     # Verify device exists in database
-    result = await test_db_session.execute(
-        select(MobileDevice).where(MobileDevice.user_id == test_user["id"])
-    )
+    result = await test_db_session.execute(select(MobileDevice).where(MobileDevice.user_id == test_user["id"]))
     device = result.scalar_one_or_none()
 
     assert device is not None
@@ -266,9 +260,7 @@ async def test_pair_device_all_platforms(test_client, test_db_session, test_user
         assert response.status_code == 201, f"Failed to pair {platform} device"
 
     # Verify all three devices exist
-    result = await test_db_session.execute(
-        select(MobileDevice).where(MobileDevice.user_id == test_user["id"])
-    )
+    result = await test_db_session.execute(select(MobileDevice).where(MobileDevice.user_id == test_user["id"]))
     devices = result.scalars().all()
     assert len(devices) == 3
 
@@ -444,9 +436,7 @@ async def test_list_devices_auto_prunes_expired(test_client, test_db_session, te
     assert data["devices"][0]["device_name"] == "Active iPhone"
 
     # Verify expired device was deleted from DB
-    result = await test_db_session.execute(
-        select(MobileDevice).where(MobileDevice.id == expired_id)
-    )
+    result = await test_db_session.execute(select(MobileDevice).where(MobileDevice.id == expired_id))
     assert result.scalar_one_or_none() is None
 
 
@@ -509,9 +499,7 @@ async def test_unpair_device_success(test_client, test_db_session, test_user):
     assert response.status_code == 204
 
     # Verify device was deleted
-    result = await test_db_session.execute(
-        select(MobileDevice).where(MobileDevice.id == device_id)
-    )
+    result = await test_db_session.execute(select(MobileDevice).where(MobileDevice.id == device_id))
     assert result.scalar_one_or_none() is None
 
 
@@ -546,9 +534,7 @@ async def test_unpair_other_user_device_returns_404(test_client, test_db_session
     assert response.status_code == 404  # Not found (user isolation)
 
     # Verify device still exists
-    result = await test_db_session.execute(
-        select(MobileDevice).where(MobileDevice.id == device_id)
-    )
+    result = await test_db_session.execute(select(MobileDevice).where(MobileDevice.id == device_id))
     assert result.scalar_one_or_none() is not None
 
 

@@ -14,13 +14,14 @@ import logging
 import time
 import uuid
 from functools import wraps
-from typing import Callable, List, Set
+from typing import Callable, List, Optional, Set, Union
 
 from fastapi import HTTPException, Request, status
 
 from autobot_shared.redis_client import get_async_redis_client
 from user_management.config import get_deployment_config
 from user_management.database import db_session_context
+from user_management.models.role import Permission
 from user_management.services import TenantContext, UserService
 
 logger = logging.getLogger(__name__)
@@ -98,7 +99,7 @@ class RBACMiddleware:
         return f"slm:perm:{user_id}"
 
     async def _cache_get(self, user_id: uuid.UUID) -> Optional[Set[str]]:
-        r = await _get_redis()
+        r = await get_async_redis_client()
         if r is not None:
             try:
                 raw = await r.get(self._redis_key(user_id))
@@ -109,13 +110,13 @@ class RBACMiddleware:
         else:
             import time
 
-            entry = _fallback_cache.get(str(user_id))
+            entry = _permission_cache.get(str(user_id))
             if entry and time.time() - entry[1] < CACHE_TTL_SECONDS:
                 return set(entry[0])
         return None
 
     async def _cache_set(self, user_id: uuid.UUID, permissions: Set[str]) -> None:
-        r = await _get_redis()
+        r = await get_async_redis_client()
         if r is not None:
             try:
                 await r.set(
@@ -128,16 +129,16 @@ class RBACMiddleware:
         else:
             import time
 
-            _fallback_cache[str(user_id)] = (frozenset(permissions), time.time())
+            _permission_cache[str(user_id)] = (frozenset(permissions), time.time())
 
     async def _cache_delete(self, user_id: uuid.UUID) -> None:
-        r = await _get_redis()
+        r = await get_async_redis_client()
         if r is not None:
             try:
                 await r.delete(self._redis_key(user_id))
             except Exception as exc:
                 logger.warning("RBAC: Redis cache delete failed: %s", exc)
-        _fallback_cache.pop(str(user_id), None)
+        _permission_cache.pop(str(user_id), None)
 
     # ------------------------------------------------------------------
     # Permission resolution
@@ -241,11 +242,11 @@ class RBACMiddleware:
             _permission_cache.pop(str(user_id), None)
         else:
             # Clear entire fallback; Redis keys expire naturally.
-            _fallback_cache.clear()
-            asyncio.ensure_future(self._clear_all_redis_keys())
+            _permission_cache.clear()
+            asyncio.ensure_future(self._clear_all_redis_keys(None))
 
-    async def _clear_all_redis_keys(self) -> None:
-        r = await _get_redis()
+    async def _clear_all_redis_keys(self, user_id: "uuid.UUID | None") -> None:
+        r = await get_async_redis_client()
         if r is None:
             return
         try:
@@ -353,6 +354,15 @@ def _require_authentication(user_id: uuid.UUID | None, permissions_desc: str) ->
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Authentication required",
         )
+
+
+# ---------------------------------------------------------------------------
+# Audit helper (stub — replace with real audit sink when available)
+# ---------------------------------------------------------------------------
+
+
+async def _emit_permission_denied_audit(user_id: object, permission: str, path: str) -> None:
+    logger.warning("Permission denied: user=%s permission=%s path=%s", user_id, permission, path)
 
 
 # ---------------------------------------------------------------------------

@@ -2,6 +2,7 @@
 
 Provides abstract exporter interface and Pydantic models for transcript data.
 """
+
 from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import List, Optional
@@ -58,7 +59,6 @@ class BaseExporter(ABC):
         Returns:
             bytes: Generated file content
         """
-        pass
 
     @abstractmethod
     def get_mime_type(self) -> str:
@@ -67,7 +67,6 @@ class BaseExporter(ABC):
         Returns:
             str: MIME type (e.g., "application/pdf")
         """
-        pass
 
     @abstractmethod
     def get_file_extension(self) -> str:
@@ -76,7 +75,6 @@ class BaseExporter(ABC):
         Returns:
             str: File extension (e.g., ".pdf")
         """
-        pass
 
     def get_filename(self) -> str:
         """Generate filename from transcript title and extension.
@@ -85,6 +83,6 @@ class BaseExporter(ABC):
             str: Sanitized filename
         """
         # Sanitize title: remove special characters
-        safe_title = "".join(c for c in self.transcript.title if c.isalnum() or c in (' ', '-', '_'))
-        safe_title = safe_title.strip().replace(' ', '_')
+        safe_title = "".join(c for c in self.transcript.title if c.isalnum() or c in (" ", "-", "_"))
+        safe_title = safe_title.strip().replace(" ", "_")
         return f"{safe_title}{self.get_file_extension()}"

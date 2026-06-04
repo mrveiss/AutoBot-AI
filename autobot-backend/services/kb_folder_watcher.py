@@ -21,7 +21,7 @@ import json
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional
 
 from watchdog.events import FileSystemEvent, FileSystemEventHandler
 from watchdog.observers import Observer
@@ -396,9 +396,7 @@ class KBFolderWatcherService:
 
         # Start batch processing if not already running
         if folder_id not in self._processing_tasks or self._processing_tasks[folder_id].done():
-            self._processing_tasks[folder_id] = asyncio.create_task(
-                self._process_pending_changes(folder_id)
-            )
+            self._processing_tasks[folder_id] = asyncio.create_task(self._process_pending_changes(folder_id))
 
     async def _process_pending_changes(self, folder_id: str) -> None:
         """Process pending file changes for a folder after batch window."""
@@ -415,9 +413,7 @@ class KBFolderWatcherService:
         for file_path, change_type in changes:
             await self._process_single_change(folder_id, file_path, change_type)
 
-    async def _process_single_change(
-        self, folder_id: str, file_path: Path, change_type: str
-    ) -> None:
+    async def _process_single_change(self, folder_id: str, file_path: Path, change_type: str) -> None:
         """Process a single file change by ingesting into KB."""
         try:
             config = self._configs[folder_id]
@@ -506,11 +502,13 @@ class KBFolderWatcherService:
         result = []
         for folder_id, config in self._configs.items():
             stats = self._stats.get(folder_id, {})
-            result.append({
-                **config.to_dict(),
-                "is_watching": folder_id in self._observers,
-                "stats": stats,
-            })
+            result.append(
+                {
+                    **config.to_dict(),
+                    "is_watching": folder_id in self._observers,
+                    "stats": stats,
+                }
+            )
         return result
 
     def get_stats(self) -> Dict[str, Any]:

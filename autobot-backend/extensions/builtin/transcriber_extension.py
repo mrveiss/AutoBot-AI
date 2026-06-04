@@ -20,7 +20,7 @@ from pathlib import Path
 from fastapi import APIRouter
 
 from autobot_shared.logging_manager import get_logger
-from extensions.base import Extension, HookContext
+from extensions.base import Extension
 
 logger = get_logger(__name__)
 
@@ -36,12 +36,12 @@ def get_transcriber_router() -> APIRouter:
     prefix so feature_routers.py can mount the result at the top-level
     application with a single include_router call.
     """
+    from transcriber.routes.ai import router as ai_router
+    from transcriber.routes.export import router as export_router
+    from transcriber.routes.kb import router as kb_router
     from transcriber.routes.projects import router as projects_router
     from transcriber.routes.recordings import router as recordings_router
     from transcriber.routes.transcripts import router as transcripts_router
-    from transcriber.routes.export import router as export_router
-    from transcriber.routes.ai import router as ai_router
-    from transcriber.routes.kb import router as kb_router
 
     combined = APIRouter(prefix="/api/transcriber")
     combined.include_router(projects_router)

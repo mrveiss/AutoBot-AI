@@ -13,18 +13,16 @@ import uuid
 from typing import Any, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-
-from autobot_shared.logging_manager import get_logger
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
+from autobot_shared.logging_manager import get_logger
 from llc.models.api_key import LLCApiKey
 from llc.services.api_key import ApiKeyService
 from user_management.database import get_async_session
 from user_management.services import TenantContext
-
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/agents", tags=["llc-api-keys"])

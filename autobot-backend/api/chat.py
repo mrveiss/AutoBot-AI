@@ -36,7 +36,6 @@ from api.schemas_chat import (
     ChatPreferences,
     ChatSaveData,
     ChatStatsData,
-    ConversationSummarizeData,
     ConversationSummarizeRequest,
     DetectLanguageData,
     DetectLanguageRequest,
@@ -52,6 +51,9 @@ from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.error_utils import safe_http_detail
 from autobot_shared.time_utils import parse_utc_iso, utc_timestamp
+
+# Import context overflow protection (#9043)
+from chat_history.overflow_integration import create_summary_message, handle_message_completion
 from constants.threshold_constants import TimingConstants
 
 # Import dependencies and utilities - Using available dependencies
@@ -75,9 +77,6 @@ from utils.chat_utils import (
     log_chat_event,
     validate_chat_session_id,
 )
-
-# Import context overflow protection (#9043)
-from chat_history.overflow_integration import handle_message_completion, create_summary_message
 
 # Import models - DISABLED: Models don't exist yet
 # from backend.models.conversation import ConversationModel
@@ -552,7 +551,9 @@ def _build_llm_context(
     return llm_context
 
 
-async def _generate_ai_response(llm_service, llm_context: List[Dict], session_id: str, request_id: str) -> tuple[Dict, Any]:
+async def _generate_ai_response(
+    llm_service, llm_context: List[Dict], session_id: str, request_id: str
+) -> tuple[Dict, Any]:
     """
     Generate AI response using LLM service with fallback handling.
 
@@ -694,8 +695,7 @@ async def process_chat_message(
         summary_msg = await create_summary_message(overflow_status["summary_text"])
         if hasattr(chat_history_manager, "add_messages_batch"):
             await chat_history_manager.add_messages_batch(
-                session_id,
-                [_to_persisted_message(summary_msg, "context_summary")]
+                session_id, [_to_persisted_message(summary_msg, "context_summary")]
             )
         logger.info(
             "Context overflow: auto-summarized session %s (%d%% full)",
@@ -719,9 +719,11 @@ async def process_chat_message(
         thinking_tokens = llm_response.usage.get("thinking_tokens") or llm_response.usage.get("cache_read_input_tokens")
         if thinking_tokens and thinking_tokens > 0:
             from api.schemas_chat import ThinkingMetadata
+
             thinking_metadata = ThinkingMetadata(used=True, tokens_used=thinking_tokens)
         else:
             from api.schemas_chat import ThinkingMetadata
+
             thinking_metadata = ThinkingMetadata(used=False, tokens_used=None)
 
     return ChatMessageData(
@@ -2232,7 +2234,7 @@ async def summarize_conversation(
     generates a compact summary of the earliest messages to enable a rolling window
     approach without losing essential context.
     """
-    from api.schemas_chat import ConversationSummarizeData, ConversationSummarizeRequest
+    from api.schemas_chat import ConversationSummarizeData
 
     request_id = generate_request_id()
     logger.info("[%s] Summarizing %d messages from session %s", request_id, len(body.message_ids), body.session_id)
@@ -2255,7 +2257,7 @@ async def summarize_conversation(
         [f"{msg.get('role', 'unknown').upper()}: {msg.get('content', '')}" for msg in messages_to_summarize]
     )
 
-    summarization_prompt = f"""Summarize the following conversation segment concisely. Preserve key context, decisions, and technical details that would be needed to continue the conversation naturally.
+    summarization_prompt = f"""Summarize the following conversation segment concisely. Preserve key context, decisions, and technical details that would be needed to continue the conversation naturally.  # noqa: E501
 
 Target length: approximately {body.target_length or 500} tokens.
 

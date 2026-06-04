@@ -1,3 +1,8 @@
+---
+tags: [type/reference, status/current]
+date: 2026-04-10
+---
+
 # Causal Reasoning Implementation Summary
 
 ## Overview

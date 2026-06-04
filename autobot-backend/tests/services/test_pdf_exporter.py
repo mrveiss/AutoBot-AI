@@ -1,7 +1,10 @@
 """Tests for PDF exporter."""
+
 import io
+
 import pytest
 from PyPDF2 import PdfReader
+
 from services.transcript_export.base import Segment, Transcript
 from services.transcript_export.pdf_exporter import PDFExporter
 

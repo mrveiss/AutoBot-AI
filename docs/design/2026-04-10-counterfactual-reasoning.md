@@ -1,3 +1,9 @@
+---
+tags: [type/architecture, status/current, component/backend]
+date: 2026-04-10
+issue: 4069
+---
+
 # Counterfactual Reasoning for Decision Engine
 
 ## Overview
