@@ -14,6 +14,7 @@ import secrets
 import socket
 import stat
 from pathlib import Path
+from typing import Optional
 
 from pydantic import ConfigDict
 from pydantic_settings import BaseSettings
@@ -174,6 +175,11 @@ class Settings(BaseSettings):
 
     # Encryption for sensitive data (credentials, etc.)
     encryption_key: str = os.getenv("SLM_ENCRYPTION_KEY", "")
+
+    # Redis (GH #6511: permission cache + future session storage)
+    # Set SLM_REDIS_URL to e.g. "redis://127.0.0.1:6379/0".
+    # When absent the RBAC middleware falls back to an in-process dict cache.
+    redis_url: Optional[str] = os.getenv("SLM_REDIS_URL")
 
     def _keys_file_path(self) -> Path:
         """Return the path to the persisted-keys file inside data_dir.

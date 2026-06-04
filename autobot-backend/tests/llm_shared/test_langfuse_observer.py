@@ -10,7 +10,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Minimal LLMRequest / LLMResponse stand-ins so tests don't need the full
 # backend import chain.
