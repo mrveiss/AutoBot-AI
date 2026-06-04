@@ -1,4 +1,3 @@
-<!-- autobot-frontend/src/components/transcriber/UploadModal.vue -->
 <!-- AutoBot - AI-Powered Automation Platform -->
 <!-- Copyright (c) 2025 mrveiss -->
 <script setup lang="ts">

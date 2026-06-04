@@ -18,8 +18,8 @@ def segments_to_srt(segments: list[dict], *, include_speaker: bool = True) -> st
         return ""
     lines = []
     for i, seg in enumerate(segments, start=1):
-        start = _fmt_srt_time(seg["start_time"])
-        end = _fmt_srt_time(seg["end_time"])
-        text = f"{seg.get('speaker_name', '')}: {seg['text']}" if include_speaker else seg["text"]
+        start = _fmt_srt_time(seg["start"])
+        end = _fmt_srt_time(seg["end"])
+        text = f"{seg['speaker']}: {seg['text']}" if include_speaker else seg["text"]
         lines.append(f"{i}\n{start} --> {end}\n{text}\n")
     return "\n".join(lines)

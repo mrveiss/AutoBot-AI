@@ -8,6 +8,8 @@ Issue #658: Built-in extension that logs all hook invocations
 for debugging and monitoring purposes.
 """
 
+from __future__ import annotations
+
 import logging
 import time
 

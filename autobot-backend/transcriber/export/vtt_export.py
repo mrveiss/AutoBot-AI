@@ -16,8 +16,8 @@ def _fmt_vtt_time(seconds: float) -> str:
 def segments_to_vtt(segments: list[dict], *, include_speaker: bool = True) -> str:
     lines = ["WEBVTT", ""]
     for seg in segments:
-        start = _fmt_vtt_time(seg["start_time"])
-        end = _fmt_vtt_time(seg["end_time"])
-        text = f"{seg.get('speaker_name', '')}: {seg['text']}" if include_speaker else seg["text"]
+        start = _fmt_vtt_time(seg["start"])
+        end = _fmt_vtt_time(seg["end"])
+        text = f"{seg['speaker']}: {seg['text']}" if include_speaker else seg["text"]
         lines.append(f"{start} --> {end}\n{text}\n")
     return "\n".join(lines)
