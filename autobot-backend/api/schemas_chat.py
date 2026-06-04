@@ -181,6 +181,13 @@ class SessionCheckpointClearData(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+class ThinkingMetadata(BaseModel):
+    """Thinking mode metadata for Claude 3.7+ reasoning models (MVA-3090)."""
+
+    used: bool = Field(..., description="Whether thinking mode was used for this response")
+    tokens_used: int | None = Field(None, description="Number of thinking tokens consumed (null if thinking not used)")
+
+
 class ChatMessageData(BaseModel):
     """data payload for POST /chat and POST /chat/message (alias).
 
@@ -194,6 +201,9 @@ class ChatMessageData(BaseModel):
     message_id: str | None = None
     timestamp: str | None = None
     metadata: Dict[str, Any] | None = None
+    thinking_metadata: ThinkingMetadata | None = Field(
+        None, description="Thinking mode metadata (Claude 3.7+ reasoning models)"
+    )
 
 
 class ChatHealthComponents(BaseModel):
