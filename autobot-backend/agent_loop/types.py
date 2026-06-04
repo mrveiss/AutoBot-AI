@@ -229,6 +229,8 @@ class AgentLoopConfig:
     belief_state_enabled: bool = False
     # MVA-1434: min confidence to serve a cached assertion instead of re-querying
     belief_cache_threshold: float = 0.85
+    # GH#9053: min confidence delta to surface contradictions for agent review
+    contradiction_surface_threshold: float = 0.3
 
     # Logging
     log_iterations: bool = True  # Log each iteration
