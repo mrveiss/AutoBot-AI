@@ -254,11 +254,11 @@ async def initialize_session(state: ChatState, config: RunnableConfig) -> dict:
         logger.error("initialize_session failed: %s", exc, exc_info=True)
         error_msg = {
             "type": "error",
-            "content": f"Session initialization failed: {exc}",
+            "content": "Session initialization failed",
         }
         if stream_cb:
             stream_cb(error_msg)
-        return {"error": str(exc), "workflow_messages": [error_msg]}
+        return {"error": "Session initialization failed", "workflow_messages": [error_msg]}
 
 
 async def detect_intent(state: ChatState, config: RunnableConfig) -> dict:
@@ -493,14 +493,14 @@ async def generate_response(state: ChatState, config: RunnableConfig) -> dict:
         messages, llm_response, should_continue = await _run_llm_iteration(manager, ctx, iteration, messages, stream_cb)
     except aiohttp.ClientError as exc:
         logger.error("LLM call failed: %s", exc)
-        error_msg = {"type": "error", "content": f"LLM error: {exc}"}
+        error_msg = {"type": "error", "content": "LLM error: Request failed"}
         messages.append(error_msg)
         if stream_cb:
             stream_cb(error_msg)
         emit_step_complete(
             step_name,
             _cot_start,
-            output_summary=f"LLM error: {exc}",
+            output_summary="LLM error: Request failed",
             session_id=session_id,
         )
         # Issue #3278: notify plugins on agent error.
