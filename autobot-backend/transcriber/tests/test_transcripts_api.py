@@ -161,7 +161,6 @@ async def test_merge_speakers_from_different_recordings_fails(client, tmp_path):
     db_dep = app.dependency_overrides[get_db]
     db = await db_dep()
 
-    rid1 = app.state._test_rid
     sid1 = app.state._test_sid
 
     pid = await db.create_project("P2", "", "u1")
