@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import time
 from typing import Any, AsyncIterator, Dict, List
 
@@ -31,6 +32,10 @@ from services.secrets_service import get_secrets_service
 from ..base_provider import BaseProvider
 
 logger = get_logger(__name__)
+
+# AWS credential format patterns
+AWS_ACCESS_KEY_PATTERN = re.compile(r"^(AKIA|ASIA)[0-9A-Z]{16}$")
+AWS_SECRET_KEY_LENGTH = 40
 
 # Model families supported by Bedrock
 BEDROCK_MODELS = {
@@ -85,6 +90,64 @@ class BedrockProvider(BaseProvider):
         self._runtime_client = None
         self._region: str | None = None
 
+    def _validate_credentials(
+        self, access_key: str | None, secret_key: str | None
+    ) -> tuple[bool, str | None]:
+        """
+        Validate AWS credential format and detect credential type.
+
+        Args:
+            access_key: AWS access key ID (or None if using IAM role).
+            secret_key: AWS secret access key (or None if using IAM role).
+
+        Returns:
+            Tuple of (is_valid, error_message). If valid, error_message is None.
+
+        Security validations:
+        - IAM user keys: AKIA[0-9A-Z]{16} (20 chars total)
+        - STS temporary keys: ASIA[0-9A-Z]{16} (20 chars total)
+        - Secret key: exactly 40 characters
+        - Warns when using long-lived IAM credentials (AKIA)
+        """
+        # If both are None, assume IAM role (valid for EC2/ECS)
+        if access_key is None and secret_key is None:
+            logger.info("Using IAM role for Bedrock authentication (no explicit credentials)")
+            return True, None
+
+        # If one is provided but not the other, that's invalid
+        if (access_key is None) != (secret_key is None):
+            return False, "Both access_key_id and secret_access_key must be provided together"
+
+        # Validate access key format
+        if not AWS_ACCESS_KEY_PATTERN.match(access_key):
+            return (
+                False,
+                f"Invalid AWS access key format. Expected AKIA[0-9A-Z]{{16}} (IAM user) "
+                f"or ASIA[0-9A-Z]{{16}} (STS temporary). Got: {access_key[:8]}...",
+            )
+
+        # Validate secret key length
+        if len(secret_key) != AWS_SECRET_KEY_LENGTH:
+            return (
+                False,
+                f"Invalid AWS secret key length. Expected {AWS_SECRET_KEY_LENGTH} characters, "
+                f"got {len(secret_key)}",
+            )
+
+        # Security: detect credential type and warn about long-lived credentials
+        if access_key.startswith("AKIA"):
+            logger.warning(
+                "Using long-lived IAM user credentials (AKIA). "
+                "For production, use STS temporary credentials (ASIA) via AWS STS AssumeRole. "
+                "Long-lived credentials pose a security risk if leaked."
+            )
+        elif access_key.startswith("ASIA"):
+            logger.info(
+                "Using STS temporary credentials (ASIA) — best practice for Bedrock authentication"
+            )
+
+        return True, None
+
     def _resolve_credentials(self) -> tuple[str | None, str | None, str | None]:
         """
         Resolve AWS credentials from SecretsService, settings, or environment.
@@ -134,6 +197,11 @@ class BedrockProvider(BaseProvider):
         # Region can come from SecretsService, env, or default
         if not region:
             region = os.getenv("AWS_DEFAULT_REGION", "us-east-1")
+
+        # Validate credentials before returning
+        is_valid, error_msg = self._validate_credentials(access_key, secret_key)
+        if not is_valid:
+            raise ValueError(f"AWS credential validation failed: {error_msg}")
 
         return access_key, secret_key, region
 
