@@ -27,7 +27,6 @@ from ..exceptions import WipLimitExceeded
 from ..services.board import BoardService
 from ..services.work_item_service import InvalidTransition
 
-
 logger = get_logger(__name__)
 router = APIRouter(prefix="/boards", tags=["llc-boards"])
 _get_service = lazy_singleton(BoardService)

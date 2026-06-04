@@ -6,6 +6,7 @@ Generates a formatted Word document with:
 - Timestamps in monospace
 - Proper paragraph spacing
 """
+
 import io
 from docx import Document
 from docx.shared import Pt, RGBColor

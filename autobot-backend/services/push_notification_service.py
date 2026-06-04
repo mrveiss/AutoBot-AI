@@ -188,8 +188,6 @@ async def _remove_stale_subscriptions(endpoints: list[str]) -> None:
         logger.exception("Failed to remove stale push subscriptions")
 
 
-
-
 async def _send_mobile_push(
     user_id: str,
     title: str,

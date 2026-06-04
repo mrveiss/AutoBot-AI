@@ -10,15 +10,8 @@ import pytest
 
 # Load the real reasoning_effort module directly to bypass the llm_shared stub
 # registered in conftest.py, which replaces llm_shared.providers with a MagicMock.
-_RE_PATH = (
-    pathlib.Path(__file__).parent.parent.parent
-    / "llm_shared"
-    / "providers"
-    / "reasoning_effort.py"
-)
-_re_spec = importlib.util.spec_from_file_location(
-    "llm_shared.providers.reasoning_effort", str(_RE_PATH)
-)
+_RE_PATH = pathlib.Path(__file__).parent.parent.parent / "llm_shared" / "providers" / "reasoning_effort.py"
+_re_spec = importlib.util.spec_from_file_location("llm_shared.providers.reasoning_effort", str(_RE_PATH))
 _re_mod = importlib.util.module_from_spec(_re_spec)
 _re_spec.loader.exec_module(_re_mod)
 _map_effort_to_provider_params = _re_mod._map_effort_to_provider_params

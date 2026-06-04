@@ -220,6 +220,7 @@ class ConversationSummarizer:
     async def _get_gateway(self):
         """Return LLM gateway instance (separate method for test patching)."""
         from llm_shared.gateway import get_llm_gateway
+
         return get_llm_gateway()
 
     async def summarize_messages(
