@@ -3,7 +3,7 @@
 # Core
 apscheduler>=3.10.4             # Issue #6590: hourly LLM key rotation job
 croniter>=2.0.0                 # GH#9027: required by LLC RoutineScheduler and routines API
-fastapi>=0.136.1                # SECURITY UPDATE - requires starlette >=0.52.1
+fastapi>=0.136.3                # SECURITY UPDATE - requires starlette >=0.52.1
 uvicorn>=0.47.0
 websockets>=16.0           # Issue #3098: required for WebSocket protocol support (desktop_streaming_manager, slm_client)
 python-dotenv>=1.2.2
