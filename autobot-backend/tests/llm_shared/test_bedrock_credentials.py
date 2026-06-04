@@ -193,7 +193,13 @@ class TestBedrockCredentialResolutionValidation:
             provider._resolve_credentials()
         assert "credential validation failed" in str(exc_info.value).lower()
 
-    @patch.dict("os.environ", {"AWS_ACCESS_KEY_ID": "AKIAIOSFODNN7EXAMPLE", "AWS_SECRET_ACCESS_KEY": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"})
+    @patch.dict(
+        "os.environ",
+        {
+            "AWS_ACCESS_KEY_ID": "AKIAIOSFODNN7EXAMPLE",
+            "AWS_SECRET_ACCESS_KEY": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+        },
+    )
     def test_valid_credentials_pass_resolution(self, mock_secrets_service, mock_boto3):
         """Valid credentials should successfully resolve."""
         from llm_shared.providers.bedrock import BedrockProvider
