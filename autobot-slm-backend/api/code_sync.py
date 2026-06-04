@@ -1200,7 +1200,23 @@ async def _sync_slm_self_node(executor, job: FleetSyncJob, slm_self_node: NodeSy
         await _update_job_status_db(job.job_id, status=pre_status, completed_at=datetime.now(timezone.utc))
         # Fire-and-forget — restart kills this process,
         # but all nodes are already done and persisted.
-        await _ansible_self_update(slm_self_node.node_id)
+        # Detect topology: local vs remote code source (#9195)
+        from services.database import db_service
+
+        conn_info = await _fetch_code_source_connection_info(db_service)
+        if conn_info:
+            source_ip, _, _ = conn_info
+            from autobot_shared.network_utils import is_local_ip
+
+            is_local_source = is_local_ip(source_ip)
+            if is_local_source:
+                await _ansible_self_update(slm_self_node.node_id)
+            else:
+                await _sync_slm_from_code_source(slm_self_node.node_id)
+        else:
+            # No code source — fall back to Ansible
+            await _ansible_self_update(slm_self_node.node_id)
+
         slm_self_node.status = "success"
         slm_self_node.completed_at = datetime.now(timezone.utc)
     else:
