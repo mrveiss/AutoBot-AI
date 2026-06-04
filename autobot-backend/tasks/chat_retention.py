@@ -128,7 +128,7 @@ async def _async_cleanup_expired_chats(retention_days: int, dry_run: bool = Fals
         logger.error("Chat retention cleanup failed: %s", exc)
 
     logger.info(
-        "Chat retention cleanup: deleted_sessions=%d, deleted_conversations=%d, errors=%d, retention_days=%d, dry_run=%s",
+        "Chat retention cleanup: deleted_sessions=%d, deleted_conversations=%d, errors=%d, retention_days=%d, dry_run=%s",  # noqa: E501
         deleted_sessions,
         deleted_conversations,
         errors,

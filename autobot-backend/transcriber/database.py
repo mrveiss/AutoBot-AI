@@ -263,7 +263,7 @@ class Database:
             raise KeyError(f"no speaker with id={speaker_id}")
 
     async def merge_speakers(self, source_speaker_id: int, target_speaker_id: int) -> None:
-        """Merge source speaker into target speaker. All segments referencing source will point to target, then source is deleted."""
+        """Merge source speaker into target speaker. All segments referencing source will point to target, then source is deleted."""  # noqa: E501
         # Verify both speakers exist and belong to the same recording
         src_cur = await self._db().execute("SELECT recording_id FROM speakers WHERE id=?", (source_speaker_id,))
         src_row = await src_cur.fetchone()
