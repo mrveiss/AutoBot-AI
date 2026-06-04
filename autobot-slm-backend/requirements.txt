@@ -30,7 +30,7 @@ bcrypt>=5.0.0  # Direct bcrypt API — passlib removed (#2669)
 python-multipart>=0.0.29          # SECURITY UPDATE - arbitrary file write fix
 
 # Cache (GH #6511: Redis-backed permission cache replaces in-process dict)
-redis[asyncio]>=5.0.0
+redis[asyncio]>=8.0.0
 
 # Async utilities
 aiofiles>=25.1.0
