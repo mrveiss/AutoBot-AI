@@ -264,7 +264,6 @@ def _check_dangerous_env_var_prefix(command: str) -> List[str] | None:
     return flagged or None
 
 
-
 # #7375: env-var prefix injection — surfaced by #7367 test rot triage.
 # Production previously classified `PATH=/x:$PATH ls` and
 # `LD_PRELOAD=/x.so ls` as MODERATE because the base-command lookup hit

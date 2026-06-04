@@ -5,6 +5,7 @@ Generates a formatted PDF document with:
 - Speaker labels and timestamps
 - Page numbers
 """
+
 import io
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -95,9 +96,9 @@ class PDFExporter(BaseExporter):
         story = []
 
         # Title page
-        story.append(Spacer(1, 1.5*inch))
+        story.append(Spacer(1, 1.5 * inch))
         story.append(Paragraph(self.transcript.title, title_style))
-        story.append(Spacer(1, 0.5*inch))
+        story.append(Spacer(1, 0.5 * inch))
 
         # Metadata
         metadata_text = f"""
