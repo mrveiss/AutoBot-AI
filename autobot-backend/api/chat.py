@@ -712,6 +712,18 @@ async def process_chat_message(
             "context_limit": overflow_status.get("context_limit", 0),
         }
 
+    # MVA-3090: Extract thinking metadata from LLM response
+    thinking_metadata = None
+    if llm_response and llm_response.usage:
+        # Check for thinking_tokens in usage dict (Anthropic extended thinking)
+        thinking_tokens = llm_response.usage.get("thinking_tokens") or llm_response.usage.get("cache_read_input_tokens")
+        if thinking_tokens and thinking_tokens > 0:
+            from api.schemas_chat import ThinkingMetadata
+            thinking_metadata = ThinkingMetadata(used=True, tokens_used=thinking_tokens)
+        else:
+            from api.schemas_chat import ThinkingMetadata
+            thinking_metadata = ThinkingMetadata(used=False, tokens_used=None)
+
     return ChatMessageData(
         content=ai_response.get("content", ""),
         role="assistant",
@@ -719,6 +731,7 @@ async def process_chat_message(
         message_id=ai_message_id,
         timestamp=utc_timestamp(),
         metadata=metadata,
+        thinking_metadata=thinking_metadata,
     )
 
 
@@ -733,12 +746,20 @@ async def _generate_llm_stream(
     llm_service,
     request_id: str,
 ):
-    """Generate LLM streaming response chunks (Issue #398: extracted)."""
+    """Generate LLM streaming response chunks (Issue #398: extracted, MVA-3090: thinking metadata).
+
+    Note: thinking_metadata is included in non-streaming responses via process_chat_message.
+    For streaming responses, thinking_metadata would need to be extracted from the LLM stream's
+    final usage information and included in the 'end' event. Currently not implemented for
+    the streaming path due to llm_service.stream_response() only yielding text chunks.
+    """
     try:
         session_id = message.session_id
         yield f"data: {json.dumps({'type': 'start', 'session_id': session_id})}\n\n"
 
         if hasattr(llm_service, "stream_response"):
+            # MVA-3090: Streaming path - thinking_metadata not yet extracted from stream
+            # TODO: Extract usage/thinking_metadata from stream final message and include in end event
             async for chunk in llm_service.stream_response(message.content, session_id):
                 chunk_data = {
                     "type": "chunk",
@@ -748,11 +769,13 @@ async def _generate_llm_stream(
                 }
                 yield f"data: {json.dumps(chunk_data)}\n\n"
         else:
+            # Non-streaming path - thinking_metadata included via process_chat_message
             response_data = await process_chat_message(
                 message, chat_history_manager, llm_service, None, None, {}, request_id
             )
             yield f"data: {json.dumps({'type': 'complete', **response_data.model_dump()})}\n\n"
 
+        # MVA-3090: End event could include thinking_metadata here for streaming responses
         yield f"data: {json.dumps({'type': 'end'})}\n\n"
 
     except Exception as e:
