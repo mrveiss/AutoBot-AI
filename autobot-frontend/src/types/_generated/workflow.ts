@@ -52,10 +52,10 @@ export interface WorkflowTask {
   error: unknown;
   start_time: unknown;
   end_time: unknown;
-  skill_name: unknown;
-  skill_action: unknown;
-  skill_resolution_method: unknown;
-  pending_skill_id: unknown;
+  skill_name: string | null;
+  skill_action: string | null;
+  skill_resolution_method: string | null;
+  pending_skill_id: string | null;
   preconditions: string[];
   effects: string[];
   metadata: Record<string, unknown>;
