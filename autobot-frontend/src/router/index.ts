@@ -335,6 +335,15 @@ export const routes: RouteRecordRaw[] = [
           title: 'Knowledge Maintenance',
           parent: 'knowledge'
         }
+      },
+      {
+        path: 'watch-folders',
+        name: 'knowledge-watch-folders',
+        component: () => import('@/views/knowledge/WatchFoldersView.vue'),
+        meta: {
+          title: 'Watch Folders',
+          parent: 'knowledge'
+        }
       }
     ]
   },
