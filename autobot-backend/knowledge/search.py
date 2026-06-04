@@ -33,6 +33,9 @@ from autobot_shared.logging_manager import get_logger
 # Issue #5064: prompt-injection sanitizer applied pre-embedding.
 from knowledge.query_sanitizer import sanitize_query as _sanitize_query
 
+# Issue #5064: prompt-injection sanitizer applied pre-embedding.
+from knowledge.query_sanitizer import sanitize_query as _sanitize_query
+
 # Import components from the search_components package
 from knowledge.search_components import (
     KeywordSearcher,

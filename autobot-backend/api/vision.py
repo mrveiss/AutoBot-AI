@@ -32,6 +32,7 @@ from api.schemas_system import (
     VisionAutomationOpportunitiesResponse,
     VisionDetectElementsResponse,
     VisionElementTypesResponse,
+    VisionHealthResponse,
     VisionInteractionTypesResponse,
     VisionLayoutResponse,
     VisionOCRResponse,

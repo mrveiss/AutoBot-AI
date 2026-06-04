@@ -28,6 +28,7 @@ class TestReorganizeRedisHelpers:
     def test_decode_key_bytes(self):
         """Test _decode_key with bytes input."""
         # Import locally to avoid module-level import issues
+        import os
         import sys
 
         sys.path.insert(0, config.project_root)
@@ -38,6 +39,7 @@ class TestReorganizeRedisHelpers:
 
     def test_decode_key_string(self):
         """Test _decode_key with string input."""
+        import os
         import sys
 
         sys.path.insert(0, config.project_root)
@@ -48,6 +50,7 @@ class TestReorganizeRedisHelpers:
 
     def test_decode_key_unicode(self):
         """Test _decode_key with unicode bytes."""
+        import os
         import sys
 
         sys.path.insert(0, config.project_root)
@@ -58,6 +61,7 @@ class TestReorganizeRedisHelpers:
 
     def test_determine_target_db_fact(self):
         """Test _determine_target_db routes facts to DB1."""
+        import os
         import sys
 
         sys.path.insert(0, config.project_root)
@@ -68,6 +72,7 @@ class TestReorganizeRedisHelpers:
 
     def test_determine_target_db_workflow(self):
         """Test _determine_target_db routes workflows to DB2."""
+        import os
         import sys
 
         sys.path.insert(0, config.project_root)
@@ -78,6 +83,7 @@ class TestReorganizeRedisHelpers:
 
     def test_determine_target_db_other(self):
         """Test _determine_target_db routes other keys to DB3."""
+        import os
         import sys
 
         sys.path.insert(0, config.project_root)
@@ -88,6 +94,7 @@ class TestReorganizeRedisHelpers:
 
     def test_db_index_to_name_mapping(self):
         """Test explicit database index to name mapping."""
+        import os
         import sys
 
         sys.path.insert(0, config.project_root)
@@ -105,6 +112,7 @@ class TestMCPClientHelpers:
 
     def test_create_error_for_status_400(self):
         """Test error creation for 400 status."""
+        import os
         import sys
 
         sys.path.insert(0, config.project_root)
@@ -118,6 +126,7 @@ class TestMCPClientHelpers:
 
     def test_create_error_for_status_404(self):
         """Test error creation for 404 status."""
+        import os
         import sys
 
         sys.path.insert(0, config.project_root)
@@ -132,6 +141,7 @@ class TestMCPClientHelpers:
 
     def test_create_error_for_status_500(self):
         """Test error creation for 500 status."""
+        import os
         import sys
 
         sys.path.insert(0, config.project_root)
@@ -145,6 +155,7 @@ class TestMCPClientHelpers:
 
     def test_non_retryable_status_codes(self):
         """Test NON_RETRYABLE_STATUS_CODES constant."""
+        import os
         import sys
 
         sys.path.insert(0, config.project_root)
@@ -158,6 +169,7 @@ class TestMCPClientHelpers:
 
     def test_retry_signal_exception_exists(self):
         """Test _RetrySignal exception class exists."""
+        import os
         import sys
 
         sys.path.insert(0, config.project_root)
@@ -170,6 +182,7 @@ class TestMCPClientHelpers:
     @pytest.mark.asyncio
     async def test_should_retry_first_attempt(self):
         """Test _should_retry returns True on first attempt."""
+        import os
         import sys
 
         sys.path.insert(0, config.project_root)
@@ -185,6 +198,7 @@ class TestMCPClientHelpers:
     @pytest.mark.asyncio
     async def test_should_retry_max_attempts_exceeded(self):
         """Test _should_retry returns False when max attempts exceeded."""
+        import os
         import sys
 
         sys.path.insert(0, config.project_root)
@@ -369,6 +383,7 @@ class TestWorkflowResult:
 
     def test_workflow_result_initialization(self):
         """Test WorkflowResult initialization."""
+        import os
         import sys
 
         sys.path.insert(0, config.project_root)
@@ -383,6 +398,7 @@ class TestWorkflowResult:
 
     def test_workflow_result_add_step_success(self):
         """Test adding successful step to WorkflowResult."""
+        import os
         import sys
 
         sys.path.insert(0, config.project_root)
@@ -399,6 +415,7 @@ class TestWorkflowResult:
 
     def test_workflow_result_add_step_error(self):
         """Test adding error step to WorkflowResult."""
+        import os
         import sys
 
         sys.path.insert(0, config.project_root)
@@ -413,6 +430,7 @@ class TestWorkflowResult:
 
     def test_workflow_result_to_dict(self):
         """Test WorkflowResult to_dict conversion."""
+        import os
         import sys
 
         sys.path.insert(0, config.project_root)

@@ -22,6 +22,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from autobot_shared.time_utils import now_utc
 
+from autobot_shared.time_utils import now_utc
+
 
 class TerminalActivity(BaseModel):
     """

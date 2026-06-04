@@ -39,20 +39,17 @@ class MetricsWorkflowResponse(BaseModel):
     workflow_id: str
     metrics: Any | None = None
 
-
 class MetricsPerformanceSummaryResponse(BaseModel):
     """Response for GET /performance/summary."""
 
     success: bool
     performance_summary: Any | None = None
 
-
 class MetricsSystemCurrentResponse(BaseModel):
     """Response for GET /system/current."""
 
     success: bool
     system_metrics: Any | None = None
-
 
 class MetricsSystemHistoryResponse(BaseModel):
     """Response for GET /system/history."""
@@ -69,7 +66,6 @@ class MetricsSystemSummaryResponse(BaseModel):
     success: bool
     resource_summary: Any | None = None
 
-
 class MetricsExportResponse(BaseModel):
     """Response for GET /export/workflow and GET /export/system."""
 
@@ -77,14 +73,12 @@ class MetricsExportResponse(BaseModel):
     format: str
     data: Any | None = None
 
-
 class MetricsMonitoringStartResponse(BaseModel):
     """Response for POST /system/monitoring/start."""
 
     success: bool
     message: str
     collection_interval: Any | None = None
-
 
 class MetricsMonitoringStopResponse(SuccessMessageResponse):
     """Response for POST /system/monitoring/stop."""

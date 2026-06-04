@@ -174,6 +174,12 @@ class WebCrawlerConnector(AbstractConnector):
             return False
         except Exception:
             return False
+        result = await WebFetcher.fetch(self._seed_urls[0])
+        if result.success:
+            self.logger.info("web_fetch connectivity OK for %s", self._seed_urls[0])
+            return True
+        self.logger.warning("web_fetch connectivity check failed: %s", result.error_code)
+        return False
 
     async def discover_sources(self) -> List[SourceInfo]:
         """Return a SourceInfo entry for each seed URL (depth=1 only)."""

@@ -15,6 +15,8 @@ from autobot_shared.singleton_factory import lazy_singleton
 
 from .types import FOLLOWUP_KEYWORDS, EnhancedQuery
 
+from .types import FOLLOWUP_KEYWORDS, EnhancedQuery
+
 
 class ConversationContextEnhancer:
     """
