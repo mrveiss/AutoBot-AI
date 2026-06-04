@@ -14,7 +14,7 @@ from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import inch
 from reportlab.platypus import PageBreak, Paragraph, SimpleDocTemplate, Spacer
 
-from services.transcript_export.base import BaseExporter
+from services.transcript_export.base import BaseExporter, Transcript
 
 
 class PDFExporter(BaseExporter):
