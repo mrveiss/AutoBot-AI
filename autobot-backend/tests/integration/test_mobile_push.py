@@ -433,7 +433,7 @@ async def test_send_mobile_push_handles_decryption_errors(mock_session_factory, 
     with patch("push_notifications.mobile_push.get_async_session_factory", return_value=mock_session_factory):
         # Should handle decryption error gracefully
         try:
-            devices = await _get_target_devices(test_user_id)
+            await _get_target_devices(test_user_id)
             # May raise during token access, or return with error
             # Either way, should not crash the service
         except Exception:
