@@ -53,6 +53,14 @@ export interface RagSource {
   chunk_id: string;
 }
 
+/** Thinking mode metadata for Claude 3.7+ reasoning models (MVA-3090). */
+export interface ThinkingMetadata {
+  /** Whether thinking mode was used for this response. */
+  used: boolean;
+  /** Number of thinking tokens consumed (null if thinking not used). */
+  tokens_used: number | null;
+}
+
 export interface ChatMessage {
   id: string;
   /** Message text content — canonical field name, matches backend `content`. */
@@ -83,6 +91,11 @@ export interface ChatMessage {
    * Empty array when RAG was not used or message has no citations.
    */
   sources?: RagSource[];
+  /**
+   * Thinking mode metadata for Claude 3.7+ reasoning models (MVA-3090).
+   * Present on assistant messages when extended thinking was used.
+   */
+  thinking_metadata?: ThinkingMetadata;
 }
 
 /** A user-defined slash command preset (GH#4449). */
