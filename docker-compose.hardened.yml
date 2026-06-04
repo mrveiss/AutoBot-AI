@@ -114,6 +114,7 @@ services:
     tmpfs:
       - /tmp
       - /app/autobot-backend/.cache:mode=1777
+      - /app/autobot-backend/logs:mode=1777  # logging_manager creates logs/backup dirs on init
     deploy:
       resources:
         limits:
@@ -126,6 +127,7 @@ services:
     tmpfs:
       - /tmp
       - /app/autobot-backend/.cache:mode=1777
+      - /app/autobot-backend/logs:mode=1777  # logging_manager creates logs/backup dirs on init
     deploy:
       resources:
         limits:
