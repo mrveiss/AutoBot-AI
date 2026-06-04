@@ -1,8 +1,10 @@
 """Tests for DOCX (Microsoft Word) exporter."""
 
 import io
+
 import pytest
 from docx import Document
+
 from services.transcript_export.base import Segment, Transcript
 from services.transcript_export.docx_exporter import DOCXExporter
 

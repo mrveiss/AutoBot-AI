@@ -4,10 +4,10 @@
 # Author: mrveiss
 """Project CRUD routes for the transcriber module."""
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 
 from transcriber.database import Database
-from transcriber.deps import get_db, DEFAULT_USER
+from transcriber.deps import DEFAULT_USER, get_db
 from transcriber.models import ProjectCreate, ProjectOut, ProjectUpdate
 
 router = APIRouter(tags=["transcriber-projects"])

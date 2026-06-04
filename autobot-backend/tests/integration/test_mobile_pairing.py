@@ -26,8 +26,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.ext.asyncio.session import async_sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from api.mobile_devices import router as mobile_router
 from api.mobile_devices import _QR_CHALLENGE_TTL_SECONDS, _redis_challenge_key
+from api.mobile_devices import router as mobile_router
 from api.user_management.dependencies import get_db_session
 from auth_middleware import get_current_user
 from autobot_shared.redis_client import get_redis_client

@@ -3,14 +3,16 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 import io
+
 import pytest
 import pytest_asyncio
-from httpx import AsyncClient, ASGITransport
 from fastapi import FastAPI
-from transcriber.routes.projects import router as projects_router
-from transcriber.routes.recordings import router as recordings_router
+from httpx import ASGITransport, AsyncClient
+
 from transcriber.database import Database
 from transcriber.deps import get_db
+from transcriber.routes.projects import router as projects_router
+from transcriber.routes.recordings import router as recordings_router
 
 
 @pytest_asyncio.fixture

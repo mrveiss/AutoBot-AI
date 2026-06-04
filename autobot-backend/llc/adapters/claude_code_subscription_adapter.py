@@ -33,9 +33,9 @@ from typing import Optional
 
 from autobot_shared.logging_manager import get_logger
 
-from .claude_code_adapter import ClaudeCodeAdapter, _output_path, _resolve_claude_cli, _state_path
-from .base import AdapterRunStatus
 from ..models.enums import LLCRunStatus
+from .base import AdapterRunStatus
+from .claude_code_adapter import ClaudeCodeAdapter, _output_path, _resolve_claude_cli, _state_path
 
 logger = get_logger(__name__)
 
@@ -52,8 +52,8 @@ class ClaudeCodeSubscriptionAdapter(ClaudeCodeAdapter):
 
     async def _invoke(self, agent_config: dict, context: dict) -> str:
         """Invoke Claude Code CLI in subscription mode (no API key)."""
-        import uuid
         import time
+        import uuid
 
         cli = _resolve_claude_cli()
         agent_id: str = agent_config.get("agent_id", "unknown")

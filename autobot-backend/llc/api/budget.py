@@ -7,12 +7,11 @@ from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-
-from autobot_shared.logging_manager import get_logger
 from pydantic import BaseModel
 from sqlalchemy import select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.logging_manager import get_logger
 from llc.exceptions import BudgetExhausted
 from llc.models.budget import LLCAgentBudget
 from llc.services.budget import BudgetService

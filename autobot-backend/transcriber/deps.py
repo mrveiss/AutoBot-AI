@@ -5,6 +5,7 @@
 """FastAPI dependency: provides the transcriber Database instance."""
 
 from fastapi import Request
+
 from transcriber.database import Database
 
 # Placeholder user ID for routes without real authentication.

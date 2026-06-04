@@ -13,10 +13,10 @@ The ``extensions`` package re-exports these under its own namespace for
 backwards compatibility (#7426).
 """
 
-from middleware.hooks import HOOK_METADATA, HookPoint, get_hook_metadata
 from middleware.base import Extension, HookContext
-from middleware.manager import ExtensionManager, get_extension_manager, reset_extension_manager
 from middleware.hook_invoker import HookInvocationConfig, HookInvoker, InvocationMode
+from middleware.hooks import HOOK_METADATA, HookPoint, get_hook_metadata
+from middleware.manager import ExtensionManager, get_extension_manager, reset_extension_manager
 
 __all__ = [
     # Hook definitions

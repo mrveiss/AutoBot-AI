@@ -5,16 +5,17 @@ are correctly wired up and would work in production.
 """
 
 import io
+
 import pytest
 from docx import Document
 from PyPDF2 import PdfReader
 
 from services.transcript_export import (
-    Transcript,
-    Segment,
     DOCXExporter,
     PDFExporter,
+    Segment,
     SRTExporter,
+    Transcript,
     VTTExporter,
 )
 
@@ -156,8 +157,9 @@ def test_mock_data_function_structure():
     when the endpoints are called.
     """
     # Import the mock function
-    from api.transcript_export import _get_transcript_mock
     import asyncio
+
+    from api.transcript_export import _get_transcript_mock
 
     # Test successful case
     transcript = asyncio.run(_get_transcript_mock("test-transcript-1"))
