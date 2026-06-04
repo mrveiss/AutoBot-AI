@@ -15,8 +15,6 @@ from typing import Any, Dict, List, Tuple
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import parse_utc_iso
 
-from autobot_shared.time_utils import parse_utc_iso
-
 from .classifiers import IntentClassifier, ResponseClassifier
 from .types import (
     SATISFACTION_SIGNALS,
