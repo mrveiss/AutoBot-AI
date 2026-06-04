@@ -3058,6 +3058,7 @@ async def create_watch_folder(
 )
 async def list_watch_folders(
     current_user: dict = Depends(get_current_user),
+    admin_check: bool = Depends(check_admin_permission),
 ):
     """
     List all configured watch folders.
@@ -3171,6 +3172,7 @@ async def control_watch_folder(
 )
 async def get_watch_folder_stats(
     current_user: dict = Depends(get_current_user),
+    admin_check: bool = Depends(check_admin_permission),
 ):
     """
     Get overall watch folder statistics.
