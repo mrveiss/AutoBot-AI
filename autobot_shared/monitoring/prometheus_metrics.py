@@ -31,6 +31,7 @@ from prometheus_client import (
 # Issue #4109: Added MCPWorkerMetricsRecorder for worker restart monitoring
 # Phase 4 (#7590): Added ChatMetricsRecorder for SSOT observability
 # Issue #7421: Added VoiceRealtimeMetricsRecorder for Realtime WebRTC session metrics
+# GH#4463: Added MobileDeviceMetricsRecorder for device pairing observability
 from .metrics import (
     ChatMetricsRecorder,
     ClaudeAPIMetricsRecorder,
@@ -40,6 +41,7 @@ from .metrics import (
     KnowledgeBaseMetricsRecorder,
     LLMProviderMetricsRecorder,
     MCPWorkerMetricsRecorder,
+    MobileDeviceMetricsRecorder,
     PerformanceMetricsRecorder,
     RedisMetricsRecorder,
     ServiceHealthMetricsRecorder,
@@ -122,6 +124,8 @@ class PrometheusMetricsManager:
         self._chat = ChatMetricsRecorder(self.registry)
         # Issue #7421: Initialize Voice Realtime WebRTC metrics recorder
         self._voice_realtime = VoiceRealtimeMetricsRecorder(self.registry)
+        # GH#4463: Initialize mobile device pairing metrics recorder
+        self._mobile_device = MobileDeviceMetricsRecorder(self.registry)
 
     # =========================================================================
     # Core Infrastructure Metrics Initialization
@@ -803,6 +807,44 @@ class PrometheusMetricsManager:
     def set_chat_disk_file_count(self, count: int) -> None:
         """Update autobot_chat_disk_file_count gauge."""
         self._chat.set_disk_file_count(count)
+
+    # =========================================================================
+    # Mobile Device Pairing Metrics (GH#4463: Delegates to MobileDeviceMetricsRecorder)
+    # =========================================================================
+
+    def record_device_pairing_attempt(self, status: str) -> None:
+        """Record a mobile device pairing attempt.
+
+        Args:
+            status: Pairing status - "success", "expired", or "invalid"
+        """
+        self._mobile_device.record_pairing_attempt(status)
+
+    def record_device_push_sent(self, platform: str, status: str) -> None:
+        """Record a push notification sent to a mobile device.
+
+        Args:
+            platform: Device platform - "ios", "android", or "pwa"
+            status: Delivery status - "success" or "failure"
+        """
+        self._mobile_device.record_push_sent(platform, status)
+
+    def record_device_cleanup_removed(self, count: int) -> None:
+        """Record devices removed by the cleanup job.
+
+        Args:
+            count: Number of devices removed
+        """
+        self._mobile_device.record_cleanup_removed(count)
+
+    def set_active_device_count(self, platform: str, count: int) -> None:
+        """Set the current number of active devices for a platform.
+
+        Args:
+            platform: Device platform - "ios", "android", or "pwa"
+            count: Number of active devices
+        """
+        self._mobile_device.set_active_device_count(platform, count)
 
     # =========================================================================
     # Metrics Export

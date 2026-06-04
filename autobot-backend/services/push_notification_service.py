@@ -17,8 +17,10 @@ import threading
 from typing import Optional
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.monitoring.prometheus_metrics import get_metrics_manager
 
 logger = get_logger(__name__)
+metrics = get_metrics_manager()
 
 # Module-level constants resolved from env vars (CLAUDE.md TTL pattern / #6743).
 _VAPID_PUBLIC_KEY: str = os.environ.get("VAPID_PUBLIC_KEY", "")
@@ -249,6 +251,8 @@ async def _send_mobile_push(
                 body,
             )
             dispatched += 1
+            # GH#4463: Record successful push notification (stub)
+            metrics.record_device_push_sent("ios", "success")
         elif platform == "android":
             # TODO: Implement FCM delivery with firebase-admin library
             logger.info(
@@ -258,11 +262,15 @@ async def _send_mobile_push(
                 body,
             )
             dispatched += 1
+            # GH#4463: Record successful push notification (stub)
+            metrics.record_device_push_sent("android", "success")
         elif platform == "pwa":
             # PWA uses web push — already handled by _send_web_push
             logger.debug("PWA device %s uses web push, skipping mobile push", device["id"])
         else:
             logger.warning("Unknown platform %s for device %s", platform, device["id"])
+            # GH#4463: Record failed push for unknown platform
+            metrics.record_device_push_sent(platform, "failure")
 
     return dispatched
 

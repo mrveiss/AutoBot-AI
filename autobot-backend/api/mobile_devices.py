@@ -28,11 +28,13 @@ from api.user_management.dependencies import get_db_session
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.monitoring.prometheus_metrics import get_metrics_manager
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.time_utils import now_utc
 from models.mobile_device import DevicePlatform, MobileDevice
 
 logger = get_logger(__name__)
+metrics = get_metrics_manager()
 router = APIRouter()
 
 # QR challenge TTL — 5 minutes is ample for a human to scan
@@ -155,6 +157,8 @@ async def pair_device(
     key = _redis_challenge_key(body.challenge_token)
     raw = redis.get(key)
     if raw is None:
+        # GH#4463: Record expired/invalid pairing attempts
+        metrics.record_device_pairing_attempt("expired")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Challenge token expired or invalid",
@@ -175,6 +179,8 @@ async def pair_device(
     await session.commit()
     await session.refresh(device)
     logger.info("Mobile device %s paired for user %s (platform=%s)", device.id, user_id, body.platform)
+    # GH#4463: Record successful pairing attempt
+    metrics.record_device_pairing_attempt("success")
     return PairSuccessResponse(device_id=device.id)
 
 
