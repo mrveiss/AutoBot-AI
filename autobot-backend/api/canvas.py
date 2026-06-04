@@ -128,7 +128,7 @@ def _validate_and_sanitize_rich_payload(rich_payload: dict | None, cell_type: st
         except ValueError as exc:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=str(exc),
+                detail="Internal server error",
             ) from exc
         return {**rich_payload, "spec": sanitized_spec, "executable": False}
 

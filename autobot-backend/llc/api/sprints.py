@@ -34,6 +34,8 @@ from datetime import date, datetime
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+
+from autobot_shared.logging_manager import get_logger
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -47,6 +49,8 @@ from ..services.approval import ApprovalNotFoundError, ApprovalService, Approval
 from ..services.sprint_autoclose import SprintAutoCloseService
 from ..services.sprint_planning import SprintNotFound, SprintPlanningService
 
+
+logger = get_logger(__name__)
 router = APIRouter(tags=["llc-sprints"])
 
 _approval_svc = ApprovalService()
@@ -539,9 +543,10 @@ async def close_sprint(
         await session.refresh(sprint)
         return sprint
     except (ApprovalNotFoundError, ApprovalStateError) as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        raise HTTPException(status_code=422, detail="Internal server error") from exc
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        logger.error("Exception in API handler: %s", exc, exc_info=True)
+        raise HTTPException(status_code=400, detail="Internal server error") from exc
 
 
 # ------------------------------------------------------------------ Sprint planning analytics (GH#8220)
@@ -558,7 +563,8 @@ async def get_sprint_capacity(
     try:
         return await _planning_svc.get_capacity(session, sprint_id)
     except SprintNotFound as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        logger.error("Exception in API handler: %s", exc, exc_info=True)
+        raise HTTPException(status_code=404, detail="Internal server error") from exc
 
 
 @router.get("/projects/{project_id}/velocity")
@@ -580,7 +586,8 @@ async def get_sprint_burndown(
     try:
         return await _planning_svc.get_burndown(session, sprint_id)
     except SprintNotFound as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        logger.error("Exception in API handler: %s", exc, exc_info=True)
+        raise HTTPException(status_code=404, detail="Internal server error") from exc
 
 
 @router.get("/projects/{project_id}/knowledge")
