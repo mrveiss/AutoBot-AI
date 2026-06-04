@@ -27,7 +27,6 @@ from user_management.schemas.retention_policy import (
     RetentionPolicyCreate,
     RetentionPolicyListResponse,
     RetentionPolicyResponse,
-    RetentionPolicyUpdate,
 )
 from utils.catalog_http_exceptions import raise_auth_error
 

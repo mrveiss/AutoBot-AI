@@ -13,15 +13,13 @@ Comprehensive end-to-end tests for the mobile device pairing flow:
 - Security: token encryption, one-time use, user isolation
 """
 
-import asyncio
-import time
 import uuid
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import AsyncGenerator
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import delete, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.ext.asyncio.session import async_sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -32,7 +30,7 @@ from api.user_management.dependencies import get_db_session
 from auth_middleware import get_current_user
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.time_utils import now_utc
-from models.mobile_device import DevicePlatform, MobileDevice
+from models.mobile_device import MobileDevice
 from user_management.models.base import Base
 
 # Test database setup
@@ -183,7 +181,6 @@ async def test_qr_challenge_token_uniqueness(test_client):
 async def test_qr_challenge_without_user_returns_401(test_client):
     """Test QR challenge generation fails without authenticated user."""
     # Override to return invalid user
-    from api.user_management.dependencies import get_db_session
     from auth_middleware import get_current_user
 
     def override_no_user():

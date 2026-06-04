@@ -29,14 +29,13 @@ import hashlib
 import io
 from datetime import datetime
 from typing import Any, Dict, List, Optional
-from urllib.parse import urlencode
 
 import aiohttp
 
 from autobot_shared.auth import BearerAuth
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc, parse_utc_iso
-from knowledge.connectors.base import AbstractConnector, RetryableError
+from knowledge.connectors.base import AbstractConnector
 from knowledge.connectors.models import (
     ChangeInfo,
     ConnectorConfig,

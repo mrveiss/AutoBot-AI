@@ -13,20 +13,18 @@ Comprehensive end-to-end tests for push notification delivery to mobile devices:
 - Stale device cleanup during push operations
 """
 
-import uuid
 from datetime import timedelta
 from typing import AsyncGenerator
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import patch
 
 import pytest
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.ext.asyncio.session import async_sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from autobot_shared.time_utils import now_utc
 from models.mobile_device import MobileDevice
-from push_notifications.mobile_push import _get_target_devices, send_push_to_user
+from push_notifications.mobile_push import _get_target_devices
 from services.push_notification_service import (
     _send_mobile_push,
     send_push_notification,
@@ -435,7 +433,7 @@ async def test_send_mobile_push_handles_decryption_errors(mock_session_factory, 
     with patch("push_notifications.mobile_push.get_async_session_factory", return_value=mock_session_factory):
         # Should handle decryption error gracefully
         try:
-            devices = await _get_target_devices(test_user_id)
+            await _get_target_devices(test_user_id)
             # May raise during token access, or return with error
             # Either way, should not crash the service
         except Exception:

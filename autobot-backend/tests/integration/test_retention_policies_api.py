@@ -28,7 +28,6 @@ from api.admin_retention_policies import router as retention_router
 from api.user_management.dependencies import get_db_session
 from user_management.models.base import Base
 from user_management.models.retention_policy import RetentionPolicy
-from user_management.models.user import User
 
 # Test database setup
 TEST_DB_URL = "sqlite+aiosqlite:///:memory:"

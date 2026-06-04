@@ -10,7 +10,7 @@ unbounded storage growth in long-running deployments.
 
 import os
 from datetime import datetime, timedelta, timezone
-from typing import Dict, List
+from typing import Dict
 
 from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.logging_manager import get_logger

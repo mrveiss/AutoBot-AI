@@ -108,7 +108,7 @@ async def create_review_gate_policy(
             reviewer_role=body.reviewer_role,
         )
         await session.commit()
-    except ReviewGatePolicyConflictError as exc:
+    except ReviewGatePolicyConflictError:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Internal server error")
     return ReviewGatePolicyRead.model_validate(policy)
 
@@ -132,7 +132,7 @@ async def update_review_gate_policy(
             reviewer_role=body.reviewer_role,
         )
         await session.commit()
-    except ReviewGatePolicyNotFoundError as exc:
+    except ReviewGatePolicyNotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error")
     return ReviewGatePolicyRead.model_validate(policy)
 
