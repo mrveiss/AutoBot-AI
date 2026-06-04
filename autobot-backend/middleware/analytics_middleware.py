@@ -4,6 +4,8 @@
 """
 Analytics Middleware for AutoBot
 Automatically tracks API calls for pattern analysis and performance monitoring
+
+Issue #9035: Respects telemetry opt-out configuration
 """
 
 import asyncio
@@ -14,6 +16,7 @@ from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 
 logger = get_logger(__name__)
 
@@ -29,7 +32,11 @@ class AnalyticsMiddleware(BaseHTTPMiddleware):
         self._background_tasks: set = set()
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
-        """Track API calls and response times"""
+        """Track API calls and response times (Issue #9035: respects telemetry opt-out)"""
+        # Check telemetry opt-out first (Issue #9035)
+        if not config.telemetry.enabled:
+            return await call_next(request)
+
         start_time = time.time()
         endpoint = str(request.url.path)
         method = request.method
@@ -61,7 +68,7 @@ class AnalyticsMiddleware(BaseHTTPMiddleware):
 
         # Add analytics headers to response
         response.headers["X-Response-Time"] = f"{response_time:.3f}s"
-        response.headers["X-Tracked-Analytics"] = "true"
+        response.headers["X-Tracked-Analytics"] = "true" if config.telemetry.enabled else "false"
 
         return response
 

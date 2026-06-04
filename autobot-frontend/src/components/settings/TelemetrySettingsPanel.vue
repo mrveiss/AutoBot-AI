@@ -3,321 +3,253 @@ AutoBot - AI-Powered Automation Platform
 Copyright (c) 2025 mrveiss
 Author: mrveiss
 
-TelemetrySettingsPanel.vue - Telemetry and Usage Data Collection Settings
+TelemetrySettingsPanel.vue - Telemetry and Analytics Opt-Out Settings
+Issue #9035: User-controlled privacy for usage data collection
 -->
 
 <template>
-  <div class="telemetry-settings-panel">
-    <!-- Loading State -->
-    <div v-if="loading" class="loading-state">
-      <LoadingSpinner />
-      <p>Loading telemetry settings...</p>
+  <form class="telemetry-panel" @submit.prevent>
+    <div class="panel-header">
+      <h3 class="panel-title">
+        <Icon name="shield-alt" aria-hidden="true" />
+        Privacy & Telemetry
+      </h3>
     </div>
 
-    <!-- Error State -->
-    <div v-else-if="error" class="error-state">
-      <BaseAlert variant="error" :message="error">
-        <template #actions>
-          <button @click="loadSettings" class="retry-btn">
-            <Icon name="redo" />
-            Retry
-          </button>
-        </template>
-      </BaseAlert>
-    </div>
-
-    <!-- Main Content -->
-    <div v-else class="settings-content">
-      <!-- Operation Success -->
-      <BaseAlert
-        v-if="successMessage"
-        variant="success"
-        :message="successMessage"
-        dismissible
-        @dismiss="successMessage = null"
-      />
-
-      <!-- Operation Error -->
-      <BaseAlert
-        v-if="operationError"
-        variant="error"
-        :message="operationError"
-        dismissible
-        @dismiss="operationError = null"
-      />
-
-      <!-- Telemetry Settings -->
-      <section class="settings-section">
-        <h3 class="section-title">Usage Data Collection</h3>
-        <p class="section-description">
-          Control what data AutoBot collects to improve the platform and provide better support.
+    <div class="panel-content">
+      <!-- Telemetry Toggle -->
+      <fieldset class="preference-section">
+        <legend class="preference-label">
+          <Icon name="chart-line" aria-hidden="true" />
+          Send Anonymous Usage Statistics
+        </legend>
+        <p class="preference-hint">
+          Help improve AutoBot by sharing anonymous usage data. This includes API call patterns,
+          voice session metrics, and feature usage. No personal data or code content is collected.
         </p>
+        <div class="toggle-wrapper">
+          <label class="toggle-switch">
+            <input
+              type="checkbox"
+              v-model="telemetryEnabled"
+              @change="handleTelemetryToggle"
+              :aria-label="'Enable telemetry collection'"
+            />
+            <span class="toggle-slider"></span>
+          </label>
+          <span class="toggle-label">
+            {{ telemetryEnabled ? 'Enabled' : 'Disabled' }}
+          </span>
+        </div>
+      </fieldset>
 
-        <div class="setting-row">
-          <div class="setting-label">
-            <strong>Anonymous Usage Statistics</strong>
-            <p class="setting-hint">
-              Collect anonymous usage data to help us understand how AutoBot is used and prioritize improvements.
+      <!-- What Data is Collected -->
+      <div class="info-section">
+        <details class="data-disclosure">
+          <summary class="disclosure-summary">
+            <Icon name="info-circle" aria-hidden="true" />
+            What data is collected?
+          </summary>
+          <div class="disclosure-content">
+            <h4>When telemetry is enabled, we collect:</h4>
+            <ul>
+              <li><strong>API Analytics:</strong> Endpoint paths, response times, status codes</li>
+              <li><strong>Voice Sessions:</strong> Duration, token counts, cost estimates</li>
+              <li><strong>Feature Usage:</strong> Which features are used and how often</li>
+            </ul>
+            <h4>We do NOT collect:</h4>
+            <ul>
+              <li>Personal information or authentication tokens</li>
+              <li>Code content, prompts, or chat messages</li>
+              <li>File paths, hostnames, or IP addresses</li>
+              <li>Any data from air-gapped or private deployments</li>
+            </ul>
+            <p class="disclosure-note">
+              All data is anonymized and used solely to improve AutoBot. You can opt out at any time.
             </p>
           </div>
-          <div class="setting-control">
-            <label class="toggle-switch">
-              <input
-                v-model="settings.collectUsageStats"
-                type="checkbox"
-                @change="handleSettingChange"
-              />
-              <span class="toggle-slider"></span>
-            </label>
-          </div>
-        </div>
+        </details>
+      </div>
 
-        <div class="setting-row">
-          <div class="setting-label">
-            <strong>Error Reports</strong>
-            <p class="setting-hint">
-              Automatically send error reports to help us identify and fix bugs faster.
-            </p>
-          </div>
-          <div class="setting-control">
-            <label class="toggle-switch">
-              <input
-                v-model="settings.collectErrorReports"
-                type="checkbox"
-                @change="handleSettingChange"
-              />
-              <span class="toggle-slider"></span>
-            </label>
-          </div>
-        </div>
-
-        <div class="setting-row">
-          <div class="setting-label">
-            <strong>Performance Metrics</strong>
-            <p class="setting-hint">
-              Collect performance data to help optimize AutoBot's speed and resource usage.
-            </p>
-          </div>
-          <div class="setting-control">
-            <label class="toggle-switch">
-              <input
-                v-model="settings.collectPerformanceMetrics"
-                type="checkbox"
-                @change="handleSettingChange"
-              />
-              <span class="toggle-slider"></span>
-            </label>
-          </div>
-        </div>
-      </section>
-
-      <!-- Privacy Notice -->
-      <section class="settings-section">
-        <h3 class="section-title">Privacy</h3>
-        <div class="privacy-notice">
-          <Icon name="shield-check" />
-          <p>
-            Your privacy is important to us. All telemetry data is anonymized and used solely to improve AutoBot.
-            We never sell or share your data with third parties. You can disable telemetry at any time.
-          </p>
-        </div>
-      </section>
+      <!-- Status Message -->
+      <div v-if="statusMessage" class="status-message" :class="statusType">
+        <Icon :name="statusType === 'success' ? 'check-circle' : 'exclamation-circle'" aria-hidden="true" />
+        {{ statusMessage }}
+      </div>
     </div>
-  </div>
+
+    <!-- Screen reader announcements -->
+    <div role="status" aria-live="polite" aria-atomic="true" class="sr-only">
+      {{ announcement }}
+    </div>
+  </form>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
-import { createLogger } from '@/utils/debugUtils';
-import { useNotificationBus } from '@/composables/useNotificationBus';
-import LoadingSpinner from '@/components/ui/LoadingSpinner.vue';
-import BaseAlert from '@/components/ui/BaseAlert.vue';
-import Icon from '@/components/ui/Icon.vue';
+import { ref, onMounted } from 'vue'
+import { useApi } from '@/composables/useApi'
+import { createLogger } from '@/utils/debugUtils'
+import Icon from '@/components/ui/Icon.vue'
 
-const logger = createLogger('TelemetrySettingsPanel');
-const { notifyError, notifySuccess } = useNotificationBus();
+const logger = createLogger('TelemetrySettingsPanel')
+const api = useApi()
 
-// State
-const loading = ref(false);
-const error = ref<string | null>(null);
-const operationError = ref<string | null>(null);
-const successMessage = ref<string | null>(null);
+const telemetryEnabled = ref(true)
+const announcement = ref('')
+const statusMessage = ref('')
+const statusType = ref<'success' | 'error'>('success')
 
-const settings = ref({
-  collectUsageStats: true,
-  collectErrorReports: true,
-  collectPerformanceMetrics: true,
-});
+onMounted(async () => {
+  await loadTelemetrySettings()
+})
 
-// Methods
-async function loadSettings() {
-  loading.value = true;
-  error.value = null;
-
+async function loadTelemetrySettings() {
   try {
-    // TODO: Implement actual API call when telemetry backend is ready
-    // For now, use localStorage
-    const stored = localStorage.getItem('autobot_telemetry_settings');
-    if (stored) {
-      settings.value = JSON.parse(stored);
-    }
-    logger.info('Telemetry settings loaded', settings.value);
-  } catch (err) {
-    error.value = 'Failed to load telemetry settings';
-    logger.error('Failed to load telemetry settings', err);
-  } finally {
-    loading.value = false;
+    const response = await api.get<{
+      enabled: boolean
+      anonymous_usage_stats: boolean
+      first_run_prompt_shown: boolean
+    }>('/api/settings/telemetry')
+
+    telemetryEnabled.value = response.enabled
+    logger.debug('Loaded telemetry settings', response)
+  } catch (error) {
+    logger.error('Failed to load telemetry settings', error)
+    statusMessage.value = 'Failed to load telemetry settings'
+    statusType.value = 'error'
   }
 }
 
-async function handleSettingChange() {
-  operationError.value = null;
-  successMessage.value = null;
+async function handleTelemetryToggle() {
+  statusMessage.value = ''
 
   try {
-    // TODO: Implement actual API call when telemetry backend is ready
-    // For now, use localStorage
-    localStorage.setItem('autobot_telemetry_settings', JSON.stringify(settings.value));
+    await api.post('/api/settings/telemetry', {
+      enabled: telemetryEnabled.value,
+      anonymous_usage_stats: telemetryEnabled.value,
+      first_run_prompt_shown: true,
+    })
 
-    successMessage.value = 'Telemetry settings updated';
-    logger.info('Telemetry settings updated', settings.value);
-    notifySuccess('Telemetry settings updated');
-  } catch (err) {
-    operationError.value = 'Failed to update telemetry settings';
-    logger.error('Failed to update telemetry settings', err);
-    notifyError('Failed to update telemetry settings');
+    const message = telemetryEnabled.value
+      ? 'Telemetry enabled. Thank you for helping improve AutoBot!'
+      : 'Telemetry disabled. No usage data will be collected.'
+
+    statusMessage.value = message
+    statusType.value = 'success'
+    announceChange(message)
+    logger.debug(`Telemetry ${telemetryEnabled.value ? 'enabled' : 'disabled'}`)
+  } catch (error) {
+    logger.error('Failed to update telemetry settings', error)
+    statusMessage.value = 'Failed to update telemetry settings'
+    statusType.value = 'error'
+
+    // Revert toggle on error
+    telemetryEnabled.value = !telemetryEnabled.value
   }
 }
 
-// Lifecycle
-onMounted(() => {
-  loadSettings();
-});
+function announceChange(message: string): void {
+  announcement.value = message
+  setTimeout(() => {
+    announcement.value = ''
+  }, 1000)
+}
 </script>
 
 <style scoped>
-.telemetry-settings-panel {
-  padding: 0;
+.telemetry-panel {
+  background: var(--bg-secondary);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-color);
+  overflow: hidden;
 }
 
-.loading-state,
-.error-state {
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: var(--spacing-0);
+  margin: var(--spacing-neg-px);
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+.panel-header {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  padding: 3rem;
-  text-align: center;
-  gap: 1rem;
-}
-
-.retry-btn {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 1rem;
-  background: var(--color-primary);
-  color: white;
-  border: none;
-  border-radius: 0.25rem;
-  cursor: pointer;
-  font-size: 0.875rem;
-}
-
-.retry-btn:hover {
-  background: var(--color-primary-dark);
-}
-
-.settings-content {
-  display: flex;
-  flex-direction: column;
-  gap: 2rem;
-}
-
-.settings-section {
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: 0.5rem;
-  padding: 1.5rem;
-}
-
-.section-title {
-  margin: 0 0 0.5rem 0;
-  font-size: 1.125rem;
-  font-weight: 600;
-  color: var(--color-text-primary);
-}
-
-.section-description {
-  margin: 0 0 1.5rem 0;
-  font-size: 0.875rem;
-  color: var(--color-text-secondary);
-}
-
-.setting-row {
-  display: flex;
   justify-content: space-between;
-  align-items: flex-start;
-  padding: 1rem 0;
-  border-bottom: 1px solid var(--color-border);
+  padding: var(--spacing-md) var(--spacing-lg);
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border-color);
 }
 
-.setting-row:last-child {
-  border-bottom: none;
-  padding-bottom: 0;
-}
-
-.setting-row:first-child {
-  padding-top: 0;
-}
-
-.setting-label {
-  flex: 1;
-  padding-right: 2rem;
-}
-
-.setting-label strong {
-  display: block;
-  margin-bottom: 0.25rem;
+.panel-title {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  font-size: var(--font-size-lg);
   font-weight: 600;
-  color: var(--color-text-primary);
+  color: var(--text-primary);
+  margin: var(--spacing-0);
 }
 
-.setting-hint {
-  margin: 0;
-  font-size: 0.813rem;
-  color: var(--color-text-secondary);
+.panel-title i {
+  color: var(--color-primary);
+}
+
+.panel-content {
+  padding: var(--spacing-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
+}
+
+.preference-section {
+  border: none;
+  padding: var(--spacing-0);
+  margin: var(--spacing-0);
+}
+
+.preference-label {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  font-size: var(--font-size-md);
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: var(--spacing-sm);
+}
+
+.preference-label i {
+  color: var(--color-primary);
+}
+
+.preference-hint {
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  margin-bottom: var(--spacing-md);
   line-height: 1.5;
 }
 
-.setting-control {
-  flex-shrink: 0;
+.toggle-wrapper {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
 }
 
 .toggle-switch {
   position: relative;
   display: inline-block;
-  width: 48px;
-  height: 24px;
+  width: 50px;
+  height: 26px;
 }
 
 .toggle-switch input {
   opacity: 0;
   width: 0;
   height: 0;
-}
-
-.toggle-switch input:checked + .toggle-slider {
-  background-color: var(--color-primary);
-}
-
-.toggle-switch input:checked + .toggle-slider::before {
-  transform: translateX(24px);
-}
-
-.toggle-switch input:disabled + .toggle-slider {
-  opacity: 0.5;
-  cursor: not-allowed;
 }
 
 .toggle-slider {
@@ -327,14 +259,15 @@ onMounted(() => {
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: var(--color-border);
+  background-color: var(--bg-tertiary);
   transition: 0.3s;
-  border-radius: 24px;
+  border-radius: 26px;
+  border: 1px solid var(--border-color);
 }
 
-.toggle-slider::before {
+.toggle-slider:before {
   position: absolute;
-  content: '';
+  content: "";
   height: 18px;
   width: 18px;
   left: 3px;
@@ -344,30 +277,104 @@ onMounted(() => {
   border-radius: 50%;
 }
 
-.toggle-slider:hover {
-  opacity: 0.8;
+input:checked + .toggle-slider {
+  background-color: var(--color-primary);
+  border-color: var(--color-primary);
 }
 
-.privacy-notice {
+input:checked + .toggle-slider:before {
+  transform: translateX(24px);
+}
+
+.toggle-label {
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.info-section {
+  margin-top: var(--spacing-md);
+}
+
+.data-disclosure {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-md);
+  background: var(--bg-tertiary);
+}
+
+.disclosure-summary {
   display: flex;
-  gap: 1rem;
-  padding: 1rem;
-  background: var(--color-info-bg);
-  border: 1px solid var(--color-info-border);
-  border-radius: 0.5rem;
+  align-items: center;
+  gap: var(--spacing-sm);
+  font-weight: 600;
+  color: var(--text-primary);
+  cursor: pointer;
+  list-style: none;
 }
 
-.privacy-notice p {
-  margin: 0;
-  font-size: 0.875rem;
-  color: var(--color-text-secondary);
+.disclosure-summary::-webkit-details-marker {
+  display: none;
+}
+
+.disclosure-summary i {
+  color: var(--color-info);
+}
+
+.disclosure-content {
+  margin-top: var(--spacing-md);
+  padding-top: var(--spacing-md);
+  border-top: 1px solid var(--border-color);
+}
+
+.disclosure-content h4 {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: var(--spacing-md) 0 var(--spacing-sm) 0;
+}
+
+.disclosure-content ul {
+  margin: var(--spacing-sm) 0;
+  padding-left: var(--spacing-lg);
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
   line-height: 1.6;
 }
 
-.privacy-notice :deep(.icon) {
-  flex-shrink: 0;
-  color: var(--color-info);
-  width: 1.25rem;
-  height: 1.25rem;
+.disclosure-content li {
+  margin-bottom: var(--spacing-xs);
+}
+
+.disclosure-note {
+  margin-top: var(--spacing-md);
+  padding: var(--spacing-sm);
+  background: var(--bg-secondary);
+  border-left: 3px solid var(--color-info);
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  border-radius: var(--radius-sm);
+}
+
+.status-message {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+}
+
+.status-message.success {
+  background: var(--color-success-bg);
+  color: var(--color-success);
+  border: 1px solid var(--color-success);
+}
+
+.status-message.error {
+  background: var(--color-error-bg);
+  color: var(--color-error);
+  border: 1px solid var(--color-error);
 }
 </style>

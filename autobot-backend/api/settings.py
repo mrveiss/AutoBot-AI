@@ -33,11 +33,13 @@ from api.schemas_system import (
     SettingsTaskQueuedResponse,
     SettingsTaskStatusResponse,
     SystemUpdateRequest,
+    TelemetrySettingsRequest,
+    TelemetrySettingsResponse,
     UpdateStatusResponse,
     WorkerStatusResponse,
 )
 from api.user_management.dependencies import get_db_session
-from auth_middleware import check_admin_permission
+from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from celery_app import celery_app
@@ -947,4 +949,101 @@ async def update_hardware_priority(
         status="ok",
         priority_order=applied_order,
         changed=changed,
+    )
+
+
+# ==================== Telemetry Settings Endpoints (Issue #9035) ====================
+
+
+@router.get("/telemetry", response_model=TelemetrySettingsResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_telemetry_settings",
+    error_code_prefix="SETTINGS",
+)
+async def get_telemetry_settings(
+    current_user: dict = Depends(get_current_user),
+):
+    """Get current telemetry settings (Issue #9035).
+
+    Returns telemetry opt-in/opt-out status and whether the first-run
+    prompt has been shown.
+
+    Requires authentication.
+    """
+    from autobot_shared.ssot_config import config
+
+    return TelemetrySettingsResponse(
+        enabled=config.telemetry.enabled,
+        anonymous_usage_stats=config.telemetry.anonymous_usage_stats,
+        first_run_prompt_shown=config.telemetry.first_run_prompt_shown,
+    )
+
+
+@router.post("/telemetry", response_model=TelemetrySettingsResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="update_telemetry_settings",
+    error_code_prefix="SETTINGS",
+)
+async def update_telemetry_settings(
+    request: TelemetrySettingsRequest,
+    session: AsyncSession = Depends(get_db_session),
+    current_user: dict = Depends(get_current_user),
+    _: None = Depends(check_admin_permission),
+):
+    """Update telemetry settings (Issue #9035).
+
+    Allows users to opt in/out of telemetry collection. When telemetry
+    is disabled, the AnalyticsMiddleware and VoiceRealtimeTelemetry
+    services skip data collection.
+
+    Requires admin permission.
+
+    Args:
+        request: New telemetry settings
+
+    Returns:
+        Updated telemetry settings
+    """
+    before_config: dict = ConfigService.get_full_config()
+
+    # Build the minimal patch
+    patch: dict = {
+        "telemetry": {
+            "enabled": request.enabled,
+            "anonymous_usage_stats": request.anonymous_usage_stats,
+            "first_run_prompt_shown": request.first_run_prompt_shown,
+        }
+    }
+
+    # Deep-merge into a copy
+    from config.loader import deep_merge
+
+    merged_config = deep_merge(copy.deepcopy(before_config), patch)
+    ConfigService.save_full_config(merged_config)
+    ConfigService.clear_cache()
+
+    changed = _compute_flat_diff(before_config, merged_config)
+
+    await ConfigRevisionService(session).create_revision(
+        entity_type="system",
+        entity_id="telemetry_settings",
+        before_config=before_config,
+        after_config=merged_config,
+        source="api",
+        created_by=current_user.get("id", "unknown"),
+    )
+
+    logger.info(
+        "Telemetry settings updated: enabled=%s, anonymous_usage_stats=%s (changed keys: %d)",
+        request.enabled,
+        request.anonymous_usage_stats,
+        len(changed),
+    )
+
+    return TelemetrySettingsResponse(
+        enabled=request.enabled,
+        anonymous_usage_stats=request.anonymous_usage_stats,
+        first_run_prompt_shown=request.first_run_prompt_shown,
     )
