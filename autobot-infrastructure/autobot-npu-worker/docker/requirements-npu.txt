@@ -7,7 +7,7 @@ uvicorn[standard]>=0.48.0
 pydantic>=2.13.4
 
 # Intel OpenVINO for NPU acceleration
-openvino>=2026.1.0
+openvino>=2026.2.0
 openvino-dev>=2024.6.0
 
 # Model and Tokenization (lightweight)
