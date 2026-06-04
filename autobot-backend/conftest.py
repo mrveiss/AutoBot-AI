@@ -623,10 +623,10 @@ if "sqlalchemy.orm" in sys.modules:
 # models/__init__.py itself (if forced by other test files) has sqlalchemy stubs
 # already in place.
 if "models" not in sys.modules:
-    import importlib.util as _ilu  # noqa: F811
+    import importlib.util as _ilu3
 
     _infra_path = str(backend_root / "models" / "infrastructure.py")
-    _spec = _ilu.spec_from_file_location("models.infrastructure", _infra_path)
+    _spec = _ilu3.spec_from_file_location("models.infrastructure", _infra_path)
     if _spec and _spec.loader:
         # Create a lightweight 'models' namespace package to hold the sub-module
         _models_pkg = _make_pkg_stub("models")

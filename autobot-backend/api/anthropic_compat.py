@@ -285,8 +285,6 @@ async def messages(
     registry = get_provider_registry()
     llm_request = _build_llm_request(body, resolved_model=resolved_model)
 
-    from llm_shared.model_fallback_coordinator import get_fallback_coordinator
-
     provider = await registry.get_provider_for_request(request=llm_request)
     if provider is None:
         raise HTTPException(status_code=503, detail="No LLM providers available")
