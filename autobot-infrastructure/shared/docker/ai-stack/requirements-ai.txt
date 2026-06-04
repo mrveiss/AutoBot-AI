@@ -17,7 +17,7 @@ sentence-transformers>=5.3.0
 
 # Model and Tokenization
 transformers>=5.8.1
-tokenizers>=0.22.2
+tokenizers>=0.23.1
 huggingface-hub>=1.8.0
 tiktoken>=0.12.0
 
