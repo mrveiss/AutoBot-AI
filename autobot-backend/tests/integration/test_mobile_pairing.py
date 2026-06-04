@@ -35,7 +35,6 @@ from autobot_shared.time_utils import now_utc
 from models.mobile_device import DevicePlatform, MobileDevice
 from user_management.models.base import Base
 
-
 # Test database setup
 TEST_DB_URL = "sqlite+aiosqlite:///:memory:"
 
@@ -225,9 +224,7 @@ async def test_pair_device_success(test_client, test_db_session, redis_client, t
     assert data["message"] == "Device paired successfully"
 
     # Verify device exists in database
-    result = await test_db_session.execute(
-        select(MobileDevice).where(MobileDevice.user_id == test_user["id"])
-    )
+    result = await test_db_session.execute(select(MobileDevice).where(MobileDevice.user_id == test_user["id"]))
     device = result.scalar_one_or_none()
 
     assert device is not None
@@ -266,9 +263,7 @@ async def test_pair_device_all_platforms(test_client, test_db_session, test_user
         assert response.status_code == 201, f"Failed to pair {platform} device"
 
     # Verify all three devices exist
-    result = await test_db_session.execute(
-        select(MobileDevice).where(MobileDevice.user_id == test_user["id"])
-    )
+    result = await test_db_session.execute(select(MobileDevice).where(MobileDevice.user_id == test_user["id"]))
     devices = result.scalars().all()
     assert len(devices) == 3
 
@@ -444,9 +439,7 @@ async def test_list_devices_auto_prunes_expired(test_client, test_db_session, te
     assert data["devices"][0]["device_name"] == "Active iPhone"
 
     # Verify expired device was deleted from DB
-    result = await test_db_session.execute(
-        select(MobileDevice).where(MobileDevice.id == expired_id)
-    )
+    result = await test_db_session.execute(select(MobileDevice).where(MobileDevice.id == expired_id))
     assert result.scalar_one_or_none() is None
 
 
@@ -509,9 +502,7 @@ async def test_unpair_device_success(test_client, test_db_session, test_user):
     assert response.status_code == 204
 
     # Verify device was deleted
-    result = await test_db_session.execute(
-        select(MobileDevice).where(MobileDevice.id == device_id)
-    )
+    result = await test_db_session.execute(select(MobileDevice).where(MobileDevice.id == device_id))
     assert result.scalar_one_or_none() is None
 
 
@@ -546,9 +537,7 @@ async def test_unpair_other_user_device_returns_404(test_client, test_db_session
     assert response.status_code == 404  # Not found (user isolation)
 
     # Verify device still exists
-    result = await test_db_session.execute(
-        select(MobileDevice).where(MobileDevice.id == device_id)
-    )
+    result = await test_db_session.execute(select(MobileDevice).where(MobileDevice.id == device_id))
     assert result.scalar_one_or_none() is not None
 
 

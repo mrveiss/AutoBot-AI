@@ -49,7 +49,6 @@ from ..services.approval import ApprovalNotFoundError, ApprovalService, Approval
 from ..services.sprint_autoclose import SprintAutoCloseService
 from ..services.sprint_planning import SprintNotFound, SprintPlanningService
 
-
 logger = get_logger(__name__)
 router = APIRouter(tags=["llc-sprints"])
 

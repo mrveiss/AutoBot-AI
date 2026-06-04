@@ -18,7 +18,6 @@ from llc.models.budget import LLCAgentBudget
 from llc.services.budget import BudgetService
 from user_management.database import get_async_session
 
-
 logger = get_logger(__name__)
 router = APIRouter(prefix="/budget", tags=["llc-budget"])
 
