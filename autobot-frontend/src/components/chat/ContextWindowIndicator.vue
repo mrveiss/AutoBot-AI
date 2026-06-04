@@ -3,8 +3,9 @@
     v-if="hasData"
     class="ctx-indicator"
     :class="{
-      'ctx-indicator--warning': isWarning && !isCritical,
-      'ctx-indicator--critical': isCritical,
+      'ctx-indicator--warning': isWarning && !isCritical && !isSummarizing,
+      'ctx-indicator--critical': isCritical && !isSummarizing,
+      'ctx-indicator--summarizing': isSummarizing,
     }"
     :title="tooltip"
     role="meter"
@@ -15,12 +16,13 @@
   >
     <!-- Token count text -->
     <span class="ctx-indicator__text">
-      {{ formattedUsed }} / {{ formattedMax }}
+      {{ isSummarizing ? t('chat.contextWindow.summarizing') : `${formattedUsed} / ${formattedMax}` }}
     </span>
     <!-- Progress bar -->
     <div class="ctx-indicator__bar-track" aria-hidden="true">
       <div
         class="ctx-indicator__bar-fill"
+        :class="{ 'ctx-indicator__bar-fill--animating': isSummarizing }"
         :style="{ width: `${usagePercent}%` }"
       />
     </div>
@@ -38,6 +40,7 @@ interface Props {
   isWarning: boolean
   isCritical: boolean
   hasData: boolean
+  isSummarizing?: boolean // GH#9043: context overflow protection status
 }
 
 const props = defineProps<Props>()
@@ -101,5 +104,25 @@ const tooltip = computed(() =>
 }
 .ctx-indicator--critical .ctx-indicator__bar-fill {
   background: var(--color-error);
+}
+
+.ctx-indicator--summarizing .ctx-indicator__text {
+  color: var(--color-info);
+}
+.ctx-indicator--summarizing .ctx-indicator__bar-fill {
+  background: var(--color-info);
+}
+
+.ctx-indicator__bar-fill--animating {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
 }
 </style>

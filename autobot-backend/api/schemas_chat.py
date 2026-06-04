@@ -669,3 +669,25 @@ class SessionFolderAssign(BaseModel):
     """Request body for PUT /chat/sessions/{session_id}/folder."""
 
     folder_id: str | None = Field(None, description="Folder ID to assign; None removes from folder")
+
+
+# ── Context Overflow Protection schemas (GH#9043) ────────────────────────────
+
+
+class ConversationSummarizeRequest(BaseModel):
+    """Request body for POST /chat/summarize."""
+
+    session_id: str = Field(..., description="Chat session ID")
+    message_ids: List[str] = Field(..., min_length=1, description="Message IDs to summarize")
+    target_length: int | None = Field(
+        500, ge=100, le=2000, description="Target summary length in tokens (default: 500)"
+    )
+
+
+class ConversationSummarizeData(BaseModel):
+    """data payload for POST /chat/summarize."""
+
+    summary: str = Field(..., description="Generated summary of the conversation segment")
+    original_message_count: int = Field(..., description="Number of messages summarized")
+    summary_token_count: int | None = Field(None, description="Token count of the summary")
+    timestamp: str = Field(..., description="ISO timestamp when summary was generated")

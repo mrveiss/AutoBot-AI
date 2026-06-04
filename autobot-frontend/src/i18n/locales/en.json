@@ -110,7 +110,8 @@
       "warningToast": "Conversation approaching context limit ({percent}%). Older messages may be summarized.",
       "compressedToast": "Context window optimized - older messages summarized",
       "summaryTitle": "Context Summary",
-      "summaryToggle": "Show details"
+      "summaryToggle": "Show details",
+      "summarizing": "Summarizing..."
     },
     "sendMessage": "Send a message...",
     "newChat": "New Chat",

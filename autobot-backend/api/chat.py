@@ -36,6 +36,8 @@ from api.schemas_chat import (
     ChatPreferences,
     ChatSaveData,
     ChatStatsData,
+    ConversationSummarizeData,
+    ConversationSummarizeRequest,
     DetectLanguageData,
     DetectLanguageRequest,
     EnhancedChatCapabilitiesData,
@@ -2187,3 +2189,89 @@ async def detect_language(
     )
     result = await agent.handle_detect_language(req)
     return JSONResponse(content=result, media_type="application/json; charset=utf-8")  # codeql[py/stack-trace-exposure]
+
+
+@router.post("/chat/summarize", response_model=DataResponse[Dict[str, Any]])
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="summarize_conversation",
+    error_code_prefix="CHAT_SUMMARIZE",
+)
+async def summarize_conversation(
+    body: "ConversationSummarizeRequest",
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Summarize a range of conversation messages for context overflow protection (GH#9043).
+
+    When a conversation approaches the model's context window limit, this endpoint
+    generates a compact summary of the earliest messages to enable a rolling window
+    approach without losing essential context.
+    """
+    from api.schemas_chat import ConversationSummarizeData, ConversationSummarizeRequest
+
+    request_id = generate_request_id()
+    logger.info("[%s] Summarizing %d messages from session %s", request_id, len(body.message_ids), body.session_id)
+
+    # Validate session ownership
+    await validate_chat_ownership(body.session_id, request)
+
+    # Get chat history manager and retrieve messages
+    chat_history = get_chat_history_manager()
+    all_messages = await chat_history.get_messages(body.session_id)
+
+    # Filter to requested message IDs
+    messages_to_summarize = [msg for msg in all_messages if msg.get("message_id") in body.message_ids]
+
+    if not messages_to_summarize:
+        raise HTTPException(status_code=404, detail="No messages found with the provided IDs")
+
+    # Build prompt for summarization
+    conversation_text = "\n\n".join([
+        f"{msg.get('role', 'unknown').upper()}: {msg.get('content', '')}"
+        for msg in messages_to_summarize
+    ])
+
+    summarization_prompt = f"""Summarize the following conversation segment concisely. Preserve key context, decisions, and technical details that would be needed to continue the conversation naturally.
+
+Target length: approximately {body.target_length or 500} tokens.
+
+Conversation:
+{conversation_text}
+
+Summary:"""
+
+    # Get LLM service and generate summary
+    llm_service = get_llm_service(request)
+
+    try:
+        summary_response = await llm_service.generate_response(
+            messages=[{"role": "user", "content": summarization_prompt}],
+            model="gpt-4o-mini",  # Fast, cheap model for summarization
+            max_tokens=body.target_length or 500,
+            temperature=0.3,  # Lower temperature for focused summarization
+        )
+
+        summary_text = summary_response.get("content", "")
+        summary_tokens = summary_response.get("usage", {}).get("total_tokens", 0)
+
+    except Exception as e:
+        logger.exception("[%s] Failed to generate summary", request_id)
+        raise HTTPException(status_code=500, detail=f"Summarization failed: {str(e)}")
+
+    result_data = ConversationSummarizeData(
+        summary=summary_text,
+        original_message_count=len(messages_to_summarize),
+        summary_token_count=summary_tokens,
+        timestamp=utc_timestamp(),
+    )
+
+    logger.info(
+        "[%s] Generated summary: %d messages → %d tokens",
+        request_id,
+        result_data.original_message_count,
+        result_data.summary_token_count or 0,
+    )
+
+    return DataResponse(data=result_data.model_dump())
