@@ -42,13 +42,18 @@ class BudgetService(LLCServiceBase):
         tokens_out: int,
         model: str,
     ) -> Decimal:
-        """Record token cost for an agent and enforce budget limits.
+        """Record token cost for an agent and enforce budget limits (GH#8215, GH#8997).
 
-        Uses an atomic UPDATE (budget_spent = budget_spent + cost) to avoid
-        read-modify-write races across 4 uvicorn workers sharing one DB.
+        Supports two budget modes:
+        - DOLLARS: tracks cost in USD, enforces budget_limit
+        - TOKENS: tracks token counts, enforces token_limit
 
-        Returns the cost added this call.
-        Raises BudgetExhausted if spending exceeds budget_limit.
+        Both modes track tokens_spent for analytics; only TOKENS mode enforces on tokens.
+
+        Uses atomic UPDATE to avoid read-modify-write races across 4 uvicorn workers.
+
+        Returns the dollar cost added this call (always calculated for analytics).
+        Raises BudgetExhausted if spending exceeds the active budget mode limit.
         """
         pricing = MODEL_PRICING_PER_1M_TOKENS.get(model)
         if pricing is None:
@@ -61,10 +66,18 @@ class BudgetService(LLCServiceBase):
         else:
             cost = Decimal(str((tokens_in * pricing["input"] + tokens_out * pricing["output"]) / 1_000_000))
 
+        total_tokens = tokens_in + tokens_out
+
         # Atomic increment — prevents lost-update across concurrent workers
+        # Always update both dollar and token counters for analytics (GH#8997)
         await session.execute(
-            text("UPDATE llc_agent_budgets" " SET budget_spent = budget_spent + :cost" " WHERE agent_id = :agent_id"),
-            {"cost": str(cost), "agent_id": agent_id},
+            text(
+                "UPDATE llc_agent_budgets"
+                " SET budget_spent = budget_spent + :cost,"
+                "     tokens_spent = tokens_spent + :tokens"
+                " WHERE agent_id = :agent_id"
+            ),
+            {"cost": str(cost), "tokens": total_tokens, "agent_id": agent_id},
         )
 
         result = await session.execute(select(LLCAgentBudget).where(LLCAgentBudget.agent_id == agent_id))
@@ -80,29 +93,45 @@ class BudgetService(LLCServiceBase):
         spent = Decimal(str(row.budget_spent))
         limit = Decimal(str(row.budget_limit))
         threshold = Decimal(str(row.alert_threshold))
+        tokens_spent = int(row.tokens_spent)
+        token_limit = int(row.token_limit) if row.token_limit is not None else None
+        budget_mode = str(row.budget_mode)
 
-        # Push updated state into cross-worker cache (GH#6630).
+        # Push updated state into cross-worker cache (GH#6630, GH#8997).
         await _tracker.record_state(
             AgentBudgetState(
                 agent_id=agent_id,
+                budget_mode=budget_mode,
                 budget_spent=float(spent),
                 budget_limit=float(limit),
+                tokens_spent=tokens_spent,
+                token_limit=token_limit,
                 alert_threshold=float(threshold),
             )
         )
 
-        if spent > limit:
-            raise BudgetExhausted(agent_id=agent_id, spent=float(spent), limit=float(limit))
-
-        if limit > Decimal("0") and spent / limit >= threshold:
-            await self._emit_alert(agent_id, float(spent), float(limit))
+        # Enforce budget based on mode (GH#8997)
+        if budget_mode == "tokens" and token_limit is not None:
+            if tokens_spent > token_limit:
+                raise BudgetExhausted(agent_id=agent_id, spent=tokens_spent, limit=token_limit)
+            if token_limit > 0 and tokens_spent / token_limit >= threshold:
+                await self._emit_alert(agent_id, tokens_spent, token_limit)
+        else:
+            # Default DOLLARS mode
+            if spent > limit:
+                raise BudgetExhausted(agent_id=agent_id, spent=float(spent), limit=float(limit))
+            if limit > Decimal("0") and spent / limit >= threshold:
+                await self._emit_alert(agent_id, float(spent), float(limit))
 
         return cost
 
     async def check_budget(self, session: AsyncSession, agent_id: str) -> Tuple[Decimal, bool, bool]:
-        """Return (remaining, is_over_limit, alert_triggered) for an agent.
+        """Return (remaining, is_over_limit, alert_triggered) for an agent (GH#6630, GH#8997).
 
         remaining can be negative when spent exceeds limit.
+
+        For TOKENS mode, remaining is in token count.
+        For DOLLARS mode, remaining is in USD.
 
         Reads from SharedRuntimeBag cache first (GH#6630); falls back to DB
         on cache miss so correctness is preserved.
@@ -117,13 +146,22 @@ class BudgetService(LLCServiceBase):
         if row is None:
             return Decimal("0"), False, False
 
+        budget_mode = str(row.budget_mode)
         spent = Decimal(str(row.budget_spent))
         limit = Decimal(str(row.budget_limit))
+        tokens_spent = int(row.tokens_spent)
+        token_limit = int(row.token_limit) if row.token_limit is not None else None
         threshold = Decimal(str(row.alert_threshold))
 
-        remaining = limit - spent
-        is_over_limit = spent > limit
-        alert_triggered = limit > Decimal("0") and spent / limit >= threshold
+        # Calculate based on budget mode (GH#8997)
+        if budget_mode == "tokens" and token_limit is not None:
+            remaining = Decimal(str(token_limit - tokens_spent))
+            is_over_limit = tokens_spent > token_limit
+            alert_triggered = token_limit > 0 and tokens_spent / token_limit >= threshold
+        else:
+            remaining = limit - spent
+            is_over_limit = spent > limit
+            alert_triggered = limit > Decimal("0") and spent / limit >= threshold
 
         return remaining, is_over_limit, alert_triggered
 

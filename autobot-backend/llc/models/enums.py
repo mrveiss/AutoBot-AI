@@ -50,6 +50,17 @@ class WorkItemPriority(str, Enum):
     LOW = "low"
 
 
+class BudgetMode(str, Enum):
+    """Budget tracking mode for LLC agents (GH#8997).
+
+    DOLLARS: track spend in USD (default, uses MODEL_PRICING_PER_1M_TOKENS)
+    TOKENS: track spend in token counts (for subscription/free-tier users)
+    """
+
+    DOLLARS = "dollars"
+    TOKENS = "tokens"
+
+
 class LLCCompanyStatus(str, Enum):
     """Lifecycle status of a company within the LLC module (GH#8211)."""
 
