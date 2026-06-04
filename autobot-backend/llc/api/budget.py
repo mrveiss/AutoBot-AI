@@ -26,11 +26,21 @@ costs_by_model_router = APIRouter(prefix="/companies", tags=["llc-costs-by-model
 
 
 class BudgetResponse(BaseModel):
+    """Budget status response (GH#8215, GH#8997)."""
+
     agent_id: str
+    budget_mode: str  # "dollars" or "tokens"
+
+    # Dollar-based fields
     budget_limit: Decimal
     budget_spent: Decimal
+
+    # Token-based fields (GH#8997)
+    token_limit: int | None
+    tokens_spent: int
+
     alert_threshold: float
-    remaining: Decimal
+    remaining: Decimal  # In the active mode (dollars or tokens)
     is_over_limit: bool
     alert_triggered: bool
 
@@ -48,15 +58,23 @@ class IngestResponse(BaseModel):
 
 
 class UpdateLimitRequest(BaseModel):
-    budget_limit: Decimal
+    """Update budget limits and mode (GH#8215, GH#8997)."""
+
+    budget_mode: Optional[str] = None  # "dollars" or "tokens"
+    budget_limit: Optional[Decimal] = None  # For DOLLARS mode
+    token_limit: Optional[int] = None  # For TOKENS mode
     alert_threshold: Optional[float] = None
 
 
 def _build_response(row: LLCAgentBudget, remaining: Decimal, is_over: bool, alert: bool) -> BudgetResponse:
+    """Build BudgetResponse with token support (GH#8997)."""
     return BudgetResponse(
         agent_id=row.agent_id,
+        budget_mode=str(row.budget_mode),
         budget_limit=Decimal(str(row.budget_limit)),
         budget_spent=Decimal(str(row.budget_spent)),
+        token_limit=int(row.token_limit) if row.token_limit is not None else None,
+        tokens_spent=int(row.tokens_spent),
         alert_threshold=row.alert_threshold,
         remaining=remaining,
         is_over_limit=is_over,
@@ -69,7 +87,7 @@ async def list_budgets(
     company_id: str = Query(..., description="Filter by company UUID"),
     session: AsyncSession = Depends(get_async_session),
 ) -> List[Dict[str, Any]]:
-    """List all per-agent budget rows for a company (GH#8551 CostDashboard)."""
+    """List all per-agent budget rows for a company (GH#8551, GH#8997)."""
     result = await session.execute(select(LLCAgentBudget).where(LLCAgentBudget.company_id == company_id))
     rows = result.scalars().all()
     svc = BudgetService()
@@ -79,8 +97,11 @@ async def list_budgets(
         out.append(
             {
                 "agent_id": row.agent_id,
+                "budget_mode": str(row.budget_mode),
                 "budget_limit": str(row.budget_limit),
                 "budget_spent": str(row.budget_spent),
+                "token_limit": int(row.token_limit) if row.token_limit is not None else None,
+                "tokens_spent": int(row.tokens_spent),
                 "remaining": str(remaining),
                 "is_over_limit": is_over,
                 "alert_triggered": alert,
@@ -133,6 +154,7 @@ async def update_limit(
     body: UpdateLimitRequest,
     session: AsyncSession = Depends(get_async_session),
 ) -> BudgetResponse:
+    """Update budget limits and mode (GH#8215, GH#8997)."""
     result = await session.execute(select(LLCAgentBudget).where(LLCAgentBudget.agent_id == agent_id))
     row = result.scalar_one_or_none()
     if row is None:
@@ -140,9 +162,21 @@ async def update_limit(
 
     # GH#8462: pass Decimal directly — Pydantic already validates it as Decimal,
     # no str() conversion needed (which would silently coerce to TEXT in the ORM).
-    values: dict = {"budget_limit": body.budget_limit}
+    # GH#8997: support budget_mode and token_limit updates.
+    values: dict = {}
+    if body.budget_mode is not None:
+        if body.budget_mode not in ("dollars", "tokens"):
+            raise HTTPException(status_code=400, detail="budget_mode must be 'dollars' or 'tokens'")
+        values["budget_mode"] = body.budget_mode
+    if body.budget_limit is not None:
+        values["budget_limit"] = body.budget_limit
+    if body.token_limit is not None:
+        values["token_limit"] = body.token_limit
     if body.alert_threshold is not None:
         values["alert_threshold"] = body.alert_threshold
+
+    if not values:
+        raise HTTPException(status_code=400, detail="No fields to update")
 
     await session.execute(update(LLCAgentBudget).where(LLCAgentBudget.agent_id == agent_id).values(**values))
     await session.refresh(row)
