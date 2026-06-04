@@ -326,13 +326,17 @@ class LLMService:
         """
         Stream a chat completion, yielding text chunks.
 
+        GH#8998: Supports quota-triggered fallback chains. When a model hits
+        rate limit (429) or quota exceeded before the first chunk, automatically
+        tries fallback models from the configured chain before failing.
+
         Args are identical to ``chat()``.
 
         Yields:
             String chunks of the generated response.
 
         Raises:
-            RuntimeError: if no provider is available.
+            RuntimeError: if no provider is available or all fallbacks exhausted.
         """
         self._request_count += 1
         resolved_type = _normalize_llm_type(llm_type)
@@ -349,21 +353,95 @@ class LLMService:
             **kwargs,
         )
 
-        provider = await self._registry.get_provider_for_request(
-            provider_name=provider_name,
-            conversation_id=conversation_id,
-        )
-        if provider is None:
-            self._error_count += 1
-            raise RuntimeError("No available LLM provider for streaming request")
+        # GH#8998: Track attempted models to avoid infinite loops
+        attempted_models: List[str] = []
+        fallback_manager = get_fallback_chain_manager()
+        current_provider_name = provider_name
+        current_model = model_name
+        max_fallback_attempts = 10
 
-        try:
-            async for chunk in provider.stream_completion(request):
-                yield chunk
-        except Exception as exc:
-            self._error_count += 1
-            logger.error("Stream error from provider %s: %s", provider.provider_name, exc)
-            raise
+        while len(attempted_models) < max_fallback_attempts:
+            provider = await self._registry.get_provider_for_request(
+                provider_name=current_provider_name,
+                conversation_id=conversation_id,
+            )
+            if provider is None:
+                self._error_count += 1
+                raise RuntimeError("No available LLM provider for streaming request")
+
+            request.model_name = current_model
+            attempt_key = f"{provider.provider_name}:{current_model or 'default'}"
+
+            if attempt_key in attempted_models:
+                logger.warning("Stream fallback loop detected at %s, breaking", attempt_key)
+                break
+            attempted_models.append(attempt_key)
+
+            logger.debug(
+                "Attempting stream with %s (attempt %d/%d)",
+                attempt_key,
+                len(attempted_models),
+                max_fallback_attempts,
+            )
+
+            try:
+                async for chunk in provider.stream_completion(request):
+                    yield chunk
+                # Stream completed successfully
+                if len(attempted_models) > 1:
+                    logger.info(
+                        "Stream fallback successful: %s worked after %d attempts (tried: %s)",
+                        attempt_key,
+                        len(attempted_models),
+                        " → ".join(attempted_models),
+                    )
+                return
+            except Exception as exc:
+                error_text = str(exc)
+                is_rate_limited = bool(
+                    "429" in error_text
+                    or "rate limit" in error_text.lower()
+                    or "quota" in error_text.lower()
+                    or "too many requests" in error_text.lower()
+                )
+
+                if is_rate_limited:
+                    fallback_result = fallback_manager.get_next_fallback(
+                        current_model or provider.provider_name,
+                        provider.provider_name,
+                    )
+                    if fallback_result:
+                        next_model, next_provider = fallback_result
+                        logger.info(
+                            "Stream rate limit on %s, falling back to %s:%s",
+                            attempt_key,
+                            next_provider or current_provider_name,
+                            next_model,
+                        )
+                        current_model = next_model
+                        if next_provider:
+                            current_provider_name = next_provider
+                        continue
+                    else:
+                        logger.warning(
+                            "Stream rate limit on %s but no fallback chain configured",
+                            attempt_key,
+                        )
+
+                self._error_count += 1
+                logger.error("Stream error from provider %s: %s", provider.provider_name, exc)
+                raise
+
+        # Max attempts reached
+        self._error_count += 1
+        logger.error(
+            "Stream exhausted fallback chain after %d attempts: %s",
+            len(attempted_models),
+            " → ".join(attempted_models),
+        )
+        raise RuntimeError(
+            f"All streaming fallback models exhausted ({len(attempted_models)} attempts)"
+        )
 
     # ------------------------------------------------------------------
     # Provider management helpers
