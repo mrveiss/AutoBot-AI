@@ -15,6 +15,8 @@ import uuid
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
+
+from autobot_shared.logging_manager import get_logger
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -25,6 +27,8 @@ from ..exceptions import WipLimitExceeded
 from ..services.board import BoardService
 from ..services.work_item_service import InvalidTransition
 
+
+logger = get_logger(__name__)
 router = APIRouter(prefix="/boards", tags=["llc-boards"])
 _get_service = lazy_singleton(BoardService)
 
@@ -120,7 +124,8 @@ async def create_kanban_board(
         board = await svc.get_or_create_kanban(session, body.company_id, body.project_id, name=body.name)
         await session.commit()
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        logger.error("Exception in API handler: %s", exc, exc_info=True)
+        raise HTTPException(status_code=400, detail="Internal server error")
     return _board_response(board)
 
 
@@ -135,7 +140,8 @@ async def create_sprint_board(
         board = await svc.get_or_create_sprint_board(session, body.company_id, body.sprint_id, name=body.name)
         await session.commit()
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        logger.error("Exception in API handler: %s", exc, exc_info=True)
+        raise HTTPException(status_code=400, detail="Internal server error")
     return _board_response(board)
 
 
@@ -170,7 +176,8 @@ async def get_board_items(
     try:
         result = await svc.get_board_items(session, board_id)
     except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc))
+        logger.error("Exception in API handler: %s", exc, exc_info=True)
+        raise HTTPException(status_code=404, detail="Internal server error")
 
     board = result["board"]
     columns_with_items: List[Dict[str, Any]] = []
@@ -226,8 +233,10 @@ async def move_item(
             },
         )
     except InvalidTransition as exc:
-        raise HTTPException(status_code=422, detail=str(exc))
+        logger.error("Exception in API handler: %s", exc, exc_info=True)
+        raise HTTPException(status_code=422, detail="Internal server error")
     except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc))
+        logger.error("Exception in API handler: %s", exc, exc_info=True)
+        raise HTTPException(status_code=404, detail="Internal server error")
 
     return _work_item_summary(updated_item)

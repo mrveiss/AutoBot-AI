@@ -214,7 +214,7 @@ async def _fetch_catalog_document(url: str) -> CatalogDocument:
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(exc),
+            detail="Internal server error",
         ) from exc
     port = parsed.port or (443 if parsed.scheme == "https" else 80)
     timeout = aiohttp.ClientTimeout(total=_FETCH_TIMEOUT_SECONDS)

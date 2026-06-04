@@ -227,7 +227,8 @@ async def list_catalog(
     try:
         entries = await importer.import_http_catalog(catalog_url, page=page, page_size=page_size)
     except RuntimeError as exc:
-        raise HTTPException(status_code=502, detail=str(exc))
+        logger.error("Exception in API handler: %s", exc, exc_info=True)
+        raise HTTPException(status_code=502, detail="Internal server error")
 
     # Annotate each entry with an install action hint
     for entry in entries:
@@ -266,7 +267,8 @@ async def install_catalog_skill(name: str, body: SkillInstallRequest) -> Dict[st
     try:
         entries = await importer.import_http_catalog(detail_url, page=1, page_size=1)
     except RuntimeError as exc:
-        raise HTTPException(status_code=502, detail=str(exc))
+        logger.error("Exception in API handler: %s", exc, exc_info=True)
+        raise HTTPException(status_code=502, detail="Internal server error")
 
     if not entries:
         raise HTTPException(status_code=404, detail=f"Skill '{name}' not found in catalog at {body.catalog_url}")
@@ -275,7 +277,8 @@ async def install_catalog_skill(name: str, body: SkillInstallRequest) -> Dict[st
     try:
         pkg = await importer.install_from_catalog(name, entry, repo_id=body.repo_id)
     except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc))
+        logger.error("Exception in API handler: %s", exc, exc_info=True)
+        raise HTTPException(status_code=422, detail="Internal server error")
 
     engine = get_skills_engine()
     async with AsyncSession(engine) as session:

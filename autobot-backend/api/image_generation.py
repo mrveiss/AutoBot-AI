@@ -147,4 +147,4 @@ async def generate_image(
 
     except Exception as exc:
         logger.error("image_generation API error: %s", exc, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error") from exc

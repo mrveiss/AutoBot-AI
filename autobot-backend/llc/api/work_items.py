@@ -27,6 +27,8 @@ Routes:
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+
+from autobot_shared.logging_manager import get_logger
 from fastapi.responses import Response
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -93,6 +95,8 @@ class CoworkerRequest(BaseModel):
     actor_user_id: Optional[str] = None
 
 
+
+logger = get_logger(__name__)
 router = APIRouter(prefix="/work-items", tags=["llc-work-items"])
 _get_service = lazy_singleton(WorkItemService)
 _get_product_service = lazy_singleton(WorkProductService)
@@ -458,9 +462,11 @@ async def checkout_work_item(
         await session.commit()
         return await _item_to_dict(item, session)
     except CheckoutConflict as exc:
-        raise HTTPException(status_code=409, detail=str(exc))
+        logger.error("Exception in API handler: %s", exc, exc_info=True)
+        raise HTTPException(status_code=409, detail="Internal server error")
     except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc))
+        logger.error("Exception in API handler: %s", exc, exc_info=True)
+        raise HTTPException(status_code=404, detail="Internal server error")
 
 
 @router.post("/{work_item_id}/release")
@@ -477,7 +483,8 @@ async def release_work_item(
             await redis.delete(f"llc:checkout:{work_item_id}")
         return await _item_to_dict(item, session)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        logger.error("Exception in API handler: %s", exc, exc_info=True)
+        raise HTTPException(status_code=400, detail="Internal server error")
 
 
 @router.post("/{work_item_id}/transition")
@@ -493,9 +500,11 @@ async def transition_work_item(
             await _kb_manager.archive_collection(KbCollectionManager.WORK_ITEM_PREFIX, item.id)
         return await _item_to_dict(item, session)
     except InvalidTransition as exc:
-        raise HTTPException(status_code=422, detail=str(exc))
+        logger.error("Exception in API handler: %s", exc, exc_info=True)
+        raise HTTPException(status_code=422, detail="Internal server error")
     except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc))
+        logger.error("Exception in API handler: %s", exc, exc_info=True)
+        raise HTTPException(status_code=404, detail="Internal server error")
 
 
 @router.post("/{work_item_id}/claim")
@@ -514,9 +523,11 @@ async def claim_work_item(
         await session.commit()
         return await _item_to_dict(item, session)
     except CheckoutConflict as exc:
-        raise HTTPException(status_code=409, detail=str(exc))
+        logger.error("Exception in API handler: %s", exc, exc_info=True)
+        raise HTTPException(status_code=409, detail="Internal server error")
     except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc))
+        logger.error("Exception in API handler: %s", exc, exc_info=True)
+        raise HTTPException(status_code=404, detail="Internal server error")
 
 
 @router.post("/{work_item_id}/unclaim")
@@ -535,7 +546,8 @@ async def unclaim_work_item(
         await session.commit()
         return await _item_to_dict(item, session)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        logger.error("Exception in API handler: %s", exc, exc_info=True)
+        raise HTTPException(status_code=400, detail="Internal server error")
 
 
 class CoWorkerSetRequest(BaseModel):
@@ -587,7 +599,8 @@ async def set_coworker(
         await session.commit()
         return await _item_to_dict(item, session)
     except CoWorkingPermissionError as exc:
-        raise HTTPException(status_code=403, detail=str(exc))
+        logger.error("Exception in API handler: %s", exc, exc_info=True)
+        raise HTTPException(status_code=403, detail="Internal server error")
     except ValueError as exc:
         msg = str(exc)
         # "not found" errors → 404; identity/type validation errors → 422
@@ -657,9 +670,11 @@ async def handoff_to_agent(
             "review_brief": result.review_brief,
         }
     except HandoffNotAuthorized as exc:
-        raise HTTPException(status_code=403, detail=str(exc))
+        logger.error("Exception in API handler: %s", exc, exc_info=True)
+        raise HTTPException(status_code=403, detail="Internal server error")
     except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc))
+        logger.error("Exception in API handler: %s", exc, exc_info=True)
+        raise HTTPException(status_code=404, detail="Internal server error")
 
 
 # ------------------------------------------------------------------
@@ -685,9 +700,11 @@ async def handoff_to_human(
         await session.commit()
         return await _item_to_dict(item, session)
     except HandoffNotAllowed as exc:
-        raise HTTPException(status_code=403, detail=str(exc))
+        logger.error("Exception in API handler: %s", exc, exc_info=True)
+        raise HTTPException(status_code=403, detail="Internal server error")
     except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc))
+        logger.error("Exception in API handler: %s", exc, exc_info=True)
+        raise HTTPException(status_code=404, detail="Internal server error")
 
 
 @router.post("/{work_item_id}/review/approve")
@@ -706,9 +723,11 @@ async def review_approve(
         await session.commit()
         return await _item_to_dict(item, session)
     except HandoffNotAllowed as exc:
-        raise HTTPException(status_code=403, detail=str(exc))
+        logger.error("Exception in API handler: %s", exc, exc_info=True)
+        raise HTTPException(status_code=403, detail="Internal server error")
     except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc))
+        logger.error("Exception in API handler: %s", exc, exc_info=True)
+        raise HTTPException(status_code=404, detail="Internal server error")
 
 
 @router.post("/{work_item_id}/review/request-changes")
@@ -729,9 +748,11 @@ async def review_request_changes(
         await session.commit()
         return await _item_to_dict(item, session)
     except HandoffNotAllowed as exc:
-        raise HTTPException(status_code=403, detail=str(exc))
+        logger.error("Exception in API handler: %s", exc, exc_info=True)
+        raise HTTPException(status_code=403, detail="Internal server error")
     except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc))
+        logger.error("Exception in API handler: %s", exc, exc_info=True)
+        raise HTTPException(status_code=404, detail="Internal server error")
 
 
 @router.get("/{work_item_id}/handoff-brief")
@@ -743,7 +764,8 @@ async def get_handoff_brief(
         brief = await _handoff_service().get_brief(session, work_item_id)
         return {"work_item_id": work_item_id, "brief": brief}
     except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc))
+        logger.error("Exception in API handler: %s", exc, exc_info=True)
+        raise HTTPException(status_code=404, detail="Internal server error")
 
 
 @router.post("/{work_item_id}/coworker", status_code=200)
@@ -785,7 +807,8 @@ async def set_or_clear_coworker(
         await session.commit()
         return _item_to_dict(item)
     except CoWorkingPermissionError as exc:
-        raise HTTPException(status_code=403, detail=str(exc))
+        logger.error("Exception in API handler: %s", exc, exc_info=True)
+        raise HTTPException(status_code=403, detail="Internal server error")
     except ValueError as exc:
         msg = str(exc)
         if "not found" in msg.lower():
@@ -855,9 +878,11 @@ async def add_relation(
             "relation_type": rel.relation_type,
         }
     except RelationConflict as exc:
-        raise HTTPException(status_code=409, detail=str(exc))
+        logger.error("Exception in API handler: %s", exc, exc_info=True)
+        raise HTTPException(status_code=409, detail="Internal server error")
     except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc))
+        logger.error("Exception in API handler: %s", exc, exc_info=True)
+        raise HTTPException(status_code=404, detail="Internal server error")
 
 
 @router.delete("/{work_item_id}/relations/{relation_id}", status_code=204)
@@ -878,7 +903,8 @@ async def remove_relation(
         )
         await session.commit()
     except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc))
+        logger.error("Exception in API handler: %s", exc, exc_info=True)
+        raise HTTPException(status_code=404, detail="Internal server error")
 
 
 # ---------------------------------------------------------------------------
@@ -923,7 +949,8 @@ async def upload_attachment(
             uploaded_by_user_id=uploaded_by_user_id,
         )
     except AttachmentTooLarge as exc:
-        raise HTTPException(status_code=413, detail=str(exc))
+        logger.error("Exception in API handler: %s", exc, exc_info=True)
+        raise HTTPException(status_code=413, detail="Internal server error")
     return _attachment_to_dict(row)
 
 

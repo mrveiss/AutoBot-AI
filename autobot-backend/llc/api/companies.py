@@ -143,16 +143,16 @@ async def create_company(
         return _to_read(org)
     except CompanyIssuePrefixConflictError as exc:
         await svc.session.rollback()
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Internal server error")
     except CompanyBudgetError as exc:
         await svc.session.rollback()
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Internal server error")
     except CompanyCycleError as exc:
         await svc.session.rollback()
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Internal server error")
     except CompanyNotFoundError as exc:
         await svc.session.rollback()
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error")
     except Exception:
         await svc.session.rollback()
         raise
@@ -167,7 +167,7 @@ async def get_company(
         org = await svc.get(company_id)
         return _to_read(org)
     except CompanyNotFoundError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error")
 
 
 @router.patch("/{company_id}", response_model=CompanyRead)
@@ -182,16 +182,16 @@ async def update_company(
         return _to_read(org)
     except CompanyNotFoundError as exc:
         await svc.session.rollback()
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error")
     except CompanyIssuePrefixConflictError as exc:
         await svc.session.rollback()
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Internal server error")
     except CompanyBudgetError as exc:
         await svc.session.rollback()
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Internal server error")
     except CompanyCycleError as exc:
         await svc.session.rollback()
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Internal server error")
     except Exception:
         await svc.session.rollback()
         raise
@@ -207,10 +207,10 @@ async def delete_company(
         await svc.session.commit()
     except CompanyNotFoundError as exc:
         await svc.session.rollback()
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error")
     except CompanyHasChildrenError as exc:
         await svc.session.rollback()
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Internal server error")
     except Exception:
         await svc.session.rollback()
         raise
@@ -224,7 +224,7 @@ async def get_company_tree(
     try:
         return await svc.get_sub_company_tree(company_id)
     except CompanyNotFoundError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error")
 
 
 @router.get("/{company_id}/ancestry", response_model=List[CompanyAncestor])
@@ -244,7 +244,7 @@ async def get_company_ancestry(
             for a in ancestors
         ]
     except CompanyNotFoundError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error")
 
 
 # ------------------------------------------------------------------
@@ -278,7 +278,7 @@ async def get_kb_ancestry_collections(
     try:
         chain = await resolver.get_query_collections(session, str(company_id))
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error")
 
     return [
         KbAncestryCollection(
@@ -318,7 +318,7 @@ async def add_member(
         return _to_member_read(membership)
     except MemberAlreadyExistsError as exc:
         await session.rollback()
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Internal server error")
 
 
 @router.delete("/{company_id}/members/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -333,7 +333,7 @@ async def remove_member(
         await session.commit()
     except MemberNotFoundError as exc:
         await session.rollback()
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error")
 
 
 # ------------------------------------------------------------------
