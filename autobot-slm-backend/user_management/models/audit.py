@@ -177,6 +177,9 @@ class AuditAction:
     ACCOUNT_UNLOCKED = "account_unlocked"
     SUSPICIOUS_ACTIVITY = "suspicious_activity"
 
+    # RBAC (GH #6511)
+    PERMISSION_DENIED = "permission_denied"
+
 
 class AuditResourceType:
     """Standard resource type constants."""
@@ -190,3 +193,4 @@ class AuditResourceType:
     SSO_PROVIDER = "sso_provider"
     SESSION = "session"
     SETTINGS = "settings"
+    ENDPOINT = "endpoint"  # GH #6511: resource type for permission-deny audit events

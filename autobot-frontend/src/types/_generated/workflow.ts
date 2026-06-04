@@ -9,7 +9,7 @@
 // to regenerate. CI checks this file is in sync with the canonical
 // Python dataclasses in `autobot_shared/workflow/types.py` (#7122).
 
- 
+/* eslint-disable */
 
 /** Generated from `autobot_shared.workflow.types.PromptSpec` */
 export interface PromptSpec {
