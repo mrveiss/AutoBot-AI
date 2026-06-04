@@ -39,7 +39,7 @@
     <div v-if="!store.sidebarCollapsed" class="flex-1 flex flex-col min-h-0 overflow-hidden">
 
       <!-- Folders Section (GH#8987) -->
-      <section v-if="folderStore.folders.length > 0 || true" class="border-b border-autobot-border p-3 pb-2 shrink-0 max-h-56 overflow-y-auto" style="scrollbar-width: thin;">
+      <section v-if="folderStore.folders.length > 0" class="border-b border-autobot-border p-3 pb-2 shrink-0 max-h-56 overflow-y-auto" style="scrollbar-width: thin;">
         <div class="flex items-center justify-between mb-1">
           <button
             class="flex items-center gap-1 text-xs font-semibold text-autobot-text-secondary hover:text-autobot-text-primary transition-colors"
