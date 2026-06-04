@@ -39,7 +39,6 @@ class AgentCommandExecuteResponse(BaseModel):
     output: str | None = None
     status: str | None = None
 
-
 class AgentHealthResponse(BaseModel):
     """Response for GET /health/enhanced."""
 
@@ -65,7 +64,6 @@ class MemoryStatisticsResponse(BaseModel):
     markdown_system: Any | None = None
     active_tasks: Any | None = None
     performance_insights: Any | None = None
-
 
 class MemoryTaskHistoryResponse(BaseModel):
     """Response for GET /tasks/history."""
@@ -124,7 +122,6 @@ class MemoryDocumentReferencesResponse(BaseModel):
     file_path: str
     timestamp: str
     references: Any | None = None
-
 
 class MemoryEmbeddingCacheStatsResponse(BaseModel):
     """Response for GET /embeddings/cache-stats."""

@@ -16,6 +16,8 @@ from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_constants import TTL_1_HOUR
 
+from autobot_shared.async_compat import run_or_schedule
+
 # Add AutoBot root to path for imports
 autobot_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(autobot_root))

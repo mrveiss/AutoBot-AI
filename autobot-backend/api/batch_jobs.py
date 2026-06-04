@@ -28,6 +28,7 @@ from api.schemas_workflows import (
     BatchJobCreate,
     BatchJobDeleteResponse,
     BatchJobList,
+    BatchJobsHealthResponse,
     BatchJobStatus,
     BatchJobType,
     BatchLoadResponse,

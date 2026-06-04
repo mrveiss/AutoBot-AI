@@ -14,6 +14,8 @@ from autobot_shared.singleton_factory import lazy_singleton
 
 from .types import QueryIntentResult, QueryKnowledgeIntent
 
+from .types import QueryIntentResult, QueryKnowledgeIntent
+
 
 class QueryKnowledgeIntentDetector:
     """

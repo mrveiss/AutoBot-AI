@@ -46,6 +46,25 @@ def anti_pattern_score(severity: Severity) -> int:
     return _ANTI_PATTERN_SCORES[severity]
 
 
+from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.status_enums import Severity  # #7253: consolidated onto canonical (#6689)
+
+# Anti-pattern severity → 0-100 integer score. Kept as a module-level helper
+# rather than an enum method so the canonical `Severity` enum stays clean
+# (canonical `to_score()` returns 0.0–0.9 floats, a different scale).
+_ANTI_PATTERN_SCORES: Dict[Severity, int] = {
+    Severity.CRITICAL: 100,
+    Severity.HIGH: 75,
+    Severity.MEDIUM: 50,
+    Severity.LOW: 25,
+}
+
+
+def anti_pattern_score(severity: Severity) -> int:
+    """Numeric anti-pattern score for `severity` (higher = worse, 0-100 scale)."""
+    return _ANTI_PATTERN_SCORES[severity]
+
+
 # Initialize configuration
 logger = get_logger(__name__)
 

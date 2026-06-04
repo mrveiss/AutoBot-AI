@@ -20,6 +20,8 @@ from typing import Any, Dict, List, Tuple
 
 from services.tool_output_filter import _dedup_consecutive, _strip_ansi
 
+from services.tool_output_filter import _dedup_consecutive, _strip_ansi
+
 try:
     # docker SDK is an optional runtime dep; required for the sandbox
     # executor itself but the api/sandbox.py router and other importers
