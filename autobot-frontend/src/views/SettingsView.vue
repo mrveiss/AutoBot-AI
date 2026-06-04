@@ -102,6 +102,13 @@ Issue #753: User preference management interface
           <Icon name="mobile" />
           Mobile Devices
         </button>
+        <button
+          @click="activeTab = 'privacy'"
+          :class="['settings-tab', { active: activeTab === 'privacy' }]"
+        >
+          <Icon name="shield-alt" />
+          Privacy
+        </button>
       </div>
 
       <!-- Tab Content -->
@@ -291,6 +298,20 @@ Issue #753: User preference management interface
             <PushNotificationSettingsPanel />
           </div>
         </section>
+
+        <!-- Issue #9035: Telemetry and analytics opt-out -->
+        <section v-if="activeTab === 'privacy'" class="settings-section">
+          <div class="section-header">
+            <h2 class="section-title">
+              <Icon name="shield-alt" />
+              Privacy & Telemetry
+            </h2>
+            <p class="section-description">Control what usage data AutoBot collects to improve the platform.</p>
+          </div>
+          <div class="section-content">
+            <TelemetrySettingsPanel />
+          </div>
+        </section>
       </div>
 
     <ApiKeySetupWizard v-model="showApiKeyWizard" @saved="onApiKeysSaved" />
@@ -309,6 +330,7 @@ import ConnectionSettingsPanel from '@/components/desktop/ConnectionSettingsPane
 import FeatureFlagsSettingsPanel from '@/components/settings/FeatureFlagsSettingsPanel.vue'
 import PresetsSettingsPanel from '@/components/settings/PresetsSettingsPanel.vue'
 import PushNotificationSettingsPanel from '@/components/settings/PushNotificationSettingsPanel.vue'
+import TelemetrySettingsPanel from '@/components/settings/TelemetrySettingsPanel.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -322,7 +344,7 @@ const { showToast } = useNotificationBus()
 
 logger.debug('Settings view initialized')
 
-type PreferenceTab = 'appearance' | 'language' | 'voice' | 'webresearch' | 'apikeys' | 'connection' | 'featureflags' | 'presets' | 'notifications'
+type PreferenceTab = 'appearance' | 'language' | 'voice' | 'webresearch' | 'apikeys' | 'connection' | 'featureflags' | 'presets' | 'notifications' | 'privacy'
 const activeTab = ref<PreferenceTab>('appearance')
 const showApiKeyWizard = ref(false)
 

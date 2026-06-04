@@ -4028,3 +4028,28 @@ class DeleteSnapshotResponse(BaseModel):
 
     success: bool
     message: str
+
+
+# ==================== Telemetry Settings (Issue #9035) ====================
+
+
+class TelemetrySettingsResponse(BaseModel):
+    """Response for GET /api/settings/telemetry - Issue #9035."""
+
+    enabled: bool = Field(..., description="Whether telemetry is enabled")
+    anonymous_usage_stats: bool = Field(..., description="Share anonymous usage statistics")
+    first_run_prompt_shown: bool = Field(..., description="First-run prompt has been shown")
+
+
+class TelemetrySettingsRequest(BaseModel):
+    """Request for POST /api/settings/telemetry - Issue #9035."""
+
+    enabled: bool = Field(..., description="Enable/disable telemetry collection")
+    anonymous_usage_stats: bool = Field(
+        default=True,
+        description="Share anonymous usage statistics",
+    )
+    first_run_prompt_shown: bool = Field(
+        default=False,
+        description="Mark first-run prompt as shown",
+    )

@@ -7,6 +7,7 @@ Voice Realtime Telemetry Service
 Per-session cost + duration accounting for OpenAI Realtime WebRTC sessions.
 
 Issue #7421 — Implements:
+Issue #9035 — Respects telemetry opt-out configuration
 - Session lifecycle tracking (start/end/duration)
 - Audio seconds accounting (input + output)
 - Token counts from response.done events
@@ -108,11 +109,18 @@ class VoiceRealtimeTelemetry(AsyncRedisClientMixin):
 
     Raises CapBreachError from check_caps(); the caller should close the WebRTC
     connection and surface the reason to the user.
+
+    Issue #9035: When config.telemetry.enabled=False, all persistence methods
+    return early without writing to Redis. Cap checks still work (in-memory only).
     """
 
     _redis_database = "analytics"
 
     def __init__(self) -> None:
+        # Import config for telemetry opt-out check (Issue #9035)
+        from autobot_shared.ssot_config import config as autobot_config
+
+        self._config = autobot_config
         self._model = config.misc.voice_realtime_model
         self._max_seconds = config.misc.voice_realtime_max_seconds
         self._max_cost_usd = config.misc.voice_realtime_max_cost_usd
@@ -123,6 +131,8 @@ class VoiceRealtimeTelemetry(AsyncRedisClientMixin):
         )
 
         self._prom = PrometheusMetricsManager()
+        # In-memory session tracking for cap checks when telemetry is disabled
+        self._in_memory_sessions: dict[str, RealtimeSessionRecord] = {}
 
     # ── Public API ────────────────────────────────────────────────────────────
 
@@ -323,6 +333,11 @@ class VoiceRealtimeTelemetry(AsyncRedisClientMixin):
     # ── Private helpers ───────────────────────────────────────────────────────
 
     async def _save_record(self, record: RealtimeSessionRecord) -> None:
+        # Issue #9035: Skip Redis persistence when telemetry is disabled
+        if not self._config.telemetry.enabled:
+            self._in_memory_sessions[record.session_id] = record
+            return
+
         redis = await self._get_redis()
         if redis is None:
             return
@@ -330,6 +345,10 @@ class VoiceRealtimeTelemetry(AsyncRedisClientMixin):
         await redis.set(key, json.dumps(record.to_dict()), ex=_SESSION_TTL)
 
     async def _load_record(self, session_id: str) -> RealtimeSessionRecord | None:
+        # Issue #9035: Check in-memory first when telemetry is disabled
+        if not self._config.telemetry.enabled:
+            return self._in_memory_sessions.get(session_id)
+
         redis = await self._get_redis()
         if redis is None:
             return None
