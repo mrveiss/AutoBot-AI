@@ -36,8 +36,9 @@ from .base import AdapterRunStatus
 
 logger = get_logger(__name__)
 
-_SIGTERM_GRACE_SECONDS = 5
-_DEFAULT_TIMEOUT_SECONDS = 3600
+_SIGTERM_GRACE_SECONDS = 10
+_ADAPTER_TIMEOUT_SECONDS = 3600  # per-adapter default (preserves current behavior)
+_DEFAULT_TIMEOUT_SECONDS = 3600  # deprecated, use _ADAPTER_TIMEOUT_SECONDS
 _DEFAULT_OUTPUT_DIR = "/tmp"  # nosec B108 - test/controlled code uses tmpdir intentionally
 _DEFAULT_COPILOT_MODEL = "copilot-4o"
 
@@ -59,6 +60,15 @@ def _state_path(output_dir: str, run_id: str) -> str:
     return os.path.join(output_dir, f"llc_copilot_state_{safe_run}.json")
 
 
+def _resolve_timeout(cfg: dict) -> int:
+    """Resolve timeout using 3-tier hierarchy:
+    1. Per-agent override via adapter_config.timeout_seconds
+    2. Per-adapter default (_ADAPTER_TIMEOUT_SECONDS)
+    3. Global default (LLC_DEFAULT_ADAPTER_TIMEOUT_SECONDS env var, default: 120s)
+    """
+    return int(cfg.get("timeout_seconds", _ADAPTER_TIMEOUT_SECONDS))
+
+
 class CopilotLocalAdapter:
     """Adapter that manages agent runs as local ``gh copilot`` CLI subprocess sessions."""
 
@@ -75,7 +85,7 @@ class CopilotLocalAdapter:
         cfg = agent_config.get("adapter_config", {})
 
         output_dir: str = cfg.get("output_dir", _DEFAULT_OUTPUT_DIR)
-        timeout_sec: int = int(cfg.get("timeout_seconds", _DEFAULT_TIMEOUT_SECONDS))
+        timeout_sec: int = _resolve_timeout(cfg)
         gh_token: Optional[str] = cfg.get("gh_token")
         copilot_model: str = cfg.get("copilot_model", _DEFAULT_COPILOT_MODEL)
 

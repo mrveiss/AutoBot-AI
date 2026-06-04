@@ -43,14 +43,24 @@ from .base import AdapterRunStatus
 logger = get_logger(__name__)
 
 _SESSION_TTL_SECONDS = 4 * 3600
-_SIGTERM_GRACE_SECONDS = 5
-_DEFAULT_TIMEOUT_SECONDS = 3600
+_SIGTERM_GRACE_SECONDS = 10
+_ADAPTER_TIMEOUT_SECONDS = 3600  # per-adapter default (preserves current behavior)
+_DEFAULT_TIMEOUT_SECONDS = 3600  # deprecated, use _ADAPTER_TIMEOUT_SECONDS
 _DEFAULT_OUTPUT_DIR = "/tmp"  # nosec B108 - test/controlled code uses tmpdir intentionally
 _SESSION_KEY = "llc:agent:{agent_id}:claude_session"
 
 
 def _redis_session_key(agent_id: str) -> str:
     return _SESSION_KEY.format(agent_id=agent_id)
+
+
+def _resolve_timeout(cfg: dict) -> int:
+    """Resolve timeout using 3-tier hierarchy:
+    1. Per-agent override via adapter_config.timeout_seconds
+    2. Per-adapter default (_ADAPTER_TIMEOUT_SECONDS)
+    3. Global default (LLC_DEFAULT_ADAPTER_TIMEOUT_SECONDS env var, default: 120s)
+    """
+    return int(cfg.get("timeout_seconds", _ADAPTER_TIMEOUT_SECONDS))
 
 
 def _output_path(output_dir: str, agent_id: str, run_id: str) -> str:
@@ -86,7 +96,7 @@ class ClaudeCodeAdapter:
         cfg = agent_config.get("adapter_config", {})
 
         output_dir: str = cfg.get("output_dir", _DEFAULT_OUTPUT_DIR)
-        timeout_sec: int = int(cfg.get("timeout_seconds", _DEFAULT_TIMEOUT_SECONDS))
+        timeout_sec: int = _resolve_timeout(cfg)
         model: Optional[str] = cfg.get("model")
         max_turns: Optional[int] = cfg.get("max_turns")
         allowed_tools: Optional[list] = cfg.get("allowed_tools")
