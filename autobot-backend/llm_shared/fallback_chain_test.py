@@ -253,9 +253,7 @@ class TestStreamFallback:
 
         from services.llm_service import LLMService
 
-        primary = self._make_mock_provider(
-            "anthropic", "claude-opus-4", raises=Exception("429 Too Many Requests")
-        )
+        primary = self._make_mock_provider("anthropic", "claude-opus-4", raises=Exception("429 Too Many Requests"))
         fallback = self._make_mock_provider("anthropic", "claude-sonnet-4")
         registry = self._make_registry([primary, fallback])
 
@@ -280,9 +278,7 @@ class TestStreamFallback:
 
         from services.llm_service import LLMService
 
-        primary = self._make_mock_provider(
-            "anthropic", "claude-opus-4", raises=Exception("Internal server error")
-        )
+        primary = self._make_mock_provider("anthropic", "claude-opus-4", raises=Exception("Internal server error"))
         registry = self._make_registry([primary])
         svc = LLMService(registry=registry)
 
