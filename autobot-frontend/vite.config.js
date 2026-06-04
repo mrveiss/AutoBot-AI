@@ -62,6 +62,10 @@ export default defineConfig(({ mode }) => {
     },
     css: { devSourcemap: true, postcss: './postcss.config.js' },
     resolve: {
+      // preserveSymlinks resolves modules relative to the symlink path
+      // (node_modules/@autobot/terminal) not the real path (../../autobot-plugins/…).
+      // Required for file: workspace packages — see #8482 / MVA-893.
+      preserveSymlinks: true,
       alias: { '@': fileURLToPath(new URL('./src', import.meta.url)), 'vue': 'vue/dist/vue.esm-bundler.js' }
     },
     server: {
