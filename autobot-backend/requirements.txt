@@ -56,7 +56,7 @@ tree-sitter-javascript>=0.25.0
 # Issue #858: Additional runtime dependencies for Python 3.13
 xxhash>=3.7.0          # Hash functions for LLM caching
 structlog>=25.5.0      # Structured logging for service auth
-llama-index>=0.14.19,<0.15.0          # Migrated from 0.13.x; floor aligned to 0.14.19 (#2642)
+llama-index>=0.14.22,<0.15.0          # Migrated from 0.13.x; floor aligned to 0.14.19 (#2642)
 llama-index-core>=0.14.21,<0.15.0     # Explicit core pin matching ecosystem (#2642)
 llama-index-llms-ollama>=0.10.1,<1.0.0       # Ollama LLM integration
 llama-index-embeddings-ollama>=0.9.0,<1.0.0  # Ollama embeddings
