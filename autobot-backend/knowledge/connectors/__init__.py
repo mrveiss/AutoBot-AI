@@ -45,6 +45,7 @@ import knowledge.connectors.file_server  # noqa: F401
 import knowledge.connectors.gitlab  # noqa: F401
 import knowledge.connectors.nextcloud  # noqa: F401
 import knowledge.connectors.notion  # noqa: F401
+import knowledge.connectors.onedrive  # noqa: F401  # GH#9004
 import knowledge.connectors.web_crawler  # noqa: F401
 from knowledge.connectors.base import AbstractConnector
 from knowledge.connectors.models import (
