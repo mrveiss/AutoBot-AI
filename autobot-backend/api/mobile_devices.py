@@ -76,6 +76,7 @@ class DeviceListResponse(BaseModel):
 
 class PairSuccessResponse(BaseModel):
     device_id: uuid.UUID
+    device_jwt: str = Field(description="Long-lived JWT for device authentication (GH#9493)")
     message: str = "Device paired successfully"
 
 
@@ -178,10 +179,16 @@ async def pair_device(
     session.add(device)
     await session.commit()
     await session.refresh(device)
+
+    # GH#9493: Mint device JWT for authentication (read-only scope by default)
+    from services.device_jwt import mint_device_jwt
+
+    device_jwt = mint_device_jwt(device_id=str(device.id), user_id=user_id, scope="read")
+
     logger.info("Mobile device %s paired for user %s (platform=%s)", device.id, user_id, body.platform)
     # GH#4463: Record successful pairing attempt
     metrics.record_device_pairing_attempt("success")
-    return PairSuccessResponse(device_id=device.id)
+    return PairSuccessResponse(device_id=device.id, device_jwt=device_jwt)
 
 
 @router.get("", response_model=DeviceListResponse)
@@ -251,4 +258,10 @@ async def delete_device(
 
     await session.delete(device)
     await session.commit()
+
+    # GH#9493: Invalidate device JWT cache to revoke authentication immediately
+    from services.device_jwt import invalidate_device_cache
+
+    await invalidate_device_cache(str(device_id))
+
     logger.info("Mobile device %s unpaired for user %s", device_id, user_id)
