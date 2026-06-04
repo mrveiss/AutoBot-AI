@@ -10,8 +10,10 @@ Exports all available channel adapters.
 
 from .base import BaseChannelAdapter
 from .websocket_adapter import WebSocketAdapter
+from .whatsapp_adapter import WhatsAppAdapter
 
 __all__ = [
     "BaseChannelAdapter",
     "WebSocketAdapter",
+    "WhatsAppAdapter",
 ]

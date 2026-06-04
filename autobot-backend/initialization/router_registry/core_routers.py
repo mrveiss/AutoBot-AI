@@ -84,7 +84,7 @@ from api.settings import router as settings_router
 from api.structured_thinking_mcp import router as structured_thinking_mcp_router
 from api.system import router as system_router
 from api.telegram_bot import router as telegram_bot_router  # MVA-2074
-from api.transcriber import router as transcriber_router  # Issue #9044, MVA-2186
+# from api.transcriber import router as transcriber_router  # Issue #9044, MVA-2186 — module doesn't exist yet
 from api.usage import router as usage_router  # Issue #1807
 from api.user_management.router import router as user_management_router  # Issue #1801
 from api.vnc_manager import router as vnc_router
@@ -455,5 +455,5 @@ def load_core_routers():
     routers.extend(_get_agent_routers())
     routers.extend(_get_plugin_routers())
     routers.extend(_get_canvas_routers())
-    routers.extend(_get_transcriber_routers())
+    # routers.extend(_get_transcriber_routers())  # Disabled until api.transcriber module is created
     return routers

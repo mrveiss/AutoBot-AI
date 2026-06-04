@@ -23,6 +23,7 @@ class ChannelType(str, Enum):
     WEBSOCKET = "websocket"
     REST_API = "rest_api"
     CLI = "cli"
+    WHATSAPP = "whatsapp"  # Issue #9007
     TELEGRAM = "telegram"  # Future
     DISCORD = "discord"  # Future
     SLACK = "slack"  # Future
