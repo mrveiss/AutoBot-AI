@@ -26,9 +26,7 @@ class LangFuseObserver:
         try:
             from langfuse import Langfuse
         except ImportError as exc:
-            raise RuntimeError(
-                "langfuse package not installed — run: pip install langfuse>=2.0.0"
-            ) from exc
+            raise RuntimeError("langfuse package not installed — run: pip install langfuse>=2.0.0") from exc
 
         self._client = Langfuse(
             host=config.host,
