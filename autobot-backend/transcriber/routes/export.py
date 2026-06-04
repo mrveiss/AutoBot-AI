@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import Response
 
 from transcriber.database import Database
-from transcriber.deps import get_db
+from transcriber.deps import DEFAULT_USER, get_db
 from transcriber.models import ExportRequest
 
 router = APIRouter(tags=["transcriber-export"])
@@ -20,7 +20,7 @@ router = APIRouter(tags=["transcriber-export"])
 # Development fallback — auth middleware populates request.state.user in production
 def _user_id(request: Request) -> str:
     user = getattr(request.state, "user", None)
-    return user.id if user else "default"
+    return user.id if user else DEFAULT_USER
 
 
 _MIME = {
@@ -69,11 +69,15 @@ async def export_recording(
     if fmt == "srt":
         from transcriber.export.srt_export import segments_to_srt
 
-        content = segments_to_srt(segments, include_speaker=body.include_speaker_names).encode("utf-8")
+        content = segments_to_srt(
+            segments, include_speaker=body.include_speaker_names
+        ).encode("utf-8")
     elif fmt == "vtt":
         from transcriber.export.vtt_export import segments_to_vtt
 
-        content = segments_to_vtt(segments, include_speaker=body.include_speaker_names).encode("utf-8")
+        content = segments_to_vtt(
+            segments, include_speaker=body.include_speaker_names
+        ).encode("utf-8")
     elif fmt == "docx":
         from transcriber.export.docx_export import build_docx
 
@@ -104,5 +108,7 @@ async def export_recording(
     return Response(
         content=content,
         media_type=_MIME[fmt],
-        headers={"Content-Disposition": f"attachment; filename=\"{filename}\"; filename*=UTF-8''{quoted}"},
+        headers={
+            "Content-Disposition": f"attachment; filename=\"{filename}\"; filename*=UTF-8''{quoted}"
+        },
     )

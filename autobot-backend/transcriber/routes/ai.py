@@ -13,7 +13,7 @@ from autobot_shared.logging_manager import get_logger
 from transcriber.ai.context import build_context
 from transcriber.ai.prompts import get_system_prompt
 from transcriber.database import Database
-from transcriber.deps import get_db
+from transcriber.deps import DEFAULT_USER, get_db
 from transcriber.models import AiAskRequest
 from transcriber.routes.export import _build_segment_list
 
@@ -24,7 +24,7 @@ router = APIRouter(tags=["transcriber-ai"])
 # Development fallback — auth middleware populates request.state.user in production
 def _user_id(request: Request) -> str:
     user = getattr(request.state, "user", None)
-    return user.id if user else "default"
+    return user.id if user else DEFAULT_USER
 
 
 @router.post("/recordings/{recording_id}/ai/ask")
