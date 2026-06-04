@@ -497,6 +497,41 @@ class AuthenticationMiddleware:
             "auth_method": "run_jwt",
         }
 
+    async def _extract_user_from_device_jwt(self, request: Request) -> Dict | None:
+        """Try to authenticate the request with a device-scoped JWT (GH#9493).
+
+        Called as a fallback when user-JWT, session, dev-header, and run-JWT
+        auth all fail. Validates the device JWT signature and checks that the
+        device still exists in the database (revocation on unpair).
+
+        Returns:
+            Synthetic user dict with ``auth_method="device_jwt"`` on success,
+            or ``None`` if the Bearer token is absent or not a valid device JWT.
+        """
+        auth_header = request.headers.get("Authorization")
+        if not auth_header or not auth_header.startswith("Bearer "):
+            return None
+
+        token = auth_header.split(" ", 1)[1]
+        try:
+            from services.device_jwt import validate_device_jwt
+
+            claims = await validate_device_jwt(token)
+        except Exception:
+            return None
+
+        device_id = str(claims.get("device_id", ""))
+        user_id = str(claims.get("user_id", ""))
+        scope = str(claims.get("scope", "read"))
+        return {
+            "username": f"device:{device_id}",
+            "user_id": user_id,
+            "role": "device",
+            "device_id": device_id,
+            "scope": scope,
+            "auth_method": "device_jwt",
+        }
+
     def get_user_from_request(self, request: Request) -> Dict | None:
         """
         Extract and validate user from request using multiple authentication methods.
@@ -682,6 +717,27 @@ async def get_current_user(request: Request) -> Dict:
                 detail="Run JWT not permitted on this endpoint",
             )
         return run_user
+
+    # Fallback: device-scoped JWT (GH#9493) — validates device still exists.
+    # Device JWTs are valid ONLY on /api/devices/ endpoints. Read-scoped tokens
+    # cannot use mutating HTTP methods (POST/PUT/PATCH/DELETE).
+    device_user = await middleware._extract_user_from_device_jwt(request)
+    if device_user:
+        _DEVICE_JWT_ALLOWED_PREFIXES = ("/api/devices/",)
+        if not any(request.url.path.startswith(p) for p in _DEVICE_JWT_ALLOWED_PREFIXES):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Device JWT not permitted on this endpoint",
+            )
+
+        # GH#9493 scope enforcement: read-only tokens cannot use mutating methods
+        scope = device_user.get("scope", "read")
+        if scope == "read" and request.method not in {"GET", "HEAD", "OPTIONS"}:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Read-only device JWT cannot use {request.method} method",
+            )
+        return device_user
 
     raise_auth_error("AUTH_0002", "Authentication required")
 
