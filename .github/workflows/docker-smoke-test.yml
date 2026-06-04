@@ -26,6 +26,8 @@ jobs:
 
       - name: Free disk space
         uses: ./.github/actions/free-disk-space
+        with:
+          min-free-gb: '15'  # Increased from 10GB due to MVA-2869
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5  # v4
@@ -46,6 +48,7 @@ jobs:
 
       - name: Build images with layer cache
         run: |
+          echo "=== Building backend image ==="
           docker buildx build \
             --cache-from type=local,src=/tmp/.buildx-cache \
             --cache-to   type=local,dest=/tmp/.buildx-cache-new,mode=min \
@@ -53,6 +56,11 @@ jobs:
             --tag autobot/backend:latest \
             --load \
             .
+          echo "Backend build complete. Disk space:"
+          df -h / | grep -v Filesystem
+
+          echo ""
+          echo "=== Building SLM image ==="
           docker buildx build \
             --cache-from type=local,src=/tmp/.buildx-cache \
             --cache-to   type=local,dest=/tmp/.buildx-cache-new,mode=min \
@@ -60,6 +68,11 @@ jobs:
             --tag autobot/slm:latest \
             --load \
             .
+          echo "SLM build complete. Disk space:"
+          df -h / | grep -v Filesystem
+
+          echo ""
+          echo "=== Building frontend image ==="
           docker buildx build \
             --cache-from type=local,src=/tmp/.buildx-cache \
             --cache-to   type=local,dest=/tmp/.buildx-cache-new,mode=min \
@@ -67,10 +80,17 @@ jobs:
             --tag autobot/frontend:latest \
             --load \
             .
+          echo "Frontend build complete. Disk space:"
+          df -h / | grep -v Filesystem
+
+          echo ""
+          echo "=== Rotating cache ==="
           # Rotate cache so next run gets the freshest layers (mode=min keeps only
           # final exported layers; mode=max kept all intermediate layers and exhausted disk)
           rm -rf /tmp/.buildx-cache
           mv /tmp/.buildx-cache-new /tmp/.buildx-cache
+
+          echo "Final disk space:"
           df -h
 
       - name: Start services with Docker Compose

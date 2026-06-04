@@ -32,8 +32,37 @@ runs:
     - name: Remove unused toolchains
       shell: bash
       run: |
-        sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
-        df -h
+        echo "=== Before cleanup ==="
+        df -h / | grep -v Filesystem
+
+        echo ""
+        echo "=== Removing unused toolchains ==="
+        # Original cleanup (~30GB)
+        sudo rm -rf /usr/share/dotnet
+        sudo rm -rf /usr/local/lib/android
+        sudo rm -rf /opt/ghc
+        sudo rm -rf /opt/hostedtoolcache/CodeQL
+
+        # Additional cleanup for Docker-heavy builds (~15GB more)
+        sudo rm -rf /usr/share/swift
+        sudo rm -rf /usr/local/share/chromium
+        sudo rm -rf /usr/local/share/powershell
+        sudo rm -rf /opt/az
+        sudo rm -rf /opt/microsoft
+        sudo rm -rf /usr/share/az_*
+
+        echo ""
+        echo "=== After cleanup ==="
+        df -h / | grep -v Filesystem
+
+    - name: Clean Docker system
+      shell: bash
+      run: |
+        echo "=== Cleaning Docker system ==="
+        docker system prune -af --volumes || true
+        echo ""
+        echo "=== After Docker cleanup ==="
+        df -h / | grep -v Filesystem
 
     - name: Assert minimum free disk space
       shell: bash
