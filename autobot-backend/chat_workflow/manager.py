@@ -3128,7 +3128,8 @@ before summarizing.
             if isinstance(exc, (TimeoutError, asyncio.TimeoutError)):
                 error_content = "The model is taking too long to respond. Please try again."
             else:
-                error_content = str(exc) or f"{type(exc).__name__}: unexpected error"
+                # Issue #9410: Never leak exception details in SSE streams
+                error_content = "An unexpected error occurred. Please try again."
             queue.put_nowait(
                 {
                     "type": "error",
