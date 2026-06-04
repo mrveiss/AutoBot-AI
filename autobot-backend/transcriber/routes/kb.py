@@ -3,6 +3,7 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """KB push and status routes."""
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 from transcriber.database import Database
 from transcriber.deps import get_db

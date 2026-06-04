@@ -3,6 +3,7 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """Export route — DOCX, PDF, SRT, VTT."""
+
 import re
 import urllib.parse
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -13,10 +14,12 @@ from transcriber.models import ExportRequest
 
 router = APIRouter(tags=["transcriber-export"])
 
+
 # Development fallback — auth middleware populates request.state.user in production
 def _user_id(request: Request) -> str:
     user = getattr(request.state, "user", None)
     return user.id if user else "default"
+
 
 _MIME = {
     "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -37,11 +40,13 @@ async def _build_segment_list(recording_id: int, db: Database) -> list[dict]:
     result = []
     for seg in segments:
         spk = speakers.get(seg["speaker_id"], {})
-        result.append({
-            **seg,
-            "speaker_name": spk.get("display_name", "Unknown"),
-            "notes": notes_by_seg.get(seg["id"], []),
-        })
+        result.append(
+            {
+                **seg,
+                "speaker_name": spk.get("display_name", "Unknown"),
+                "notes": notes_by_seg.get(seg["id"], []),
+            }
+        )
     return result
 
 
@@ -61,22 +66,28 @@ async def export_recording(
 
     if fmt == "srt":
         from transcriber.export.srt_export import segments_to_srt
+
         content = segments_to_srt(segments, include_speaker=body.include_speaker_names).encode("utf-8")
     elif fmt == "vtt":
         from transcriber.export.vtt_export import segments_to_vtt
+
         content = segments_to_vtt(segments, include_speaker=body.include_speaker_names).encode("utf-8")
     elif fmt == "docx":
         from transcriber.export.docx_export import build_docx
+
         content = build_docx(
-            title, segments,
+            title,
+            segments,
             include_timestamps=body.include_timestamps,
             include_notes=body.include_notes,
             include_speaker_names=body.include_speaker_names,
         )
     elif fmt == "pdf":
         from transcriber.export.pdf_export import build_pdf
+
         content = build_pdf(
-            title, segments,
+            title,
+            segments,
             include_timestamps=body.include_timestamps,
             include_notes=body.include_notes,
             include_speaker_names=body.include_speaker_names,
@@ -85,11 +96,11 @@ async def export_recording(
         raise HTTPException(400, f"Unknown format: {fmt}")
 
     # Sanitize filename to prevent header injection
-    safe_title = re.sub(r'[\r\n"\\]+', '_', title)
+    safe_title = re.sub(r'[\r\n"\\]+', "_", title)
     filename = f"{safe_title}.{_EXT[fmt]}"
     quoted = urllib.parse.quote(filename)
     return Response(
         content=content,
         media_type=_MIME[fmt],
-        headers={"Content-Disposition": f'attachment; filename="{filename}"; filename*=UTF-8\'\'{quoted}'},
+        headers={"Content-Disposition": f"attachment; filename=\"{filename}\"; filename*=UTF-8''{quoted}"},
     )

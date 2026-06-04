@@ -19,8 +19,7 @@ def test_build_context_formats_segments():
 
 
 def test_build_context_truncates_at_max():
-    segments = [{"start": float(i), "end": float(i+1), "speaker_name": "A", "text": "X" * 100}
-                for i in range(200)]
+    segments = [{"start": float(i), "end": float(i + 1), "speaker_name": "A", "text": "X" * 100} for i in range(200)]
     ctx = build_context(segments, max_chars=500)
     assert len(ctx) <= 600  # some slack for truncation message
 

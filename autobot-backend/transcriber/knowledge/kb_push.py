@@ -3,6 +3,7 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """Manual Knowledge Base push — formats transcript segments as KB documents."""
+
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
@@ -16,6 +17,7 @@ def _fmt_ts(seconds: float) -> str:
 
 def _get_indexer():
     from knowledge.documents import DocIndexerService
+
     return DocIndexerService()
 
 
@@ -50,6 +52,9 @@ async def push_to_kb(
     result = await indexer.add_documents(documents, collection_id=collection_id)
     logger.info(
         "KB push: recording=%s collection=%s docs=%s by=%s",
-        recording_id, collection_id, len(documents), pushed_by,
+        recording_id,
+        collection_id,
+        len(documents),
+        pushed_by,
     )
     return result

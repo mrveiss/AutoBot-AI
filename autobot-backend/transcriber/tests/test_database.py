@@ -44,6 +44,7 @@ async def test_delete_project_cascades(db):
 
 # ── GH#9056: update/delete raise KeyError on nonexistent ID ───────────────────
 
+
 @pytest.mark.asyncio
 async def test_update_project_missing_raises(db):
     with pytest.raises(KeyError):
@@ -94,9 +95,11 @@ async def test_delete_note_missing_raises(db):
 
 # ── GH#9057: schema migration table exists and tracks version ─────────────────
 
+
 @pytest.mark.asyncio
 async def test_migration_table_exists_and_version_recorded(tmp_path):
     import aiosqlite
+
     db_path = str(tmp_path / "migrate_test.db")
     d = Database(db_path)
     await d.connect()
@@ -117,6 +120,7 @@ async def test_migration_idempotent_on_reconnect(tmp_path):
         await d.close()
 
     import aiosqlite
+
     async with aiosqlite.connect(db_path) as conn:
         cur = await conn.execute("SELECT COUNT(*) FROM _schema_migrations")
         row = await cur.fetchone()
@@ -124,6 +128,7 @@ async def test_migration_idempotent_on_reconnect(tmp_path):
 
 
 # ── GH#9058: close() uses is not None ────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_close_idempotent(tmp_path):
@@ -134,6 +139,7 @@ async def test_close_idempotent(tmp_path):
 
 
 # ── GH#9059: list methods support limit/offset ────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_list_projects_pagination(db):

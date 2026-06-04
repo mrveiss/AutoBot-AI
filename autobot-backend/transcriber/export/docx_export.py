@@ -3,6 +3,7 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """Export transcript to Word (.docx) format using python-docx."""
+
 import io
 from docx import Document
 from docx.shared import Pt, RGBColor
@@ -14,6 +15,7 @@ _SPEAKER_COLORS = [
     RGBColor(0xFB, 0xBC, 0x04),
     RGBColor(0x8A, 0x2B, 0xE2),
 ]
+
 
 def _fmt_ts(seconds: float) -> str:
     m, s = divmod(int(seconds), 60)

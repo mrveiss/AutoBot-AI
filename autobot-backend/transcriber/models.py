@@ -3,6 +3,7 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """Pydantic request/response schemas for the transcriber module."""
+
 from datetime import datetime
 from typing import Literal
 from pydantic import BaseModel, Field

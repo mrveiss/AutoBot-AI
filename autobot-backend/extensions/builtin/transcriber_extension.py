@@ -13,6 +13,7 @@ The module-level ``router`` attribute is consumed by feature_routers.py
 ``get_transcriber_router()`` is provided for callers that prefer the
 factory-function style and for unit-test assertions.
 """
+
 import os
 from pathlib import Path
 

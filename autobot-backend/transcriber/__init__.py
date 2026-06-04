@@ -5,6 +5,7 @@
 
 # Export Database class with both names for compatibility
 from transcriber.database import Database
+
 # Alias for Dev_new_gui compatibility
 TranscriberDatabase = Database
 

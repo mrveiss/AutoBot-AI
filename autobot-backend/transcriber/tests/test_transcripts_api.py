@@ -69,6 +69,7 @@ async def client_other_user(tmp_path):
     a.state._test_note_id = note_id
 
     async with AsyncClient(transport=ASGITransport(app=a), base_url="http://test") as c:
+
         @a.middleware("http")
         async def inject_user(request, call_next):
             request.state.user = SimpleNamespace(id="u2")
@@ -112,8 +113,9 @@ async def test_create_and_delete_note(client, tmp_path):
     rid = client._transport.app.state._test_rid  # type: ignore
     transcript = (await client.get(f"/api/transcriber/recordings/{rid}/transcript")).json()
     seg_id = transcript["segments"][0]["id"]
-    r = await client.post(f"/api/transcriber/segments/{seg_id}/notes",
-                         json={"content": "Important!", "recording_id": rid})
+    r = await client.post(
+        f"/api/transcriber/segments/{seg_id}/notes", json={"content": "Important!", "recording_id": rid}
+    )
     assert r.status_code == 201
     note_id = r.json()["id"]
     r2 = await client.delete(f"/api/transcriber/notes/{note_id}")
@@ -138,8 +140,9 @@ async def test_merge_speakers(client, tmp_path):
     assert len(transcript["speakers"]) == 2
     assert len(transcript["segments"]) == 4
 
-    r = await client.post("/api/transcriber/speakers/merge",
-                          json={"source_speaker_id": sid2, "target_speaker_id": sid1})
+    r = await client.post(
+        "/api/transcriber/speakers/merge", json={"source_speaker_id": sid2, "target_speaker_id": sid1}
+    )
     assert r.status_code == 200
     assert r.json()["success"] is True
 
@@ -163,13 +166,15 @@ async def test_merge_speakers_from_different_recordings_fails(client, tmp_path):
     rid2 = await db.create_recording(pid, "b.wav", "/tmp/b.wav", "u1")
     sid2 = await db.create_speaker(rid2, "SPEAKER_00", "Charlie", "en")
 
-    r = await client.post("/api/transcriber/speakers/merge",
-                          json={"source_speaker_id": sid2, "target_speaker_id": sid1})
+    r = await client.post(
+        "/api/transcriber/speakers/merge", json={"source_speaker_id": sid2, "target_speaker_id": sid1}
+    )
     assert r.status_code == 400
     assert "different recordings" in r.json()["detail"]
 
 
 # ── Authorization tests (403 for other-user access) ───────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_update_segment_forbidden_for_other_user(client_other_user):
@@ -195,8 +200,9 @@ async def test_merge_speakers_forbidden_for_other_user(client_other_user):
     rid = app.state._test_rid
     sid1 = app.state._test_sid
     sid2 = await db.create_speaker(rid, "SPEAKER_01", "Bob", "lv")
-    r = await client_other_user.post("/api/transcriber/speakers/merge",
-                                     json={"source_speaker_id": sid2, "target_speaker_id": sid1})
+    r = await client_other_user.post(
+        "/api/transcriber/speakers/merge", json={"source_speaker_id": sid2, "target_speaker_id": sid1}
+    )
     assert r.status_code == 403
 
 
@@ -205,8 +211,9 @@ async def test_create_note_forbidden_for_other_user(client_other_user):
     app = client_other_user._transport.app  # type: ignore
     seg_id = app.state._test_seg_id
     rid = app.state._test_rid
-    r = await client_other_user.post(f"/api/transcriber/segments/{seg_id}/notes",
-                                     json={"content": "Hacked", "recording_id": rid})
+    r = await client_other_user.post(
+        f"/api/transcriber/segments/{seg_id}/notes", json={"content": "Hacked", "recording_id": rid}
+    )
     assert r.status_code == 403
 
 
@@ -227,6 +234,7 @@ async def test_delete_note_forbidden_for_other_user(client_other_user):
 
 
 # ── Segment editing error cases ────────────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_update_non_existent_segment_returns_404(client):
@@ -273,6 +281,7 @@ async def test_original_text_preserved_after_edit(client):
 
 # ── Speaker operation error cases ──────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_update_non_existent_speaker_returns_404(client):
     r = await client.patch("/api/transcriber/speakers/99999", json={"display_name": "Ghost"})
@@ -298,25 +307,25 @@ async def test_update_speaker_with_name_over_100_chars_fails(client):
 @pytest.mark.asyncio
 async def test_merge_speaker_into_itself_fails(client):
     sid = client._transport.app.state._test_sid  # type: ignore
-    r = await client.post("/api/transcriber/speakers/merge",
-                          json={"source_speaker_id": sid, "target_speaker_id": sid})
+    r = await client.post("/api/transcriber/speakers/merge", json={"source_speaker_id": sid, "target_speaker_id": sid})
     assert r.status_code == 400
 
 
 @pytest.mark.asyncio
 async def test_merge_non_existent_speakers_fails(client):
-    r = await client.post("/api/transcriber/speakers/merge",
-                          json={"source_speaker_id": 99999, "target_speaker_id": 99998})
+    r = await client.post(
+        "/api/transcriber/speakers/merge", json={"source_speaker_id": 99999, "target_speaker_id": 99998}
+    )
     assert r.status_code == 404
 
 
 # ── Note operation error cases ─────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_create_note_on_non_existent_segment_returns_404(client):
     rid = client._transport.app.state._test_rid  # type: ignore
-    r = await client.post("/api/transcriber/segments/99999/notes",
-                         json={"content": "Ghost note", "recording_id": rid})
+    r = await client.post("/api/transcriber/segments/99999/notes", json={"content": "Ghost note", "recording_id": rid})
     assert r.status_code == 404
     assert "Segment not found" in r.json()["detail"]
 
@@ -326,8 +335,9 @@ async def test_update_note_happy_path(client):
     rid = client._transport.app.state._test_rid  # type: ignore
     transcript = (await client.get(f"/api/transcriber/recordings/{rid}/transcript")).json()
     seg_id = transcript["segments"][0]["id"]
-    r = await client.post(f"/api/transcriber/segments/{seg_id}/notes",
-                         json={"content": "Original note", "recording_id": rid})
+    r = await client.post(
+        f"/api/transcriber/segments/{seg_id}/notes", json={"content": "Original note", "recording_id": rid}
+    )
     assert r.status_code == 201
     note_id = r.json()["id"]
     r2 = await client.patch(f"/api/transcriber/notes/{note_id}", json={"content": "Updated note"})
@@ -355,12 +365,14 @@ async def test_create_note_with_content_over_2000_chars_fails(client):
     transcript = (await client.get(f"/api/transcriber/recordings/{rid}/transcript")).json()
     seg_id = transcript["segments"][0]["id"]
     long_content = "x" * 2001
-    r = await client.post(f"/api/transcriber/segments/{seg_id}/notes",
-                         json={"content": long_content, "recording_id": rid})
+    r = await client.post(
+        f"/api/transcriber/segments/{seg_id}/notes", json={"content": long_content, "recording_id": rid}
+    )
     assert r.status_code == 422
 
 
 # ── Transcript retrieval error cases ───────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_get_transcript_for_non_existent_recording_returns_404(client):

@@ -12,5 +12,6 @@ def test_transcriber_extension_name():
 
 def test_get_transcriber_router_returns_router():
     from fastapi import APIRouter
+
     router = get_transcriber_router()
     assert isinstance(router, APIRouter)

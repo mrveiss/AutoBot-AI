@@ -3,6 +3,7 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """FastAPI dependency: provides the transcriber Database instance."""
+
 from fastapi import Request
 from transcriber.database import Database
 

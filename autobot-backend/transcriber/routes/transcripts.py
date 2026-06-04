@@ -3,12 +3,21 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """Transcript routes: segments, speakers, notes."""
+
 from fastapi import APIRouter, Depends, HTTPException, Response, Request
 from transcriber.database import Database
 from transcriber.deps import get_db
 from transcriber.models import (
-    NoteCreate, NoteOut, NoteUpdate, SegmentOut, SegmentUpdate,
-    SpeakerOut, SpeakerUpdate, SpeakerMerge, TranscriptOut, RecordingOut,
+    NoteCreate,
+    NoteOut,
+    NoteUpdate,
+    SegmentOut,
+    SegmentUpdate,
+    SpeakerOut,
+    SpeakerUpdate,
+    SpeakerMerge,
+    TranscriptOut,
+    RecordingOut,
 )
 
 router = APIRouter(tags=["transcriber-transcripts"])
@@ -46,9 +55,7 @@ async def get_transcript(recording_id: int, db: Database = Depends(get_db)):
 
 
 @router.patch("/segments/{segment_id}", response_model=SegmentOut)
-async def update_segment(
-    segment_id: int, body: SegmentUpdate, request: Request, db: Database = Depends(get_db)
-):
+async def update_segment(segment_id: int, body: SegmentUpdate, request: Request, db: Database = Depends(get_db)):
     segment = await db.get_segment(segment_id)
     if not segment:
         raise HTTPException(404, "Segment not found")
@@ -59,9 +66,7 @@ async def update_segment(
 
 
 @router.patch("/speakers/{speaker_id}", response_model=SpeakerOut)
-async def update_speaker(
-    speaker_id: int, body: SpeakerUpdate, request: Request, db: Database = Depends(get_db)
-):
+async def update_speaker(speaker_id: int, body: SpeakerUpdate, request: Request, db: Database = Depends(get_db)):
     speaker = await db.get_speaker(speaker_id)
     if not speaker:
         raise HTTPException(404, "Speaker not found")

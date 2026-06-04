@@ -3,12 +3,14 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """Export transcript to PDF via HTML→WeasyPrint."""
+
 import html as html_lib
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 
 _SPEAKER_COLORS = ["#1a73e8", "#d93425", "#188a38", "#fbbc04", "#8a2be2"]
+
 
 def _fmt_ts(seconds: float) -> str:
     m, s = divmod(int(seconds), 60)
@@ -25,6 +27,7 @@ def build_pdf(
     include_speaker_names: bool,
 ) -> bytes:
     from weasyprint import HTML
+
     speaker_index: dict[str, int] = {}
     rows = []
     for seg in segments:
@@ -33,7 +36,11 @@ def build_pdf(
             speaker_index[speaker] = len(speaker_index)
         color = _SPEAKER_COLORS[speaker_index[speaker] % len(_SPEAKER_COLORS)]
         ts = f'<span class="ts">[{_fmt_ts(seg["start"])} → {_fmt_ts(seg["end"])}]</span> ' if include_timestamps else ""
-        spk = f'<span class="speaker" style="color:{color}">{html_lib.escape(speaker)}</span> ' if include_speaker_names else ""
+        spk = (
+            f'<span class="speaker" style="color:{color}">{html_lib.escape(speaker)}</span> '
+            if include_speaker_names
+            else ""
+        )
         notes_html = ""
         if include_notes and seg.get("notes"):
             items = "".join(f'<li>{html_lib.escape(n["content"])}</li>' for n in seg["notes"])

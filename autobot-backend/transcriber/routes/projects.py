@@ -3,6 +3,7 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """Project CRUD routes for the transcriber module."""
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, Request
 
 from transcriber.database import Database
