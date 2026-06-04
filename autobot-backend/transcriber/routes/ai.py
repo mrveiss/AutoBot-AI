@@ -13,7 +13,7 @@ from autobot_shared.logging_manager import get_logger
 from transcriber.ai.context import build_context
 from transcriber.ai.prompts import get_system_prompt
 from transcriber.database import Database
-from transcriber.deps import DEFAULT_USER, get_db
+from transcriber.deps import get_db
 from transcriber.models import AiAskRequest
 from transcriber.routes.export import _build_segment_list
 
@@ -24,7 +24,7 @@ router = APIRouter(tags=["transcriber-ai"])
 # Development fallback — auth middleware populates request.state.user in production
 def _user_id(request: Request) -> str:
     user = getattr(request.state, "user", None)
-    return user.id if user else DEFAULT_USER
+    return user.id if user else "default"
 
 
 @router.post("/recordings/{recording_id}/ai/ask")
@@ -51,7 +51,7 @@ async def ai_ask(
                 user=f"Transcript:\n\n{context}",
             ):
                 yield f"data: {json.dumps({'content': chunk})}\n\n"
-        except Exception:
+        except Exception as exc:
             logger.exception("AI analysis failed for recording=%s", recording_id)
             yield f"data: {json.dumps({'error': 'AI analysis failed'})}\n\n"
         yield "data: [DONE]\n\n"
