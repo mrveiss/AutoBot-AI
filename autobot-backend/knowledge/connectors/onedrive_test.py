@@ -5,9 +5,9 @@
 Tests for OneDrive/SharePoint Knowledge Connector (Issue #9004)
 """
 
+from unittest.mock import AsyncMock, patch
+
 import pytest
-from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
 
 from knowledge.connectors.models import ConnectorConfig
 from knowledge.connectors.onedrive import OneDriveConnector

@@ -3,6 +3,7 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 import pytest
+
 from transcriber.ai.context import build_context
 from transcriber.ai.prompts import get_system_prompt
 

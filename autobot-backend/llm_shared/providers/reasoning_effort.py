@@ -8,7 +8,7 @@ Maps user-facing reasoning effort levels (low/medium/high/auto) to
 provider-specific API parameters for different LLM providers.
 """
 
-from typing import Dict, Any
+from typing import Any, Dict
 
 
 def _map_effort_to_provider_params(effort: str, provider: str) -> Dict[str, Any]:

@@ -34,12 +34,11 @@ from datetime import date, datetime
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-
-from autobot_shared.logging_manager import get_logger
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.logging_manager import get_logger
 from user_management.database import get_async_session
 
 from ..kb.collections import KbCollectionManager

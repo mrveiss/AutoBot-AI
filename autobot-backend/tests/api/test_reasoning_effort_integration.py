@@ -11,6 +11,10 @@ Covers:
   to the LLM context
 """
 
+# Load the real reasoning_effort module directly to bypass the llm_shared stub
+# registered in conftest.py, which replaces llm_shared.providers with a MagicMock.
+import importlib.util as _ilu
+import pathlib as _pathlib
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -22,11 +26,6 @@ from api.users import (
     _get_user_preferences_from_redis,
     _store_user_preferences_to_redis,
 )
-
-# Load the real reasoning_effort module directly to bypass the llm_shared stub
-# registered in conftest.py, which replaces llm_shared.providers with a MagicMock.
-import importlib.util as _ilu
-import pathlib as _pathlib
 
 _re_spec = _ilu.spec_from_file_location(
     "llm_shared.providers.reasoning_effort",
