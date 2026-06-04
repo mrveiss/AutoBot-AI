@@ -100,13 +100,18 @@ async def test_set_user_bundle_invalid_bundle():
     from api.voice_bundle_admin import bundle_admin_router
 
     app = FastAPI()
-    app.include_router(bundle_admin_router)
 
-    with TestClient(app) as client:
-        with patch(
-            "api.voice_bundle_admin._require_admin",
-            return_value={"username": "admin", "role": "admin"},
-        ):
+    # Mock auth middleware to return admin user BEFORE including router
+    mock_auth = MagicMock()
+    mock_auth.get_user_from_request.return_value = {
+        "username": "admin",
+        "role": "admin",
+        "user_id": "admin-1",
+    }
+
+    with patch("api.voice_bundle_helpers.get_auth_middleware", return_value=mock_auth):
+        app.include_router(bundle_admin_router)
+        with TestClient(app) as client:
             resp = client.put(
                 "/admin/voice/bundle/user-abc",
                 json={"bundle_name": "voice_godmode"},
@@ -128,8 +133,8 @@ async def test_user_cannot_call_admin_bundle_endpoint_unauthenticated():
 
     with TestClient(app, raise_server_exceptions=False) as client:
         with patch(
-            "api.voice_bundle_admin.get_auth_middleware",
-            return_value=MagicMock(get_user_from_request=MagicMock(return_value=None)),
+            "api.voice_bundle_admin._require_admin",
+            side_effect=lambda req: None,  # Returns None to simulate unauthenticated
         ):
             resp = client.get("/admin/voice/bundle/user-abc")
     # Expect 401 or 403
