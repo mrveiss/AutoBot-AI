@@ -7,6 +7,8 @@ from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+
+from autobot_shared.logging_manager import get_logger
 from pydantic import BaseModel
 from sqlalchemy import select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,6 +18,8 @@ from llc.models.budget import LLCAgentBudget
 from llc.services.budget import BudgetService
 from user_management.database import get_async_session
 
+
+logger = get_logger(__name__)
 router = APIRouter(prefix="/budget", tags=["llc-budget"])
 
 # Separate router for /cost-events so it doesn't inherit the /budget prefix
@@ -144,7 +148,8 @@ async def ingest_cost(
     try:
         cost = await svc.ingest_cost_event(session, agent_id, body.tokens_in, body.tokens_out, body.model)
     except BudgetExhausted as exc:
-        raise HTTPException(status_code=402, detail=str(exc)) from exc
+        logger.error("Exception in API handler: %s", exc, exc_info=True)
+        raise HTTPException(status_code=402, detail="Internal server error") from exc
     return IngestResponse(cost=cost)
 
 

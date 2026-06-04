@@ -58,7 +58,7 @@ async def publish_template(
         await svc.session.commit()
         return result
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Internal server error")
 
 
 @router.get("/search", response_model=TemplateSearchResponse)
@@ -165,4 +165,4 @@ async def get_built_in_template(template_key: str) -> Dict:
     try:
         return TemplateService.get_built_in_template(template_key)
     except BuiltInTemplateNotFoundError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error")
