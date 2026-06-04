@@ -137,10 +137,13 @@ services:
 
   autobot-slm:
     read_only: true
+    volumes:
+      - slm_data:/app/data
     tmpfs:
       - /tmp
       - /var/run
       - /app/data/tmp:mode=1777
+      - /app/logs:mode=1777
     secrets:
       - slm_admin_password
       - slm_jwt_secret
