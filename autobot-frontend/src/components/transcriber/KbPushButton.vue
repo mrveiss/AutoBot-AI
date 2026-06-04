@@ -3,27 +3,27 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useTranscriberApi } from '@/composables/transcriber/useTranscriberApi'
-import type { KbPushStatus } from '@/composables/transcriber/useTranscriberApi'
+import { useKbStatus } from '@/composables/transcriber/useKbStatus'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('KbPushButton')
 const props = defineProps<{ recordingId: number }>()
 const api = useTranscriberApi()
+const { status, refresh } = useKbStatus(props.recordingId)
 
-const status = ref<KbPushStatus | null>(null)
 const pushing = ref(false)
 const collectionId = ref('default')
 const showInput = ref(false)
 
 onMounted(async () => {
-  status.value = await api.kbStatus(props.recordingId)
+  await refresh()
 })
 
 async function push() {
   pushing.value = true
   try {
     await api.kbPush(props.recordingId, collectionId.value)
-    status.value = await api.kbStatus(props.recordingId)
+    await refresh()
     showInput.value = false
   } catch (err) {
     logger.error('KB push failed', err)
