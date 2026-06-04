@@ -217,6 +217,11 @@ class ConversationSummarizer:
         "Provide ONLY the structured summary above — no preamble or meta-commentary."
     )
 
+    async def _get_gateway(self):
+        """Return LLM gateway instance (separate method for test patching)."""
+        from llm_shared.gateway import get_llm_gateway
+        return get_llm_gateway()
+
     async def summarize_messages(
         self,
         messages: List[Dict[str, Any]],
@@ -232,10 +237,7 @@ class ConversationSummarizer:
             Summary text. Returns placeholder on error.
         """
         try:
-            # Lazy import to avoid circular dependency
-            from llm_shared.gateway import get_llm_gateway
-
-            gateway = get_llm_gateway()
+            gateway = await self._get_gateway()
 
             # Sanitize orphaned tool messages before formatting
             safe_messages = _sanitize_tool_messages(messages)
