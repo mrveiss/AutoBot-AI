@@ -22,10 +22,12 @@ adapter_config schema (future)::
 
 from __future__ import annotations
 
+from typing import Optional
+
 from autobot_shared.logging_manager import get_logger
 
 from ..models.enums import LLCRunStatus
-from .base import AdapterRunStatus
+from .base import AdapterRunStatus, LLCAdapter
 
 logger = get_logger(__name__)
 

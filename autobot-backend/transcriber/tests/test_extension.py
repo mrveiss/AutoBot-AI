@@ -1,6 +1,7 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
+import pytest
 
 from extensions.builtin.transcriber_extension import TranscriberExtension, get_transcriber_router
 

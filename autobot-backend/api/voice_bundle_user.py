@@ -14,14 +14,12 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
-from api.voice_bundle_admin import _require_admin
 from api.voice_bundle_constants import (
     BUNDLE_DEFINITIONS,
     VALID_BUNDLES,
     BundleAssignRequest,
 )
-from api.voice_bundle_helpers import _count_tools_for_bundle
-from auth_middleware import get_current_user
+from auth_middleware import get_auth_middleware, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from services.audit.unified_audit import AuditCategory, AuditEvent, emit
@@ -57,9 +55,35 @@ class UserBundleResponse(BaseModel):
 # Helpers
 # ---------------------------------------------------------------------------
 
+_tool_count_cache: dict[tuple[str, bool], int] = {}
+
+
+async def _count_tools_for_bundle(bundle: str, is_admin: bool) -> int:
+    """Return the number of tools available in this bundle (cached per bundle+role)."""
+    key = (bundle, is_admin)
+    if key not in _tool_count_cache:
+        from api.redis_mcp.rbac import (  # noqa: PLC0415
+            TOOL_ACCESS_MATRIX,
+            filter_tools_for_bundle,
+        )
+
+        all_tools = list(TOOL_ACCESS_MATRIX.keys())
+        _tool_count_cache[key] = len(filter_tools_for_bundle(all_tools, bundle=bundle, is_admin=is_admin))
+    return _tool_count_cache[key]
+
 
 def _is_admin(user: dict) -> bool:
     return user.get("role") == "admin"
+
+
+def _require_admin(request: Request) -> dict:
+    """Verify current user is admin, return user_data or raise."""
+    user_data = get_auth_middleware().get_user_from_request(request)
+    if not user_data:
+        raise_auth_error("AUTH_0002", "Authentication required")
+    if user_data.get("role") != "admin":
+        raise_auth_error("AUTH_0003", "Admin permission required")
+    return user_data
 
 
 def _get_user_id(user: dict) -> str:
