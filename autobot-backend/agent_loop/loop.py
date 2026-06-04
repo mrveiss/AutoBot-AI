@@ -152,7 +152,9 @@ class AgentLoop:
         self.tool_executor = tool_executor
         self.think_tool = think_tool or ThinkTool()
         self.config = config or AgentLoopConfig()
-        self._belief_updater = BeliefStateUpdater()
+        self._belief_updater = BeliefStateUpdater(
+            contradiction_surface_threshold=self.config.contradiction_surface_threshold
+        )
 
         # State
         self._state = LoopState.IDLE
