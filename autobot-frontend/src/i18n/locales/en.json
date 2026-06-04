@@ -141,6 +141,10 @@
       "copy": "Copy message",
       "delete": "Delete message",
       "tokens": "{count} tokens",
+      "thinking": {
+        "badge": "🧠 Extended thinking ({count} tokens)",
+        "tooltip": "This response used extended thinking mode to reason through the problem step-by-step"
+      },
       "sender": {
         "user": "You",
         "assistant": "AutoBot",
