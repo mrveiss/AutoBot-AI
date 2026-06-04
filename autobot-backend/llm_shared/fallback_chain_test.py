@@ -193,7 +193,7 @@ class TestStreamFallback:
 
     def _make_mock_provider(self, provider_name: str, model_name: str, raises: Exception | None = None):
         """Build a mock provider that either succeeds or raises on stream_completion."""
-        from unittest.mock import AsyncMock, MagicMock
+        from unittest.mock import MagicMock
 
         async def _stream_ok(*a, **kw):
             yield "chunk1"
@@ -211,7 +211,7 @@ class TestStreamFallback:
 
     def _make_registry(self, providers: list):
         """Build a mock ProviderRegistry that returns providers in sequence."""
-        from unittest.mock import AsyncMock, MagicMock
+        from unittest.mock import MagicMock
 
         registry = MagicMock()
         provider_iter = iter(providers)
@@ -228,7 +228,6 @@ class TestStreamFallback:
     def test_stream_succeeds_without_fallback(self):
         """Successful stream returns all chunks."""
         import asyncio
-        from unittest.mock import MagicMock, patch
 
         from services.llm_service import LLMService
 
@@ -249,7 +248,6 @@ class TestStreamFallback:
     def test_stream_falls_back_on_rate_limit(self):
         """Rate limit error triggers fallback to the next model."""
         import asyncio
-        from unittest.mock import MagicMock, patch
 
         from services.llm_service import LLMService
 
