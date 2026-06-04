@@ -22,41 +22,12 @@ from agent_loop.types import (
     ToolExecutionRef,
 )
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.ssot_config import config
 from autobot_shared.time_utils import now_utc
 
 if TYPE_CHECKING:
     from agent_loop.types import TaskContext
 
 logger = get_logger(__name__)
-
-_DEFAULT_CONTRADICTION_SURFACE_THRESHOLD = 0.3
-
-
-def _resolve_contradiction_surface_threshold() -> float:
-    raw = config.misc.contradiction_surface_threshold
-    if not raw:
-        return _DEFAULT_CONTRADICTION_SURFACE_THRESHOLD
-    try:
-        value = float(raw)
-    except ValueError:
-        logger.warning(
-            "AUTOBOT_CONTRADICTION_SURFACE_THRESHOLD=%r is not a float; falling back to %.1f",
-            raw,
-            _DEFAULT_CONTRADICTION_SURFACE_THRESHOLD,
-        )
-        return _DEFAULT_CONTRADICTION_SURFACE_THRESHOLD
-    if not 0.0 < value < 1.0:
-        logger.warning(
-            "AUTOBOT_CONTRADICTION_SURFACE_THRESHOLD=%.3f must be in (0, 1); falling back to %.1f",
-            value,
-            _DEFAULT_CONTRADICTION_SURFACE_THRESHOLD,
-        )
-        return _DEFAULT_CONTRADICTION_SURFACE_THRESHOLD
-    return value
-
-
-_CONTRADICTION_SURFACE_THRESHOLD = _resolve_contradiction_surface_threshold()
 
 
 def _slugify(text: str) -> str:
@@ -177,7 +148,8 @@ class BeliefState:
 class BeliefStateUpdater:
     """Update TaskContext.assertions from raw tool output."""
 
-    CONTRADICTION_SURFACE_THRESHOLD = _CONTRADICTION_SURFACE_THRESHOLD
+    def __init__(self, contradiction_surface_threshold: float = 0.3) -> None:
+        self.CONTRADICTION_SURFACE_THRESHOLD = contradiction_surface_threshold
 
     def _resolve_contradiction_surface(self, prior_confidence: float, new_confidence: float) -> str:
         """Determine contradiction resolution strategy based on confidence delta.
