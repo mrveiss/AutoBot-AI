@@ -225,6 +225,7 @@ class LogRecentResponse(BaseModel):
     source: str
     error: str | None = None
 
+
 class LogReadResponse(BaseModel):
     """Response for GET /logs/read/{filename}."""
 
@@ -281,6 +282,7 @@ class GitMCPOperationResponse(BaseModel):
     output: str
     timestamp: str
     errors: str | None = None
+
 
 class GitMCPInfoResponse(BaseModel):
     """Response for GET /git/mcp/info."""
@@ -351,6 +353,7 @@ class SkillsGapResponse(BaseModel):
     name: str | None = None
     tools_found: List[str] | None = None
 
+
 class SkillsDraftListItem(BaseModel):
     """Single draft entry in the list response."""
 
@@ -360,6 +363,7 @@ class SkillsDraftListItem(BaseModel):
     gap_reason: str | None = None
     created_at: Any | None = None
     trust_level: Any | None = None
+
 
 class SkillsDraftTestResponse(BaseModel):
     """Response for POST /skills-governance/drafts/{skill_id}/test."""
@@ -536,17 +540,20 @@ class AccessControlMetricsResponse(BaseModel):
     success: bool
     data: Dict[str, Any] | None = None
 
+
 class AccessControlEndpointMetricsResponse(BaseModel):
     """Response for GET /access-control/endpoint/{endpoint:path}."""
 
     success: bool
     data: Any | None = None
 
+
 class AccessControlUserMetricsResponse(BaseModel):
     """Response for GET /access-control/user/{username}."""
 
     success: bool
     data: Any | None = None
+
 
 class AccessControlCleanupResponse(SuccessMessageResponse):
     """Response for POST /access-control/cleanup."""
