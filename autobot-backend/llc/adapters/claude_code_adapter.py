@@ -1,7 +1,7 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
-"""ClaudeCodeAdapter — runs Claude Code CLI sessions as LLC agent heartbeats (GH#8258).
+"""ClaudeCodeAdapter — runs Claude Code CLI sessions as LLC agent heartbeats (GH#8258, GH#9030).
 
 adapter_config schema::
 
@@ -11,12 +11,15 @@ adapter_config schema::
         "allowed_tools": ["Bash", "Read"],
         "output_dir": "/tmp",
         "timeout_seconds": 3600,
+        "streaming_watchdog_timeout_seconds": 120,
         "workspace_dir": "/path/to/worktree"
     }
 
 ``run_id`` is ``"<pid>/<session_id>"``.
 ``workspace_dir`` sets the subprocess cwd; if the directory has been deleted the
 adapter retries without it and clears the config value for subsequent calls.
+``streaming_watchdog_timeout_seconds`` configures per-agent silent-stream timeout
+(defaults to 120s global, overridable per adapter or per agent).
 """
 
 from __future__ import annotations

@@ -15,7 +15,6 @@ from llc.adapters.codex_subscription_adapter import CodexSubscriptionAdapter
 from llc.adapters.copilot_subscription_adapter import CopilotSubscriptionAdapter
 from llc.models.enums import LLCRunStatus
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
