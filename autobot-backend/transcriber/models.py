@@ -122,19 +122,3 @@ class KbPushStatus(BaseModel):
     pushed_at: datetime | None
     kb_collection_id: str | None
     pushed_by: str | None
-
-
-class AiAskRequest(BaseModel):
-    action: Literal["summarize", "key_facts", "protocol", "custom"]
-    custom_question: str | None = None
-
-
-class KbPushRequest(BaseModel):
-    collection_id: str = Field(min_length=1, max_length=200)
-
-
-class KbPushStatus(BaseModel):
-    pushed: bool
-    pushed_at: datetime | None
-    kb_collection_id: str | None
-    pushed_by: str | None
