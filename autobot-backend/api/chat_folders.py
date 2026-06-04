@@ -181,15 +181,16 @@ async def update_folder(
         folder["name"] = body.name
     if body.pinned is not None:
         folder["pinned"] = body.pinned
-    if body.parent_id is not None:
-        if body.parent_id == folder_id:
-            raise ValidationError("A folder cannot be its own parent")
-        parent = next((f for f in folders if f["id"] == body.parent_id), None)
-        if not parent:
-            raise ValidationError("Parent folder not found")
-        depth = _folder_depth(folders, body.parent_id)
-        if depth >= _MAX_NESTING:
-            raise ValidationError(f"Maximum folder nesting depth ({_MAX_NESTING}) reached")
+    if "parent_id" in body.model_fields_set:
+        if body.parent_id is not None:
+            if body.parent_id == folder_id:
+                raise ValidationError("A folder cannot be its own parent")
+            parent = next((f for f in folders if f["id"] == body.parent_id), None)
+            if not parent:
+                raise ValidationError("Parent folder not found")
+            depth = _folder_depth(folders, body.parent_id)
+            if depth >= _MAX_NESTING:
+                raise ValidationError(f"Maximum folder nesting depth ({_MAX_NESTING}) reached")
         folder["parent_id"] = body.parent_id
 
     await _save_folders(redis, username, folders)
