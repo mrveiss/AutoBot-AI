@@ -12,6 +12,15 @@ name: "AutoBot CodeQL Configuration"
 
 query-filters:
   - exclude:
+      id: py/full-ssrf
+      files: autobot-backend/skills/external_importer.py
+    reason: >-
+      URL is validated via _validate_git_url() which enforces SSRF protections:
+      1) Scheme allowlist (https, ssh, git+ssh only)
+      2) For https: is_public_url_async() rejects private IPs
+      3) For ssh: resolve_safe_ip_async() blocks RFC1918/loopback/link-local ranges
+      The validation happens before any use in _run_git(). See #MVA-2605.
+  - exclude:
       id: py/path-injection
     paths:
       - autobot-backend/transcriber/upload_security.py
@@ -27,17 +36,3 @@ query-filters:
 packs:
   python:
     - codeql/python-queries
-
-# Paths to scan
-paths:
-  - autobot-backend
-  - autobot_shared
-  - autobot-slm-backend
-
-# Paths to ignore
-paths-ignore:
-  - autobot-frontend/node_modules
-  - autobot-backend/venv
-  - "**/__pycache__"
-  - "**/migrations"
-  - "**/tests"
