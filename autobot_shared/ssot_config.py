@@ -847,6 +847,27 @@ class AuthConfig(BaseSettings):
         ),
     )
 
+    sso_callback_hosts: str = Field(
+        default="localhost,127.0.0.1,autobot.local",
+        alias="AUTOBOT_SSO_CALLBACK_HOSTS",
+        description=(
+            "Comma-separated allowlist of valid hosts for OAuth2/OIDC callback URLs. "
+            "Prevents authorization code phishing via X-Forwarded-Host manipulation. "
+            "Production deployments MUST override this with actual domain(s). "
+            "Security: MVA-3396 (M-2)"
+        ),
+    )
+
+    enforce_https_callbacks: bool = Field(
+        default=False,
+        alias="AUTOBOT_ENFORCE_HTTPS_CALLBACKS",
+        description=(
+            "Enforce HTTPS for OAuth2/OIDC callback URLs in production. "
+            "Set to true for production deployments. "
+            "Security: MVA-3396 (M-2)"
+        ),
+    )
+
 
 class PermissionMode(str, Enum):
     """

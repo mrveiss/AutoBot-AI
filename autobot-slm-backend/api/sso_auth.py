@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request, sta
 from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.ssot_config import config
 from services.auth import auth_service
 from user_management.database import get_slm_session
 from user_management.schemas.sso import LDAPLoginRequest, SSOLoginInitResponse
@@ -28,6 +29,13 @@ from user_management.services.sso_service import (
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth/sso", tags=["sso-auth"])
 
+# Callback URL allowlist (Security: MVA-3396 M-2)
+_ALLOWED_CALLBACK_HOSTS = frozenset(
+    host.strip().lower()
+    for host in config.auth.sso_callback_hosts.split(",")
+    if host.strip()
+)
+
 
 async def get_slm_db():
     """Dependency for SLM database session."""
@@ -36,9 +44,57 @@ async def get_slm_db():
 
 
 def _build_callback_url(request: Request) -> str:
-    """Build OAuth2 callback URL from request headers."""
+    """Build OAuth2 callback URL from request headers with security validation.
+
+    Security (MVA-3396 M-2):
+    - Validates host against allowlist to prevent authorization code phishing
+    - Enforces HTTPS in production when configured
+    - Mitigates X-Forwarded-Host manipulation attacks
+
+    Args:
+        request: FastAPI request object
+
+    Returns:
+        Validated callback URL
+
+    Raises:
+        HTTPException: 400 if host is not in allowlist or scheme is invalid
+    """
     scheme = request.headers.get("x-forwarded-proto", request.url.scheme)
     host = request.headers.get("x-forwarded-host", request.url.netloc)
+
+    # Normalize host for comparison (lowercase, strip port if present)
+    normalized_host = host.lower().split(":")[0] if host else ""
+
+    # Validate host against allowlist
+    if normalized_host not in _ALLOWED_CALLBACK_HOSTS:
+        logger.error(
+            "OAuth callback rejected: host not in allowlist",
+            extra={
+                "requested_host": host,
+                "normalized_host": normalized_host,
+                "allowlist": list(_ALLOWED_CALLBACK_HOSTS),
+            },
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid callback host",
+        )
+
+    # Enforce HTTPS in production
+    if config.auth.enforce_https_callbacks and scheme != "https":
+        logger.error(
+            "OAuth callback rejected: HTTPS required",
+            extra={
+                "requested_scheme": scheme,
+                "host": normalized_host,
+            },
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Callback must use HTTPS",
+        )
+
     return f"{scheme}://{host}/api/auth/sso/callback"
 
 
