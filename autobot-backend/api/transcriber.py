@@ -3,11 +3,11 @@
 # Author: mrveiss
 #
 # Transcriber API
-# Issue #9044
+# Issue #9044, #9214
 
 """Transcriber API endpoints for audio transcription with speaker diarization."""
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 
 from api.schemas_common import DataResponse
@@ -20,12 +20,80 @@ from transcriber.models import (
     RecordingCreate,
     RecordingResponse,
     SegmentResponse,
+    UploadResponse,
 )
 from transcriber.orchestrator import get_transcriber_orchestrator
+from transcriber.upload_security import UploadSecurityError, save_uploaded_file
 
 logger = get_logger(__name__)
 
 router = APIRouter()
+
+
+@router.post("/upload", response_model=DataResponse[UploadResponse], status_code=201)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="upload_recording",
+    error_code_prefix="TRANSCRIBER",
+)
+async def upload_recording(
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user),
+):
+    """Upload an audio file for transcription.
+
+    Security measures:
+    - UUID-based server-managed filenames
+    - Per-user upload directories
+    - Extension whitelist (wav, mp3, mp4, m4a, ogg, flac, webm)
+    - 500MB size limit
+    - Path traversal protection
+
+    Args:
+        file: Audio file upload
+        current_user: Authenticated user
+
+    Returns:
+        Upload response with server-managed file path
+
+    Issue #9214: Secure file upload to prevent path injection
+    """
+    try:
+        user_id = current_user.get("id")
+        if user_id is None:
+            raise HTTPException(status_code=401, detail="User ID not found in token")
+
+        # Read file content
+        file_content = await file.read()
+
+        # Save with security validations
+        file_path = save_uploaded_file(
+            file_content=file_content,
+            original_filename=file.filename or "audio.wav",
+            user_id=user_id,
+        )
+
+        response_data = {
+            "file_path": file_path,
+            "filename": file.filename or "audio.wav",
+            "size_bytes": len(file_content),
+        }
+
+        logger.info(
+            "File uploaded successfully: %s (user: %d, size: %d bytes)",
+            file_path,
+            user_id,
+            len(file_content),
+        )
+
+        return JSONResponse(status_code=201, content={"data": response_data})
+
+    except UploadSecurityError as exc:
+        logger.warning("Upload security violation: %s", exc)
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        logger.error("Failed to upload file: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 @router.post("/recordings", response_model=DataResponse[RecordingResponse], status_code=201)
@@ -36,26 +104,45 @@ router = APIRouter()
 )
 async def create_recording(
     recording: RecordingCreate,
+    file_path: str,
     current_user: dict = Depends(get_current_user),
 ):
-    """Create a new recording entry.
+    """Create a new recording entry with server-managed file path.
+
+    Security: file_path must be from a previous upload response.
+    Client-provided paths are rejected.
 
     Args:
-        recording: Recording creation data
+        recording: Recording creation data (filename only)
+        file_path: Server-managed file path from upload endpoint
         current_user: Authenticated user
 
     Returns:
         Created recording with pending status
 
     Issue #9044: Transcriber pipeline foundation
+    Issue #9214: Removed client-provided file_path to prevent path injection
     """
     try:
         user_id = current_user.get("id")
-        if not user_id:
-            raise HTTPException(status_code=401, detail="User ID not found in session")
+        if user_id is None:
+            raise HTTPException(status_code=401, detail="User ID not found in token")
+
+        # Import here to avoid circular dependency
+        from transcriber.upload_security import validate_upload_path
+
+        # Validate that file_path is within user's upload directory
+        try:
+            validated_path = validate_upload_path(file_path, user_id)
+        except UploadSecurityError as exc:
+            logger.warning("Invalid file path provided: %s", exc)
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid file path. Use POST /api/transcriber/upload first.",
+            )
 
         db = await get_transcriber_db()
-        created = await db.create_recording(filename=recording.filename, file_path=recording.file_path, user_id=user_id)
+        created = await db.create_recording(filename=recording.filename, file_path=str(validated_path), user_id=user_id)
 
         response_data = {
             "id": created.id,
@@ -72,6 +159,8 @@ async def create_recording(
 
         return JSONResponse(status_code=201, content={"data": response_data})
 
+    except HTTPException:
+        raise
     except Exception as exc:
         logger.error("Failed to create recording: %s", exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")

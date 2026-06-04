@@ -8,9 +8,10 @@ const mockGet = vi.fn()
 const mockPost = vi.fn()
 const mockPatch = vi.fn()
 const mockDelete = vi.fn()
+const mockRawRequest = vi.fn()
 
-vi.mock('@/composables/useApi', () => ({
-  useApi: () => ({ get: mockGet, post: mockPost, patch: mockPatch, delete: mockDelete }),
+vi.mock('@/plugins/api', () => ({
+  useApiClient: () => ({ get: mockGet, post: mockPost, patch: mockPatch, delete: mockDelete, rawRequest: mockRawRequest }),
 }))
 
 describe('useTranscriberApi', () => {

@@ -129,8 +129,8 @@ def get_cross_worker_load_results() -> Dict[str, Any]:
 # Issue #281: Router configurations as data instead of repetitive code blocks
 # Format: (module_path, prefix, tags, name)
 FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
-    # GH#4458: execution snapshot/restore — api.execution_snapshots not yet implemented
-    ("api.execution_snapshots", "", ["execution", "snapshots"], "execution_snapshots"),
+    # GH#4458: execution snapshot/restore — now loaded via core_routers (MVA-2531)
+    # ("api.execution_snapshots", "", ["execution", "snapshots"], "execution_snapshots"),
     # Core workflow and batch processing
     # Issue #6229: api.websockets and api.live_events promoted to core_routers
     ("api.workflow", "/workflow", ["workflow"], "workflow"),

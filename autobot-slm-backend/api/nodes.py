@@ -1024,7 +1024,12 @@ async def remove_role_from_node(
     if service_name:
         ansible_result = await _run_role_removal(node_id, role_name, service_name, backup, target_path)
         if not ansible_result["success"]:
-            logger.error("Role removal failed for node %s role %s: %s", node_id, role_name, ansible_result["output"])
+            logger.error(
+                "Role removal failed for node %s role %s: %s",
+                node_id,
+                role_name,
+                ansible_result["output"],
+            )
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Role removal failed",
@@ -1839,7 +1844,7 @@ async def node_heartbeat(
             status="ok",
             update_available=update_available,
             latest_version=latest_version if update_available else None,
-            update_url=(f"/api/nodes/{node_id}/code-package" if update_available else None),
+            update_url=(f"/api/nodes/{node_id}/package" if update_available else None),
         )
 
     except HTTPException:

@@ -33,6 +33,7 @@ from api.config_revisions import router as config_revisions_router  # #1404
 from api.data_storage import router as data_storage_router
 from api.database_mcp import router as database_mcp_router
 from api.developer import router as developer_router
+from api.execution_snapshots import router as execution_snapshots_router  # GH#4458, MVA-2227
 from api.files import router as files_router
 from api.filesystem_mcp import router as filesystem_mcp_router
 from api.frontend_config import router as frontend_config_router
@@ -319,6 +320,7 @@ def _get_service_routers() -> list:
         (models_router, "/models", ["models"], "models"),
         (adapters_router, "/adapters", ["adapters"], "adapters"),
         (redis_router, "/redis", ["redis"], "redis"),
+        (execution_snapshots_router, "", ["execution", "snapshots"], "execution_snapshots"),  # GH#4458, MVA-2227
         (voice_realtime_router, "/voice", ["voice"], "voice_realtime"),
         (voice_router, "/voice", ["voice"], "voice"),
         (bundle_me_router, "/voice", ["voice", "rbac"], "voice_bundle_me"),
