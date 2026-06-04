@@ -85,7 +85,7 @@ bleach>=6.0.0           # HTML sanitization for canvas HTML/PDF export (XSS prev
 weasyprint>=68.1        # HTML→PDF rendering for canvas PDF export
 
 # Media processing pipelines (Issue #932)
-aiohttp>=3.13.4         # Async HTTP client - SECURITY UPDATE
+aiohttp>=3.14.0         # Async HTTP client - SECURITY UPDATE
 httpx>=0.28.1           # Issue #4412: hub registry fetches (async HTTP)
 pywebpush>=2.0.0        # VAPID/RFC8291 browser push delivery (GH#4459)
 beautifulsoup4>=4.14.3  # HTML parsing for link pipeline
