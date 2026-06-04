@@ -108,6 +108,7 @@ async def test_llm_provider(
 )
 async def get_fallback_status(
     current_user: dict = Depends(get_current_user),
+    admin_check: bool = Depends(check_admin_permission),
 ):
     """
     Get LLM fallback chain status (GH#8998 - MVA-2999).
