@@ -15,9 +15,9 @@ from transcriber.models import (
     RecordingOut,
     SegmentOut,
     SegmentUpdate,
+    SpeakerMerge,
     SpeakerOut,
     SpeakerUpdate,
-    SpeakerMerge,
     TranscriptOut,
 )
 

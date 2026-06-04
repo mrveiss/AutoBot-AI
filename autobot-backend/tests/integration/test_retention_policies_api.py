@@ -23,8 +23,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.ext.asyncio.session import async_sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from api.admin_retention_policies import router as retention_router
 from api.admin_retention_policies import _require_admin
+from api.admin_retention_policies import router as retention_router
 from api.user_management.dependencies import get_db_session
 from user_management.models.base import Base
 from user_management.models.retention_policy import RetentionPolicy

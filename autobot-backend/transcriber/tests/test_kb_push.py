@@ -2,8 +2,10 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
-import pytest
 from unittest.mock import AsyncMock, patch
+
+import pytest
+
 from transcriber.knowledge.kb_push import push_to_kb
 
 
