@@ -16,7 +16,6 @@ import logging
 import sys
 import types
 import uuid
-from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -377,7 +376,7 @@ class TestClientSecretHandling:
             mock_client_cls.return_value = MagicMock()
 
             with caplog.at_level(logging.DEBUG):
-                client = service._build_oauth_client(provider)
+                service._build_oauth_client(provider)
 
         # Check all log records — secret must never appear
         log_text = " ".join(record.message for record in caplog.records)
