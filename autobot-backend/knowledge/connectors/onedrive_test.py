@@ -209,7 +209,6 @@ class TestOneDriveConnector:
         assert change.change_type == "added"
         assert change.details["last_modified"] == last_modified
 
-
     @pytest.mark.asyncio
     async def test_max_concurrency_default(self, onedrive_config):
         """Test default max_concurrency is 4."""
