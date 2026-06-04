@@ -1483,6 +1483,47 @@ class FeatureConfig(BaseSettings):
     mcp: bool = Field(default=True, alias="AUTOBOT_FEATURE_MCP")
 
 
+class TelemetryConfig(BaseSettings):
+    """
+    Telemetry and analytics opt-out configuration.
+
+    Issue #9035: User-controlled privacy for usage data collection.
+
+    When enabled=False:
+    - AnalyticsMiddleware skips API call tracking
+    - VoiceRealtimeTelemetry skips session persistence
+    - All outbound analytics calls are suppressed
+
+    Usage:
+        from autobot_shared.ssot_config import config
+
+        if config.telemetry.enabled:
+            await track_usage(...)
+    """
+
+    model_config = SettingsConfigDict(
+        env_file=str(PROJECT_ROOT / ".env"),
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+    enabled: bool = Field(
+        default=True,
+        alias="AUTOBOT_TELEMETRY_ENABLED",
+        description="Enable telemetry collection (API analytics, voice session tracking, usage metrics)",
+    )
+    anonymous_usage_stats: bool = Field(
+        default=True,
+        alias="AUTOBOT_TELEMETRY_ANONYMOUS_USAGE_STATS",
+        description="Share anonymous usage statistics to help improve AutoBot",
+    )
+    first_run_prompt_shown: bool = Field(
+        default=False,
+        alias="AUTOBOT_TELEMETRY_FIRST_RUN_PROMPT_SHOWN",
+        description="Whether the first-run telemetry consent prompt has been shown",
+    )
+
+
 class AutoBotConfig(BaseSettings):
     """
     Master configuration - SINGLE SOURCE OF TRUTH.
@@ -1525,6 +1566,7 @@ class AutoBotConfig(BaseSettings):
         default_factory=PathConfig, alias="AUTOBOT_PATH_CONFIG"
     )  # Issue #3397; alias avoids collision with system PATH env var
     misc: MiscConfig = Field(default_factory=MiscConfig)  # GH#7437: Unmapped env vars
+    telemetry: TelemetryConfig = Field(default_factory=TelemetryConfig)  # Issue #9035
 
     # Top-level settings
     deployment_mode: str = Field(default="distributed", alias="AUTOBOT_DEPLOYMENT_MODE")
