@@ -243,32 +243,25 @@ class RBACMiddleware:
         else:
             # Clear entire fallback; Redis keys expire naturally.
             _permission_cache.clear()
-            asyncio.ensure_future(self._clear_all_redis_keys())
 
-    async def _clear_all_redis_keys(self) -> None:
-        r = await get_async_redis_client()
-        if r is None:
+        asyncio.ensure_future(self._clear_redis_cache(user_id))
+
+    async def _clear_redis_cache(self, user_id: uuid.UUID | None = None) -> None:
+        redis = await get_async_redis_client()
+        if redis is None:
             return
         try:
-            keys = await r.keys("slm:perm:*")
-            if keys:
-                await r.delete(*keys)
-        except Exception as exc:
-            logger.warning("RBAC: failed to clear all Redis permission keys: %s", exc)
-
-        # Clear Redis L2 and notify other workers
-        redis = await get_async_redis_client()
-        if redis is not None:
             if user_id:
                 await redis.delete(f"{_REDIS_KEY_PREFIX}{user_id}")
             else:
-                pipeline = redis.pipeline()
-                async for key in redis.scan_iter(f"{_REDIS_KEY_PREFIX}*"):
-                    pipeline.delete(key)
-                await pipeline.execute()
+                keys = await redis.keys("slm:perm:*")
+                if keys:
+                    await redis.delete(*keys)
             payload = json.dumps({"user_id": str(user_id)} if user_id else {})
             await redis.publish(_PUBSUB_CHANNEL, payload)
             logger.debug("RBAC cache invalidated for user=%s", user_id)
+        except Exception as exc:
+            logger.warning("RBAC: failed to clear Redis permission keys: %s", exc)
 
 
 # Global instance
@@ -354,6 +347,16 @@ def _require_authentication(user_id: uuid.UUID | None, permissions_desc: str) ->
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Authentication required",
         )
+
+
+# ---------------------------------------------------------------------------
+# Audit helpers
+# ---------------------------------------------------------------------------
+
+
+async def _emit_permission_denied_audit(user_id: uuid.UUID | None, permission: str, path: str) -> None:
+    """Fire-and-forget audit log for permission-denied events."""
+    logger.warning("RBAC: permission denied user=%s permission=%s path=%s", user_id, permission, path)
 
 
 # ---------------------------------------------------------------------------

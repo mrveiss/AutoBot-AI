@@ -146,7 +146,7 @@ async def decide_approval(
     except ApprovalNotFoundError as exc:
         logger.error("Exception in API handler: %s", exc, exc_info=True)
         raise HTTPException(status_code=404, detail="Internal server error")
-    except (ApprovalStateError, ApprovalRequiredError) as exc:
+    except (ApprovalStateError, ApprovalRequiredError):
         raise HTTPException(status_code=409, detail="Internal server error")
 
     await svc.publish_decided(approval, body.decision)

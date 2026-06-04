@@ -78,7 +78,7 @@ async def update_speaker(speaker_id: int, body: SpeakerUpdate, request: Request,
 
 @router.post("/speakers/merge", status_code=200)
 async def merge_speakers(body: SpeakerMerge, request: Request, db: Database = Depends(get_db)):
-    """Merge source speaker into target speaker. All segments from source will be reassigned to target, then source is deleted."""
+    """Merge source speaker into target. Segments from source are reassigned to target, then source is deleted."""
     source = await db.get_speaker(body.source_speaker_id)
     if not source:
         raise HTTPException(404, f"no speaker with id={body.source_speaker_id}")
