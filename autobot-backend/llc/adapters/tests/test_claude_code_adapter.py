@@ -5,6 +5,7 @@
 
 import json
 import os
+import signal
 import tempfile
 import time
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -413,6 +414,103 @@ class TestCancel:
         adapter = ClaudeCodeAdapter()
         # Should not raise
         await adapter.cancel(_agent_cfg(), "bad-run-id")
+
+
+# ---------------------------------------------------------------------------
+# Timeout Configuration (3-tier hierarchy)
+# ---------------------------------------------------------------------------
+
+
+class TestTimeoutConfiguration:
+    """Test 3-tier timeout configuration per MVA-2940 ADR."""
+
+    def test_per_agent_override_highest_priority(self, monkeypatch) -> None:
+        """Tier 1: per-agent timeout_seconds overrides everything."""
+        from llc.adapters.claude_code_adapter import _resolve_timeout
+
+        monkeypatch.setenv("LLC_DEFAULT_ADAPTER_TIMEOUT_SECONDS", "250")
+        cfg = {"timeout_seconds": 500}
+        assert _resolve_timeout(cfg) == 500
+
+    def test_global_env_var_when_no_agent_override(self, monkeypatch) -> None:
+        """Tier 2/3: global env var used when per-agent override absent."""
+        from llc.adapters.claude_code_adapter import _resolve_timeout
+
+        monkeypatch.setenv("LLC_DEFAULT_ADAPTER_TIMEOUT_SECONDS", "180")
+        cfg = {}  # no per-agent override
+        assert _resolve_timeout(cfg) == 180
+
+    def test_adapter_default_when_no_env_var(self, monkeypatch) -> None:
+        """Fallback: per-adapter default (3600) when env var unset."""
+        from llc.adapters.claude_code_adapter import _resolve_timeout
+
+        monkeypatch.delenv("LLC_DEFAULT_ADAPTER_TIMEOUT_SECONDS", raising=False)
+        cfg = {}
+        assert _resolve_timeout(cfg) == 3600  # _ADAPTER_TIMEOUT_SECONDS
+
+    def test_precedence_order_all_three_tiers(self, monkeypatch) -> None:
+        """Verify precedence: per-agent > global env > adapter default."""
+        from llc.adapters.claude_code_adapter import _resolve_timeout
+
+        # Set global env var
+        monkeypatch.setenv("LLC_DEFAULT_ADAPTER_TIMEOUT_SECONDS", "200")
+
+        # Tier 1: per-agent wins
+        assert _resolve_timeout({"timeout_seconds": 100}) == 100
+
+        # Tier 2: global env var when no per-agent
+        assert _resolve_timeout({}) == 200
+
+        # Tier 3: adapter default when env var cleared
+        monkeypatch.delenv("LLC_DEFAULT_ADAPTER_TIMEOUT_SECONDS")
+        assert _resolve_timeout({}) == 3600
+
+
+@pytest.mark.asyncio
+class TestGracefulTimeout:
+    """Test graceful SIGTERM + SIGKILL with 10s grace period."""
+
+    async def test_grace_period_is_10_seconds(self) -> None:
+        """Verify _SIGTERM_GRACE_SECONDS is 10 (per MVA-2940 ADR)."""
+        from llc.adapters.claude_code_adapter import _SIGTERM_GRACE_SECONDS
+
+        assert _SIGTERM_GRACE_SECONDS == 10
+
+    async def test_cancel_sends_sigterm_then_sigkill_after_grace(self) -> None:
+        """cancel() sends SIGTERM, waits 10s, then SIGKILL."""
+        from llc.adapters.claude_code_adapter import ClaudeCodeAdapter, _SIGTERM_GRACE_SECONDS
+
+        adapter = ClaudeCodeAdapter()
+        kill_signals = []
+
+        def fake_kill(pid, sig):
+            kill_signals.append((pid, sig))
+            if sig == signal.SIGKILL:
+                raise ProcessLookupError()  # process dies
+
+        with tempfile.TemporaryDirectory() as td:
+            state_file = _state_path(td, "123/session-x")
+            os.makedirs(os.path.dirname(state_file), exist_ok=True)
+            with open(state_file, "w") as f:
+                json.dump({"pid": 123, "session_id": "session-x"}, f)
+
+            with (
+                patch("os.kill", side_effect=fake_kill),
+                patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+                patch(
+                    "llc.adapters.claude_code_adapter.get_async_redis_client",
+                    new_callable=AsyncMock,
+                    return_value=AsyncMock(),
+                ),
+            ):
+                await adapter.cancel(_agent_cfg(output_dir=td), "123/session-x")
+
+        # Verify SIGTERM sent first
+        assert kill_signals[0] == (123, signal.SIGTERM)
+        # Verify grace period wait (10s in 0.1s increments = 100 iterations)
+        assert mock_sleep.await_count == _SIGTERM_GRACE_SECONDS * 10
+        # Verify SIGKILL sent after grace period
+        assert (123, signal.SIGKILL) in kill_signals
 
 
 # ---------------------------------------------------------------------------

@@ -60,7 +60,16 @@ def _resolve_timeout(cfg: dict) -> int:
     2. Per-adapter default (_ADAPTER_TIMEOUT_SECONDS)
     3. Global default (LLC_DEFAULT_ADAPTER_TIMEOUT_SECONDS env var, default: 120s)
     """
-    return int(cfg.get("timeout_seconds", _ADAPTER_TIMEOUT_SECONDS))
+    # Tier 1: per-agent override
+    if "timeout_seconds" in cfg:
+        return int(cfg["timeout_seconds"])
+
+    # Tier 2/3: global env var, fallback to per-adapter default
+    global_default = os.environ.get("LLC_DEFAULT_ADAPTER_TIMEOUT_SECONDS")
+    if global_default:
+        return int(global_default)
+
+    return _ADAPTER_TIMEOUT_SECONDS
 
 
 def _output_path(output_dir: str, agent_id: str, run_id: str) -> str:
