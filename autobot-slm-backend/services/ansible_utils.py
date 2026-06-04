@@ -26,6 +26,11 @@ def _extract_failure_summary(output: str) -> str:
             task_match = re.search(r"(?:TASK|RUNNING HANDLER) \[(.+?)\]", line)
             if task_match:
                 current_task = task_match.group(1).strip()
+        elif line.startswith("RUNNING HANDLER ["):
+            # Issue #9286: Track handlers so failure is attributed correctly
+            handler_match = re.search(r"RUNNING HANDLER \[(.+?)\]", line)
+            if handler_match:
+                current_task = handler_match.group(1).strip()
 
         if line.startswith("fatal:"):
             host_match = re.search(r"fatal: \[([^\]]+)\]", line)
