@@ -26,6 +26,10 @@ class ProjectOut(BaseModel):
     user_id: str
 
 
+class RecordingCreate(BaseModel):
+    project_id: int = Field(gt=0, description="Project ID to associate with this recording")
+
+
 class RecordingOut(BaseModel):
     id: int
     project_id: int

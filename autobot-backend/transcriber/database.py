@@ -392,20 +392,3 @@ class Database:
         )
         row = await cur.fetchone()
         return dict(row) if row else None
-
-
-# Singleton instance
-_transcriber_db: Database | None = None
-
-
-async def get_transcriber_db() -> Database:
-    """Get or create transcriber database singleton.
-
-    Returns:
-        Database instance
-    """
-    global _transcriber_db
-    if _transcriber_db is None:
-        _transcriber_db = Database(os.path.expanduser("~/.autobot/transcriber.db"))
-        await _transcriber_db.connect()
-    return _transcriber_db

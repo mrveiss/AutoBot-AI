@@ -16,6 +16,7 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from transcriber.database import get_transcriber_db
 from transcriber.models import (
+    ProcessingResponse,
     RecordingCreate,
     RecordingResponse,
     SegmentResponse,
@@ -23,7 +24,6 @@ from transcriber.models import (
 )
 from transcriber.orchestrator import get_transcriber_orchestrator
 from transcriber.upload_security import UploadSecurityError, save_uploaded_file
-from type_defs.api import ProcessingResponse
 
 logger = get_logger(__name__)
 
