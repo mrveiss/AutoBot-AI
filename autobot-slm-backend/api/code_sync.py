@@ -49,7 +49,6 @@ from models.schemas import (
     ScheduleResponse,
     ScheduleRunResponse,
     ScheduleUpdate,
-    SelfUpdateResponse,
 )
 from services.auth import get_current_user
 from services.code_distributor import get_code_distributor
@@ -1097,11 +1096,11 @@ async def _ansible_self_update(node_id: str) -> None:
         logger.error("Ansible full-machine update error for %s: %s", node_id, exc)
 
 
-@router.post("/self-update", response_model=SelfUpdateResponse)
+@router.post("/self-update", response_model=NodeSyncResponse)
 async def self_update(
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(get_current_user)],
-) -> SelfUpdateResponse:
+) -> NodeSyncResponse:
     """Trigger an Ansible-based update of the SLM server itself (#9073).
 
     Looks up the SLM's own node record by matching the external_url IP,
@@ -1127,13 +1126,14 @@ async def self_update(
     logger.info("Full machine update via Ansible: queuing for node %s", slm_node.node_id)
     asyncio.create_task(_ansible_self_update(slm_node.node_id))
 
-    return SelfUpdateResponse(
+    return NodeSyncResponse(
         success=True,
         message=(
             "Full update queued: Ansible will update all roles on this machine"
             " and restart services. Check backend health in ~60s."
         ),
         node_id=slm_node.node_id,
+        job_id=None,
     )
 
 
