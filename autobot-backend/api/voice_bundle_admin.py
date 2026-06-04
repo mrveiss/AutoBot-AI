@@ -15,8 +15,8 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from api.voice_bundle_constants import VALID_BUNDLES, BundleAssignRequest
-from api.voice_bundle_user import _count_tools_for_bundle
-from auth_middleware import get_auth_middleware, get_current_user
+from api.voice_bundle_helpers import _require_admin, _count_tools_for_bundle
+from auth_middleware import get_current_user
 from autobot_shared.logging_manager import get_logger
 from services.event_log import EventType, emit
 from utils.catalog_http_exceptions import raise_auth_error
@@ -33,20 +33,6 @@ bundle_admin_router = APIRouter(prefix="/admin", tags=["admin", "voice", "rbac"]
 router = APIRouter()
 router.include_router(bundle_me_router, prefix="/voice")
 router.include_router(bundle_admin_router)
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
-def _require_admin(request: Request) -> dict:
-    user_data = get_auth_middleware().get_user_from_request(request)
-    if not user_data:
-        raise_auth_error("AUTH_0002", "Authentication required")
-    if user_data.get("role") != "admin":
-        raise_auth_error("AUTH_0003", "Admin permission required")
-    return user_data
 
 
 # ---------------------------------------------------------------------------
