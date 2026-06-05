@@ -352,6 +352,23 @@ watch -n 5 './utils/health-check.sh --quick'
 - Redis data persistence
 - Configuration file protection
 - Secure inter-service communication
+- SSO credentials encrypted at rest (AES-256-GCM via `system_secrets` table)
+
+### SSO Secret Migration
+
+When deploying a build that includes PR #9676 for the first time, run the SSO
+secret migration to move OAuth `client_secret` and LDAP `bind_password` from
+plaintext JSONB to encrypted storage:
+
+```bash
+# On the backend VM (VM2), before restarting the service:
+source /etc/autobot/slm-secrets.env
+cd /opt/autobot/autobot-slm-backend && source venv/bin/activate
+python migrations/migrate_sso_secrets_to_system_secret.py
+```
+
+See [docs/sso-secret-migration.md](sso-secret-migration.md) for the full
+migration guide (prerequisites, verification, rollback, Ansible automation).
 
 ## Maintenance
 
