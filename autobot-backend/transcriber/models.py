@@ -57,6 +57,30 @@ class TranscriptionSegment:
 # Pydantic schemas for API
 
 
+class ProjectCreate(BaseModel):
+    """Request schema for creating a project."""
+
+    name: str = Field(..., description="Project name", min_length=1, max_length=200)
+    description: str = Field(default="", description="Project description", max_length=1000)
+
+
+class ProjectUpdate(BaseModel):
+    """Request schema for updating a project."""
+
+    name: str = Field(..., description="Project name", min_length=1, max_length=200)
+    description: str = Field(default="", description="Project description", max_length=1000)
+
+
+class ProjectOut(BaseModel):
+    """Response schema for project."""
+
+    id: int
+    name: str
+    description: str
+    user_id: str
+    created_at: datetime
+
+
 class RecordingCreate(BaseModel):
     """Request schema for creating a recording.
 
