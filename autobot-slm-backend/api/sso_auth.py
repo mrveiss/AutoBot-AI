@@ -8,13 +8,14 @@ Public endpoints for SSO login flows (OAuth2, LDAP, SAML).
 """
 
 import logging
+import os
 import uuid
+from urllib.parse import urlsplit
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from autobot_shared.ssot_config import config
 from services.auth import auth_service
 from user_management.database import get_slm_session
 from user_management.schemas.sso import LDAPLoginRequest, SSOLoginInitResponse
@@ -29,12 +30,24 @@ from user_management.services.sso_service import (
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth/sso", tags=["sso-auth"])
 
-# Callback URL allowlist (Security: MVA-3396 M-2)
-_ALLOWED_CALLBACK_HOSTS = frozenset(
-    host.strip().lower()
-    for host in config.auth.sso_callback_hosts.split(",")
-    if host.strip()
-)
+
+
+def _get_allowed_callback_hosts() -> frozenset[str]:
+    """Get allowed callback hosts for OAuth redirects (MVA-3542)."""
+    hosts = {"localhost", "127.0.0.1"}
+    external_url = os.getenv("SLM_EXTERNAL_URL", "")
+    if external_url:
+        try:
+            parsed = urlsplit(external_url)
+            hostname = (parsed.hostname or "").lower().rstrip(".")
+            if hostname:
+                hosts.add(hostname)
+        except Exception as e:
+            logger.warning("Failed to parse SLM_EXTERNAL_URL: %s", e)
+    return frozenset(hosts)
+
+
+_ALLOWED_CALLBACK_HOSTS = _get_allowed_callback_hosts()
 
 
 async def get_slm_db():
@@ -44,58 +57,31 @@ async def get_slm_db():
 
 
 def _build_callback_url(request: Request) -> str:
-    """Build OAuth2 callback URL from request headers with security validation.
-
-    Security (MVA-3396 M-2):
-    - Validates host against allowlist to prevent authorization code phishing
-    - Enforces HTTPS in production when configured
-    - Mitigates X-Forwarded-Host manipulation attacks
-
-    Args:
-        request: FastAPI request object
-
-    Returns:
-        Validated callback URL
-
-    Raises:
-        HTTPException: 400 if host is not in allowlist or scheme is invalid
-    """
+    """Build OAuth2 callback URL with security validation (MVA-3542)."""
     scheme = request.headers.get("x-forwarded-proto", request.url.scheme)
-    host = request.headers.get("x-forwarded-host", request.url.netloc)
-
-    # Normalize host for comparison (lowercase, strip port if present)
-    normalized_host = host.lower().split(":")[0] if host else ""
-
-    # Validate host against allowlist
-    if normalized_host not in _ALLOWED_CALLBACK_HOSTS:
-        logger.error(
-            "OAuth callback rejected: host not in allowlist",
-            extra={
-                "requested_host": host,
-                "normalized_host": normalized_host,
-                "allowlist": list(_ALLOWED_CALLBACK_HOSTS),
-            },
-        )
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid callback host",
-        )
-
-    # Enforce HTTPS in production
-    if config.auth.enforce_https_callbacks and scheme != "https":
-        logger.error(
-            "OAuth callback rejected: HTTPS required",
-            extra={
-                "requested_scheme": scheme,
-                "host": normalized_host,
-            },
-        )
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Callback must use HTTPS",
-        )
-
-    return f"{scheme}://{host}/api/auth/sso/callback"
+    raw_host = request.headers.get("x-forwarded-host", request.url.netloc) or ""
+    
+    # Block malicious characters (MVA-3542: SSRF/CRLF prevention)
+    if any(c in raw_host for c in "@/\\#?"):
+        logger.error("OAuth callback rejected: malicious characters", extra={"host": raw_host})
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid callback host")
+    
+    # Parse with urlsplit to prevent parser differential attacks
+    try:
+        parsed = urlsplit(f"//{raw_host}")
+        hostname = (parsed.hostname or "").lower().rstrip(".")
+    except Exception as e:
+        logger.error("OAuth callback rejected: parse failed", extra={"host": raw_host, "error": str(e)})
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid callback host") from e
+    
+    # Validate hostname against allowlist
+    if not hostname or hostname not in _ALLOWED_CALLBACK_HOSTS:
+        logger.error("OAuth callback rejected: not in allowlist", extra={"hostname": hostname})
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid callback host")
+    
+    # Reconstruct netloc from validated components
+    netloc = hostname + (f":{parsed.port}" if parsed.port else "")
+    return f"{scheme}://{netloc}/api/auth/sso/callback"
 
 
 @router.get("/providers", response_model=list[dict])
