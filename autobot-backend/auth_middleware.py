@@ -843,17 +843,16 @@ async def require_device_jwt(
     # Validate device still exists (revocation check)
     device_id = user_data.get("device_id")
     if device_id:
+        from sqlalchemy import select
+
         from api.user_management.dependencies import get_db_session
         from models.mobile_device import MobileDevice
-        from sqlalchemy import select
 
         # Get DB session
         session_gen = get_db_session()
         session = await anext(session_gen)
         try:
-            result = await session.execute(
-                select(MobileDevice).where(MobileDevice.id == device_id)
-            )
+            result = await session.execute(select(MobileDevice).where(MobileDevice.id == device_id))
             device = result.scalar_one_or_none()
             if device is None:
                 raise HTTPException(

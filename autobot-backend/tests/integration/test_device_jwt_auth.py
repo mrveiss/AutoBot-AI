@@ -19,7 +19,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi import Request, status
 
-from auth_middleware import enforce_device_read_only_scope, get_auth_middleware
+from auth_middleware import get_auth_middleware
 from models.mobile_device import DeviceTokenScope
 from services.device_jwt import mint_device_jwt, validate_device_jwt
 
@@ -95,6 +95,7 @@ class TestDeviceJWTValidation:
 
         # Use same secret as device JWT
         import os
+
         secret = os.environ.get("DEVICE_JWT_SECRET") or os.environ.get("AUTOBOT_JWT_SECRET", "test-secret")
         token = encode_jwt(payload, secret=secret, expires_delta=timedelta(days=1))
 
@@ -113,6 +114,7 @@ class TestDeviceJWTValidation:
         }
 
         import os
+
         secret = os.environ.get("DEVICE_JWT_SECRET") or os.environ.get("AUTOBOT_JWT_SECRET", "test-secret")
         token = encode_jwt(payload, secret=secret, expires_delta=timedelta(days=1))
 
