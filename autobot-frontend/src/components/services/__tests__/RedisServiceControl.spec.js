@@ -205,7 +205,7 @@ describe('RedisServiceControl.vue', () => {
       wrapper = mountWithPlugins();
 
       const buttons = wrapper.findAllComponents({ name: 'BaseButton' });
-      const stopButton = buttons.find((b) => b.props('variant') === 'danger');
+      const stopButton = buttons.find((b) => b.props('variant') === 'error');
       expect(stopButton.exists()).toBe(true);
       expect(stopButton.props('disabled')).toBe(false);
     });
@@ -219,7 +219,7 @@ describe('RedisServiceControl.vue', () => {
       // Start, Restart, Stop buttons should all be disabled when loading
       const startBtn = buttons.find((b) => b.props('variant') === 'success');
       const restartBtn = buttons.find((b) => b.props('variant') === 'warning');
-      const stopBtn = buttons.find((b) => b.props('variant') === 'danger');
+      const stopBtn = buttons.find((b) => b.props('variant') === 'error');
 
       expect(startBtn.props('disabled')).toBe(true);
       expect(restartBtn.props('disabled')).toBe(true);
@@ -266,7 +266,7 @@ describe('RedisServiceControl.vue', () => {
       wrapper = mountWithPlugins();
 
       const stopButton = wrapper.findAllComponents({ name: 'BaseButton' }).find(
-        (b) => b.props('variant') === 'danger',
+        (b) => b.props('variant') === 'error',
       );
       await stopButton.trigger('click');
       await wrapper.vm.$nextTick();
@@ -318,7 +318,7 @@ describe('RedisServiceControl.vue', () => {
       // is the last BaseButton rendered by the #actions slot
       const allButtons = wrapper.findAllComponents({ name: 'BaseButton' });
       // The confirm button in the dialog has variant 'primary' (for restart, type='warning')
-      // but actually the template uses: :variant="confirmDialog.type === 'danger' ? 'danger' : 'primary'"
+      // but actually the template uses: :variant="confirmDialog.type === 'error' ? 'error' : 'primary'"
       // For restart, type='warning', so confirm button variant='primary'
       const confirmBtn = allButtons.find(
         (b) => b.props('variant') === 'primary',
@@ -364,7 +364,7 @@ describe('RedisServiceControl.vue', () => {
       wrapper = mountWithPlugins();
 
       const stopButton = wrapper.findAllComponents({ name: 'BaseButton' }).find(
-        (b) => b.props('variant') === 'danger',
+        (b) => b.props('variant') === 'error',
       );
       await stopButton.trigger('click');
       await wrapper.vm.$nextTick();
@@ -624,7 +624,7 @@ describe('RedisServiceControl.vue', () => {
       wrapper = mountWithPlugins();
 
       const stopBtn = wrapper.findAllComponents({ name: 'BaseButton' }).find(
-        (b) => b.props('variant') === 'danger',
+        (b) => b.props('variant') === 'error',
       );
       expect(stopBtn.props('disabled')).toBe(true);
     });
