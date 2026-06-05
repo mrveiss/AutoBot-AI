@@ -35,7 +35,7 @@ Design choices
 import time
 from dataclasses import asdict, dataclass, field
 from enum import Enum
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional  # noqa: F401  # Used by type generator
 
 from autobot_shared.status_enums import TaskStatus
 
