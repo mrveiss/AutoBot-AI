@@ -9,7 +9,7 @@
  */
 
 import { ref, computed } from 'vue'
-import { useApi } from '@/composables/useApi'
+import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('useWatchFolders')
@@ -42,7 +42,7 @@ export interface WatchFolderStats {
 }
 
 export function useWatchFolders() {
-  const api = useApi()
+  const api = useApiClient()
 
   const watchFolders = ref<WatchFolderConfig[]>([])
   const stats = ref<WatchFolderStats | null>(null)

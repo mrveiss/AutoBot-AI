@@ -126,8 +126,8 @@ class Settings(BaseSettings):
 
     # Paths - relative to slm-server directory (where config.py lives)
     base_dir: Path = Path(__file__).parent
-    data_dir: Path = Path(__file__).parent / "data"
-    config_dir: Path = Path(__file__).parent / "config"
+    data_dir: Path = Path(os.getenv("SLM_DATA_DIR", str(Path(__file__).parent / "data")))
+    config_dir: Path = Path(os.getenv("SLM_CONFIG_DIR", str(Path(__file__).parent / "config")))
     ansible_dir: Path = Path(__file__).parent / "ansible"
     backup_dir: Path = Path(os.getenv("SLM_BACKUP_DIR", str(Path.home() / "slm-backups")))
 

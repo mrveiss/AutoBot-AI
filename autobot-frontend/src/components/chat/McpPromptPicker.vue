@@ -144,14 +144,14 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import { useApi } from '@/composables/useApi'
+import { useApiClient } from '@/plugins/api'
 import BaseButton from '@/components/base/BaseButton.vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('McpPromptPicker')
-const api = useApi()
+const api = useApiClient()
 
 interface Props {
   disabled?: boolean
