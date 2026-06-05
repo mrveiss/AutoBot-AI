@@ -156,10 +156,10 @@ services:
     environment:
       # Map-style environment merges with base (list-style would replace)
       # The SLM service reads *_FILE variants via autobot_shared.secret_file_utils.
+      # SLM_DATA_DIR inherited from base compose (set to /app/data)
       SLM_ADMIN_PASSWORD_FILE: /run/secrets/slm_admin_password
       SLM_JWT_SECRET_FILE: /run/secrets/slm_jwt_secret
       SLM_ADMIN_PASSWORD: ""         # clear the plain-text env var
-      SLM_DATA_DIR: /app/data        # redirect .slm_keys to named volume (not image layer)
     deploy:
       resources:
         limits:
