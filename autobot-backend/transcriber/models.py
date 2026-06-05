@@ -117,6 +117,10 @@ class RecordingResponse(BaseModel):
     metadata: Optional[Dict[str, Any]] = None
 
 
+# Alias for backwards compatibility
+RecordingOut = RecordingResponse
+
+
 class SegmentResponse(BaseModel):
     """Response schema for transcription segment."""
 
