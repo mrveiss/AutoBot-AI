@@ -144,6 +144,7 @@ services:
       - /var/run
       - /app/data/tmp:mode=1777
       - /app/autobot-slm-backend/data:uid=999,gid=999,mode=0700  # SLM writes .slm_keys here; UID/GID pinned in Dockerfile
+      - /app/autobot-slm-backend/config:uid=999,gid=999,mode=0700  # config.py creates config_dir at import time
     secrets:
       - slm_admin_password
       - slm_jwt_secret

@@ -56,7 +56,7 @@ COPY autobot-slm-backend/ /app/autobot-slm-backend/
 COPY autobot-infrastructure/ /app/autobot-infrastructure/
 
 # Create required directories
-RUN mkdir -p /app/data /app/logs /app/autobot-slm-backend/data \
+RUN mkdir -p /app/data /app/logs /app/autobot-slm-backend/data /app/autobot-slm-backend/config \
     && chown -R autobot:autobot /app
 
 # Copy entrypoint script (runs migrations before app start)
