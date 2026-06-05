@@ -242,15 +242,76 @@ class RateLimiter:
         requests_per_minute: int | None = None,
         requests_per_hour: int | None = None,
     ) -> bool:
-        """Check and record atomically.  Returns True when the request is allowed.
+        """Check and record atomically using Redis Lua script.
 
-        Convenience wrapper that calls ``is_allowed`` then ``record`` when
-        allowed.  Returns False without recording when the limit is exceeded.
+        Returns True when the request is allowed. Uses a Lua script to ensure
+        atomicity and prevent race conditions where concurrent requests could
+        bypass rate limits (Issue #9610 review fix).
         """
-        allowed = await self.is_allowed(key, requests_per_minute, requests_per_hour)
-        if allowed:
-            await self.record(key)
-        return allowed
+        rpm = requests_per_minute if requests_per_minute is not None else self._rpm
+        rph = requests_per_hour if requests_per_hour is not None else self._rph
+        now = time.time()
+
+        try:
+            redis = await get_async_redis_client(database=self._db)
+            if redis is None:
+                logger.warning(
+                    "rate_limiter: Redis unavailable for key '%s:%s'; allowing request",
+                    self._prefix,
+                    key,
+                )
+                return True
+
+            # Lua script for atomic check+record
+            # Returns 1 if allowed, 0 if rate limited
+            lua_script = """
+            local hour_key = KEYS[1]
+            local now = tonumber(ARGV[1])
+            local rpm = tonumber(ARGV[2])
+            local rph = tonumber(ARGV[3])
+
+            -- Count requests in minute and hour windows
+            local minute_cutoff = now - 60
+            local hour_cutoff = now - 3600
+            local minute_count = redis.call('ZCOUNT', hour_key, minute_cutoff, '+inf')
+            local hour_count = redis.call('ZCOUNT', hour_key, hour_cutoff, '+inf')
+
+            -- Check limits
+            if minute_count >= rpm or hour_count >= rph then
+                return 0  -- Rate limited
+            end
+
+            -- Record request atomically
+            redis.call('ZADD', hour_key, now, tostring(now))
+            redis.call('ZREMRANGEBYSCORE', hour_key, '-inf', now - 3600)
+            redis.call('EXPIRE', hour_key, 7200)
+
+            return 1  -- Allowed
+            """
+
+            hour_key = self._redis_key(key, "hour")
+            result = await redis.eval(lua_script, 1, hour_key, now, rpm, rph)
+            allowed = bool(result)
+
+            if not allowed:
+                logger.debug(
+                    "rate_limiter: limit hit for %s:%s (rpm=%d, rph=%d)",
+                    self._prefix,
+                    key,
+                    rpm,
+                    rph,
+                )
+
+            return allowed
+
+        except Exception as exc:
+            logger.warning(
+                "rate_limiter: Redis error for key '%s:%s': %s; allowing request",
+                self._prefix,
+                key,
+                exc,
+            )
+            return True
 
     async def get_retry_after_seconds(self, key: str) -> int:
         """Return integer seconds until the next request for *key* will be allowed.

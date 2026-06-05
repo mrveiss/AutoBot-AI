@@ -104,6 +104,4 @@ def _get_jwt_secret() -> str:
     if secret and len(secret) >= 32:
         return secret
 
-    raise ValueError(
-        "No JWT secret configured. Set AUTOBOT_JWT_SECRET or SECRET_KEY environment variable."
-    )
+    raise ValueError("No JWT secret configured. Set AUTOBOT_JWT_SECRET or SECRET_KEY environment variable.")

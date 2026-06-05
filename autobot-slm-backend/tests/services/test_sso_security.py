@@ -18,7 +18,6 @@ import types
 import uuid
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
-from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -163,7 +162,7 @@ class TestLdapInjectionPrevention:
         from autobot_shared.security.input_sanitizer import sanitize_ldap_dn, sanitize_ldap_filter
 
         # Test 1: DN escaping with DN-specific dangerous chars (RFC 4514)
-        dn_malicious = 'cn=admin,ou=users'  # comma is special in DNs
+        dn_malicious = "cn=admin,ou=users"  # comma is special in DNs
         safe_dn = sanitize_ldap_dn(dn_malicious)
         # Comma must be escaped in DN attribute values
         assert "\\2c" in safe_dn
@@ -377,7 +376,7 @@ class TestClientSecretHandling:
             mock_client_cls.return_value = MagicMock()
 
             with caplog.at_level(logging.DEBUG):
-                client = service._build_oauth_client(provider)
+                service._build_oauth_client(provider)
 
         # Check all log records — secret must never appear
         log_text = " ".join(record.message for record in caplog.records)

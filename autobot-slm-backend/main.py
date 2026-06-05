@@ -405,6 +405,9 @@ app = FastAPI(
     root_path=os.getenv("SLM_ROOT_PATH", ""),
     docs_url="/api/docs" if settings.debug else None,
     redoc_url="/api/redoc" if settings.debug else None,
+    # Security: MVA-3397 - Trust X-Forwarded-For from nginx proxy for rate limiting
+    proxy_headers=True,
+    forwarded_allow_ips=settings.trusted_proxies,
 )
 
 app.add_middleware(
