@@ -30,7 +30,9 @@ class SecretRequirement(Enum):
     SSH_KEY = "ssh_key"
     API_KEY = "api_key"  # nosemgrep: semgrep.autobot-hardcoded-secret-key
     PASSWORD = "password"  # nosemgrep: semgrep.autobot-hardcoded-secret-key  # nosec B105 - secret type enum, not actual password
-    TOKEN = "token"  # nosemgrep: semgrep.autobot-hardcoded-secret-key  # nosec B105 - secret type enum, not actual token
+    TOKEN = (
+        "token"  # nosemgrep: semgrep.autobot-hardcoded-secret-key  # nosec B105 - secret type enum, not actual token
+    )
     CERTIFICATE = "certificate"
     DATABASE_URL = "database_url"
     ANY = "any"  # Agent can use any available secrets
