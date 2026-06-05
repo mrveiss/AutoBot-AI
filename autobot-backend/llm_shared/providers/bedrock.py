@@ -140,9 +140,7 @@ class BedrockProvider(BaseProvider):
 
         return access_key, secret_key, region
 
-    def _validate_credentials(
-        self, access_key: str | None, secret_key: str | None
-    ) -> None:
+    def _validate_credentials(self, access_key: str | None, secret_key: str | None) -> None:
         """
         Validate AWS credential format at initialization.
 
@@ -198,15 +196,13 @@ class BedrockProvider(BaseProvider):
             # AWS secret keys are exactly 40 characters (base64-encoded 30 bytes)
             if len(secret_key) != 40:
                 raise ValueError(
-                    f"Invalid AWS secret key length: {len(secret_key)} characters. "
-                    "Expected exactly 40 characters."
+                    f"Invalid AWS secret key length: {len(secret_key)} characters. " "Expected exactly 40 characters."
                 )
 
             # Validate character set (base64: A-Za-z0-9+/)
             if not re.match(r"^[A-Za-z0-9+/]{40}$", secret_key):
                 raise ValueError(
-                    "Invalid AWS secret key format: must contain only base64 characters "
-                    "(A-Z, a-z, 0-9, +, /)."
+                    "Invalid AWS secret key format: must contain only base64 characters " "(A-Z, a-z, 0-9, +, /)."
                 )
 
     def _ensure_runtime_client(self):
