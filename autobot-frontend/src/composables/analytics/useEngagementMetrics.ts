@@ -19,8 +19,7 @@ export function useEngagementMetrics() {
     error.value = null
 
     try {
-      const response = await api.get('/analytics/engagement-metrics')
-      data.value = response.data
+      data.value = await api.get<EngagementMetrics>('/analytics/engagement-metrics')
     } catch (err) {
       error.value = err instanceof Error ? err.message : 'Failed to load engagement metrics'
     } finally {
