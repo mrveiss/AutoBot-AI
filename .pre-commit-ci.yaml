@@ -1,0 +1,43 @@
+# Configuration for pre-commit.ci - automated pre-commit hook runner
+# Automatically runs pre-commit hooks on PRs and commits fixes
+# See: https://pre-commit.ci
+#
+# Benefits:
+# - Catches issues even if developers skip local pre-commit installation
+# - Auto-commits formatting fixes to PR branches
+# - Reduces manual formatting work
+#
+# To enable: Visit https://github.com/apps/pre-commit-ci and install for this repo
+# Related: MVA-2111
+
+# Run pre-commit.ci on PRs targeting these branches
+branches: [main, Dev_new_gui, develop]
+
+# Auto-fix and commit changes when possible
+autofix_commit_msg: |
+  [pre-commit.ci] auto fixes from pre-commit hooks
+
+  Co-Authored-By: Paperclip <noreply@paperclip.ing>
+
+# PR comment when auto-fixes are committed
+autofix_prs: true
+
+# Update pre-commit hook versions quarterly
+autoupdate_schedule: quarterly
+
+# Skip these hooks in pre-commit.ci (too slow or require specific environment)
+skip:
+  # Skip mypy in CI bot - it's covered by code-quality.yml workflow
+  - mypy
+  # Skip custom hooks that need specific repo structure
+  - record-branch
+  - worktree-branch-guard
+  - target-branch-guard
+  - detect-mass-deletions
+  - branch-guard
+  - warn-untracked-files
+  - install-post-checkout
+  - install-post-commit
+
+# Submodules handling
+submodules: false

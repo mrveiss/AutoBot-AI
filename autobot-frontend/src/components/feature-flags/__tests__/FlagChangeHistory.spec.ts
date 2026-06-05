@@ -50,7 +50,7 @@ describe('FlagChangeHistory', () => {
       const header = document.querySelector('.section-header')
       expect(header).not.toBeNull()
 
-      const icon = header?.querySelector('i.fa-history')
+      const icon = header?.querySelector('.icon')
       expect(icon).not.toBeNull()
     })
   })
@@ -64,7 +64,7 @@ describe('FlagChangeHistory', () => {
 
     it('shows empty state icon', () => {
       renderHistory({ history: [] })
-      const icon = document.querySelector('.empty-icon i.fa-clock')
+      const icon = document.querySelector('.empty-icon .icon')
       expect(icon).not.toBeNull()
     })
   })

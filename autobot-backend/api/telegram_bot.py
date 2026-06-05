@@ -494,7 +494,6 @@ async def send_telegram_response(
                 logger.info(f"Sent response to Telegram chat {chat_id} thread {thread_id}")
             else:
                 logger.info(f"Sent response to Telegram chat {chat_id}")
-
     except Exception:
         logger.exception("Failed to send Telegram response")
         raise
