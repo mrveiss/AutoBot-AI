@@ -103,14 +103,14 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useApi } from '@/composables/useApi'
+import { useApiClient } from '@/plugins/api'
 import BaseButton from '@/components/base/BaseButton.vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('McpResourceBrowser')
-const api = useApi()
+const api = useApiClient()
 
 interface McpResource {
   uri: string

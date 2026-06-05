@@ -1,5 +1,5 @@
 import { ref, type Ref } from 'vue'
-import { useApi } from '@/composables/useApi'
+import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('useMCPResources')
@@ -49,7 +49,7 @@ export interface MCPPromptMessages {
  * Provides methods to list and read MCP resources from filesystem, git, and knowledge bridges
  */
 export function useMCPResources() {
-  const { get, post } = useApi()
+  const { get, post } = useApiClient()
 
   const resources: Ref<MCPResource[]> = ref([])
   const loading = ref(false)

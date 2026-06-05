@@ -18,7 +18,7 @@ describe('useSseProgress', () => {
     }
 
     // Mock the EventSource constructor
-    vi.stubGlobal('EventSource', vi.fn(function EventSource(this: any, url: string) {
+    vi.stubGlobal('EventSource', vi.fn(function EventSource(this: any, _url: string) {
       Object.defineProperty(mockEventSource, 'onmessage', {
         set: (handler) => { onmessageHandler = handler },
         get: () => onmessageHandler,
