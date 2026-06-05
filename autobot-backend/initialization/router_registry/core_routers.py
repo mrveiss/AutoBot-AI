@@ -85,6 +85,7 @@ from api.settings import router as settings_router
 from api.structured_thinking_mcp import router as structured_thinking_mcp_router
 from api.system import router as system_router
 from api.telegram_bot import router as telegram_bot_router  # MVA-2074
+
 # from api.transcriber import router as transcriber_router  # Issue #9044, MVA-2186 - REMOVED: api/transcriber.py deleted in 58318397a, routes now via extensions
 from api.usage import router as usage_router  # Issue #1807
 from api.user_management.router import router as user_management_router  # Issue #1801
