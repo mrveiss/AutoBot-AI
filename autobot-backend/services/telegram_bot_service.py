@@ -12,6 +12,7 @@ from typing import Any, Dict, Optional
 
 import aiohttp
 
+from autobot_shared.field_encryption import decrypt_field, encrypt_field
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 
@@ -20,6 +21,9 @@ logger = get_logger(__name__)
 # Redis keys for storing Telegram bot config
 TELEGRAM_BOT_TOKEN_KEY = "autobot:settings:telegram_bot_token"
 TELEGRAM_WEBHOOK_SECRET_KEY = "autobot:settings:telegram_webhook_secret"
+
+# Sentinel prefix for encrypted values (backward compatibility)
+_ENCRYPTED_PREFIX = "enc:"
 
 
 class TelegramBotService:
@@ -46,7 +50,17 @@ class TelegramBotService:
         bot_token = await redis.get(TELEGRAM_BOT_TOKEN_KEY)
         if bot_token:
             bot_token = bot_token.decode("utf-8") if isinstance(bot_token, bytes) else bot_token
-            logger.info("Loaded Telegram bot token from Redis")
+            # Decrypt if encrypted (backward compatible with plaintext tokens)
+            if bot_token.startswith(_ENCRYPTED_PREFIX):
+                try:
+                    bot_token = decrypt_field(bot_token[len(_ENCRYPTED_PREFIX) :])
+                    logger.info("Loaded and decrypted Telegram bot token from Redis")
+                except Exception as exc:
+                    logger.error(f"Failed to decrypt Telegram bot token: {exc}")
+                    return cls(bot_token=None)
+            else:
+                logger.warning("Telegram bot token is stored in plaintext (not encrypted)")
+                logger.info("Loaded Telegram bot token from Redis")
         else:
             logger.warning("No Telegram bot token found in Redis")
 
@@ -357,7 +371,7 @@ class TelegramBotService:
 
 async def save_telegram_bot_token(bot_token: str) -> None:
     """
-    Save Telegram bot token to Redis.
+    Save Telegram bot token to Redis (encrypted).
 
     Args:
         bot_token: Telegram Bot API token
@@ -366,13 +380,19 @@ async def save_telegram_bot_token(bot_token: str) -> None:
     if redis is None:
         raise RuntimeError("Redis client not available")
 
-    await redis.set(TELEGRAM_BOT_TOKEN_KEY, bot_token)
-    logger.info("Saved Telegram bot token to Redis")
+    # Encrypt the token before storing
+    try:
+        encrypted_token = _ENCRYPTED_PREFIX + encrypt_field(bot_token)
+        await redis.set(TELEGRAM_BOT_TOKEN_KEY, encrypted_token)
+        logger.info("Saved encrypted Telegram bot token to Redis")
+    except Exception as exc:
+        logger.error(f"Failed to encrypt Telegram bot token: {exc}")
+        raise
 
 
 async def get_telegram_bot_token() -> Optional[str]:
     """
-    Get Telegram bot token from Redis.
+    Get Telegram bot token from Redis (decrypted).
 
     Returns:
         Bot token or None if not configured
@@ -384,7 +404,17 @@ async def get_telegram_bot_token() -> Optional[str]:
 
     bot_token = await redis.get(TELEGRAM_BOT_TOKEN_KEY)
     if bot_token:
-        return bot_token.decode("utf-8") if isinstance(bot_token, bytes) else bot_token
+        bot_token = bot_token.decode("utf-8") if isinstance(bot_token, bytes) else bot_token
+        # Decrypt if encrypted (backward compatible with plaintext tokens)
+        if bot_token.startswith(_ENCRYPTED_PREFIX):
+            try:
+                return decrypt_field(bot_token[len(_ENCRYPTED_PREFIX) :])
+            except Exception as exc:
+                logger.error(f"Failed to decrypt Telegram bot token: {exc}")
+                return None
+        else:
+            logger.warning("Telegram bot token is stored in plaintext (not encrypted)")
+            return bot_token
     return None
 
 
