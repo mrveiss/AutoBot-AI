@@ -8,8 +8,9 @@ by providing shared functionality that both modules depend on.
 """
 
 from fastapi import Request
-from utils.catalog_http_exceptions import raise_auth_error
+
 from auth_middleware import get_auth_middleware
+from utils.catalog_http_exceptions import raise_auth_error
 
 
 def _require_admin(request: Request) -> dict:

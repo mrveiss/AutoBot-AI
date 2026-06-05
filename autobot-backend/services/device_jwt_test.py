@@ -8,8 +8,8 @@ import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from autobot_shared.auth.jwt_core import JWTDecodeError, JWTExpiredError, decode_jwt
 
+from autobot_shared.auth.jwt_core import JWTDecodeError, JWTExpiredError, decode_jwt
 from services.device_jwt import (
     VALID_SCOPES,
     invalidate_device_cache,
