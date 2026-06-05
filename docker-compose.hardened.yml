@@ -158,6 +158,7 @@ services:
       SLM_ADMIN_PASSWORD_FILE: /run/secrets/slm_admin_password
       SLM_JWT_SECRET_FILE: /run/secrets/slm_jwt_secret
       SLM_ADMIN_PASSWORD: ""         # clear the plain-text env var
+      SLM_DATA_DIR: /app/data        # redirect .slm_keys to named volume (not image layer)
     deploy:
       resources:
         limits:
