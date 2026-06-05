@@ -1,0 +1,50 @@
+name: PR Queue Gate
+
+on:
+  pull_request:
+    types: [opened, reopened]
+
+jobs:
+  enforce-pr-limit:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Count open PRs and enforce limit
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          LIMIT=5
+
+          # Count all open PRs (including this one), then subtract 1
+          TOTAL=$(gh pr list --repo "$REPO" --state open --json number --jq 'length')
+          OPEN=$(( TOTAL - 1 ))
+
+          echo "Open PRs (excluding this one): $OPEN / $LIMIT"
+
+          if [ "$OPEN" -ge "$LIMIT" ]; then
+            echo "PR limit exceeded — closing PR #$PR_NUMBER"
+
+            OPEN_LIST=$(gh pr list \
+              --repo "$REPO" \
+              --state open \
+              --json number,title \
+              --jq --argjson skip "$PR_NUMBER" \
+              '[.[] | select(.number != $skip) | "- #\(.number) \(.title)"] | join("\n")')
+
+            BODY="## PR Queue Gate: Limit Reached
+
+This PR was automatically closed because the repository already has $OPEN/$LIMIT open PRs.
+
+**Open PRs:**
+$OPEN_LIST
+
+Review and merge existing PRs, then reopen this one.
+
+> Hard limit enforced by \`.github/workflows/pr-queue-gate.yml\`"
+
+            gh pr comment "$PR_NUMBER" --repo "$REPO" --body "$BODY"
+            gh pr close "$PR_NUMBER" --repo "$REPO"
+          fi
