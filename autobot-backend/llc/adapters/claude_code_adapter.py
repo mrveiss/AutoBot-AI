@@ -286,16 +286,121 @@ class ClaudeCodeAdapter:
             pass
 
     def _build_prompt(self, context: dict) -> str:
-        parts: list[str] = []
-        if rag_brief := context.get("rag_brief"):
-            parts.append(rag_brief)
-        if task_id := context.get("task_id", ""):
-            parts.append(f"Task ID: {task_id}")
-        if api_base := context.get("api_base_url", ""):
-            parts.append(f"API base URL: {api_base}")
-        if not parts:
-            parts.append(json.dumps(context, default=str))
-        return "\n\n".join(parts)
+        """Build structured Markdown prompt from context (GH#9622).
+
+        Formats HeartbeatContextBuilder fat context as readable Markdown sections.
+        Falls back to legacy format for backward compatibility.
+        """
+        # Legacy format: rag_brief + task_id + api_base_url
+        if "rag_brief" in context or "task_id" in context or "api_base_url" in context:
+            parts: list[str] = []
+            if rag_brief := context.get("rag_brief"):
+                parts.append(rag_brief)
+            if task_id := context.get("task_id", ""):
+                parts.append(f"Task ID: {task_id}")
+            if api_base := context.get("api_base_url", ""):
+                parts.append(f"API base URL: {api_base}")
+            return "\n\n".join(parts)
+
+        # Fat context format: structured Markdown from HeartbeatContextBuilder
+        if "work_item_detail" in context:
+            return self._format_fat_context_markdown(context)
+
+        # Ultimate fallback: raw JSON (backward compatibility)
+        return json.dumps(context, default=str)
+
+    def _format_fat_context_markdown(self, context: dict) -> str:
+        """Format fat context as structured Markdown (GH#9622).
+
+        Args:
+            context: Dict from HeartbeatContextBuilder._build_fat()
+
+        Returns:
+            Markdown-formatted prompt string
+        """
+        sections: list[str] = []
+
+        # Work Item Details
+        work_item = context.get("work_item_detail", {})
+        if work_item:
+            sections.append("## Work Item")
+            sections.append(f"**Title:** {work_item.get('title', 'N/A')}")
+            sections.append(f"**Status:** {work_item.get('status', 'N/A')}")
+            sections.append(f"**Priority:** {work_item.get('priority', 'N/A')}")
+            if desc := work_item.get("description"):
+                sections.append(f"\n**Description:**\n{desc}")
+            if ac := work_item.get("acceptance_criteria"):
+                sections.append(f"\n**Acceptance Criteria:**\n{ac}")
+
+        # Goal Ancestry
+        if goal_ancestry := context.get("goal_ancestry"):
+            sections.append("\n## Goal Ancestry")
+            for idx, goal in enumerate(goal_ancestry, 1):
+                goal_title = goal.get("title", "Unknown")
+                sections.append(f"{idx}. {goal_title}")
+
+        # Company Context
+        if company_ctx := context.get("company_context"):
+            if chunks := self._format_rag_chunks(company_ctx):
+                sections.append("\n## Company Knowledge")
+                sections.append(chunks)
+
+        # Project Context
+        if project_ctx := context.get("project_context"):
+            if chunks := self._format_rag_chunks(project_ctx):
+                sections.append("\n## Project Knowledge")
+                sections.append(chunks)
+
+        # Agent Memory
+        if agent_mem := context.get("agent_memory"):
+            if chunks := self._format_rag_chunks(agent_mem):
+                sections.append("\n## Agent Memory")
+                sections.append(chunks)
+
+        # Agent Wiki
+        if agent_wiki := context.get("agent_wiki"):
+            sections.append("\n## Agent Wiki")
+            sections.append(agent_wiki)
+
+        # Similar Past Work
+        if past_work := context.get("similar_past_work"):
+            sections.append("\n## Similar Completed Work")
+            for item in past_work:
+                sections.append(f"\n**{item.get('title', 'N/A')}**")
+                if desc := item.get("description"):
+                    sections.append(desc)
+
+        # API Configuration
+        if api_base := context.get("api_base"):
+            sections.append(f"\n## API Configuration")
+            sections.append(f"Base URL: {api_base}")
+
+        return "\n\n".join(sections)
+
+    @staticmethod
+    def _format_rag_chunks(rag_context: dict) -> str:
+        """Format RAG chunks as Markdown list (GH#9622).
+
+        Args:
+            rag_context: Dict with 'chunks' and 'sources' keys
+
+        Returns:
+            Markdown-formatted chunk list, or empty string if no chunks
+        """
+        if not isinstance(rag_context, dict):
+            return ""
+
+        chunks = rag_context.get("chunks", [])
+        if not chunks:
+            return ""
+
+        lines: list[str] = []
+        for idx, chunk in enumerate(chunks, 1):
+            content = chunk.get("content", "").strip()
+            score = chunk.get("score", 0.0)
+            lines.append(f"{idx}. (score: {score:.3f}) {content}")
+
+        return "\n".join(lines)
 
     @staticmethod
     def _load_state(state_file: str, safe_dir: str = _DEFAULT_OUTPUT_DIR) -> Optional[dict]:

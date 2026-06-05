@@ -74,6 +74,132 @@ class TestBuildPrompt:
         p = self._prompt({"foo": "bar"})
         assert "bar" in p
 
+    def test_fat_context_markdown_work_item_section(self) -> None:
+        """GH#9622: work_item_detail formatted as Markdown."""
+        context = {
+            "work_item_detail": {
+                "title": "Fix bug in adapter",
+                "status": "in_progress",
+                "priority": "high",
+                "description": "The adapter fails on edge case X",
+                "acceptance_criteria": "- Fix verified\n- Tests pass",
+            }
+        }
+        p = self._prompt(context)
+        assert "## Work Item" in p
+        assert "**Title:** Fix bug in adapter" in p
+        assert "**Status:** in_progress" in p
+        assert "**Priority:** high" in p
+        assert "**Description:**\nThe adapter fails on edge case X" in p
+        assert "**Acceptance Criteria:**\n- Fix verified" in p
+
+    def test_fat_context_markdown_goal_ancestry(self) -> None:
+        """GH#9622: goal_ancestry formatted as numbered list."""
+        context = {
+            "work_item_detail": {"title": "Task", "status": "open", "priority": "medium"},
+            "goal_ancestry": [
+                {"title": "Q1 Goals"},
+                {"title": "Improve Performance"},
+                {"title": "Optimize Adapters"},
+            ],
+        }
+        p = self._prompt(context)
+        assert "## Goal Ancestry" in p
+        assert "1. Q1 Goals" in p
+        assert "2. Improve Performance" in p
+        assert "3. Optimize Adapters" in p
+
+    def test_fat_context_markdown_rag_chunks(self) -> None:
+        """GH#9622: RAG chunks formatted with scores."""
+        context = {
+            "work_item_detail": {"title": "Task", "status": "open", "priority": "medium"},
+            "company_context": {
+                "chunks": [
+                    {"content": "Company policy: always test", "score": 0.95},
+                    {"content": "Code style guide", "score": 0.87},
+                ],
+                "sources": ["doc1", "doc2"],
+            },
+        }
+        p = self._prompt(context)
+        assert "## Company Knowledge" in p
+        assert "(score: 0.950) Company policy: always test" in p
+        assert "(score: 0.870) Code style guide" in p
+
+    def test_fat_context_markdown_agent_wiki(self) -> None:
+        """GH#9622: agent_wiki section included."""
+        context = {
+            "work_item_detail": {"title": "Task", "status": "open", "priority": "medium"},
+            "agent_wiki": "# Agent Notes\n\nRemember to check Redis before querying DB.",
+        }
+        p = self._prompt(context)
+        assert "## Agent Wiki" in p
+        assert "# Agent Notes" in p
+        assert "Remember to check Redis before querying DB" in p
+
+    def test_fat_context_markdown_similar_work(self) -> None:
+        """GH#9622: similar_past_work formatted as list."""
+        context = {
+            "work_item_detail": {"title": "Task", "status": "open", "priority": "medium"},
+            "similar_past_work": [
+                {"title": "Fixed similar bug in X", "description": "Applied patch Y"},
+                {"title": "Refactored adapter", "description": None},
+            ],
+        }
+        p = self._prompt(context)
+        assert "## Similar Completed Work" in p
+        assert "**Fixed similar bug in X**" in p
+        assert "Applied patch Y" in p
+        assert "**Refactored adapter**" in p
+
+    def test_fat_context_markdown_api_config(self) -> None:
+        """GH#9622: API base URL in config section."""
+        context = {
+            "work_item_detail": {"title": "Task", "status": "open", "priority": "medium"},
+            "api_base": "http://localhost:8001/api",
+        }
+        p = self._prompt(context)
+        assert "## API Configuration" in p
+        assert "Base URL: http://localhost:8001/api" in p
+
+    def test_fat_context_markdown_all_sections(self) -> None:
+        """GH#9622: comprehensive fat context with all sections."""
+        context = {
+            "work_item_detail": {
+                "title": "Implement feature X",
+                "status": "in_progress",
+                "priority": "high",
+                "description": "Add new capability",
+                "acceptance_criteria": "- Tests pass\n- Docs updated",
+            },
+            "goal_ancestry": [{"title": "Q1 Goals"}],
+            "company_context": {"chunks": [{"content": "Policy", "score": 0.9}], "sources": []},
+            "project_context": {"chunks": [{"content": "Project rule", "score": 0.85}], "sources": []},
+            "agent_memory": {"chunks": [{"content": "Past learning", "score": 0.8}], "sources": []},
+            "agent_wiki": "# Notes",
+            "similar_past_work": [{"title": "Similar task", "description": "Done"}],
+            "api_base": "http://api.local",
+        }
+        p = self._prompt(context)
+        assert "## Work Item" in p
+        assert "## Goal Ancestry" in p
+        assert "## Company Knowledge" in p
+        assert "## Project Knowledge" in p
+        assert "## Agent Memory" in p
+        assert "## Agent Wiki" in p
+        assert "## Similar Completed Work" in p
+        assert "## API Configuration" in p
+
+    def test_legacy_format_takes_precedence(self) -> None:
+        """GH#9622: legacy rag_brief format takes precedence over fat context."""
+        context = {
+            "rag_brief": "# Legacy Brief",
+            "work_item_detail": {"title": "Task", "status": "open", "priority": "medium"},
+        }
+        p = self._prompt(context)
+        assert "# Legacy Brief" in p
+        assert "## Work Item" not in p  # fat context not used
+
 
 # ---------------------------------------------------------------------------
 # invoke
