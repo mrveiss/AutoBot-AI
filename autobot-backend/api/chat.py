@@ -2257,7 +2257,8 @@ async def summarize_conversation(
         [f"{msg.get('role', 'unknown').upper()}: {msg.get('content', '')}" for msg in messages_to_summarize]
     )
 
-    summarization_prompt = f"""Summarize the following conversation segment concisely. Preserve key context, decisions, and technical details that would be needed to continue the conversation naturally.  # noqa: E501
+    summarization_prompt = f"""Summarize the following conversation segment concisely.
+Preserve key context, decisions, and technical details that would be needed to continue the conversation naturally.
 
 Target length: approximately {body.target_length or 500} tokens.
 
