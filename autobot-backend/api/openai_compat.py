@@ -41,6 +41,7 @@ from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from llm_shared import get_provider_registry
+from llm_shared.model_fallback_coordinator import get_fallback_coordinator
 from llm_shared.models import LLMRequest
 from llm_shared.tiered_routing.tier_router import get_tiered_router
 from services.llm_api_key_service import LLMApiKeyRecord, get_llm_api_key_service
@@ -337,8 +338,6 @@ async def chat_completions(
 
     registry = get_provider_registry()
     llm_request = _build_llm_request(body, resolved_model=resolved_model)
-
-    from llm_shared.model_fallback_coordinator import get_fallback_coordinator
 
     provider = await registry.get_provider_for_request(request=llm_request)
     if provider is None:

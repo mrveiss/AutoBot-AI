@@ -35,6 +35,7 @@ from api.openai_compat import (
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from llm_shared import get_provider_registry
+from llm_shared.model_fallback_coordinator import get_fallback_coordinator
 from llm_shared.models import LLMRequest
 from services.llm_api_key_service import LLMApiKeyRecord, get_llm_api_key_service
 from services.llm_cost_tracker import get_cost_tracker
@@ -284,8 +285,6 @@ async def messages(
 
     registry = get_provider_registry()
     llm_request = _build_llm_request(body, resolved_model=resolved_model)
-
-    from llm_shared.model_fallback_coordinator import get_fallback_coordinator
 
     provider = await registry.get_provider_for_request(request=llm_request)
     if provider is None:
