@@ -11,7 +11,7 @@ Tests OAuth and LDAP flows using encrypted secrets:
 """
 
 import uuid
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
@@ -30,9 +30,7 @@ async def async_session():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
-    async_session_maker = sessionmaker(
-        engine, class_=AsyncSession, expire_on_commit=False
-    )
+    async_session_maker = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
     async with async_session_maker() as session:
         yield session
@@ -103,9 +101,7 @@ class TestOAuthFlowWithEncryptedCredentials:
     """End-to-end OAuth flow tests using encrypted client_secret."""
 
     @pytest.mark.asyncio
-    async def test_oauth_authorization_url_generation(
-        self, async_session, oauth_provider_with_encrypted_secret
-    ):
+    async def test_oauth_authorization_url_generation(self, async_session, oauth_provider_with_encrypted_secret):
         """Test OAuth authorization URL generation with encrypted credentials."""
         from user_management.services.sso_secrets import SSOSecretsManager
 
@@ -177,9 +173,7 @@ class TestOAuthFlowWithEncryptedCredentials:
 
     @pytest.mark.asyncio
     @patch("httpx.AsyncClient.get")
-    async def test_oauth_userinfo_retrieval(
-        self, mock_get, async_session, oauth_provider_with_encrypted_secret
-    ):
+    async def test_oauth_userinfo_retrieval(self, mock_get, async_session, oauth_provider_with_encrypted_secret):
         """Test OAuth userinfo retrieval after successful token exchange."""
         # Mock userinfo endpoint response
         mock_get.return_value = MagicMock(
@@ -197,7 +191,7 @@ class TestOAuthFlowWithEncryptedCredentials:
 
         # Simulate userinfo request with access token
         access_token = "mock_access_token"
-        userinfo_url = oauth_provider_with_encrypted_secret["userinfo_url"]
+        oauth_provider_with_encrypted_secret["userinfo_url"]
 
         # In real code, this would make HTTP request
         # For test, verify flow completes successfully
@@ -207,9 +201,7 @@ class TestOAuthFlowWithEncryptedCredentials:
         assert headers["Authorization"] == "Bearer mock_access_token"
 
     @pytest.mark.asyncio
-    async def test_oauth_flow_handles_missing_secret_gracefully(
-        self, async_session, provider_id
-    ):
+    async def test_oauth_flow_handles_missing_secret_gracefully(self, async_session, provider_id):
         """Test OAuth flow error handling when secret not found."""
         from user_management.services.sso_secrets import SSOSecretsManager
 
@@ -222,9 +214,7 @@ class TestOAuthFlowWithEncryptedCredentials:
         assert client_secret is None
 
     @pytest.mark.asyncio
-    async def test_oauth_flow_handles_decryption_error(
-        self, async_session, provider_id
-    ):
+    async def test_oauth_flow_handles_decryption_error(self, async_session, provider_id):
         """Test OAuth flow when secret decryption fails."""
         from user_management.services.sso_secrets import SSOSecretsManager
 
@@ -250,9 +240,7 @@ class TestLDAPFlowWithEncryptedCredentials:
     """End-to-end LDAP authentication tests using encrypted bind_password."""
 
     @pytest.mark.asyncio
-    async def test_ldap_connection_with_encrypted_password(
-        self, async_session, ldap_provider_with_encrypted_password
-    ):
+    async def test_ldap_connection_with_encrypted_password(self, async_session, ldap_provider_with_encrypted_password):
         """Test LDAP connection using decrypted bind_password."""
         from user_management.services.sso_secrets import SSOSecretsManager
 
@@ -332,9 +320,7 @@ class TestLDAPFlowWithEncryptedCredentials:
         assert "(uid=testuser)" in search_params["filter"]
 
     @pytest.mark.asyncio
-    async def test_ldap_connection_handles_missing_password(
-        self, async_session, provider_id
-    ):
+    async def test_ldap_connection_handles_missing_password(self, async_session, provider_id):
         """Test LDAP connection error handling when bind_password missing."""
         from user_management.services.sso_secrets import SSOSecretsManager
 
@@ -367,21 +353,18 @@ class TestLDAPFlowWithEncryptedCredentials:
         bind_password = await manager.retrieve_secret(provider_id, "bind_password")
 
         # First, admin binds to search for user
-        admin_dn = ldap_provider_with_encrypted_password["bind_dn"]
+        ldap_provider_with_encrypted_password["bind_dn"]
         assert bind_password == "ldap_bind_password_456"
 
         # Then user would be authenticated with their own credentials
         # (user password is not stored in SSO config, only bind password)
         user_dn = "uid=testuser,dc=example,dc=com"
-        user_password = "user_entered_password"
 
         # Verify admin bind password retrieved from encrypted storage
         assert bind_password is not None
 
     @pytest.mark.asyncio
-    async def test_ldap_handles_special_characters_in_password(
-        self, async_session, provider_id
-    ):
+    async def test_ldap_handles_special_characters_in_password(self, async_session, provider_id):
         """Test LDAP with special characters in bind_password."""
         from user_management.services.sso_secrets import SSOSecretsManager
 

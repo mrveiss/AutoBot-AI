@@ -18,7 +18,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from services.encryption import decrypt_data, encrypt_data
+from services.encryption import decrypt_data
 
 
 @pytest.fixture
@@ -40,31 +40,37 @@ def sample_providers_with_plaintext():
     return [
         (
             provider1_id,
-            json.dumps({
-                "provider_type": "google",
-                "client_id": "google_client_123",
-                "client_secret": "plaintext_google_secret",
-                "authorize_url": "https://accounts.google.com/o/oauth2/v2/auth",
-            }),
+            json.dumps(
+                {
+                    "provider_type": "google",
+                    "client_id": "google_client_123",
+                    "client_secret": "plaintext_google_secret",
+                    "authorize_url": "https://accounts.google.com/o/oauth2/v2/auth",
+                }
+            ),
         ),
         (
             provider2_id,
-            json.dumps({
-                "provider_type": "ldap",
-                "server_url": "ldap://ldap.example.com",
-                "bind_dn": "cn=admin,dc=example,dc=com",
-                "bind_password": "plaintext_ldap_password",
-                "base_dn": "dc=example,dc=com",
-            }),
+            json.dumps(
+                {
+                    "provider_type": "ldap",
+                    "server_url": "ldap://ldap.example.com",
+                    "bind_dn": "cn=admin,dc=example,dc=com",
+                    "bind_password": "plaintext_ldap_password",
+                    "base_dn": "dc=example,dc=com",
+                }
+            ),
         ),
         (
             provider3_id,
-            json.dumps({
-                "provider_type": "github",
-                "client_id": "github_client_456",
-                "client_secret": "plaintext_github_secret",
-                "authorize_url": "https://github.com/login/oauth/authorize",
-            }),
+            json.dumps(
+                {
+                    "provider_type": "github",
+                    "client_id": "github_client_456",
+                    "client_secret": "plaintext_github_secret",
+                    "authorize_url": "https://github.com/login/oauth/authorize",
+                }
+            ),
         ),
     ]
 
@@ -92,16 +98,12 @@ class TestSSOSecretsMigration:
 
         # Verify INSERT called for system_secrets table
         insert_calls = [
-            call for call in mock_cursor.execute.call_args_list
-            if "INSERT INTO system_secrets" in str(call)
+            call for call in mock_cursor.execute.call_args_list if "INSERT INTO system_secrets" in str(call)
         ]
         assert len(insert_calls) >= 1
 
         # Verify UPDATE called for sso_providers table
-        update_calls = [
-            call for call in mock_cursor.execute.call_args_list
-            if "UPDATE sso_providers" in str(call)
-        ]
+        update_calls = [call for call in mock_cursor.execute.call_args_list if "UPDATE sso_providers" in str(call)]
         assert len(update_calls) >= 1
 
     @patch("migrations.utils.get_connection")
@@ -121,10 +123,7 @@ class TestSSOSecretsMigration:
         migrate("postgresql://test")
 
         # Get the UPDATE call for sso_providers
-        update_calls = [
-            call for call in mock_cursor.execute.call_args_list
-            if "UPDATE sso_providers" in str(call)
-        ]
+        update_calls = [call for call in mock_cursor.execute.call_args_list if "UPDATE sso_providers" in str(call)]
 
         # Verify updated config was passed
         assert len(update_calls) > 0
@@ -163,8 +162,7 @@ class TestSSOSecretsMigration:
 
         # Verify bind_password was processed
         insert_calls = [
-            call for call in mock_cursor.execute.call_args_list
-            if "INSERT INTO system_secrets" in str(call)
+            call for call in mock_cursor.execute.call_args_list if "INSERT INTO system_secrets" in str(call)
         ]
         assert len(insert_calls) >= 1
 
@@ -190,34 +188,30 @@ class TestSSOSecretsMigration:
 
         # Should have 3 INSERT calls (one per provider)
         insert_calls = [
-            call for call in mock_cursor.execute.call_args_list
-            if "INSERT INTO system_secrets" in str(call)
+            call for call in mock_cursor.execute.call_args_list if "INSERT INTO system_secrets" in str(call)
         ]
         assert len(insert_calls) == 3
 
         # Should have 3 UPDATE calls (one per provider)
-        update_calls = [
-            call for call in mock_cursor.execute.call_args_list
-            if "UPDATE sso_providers" in str(call)
-        ]
+        update_calls = [call for call in mock_cursor.execute.call_args_list if "UPDATE sso_providers" in str(call)]
         assert len(update_calls) == 3
 
     @patch("migrations.utils.get_connection")
-    def test_migrate_handles_provider_with_no_secrets(
-        self, mock_get_connection, mock_db_connection
-    ):
+    def test_migrate_handles_provider_with_no_secrets(self, mock_get_connection, mock_db_connection):
         """Test migration skips providers without sensitive fields."""
         mock_conn, mock_cursor = mock_db_connection
         mock_get_connection.return_value = mock_conn
 
         # Provider config without any secrets
         provider_id = str(uuid.uuid4())
-        config_without_secrets = json.dumps({
-            "provider_type": "saml",
-            "entity_id": "https://idp.example.com/saml",
-            "sso_url": "https://idp.example.com/sso",
-            # No client_secret or bind_password
-        })
+        config_without_secrets = json.dumps(
+            {
+                "provider_type": "saml",
+                "entity_id": "https://idp.example.com/saml",
+                "sso_url": "https://idp.example.com/sso",
+                # No client_secret or bind_password
+            }
+        )
 
         mock_cursor.fetchall.return_value = [(provider_id, config_without_secrets)]
 
@@ -227,34 +221,30 @@ class TestSSOSecretsMigration:
 
         # Should not insert any secrets
         insert_calls = [
-            call for call in mock_cursor.execute.call_args_list
-            if "INSERT INTO system_secrets" in str(call)
+            call for call in mock_cursor.execute.call_args_list if "INSERT INTO system_secrets" in str(call)
         ]
         assert len(insert_calls) == 0
 
         # Should not update provider config
-        update_calls = [
-            call for call in mock_cursor.execute.call_args_list
-            if "UPDATE sso_providers" in str(call)
-        ]
+        update_calls = [call for call in mock_cursor.execute.call_args_list if "UPDATE sso_providers" in str(call)]
         assert len(update_calls) == 0
 
     @patch("migrations.utils.get_connection")
-    def test_migrate_handles_empty_secret_values(
-        self, mock_get_connection, mock_db_connection
-    ):
+    def test_migrate_handles_empty_secret_values(self, mock_get_connection, mock_db_connection):
         """Test migration skips empty/null secret values."""
         mock_conn, mock_cursor = mock_db_connection
         mock_get_connection.return_value = mock_conn
 
         # Provider with empty client_secret
         provider_id = str(uuid.uuid4())
-        config_with_empty_secret = json.dumps({
-            "provider_type": "google",
-            "client_id": "client_123",
-            "client_secret": "",  # Empty value
-            "authorize_url": "https://accounts.google.com/oauth",
-        })
+        config_with_empty_secret = json.dumps(
+            {
+                "provider_type": "google",
+                "client_id": "client_123",
+                "client_secret": "",  # Empty value
+                "authorize_url": "https://accounts.google.com/oauth",
+            }
+        )
 
         mock_cursor.fetchall.return_value = [(provider_id, config_with_empty_secret)]
 
@@ -264,8 +254,7 @@ class TestSSOSecretsMigration:
 
         # Should not insert secret for empty value
         insert_calls = [
-            call for call in mock_cursor.execute.call_args_list
-            if "INSERT INTO system_secrets" in str(call)
+            call for call in mock_cursor.execute.call_args_list if "INSERT INTO system_secrets" in str(call)
         ]
         assert len(insert_calls) == 0
 
@@ -289,8 +278,7 @@ class TestSSOSecretsMigration:
 
         # Should UPDATE instead of INSERT
         update_secret_calls = [
-            call for call in mock_cursor.execute.call_args_list
-            if "UPDATE system_secrets" in str(call)
+            call for call in mock_cursor.execute.call_args_list if "UPDATE system_secrets" in str(call)
         ]
         assert len(update_secret_calls) >= 1
 
@@ -313,10 +301,7 @@ class TestSSOSecretsMigration:
         migrate("postgresql://test")
 
         # Get updated config from UPDATE call
-        update_calls = [
-            call for call in mock_cursor.execute.call_args_list
-            if "UPDATE sso_providers" in str(call)
-        ]
+        update_calls = [call for call in mock_cursor.execute.call_args_list if "UPDATE sso_providers" in str(call)]
 
         # Verify non-sensitive fields preserved
         # (In real test, would parse the SQL parameters)
@@ -365,9 +350,7 @@ class TestSSOSecretsMigration:
         mock_conn.rollback.assert_called_once()
 
     @patch("migrations.utils.get_connection")
-    def test_migrate_closes_connection(
-        self, mock_get_connection, mock_db_connection, sample_providers_with_plaintext
-    ):
+    def test_migrate_closes_connection(self, mock_get_connection, mock_db_connection, sample_providers_with_plaintext):
         """Test migration closes connection in finally block."""
         mock_conn, mock_cursor = mock_db_connection
         mock_get_connection.return_value = mock_conn
@@ -383,9 +366,7 @@ class TestSSOSecretsMigration:
         mock_conn.close.assert_called_once()
 
     @patch("migrations.utils.get_connection")
-    def test_migrate_handles_json_string_and_dict_configs(
-        self, mock_get_connection, mock_db_connection
-    ):
+    def test_migrate_handles_json_string_and_dict_configs(self, mock_get_connection, mock_db_connection):
         """Test migration handles both JSON string and dict config formats."""
         mock_conn, mock_cursor = mock_db_connection
         mock_get_connection.return_value = mock_conn
@@ -398,10 +379,12 @@ class TestSSOSecretsMigration:
             # JSON string format
             (
                 provider1_id,
-                json.dumps({
-                    "client_id": "client_1",
-                    "client_secret": "secret_1",
-                }),
+                json.dumps(
+                    {
+                        "client_id": "client_1",
+                        "client_secret": "secret_1",
+                    }
+                ),
             ),
             # Dict format (PostgreSQL JSONB)
             (
@@ -422,8 +405,7 @@ class TestSSOSecretsMigration:
 
         # Should process both formats without error
         insert_calls = [
-            call for call in mock_cursor.execute.call_args_list
-            if "INSERT INTO system_secrets" in str(call)
+            call for call in mock_cursor.execute.call_args_list if "INSERT INTO system_secrets" in str(call)
         ]
         assert len(insert_calls) == 2
 
@@ -484,8 +466,7 @@ class TestMigrationDataIntegrity:
 
         # Verify key format in INSERT call
         insert_calls = [
-            call for call in mock_cursor.execute.call_args_list
-            if "INSERT INTO system_secrets" in str(call)
+            call for call in mock_cursor.execute.call_args_list if "INSERT INTO system_secrets" in str(call)
         ]
 
         # Key should match format: sso:provider:{uuid}:client_secret
