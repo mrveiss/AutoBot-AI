@@ -34,9 +34,11 @@ boto3>=1.43.22                       # GH#9010: AWS Bedrock provider
 chromadb>=1.5.9,<2.0.0             # upper bound guards against breaking API changes; 1.5.5+ uses regenerated protos compatible with protobuf 5.x (#4053)
 protobuf>=5.29.6,<8.0.0           # required floor for chromadb 1.5.5+ opentelemetry exporter; resolves googleapis-common-protos conflict (#4061)
 sentence-transformers>=5.4.1
-torch>=2.12.0  # Issue #904: ML model training
-torchvision>=0.26.0  # Issue #904: Must match torch CUDA major version (torch 2.11 → torchvision 0.26)
+torch==2.11.0  # MVA-3684: Pinned to match vllm 0.22.0 exact requirement
+torchvision==0.26.0  # MVA-3684: Pinned to match vllm 0.22.0 exact requirement
+torchaudio==2.11.0  # MVA-3684: Pinned to match vllm 0.22.0 exact requirement
 torchmetrics>=1.9.0  # Issue #904: Training metrics
+opencv-python-headless>=4.10.0,<4.11  # MVA-3684: <4.11 avoids numpy>=2 requirement (compatible with vllm's numpy 1.x)
 vanna>=2.0.2  # Issue #723: Natural language to SQL via Vanna.ai
                # SECURITY: CVE unpatched in all published releases (Dependabot alert #298,
                # dismissed tolerable_risk 2026-04-04, Issue #3445). Monitor
