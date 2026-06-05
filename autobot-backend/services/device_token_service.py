@@ -15,7 +15,6 @@ from typing import Dict
 
 from autobot_shared.auth.jwt_core import decode_jwt_or_none, encode_jwt
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.ssot_config import config
 
 logger = get_logger(__name__)
 
