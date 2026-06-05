@@ -7,7 +7,7 @@ import type { Ref, ComputedRef } from 'vue'
 import type { ChatMessage } from '@/types/api'
 import { useContextWindow, type ContextWindowState } from './useContextWindow'
 import { createLogger } from '@/utils/debugUtils'
-import { useApi } from '@/composables/useApi'
+import { useApiClient } from '@/plugins/api'
 
 const logger = createLogger('useContextOverflowProtection')
 
@@ -54,7 +54,7 @@ export interface ContextOverflowProtectionState {
 export function useContextOverflowProtection(
   options: ContextOverflowProtectionOptions,
 ): ContextOverflowProtectionState {
-  const api = useApi()
+  const api = useApiClient()
 
   // State
   const isSummarizing = ref(false)
