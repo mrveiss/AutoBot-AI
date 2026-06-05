@@ -4,11 +4,13 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useTranscriberApi } from '@/composables/transcriber/useTranscriberApi'
+import { useFileDownload } from '@/composables/useFileDownload'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('ExportMenu')
 const props = defineProps<{ recordingId: number; filename: string }>()
 const api = useTranscriberApi()
+const { download } = useFileDownload()
 const open = ref(false)
 const exporting = ref(false)
 
@@ -25,12 +27,7 @@ async function doExport(format: 'docx' | 'pdf' | 'srt' | 'vtt') {
   try {
     const resp = await api.exportRecording(props.recordingId, format)
     const blob = await resp.blob()
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `${props.filename}.${format}`
-    a.click()
-    URL.revokeObjectURL(url)
+    download(blob, `${props.filename}.${format}`)
   } catch (err) {
     logger.error('Export failed', err)
   } finally {
