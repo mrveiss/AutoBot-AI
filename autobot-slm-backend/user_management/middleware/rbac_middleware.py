@@ -362,11 +362,6 @@ def _require_authentication(user_id: uuid.UUID | None, permissions_desc: str) ->
         )
 
 
-async def _emit_permission_denied_audit(user_id: uuid.UUID | None, permission: str, path: str) -> None:
-    """Emit an audit log entry for a permission-denied event (GH #6511)."""
-    logger.warning("RBAC: audit - permission denied user=%s perm=%s path=%s", user_id, permission, path)
-
-
 # ---------------------------------------------------------------------------
 # Audit helper (stub — replace with real audit sink when available)
 # ---------------------------------------------------------------------------
