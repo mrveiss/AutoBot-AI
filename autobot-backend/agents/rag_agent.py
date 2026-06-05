@@ -336,7 +336,8 @@ QUALITY STANDARDS:
 
     def _get_query_reformulation_prompt(self) -> str:
         """Get system prompt for query reformulation."""
-        return """You are a query reformulation expert. Your task is to take user queries and create multiple improved versions for better document retrieval.
+        return """You are a query reformulation expert. Your task is to take user queries and create multiple
+improved versions for better document retrieval.
 
 Generate reformulated queries that:
 1. Use different terminology while maintaining meaning
