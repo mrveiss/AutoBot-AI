@@ -33,10 +33,12 @@ def main() -> int:
     args = _parse_args()
 
     try:
-        from autobot_shared.field_encryption import encrypt_sso_config, is_sso_config_encrypted
-        from sqlalchemy import create_engine, text
-        from config import get_db_url  # autobot-slm-backend config helper
         import json
+
+        from sqlalchemy import create_engine, text
+
+        from autobot_shared.field_encryption import encrypt_sso_config, is_sso_config_encrypted
+        from config import get_db_url  # autobot-slm-backend config helper
     except ImportError as exc:
         logger.error("Import error: %s — run from autobot-slm-backend/ with its venv active.", exc)
         return 1
