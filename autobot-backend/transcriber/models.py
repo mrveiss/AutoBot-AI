@@ -120,3 +120,12 @@ class AiAskRequest(BaseModel):
 
     action: Literal["summarize", "key_facts", "protocol", "custom"]
     custom_question: str | None = None
+
+
+class ExportRequest(BaseModel):
+    """Request schema for export operations."""
+
+    format: Literal["docx", "pdf", "srt", "vtt"]
+    include_timestamps: bool = True
+    include_notes: bool = True
+    include_speaker_names: bool = True
