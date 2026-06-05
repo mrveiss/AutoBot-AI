@@ -390,7 +390,6 @@ def require_permission(permission: str):
             if not has_perm:
                 logger.warning("RBAC: permission denied user=%s perm=%s", user_id, perm_str)
                 # TODO: Emit permission denied audit event
-                pass
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail=f"Permission '{perm_str}' required",
