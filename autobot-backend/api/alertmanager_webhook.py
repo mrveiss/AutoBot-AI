@@ -5,8 +5,10 @@
 AlertManager Webhook Integration
 Receives alerts from Prometheus AlertManager and broadcasts to WebSocket clients.
 Phase 3: Alert Migration (Issue #346)
+Security: GH#9657 - Added webhook authentication (fail-closed)
 """
 
+import os
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, Request, status
@@ -38,8 +40,35 @@ async def receive_alertmanager_webhook(payload: AlertManagerWebhook, request: Re
 
     Phase 3 (Issue #346): AlertManager → WebSocket integration
     Replaces MonitoringAlertsManager's WebSocket notification channel
+
+    Security (GH#9657): Requires X-AlertManager-Secret header authentication.
+    Fails closed when ALERTMANAGER_WEBHOOK_SECRET is not configured.
     """
     try:
+        # Verify webhook secret (GH#9657 fail-closed authentication)
+        webhook_secret = os.environ.get("ALERTMANAGER_WEBHOOK_SECRET")
+        if not webhook_secret:
+            logger.error("AlertManager webhook secret not configured - failing closed")
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Webhook authentication not configured",
+            )
+
+        request_secret = request.headers.get("X-AlertManager-Secret")
+        if not request_secret:
+            logger.warning("AlertManager webhook authentication failed - missing secret header")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Missing authentication header",
+            )
+
+        if request_secret != webhook_secret:
+            logger.warning("AlertManager webhook authentication failed - invalid secret")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Invalid authentication credentials",
+            )
+
         logger.info(
             f"Received AlertManager webhook: {len(payload.alerts)} alerts "
             f"(status: {payload.status}, receiver: {payload.receiver})"

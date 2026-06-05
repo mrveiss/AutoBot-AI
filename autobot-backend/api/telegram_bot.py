@@ -260,13 +260,23 @@ async def telegram_webhook(
         200 OK to acknowledge receipt
     """
     try:
-        # Verify webhook secret token (MVA-2074 security requirement)
+        # Verify webhook secret token (MVA-2074 security requirement, GH#9657 fail-closed fix)
         stored_secret = await get_telegram_webhook_secret()
         if not stored_secret:
-            logger.error("Telegram webhook secret not configured")
-            return JSONResponse({"status": "ok"})  # Return OK to avoid retry storm
+            logger.error("Telegram webhook secret not configured - failing closed")
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Webhook authentication not configured",
+            )
 
         request_secret = request.headers.get("X-Telegram-Bot-Api-Secret-Token")
+        if not request_secret:
+            logger.warning("Telegram webhook authentication failed - missing secret header")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Missing authentication header",
+            )
+
         if request_secret != stored_secret:
             logger.warning("Telegram webhook authentication failed - invalid secret token")
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
