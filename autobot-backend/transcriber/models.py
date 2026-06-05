@@ -10,7 +10,7 @@
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -113,3 +113,10 @@ class ProcessingResponse(BaseModel):
     status: RecordingStatus
     segments_count: int
     message: str
+
+
+class AiAskRequest(BaseModel):
+    """Request schema for AI analysis."""
+
+    action: Literal["summarize", "key_facts", "protocol", "custom"]
+    custom_question: str | None = None
