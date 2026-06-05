@@ -244,7 +244,9 @@ class TestInvoke:
             call_count += 1
             captured_envs.append(dict(kwargs.get("env", {})))
             if call_count == 1:
-                raise FileNotFoundError("No such directory")
+                err = FileNotFoundError("No such directory")
+                err.filename = "/deleted/worktree"
+                raise err
             return fake_proc
 
         with tempfile.TemporaryDirectory() as td:
