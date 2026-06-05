@@ -114,6 +114,7 @@ services:
     tmpfs:
       - /tmp
       - /app/config:mode=1777  # config_manager creates config dir on init
+      - /app/.config:mode=1777  # matplotlib creates this dir on init
       - /app/autobot-backend/.cache:mode=1777
       - /app/autobot-backend/logs:mode=1777  # logging_manager creates logs/backup dirs on init
     deploy:
@@ -128,6 +129,7 @@ services:
     tmpfs:
       - /tmp
       - /app/config:mode=1777  # config_manager creates config dir on init
+      - /app/.config:mode=1777  # matplotlib creates this dir on init
       - /app/autobot-backend/.cache:mode=1777
       - /app/autobot-backend/logs:mode=1777  # logging_manager creates logs/backup dirs on init
     deploy:
@@ -143,13 +145,18 @@ services:
       - /tmp
       - /var/run
       - /app/data/tmp:mode=1777
-      - /app/autobot-slm-backend/data:uid=999,gid=999,mode=0700  # SLM writes .slm_keys here; UID/GID pinned in Dockerfile
-      - /app/autobot-slm-backend/config:uid=999,gid=999,mode=0700  # config.py creates config_dir at import time
+      - /app/autobot-slm-backend/config:mode=1777
+      # /app/logs is writable via slm_logs named volume in base compose
+      # /app/data is writable via slm_data named volume; SLM_DATA_DIR=/app/data in base compose
+      # ensures .slm_keys is written there, not to the image-layer /app/autobot-slm-backend/data
+      # /app/autobot-slm-backend/config is tmpfs; config.py creates it on init
     secrets:
       - slm_admin_password
       - slm_jwt_secret
     environment:
+      # Map-style environment merges with base (list-style would replace)
       # The SLM service reads *_FILE variants via autobot_shared.secret_file_utils.
+      # SLM_DATA_DIR inherited from base compose (set to /app/data)
       SLM_ADMIN_PASSWORD_FILE: /run/secrets/slm_admin_password
       SLM_JWT_SECRET_FILE: /run/secrets/slm_jwt_secret
       SLM_ADMIN_PASSWORD: ""         # clear the plain-text env var
