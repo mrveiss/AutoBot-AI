@@ -135,7 +135,79 @@ class BedrockProvider(BaseProvider):
         if not region:
             region = os.getenv("AWS_DEFAULT_REGION", "us-east-1")
 
+        # Validate credential format before returning
+        self._validate_credentials(access_key, secret_key)
+
         return access_key, secret_key, region
+
+    def _validate_credentials(
+        self, access_key: str | None, secret_key: str | None
+    ) -> None:
+        """
+        Validate AWS credential format at initialization.
+
+        Raises:
+            ValueError: If credentials are provided but invalid format.
+
+        Security notes:
+        - AKIA prefix = long-lived IAM user credentials (security warning)
+        - ASIA prefix = temporary STS credentials (recommended)
+        - Both None/empty = IAM role authentication (no validation needed)
+        """
+        import re
+
+        # Treat empty strings as None (falsy values = IAM role)
+        if not access_key:
+            access_key = None
+        if not secret_key:
+            secret_key = None
+
+        # If both are None, using IAM role authentication - no validation needed
+        if access_key is None and secret_key is None:
+            logger.info("Using IAM role authentication (no explicit credentials)")
+            return
+
+        # If only one is provided, that's an error
+        if (access_key is None) != (secret_key is None):
+            raise ValueError(
+                "AWS credentials incomplete: both access_key_id and secret_access_key "
+                "must be provided, or both must be None for IAM role authentication."
+            )
+
+        # Validate access key format
+        if access_key:
+            # AWS access keys are 20 characters: AKIA (IAM) or ASIA (STS) + 16 alphanumeric
+            if not re.match(r"^(AKIA|ASIA)[0-9A-Z]{16}$", access_key):
+                raise ValueError(
+                    f"Invalid AWS access key format: {access_key[:8]}... "
+                    "Expected AKIA or ASIA followed by 16 alphanumeric characters."
+                )
+
+            # Security warning for long-lived IAM user credentials
+            if access_key.startswith("AKIA"):
+                logger.warning(
+                    "Using long-lived IAM user credentials (AKIA prefix). "
+                    "For production, consider using STS temporary credentials (ASIA prefix) "
+                    "or IAM role authentication for enhanced security."
+                )
+            elif access_key.startswith("ASIA"):
+                logger.info("Using STS temporary credentials (ASIA prefix) - recommended")
+
+        # Validate secret key format
+        if secret_key:
+            # AWS secret keys are exactly 40 characters (base64-encoded 30 bytes)
+            if len(secret_key) != 40:
+                raise ValueError(
+                    f"Invalid AWS secret key length: {len(secret_key)} characters. "
+                    "Expected exactly 40 characters."
+                )
+
+            # Validate character set (base64: A-Za-z0-9+/)
+            if not re.match(r"^[A-Za-z0-9+/]{40}$", secret_key):
+                raise ValueError(
+                    "Invalid AWS secret key format: must contain only base64 characters "
+                    "(A-Z, a-z, 0-9, +, /)."
+                )
 
     def _ensure_runtime_client(self):
         """Lazily initialize the bedrock-runtime client."""
