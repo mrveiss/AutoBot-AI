@@ -184,7 +184,6 @@ class TestUpdateDocument:
     @pytest.mark.asyncio
     async def test_validation_still_enforced_when_not_null(self, mock_redis):
         """Test fix for #9525: validation (e.g., title min_length) still works."""
-        from fastapi import HTTPException
 
         from api.documents import UpdateDocumentRequest, update_document
 
