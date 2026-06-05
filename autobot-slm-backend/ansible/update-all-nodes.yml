@@ -232,7 +232,7 @@
 
     - name: "[PLAY 1] SLM Frontend | Rebuild production dist"
       command:
-        cmd: npm run build
+        cmd: npm run build:slm
         chdir: "{{ code_base_dir }}/autobot-slm-frontend"
       tags: [slm, slm-frontend]
 
