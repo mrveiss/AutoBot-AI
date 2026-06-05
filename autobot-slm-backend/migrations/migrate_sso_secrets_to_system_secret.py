@@ -73,7 +73,6 @@ def migrate(db_url: str) -> None:
                                 """,
                                 (encrypted_value, secret_key),
                             )
-                            logger.info("Updated secret: %s", secret_key)
                         else:
                             # Create new
                             cursor.execute(
@@ -89,7 +88,6 @@ def migrate(db_url: str) -> None:
                                     f"SSO {field} for provider {provider_id}",
                                 ),
                             )
-                            logger.info("Created secret: %s", secret_key)
 
                         # Replace with reference in config
                         updated_config[f"{field}_ref"] = secret_key
