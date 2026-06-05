@@ -1039,6 +1039,16 @@ export const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/llc/companies/:companyId/boards/:boardId/timeline',
+    name: 'llc-timeline',
+    component: () => import('@/views/llc/GanttTimelineView.vue'),
+    meta: {
+      title: 'Timeline',
+      requiresAuth: true,
+      hideInNav: true,
+    }
+  },
+  {
     path: '/llc/companies/:companyId/boards/:boardId/kanban',
     name: 'llc-kanban-board',
     component: () => import('@/views/llc/KanbanBoardView.vue'),

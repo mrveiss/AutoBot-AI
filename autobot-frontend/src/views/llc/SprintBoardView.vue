@@ -9,6 +9,14 @@
         <h2 class="sprint-title">{{ sprint.name }}</h2>
         <span class="sprint-dates">{{ formatDate(sprint.start_date) }} – {{ formatDate(sprint.end_date) }}</span>
         <span class="sprint-status-badge" :class="`status-${sprint.status}`">{{ sprint.status }}</span>
+        <button class="view-toggle-btn" @click="switchToTimeline" title="Switch to Timeline View">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <rect x="2" y="4" width="6" height="2" fill="currentColor" />
+            <rect x="2" y="8" width="10" height="2" fill="currentColor" />
+            <rect x="2" y="12" width="4" height="2" fill="currentColor" />
+          </svg>
+          Timeline
+        </button>
       </div>
       <div class="sprint-stats">
         <div class="stat">
@@ -111,7 +119,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
 import WorkItemDetail from './WorkItemDetail.vue'
@@ -119,6 +127,7 @@ import WorkItemDetail from './WorkItemDetail.vue'
 const logger = createLogger('SprintBoardView')
 const api = useApiClient()
 const route = useRoute()
+const router = useRouter()
 
 const companyId = computed(() => route.params.companyId as string)
 const boardId = computed(() => route.params.boardId as string)
@@ -192,6 +201,16 @@ function initials(name: string) {
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+}
+
+function switchToTimeline() {
+  router.push({
+    name: 'llc-timeline',
+    params: {
+      companyId: companyId.value,
+      boardId: boardId.value,
+    },
+  })
 }
 
 function openDetail(item: WorkItem) {
@@ -324,6 +343,30 @@ onUnmounted(() => {
 .status-active { background: #d1fae5; color: #065f46; }
 .status-review { background: #ddd6fe; color: #5b21b6; }
 .status-closed { background: #f3f4f6; color: #374151; }
+
+.view-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.75rem;
+  border: 1px solid var(--color-border, #e5e7eb);
+  background: var(--color-surface, #fff);
+  color: var(--color-text);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  border-radius: 0.375rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.view-toggle-btn:hover {
+  border-color: var(--color-primary, #3b82f6);
+  background: var(--color-primary-light, #eff6ff);
+}
+
+.view-toggle-btn svg {
+  flex-shrink: 0;
+}
 
 .sprint-stats {
   display: flex;
