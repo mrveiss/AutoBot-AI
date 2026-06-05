@@ -27,6 +27,7 @@ jobs:
           if [ "$EXISTING" -ge "$LIMIT" ]; then
             echo "Queue is full — posting warning on PR #$PR_NUMBER"
 
+            # shellcheck disable=SC2016  # $skip is a jq variable, not a shell variable
             OPEN_LIST=$(gh pr list \
               --repo "$REPO" \
               --state open \
