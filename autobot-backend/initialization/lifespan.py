@@ -654,6 +654,30 @@ async def _init_documentation_watcher():
         logger.warning("Documentation watcher failed: %s", watcher_error)
 
 
+async def _init_kb_folder_watcher():
+    """
+    Initialize KB folder watcher for automatic document ingestion (NON-CRITICAL).
+
+    Issue #9000: Starts filesystem watcher for user-configured directories to enable
+    automatic ingestion of new files into knowledge base collections.
+    """
+    logger.info("✅ [ 84%] KB Folder Watcher: Initializing KB folder watcher...")
+    try:
+        from services.kb_folder_watcher import start_kb_folder_watcher
+
+        success = await start_kb_folder_watcher()
+
+        if success:
+            logger.info("✅ [ 84%] KB Folder Watcher: KB folder watcher started")
+        else:
+            logger.info("✅ [ 84%] KB Folder Watcher: No watch folders configured")
+
+    except ImportError as import_error:
+        logger.debug("KB folder watcher not available: %s", import_error)
+    except Exception as watcher_error:
+        logger.warning("KB folder watcher failed: %s", watcher_error)
+
+
 async def _run_background_doc_indexing():
     """Background task for documentation indexing (#1385, #1390).
 
@@ -1638,6 +1662,7 @@ async def initialize_background_services(app: FastAPI):
         await _init_slm_client()
         await _init_background_llm_sync(app)
         await _init_documentation_watcher()
+        await _init_kb_folder_watcher()
         await _start_doc_sync_queue_worker(app)
         await _auto_index_documentation()
         await _init_log_forwarding()
@@ -1738,6 +1763,17 @@ async def cleanup_services(app: FastAPI):
             await stop_documentation_watcher()
         except ImportError:
             pass  # Watcher not available
+
+        # Issue #9000: Stop KB folder watcher
+        try:
+            from services.kb_folder_watcher import stop_kb_folder_watcher
+
+            await stop_kb_folder_watcher()
+            logger.info("✅ KB folder watcher stopped")
+        except ImportError:
+            pass  # Watcher not available
+        except Exception as kb_watcher_error:
+            logger.warning("KB folder watcher shutdown failed: %s", kb_watcher_error)
 
         # Issue #4453: Stop doc sync queue worker
         worker = getattr(app.state, "doc_sync_queue_worker", None)
