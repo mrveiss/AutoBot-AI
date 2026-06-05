@@ -138,11 +138,12 @@ class LLCRunStatus(str, Enum):
 
 
 class HeartbeatInvocationSource(str, Enum):
-    """How a heartbeat run was triggered (GH#8225)."""
+    """How a heartbeat run was triggered (GH#8225, GH#9624)."""
 
     SCHEDULER = "scheduler"
     MANUAL = "manual"
     CALLBACK = "callback"
+    WORK_ITEM_COMMENTED = "work_item_commented"
 
 
 class ContextMode(str, Enum):
