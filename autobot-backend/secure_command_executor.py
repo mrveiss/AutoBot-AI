@@ -348,6 +348,16 @@ _DNS_RECON_COMMANDS = frozenset({"dig", "nslookup", "host", "whois", "drill"})
 # #7406: ordering for CommandRisk so chained-command detection can pick the
 # strictest risk across sub-commands. Strings are used here because the enum
 # class is defined later in this module; the caller compares via this lookup.
+_RISK_ORDER: Dict[str, int] = {
+    "safe": 0,
+    "moderate": 1,
+    "high": 2,
+    "critical": 3,
+    "forbidden": 4,
+}
+
+
+# Issue #765: Path constants now imported from security.command_patterns
 
 
 class CommandRisk(Enum):
