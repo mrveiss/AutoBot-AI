@@ -105,8 +105,10 @@ services:
     tmpfs:
       - /tmp
       - /app/config:mode=1777  # config_manager creates config dir on init
-      - /app/.config:mode=1777  # matplotlib creates this dir on init
+      - /app/.cache:mode=1777  # matplotlib writes to .cache
+      - /app/.config:mode=1777  # some libs create .config dir on init
       - /app/autobot-backend/.cache:mode=1777
+      - /app/autobot-backend/data:mode=1777  # conversation_file_manager creates data dir on init
       - /app/autobot-backend/logs:mode=1777  # logging_manager creates logs/backup dirs on init
     deploy:
       resources:
@@ -120,8 +122,10 @@ services:
     tmpfs:
       - /tmp
       - /app/config:mode=1777  # config_manager creates config dir on init
-      - /app/.config:mode=1777  # matplotlib creates this dir on init
+      - /app/.cache:mode=1777  # matplotlib writes to .cache
+      - /app/.config:mode=1777  # some libs create .config dir on init
       - /app/autobot-backend/.cache:mode=1777
+      - /app/autobot-backend/data:mode=1777  # conversation_file_manager creates data dir on init
       - /app/autobot-backend/logs:mode=1777  # logging_manager creates logs/backup dirs on init
     deploy:
       resources:
