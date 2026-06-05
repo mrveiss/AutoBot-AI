@@ -16,7 +16,7 @@ transformers>=5.9.0
 huggingface-hub>=1.16.1
 
 # Tensor Operations (NPU optimized)
-numpy>=2.4.4,<3.0.0
+numpy>=2.2.0,<3.0.0  # v2.2.6 is latest stable; 2.4.x doesn't exist
 
 # HTTP and API
 aiohttp>=3.13.4  # GH#8323: zip bomb, request smuggling CVEs
