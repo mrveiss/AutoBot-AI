@@ -2,10 +2,13 @@
 # Copyright (c) 2026 mrveiss
 # Author: mrveiss
 """
-Telegram Bot Service (MVA-2074, MVA-2075)
+Telegram Bot Service (MVA-2074, MVA-2075, #9606)
 
 Manages Telegram bot instance, sends messages via Bot API,
 handles webhook verification, and supports file/photo uploads.
+
+Security: Bot tokens and webhook secrets are encrypted at rest using
+AES-256-GCM field encryption (see autobot_shared.field_encryption).
 """
 
 from typing import Any, Dict, Optional
@@ -41,7 +44,11 @@ class TelegramBotService:
 
     @classmethod
     async def from_redis(cls) -> "TelegramBotService":
-        """Load bot token from Redis and create service instance."""
+        """
+        Load bot token from Redis and create service instance.
+
+        Security: Automatically decrypts encrypted tokens (prefixed with 'enc:').
+        """
         redis = await get_redis_client()
         if redis is None:
             logger.error("Redis client not available for Telegram bot service")
@@ -395,7 +402,7 @@ async def get_telegram_bot_token() -> Optional[str]:
     Get Telegram bot token from Redis (decrypted).
 
     Returns:
-        Bot token or None if not configured
+        Decrypted bot token or None if not configured
     """
     redis = await get_redis_client()
     if redis is None:
@@ -420,7 +427,9 @@ async def get_telegram_bot_token() -> Optional[str]:
 
 async def save_telegram_webhook_secret(secret: str) -> None:
     """
-    Save Telegram webhook secret to Redis.
+    Save Telegram webhook secret to Redis with encryption.
+
+    Security: Secret is encrypted using AES-256-GCM before storage (#9606).
 
     Args:
         secret: Webhook secret token
@@ -429,16 +438,20 @@ async def save_telegram_webhook_secret(secret: str) -> None:
     if redis is None:
         raise RuntimeError("Redis client not available")
 
-    await redis.set(TELEGRAM_WEBHOOK_SECRET_KEY, secret)
-    logger.info("Saved Telegram webhook secret to Redis")
+    # Encrypt secret before storage (#9606)
+    encrypted_secret = _ENCRYPTED_PREFIX + encrypt_field(secret)
+    await redis.set(TELEGRAM_WEBHOOK_SECRET_KEY, encrypted_secret)
+    logger.info("Saved encrypted Telegram webhook secret to Redis")
 
 
 async def get_telegram_webhook_secret() -> Optional[str]:
     """
-    Get Telegram webhook secret from Redis.
+    Get Telegram webhook secret from Redis with decryption.
+
+    Security: Automatically decrypts encrypted secrets (prefixed with 'enc:').
 
     Returns:
-        Webhook secret or None if not configured
+        Decrypted webhook secret or None if not configured
     """
     redis = await get_redis_client()
     if redis is None:
@@ -447,5 +460,16 @@ async def get_telegram_webhook_secret() -> Optional[str]:
 
     secret = await redis.get(TELEGRAM_WEBHOOK_SECRET_KEY)
     if secret:
-        return secret.decode("utf-8") if isinstance(secret, bytes) else secret
+        secret = secret.decode("utf-8") if isinstance(secret, bytes) else secret
+
+        # Decrypt if encrypted (#9606)
+        if secret.startswith(_ENCRYPTED_PREFIX):
+            try:
+                return decrypt_field(secret[len(_ENCRYPTED_PREFIX):])
+            except Exception as e:
+                logger.error(f"Failed to decrypt Telegram webhook secret: {e}")
+                return None
+
+        # Return plaintext for backward compatibility
+        return secret
     return None
