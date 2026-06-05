@@ -325,7 +325,7 @@ self.addEventListener('message', (event) => {
 self.addEventListener('push', (event) => {
   if (!event.data) return
 
-  let payload = { title: 'AutoBot', body: 'You have a new notification.', url: '/', icon: '/favicon.ico' }
+  const payload = { title: 'AutoBot', body: 'You have a new notification.', url: '/', icon: '/favicon.ico' }
   try {
     Object.assign(payload, event.data.json())
   } catch {
