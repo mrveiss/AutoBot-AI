@@ -48,14 +48,11 @@ class TestTelegramWebhookAuthentication:
         }
 
     @pytest.mark.asyncio
-    async def test_telegram_webhook_fails_closed_when_secret_not_configured(
-        self, valid_telegram_update
-    ):
+    async def test_telegram_webhook_fails_closed_when_secret_not_configured(self, valid_telegram_update):
         """
         CRITICAL: Telegram webhook MUST return 503 when secret not configured.
         This is the core fail-closed fix from GH#9657.
         """
-        from api.telegram_bot import router
 
         # Mock get_telegram_webhook_secret to return None (not configured)
         with patch(
@@ -77,9 +74,7 @@ class TestTelegramWebhookAuthentication:
             assert "not configured" in response.json()["detail"].lower()
 
     @pytest.mark.asyncio
-    async def test_telegram_webhook_returns_401_when_header_missing(
-        self, valid_telegram_update
-    ):
+    async def test_telegram_webhook_returns_401_when_header_missing(self, valid_telegram_update):
         """
         Security: Telegram webhook MUST return 401 when X-Telegram-Bot-Api-Secret-Token missing.
         """
@@ -102,9 +97,7 @@ class TestTelegramWebhookAuthentication:
             assert "missing" in response.json()["detail"].lower()
 
     @pytest.mark.asyncio
-    async def test_telegram_webhook_returns_403_when_secret_invalid(
-        self, valid_telegram_update
-    ):
+    async def test_telegram_webhook_returns_403_when_secret_invalid(self, valid_telegram_update):
         """
         Security: Telegram webhook MUST return 403 when secret is incorrect.
         """
@@ -130,17 +123,17 @@ class TestTelegramWebhookAuthentication:
             assert "forbidden" in response.json()["detail"].lower()
 
     @pytest.mark.asyncio
-    async def test_telegram_webhook_succeeds_with_valid_authentication(
-        self, valid_telegram_update
-    ):
+    async def test_telegram_webhook_succeeds_with_valid_authentication(self, valid_telegram_update):
         """
         Security: Telegram webhook MUST accept request with valid authentication.
         """
-        with patch(
-            "api.telegram_bot.get_telegram_webhook_secret",
-            return_value="correct_secret_123",
-        ), patch("api.telegram_bot.gateway_manager") as mock_gateway, patch(
-            "api.telegram_bot._route_to_chat_and_reply", new_callable=AsyncMock
+        with (
+            patch(
+                "api.telegram_bot.get_telegram_webhook_secret",
+                return_value="correct_secret_123",
+            ),
+            patch("api.telegram_bot.gateway_manager") as mock_gateway,
+            patch("api.telegram_bot._route_to_chat_and_reply", new_callable=AsyncMock),
         ):
             mock_gateway.normalize_message = AsyncMock(
                 return_value=type(
@@ -200,9 +193,7 @@ class TestAlertManagerWebhookAuthentication:
         }
 
     @pytest.mark.asyncio
-    async def test_alertmanager_webhook_fails_closed_when_secret_not_configured(
-        self, valid_alertmanager_payload
-    ):
+    async def test_alertmanager_webhook_fails_closed_when_secret_not_configured(self, valid_alertmanager_payload):
         """
         CRITICAL: AlertManager webhook MUST return 503 when secret not configured.
         This prevents unauthenticated alert injection (GH#9657).
@@ -224,9 +215,7 @@ class TestAlertManagerWebhookAuthentication:
             assert "not configured" in response.json()["detail"].lower()
 
     @pytest.mark.asyncio
-    async def test_alertmanager_webhook_returns_401_when_header_missing(
-        self, valid_alertmanager_payload
-    ):
+    async def test_alertmanager_webhook_returns_401_when_header_missing(self, valid_alertmanager_payload):
         """
         Security: AlertManager webhook MUST return 401 when X-AlertManager-Secret missing.
         """
@@ -246,15 +235,11 @@ class TestAlertManagerWebhookAuthentication:
             assert "missing" in response.json()["detail"].lower()
 
     @pytest.mark.asyncio
-    async def test_alertmanager_webhook_returns_403_when_secret_invalid(
-        self, valid_alertmanager_payload
-    ):
+    async def test_alertmanager_webhook_returns_403_when_secret_invalid(self, valid_alertmanager_payload):
         """
         Security: AlertManager webhook MUST return 403 when secret is incorrect.
         """
-        with patch.dict(
-            os.environ, {"ALERTMANAGER_WEBHOOK_SECRET": "correct_secret_789"}
-        ):
+        with patch.dict(os.environ, {"ALERTMANAGER_WEBHOOK_SECRET": "correct_secret_789"}):
             from main import app
 
             client = TestClient(app)
@@ -273,15 +258,14 @@ class TestAlertManagerWebhookAuthentication:
             assert "invalid" in response.json()["detail"].lower()
 
     @pytest.mark.asyncio
-    async def test_alertmanager_webhook_succeeds_with_valid_authentication(
-        self, valid_alertmanager_payload
-    ):
+    async def test_alertmanager_webhook_succeeds_with_valid_authentication(self, valid_alertmanager_payload):
         """
         Security: AlertManager webhook MUST accept request with valid authentication.
         """
-        with patch.dict(
-            os.environ, {"ALERTMANAGER_WEBHOOK_SECRET": "correct_secret_789"}
-        ), patch("api.alertmanager_webhook.ws_manager") as mock_ws:
+        with (
+            patch.dict(os.environ, {"ALERTMANAGER_WEBHOOK_SECRET": "correct_secret_789"}),
+            patch("api.alertmanager_webhook.ws_manager") as mock_ws,
+        ):
             mock_ws.broadcast_update = AsyncMock()
 
             from main import app
@@ -332,11 +316,7 @@ class TestWebhookSecurityDocumentation:
             content = f.read()
 
         # Should document the Telegram webhook secret requirement
-        assert (
-            "TELEGRAM_WEBHOOK_SECRET" in content
-            or "telegram" in content.lower()
-            and "webhook" in content.lower()
-        )
+        assert "TELEGRAM_WEBHOOK_SECRET" in content or "telegram" in content.lower() and "webhook" in content.lower()
 
     def test_env_example_documents_alertmanager_webhook_secret(self):
         """Verify .env.example documents ALERTMANAGER_WEBHOOK_SECRET"""
