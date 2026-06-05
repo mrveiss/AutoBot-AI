@@ -154,11 +154,19 @@ services:
       - slm_admin_password
       - slm_jwt_secret
     environment:
+      # Inherit base environment variables (compose override replaces, not merges)
+      - AUTOBOT_ENVIRONMENT=production
+      - AUTOBOT_LOG_LEVEL=${AUTOBOT_LOG_LEVEL:-INFO}
+      - AUTOBOT_REDIS_HOST=autobot-redis
+      - AUTOBOT_REDIS_PORT=6379
+      - SLM_DATABASE_URL=postgresql+asyncpg://${AUTOBOT_DB_USER:-autobot}:${AUTOBOT_DB_PASSWORD:-autobot}@autobot-postgres:5432/${AUTOBOT_DB_NAME:-autobot_slm}
+      - SLM_USERS_DATABASE_URL=postgresql+asyncpg://${AUTOBOT_DB_USER:-autobot}:${AUTOBOT_DB_PASSWORD:-autobot}@autobot-postgres:5432/slm_users
+      - SLM_POSTGRES_HOST=autobot-postgres
+      - SLM_DATA_DIR=/app/data        # redirect .slm_keys to named volume (not image layer)
       # The SLM service reads *_FILE variants via autobot_shared.secret_file_utils.
-      SLM_ADMIN_PASSWORD_FILE: /run/secrets/slm_admin_password
-      SLM_JWT_SECRET_FILE: /run/secrets/slm_jwt_secret
-      SLM_ADMIN_PASSWORD: ""         # clear the plain-text env var
-      SLM_DATA_DIR: /app/data        # redirect .slm_keys to named volume (not image layer)
+      - SLM_ADMIN_PASSWORD_FILE=/run/secrets/slm_admin_password
+      - SLM_JWT_SECRET_FILE=/run/secrets/slm_jwt_secret
+      - SLM_ADMIN_PASSWORD=         # clear the plain-text env var
     deploy:
       resources:
         limits:
