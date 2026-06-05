@@ -32,7 +32,6 @@ logger = logging.getLogger(__name__)
 class MigrationError(Exception):
     """Custom exception for migration failures."""
 
-    pass
 
 
 def validate_encryption_key() -> None:
@@ -98,8 +97,7 @@ def verify_secret_encryption(
 
         if decrypted_value != original_value:
             logger.error(
-                "Verification failed for provider %d field %s: "
-                "decrypted value does not match original",
+                "Verification failed for provider %d field %s: " "decrypted value does not match original",
                 provider_id,
                 field,
             )
@@ -218,9 +216,7 @@ def migrate_provider_secrets(
             }
 
         except Exception as e:
-            error_msg = (
-                f"Failed to encrypt provider {provider_id} field {field}: {e}"
-            )
+            error_msg = f"Failed to encrypt provider {provider_id} field {field}: {e}"
             logger.error(error_msg, exc_info=True)
             raise MigrationError(error_msg) from e
 
@@ -243,9 +239,7 @@ def migrate_provider_secrets(
             provider_id,
             field,
         ):
-            error_msg = (
-                f"Verification failed for provider {provider_id} field {field}"
-            )
+            error_msg = f"Verification failed for provider {provider_id} field {field}"
             raise MigrationError(error_msg)
 
     logger.info(
@@ -307,11 +301,7 @@ def migrate(db_url: str, dry_run: bool = False) -> None:
         for provider_id, config_json in providers:
             logger.info("\n=== Processing provider %d ===", provider_id)
 
-            config = (
-                json.loads(config_json)
-                if isinstance(config_json, str)
-                else config_json
-            )
+            config = json.loads(config_json) if isinstance(config_json, str) else config_json
 
             try:
                 updated_config, secrets_count = migrate_provider_secrets(
@@ -321,11 +311,13 @@ def migrate(db_url: str, dry_run: bool = False) -> None:
                 )
 
                 if secrets_count > 0:
-                    migrated_providers.append({
-                        "id": provider_id,
-                        "config": updated_config,
-                        "secrets_count": secrets_count,
-                    })
+                    migrated_providers.append(
+                        {
+                            "id": provider_id,
+                            "config": updated_config,
+                            "secrets_count": secrets_count,
+                        }
+                    )
                     total_secrets += secrets_count
 
             except MigrationError as e:
@@ -376,8 +368,7 @@ def migrate(db_url: str, dry_run: bool = False) -> None:
         else:
             conn.commit()
             logger.info(
-                "\n✓ Migration completed successfully! "
-                "Migrated %d secrets for %d providers.",
+                "\n✓ Migration completed successfully! " "Migrated %d secrets for %d providers.",
                 total_secrets,
                 len(migrated_providers),
             )
