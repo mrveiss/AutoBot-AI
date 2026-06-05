@@ -31,9 +31,7 @@ class SecretRequirement(Enum):
     # nosemgrep: autobot-hardcoded-secret-key
     API_KEY = "api_key"
     # nosemgrep: autobot-hardcoded-secret-key
-    PASSWORD = (
-        "password"  # nosec B105 - secret type enum, not actual password
-    )
+    PASSWORD = "password"  # nosec B105 - secret type enum, not actual password
     # nosemgrep: autobot-hardcoded-secret-key
     TOKEN = "token"  # nosec B105 - secret type enum, not actual token
     CERTIFICATE = "certificate"
