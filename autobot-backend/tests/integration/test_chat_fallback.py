@@ -16,10 +16,8 @@ ModelFallbackCoordinator.execute_with_fallback for quota-triggered model switch.
 
 from __future__ import annotations
 
-import json
 from typing import Any, AsyncIterator, Dict
 from unittest.mock import AsyncMock, MagicMock, patch
-from uuid import uuid4
 
 import pytest
 from fastapi import FastAPI

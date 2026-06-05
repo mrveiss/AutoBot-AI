@@ -13,7 +13,7 @@ Avoids importing FastAPI directly to bypass python_multipart dependency conflict
 import sys
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -191,7 +191,6 @@ async def test_sso_login_rate_limit():
     """Test SSO login endpoint rate limiting (10 req/min per IP)."""
     import importlib.util
     import sys
-    from unittest.mock import AsyncMock, MagicMock, patch
 
     # Mock FastAPI dependencies
     sys.modules["fastapi"] = MagicMock()
@@ -241,7 +240,6 @@ async def test_ldap_login_rate_limit():
     """Test LDAP login endpoint rate limiting (5 req/min per username)."""
     import importlib.util
     import sys
-    from unittest.mock import AsyncMock, MagicMock, patch
 
     # Mock FastAPI dependencies
     sys.modules["fastapi"] = MagicMock()
@@ -288,7 +286,6 @@ async def test_sso_callback_rate_limit():
     """Test SSO callback endpoint rate limiting (20 req/min per IP)."""
     import importlib.util
     import sys
-    from unittest.mock import AsyncMock, MagicMock, patch
 
     # Mock FastAPI dependencies
     sys.modules["fastapi"] = MagicMock()
@@ -343,7 +340,6 @@ async def test_sso_login_rate_limit_with_x_forwarded_for_trusted():
     """Test rate limiting respects X-Forwarded-For from trusted proxy (MVA-3671)."""
     import importlib.util
     import sys
-    from unittest.mock import AsyncMock, MagicMock, patch
 
     # Mock FastAPI dependencies BEFORE importing
     sys.modules["fastapi"] = MagicMock()
@@ -405,7 +401,6 @@ async def test_sso_login_rate_limit_with_x_forwarded_for_untrusted():
     """Test rate limiting ignores X-Forwarded-For from untrusted source (MVA-3671)."""
     import importlib.util
     import sys
-    from unittest.mock import AsyncMock, MagicMock, patch
 
     # Mock FastAPI dependencies BEFORE importing
     sys.modules["fastapi"] = MagicMock()
@@ -471,7 +466,6 @@ async def test_sso_callback_rate_limit_with_x_forwarded_for():
     """Test OAuth callback rate limiting respects X-Forwarded-For from trusted proxy (MVA-3671)."""
     import importlib.util
     import sys
-    from unittest.mock import AsyncMock, MagicMock, patch
 
     # Mock FastAPI dependencies BEFORE importing
     sys.modules["fastapi"] = MagicMock()
