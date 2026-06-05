@@ -14,8 +14,10 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request, Res
 from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.proxy_utils import get_client_ip
 from autobot_shared.rate_limiter import RateLimiter
 from autobot_shared.ssot_config import config
+from config import settings
 from services.auth import auth_service
 from user_management.database import get_slm_session
 from user_management.schemas.sso import LDAPLoginRequest, SSOLoginInitResponse
@@ -151,7 +153,7 @@ async def initiate_sso_login(
 ) -> SSOLoginInitResponse:
     """Initiate SSO login flow (OAuth2/SAML)."""
     # Rate limiting (MVA-3397 M-1): prevent provider enumeration and state exhaustion
-    client_ip = request.client.host if request.client else "unknown"
+    client_ip = get_client_ip(request, trusted_proxies=settings.trusted_proxies) or "unknown"
     rate_key = f"ip:{client_ip}"
 
     if not await _sso_login_limiter.acquire(rate_key):
@@ -213,7 +215,7 @@ async def oauth_callback(
 ) -> RedirectResponse:
     """Handle OAuth2 callback."""
     # Rate limiting (MVA-3397 M-1): prevent callback replay attacks
-    client_ip = request.client.host if request.client else "unknown"
+    client_ip = get_client_ip(request, trusted_proxies=settings.trusted_proxies) or "unknown"
     rate_key = f"ip:{client_ip}"
 
     if not await _sso_callback_limiter.acquire(rate_key):
