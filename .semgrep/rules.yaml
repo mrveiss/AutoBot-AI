@@ -70,6 +70,9 @@ rules:
       - pattern-not: $VAR = "changeme"
       - pattern-not: $VAR = "your-secret-here"
       - pattern-not: $VAR = "placeholder"
+      - pattern-not-inside: |
+          class $CLASS(Enum):
+            ...
     message: >
       Potential hardcoded secret. Use environment variables or a secrets
       manager (e.g. os.environ, Vault) instead.
@@ -89,6 +92,7 @@ rules:
           - pattern: $DB.execute("..." + $VAR + "...")
           - pattern: $DB.execute("..." + $VAR)
           - pattern: $DB.execute($VAR + "...")
+      - pattern-not: $DB.execute(f"PRAGMA table_info([{$VAR}])")
     message: >
       SQL query built with string interpolation/concatenation risks SQL
       injection. Use parameterised queries: db.execute(sql, [params]).
