@@ -117,7 +117,7 @@ def migrate(db_url: str) -> None:
 
     except Exception as e:
         conn.rollback()
-        logger.error("Migration failed: %s", e)
+        logger.error("Migration failed: %s", type(e).__name__)
         raise
     finally:
         conn.close()
@@ -128,5 +128,5 @@ if __name__ == "__main__":
     from migrations.runner import get_db_url
 
     db_url = sys.argv[1] if len(sys.argv) > 1 else get_db_url()
-    logger.info("Migrating SSO secrets for database: %s", db_url)
+    logger.info("Starting SSO secrets migration")
     migrate(db_url)
