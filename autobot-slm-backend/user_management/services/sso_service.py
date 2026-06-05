@@ -278,7 +278,9 @@ class SSOService(BaseService):
             raise SSOAuthenticationError(f"SSO provider {provider.name} is disabled")
         return await self._get_oauth_authorize_url(provider, callback_url)
 
-    async def complete_oauth_login(self, code: str, state: str, callback_url: str, provider_id: uuid.UUID | None = None) -> User:
+    async def complete_oauth_login(
+        self, code: str, state: str, callback_url: str, provider_id: uuid.UUID | None = None
+    ) -> User:
         """Complete OAuth2 login flow and return authenticated user."""
         # Always validate state to prevent CSRF attacks
         state_provider_id = await self._validate_oauth_state(state)
