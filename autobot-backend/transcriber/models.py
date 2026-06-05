@@ -129,3 +129,18 @@ class ExportRequest(BaseModel):
     include_timestamps: bool = True
     include_notes: bool = True
     include_speaker_names: bool = True
+
+
+class KbPushRequest(BaseModel):
+    """Request schema for pushing transcription to knowledge base."""
+
+    collection_id: str = Field(..., description="Knowledge base collection ID")
+
+
+class KbPushStatus(BaseModel):
+    """Response schema for knowledge base push status."""
+
+    pushed: bool = Field(..., description="Whether recording has been pushed to KB")
+    pushed_at: Optional[datetime] = Field(None, description="Timestamp of KB push")
+    kb_collection_id: Optional[str] = Field(None, description="KB collection ID")
+    pushed_by: Optional[str] = Field(None, description="User who pushed to KB")
