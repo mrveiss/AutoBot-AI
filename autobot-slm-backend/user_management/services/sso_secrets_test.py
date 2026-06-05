@@ -13,7 +13,7 @@ Tests SSOSecretsManager for:
 """
 
 import uuid
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 from sqlalchemy import select
@@ -21,7 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
 from models.database import Base, SystemSecret
-from services.encryption import decrypt_data, encrypt_data
+from services.encryption import decrypt_data
 
 
 # Test fixtures setup
@@ -35,9 +35,7 @@ async def async_session():
         await conn.run_sync(Base.metadata.create_all)
 
     # Create session factory
-    async_session_maker = sessionmaker(
-        engine, class_=AsyncSession, expire_on_commit=False
-    )
+    async_session_maker = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
     async with async_session_maker() as session:
         yield session
@@ -80,9 +78,7 @@ class TestSSOSecretsManagerIntegration:
     """Integration tests for SSOSecretsManager with real async database."""
 
     @pytest.mark.asyncio
-    async def test_store_secrets_creates_encrypted_secrets(
-        self, async_session, provider_id, oauth_config
-    ):
+    async def test_store_secrets_creates_encrypted_secrets(self, async_session, provider_id, oauth_config):
         """Test that store_secrets extracts and encrypts sensitive fields."""
         from user_management.services.sso_secrets import SSOSecretsManager
 
@@ -103,9 +99,7 @@ class TestSSOSecretsManagerIntegration:
 
         # Verify secret stored encrypted in database
         result = await async_session.execute(
-            select(SystemSecret).where(
-                SystemSecret.key == f"sso:provider:{provider_id}:client_secret"
-            )
+            select(SystemSecret).where(SystemSecret.key == f"sso:provider:{provider_id}:client_secret")
         )
         secret = result.scalar_one()
 
@@ -118,9 +112,7 @@ class TestSSOSecretsManagerIntegration:
         assert decrypted == "secret_abc_oauth"
 
     @pytest.mark.asyncio
-    async def test_store_secrets_handles_multiple_sensitive_fields(
-        self, async_session, provider_id, ldap_config
-    ):
+    async def test_store_secrets_handles_multiple_sensitive_fields(self, async_session, provider_id, ldap_config):
         """Test storing config with bind_password field."""
         from user_management.services.sso_secrets import SSOSecretsManager
 
@@ -137,9 +129,7 @@ class TestSSOSecretsManagerIntegration:
 
         # Verify secret stored in database
         result = await async_session.execute(
-            select(SystemSecret).where(
-                SystemSecret.key == f"sso:provider:{provider_id}:bind_password"
-            )
+            select(SystemSecret).where(SystemSecret.key == f"sso:provider:{provider_id}:bind_password")
         )
         secret = result.scalar_one()
 
@@ -147,9 +137,7 @@ class TestSSOSecretsManagerIntegration:
         assert decrypted == "ldap_secret_password_123"
 
     @pytest.mark.asyncio
-    async def test_store_secrets_updates_existing_secret(
-        self, async_session, provider_id, oauth_config
-    ):
+    async def test_store_secrets_updates_existing_secret(self, async_session, provider_id, oauth_config):
         """Test that updating provider updates the encrypted secret."""
         from user_management.services.sso_secrets import SSOSecretsManager
 
@@ -168,9 +156,7 @@ class TestSSOSecretsManagerIntegration:
 
         # Verify updated secret in database
         result = await async_session.execute(
-            select(SystemSecret).where(
-                SystemSecret.key == f"sso:provider:{provider_id}:client_secret"
-            )
+            select(SystemSecret).where(SystemSecret.key == f"sso:provider:{provider_id}:client_secret")
         )
         secret = result.scalar_one()
 
@@ -178,9 +164,7 @@ class TestSSOSecretsManagerIntegration:
         assert decrypted == "new_secret_xyz"
 
     @pytest.mark.asyncio
-    async def test_retrieve_secret_decrypts_successfully(
-        self, async_session, provider_id, oauth_config
-    ):
+    async def test_retrieve_secret_decrypts_successfully(self, async_session, provider_id, oauth_config):
         """Test retrieving and decrypting a stored secret."""
         from user_management.services.sso_secrets import SSOSecretsManager
 
@@ -195,9 +179,7 @@ class TestSSOSecretsManagerIntegration:
         assert decrypted == "secret_abc_oauth"
 
     @pytest.mark.asyncio
-    async def test_retrieve_secret_returns_none_for_missing(
-        self, async_session, provider_id
-    ):
+    async def test_retrieve_secret_returns_none_for_missing(self, async_session, provider_id):
         """Test that retrieve_secret returns None for non-existent secret."""
         from user_management.services.sso_secrets import SSOSecretsManager
 
@@ -208,9 +190,7 @@ class TestSSOSecretsManagerIntegration:
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_retrieve_secret_handles_decryption_failure(
-        self, async_session, provider_id
-    ):
+    async def test_retrieve_secret_handles_decryption_failure(self, async_session, provider_id):
         """Test graceful handling of decryption failures."""
         from user_management.services.sso_secrets import SSOSecretsManager
 
@@ -231,9 +211,7 @@ class TestSSOSecretsManagerIntegration:
             await manager.retrieve_secret(provider_id, "client_secret")
 
     @pytest.mark.asyncio
-    async def test_delete_secrets_removes_all_provider_secrets(
-        self, async_session, provider_id, oauth_config
-    ):
+    async def test_delete_secrets_removes_all_provider_secrets(self, async_session, provider_id, oauth_config):
         """Test that delete_secrets removes all associated secrets."""
         from user_management.services.sso_secrets import SSOSecretsManager
 
@@ -245,9 +223,7 @@ class TestSSOSecretsManagerIntegration:
 
         # Verify secret exists
         result = await async_session.execute(
-            select(SystemSecret).where(
-                SystemSecret.key == f"sso:provider:{provider_id}:client_secret"
-            )
+            select(SystemSecret).where(SystemSecret.key == f"sso:provider:{provider_id}:client_secret")
         )
         assert result.scalar_one_or_none() is not None
 
@@ -257,9 +233,7 @@ class TestSSOSecretsManagerIntegration:
 
         # Verify secret deleted
         result = await async_session.execute(
-            select(SystemSecret).where(
-                SystemSecret.key == f"sso:provider:{provider_id}:client_secret"
-            )
+            select(SystemSecret).where(SystemSecret.key == f"sso:provider:{provider_id}:client_secret")
         )
         assert result.scalar_one_or_none() is None
 
@@ -278,9 +252,7 @@ class TestSSOSecretsManagerIntegration:
         assert await manager.has_plaintext_secrets(safe_config) is False
 
     @pytest.mark.asyncio
-    async def test_migrate_plaintext_to_secrets_converts_successfully(
-        self, async_session, provider_id, oauth_config
-    ):
+    async def test_migrate_plaintext_to_secrets_converts_successfully(self, async_session, provider_id, oauth_config):
         """Test migration from plaintext to encrypted storage."""
         from user_management.services.sso_secrets import SSOSecretsManager
 
@@ -299,9 +271,7 @@ class TestSSOSecretsManagerIntegration:
         assert decrypted == "secret_abc_oauth"
 
     @pytest.mark.asyncio
-    async def test_migrate_plaintext_skips_already_migrated(
-        self, async_session, provider_id
-    ):
+    async def test_migrate_plaintext_skips_already_migrated(self, async_session, provider_id):
         """Test that migration skips configs without plaintext secrets."""
         from user_management.services.sso_secrets import SSOSecretsManager
 
@@ -318,9 +288,7 @@ class TestSSOSecretsManagerIntegration:
         assert result == migrated_config
 
     @pytest.mark.asyncio
-    async def test_store_secrets_handles_empty_secret_values(
-        self, async_session, provider_id
-    ):
+    async def test_store_secrets_handles_empty_secret_values(self, async_session, provider_id):
         """Test that empty/null secret values are not stored."""
         from user_management.services.sso_secrets import SSOSecretsManager
 
@@ -338,9 +306,7 @@ class TestSSOSecretsManagerIntegration:
 
         # Empty values should not create secrets
         result = await async_session.execute(
-            select(SystemSecret).where(
-                SystemSecret.key == f"sso:provider:{provider_id}:client_secret"
-            )
+            select(SystemSecret).where(SystemSecret.key == f"sso:provider:{provider_id}:client_secret")
         )
         assert result.scalar_one_or_none() is None
 
@@ -352,9 +318,7 @@ class TestSSOSecretsManagerEdgeCases:
     """Edge case tests for SSOSecretsManager."""
 
     @pytest.mark.asyncio
-    async def test_concurrent_updates_to_same_secret(
-        self, async_session, provider_id, oauth_config
-    ):
+    async def test_concurrent_updates_to_same_secret(self, async_session, provider_id, oauth_config):
         """Test that concurrent updates don't corrupt secrets."""
         from user_management.services.sso_secrets import SSOSecretsManager
 
@@ -382,9 +346,7 @@ class TestSSOSecretsManagerEdgeCases:
         assert decrypted == "concurrent_secret_2"
 
     @pytest.mark.asyncio
-    async def test_unicode_secrets_handled_correctly(
-        self, async_session, provider_id
-    ):
+    async def test_unicode_secrets_handled_correctly(self, async_session, provider_id):
         """Test that Unicode characters in secrets are preserved."""
         from user_management.services.sso_secrets import SSOSecretsManager
 
