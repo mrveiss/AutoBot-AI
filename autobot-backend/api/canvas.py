@@ -238,7 +238,7 @@ async def put_canvas(
             new_token = uuid.uuid4()
             now = datetime.now(tz=timezone.utc)
 
-            if body.title is not None:
+            if 'title' in body.model_fields_set:
                 canvas.title = body.title
             canvas.save_token = new_token
             canvas.updated_at = now

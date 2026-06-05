@@ -214,6 +214,52 @@ class TestPutCanvas:
             resp = client.put(f"/api/canvas/{_CANVAS_ID}", json={"cells": []})
         assert resp.status_code == 403
 
+    def test_autosave_can_set_title_to_null(self, app):
+        """Test that title can be explicitly set to null (GH#9526)."""
+        canvas = _make_canvas()
+        canvas.title = "Existing Title"
+        session = _mock_session()
+        session.execute.return_value.scalar_one_or_none = MagicMock(return_value=canvas)
+
+        from auth_middleware import get_current_user
+        from user_management.database import get_async_session
+
+        app.dependency_overrides = {
+            get_async_session: lambda: session,
+            get_current_user: lambda: _USER_A,
+        }
+
+        with TestClient(app) as client:
+            resp = client.put(
+                f"/api/canvas/{_CANVAS_ID}",
+                json={"title": None, "cells": []},
+            )
+        assert resp.status_code == 200
+        assert canvas.title is None
+
+    def test_autosave_omitted_title_unchanged(self, app):
+        """Test that omitting title from request leaves it unchanged."""
+        canvas = _make_canvas()
+        canvas.title = "Existing Title"
+        session = _mock_session()
+        session.execute.return_value.scalar_one_or_none = MagicMock(return_value=canvas)
+
+        from auth_middleware import get_current_user
+        from user_management.database import get_async_session
+
+        app.dependency_overrides = {
+            get_async_session: lambda: session,
+            get_current_user: lambda: _USER_A,
+        }
+
+        with TestClient(app) as client:
+            resp = client.put(
+                f"/api/canvas/{_CANVAS_ID}",
+                json={"cells": []},
+            )
+        assert resp.status_code == 200
+        assert canvas.title == "Existing Title"
+
 
 # ---------------------------------------------------------------------------
 # POST /api/canvas/{id}/cells
