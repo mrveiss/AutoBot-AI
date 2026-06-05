@@ -14,7 +14,7 @@ import logging
 import time
 import uuid
 from functools import wraps
-from typing import Callable, List, Optional, Set, Union
+from typing import Callable, Dict, List, Optional, Set, Union
 
 from fastapi import HTTPException, Request, status
 
@@ -32,9 +32,15 @@ _REDIS_KEY_PREFIX = "rbac:perm:"
 # L1 per-worker cache — invalidated immediately on this worker via clear_cache,
 # and on all other workers via the pub/sub listener below.
 _permission_cache: dict[str, tuple[Set[str], float]] = {}
+_fallback_cache: Dict[str, tuple] = _permission_cache  # alias for legacy cache helpers
 CACHE_TTL_SECONDS = 300  # 5 minutes
 
 _listener_task: asyncio.Task | None = None
+
+
+async def _get_redis():
+    """Return an async Redis client or None if unavailable."""
+    return await get_async_redis_client()
 
 
 async def _run_invalidation_listener() -> None:
@@ -243,10 +249,10 @@ class RBACMiddleware:
         else:
             # Clear entire fallback; Redis keys expire naturally.
             _permission_cache.clear()
-            asyncio.ensure_future(self._clear_all_redis_keys(None))
+            asyncio.ensure_future(self._clear_all_redis_keys(user_id))
 
-    async def _clear_all_redis_keys(self, user_id: "uuid.UUID | None") -> None:
-        r = await get_async_redis_client()
+    async def _clear_all_redis_keys(self, user_id: uuid.UUID | None = None) -> None:
+        r = await _get_redis()
         if r is None:
             return
         try:
