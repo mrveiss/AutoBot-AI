@@ -87,6 +87,40 @@ class TestCircuitBreaker:
         assert state["name"] == "test_svc"
         assert "stats" in state
 
+    def test_reset_on_success_true_fully_resets(self):
+        """Test reset_on_success=True (default): failure_count resets to 0 on success in CLOSED."""
+        config = CircuitBreakerConfig(failure_threshold=5, reset_on_success=True)
+        cb = CircuitBreaker("test_svc", config)
+        # Accumulate 3 failures (below threshold)
+        for _ in range(3):
+            cb._record_failure(0.1, ConnectionError("test"))
+        assert cb.failure_count == 3
+        assert cb.state == CircuitState.CLOSED
+        # Record one success
+        cb._record_success(0.1)
+        # failure_count should be fully reset to 0
+        assert cb.failure_count == 0
+        assert cb.state == CircuitState.CLOSED
+
+    def test_reset_on_success_false_decrements(self):
+        """Test reset_on_success=False (legacy): failure_count decrements by 1 on success in CLOSED."""
+        config = CircuitBreakerConfig(failure_threshold=5, reset_on_success=False)
+        cb = CircuitBreaker("test_svc", config)
+        # Accumulate 3 failures (below threshold)
+        for _ in range(3):
+            cb._record_failure(0.1, ConnectionError("test"))
+        assert cb.failure_count == 3
+        assert cb.state == CircuitState.CLOSED
+        # Record one success
+        cb._record_success(0.1)
+        # failure_count should decrement by 1
+        assert cb.failure_count == 2
+        assert cb.state == CircuitState.CLOSED
+        # Record another success
+        cb._record_success(0.1)
+        # failure_count should decrement again
+        assert cb.failure_count == 1
+
 
 class TestCircuitBreakerAsync:
     """Tests for async operations."""
