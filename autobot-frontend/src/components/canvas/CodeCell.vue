@@ -128,7 +128,6 @@ async function updateHighlightedCode() {
       try {
         highlighted = hljs.highlight(codeContent.value, { language: codeLanguage.value }).value
       } catch {
-        // Fallback to plaintext if language not supported
         highlighted = hljs.highlightAuto(codeContent.value).value
       }
     } else {
