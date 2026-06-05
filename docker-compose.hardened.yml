@@ -143,7 +143,7 @@ services:
       - /tmp
       - /var/run
       - /app/data/tmp:mode=1777
-      # Note: /app/logs is already mounted as slm_logs volume in base compose
+      - /app/logs:mode=1777  # Ephemeral logs in hardened mode (base compose removed slm_logs volume in #9485)
     secrets:
       - slm_admin_password
       - slm_jwt_secret
