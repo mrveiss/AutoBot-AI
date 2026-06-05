@@ -33,7 +33,6 @@ class MigrationError(Exception):
     """Custom exception for migration failures."""
 
 
-
 def validate_encryption_key() -> None:
     """
     Validate that encryption key is set before migration starts.
