@@ -478,7 +478,7 @@ class TestGracefulTimeout:
 
     async def test_cancel_sends_sigterm_then_sigkill_after_grace(self) -> None:
         """cancel() sends SIGTERM, waits 10s, then SIGKILL."""
-        from llc.adapters.claude_code_adapter import ClaudeCodeAdapter, _SIGTERM_GRACE_SECONDS
+        from llc.adapters.claude_code_adapter import _SIGTERM_GRACE_SECONDS, ClaudeCodeAdapter
 
         adapter = ClaudeCodeAdapter()
         kill_signals = []

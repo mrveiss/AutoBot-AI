@@ -455,7 +455,7 @@ class TestGracefulTimeout:
 
     async def test_cancel_sends_sigterm_then_sigkill_after_grace(self) -> None:
         """cancel() sends SIGTERM, waits 10s, then SIGKILL."""
-        from llc.adapters.copilot_local_adapter import CopilotLocalAdapter, _SIGTERM_GRACE_SECONDS
+        from llc.adapters.copilot_local_adapter import _SIGTERM_GRACE_SECONDS, CopilotLocalAdapter
 
         adapter = CopilotLocalAdapter()
         kill_signals = []

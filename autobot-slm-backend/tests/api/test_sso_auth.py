@@ -40,9 +40,9 @@ def test_build_callback_url_valid_host_localhost():
     """Test callback URL construction with valid localhost host."""
     # Import after path setup to avoid FastAPI import
     import importlib.util
+
     spec = importlib.util.spec_from_file_location(
-        "sso_auth",
-        Path(__file__).parent.parent.parent / "api" / "sso_auth.py"
+        "sso_auth", Path(__file__).parent.parent.parent / "api" / "sso_auth.py"
     )
     sso_auth = importlib.util.module_from_spec(spec)
 
@@ -57,11 +57,7 @@ def test_build_callback_url_valid_host_localhost():
 
     spec.loader.exec_module(sso_auth)
 
-    request = _make_mock_request(
-        "http",
-        "localhost",
-        {"x-forwarded-proto": "http", "x-forwarded-host": "localhost"}
-    )
+    request = _make_mock_request("http", "localhost", {"x-forwarded-proto": "http", "x-forwarded-host": "localhost"})
 
     result = sso_auth._build_callback_url(request)
     assert result == "http://localhost/api/auth/sso/callback"
@@ -70,9 +66,9 @@ def test_build_callback_url_valid_host_localhost():
 def test_build_callback_url_valid_host_127_0_0_1():
     """Test callback URL construction with valid 127.0.0.1 host."""
     import importlib.util
+
     spec = importlib.util.spec_from_file_location(
-        "sso_auth",
-        Path(__file__).parent.parent.parent / "api" / "sso_auth.py"
+        "sso_auth", Path(__file__).parent.parent.parent / "api" / "sso_auth.py"
     )
     sso_auth = importlib.util.module_from_spec(spec)
 
@@ -86,11 +82,7 @@ def test_build_callback_url_valid_host_127_0_0_1():
 
     spec.loader.exec_module(sso_auth)
 
-    request = _make_mock_request(
-        "http",
-        "127.0.0.1",
-        {"x-forwarded-proto": "http", "x-forwarded-host": "127.0.0.1"}
-    )
+    request = _make_mock_request("http", "127.0.0.1", {"x-forwarded-proto": "http", "x-forwarded-host": "127.0.0.1"})
 
     result = sso_auth._build_callback_url(request)
     assert result == "http://127.0.0.1/api/auth/sso/callback"
@@ -99,9 +91,9 @@ def test_build_callback_url_valid_host_127_0_0_1():
 def test_build_callback_url_invalid_host_rejected():
     """Test callback URL rejects host not in allowlist (phishing attempt)."""
     import importlib.util
+
     spec = importlib.util.spec_from_file_location(
-        "sso_auth",
-        Path(__file__).parent.parent.parent / "api" / "sso_auth.py"
+        "sso_auth", Path(__file__).parent.parent.parent / "api" / "sso_auth.py"
     )
     sso_auth = importlib.util.module_from_spec(spec)
 
@@ -127,9 +119,7 @@ def test_build_callback_url_invalid_host_rejected():
     spec.loader.exec_module(sso_auth)
 
     request = _make_mock_request(
-        "https",
-        "attacker.com",
-        {"x-forwarded-proto": "https", "x-forwarded-host": "attacker.com"}
+        "https", "attacker.com", {"x-forwarded-proto": "https", "x-forwarded-host": "attacker.com"}
     )
 
     with pytest.raises(MockHTTPException) as exc_info:
@@ -142,9 +132,9 @@ def test_build_callback_url_invalid_host_rejected():
 def test_build_callback_url_host_with_port():
     """Test callback URL construction strips port for allowlist validation."""
     import importlib.util
+
     spec = importlib.util.spec_from_file_location(
-        "sso_auth",
-        Path(__file__).parent.parent.parent / "api" / "sso_auth.py"
+        "sso_auth", Path(__file__).parent.parent.parent / "api" / "sso_auth.py"
     )
     sso_auth = importlib.util.module_from_spec(spec)
 
@@ -159,9 +149,7 @@ def test_build_callback_url_host_with_port():
     spec.loader.exec_module(sso_auth)
 
     request = _make_mock_request(
-        "http",
-        "localhost:8000",
-        {"x-forwarded-proto": "http", "x-forwarded-host": "localhost:8000"}
+        "http", "localhost:8000", {"x-forwarded-proto": "http", "x-forwarded-host": "localhost:8000"}
     )
 
     result = sso_auth._build_callback_url(request)
@@ -171,9 +159,9 @@ def test_build_callback_url_host_with_port():
 def test_build_callback_url_case_insensitive():
     """Test callback URL validation is case-insensitive."""
     import importlib.util
+
     spec = importlib.util.spec_from_file_location(
-        "sso_auth",
-        Path(__file__).parent.parent.parent / "api" / "sso_auth.py"
+        "sso_auth", Path(__file__).parent.parent.parent / "api" / "sso_auth.py"
     )
     sso_auth = importlib.util.module_from_spec(spec)
 
@@ -187,11 +175,7 @@ def test_build_callback_url_case_insensitive():
 
     spec.loader.exec_module(sso_auth)
 
-    request = _make_mock_request(
-        "http",
-        "LOCALHOST",
-        {"x-forwarded-proto": "http", "x-forwarded-host": "LOCALHOST"}
-    )
+    request = _make_mock_request("http", "LOCALHOST", {"x-forwarded-proto": "http", "x-forwarded-host": "LOCALHOST"})
 
     result = sso_auth._build_callback_url(request)
     assert result == "http://LOCALHOST/api/auth/sso/callback"
