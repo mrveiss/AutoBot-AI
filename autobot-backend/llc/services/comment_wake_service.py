@@ -15,7 +15,6 @@ Dedup guard: only trigger if no RUNNING or QUEUED run exists for the agent.
 
 import logging
 import uuid
-from datetime import timezone
 from typing import Optional
 
 from sqlalchemy import select, text
