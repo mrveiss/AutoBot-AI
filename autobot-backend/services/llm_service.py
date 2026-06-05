@@ -417,6 +417,17 @@ class LLMService:
                         len(attempted_models),
                         " → ".join(attempted_models),
                     )
+                    # GH#8998 - MVA-2999: Track successful fallback in Redis
+                    primary_attempt = attempted_models[0]
+                    primary_provider_name = primary_attempt.split(":")[0]
+                    primary_model_name = primary_attempt.split(":", 1)[1] if ":" in primary_attempt else ""
+                    self._track_fallback_event(
+                        conversation_id=conversation_id,
+                        primary_model=primary_model_name,
+                        fallback_model=current_model or "",
+                        primary_provider=primary_provider_name,
+                        fallback_provider=provider.provider_name,
+                    )
                 return
 
             except Exception as exc:
