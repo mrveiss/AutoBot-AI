@@ -7,7 +7,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 
 from transcriber.database import Database
-from transcriber.deps import DEFAULT_USER, get_db
+from transcriber.deps import get_db
 from transcriber.models import (
     NoteCreate,
     NoteOut,
@@ -23,10 +23,12 @@ from transcriber.models import (
 
 router = APIRouter(tags=["transcriber-transcripts"])
 
+_DEFAULT_USER = "default"
+
 
 def _user_id(request: Request) -> str:
     user = getattr(request.state, "user", None)
-    return user.id if user else DEFAULT_USER
+    return user.id if user else _DEFAULT_USER
 
 
 async def _require_recording_owner(recording_id: int, user_id: str, db: Database) -> None:
@@ -76,7 +78,10 @@ async def update_speaker(speaker_id: int, body: SpeakerUpdate, request: Request,
 
 @router.post("/speakers/merge", status_code=200)
 async def merge_speakers(body: SpeakerMerge, request: Request, db: Database = Depends(get_db)):
-    """Merge source speaker into target speaker. All segments from source will be reassigned to target, then source is deleted."""  # noqa: E501
+    """Merge source speaker into target speaker.
+
+    All segments from source will be reassigned to target, then source is deleted.
+    """
     source = await db.get_speaker(body.source_speaker_id)
     if not source:
         raise HTTPException(404, f"no speaker with id={body.source_speaker_id}")
