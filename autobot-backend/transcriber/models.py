@@ -172,3 +172,69 @@ class KbPushStatus(BaseModel):
     pushed_at: Optional[datetime] = Field(None, description="Timestamp of KB push")
     kb_collection_id: Optional[str] = Field(None, description="KB collection ID")
     pushed_by: Optional[str] = Field(None, description="User who pushed to KB")
+
+
+# Transcript route models (transcriber/routes/transcripts.py)
+
+
+class SpeakerOut(BaseModel):
+    """Response schema for speaker."""
+
+    id: int
+    recording_id: int
+    speaker_label: str
+    display_name: Optional[str] = None
+
+
+class SpeakerUpdate(BaseModel):
+    """Request schema for updating speaker display name."""
+
+    display_name: str
+
+
+class SegmentOut(BaseModel):
+    """Response schema for transcription segment."""
+
+    id: int
+    recording_id: int
+    speaker_label: str
+    start_time: float
+    end_time: float
+    text: str
+    confidence: float
+    created_at: datetime
+
+
+class SegmentUpdate(BaseModel):
+    """Request schema for updating segment text."""
+
+    text: str
+
+
+class NoteCreate(BaseModel):
+    """Request schema for creating a note."""
+
+    content: str
+
+
+class NoteOut(BaseModel):
+    """Response schema for note."""
+
+    id: int
+    segment_id: int
+    recording_id: int
+    content: str
+
+
+class NoteUpdate(BaseModel):
+    """Request schema for updating note content."""
+
+    content: str
+
+
+class TranscriptOut(BaseModel):
+    """Response schema for full transcript."""
+
+    recording: RecordingOut
+    speakers: list[SpeakerOut]
+    segments: list[SegmentOut]
