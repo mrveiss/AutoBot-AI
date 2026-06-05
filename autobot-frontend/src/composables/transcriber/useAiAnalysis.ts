@@ -4,10 +4,11 @@
 import { ref, toValue, type MaybeRefOrGetter } from 'vue'
 import { getBackendUrl } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
+import type { AiAction } from './useTranscriberApi'
 
 const logger = createLogger('useAiAnalysis')
 
-export type AiAnalysisAction = 'summarize' | 'key_facts' | 'protocol' | 'custom'
+export type AiAnalysisAction = AiAction
 
 export interface AskOptions {
   action: AiAnalysisAction
