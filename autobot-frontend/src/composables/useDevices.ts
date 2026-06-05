@@ -46,7 +46,7 @@ export function useDevices() {
     return wrap(async () => {
       try {
         error.value = null
-        const response = await api.get('/devices')
+        const response = await api.get<DeviceListResponse>('/devices')
         devices.value = response.devices || []
         logger.debug('Fetched devices:', devices.value.length)
       } catch (err: any) {

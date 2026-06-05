@@ -148,7 +148,7 @@ async function deleteDevice(deviceId: string) {
     logger.error('Failed to delete device:', err)
   } finally {
     deleteLoading.value.delete(deviceId)
-    deleteLoading.value = new Set([...deleteLoading.value])
+    deleteLoading.value = new Set(deleteLoading.value)
   }
 }
 

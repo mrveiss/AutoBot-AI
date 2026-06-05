@@ -16,7 +16,7 @@ jobs:
           REPO: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
-          LIMIT=5
+          LIMIT=10
 
           # Count open PRs excluding the one just opened
           TOTAL=$(gh pr list --repo "$REPO" --state open --json number --jq 'length')

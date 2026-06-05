@@ -202,7 +202,7 @@ describe('useTranscriberApi', () => {
         addEventListener: vi.fn(),
         removeEventListener: vi.fn(),
       }
-      vi.stubGlobal('EventSource', vi.fn(function EventSource(url: string) {
+      vi.stubGlobal('EventSource', vi.fn(function EventSource(_url: string) {
         return mockEventSource
       }))
     })
