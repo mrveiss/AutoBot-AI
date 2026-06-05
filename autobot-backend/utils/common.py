@@ -427,8 +427,9 @@ class DatabaseUtils:
         try:
             _validate_sql_identifier(table_name, "table name")
             cursor = conn.cursor()
-            # nosemgrep: autobot-sql-string-format
-            cursor.execute(f"SELECT COUNT(*) FROM {table_name}")  # nosec B608
+            cursor.execute(  # nosemgrep: autobot-sql-string-format
+                f"SELECT COUNT(*) FROM {table_name}"
+            )  # nosec B608
             result = cursor.fetchone()
             return result[0] if result else 0
         except Exception:
