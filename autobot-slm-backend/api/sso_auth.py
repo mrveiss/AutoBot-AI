@@ -57,9 +57,7 @@ _ldap_login_limiter = RateLimiter(
 
 # Callback URL allowlist (Security: MVA-3396 M-2)
 _ALLOWED_CALLBACK_HOSTS = frozenset(
-    host.strip().lower()
-    for host in config.auth.sso_callback_hosts.split(",")
-    if host.strip()
+    host.strip().lower() for host in config.auth.sso_callback_hosts.split(",") if host.strip()
 )
 
 

@@ -40,9 +40,9 @@ def test_build_callback_url_valid_host_localhost():
     """Test callback URL construction with valid localhost host."""
     # Import after path setup to avoid FastAPI import
     import importlib.util
+
     spec = importlib.util.spec_from_file_location(
-        "sso_auth",
-        Path(__file__).parent.parent.parent / "api" / "sso_auth.py"
+        "sso_auth", Path(__file__).parent.parent.parent / "api" / "sso_auth.py"
     )
     sso_auth = importlib.util.module_from_spec(spec)
 
@@ -57,11 +57,7 @@ def test_build_callback_url_valid_host_localhost():
 
     spec.loader.exec_module(sso_auth)
 
-    request = _make_mock_request(
-        "http",
-        "localhost",
-        {"x-forwarded-proto": "http", "x-forwarded-host": "localhost"}
-    )
+    request = _make_mock_request("http", "localhost", {"x-forwarded-proto": "http", "x-forwarded-host": "localhost"})
 
     result = sso_auth._build_callback_url(request)
     assert result == "http://localhost/api/auth/sso/callback"
@@ -70,9 +66,9 @@ def test_build_callback_url_valid_host_localhost():
 def test_build_callback_url_valid_host_127_0_0_1():
     """Test callback URL construction with valid 127.0.0.1 host."""
     import importlib.util
+
     spec = importlib.util.spec_from_file_location(
-        "sso_auth",
-        Path(__file__).parent.parent.parent / "api" / "sso_auth.py"
+        "sso_auth", Path(__file__).parent.parent.parent / "api" / "sso_auth.py"
     )
     sso_auth = importlib.util.module_from_spec(spec)
 
@@ -86,11 +82,7 @@ def test_build_callback_url_valid_host_127_0_0_1():
 
     spec.loader.exec_module(sso_auth)
 
-    request = _make_mock_request(
-        "http",
-        "127.0.0.1",
-        {"x-forwarded-proto": "http", "x-forwarded-host": "127.0.0.1"}
-    )
+    request = _make_mock_request("http", "127.0.0.1", {"x-forwarded-proto": "http", "x-forwarded-host": "127.0.0.1"})
 
     result = sso_auth._build_callback_url(request)
     assert result == "http://127.0.0.1/api/auth/sso/callback"
@@ -99,9 +91,9 @@ def test_build_callback_url_valid_host_127_0_0_1():
 def test_build_callback_url_invalid_host_rejected():
     """Test callback URL rejects host not in allowlist (phishing attempt)."""
     import importlib.util
+
     spec = importlib.util.spec_from_file_location(
-        "sso_auth",
-        Path(__file__).parent.parent.parent / "api" / "sso_auth.py"
+        "sso_auth", Path(__file__).parent.parent.parent / "api" / "sso_auth.py"
     )
     sso_auth = importlib.util.module_from_spec(spec)
 
@@ -127,9 +119,7 @@ def test_build_callback_url_invalid_host_rejected():
     spec.loader.exec_module(sso_auth)
 
     request = _make_mock_request(
-        "https",
-        "attacker.com",
-        {"x-forwarded-proto": "https", "x-forwarded-host": "attacker.com"}
+        "https", "attacker.com", {"x-forwarded-proto": "https", "x-forwarded-host": "attacker.com"}
     )
 
     with pytest.raises(MockHTTPException) as exc_info:
@@ -142,9 +132,9 @@ def test_build_callback_url_invalid_host_rejected():
 def test_build_callback_url_host_with_port():
     """Test callback URL construction strips port for allowlist validation."""
     import importlib.util
+
     spec = importlib.util.spec_from_file_location(
-        "sso_auth",
-        Path(__file__).parent.parent.parent / "api" / "sso_auth.py"
+        "sso_auth", Path(__file__).parent.parent.parent / "api" / "sso_auth.py"
     )
     sso_auth = importlib.util.module_from_spec(spec)
 
@@ -159,9 +149,7 @@ def test_build_callback_url_host_with_port():
     spec.loader.exec_module(sso_auth)
 
     request = _make_mock_request(
-        "http",
-        "localhost:8000",
-        {"x-forwarded-proto": "http", "x-forwarded-host": "localhost:8000"}
+        "http", "localhost:8000", {"x-forwarded-proto": "http", "x-forwarded-host": "localhost:8000"}
     )
 
     result = sso_auth._build_callback_url(request)
@@ -171,9 +159,9 @@ def test_build_callback_url_host_with_port():
 def test_build_callback_url_case_insensitive():
     """Test callback URL validation is case-insensitive."""
     import importlib.util
+
     spec = importlib.util.spec_from_file_location(
-        "sso_auth",
-        Path(__file__).parent.parent.parent / "api" / "sso_auth.py"
+        "sso_auth", Path(__file__).parent.parent.parent / "api" / "sso_auth.py"
     )
     sso_auth = importlib.util.module_from_spec(spec)
 
@@ -187,11 +175,7 @@ def test_build_callback_url_case_insensitive():
 
     spec.loader.exec_module(sso_auth)
 
-    request = _make_mock_request(
-        "http",
-        "LOCALHOST",
-        {"x-forwarded-proto": "http", "x-forwarded-host": "LOCALHOST"}
-    )
+    request = _make_mock_request("http", "LOCALHOST", {"x-forwarded-proto": "http", "x-forwarded-host": "LOCALHOST"})
 
     result = sso_auth._build_callback_url(request)
     assert result == "http://LOCALHOST/api/auth/sso/callback"
@@ -201,13 +185,14 @@ def test_build_callback_url_case_insensitive():
 # Rate Limiting Tests (MVA-3397 M-1)
 # ============================================================================
 
+
 @pytest.mark.asyncio
 async def test_sso_login_rate_limit():
     """Test SSO login endpoint rate limiting (10 req/min per IP)."""
     import importlib.util
     import sys
     from unittest.mock import AsyncMock, MagicMock, patch
-    
+
     # Mock FastAPI dependencies
     sys.modules["fastapi"] = MagicMock()
     sys.modules["fastapi.responses"] = MagicMock()
@@ -216,39 +201,37 @@ async def test_sso_login_rate_limit():
     sys.modules["user_management.services.base_service"] = MagicMock()
     sys.modules["user_management.services.sso_service"] = MagicMock()
     sys.modules["services.auth"] = MagicMock()
-    
+
     spec = importlib.util.spec_from_file_location(
-        "sso_auth",
-        Path(__file__).parent.parent.parent / "api" / "sso_auth.py"
+        "sso_auth", Path(__file__).parent.parent.parent / "api" / "sso_auth.py"
     )
     sso_auth = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(sso_auth)
-    
+
     # Mock request and response
     request = MagicMock()
     request.client = MagicMock()
     request.client.host = "192.168.1.1"
     response = MagicMock()
     response.headers = {}
-    
+
     # Mock the rate limiter to simulate rate limit exceeded
-    with patch.object(sso_auth._sso_login_limiter, "acquire", new_callable=AsyncMock) as mock_acquire, \
-         patch.object(sso_auth._sso_login_limiter, "get_retry_after_seconds", new_callable=AsyncMock) as mock_retry:
+    with (
+        patch.object(sso_auth._sso_login_limiter, "acquire", new_callable=AsyncMock) as mock_acquire,
+        patch.object(sso_auth._sso_login_limiter, "get_retry_after_seconds", new_callable=AsyncMock) as mock_retry,
+    ):
         mock_acquire.return_value = False  # Rate limit exceeded
         mock_retry.return_value = 45  # 45 seconds until retry
-        
+
         # Attempt to call endpoint (should raise HTTPException)
         with pytest.raises(Exception) as exc_info:
             await sso_auth.initiate_sso_login(
-                provider_id="00000000-0000-0000-0000-000000000001",
-                request=request,
-                response=response,
-                db=MagicMock()
+                provider_id="00000000-0000-0000-0000-000000000001", request=request, response=response, db=MagicMock()
             )
-        
+
         # Verify rate limiter was called with correct key
         mock_acquire.assert_called_once_with("ip:192.168.1.1")
-        
+
         # Verify Retry-After header was set
         assert response.headers.get("Retry-After") == "45"
 
@@ -259,7 +242,7 @@ async def test_ldap_login_rate_limit():
     import importlib.util
     import sys
     from unittest.mock import AsyncMock, MagicMock, patch
-    
+
     # Mock FastAPI dependencies
     sys.modules["fastapi"] = MagicMock()
     sys.modules["fastapi.responses"] = MagicMock()
@@ -268,37 +251,34 @@ async def test_ldap_login_rate_limit():
     sys.modules["user_management.services.base_service"] = MagicMock()
     sys.modules["user_management.services.sso_service"] = MagicMock()
     sys.modules["services.auth"] = MagicMock()
-    
+
     spec = importlib.util.spec_from_file_location(
-        "sso_auth",
-        Path(__file__).parent.parent.parent / "api" / "sso_auth.py"
+        "sso_auth", Path(__file__).parent.parent.parent / "api" / "sso_auth.py"
     )
     sso_auth = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(sso_auth)
-    
+
     # Mock login data
     login_data = MagicMock()
     login_data.username = "testuser"
     response = MagicMock()
     response.headers = {}
-    
+
     # Mock the rate limiter to simulate rate limit exceeded
-    with patch.object(sso_auth._ldap_login_limiter, "acquire", new_callable=AsyncMock) as mock_acquire, \
-         patch.object(sso_auth._ldap_login_limiter, "get_retry_after_seconds", new_callable=AsyncMock) as mock_retry:
+    with (
+        patch.object(sso_auth._ldap_login_limiter, "acquire", new_callable=AsyncMock) as mock_acquire,
+        patch.object(sso_auth._ldap_login_limiter, "get_retry_after_seconds", new_callable=AsyncMock) as mock_retry,
+    ):
         mock_acquire.return_value = False  # Rate limit exceeded
         mock_retry.return_value = 30  # 30 seconds until retry
-        
+
         # Attempt to call endpoint (should raise HTTPException)
         with pytest.raises(Exception) as exc_info:
-            await sso_auth.ldap_login(
-                login_data=login_data,
-                response=response,
-                db=MagicMock()
-            )
-        
+            await sso_auth.ldap_login(login_data=login_data, response=response, db=MagicMock())
+
         # Verify rate limiter was called with correct key
         mock_acquire.assert_called_once_with("username:testuser")
-        
+
         # Verify Retry-After header was set
         assert response.headers.get("Retry-After") == "30"
 
@@ -309,7 +289,7 @@ async def test_sso_callback_rate_limit():
     import importlib.util
     import sys
     from unittest.mock import AsyncMock, MagicMock, patch
-    
+
     # Mock FastAPI dependencies
     sys.modules["fastapi"] = MagicMock()
     sys.modules["fastapi.responses"] = MagicMock()
@@ -318,39 +298,36 @@ async def test_sso_callback_rate_limit():
     sys.modules["user_management.services.base_service"] = MagicMock()
     sys.modules["user_management.services.sso_service"] = MagicMock()
     sys.modules["services.auth"] = MagicMock()
-    
+
     spec = importlib.util.spec_from_file_location(
-        "sso_auth",
-        Path(__file__).parent.parent.parent / "api" / "sso_auth.py"
+        "sso_auth", Path(__file__).parent.parent.parent / "api" / "sso_auth.py"
     )
     sso_auth = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(sso_auth)
-    
+
     # Mock request and response
     request = MagicMock()
     request.client = MagicMock()
     request.client.host = "10.0.0.5"
     response = MagicMock()
     response.headers = {}
-    
+
     # Mock the rate limiter to simulate rate limit exceeded
-    with patch.object(sso_auth._sso_callback_limiter, "acquire", new_callable=AsyncMock) as mock_acquire, \
-         patch.object(sso_auth._sso_callback_limiter, "get_retry_after_seconds", new_callable=AsyncMock) as mock_retry:
+    with (
+        patch.object(sso_auth._sso_callback_limiter, "acquire", new_callable=AsyncMock) as mock_acquire,
+        patch.object(sso_auth._sso_callback_limiter, "get_retry_after_seconds", new_callable=AsyncMock) as mock_retry,
+    ):
         mock_acquire.return_value = False  # Rate limit exceeded
         mock_retry.return_value = 60  # 60 seconds until retry
-        
+
         # Attempt to call endpoint (should raise HTTPException)
         with pytest.raises(Exception) as exc_info:
             await sso_auth.oauth_callback(
-                request=request,
-                response=response,
-                code="test_code",
-                state="test_state",
-                db=MagicMock()
+                request=request, response=response, code="test_code", state="test_state", db=MagicMock()
             )
-        
+
         # Verify rate limiter was called with correct key
         mock_acquire.assert_called_once_with("ip:10.0.0.5")
-        
+
         # Verify Retry-After header was set
         assert response.headers.get("Retry-After") == "60"
