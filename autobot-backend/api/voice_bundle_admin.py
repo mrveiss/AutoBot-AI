@@ -15,7 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from api.voice_bundle_constants import VALID_BUNDLES, BundleAssignRequest
-from api.voice_bundle_helpers import _require_admin, _count_tools_for_bundle
+from api.voice_bundle_helpers import _count_tools_for_bundle, _require_admin
 from auth_middleware import get_current_user
 from autobot_shared.logging_manager import get_logger
 from services.event_log import EventType, emit
