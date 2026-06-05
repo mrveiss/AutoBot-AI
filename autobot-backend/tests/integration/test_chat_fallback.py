@@ -30,7 +30,6 @@ from llm_shared.fallback_chain import FallbackChain, FallbackChainManager
 from llm_shared.models import LLMRequest, LLMResponse, ProviderType
 from llm_shared.optimization.rate_limiter import RateLimitError
 
-
 # ---------------------------------------------------------------------------
 # Test fixtures and helpers
 # ---------------------------------------------------------------------------
@@ -65,9 +64,7 @@ def _make_anthropic_request(
     """Create a mock Anthropic Messages API request."""
     return {
         "model": model,
-        "messages": [
-            {"role": "user", "content": "Hello, test!"}
-        ],
+        "messages": [{"role": "user", "content": "Hello, test!"}],
         "max_tokens": 100,
         "stream": stream,
     }
@@ -185,10 +182,12 @@ async def test_rate_limit_triggers_fallback(client):
         model=fallback_model,
     )
 
-    primary_provider = _make_mock_provider([
-        RateLimitError("Rate limit exceeded"),
-        fallback_response,
-    ])
+    primary_provider = _make_mock_provider(
+        [
+            RateLimitError("Rate limit exceeded"),
+            fallback_response,
+        ]
+    )
 
     mock_registry = _make_mock_registry([primary_provider, primary_provider])
     fallback_chain_mgr = _make_fallback_chain_manager(
@@ -196,10 +195,12 @@ async def test_rate_limit_triggers_fallback(client):
         [fallback_model],
     )
 
-    with patch("api.anthropic_compat._resolve_auth") as mock_auth, \
-         patch("api.anthropic_compat._oai_limiter.check_or_429") as mock_limiter, \
-         patch("api.anthropic_compat.get_provider_registry", return_value=mock_registry), \
-         patch("llm_shared.model_fallback_coordinator.get_fallback_chain_manager", return_value=fallback_chain_mgr):
+    with (
+        patch("api.anthropic_compat._resolve_auth") as mock_auth,
+        patch("api.anthropic_compat._oai_limiter.check_or_429") as mock_limiter,
+        patch("api.anthropic_compat.get_provider_registry", return_value=mock_registry),
+        patch("llm_shared.model_fallback_coordinator.get_fallback_chain_manager", return_value=fallback_chain_mgr),
+    ):
 
         mock_auth.return_value = (None, None)
         mock_limiter.return_value = None
@@ -259,10 +260,12 @@ async def test_fallback_audit_metadata_in_response():
     coordinator = get_fallback_coordinator()
     fallback_response = _ok_response(model=fallback_model)
 
-    mock_provider = _make_mock_provider([
-        RateLimitError("Rate limit exceeded"),
-        fallback_response,
-    ])
+    mock_provider = _make_mock_provider(
+        [
+            RateLimitError("Rate limit exceeded"),
+            fallback_response,
+        ]
+    )
     mock_registry = _make_mock_registry([mock_provider, mock_provider])
     fallback_chain_mgr = _make_fallback_chain_manager(
         primary_model,
@@ -317,11 +320,13 @@ async def test_fallback_chain_exhaustion():
     coordinator = get_fallback_coordinator()
 
     # All attempts return rate limit error
-    mock_provider = _make_mock_provider([
-        RateLimitError("Rate limit exceeded"),
-        RateLimitError("Rate limit exceeded"),
-        RateLimitError("Rate limit exceeded"),
-    ])
+    mock_provider = _make_mock_provider(
+        [
+            RateLimitError("Rate limit exceeded"),
+            RateLimitError("Rate limit exceeded"),
+            RateLimitError("Rate limit exceeded"),
+        ]
+    )
     mock_registry = _make_mock_registry([mock_provider])
     fallback_chain_mgr = _make_fallback_chain_manager(
         primary_model,
@@ -377,9 +382,11 @@ async def test_streaming_endpoint_fallback_behavior(client):
     mock_provider.stream_completion = mock_stream_completion
     mock_registry = _make_mock_registry([mock_provider])
 
-    with patch("api.anthropic_compat._resolve_auth") as mock_auth, \
-         patch("api.anthropic_compat._oai_limiter.check_or_429") as mock_limiter, \
-         patch("api.anthropic_compat.get_provider_registry", return_value=mock_registry):
+    with (
+        patch("api.anthropic_compat._resolve_auth") as mock_auth,
+        patch("api.anthropic_compat._oai_limiter.check_or_429") as mock_limiter,
+        patch("api.anthropic_compat.get_provider_registry", return_value=mock_registry),
+    ):
 
         mock_auth.return_value = (None, None)
         mock_limiter.return_value = None
@@ -471,11 +478,13 @@ async def test_multiple_fallback_hops():
     coordinator = get_fallback_coordinator()
     final_response = _ok_response(model=fallback_2)
 
-    mock_provider = _make_mock_provider([
-        RateLimitError("Rate limit exceeded"),  # Primary fails
-        RateLimitError("Rate limit exceeded"),  # First fallback fails
-        final_response,                          # Second fallback succeeds
-    ])
+    mock_provider = _make_mock_provider(
+        [
+            RateLimitError("Rate limit exceeded"),  # Primary fails
+            RateLimitError("Rate limit exceeded"),  # First fallback fails
+            final_response,  # Second fallback succeeds
+        ]
+    )
     mock_registry = _make_mock_registry([mock_provider])
     fallback_chain_mgr = _make_fallback_chain_manager(
         primary_model,

@@ -101,7 +101,7 @@ def decrypt_sso_config(config: dict) -> dict:
     for field in SSO_SENSITIVE_FIELDS:
         value = out.get(field)
         if value and isinstance(value, str) and value.startswith(_ENCRYPTED_PREFIX):
-            out[field] = decrypt_field(value[len(_ENCRYPTED_PREFIX):])
+            out[field] = decrypt_field(value[len(_ENCRYPTED_PREFIX) :])
     return out
 
 
