@@ -44,7 +44,6 @@ class SecretType(str, Enum):
     API_KEY = "api_key"
     # nosemgrep: autobot-hardcoded-secret-key
     TOKEN = "token"  # nosec B105 - enum value, not actual token
-    # nosemgrep: autobot-hardcoded-secret-key
     OAUTH_REFRESH_TOKEN = "oauth_refresh_token"  # nosec B105 - enum value
     CERTIFICATE = "certificate"
     DATABASE_URL = "database_url"
