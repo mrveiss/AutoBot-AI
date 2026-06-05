@@ -87,12 +87,12 @@ def _build_callback_url(request: Request) -> str:
     """Build OAuth2 callback URL with security validation (MVA-3542)."""
     scheme = request.headers.get("x-forwarded-proto", request.url.scheme)
     raw_host = request.headers.get("x-forwarded-host", request.url.netloc) or ""
-    
+
     # Block malicious characters (MVA-3542: SSRF/CRLF prevention)
     if any(c in raw_host for c in "@/\\#?"):
         logger.error("OAuth callback rejected: malicious characters", extra={"host": raw_host})
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid callback host")
-    
+
     # Parse with urlsplit to prevent parser differential attacks
     try:
         parsed = urlsplit(f"//{raw_host}")
@@ -100,12 +100,12 @@ def _build_callback_url(request: Request) -> str:
     except Exception as e:
         logger.error("OAuth callback rejected: parse failed", extra={"host": raw_host, "error": str(e)})
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid callback host") from e
-    
+
     # Validate hostname against allowlist
     if not hostname or hostname not in _ALLOWED_CALLBACK_HOSTS:
         logger.error("OAuth callback rejected: not in allowlist", extra={"hostname": hostname})
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid callback host")
-    
+
     # Reconstruct netloc from validated components
     netloc = hostname + (f":{parsed.port}" if parsed.port else "")
     return f"{scheme}://{netloc}/api/auth/sso/callback"
