@@ -383,7 +383,7 @@ describe('RedisServiceControl.vue', () => {
       wrapper = mountWithPlugins();
 
       // Component renders a loading overlay with spinner
-      expect(wrapper.find('.fa-spinner').exists()).toBe(true);
+      expect(wrapper.find('.icon-spin').exists()).toBe(true);
     });
 
     it('disables buttons during loading', () => {
@@ -401,7 +401,7 @@ describe('RedisServiceControl.vue', () => {
       wrapper = mountWithPlugins();
 
       // No spinner when not loading
-      expect(wrapper.find('.fa-spinner').exists()).toBe(false);
+      expect(wrapper.find('.icon-spin').exists()).toBe(false);
     });
   });
 

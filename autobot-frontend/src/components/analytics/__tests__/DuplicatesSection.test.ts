@@ -82,7 +82,7 @@ describe('DuplicatesSection (#5369)', () => {
       const w = mountSection([], true)
       expect(w.find('.section-loading').exists()).toBe(true)
       expect(w.find('.empty-state').exists()).toBe(false)
-      expect(w.find('.fa-spinner').exists()).toBe(true)
+      expect(w.find('.icon-spin').exists()).toBe(true)
     })
 
     it('renders spinner (not empty-state) with duplicates when loading=true', () => {
