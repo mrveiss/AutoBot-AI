@@ -38,7 +38,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl git openssh-client sshpass rsync ansible \
     && rm -rf /var/lib/apt/lists/*
 
-RUN groupadd -r autobot && useradd -r -g autobot -d /app autobot
+RUN groupadd -r --gid 999 autobot && useradd -r --uid 999 -g autobot -d /app autobot
 
 WORKDIR /app
 

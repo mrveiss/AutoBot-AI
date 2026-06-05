@@ -143,7 +143,7 @@ services:
       - /tmp
       - /var/run
       - /app/data/tmp:mode=1777
-      - /app/autobot-slm-backend/data:mode=1777  # config._write_persisted_keys writes .slm_keys here
+      - /app/autobot-slm-backend/data:uid=999,gid=999,mode=0700  # SLM writes .slm_keys here; UID/GID pinned in Dockerfile
     secrets:
       - slm_admin_password
       - slm_jwt_secret
