@@ -157,6 +157,50 @@ class TestUpdateDocument:
         assert result["content"] == "original content"
         assert result["title"] == "New Title Only"
 
+    @pytest.mark.asyncio
+    async def test_can_set_nullable_fields_to_null(self, mock_redis):
+        """Test fix for #9525: nullable fields can be explicitly set to null."""
+        from api.documents import UpdateDocumentRequest, update_document
+
+        doc = _make_doc(
+            title="Original Title",
+            content="Original content",
+            tags=["tag1", "tag2"],
+            metadata={"key": "value"},
+        )
+        mock_redis.get = AsyncMock(return_value=doc.model_dump_json())
+
+        # Set all nullable fields to null
+        body = UpdateDocumentRequest(title=None, content=None, tags=None, metadata=None)
+        with patch("api.documents.get_async_redis_client", AsyncMock(return_value=mock_redis)):
+            result = await update_document(doc.id, body, current_user=_FAKE_USER)
+
+        # All fields should be null (not unchanged)
+        assert result["title"] is None
+        assert result["content"] is None
+        assert result["tags"] is None
+        assert result["metadata"] is None
+
+    @pytest.mark.asyncio
+    async def test_validation_still_enforced_when_not_null(self, mock_redis):
+        """Test fix for #9525: validation (e.g., title min_length) still works."""
+        from fastapi import HTTPException
+
+        from api.documents import UpdateDocumentRequest, update_document
+
+        doc = _make_doc()
+        mock_redis.get = AsyncMock(return_value=doc.model_dump_json())
+
+        # Empty string should fail validation (min_length=1)
+        with pytest.raises(Exception):  # Pydantic ValidationError
+            UpdateDocumentRequest(title="")
+
+        # But null should be allowed
+        body = UpdateDocumentRequest(title=None)
+        with patch("api.documents.get_async_redis_client", AsyncMock(return_value=mock_redis)):
+            result = await update_document(doc.id, body, current_user=_FAKE_USER)
+        assert result["title"] is None
+
 
 class TestDeleteDocument:
     @pytest.mark.asyncio
