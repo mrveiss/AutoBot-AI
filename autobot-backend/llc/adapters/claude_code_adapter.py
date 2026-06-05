@@ -143,6 +143,14 @@ class ClaudeCodeAdapter:
         if workspace_dir:
             env["AUTOBOT_WORKSPACE_DIR"] = workspace_dir
 
+        # GH#9624: inject wake env vars for comment-driven wakes
+        wake_reason = context.get("wake_reason")
+        if wake_reason:
+            env["AUTOBOT_LLC_WAKE_REASON"] = wake_reason
+        wake_comment_id = context.get("wake_comment_id")
+        if wake_comment_id:
+            env["AUTOBOT_LLC_WAKE_COMMENT_ID"] = wake_comment_id
+
         out_fh = open(output_file, "w", encoding="utf-8")
         try:
             try:
