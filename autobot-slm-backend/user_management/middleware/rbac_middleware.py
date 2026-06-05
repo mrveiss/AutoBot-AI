@@ -241,9 +241,18 @@ class RBACMiddleware:
         if user_id:
             _permission_cache.pop(str(user_id), None)
         else:
-            # Clear entire fallback; Redis keys expire naturally.
             _permission_cache.clear()
-            asyncio.ensure_future(self._clear_all_redis_keys())
+
+        # Clear Redis L2 and notify other workers
+        redis = await get_async_redis_client()
+        if redis is not None:
+            if user_id:
+                await redis.delete(f"{_REDIS_KEY_PREFIX}{user_id}")
+            else:
+                asyncio.ensure_future(self._clear_all_redis_keys())
+            payload = json.dumps({"user_id": str(user_id)} if user_id else {})
+            await redis.publish(_PUBSUB_CHANNEL, payload)
+            logger.debug("RBAC cache invalidated for user=%s", user_id)
 
     async def _clear_all_redis_keys(self) -> None:
         r = await get_async_redis_client()
@@ -255,20 +264,6 @@ class RBACMiddleware:
                 await r.delete(*keys)
         except Exception as exc:
             logger.warning("RBAC: failed to clear all Redis permission keys: %s", exc)
-
-        # Clear Redis L2 and notify other workers
-        redis = await get_async_redis_client()
-        if redis is not None:
-            if user_id:
-                await redis.delete(f"{_REDIS_KEY_PREFIX}{user_id}")
-            else:
-                pipeline = redis.pipeline()
-                async for key in redis.scan_iter(f"{_REDIS_KEY_PREFIX}*"):
-                    pipeline.delete(key)
-                await pipeline.execute()
-            payload = json.dumps({"user_id": str(user_id)} if user_id else {})
-            await redis.publish(_PUBSUB_CHANNEL, payload)
-            logger.debug("RBAC cache invalidated for user=%s", user_id)
 
 
 # Global instance
@@ -379,7 +374,6 @@ def require_permission(permission: Union[Permission, str]):
             has_perm = await rbac_middleware.check_permission(user_id, perm_str, org_id)
             if not has_perm:
                 logger.warning("RBAC: permission denied user=%s perm=%s", user_id, perm_str)
-                asyncio.ensure_future(_emit_permission_denied_audit(user_id, perm_str, str(request.url.path)))
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail=f"Permission '{perm_str}' required",
@@ -406,7 +400,6 @@ def require_any_permission(permissions: List[Union[Permission, str]]):
             has_perm = await rbac_middleware.check_any_permission(user_id, permissions, org_id)
             if not has_perm:
                 logger.warning("RBAC: permission denied user=%s required_any=%s", user_id, perm_strs)
-                asyncio.ensure_future(_emit_permission_denied_audit(user_id, str(perm_strs), str(request.url.path)))
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail=f"One of these permissions required: {perm_strs}",
@@ -433,7 +426,6 @@ def require_all_permissions(permissions: List[Union[Permission, str]]):
             has_perm = await rbac_middleware.check_all_permissions(user_id, permissions, org_id)
             if not has_perm:
                 logger.warning("RBAC: permission denied user=%s required_all=%s", user_id, perm_strs)
-                asyncio.ensure_future(_emit_permission_denied_audit(user_id, str(perm_strs), str(request.url.path)))
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail=f"All of these permissions required: {perm_strs}",
