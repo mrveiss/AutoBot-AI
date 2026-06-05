@@ -34,20 +34,21 @@ jobs:
               --jq --argjson skip "$PR_NUMBER" \
               '[.[] | select(.number != $skip) | "- #\(.number) \(.title)"] | join("\n")')
 
-            BODY="## ⚠️ PR Queue Warning: $EXISTING/$LIMIT PRs Already Open
-
-This PR was opened while the queue is at capacity. **Please do not merge new work until existing PRs are reviewed and merged first.**
-
-**Open PRs to clear:**
-$OPEN_LIST
-
-**Action required (agent or author):**
-1. Check CI status on each open PR above
-2. Merge any that are green: \`gh pr merge <number> --squash --delete-branch\`
-3. Fix CI on failing ones if straightforward
-4. Only then should this PR proceed to review/merge
-
-> Queue gate enforced by \`.github/workflows/pr-queue-gate.yml\`"
+            BODY=$(printf '%s\n' \
+              "## PR Queue Warning: $EXISTING/$LIMIT PRs Already Open" \
+              "" \
+              "This PR was opened while the queue is at capacity. Please do not merge new work until existing PRs are reviewed and merged first." \
+              "" \
+              "Open PRs to clear:" \
+              "$OPEN_LIST" \
+              "" \
+              "Action required (agent or author):" \
+              "1. Check CI status on each open PR above" \
+              "2. Merge any that are green: gh pr merge <number> --squash --delete-branch" \
+              "3. Fix CI on failing ones if straightforward" \
+              "4. Only then should this PR proceed to review/merge" \
+              "" \
+              "Queue gate enforced by .github/workflows/pr-queue-gate.yml")
 
             gh pr comment "$PR_NUMBER" --repo "$REPO" --body "$BODY"
           else
