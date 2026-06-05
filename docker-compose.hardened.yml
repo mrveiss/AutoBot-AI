@@ -143,8 +143,7 @@ services:
       - /tmp
       - /var/run
       - /app/data/tmp:mode=1777
-      - /app/autobot-slm-backend/data:mode=0755  # SLM writes .slm_keys here (config.py data_dir)
-      # Note: /app/logs is already mounted as slm_logs volume in base compose
+      - /app/autobot-slm-backend/data:mode=1777  # config._write_persisted_keys writes .slm_keys here
     secrets:
       - slm_admin_password
       - slm_jwt_secret
