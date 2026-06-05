@@ -176,6 +176,7 @@ services:
       - AUTOBOT_CHROMADB_PORT=8000
       - AUTOBOT_LLAMAINDEX_LLM_ENDPOINT=http://${AUTOBOT_OLLAMA_HOST:-autobot-ollama}:11434
       - AUTOBOT_LLAMAINDEX_EMBEDDING_ENDPOINT=http://${AUTOBOT_OLLAMA_HOST:-autobot-ollama}:11434
+      - AUTOBOT_AUDIT_LOG_FILE=/app/logs/audit.log
     depends_on:
       autobot-redis:
         condition: service_healthy
@@ -236,6 +237,7 @@ services:
       - CELERY_RESULT_BACKEND=redis://autobot-redis:6379/${AUTOBOT_REDIS_DB_CELERY_RESULTS:-15}
       - AUTOBOT_CHROMADB_HOST=autobot-chromadb
       - AUTOBOT_CHROMADB_PORT=8000
+      - AUTOBOT_AUDIT_LOG_FILE=/app/logs/audit.log
     healthcheck:
       test: ["CMD-SHELL", "python3.12 -m celery -A celery_app inspect ping --destination celery@$HOSTNAME --timeout 5"]
       interval: 30s
