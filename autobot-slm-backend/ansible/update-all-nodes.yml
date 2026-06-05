@@ -255,6 +255,16 @@
       become: true
       tags: [shared, library, slm-agent]
 
+    # Issue #9565: slm-backend also needs autobot_shared in PYTHONPATH
+    - name: "[PLAY 1] SLM Backend | Create autobot_shared symlink for backend imports"
+      ansible.builtin.file:
+        src: "{{ code_base_dir }}/autobot_shared"
+        dest: "{{ code_base_dir }}/autobot-slm-backend/autobot_shared"
+        state: link
+        force: true
+      become: true
+      tags: [shared, library, slm-backend]
+
     # =========================================================================
     # SLM AGENT - Issue #1164: Keep agent code in sync on every fleet update
     # =========================================================================
