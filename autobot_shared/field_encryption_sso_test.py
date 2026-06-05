@@ -4,7 +4,6 @@
 """Tests for SSO config field-level encryption helpers (GH#9501)."""
 
 import base64
-import os
 
 import pytest
 
