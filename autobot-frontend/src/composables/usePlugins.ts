@@ -27,6 +27,7 @@ export interface PluginInfo {
   author: string
   status: 'unloaded' | 'loaded' | 'enabled' | 'disabled' | 'error'
   hooks: string[]
+  trust_tier?: 'official' | 'verified' | 'community' | 'unverified'
 }
 
 export interface PluginManifest {
@@ -39,6 +40,7 @@ export interface PluginManifest {
   dependencies: string[]
   config_schema: Record<string, unknown>
   hooks: string[]
+  trust_tier?: 'official' | 'verified' | 'community' | 'unverified'
 }
 
 export interface DiscoveredPlugin {
