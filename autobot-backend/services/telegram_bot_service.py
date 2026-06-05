@@ -465,7 +465,7 @@ async def get_telegram_webhook_secret() -> Optional[str]:
         # Decrypt if encrypted (#9606)
         if secret.startswith(_ENCRYPTED_PREFIX):
             try:
-                return decrypt_field(secret[len(_ENCRYPTED_PREFIX):])
+                return decrypt_field(secret[len(_ENCRYPTED_PREFIX) :])
             except Exception as e:
                 logger.error(f"Failed to decrypt Telegram webhook secret: {e}")
                 return None
