@@ -347,7 +347,7 @@ def _describe_schema_sync(db_path: Path, table: str | None) -> dict:
             tables = cursor.fetchall()
 
             for (table_name,) in tables:
-                # nosemgrep: autobot-sql-string-format
+                # nosemgrep: semgrep.autobot-sql-string-format
                 cursor.execute(f"PRAGMA table_info([{table_name}])")  # nosec B608
                 columns = cursor.fetchall()
                 schemas[table_name] = [
