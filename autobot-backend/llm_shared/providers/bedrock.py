@@ -90,9 +90,7 @@ class BedrockProvider(BaseProvider):
         self._runtime_client = None
         self._region: str | None = None
 
-    def _validate_credentials(
-        self, access_key: str | None, secret_key: str | None
-    ) -> tuple[bool, str | None]:
+    def _validate_credentials(self, access_key: str | None, secret_key: str | None) -> tuple[bool, str | None]:
         """
         Validate AWS credential format and detect credential type.
 
@@ -142,9 +140,7 @@ class BedrockProvider(BaseProvider):
                 "Long-lived credentials pose a security risk if leaked."
             )
         elif access_key.startswith("ASIA"):
-            logger.info(
-                "Using STS temporary credentials (ASIA) — best practice for Bedrock authentication"
-            )
+            logger.info("Using STS temporary credentials (ASIA) — best practice for Bedrock authentication")
 
         return True, None
 
