@@ -22,10 +22,6 @@ export interface Device {
   created_at: string
 }
 
-interface DeviceListResponse {
-  devices: Device[]
-}
-
 // Module-level singleton state
 const devices = ref<Device[]>([])
 const { isLoading: loading, wrap } = useLoadingState()
