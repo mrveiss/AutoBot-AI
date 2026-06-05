@@ -166,20 +166,6 @@ async def _fetch_and_verify(remote_url: str) -> CapabilityReport:
     except (json.JSONDecodeError, UnicodeDecodeError) as exc:
         return CapabilityReport(verified=False, warnings=[f"Agent card is not valid JSON: {exc}"])
 
-    if status_code != 200:
-        return CapabilityReport(
-            verified=False,
-            warnings=[f"Agent card fetch failed: HTTP {status_code}"],
-        )
-
-    try:
-        data = _json.loads(body)
-    except _json.JSONDecodeError as exc:
-        return CapabilityReport(
-            verified=False,
-            warnings=[f"Agent card is not valid JSON: {exc}"],
-        )
-
     return _check_card_skills(data)
 
 
