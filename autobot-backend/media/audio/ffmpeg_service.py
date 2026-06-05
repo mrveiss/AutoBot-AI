@@ -11,6 +11,7 @@
 import asyncio
 import os
 import tempfile
+from pathlib import Path
 from typing import Optional
 
 from autobot_shared.logging_manager import get_logger
@@ -75,7 +76,9 @@ class FFmpegService:
         # Security: Validate extension
         input_ext = Path(input_path).suffix.lower()
         if input_ext not in ALLOWED_EXTENSIONS:
-            raise ValueError(f"File extension '{input_ext}' not allowed. Allowed: {', '.join(ALLOWED_EXTENSIONS)}")
+            raise ValueError(
+                f"File extension '{input_ext}' not allowed. Allowed: {', '.join(ALLOWED_EXTENSIONS)}"
+            )
 
         # Security: Reject relative paths
         if not os.path.isabs(input_path):
@@ -147,7 +150,9 @@ class FFmpegService:
             return output_path
 
         except FileNotFoundError:
-            raise RuntimeError(f"FFmpeg not found at {self.ffmpeg_path}. Please install FFmpeg: apt-get install ffmpeg")
+            raise RuntimeError(
+                f"FFmpeg not found at {self.ffmpeg_path}. Please install FFmpeg: apt-get install ffmpeg"
+            )
         except Exception as exc:
             logger.error("Audio extraction error: %s", exc)
             # Clean up output file on error
