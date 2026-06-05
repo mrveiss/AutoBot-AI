@@ -5,12 +5,12 @@ on:
     types: [opened, reopened]
 
 jobs:
-  enforce-pr-limit:
+  check-pr-limit:
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
     steps:
-      - name: Count open PRs and enforce limit
+      - name: Warn when PR queue is full
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
@@ -18,14 +18,14 @@ jobs:
         run: |
           LIMIT=5
 
-          # Count all open PRs (including this one), then subtract 1
+          # Count open PRs excluding the one just opened
           TOTAL=$(gh pr list --repo "$REPO" --state open --json number --jq 'length')
-          OPEN=$(( TOTAL - 1 ))
+          EXISTING=$(( TOTAL - 1 ))
 
-          echo "Open PRs (excluding this one): $OPEN / $LIMIT"
+          echo "Existing open PRs (excluding this one): $EXISTING / $LIMIT"
 
-          if [ "$OPEN" -ge "$LIMIT" ]; then
-            echo "PR limit exceeded — closing PR #$PR_NUMBER"
+          if [ "$EXISTING" -ge "$LIMIT" ]; then
+            echo "Queue is full — posting warning on PR #$PR_NUMBER"
 
             OPEN_LIST=$(gh pr list \
               --repo "$REPO" \
@@ -34,17 +34,22 @@ jobs:
               --jq --argjson skip "$PR_NUMBER" \
               '[.[] | select(.number != $skip) | "- #\(.number) \(.title)"] | join("\n")')
 
-            BODY="## PR Queue Gate: Limit Reached
+            BODY="## ⚠️ PR Queue Warning: $EXISTING/$LIMIT PRs Already Open
 
-This PR was automatically closed because the repository already has $OPEN/$LIMIT open PRs.
+This PR was opened while the queue is at capacity. **Please do not merge new work until existing PRs are reviewed and merged first.**
 
-**Open PRs:**
+**Open PRs to clear:**
 $OPEN_LIST
 
-Review and merge existing PRs, then reopen this one.
+**Action required (agent or author):**
+1. Check CI status on each open PR above
+2. Merge any that are green: \`gh pr merge <number> --squash --delete-branch\`
+3. Fix CI on failing ones if straightforward
+4. Only then should this PR proceed to review/merge
 
-> Hard limit enforced by \`.github/workflows/pr-queue-gate.yml\`"
+> Queue gate enforced by \`.github/workflows/pr-queue-gate.yml\`"
 
             gh pr comment "$PR_NUMBER" --repo "$REPO" --body "$BODY"
-            gh pr close "$PR_NUMBER" --repo "$REPO"
+          else
+            echo "Queue OK — $EXISTING/$LIMIT open PRs"
           fi
