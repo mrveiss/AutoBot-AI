@@ -3,6 +3,9 @@
 // Author: mrveiss
 import { useApiClient } from '@/plugins/api'
 
+export type AiAction = 'summarize' | 'key_facts' | 'protocol' | 'custom'
+export type RecordingStatus = 'pending' | 'processing' | 'complete' | 'error'
+
 export interface Project {
   id: number
   name: string
@@ -16,7 +19,7 @@ export interface Recording {
   project_id: number
   filename: string
   duration: number | null
-  status: 'pending' | 'processing' | 'complete' | 'error'
+  status: RecordingStatus
   speaker_count: number
   process_seconds: number | null
   engine_used: string | null
@@ -103,7 +106,7 @@ export function useTranscriberApi() {
       }),
 
     // AI
-    aiAsk: (recordingId: number, action: string, customQuestion?: string) =>
+    aiAsk: (recordingId: number, action: AiAction, customQuestion?: string) =>
       new EventSource(`${base}/recordings/${recordingId}/ai/ask?action=${action}${customQuestion ? `&q=${encodeURIComponent(customQuestion)}` : ''}`),
 
     // KB
