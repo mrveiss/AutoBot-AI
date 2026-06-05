@@ -100,6 +100,8 @@ updates:
         update-types: ["version-update:semver-major"]
       - dependency-name: "vega-lite"
         update-types: ["version-update:semver-major"]
+      - dependency-name: "vega-functions"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "npm"
     directory: "/autobot-slm-frontend"
