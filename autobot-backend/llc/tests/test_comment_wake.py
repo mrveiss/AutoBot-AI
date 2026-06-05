@@ -4,14 +4,14 @@
 """Integration tests for comment-driven agent wake (GH#9624)."""
 
 import uuid
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..models.enums import HeartbeatInvocationSource, LLCRunStatus, WorkItemStatus, WorkItemType
+from ..models.enums import HeartbeatInvocationSource, LLCRunStatus
 from ..models.heartbeat_run import LLCHeartbeatRun
-from ..models.work_item import LLCWorkItem, LLCWorkItemComment
+from ..models.work_item import LLCWorkItemComment
 from ..services.comment_wake_service import CommentWakeService
 
 
