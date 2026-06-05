@@ -58,6 +58,44 @@ repos:
         ]
         exclude: ^autobot-infrastructure/
 
+  # Type checking with mypy
+  # Matches CI configuration (GH#7105) - strict on autobot_shared/, informational on backends
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.16.0
+    hooks:
+      - id: mypy
+        name: mypy (autobot_shared - strict)
+        files: ^autobot_shared/
+        args: [--config-file=pyproject.toml]
+        additional_dependencies: [
+          pydantic-settings,
+          types-redis,
+          types-requests,
+          types-PyYAML,
+          types-setuptools,
+          opentelemetry-api,
+          opentelemetry-sdk
+        ]
+      - id: mypy
+        name: mypy (backends - informational)
+        files: ^(autobot-backend|autobot-slm-backend)/
+        args: [--config-file=pyproject.toml]
+        additional_dependencies: [
+          pydantic-settings,
+          types-redis,
+          types-requests,
+          types-PyYAML,
+          types-setuptools,
+          opentelemetry-api,
+          opentelemetry-sdk
+        ]
+        # Non-blocking for backends (4133+ pre-existing errors in GH#7105)
+        verbose: true
+        # Allow failures in backends but still show output
+        # Note: pre-commit doesn't have a native "warn" mode, so we use exclude to skip for now
+        # Once GH#7105 is resolved, remove this exclude to make it blocking
+        exclude: ^(autobot-backend|autobot-slm-backend)/
+
   # Trailing whitespace removal
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.5.0

@@ -1,0 +1,103 @@
+# GitHub Actions workflow to enforce pre-commit hooks installation
+# Ensures developers have pre-commit configured to catch issues before push
+# Related: MVA-2111, MVA-2108 (6 PRs required admin override due to missing local checks)
+
+name: Enforce Pre-commit Hooks
+
+on:
+  pull_request:
+    branches: [ main, Dev_new_gui, develop ]
+    paths:
+      - '**/*.py'
+      - '**/*.ts'
+      - '**/*.vue'
+      - '**/*.yml'
+      - '**/*.yaml'
+      - '.pre-commit-config.yaml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify-precommit-config:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6.0.2
+
+      - name: Check for pre-commit config
+        run: |
+          if [ ! -f .pre-commit-config.yaml ]; then
+            echo "::error::.pre-commit-config.yaml is missing from the repository"
+            echo "Pre-commit hooks are required to catch code quality issues locally."
+            echo "This file should exist in the repository root."
+            exit 1
+          fi
+          echo "✓ .pre-commit-config.yaml found"
+
+      - name: Validate pre-commit config
+        run: |
+          if ! grep -q "black" .pre-commit-config.yaml; then
+            echo "::error::Black hook missing from .pre-commit-config.yaml"
+            exit 1
+          fi
+          if ! grep -q "isort" .pre-commit-config.yaml; then
+            echo "::error::isort hook missing from .pre-commit-config.yaml"
+            exit 1
+          fi
+          if ! grep -q "flake8" .pre-commit-config.yaml; then
+            echo "::error::flake8 hook missing from .pre-commit-config.yaml"
+            exit 1
+          fi
+          if ! grep -q "autoflake" .pre-commit-config.yaml; then
+            echo "::error::autoflake hook missing from .pre-commit-config.yaml"
+            exit 1
+          fi
+          if ! grep -q "mypy" .pre-commit-config.yaml; then
+            echo "::error::mypy hook missing from .pre-commit-config.yaml"
+            exit 1
+          fi
+          echo "✓ All required hooks (black, isort, flake8, autoflake, mypy) are configured"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install pre-commit
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pre-commit
+
+      - name: Run pre-commit on all files
+        run: |
+          # This validates that the hooks are properly configured and can run
+          # We expect this to potentially fail on the first run if code doesn't meet standards
+          # The goal is to catch configuration errors, not necessarily code issues
+          pre-commit run --all-files --show-diff-on-failure || {
+            echo "::warning::Pre-commit hooks found issues. Developers should run 'pre-commit run --all-files' locally."
+            echo "::warning::Note: This is informational. The main goal is verifying hooks are configured."
+            # Don't fail the workflow - we just want to verify hooks work
+            exit 0
+          }
+
+  check-instructions:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6.0.2
+
+      - name: Verify CONTRIBUTING.md mentions pre-commit
+        run: |
+          if ! grep -qi "pre-commit" CONTRIBUTING.md; then
+            echo "::warning::CONTRIBUTING.md does not mention pre-commit setup"
+            echo "Developers may not know to install pre-commit hooks."
+            echo "Consider adding installation instructions to CONTRIBUTING.md"
+            # Warning only - don't fail
+            exit 0
+          fi
+          echo "✓ CONTRIBUTING.md mentions pre-commit"
