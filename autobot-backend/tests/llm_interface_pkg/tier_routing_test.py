@@ -166,6 +166,5 @@ def test_trivial_without_model_configured_routes_to_complex_with_correct_tier():
     assert model == "capable-model", f"expected complex model, got {model}"
     # MVA-2022 FIX: tier must match the selected model
     assert result.tier == "complex", (
-        f"Tier mismatch: selected complex model but tier is '{result.tier}'. "
-        "This causes metrics corruption."
+        f"Tier mismatch: selected complex model but tier is '{result.tier}'. " "This causes metrics corruption."
     )
