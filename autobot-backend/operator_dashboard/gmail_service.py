@@ -90,7 +90,7 @@ class GmailService:
                 )
 
         if not creds.valid:
-            raise ValueError(f"Gmail credentials are invalid\n" f"Re-authorize: python scripts/gmail_authorize.py")
+            raise ValueError("Gmail credentials are invalid\n" "Re-authorize: python scripts/gmail_authorize.py")
 
         return creds
 

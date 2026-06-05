@@ -11,7 +11,7 @@ Issue #1803 - Plugin and agent marketplace: package, share, and install extensio
 
 import json
 from enum import Enum
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
