@@ -141,13 +141,18 @@ async def _load_ts(connector_id: str, source_id: str) -> Optional[str]:
         from autobot_shared.redis_client import get_redis_client
 
         redis = get_redis_client(database="knowledge")
+        if redis is None:
+            logger.warning("Redis client unavailable for load_ts")
+            return None
         key = f"{_REDIS_TS_PREFIX}{connector_id}:{source_id}"
         value = redis.get(key)
         if hasattr(value, "__await__"):
             value = await value
         if isinstance(value, bytes):
             return value.decode("utf-8")
-        return value
+        if isinstance(value, str):
+            return value
+        return None
     except Exception as exc:
         logger.warning("Redis load_ts failed for %s: %s", source_id, exc)
         return None
@@ -159,6 +164,9 @@ async def _store_ts(connector_id: str, source_id: str, ts: str) -> None:
         from autobot_shared.redis_client import get_redis_client
 
         redis = get_redis_client(database="knowledge")
+        if redis is None:
+            logger.warning("Redis client unavailable for store_ts")
+            return
         key = f"{_REDIS_TS_PREFIX}{connector_id}:{source_id}"
         result = redis.set(key, ts, ex=_REDIS_TS_TTL)
         if hasattr(result, "__await__"):
