@@ -59,6 +59,7 @@ class BaseExporter(ABC):
         Returns:
             bytes: Generated file content
         """
+        ...
 
     @abstractmethod
     def get_mime_type(self) -> str:
@@ -67,6 +68,7 @@ class BaseExporter(ABC):
         Returns:
             str: MIME type (e.g., "application/pdf")
         """
+        ...
 
     @abstractmethod
     def get_file_extension(self) -> str:
@@ -75,6 +77,7 @@ class BaseExporter(ABC):
         Returns:
             str: File extension (e.g., ".pdf")
         """
+        ...
 
     def get_filename(self) -> str:
         """Generate filename from transcript title and extension.

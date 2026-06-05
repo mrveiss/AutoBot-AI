@@ -326,7 +326,7 @@ describe('useTimeout Composable', () => {
     it('should preserve function context', async () => {
       let capturedThis: any = null
       const callback = function (this: any) {
-        // eslint-disable-next-line @typescript-eslint/no-this-alias
+         
         capturedThis = this
       }
 
