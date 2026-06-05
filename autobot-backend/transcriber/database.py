@@ -298,3 +298,7 @@ async def get_transcriber_db() -> TranscriberDatabase:
         _transcriber_db = TranscriberDatabase()
         await _transcriber_db.initialize()
     return _transcriber_db
+
+
+# Backward compatibility alias
+Database = TranscriberDatabase

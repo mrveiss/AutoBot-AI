@@ -10,7 +10,7 @@
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -57,6 +57,30 @@ class TranscriptionSegment:
 # Pydantic schemas for API
 
 
+class ProjectCreate(BaseModel):
+    """Request schema for creating a project."""
+
+    name: str = Field(..., description="Project name", min_length=1, max_length=200)
+    description: str = Field(default="", description="Project description", max_length=1000)
+
+
+class ProjectUpdate(BaseModel):
+    """Request schema for updating a project."""
+
+    name: str = Field(..., description="Project name", min_length=1, max_length=200)
+    description: str = Field(default="", description="Project description", max_length=1000)
+
+
+class ProjectOut(BaseModel):
+    """Response schema for project."""
+
+    id: int
+    name: str
+    description: str
+    user_id: str
+    created_at: datetime
+
+
 class RecordingCreate(BaseModel):
     """Request schema for creating a recording.
 
@@ -93,6 +117,10 @@ class RecordingResponse(BaseModel):
     metadata: Optional[Dict[str, Any]] = None
 
 
+# Alias for backwards compatibility
+RecordingOut = RecordingResponse
+
+
 class SegmentResponse(BaseModel):
     """Response schema for transcription segment."""
 
@@ -113,3 +141,34 @@ class ProcessingResponse(BaseModel):
     status: RecordingStatus
     segments_count: int
     message: str
+
+
+class AiAskRequest(BaseModel):
+    """Request schema for AI analysis."""
+
+    action: Literal["summarize", "key_facts", "protocol", "custom"]
+    custom_question: str | None = None
+
+
+class ExportRequest(BaseModel):
+    """Request schema for export operations."""
+
+    format: Literal["docx", "pdf", "srt", "vtt"]
+    include_timestamps: bool = True
+    include_notes: bool = True
+    include_speaker_names: bool = True
+
+
+class KbPushRequest(BaseModel):
+    """Request schema for pushing transcription to knowledge base."""
+
+    collection_id: str = Field(..., description="Knowledge base collection ID")
+
+
+class KbPushStatus(BaseModel):
+    """Response schema for knowledge base push status."""
+
+    pushed: bool = Field(..., description="Whether recording has been pushed to KB")
+    pushed_at: Optional[datetime] = Field(None, description="Timestamp of KB push")
+    kb_collection_id: Optional[str] = Field(None, description="KB collection ID")
+    pushed_by: Optional[str] = Field(None, description="User who pushed to KB")

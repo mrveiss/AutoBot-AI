@@ -14,7 +14,7 @@
 /** Generated from `autobot_shared.workflow.types.PromptSpec` */
 export interface PromptSpec {
   user_prompt: string;
-  system_prompt: unknown;
+  system_prompt: string | null;
   template_vars: Record<string, unknown>;
   version: string;
 }
@@ -31,10 +31,10 @@ export type ExecutionStrategy =
 export interface WorkflowTask {
   task_id: string;
   description: string;
-  agent_type: unknown;
-  action: unknown;
-  command: unknown;
-  prompt: unknown;
+  agent_type: string | null;
+  action: string | null;
+  command: string | null;
+  prompt: PromptSpec | null;
   tools_allowed: string[] | null;
   tools_denied: string[];
   inputs: Record<string, unknown>;
@@ -49,9 +49,9 @@ export interface WorkflowTask {
   capabilities_required: string[];
   estimated_duration_seconds: number;
   status: string;
-  error: unknown;
-  start_time: unknown;
-  end_time: unknown;
+  error: string | null;
+  start_time: number | null;
+  end_time: number | null;
   skill_name: string | null;
   skill_action: string | null;
   skill_resolution_method: string | null;
@@ -78,7 +78,7 @@ export interface WorkflowPlan {
   status: string;
   is_goap_plan: boolean;
   goap_goal: string[];
-  created_at_epoch: unknown;
+  created_at_epoch: number | null;
   metadata: Record<string, unknown>;
 }
 
