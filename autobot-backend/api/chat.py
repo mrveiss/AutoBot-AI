@@ -36,7 +36,6 @@ from api.schemas_chat import (
     ChatPreferences,
     ChatSaveData,
     ChatStatsData,
-    ConversationSummarizeData,
     ConversationSummarizeRequest,
     DetectLanguageData,
     DetectLanguageRequest,
@@ -2235,6 +2234,8 @@ async def summarize_conversation(
     generates a compact summary of the earliest messages to enable a rolling window
     approach without losing essential context.
     """
+    from api.schemas_chat import ConversationSummarizeData
+
     request_id = generate_request_id()
     logger.info("[%s] Summarizing %d messages from session %s", request_id, len(body.message_ids), body.session_id)
 
@@ -2256,7 +2257,7 @@ async def summarize_conversation(
         [f"{msg.get('role', 'unknown').upper()}: {msg.get('content', '')}" for msg in messages_to_summarize]
     )
 
-    summarization_prompt = f"""Summarize the following conversation segment concisely. \
+    summarization_prompt = f"""Summarize the following conversation segment concisely.
 Preserve key context, decisions, and technical details that would be needed to continue the conversation naturally.
 
 Target length: approximately {body.target_length or 500} tokens.
