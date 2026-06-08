@@ -16,6 +16,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from llc.adapters.base import AdapterRunStatus
+from llc.exceptions import AdapterRunFailed
 from llc.models.enums import LLCRunStatus
 from llc.models.heartbeat_run import LLCHeartbeatRun
 from llc.scheduler.heartbeat_scheduler import (
@@ -23,6 +24,7 @@ from llc.scheduler.heartbeat_scheduler import (
     HeartbeatScheduler,
     _await_adapter_completion,
     _dispatch_adapter,
+    _dispatch_autobot_agent,
     _dispatch_registry_adapter,
     _next_fire,
 )
@@ -420,3 +422,71 @@ class TestAwaitAdapterCompletion:
             result = await _await_adapter_completion(fake_adapter, {"agent_id": "a"}, "1/s")
         assert result == LLCRunStatus.TIMEOUT
         fake_adapter.cancel.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+class TestRegistryAdapterTerminalStatus:
+    async def test_failed_terminal_status_raises_and_revokes(self):
+        agent = _make_agent(adapter_type="claude_code")
+        key_record = MagicMock()
+        key_record.id = uuid.uuid4()
+        fake_adapter = MagicMock()
+        fake_adapter.invoke = AsyncMock(return_value="1/s")
+
+        with (
+            patch(f"{_HBS}._issue_run_key", new=AsyncMock(return_value=(key_record, "llc_k"))),
+            patch(f"{_HBS}._revoke_run_key", new=AsyncMock()) as mock_revoke,
+            patch(f"{_HBS}._await_adapter_completion", new=AsyncMock(return_value=LLCRunStatus.FAILED)),
+        ):
+            with pytest.raises(AdapterRunFailed):
+                await _dispatch_registry_adapter(fake_adapter, agent, {})
+
+        mock_revoke.assert_awaited_once_with(agent["agent_id"], key_record.id)
+
+    async def test_completed_terminal_status_does_not_raise(self):
+        agent = _make_agent(adapter_type="claude_code")
+        fake_adapter = MagicMock()
+        fake_adapter.invoke = AsyncMock(return_value="1/s")
+        with (
+            patch(f"{_HBS}._issue_run_key", new=AsyncMock(return_value=(None, None))),
+            patch(f"{_HBS}._revoke_run_key", new=AsyncMock()),
+            patch(f"{_HBS}._await_adapter_completion", new=AsyncMock(return_value=LLCRunStatus.COMPLETED)),
+        ):
+            await _dispatch_registry_adapter(fake_adapter, agent, {})  # no raise
+
+    async def test_cancellation_cancels_run_and_revokes_key(self):
+        agent = _make_agent(adapter_type="claude_code")
+        key_record = MagicMock()
+        key_record.id = uuid.uuid4()
+        fake_adapter = MagicMock()
+        fake_adapter.invoke = AsyncMock(return_value="9/s")
+        fake_adapter.cancel = AsyncMock()
+
+        with (
+            patch(f"{_HBS}._issue_run_key", new=AsyncMock(return_value=(key_record, "llc_k"))),
+            patch(f"{_HBS}._revoke_run_key", new=AsyncMock()) as mock_revoke,
+            patch(f"{_HBS}._await_adapter_completion", new=AsyncMock(side_effect=__import__("asyncio").CancelledError())),
+        ):
+            with pytest.raises(__import__("asyncio").CancelledError):
+                await _dispatch_registry_adapter(fake_adapter, agent, {})
+
+        fake_adapter.cancel.assert_awaited_once()
+        mock_revoke.assert_awaited_once_with(agent["agent_id"], key_record.id)
+
+
+@pytest.mark.asyncio
+class TestDispatchAutobotAgent:
+    async def test_skips_when_no_agent_class(self):
+        agent = _make_agent(adapter_type="autobot_agent", adapter_config={})
+        # No agent_class → graceful skip, no adapter instantiated.
+        with patch(f"{_HBS}.AutoBotAgentAdapter") as mock_cls:
+            await _dispatch_autobot_agent(agent, {})
+        mock_cls.assert_not_called()
+
+    async def test_runs_when_agent_class_present(self):
+        agent = _make_agent(adapter_type="autobot_agent", adapter_config={"agent_class": "X"})
+        mock_adapter = MagicMock()
+        mock_adapter.run_blocking = AsyncMock()
+        with patch(f"{_HBS}.AutoBotAgentAdapter", return_value=mock_adapter):
+            await _dispatch_autobot_agent(agent, {})
+        mock_adapter.run_blocking.assert_awaited_once()
