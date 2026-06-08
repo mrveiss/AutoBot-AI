@@ -254,6 +254,18 @@
       become: true
       tags: [slm, slm-agent, shared]
 
+    # Issue #9565: slm-backend needs autobot_shared in PYTHONPATH
+    - name: "[PLAY 1] SLM Backend | Create autobot_shared symlink for backend imports"
+      ansible.builtin.file:
+        src: /opt/autobot/autobot_shared
+        dest: /opt/autobot/autobot-slm-backend/autobot_shared
+        state: link
+        force: true
+        owner: autobot
+        group: autobot
+      become: true
+      tags: [slm, slm-backend, shared]
+
     # --- SLM custom migrations (#1630) ---
     - name: "[PLAY 1] SLM | Load db credentials for migration (#2293)"
       slurp:
@@ -826,6 +838,19 @@
       become: true
       when: slm_node_id is defined
       tags: [slm-agent, shared]
+
+    # Issue #9565: slm-backend needs autobot_shared in PYTHONPATH
+    - name: "[PLAY 2] SLM Backend | Create autobot_shared symlink for backend imports"
+      ansible.builtin.file:
+        src: /opt/autobot/autobot_shared
+        dest: /opt/autobot/autobot-slm-backend/autobot_shared
+        state: link
+        force: true
+        owner: autobot
+        group: autobot
+      become: true
+      when: slm_node_id is defined
+      tags: [slm-backend, shared]
 
     # ----- Mark synced -----
     - name: "[PLAY 2] Mark node as synced in SLM DB"
