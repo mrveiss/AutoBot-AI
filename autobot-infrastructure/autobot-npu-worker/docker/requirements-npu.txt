@@ -25,7 +25,7 @@ requests>=2.34.2
 
 # Utilities
 python-dotenv>=1.2.2
-structlog>=25.5.0
+structlog>=26.1.0
 tenacity>=9.1.4
 async-timeout>=5.0.1
 
