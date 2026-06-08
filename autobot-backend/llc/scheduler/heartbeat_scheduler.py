@@ -62,6 +62,7 @@ _RL_BASE_SECONDS = 300  # 5 minutes for the first retry
 _RL_MAX_SECONDS = 14400  # cap at 4 hours
 _MAX_RATE_LIMIT_RETRIES = 10  # demote to failed after this many consecutive retries
 
+
 def _env_float(name: str, default: float) -> float:
     """Parse a float env var, falling back to *default* on absence or bad value."""
     raw = os.environ.get(name)

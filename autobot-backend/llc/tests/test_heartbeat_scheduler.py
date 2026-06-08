@@ -465,7 +465,9 @@ class TestRegistryAdapterTerminalStatus:
         with (
             patch(f"{_HBS}._issue_run_key", new=AsyncMock(return_value=(key_record, "llc_k"))),
             patch(f"{_HBS}._revoke_run_key", new=AsyncMock()) as mock_revoke,
-            patch(f"{_HBS}._await_adapter_completion", new=AsyncMock(side_effect=__import__("asyncio").CancelledError())),
+            patch(
+                f"{_HBS}._await_adapter_completion", new=AsyncMock(side_effect=__import__("asyncio").CancelledError())
+            ),
         ):
             with pytest.raises(__import__("asyncio").CancelledError):
                 await _dispatch_registry_adapter(fake_adapter, agent, {})
