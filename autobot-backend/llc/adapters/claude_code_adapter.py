@@ -89,6 +89,110 @@ def _resolve_claude_cli() -> str:
     return path
 
 
+# Placeholder written by HeartbeatContextBuilder before a real key is issued at
+# dispatch time — never forwarded to the agent subprocess (GH#9623).
+_AGENT_API_KEY_PLACEHOLDER = "<injected-at-runtime>"
+
+# Keys rendered by dedicated prompt sections or consumed as env vars — excluded
+# from the generic "Additional Context" catch-all in _render_context_markdown.
+_RENDERED_CONTEXT_KEYS = frozenset(
+    {
+        "rag_brief",
+        "work_item_detail",
+        "work_item_id",
+        "goal_ancestry",
+        "company_context",
+        "project_context",
+        "agent_memory",
+        "agent_wiki",
+        "similar_past_work",
+        "recent_decisions",
+        "task_id",
+        "api_base",
+        "api_base_url",
+        "agent_api_key",
+        "workspace_dir",
+        "wake_reason",
+        "wake_comment_id",
+    }
+)
+
+
+def _render_kb_chunks(label: str, ctx: object) -> str:
+    """Render a ``{chunks, sources}`` RAG context block, or '' when empty."""
+    if not isinstance(ctx, dict):
+        return ""
+    chunks = [str(c).strip() for c in ctx.get("chunks") or [] if str(c).strip()]
+    if not chunks:
+        return ""
+    return f"## {label}\n" + "\n\n".join(chunks)
+
+
+def _render_work_item(detail: object) -> str:
+    """Render the ``work_item_detail`` block as a Markdown header + sections."""
+    if not isinstance(detail, dict):
+        return ""
+    lines = [f"# Work Item: {detail.get('title') or 'Untitled'}"]
+    meta = [f"**{k}:** {detail[v]}" for k, v in (("Status", "status"), ("Priority", "priority")) if detail.get(v)]
+    if meta:
+        lines.append(" | ".join(meta))
+    if detail.get("description"):
+        lines.append(f"\n## Description\n{detail['description']}")
+    if detail.get("acceptance_criteria"):
+        lines.append(f"\n## Acceptance Criteria\n{detail['acceptance_criteria']}")
+    return "\n".join(lines)
+
+
+def _render_list_section(label: str, items: object, key: str = "title") -> str:
+    """Render a list of dicts/strings as a bulleted Markdown section, or ''."""
+    if not isinstance(items, (list, tuple)) or not items:
+        return ""
+    bullets = []
+    for item in items:
+        if isinstance(item, dict):
+            text = item.get(key) or item.get("summary") or item.get("description")
+            bullets.append(f"- {text}" if text else f"- {item}")
+        else:
+            bullets.append(f"- {item}")
+    return f"## {label}\n" + "\n".join(bullets)
+
+
+def _render_extra_scalars(context: dict) -> str:
+    """Render leftover scalar context keys as bullets (never a raw JSON dump)."""
+    extras = [
+        f"- {k}: {v}"
+        for k, v in context.items()
+        if k not in _RENDERED_CONTEXT_KEYS and isinstance(v, (str, int, float, bool))
+    ]
+    return "## Additional Context\n" + "\n".join(extras) if extras else ""
+
+
+def _render_context_markdown(context: dict) -> str:
+    """Assemble the agent prompt from recognised context sections (GH#9622).
+
+    Renders the heartbeat fat context (work item, goal ancestry, KB context,
+    agent memory, past work) as readable Markdown.  Never serialises the raw
+    context dict as JSON — unrecognised scalar keys become a bulleted block.
+    """
+    api_base = context.get("api_base") or context.get("api_base_url")
+    sections = [
+        str(context["rag_brief"]) if context.get("rag_brief") else "",
+        _render_work_item(context.get("work_item_detail")),
+        _render_list_section("Goal Ancestry", context.get("goal_ancestry")),
+        _render_kb_chunks("Company Knowledge Base", context.get("company_context")),
+        _render_kb_chunks("Project Knowledge Base", context.get("project_context")),
+        _render_kb_chunks("Agent Memory", context.get("agent_memory")),
+        f"## Agent Wiki\n{context['agent_wiki']}" if context.get("agent_wiki") else "",
+        _render_list_section("Similar Past Work", context.get("similar_past_work")),
+        _render_list_section("Recent Decisions", context.get("recent_decisions"), key="summary"),
+        f"Task ID: {context['task_id']}" if context.get("task_id") else "",
+        f"API base URL: {api_base}" if api_base else "",
+        _render_extra_scalars(context),
+    ]
+    body = "\n\n".join(s for s in sections if s)
+    return body or "Heartbeat invocation: no additional context was provided."
+
+
 class ClaudeCodeAdapter:
     """Adapter that manages agent runs as Claude Code CLI subprocess sessions."""
 
@@ -150,6 +254,16 @@ class ClaudeCodeAdapter:
         wake_comment_id = context.get("wake_comment_id")
         if wake_comment_id:
             env["AUTOBOT_LLC_WAKE_COMMENT_ID"] = wake_comment_id
+
+        # GH#9623: surface the agent's LLC API bearer token + base URL so the
+        # subprocess can authenticate LLC API calls. The build-time placeholder
+        # is skipped — only a real injected key is forwarded.
+        api_key = context.get("agent_api_key")
+        if api_key and api_key != _AGENT_API_KEY_PLACEHOLDER:
+            env["AUTOBOT_LLC_API_KEY"] = api_key
+        api_base_env = context.get("api_base") or context.get("api_base_url")
+        if api_base_env:
+            env["AUTOBOT_LLC_API_BASE"] = api_base_env
 
         out_fh = open(output_file, "w", encoding="utf-8")
         try:
@@ -293,16 +407,12 @@ class ClaudeCodeAdapter:
             pass
 
     def _build_prompt(self, context: dict) -> str:
-        parts: list[str] = []
-        if rag_brief := context.get("rag_brief"):
-            parts.append(rag_brief)
-        if task_id := context.get("task_id", ""):
-            parts.append(f"Task ID: {task_id}")
-        if api_base := context.get("api_base_url", ""):
-            parts.append(f"API base URL: {api_base}")
-        if not parts:
-            parts.append(json.dumps(context, default=str))
-        return "\n\n".join(parts)
+        """Render the agent prompt as structured Markdown (GH#9622).
+
+        Delegates to :func:`_render_context_markdown` so the heartbeat fat
+        context becomes a readable brief instead of a raw ``json.dumps`` blob.
+        """
+        return _render_context_markdown(context)
 
     @staticmethod
     def _load_state(state_file: str, safe_dir: str = _DEFAULT_OUTPUT_DIR) -> Optional[dict]:

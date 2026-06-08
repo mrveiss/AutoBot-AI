@@ -66,13 +66,53 @@ class TestBuildPrompt:
         assert "Task ID: t2" in p
         assert "API base URL: http://api" in p
 
-    def test_empty_context_falls_back_to_json(self) -> None:
+    def test_empty_context_returns_nonempty_placeholder(self) -> None:
+        # GH#9622: empty context must not produce a raw JSON dump.
         p = self._prompt({})
         assert p  # non-empty
+        assert p.strip() != "{}"
+        assert not p.lstrip().startswith("{")
 
-    def test_unknown_keys_serialised_as_json(self) -> None:
+    def test_unknown_scalar_keys_rendered_as_bullets_not_json(self) -> None:
+        # GH#9622: unknown scalar keys are bulleted, never json.dumps(context).
         p = self._prompt({"foo": "bar"})
-        assert "bar" in p
+        assert "- foo: bar" in p
+        assert '"foo"' not in p  # not JSON-serialised
+
+    def test_fat_context_renders_structured_markdown(self) -> None:
+        # GH#9622: heartbeat fat context becomes a readable Markdown brief.
+        p = self._prompt(
+            {
+                "work_item_detail": {
+                    "title": "Fix login",
+                    "status": "in_progress",
+                    "priority": "high",
+                    "description": "Users cannot log in.",
+                    "acceptance_criteria": "Login works.",
+                },
+                "goal_ancestry": [{"title": "Improve auth"}],
+                "company_context": {"chunks": ["Company uses OAuth."], "sources": []},
+                "agent_memory": {"chunks": ["Tried fix A."], "sources": []},
+                "similar_past_work": [{"title": "Past auth fix"}],
+                "agent_api_key": "<injected-at-runtime>",
+            }
+        )
+        assert "# Work Item: Fix login" in p
+        assert "**Status:** in_progress" in p
+        assert "## Acceptance Criteria" in p
+        assert "## Goal Ancestry" in p
+        assert "- Improve auth" in p
+        assert "Company uses OAuth." in p
+        assert "Tried fix A." in p
+        assert "Past auth fix" in p
+        # The build-time API-key placeholder must never leak into the prompt.
+        assert "<injected-at-runtime>" not in p
+
+    def test_never_emits_raw_json_dump(self) -> None:
+        # GH#9622: regression guard — a dict-valued unknown key is not dumped.
+        p = self._prompt({"work_item_detail": {"title": "T"}, "raw": {"a": 1}})
+        assert '{"a": 1}' not in p
+        assert '"a": 1' not in p
 
 
 # ---------------------------------------------------------------------------
@@ -189,6 +229,55 @@ class TestInvoke:
         assert "--allowedTools" in captured_cmd
         tools_idx = captured_cmd.index("--allowedTools")
         assert captured_cmd[tools_idx + 1] == "Bash,Read"
+
+    async def test_invoke_injects_agent_api_key_env(self) -> None:
+        # GH#9623: a real agent_api_key is forwarded as AUTOBOT_LLC_API_KEY.
+        adapter = ClaudeCodeAdapter()
+        fake_proc = _make_fake_proc(33)
+        captured_env: dict = {}
+
+        async def fake_exec(*args, **kwargs):
+            captured_env.update(kwargs.get("env") or {})
+            return fake_proc
+
+        with tempfile.TemporaryDirectory() as td:
+            cfg = _agent_cfg(output_dir=td)
+            with (
+                patch("llc.adapters.claude_code_adapter.shutil.which", return_value="/usr/bin/claude"),
+                patch(
+                    "llc.adapters.claude_code_adapter.get_async_redis_client", new_callable=AsyncMock, return_value=None
+                ),
+                patch("asyncio.create_subprocess_exec", side_effect=fake_exec),
+                patch("builtins.open", MagicMock(return_value=MagicMock())),
+            ):
+                await adapter.invoke(cfg, {"agent_api_key": "real-key-123", "api_base": "http://api/llc"})
+
+        assert captured_env.get("AUTOBOT_LLC_API_KEY") == "real-key-123"
+        assert captured_env.get("AUTOBOT_LLC_API_BASE") == "http://api/llc"
+
+    async def test_invoke_skips_placeholder_api_key(self) -> None:
+        # GH#9623: the build-time placeholder is never forwarded to the subprocess.
+        adapter = ClaudeCodeAdapter()
+        fake_proc = _make_fake_proc(34)
+        captured_env: dict = {}
+
+        async def fake_exec(*args, **kwargs):
+            captured_env.update(kwargs.get("env") or {})
+            return fake_proc
+
+        with tempfile.TemporaryDirectory() as td:
+            cfg = _agent_cfg(output_dir=td)
+            with (
+                patch("llc.adapters.claude_code_adapter.shutil.which", return_value="/usr/bin/claude"),
+                patch(
+                    "llc.adapters.claude_code_adapter.get_async_redis_client", new_callable=AsyncMock, return_value=None
+                ),
+                patch("asyncio.create_subprocess_exec", side_effect=fake_exec),
+                patch("builtins.open", MagicMock(return_value=MagicMock())),
+            ):
+                await adapter.invoke(cfg, {"agent_api_key": "<injected-at-runtime>"})
+
+        assert "AUTOBOT_LLC_API_KEY" not in captured_env
 
     async def test_fd_closed_when_exec_raises(self) -> None:
         """out_fh must be closed even if create_subprocess_exec raises (GH#6471 follow-up)."""
