@@ -32,42 +32,61 @@ class TestGitTracker:
         """Test getting current commit hash from local repo."""
         tracker = GitTracker(repo_path="${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
 
-        with patch("asyncio.create_subprocess_exec") as mock_exec:
-            mock_process = AsyncMock()
-            mock_process.communicate = AsyncMock(return_value=(b"abc123def456\n", b""))
-            mock_process.returncode = 0
-            mock_exec.return_value = mock_process
+        with patch.object(git_tracker, "_is_git_repo", return_value=True):
+            with patch("asyncio.create_subprocess_exec") as mock_exec:
+                mock_process = AsyncMock()
+                mock_process.communicate = AsyncMock(return_value=(b"abc123def456\n", b""))
+                mock_process.returncode = 0
+                mock_exec.return_value = mock_process
 
-            commit = await tracker.get_local_commit()
-            assert commit == "abc123def456"
+                commit = await tracker.get_local_commit()
+                assert commit == "abc123def456"
 
     @pytest.mark.asyncio
     async def test_fetch_from_remote(self):
         """Test fetching updates from remote."""
         tracker = GitTracker(repo_path="${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
 
-        with patch("asyncio.create_subprocess_exec") as mock_exec:
-            mock_process = AsyncMock()
-            mock_process.communicate = AsyncMock(return_value=(b"", b""))
-            mock_process.returncode = 0
-            mock_exec.return_value = mock_process
+        with patch.object(git_tracker, "_is_git_repo", return_value=True):
+            with patch("asyncio.create_subprocess_exec") as mock_exec:
+                mock_process = AsyncMock()
+                mock_process.communicate = AsyncMock(return_value=(b"", b""))
+                mock_process.returncode = 0
+                mock_exec.return_value = mock_process
 
-            success = await tracker.fetch_remote()
-            assert success is True
+                success = await tracker.fetch_remote()
+                assert success is True
 
     @pytest.mark.asyncio
     async def test_get_remote_commit_hash(self):
         """Test getting latest commit hash from remote."""
         tracker = GitTracker(repo_path="${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
 
-        with patch("asyncio.create_subprocess_exec") as mock_exec:
-            mock_process = AsyncMock()
-            mock_process.communicate = AsyncMock(return_value=(b"def789ghi012\n", b""))
-            mock_process.returncode = 0
-            mock_exec.return_value = mock_process
+        with patch.object(git_tracker, "_is_git_repo", return_value=True):
+            with patch("asyncio.create_subprocess_exec") as mock_exec:
+                mock_process = AsyncMock()
+                mock_process.communicate = AsyncMock(return_value=(b"def789ghi012\n", b""))
+                mock_process.returncode = 0
+                mock_exec.return_value = mock_process
 
-            commit = await tracker.get_remote_commit(branch="main")
-            assert commit == "def789ghi012"
+                commit = await tracker.get_remote_commit(branch="main")
+                assert commit == "def789ghi012"
+
+    @pytest.mark.asyncio
+    async def test_run_git_command_skips_when_not_a_repo(self):
+        """No local checkout → skip the git invocation entirely (#9771).
+
+        Callers must fall back to the DB commit setting instead of spawning
+        a doomed `git` subprocess (and warn-spamming) every reconcile cycle.
+        """
+        tracker = GitTracker(repo_path="/opt/autobot/code_source")
+
+        with patch.object(git_tracker, "_is_git_repo", return_value=False):
+            with patch("asyncio.create_subprocess_exec") as mock_exec:
+                output, returncode = await tracker._run_git_command("rev-parse", "HEAD")
+
+                assert (output, returncode) == ("", 1)
+                mock_exec.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_check_for_updates_no_update(self):

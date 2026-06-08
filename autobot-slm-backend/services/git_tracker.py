@@ -81,6 +81,15 @@ class GitTracker:
         """
         cmd = ["git", "-C", self.repo_path, *args]
 
+        # Deployments without a local checkout (docker compose / rsync) have no
+        # code_source dir. Skip the git invocation and let callers fall back to
+        # the DB commit setting, instead of warn-spamming every reconcile cycle
+        # (#9716 guarded only version_check_task; the API/reconciler callers
+        # bypassed it — #9771).
+        if not _is_git_repo(self.repo_path):
+            logger.debug("git_tracker: %s is not a git repo — skipping 'git %s'", self.repo_path, " ".join(args))
+            return "", 1
+
         try:
             proc = await asyncio.create_subprocess_exec(
                 *cmd,
