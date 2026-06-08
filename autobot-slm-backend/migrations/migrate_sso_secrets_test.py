@@ -13,12 +13,17 @@ Tests the migration from plaintext SSO credentials to encrypted SystemSecret sto
 """
 
 import json
+import sys
 import uuid
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from services.encryption import decrypt_data
+
+@pytest.fixture(autouse=True)
+def _encryption_key(monkeypatch):
+    """Provide an encryption key so encrypt_data() and the pre-flight check work."""
+    monkeypatch.setenv("SLM_ENCRYPTION_KEY", "test-key-0123456789abcdef0123456789ab")
 
 
 @pytest.fixture
@@ -78,7 +83,7 @@ def sample_providers_with_plaintext():
 class TestSSOSecretsMigration:
     """Tests for the migration script that moves plaintext secrets to encrypted storage."""
 
-    @patch("migrations.utils.get_connection")
+    @patch("migrations.migrate_sso_secrets_to_system_secret.get_connection")
     def test_migrate_extracts_and_encrypts_client_secret(
         self, mock_get_connection, mock_db_connection, sample_providers_with_plaintext
     ):
@@ -106,7 +111,7 @@ class TestSSOSecretsMigration:
         update_calls = [call for call in mock_cursor.execute.call_args_list if "UPDATE sso_providers" in str(call)]
         assert len(update_calls) >= 1
 
-    @patch("migrations.utils.get_connection")
+    @patch("migrations.migrate_sso_secrets_to_system_secret.get_connection")
     def test_migrate_removes_plaintext_and_adds_reference(
         self, mock_get_connection, mock_db_connection, sample_providers_with_plaintext
     ):
@@ -125,25 +130,19 @@ class TestSSOSecretsMigration:
         # Get the UPDATE call for sso_providers
         update_calls = [call for call in mock_cursor.execute.call_args_list if "UPDATE sso_providers" in str(call)]
 
-        # Verify updated config was passed
+        # Verify updated config was passed.
+        # Call shape: execute("UPDATE sso_providers SET config = %s WHERE id = %s",
+        #                      (updated_config_json, provider_id))
         assert len(update_calls) > 0
-        update_args = update_calls[0][0]
+        sql_params = update_calls[0].args[1]
+        updated_config = json.loads(sql_params[0])
 
-        # The updated config should be the first parameter
-        if len(update_args) > 0:
-            updated_config_json = update_args[0]
-            if isinstance(updated_config_json, str):
-                updated_config = json.loads(updated_config_json)
-            else:
-                # Might be passed as tuple parameter
-                updated_config = json.loads(update_calls[0][1][0])
+        # Verify plaintext removed and reference added
+        assert "client_secret" not in updated_config
+        assert "client_secret_ref" in updated_config
+        assert updated_config["client_secret_ref"] == f"sso:provider:{provider_id}:client_secret"
 
-            # Verify plaintext removed and reference added
-            assert "client_secret" not in updated_config
-            assert "client_secret_ref" in updated_config
-            assert updated_config["client_secret_ref"] == f"sso:provider:{provider_id}:client_secret"
-
-    @patch("migrations.utils.get_connection")
+    @patch("migrations.migrate_sso_secrets_to_system_secret.get_connection")
     def test_migrate_handles_ldap_bind_password(
         self, mock_get_connection, mock_db_connection, sample_providers_with_plaintext
     ):
@@ -170,7 +169,7 @@ class TestSSOSecretsMigration:
         insert_call_str = str(insert_calls[0])
         assert "bind_password" in insert_call_str
 
-    @patch("migrations.utils.get_connection")
+    @patch("migrations.migrate_sso_secrets_to_system_secret.get_connection")
     def test_migrate_handles_multiple_providers(
         self, mock_get_connection, mock_db_connection, sample_providers_with_plaintext
     ):
@@ -196,7 +195,7 @@ class TestSSOSecretsMigration:
         update_calls = [call for call in mock_cursor.execute.call_args_list if "UPDATE sso_providers" in str(call)]
         assert len(update_calls) == 3
 
-    @patch("migrations.utils.get_connection")
+    @patch("migrations.migrate_sso_secrets_to_system_secret.get_connection")
     def test_migrate_handles_provider_with_no_secrets(self, mock_get_connection, mock_db_connection):
         """Test migration skips providers without sensitive fields."""
         mock_conn, mock_cursor = mock_db_connection
@@ -229,7 +228,7 @@ class TestSSOSecretsMigration:
         update_calls = [call for call in mock_cursor.execute.call_args_list if "UPDATE sso_providers" in str(call)]
         assert len(update_calls) == 0
 
-    @patch("migrations.utils.get_connection")
+    @patch("migrations.migrate_sso_secrets_to_system_secret.get_connection")
     def test_migrate_handles_empty_secret_values(self, mock_get_connection, mock_db_connection):
         """Test migration skips empty/null secret values."""
         mock_conn, mock_cursor = mock_db_connection
@@ -258,7 +257,7 @@ class TestSSOSecretsMigration:
         ]
         assert len(insert_calls) == 0
 
-    @patch("migrations.utils.get_connection")
+    @patch("migrations.migrate_sso_secrets_to_system_secret.get_connection")
     def test_migrate_updates_existing_secret(
         self, mock_get_connection, mock_db_connection, sample_providers_with_plaintext
     ):
@@ -282,7 +281,7 @@ class TestSSOSecretsMigration:
         ]
         assert len(update_secret_calls) >= 1
 
-    @patch("migrations.utils.get_connection")
+    @patch("migrations.migrate_sso_secrets_to_system_secret.get_connection")
     def test_migrate_preserves_non_sensitive_config_fields(
         self, mock_get_connection, mock_db_connection, sample_providers_with_plaintext
     ):
@@ -307,7 +306,7 @@ class TestSSOSecretsMigration:
         # (In real test, would parse the SQL parameters)
         assert len(update_calls) > 0
 
-    @patch("migrations.utils.get_connection")
+    @patch("migrations.migrate_sso_secrets_to_system_secret.get_connection")
     def test_migrate_commits_transaction_on_success(
         self, mock_get_connection, mock_db_connection, sample_providers_with_plaintext
     ):
@@ -325,7 +324,7 @@ class TestSSOSecretsMigration:
         # Verify commit was called
         mock_conn.commit.assert_called_once()
 
-    @patch("migrations.utils.get_connection")
+    @patch("migrations.migrate_sso_secrets_to_system_secret.get_connection")
     def test_migrate_rolls_back_on_error(
         self, mock_get_connection, mock_db_connection, sample_providers_with_plaintext
     ):
@@ -349,7 +348,7 @@ class TestSSOSecretsMigration:
         # Verify rollback was called
         mock_conn.rollback.assert_called_once()
 
-    @patch("migrations.utils.get_connection")
+    @patch("migrations.migrate_sso_secrets_to_system_secret.get_connection")
     def test_migrate_closes_connection(self, mock_get_connection, mock_db_connection, sample_providers_with_plaintext):
         """Test migration closes connection in finally block."""
         mock_conn, mock_cursor = mock_db_connection
@@ -365,7 +364,7 @@ class TestSSOSecretsMigration:
         # Verify connection closed
         mock_conn.close.assert_called_once()
 
-    @patch("migrations.utils.get_connection")
+    @patch("migrations.migrate_sso_secrets_to_system_secret.get_connection")
     def test_migrate_handles_json_string_and_dict_configs(self, mock_get_connection, mock_db_connection):
         """Test migration handles both JSON string and dict config formats."""
         mock_conn, mock_cursor = mock_db_connection
@@ -413,7 +412,7 @@ class TestSSOSecretsMigration:
 class TestMigrationDataIntegrity:
     """Tests for ensuring data integrity during migration."""
 
-    @patch("migrations.utils.get_connection")
+    @patch("migrations.migrate_sso_secrets_to_system_secret.get_connection")
     def test_encrypted_value_can_be_decrypted(
         self, mock_get_connection, mock_db_connection, sample_providers_with_plaintext
     ):
@@ -434,21 +433,28 @@ class TestMigrationDataIntegrity:
         def capture_insert(*args, **kwargs):
             nonlocal captured_encrypted_value
             if "INSERT INTO system_secrets" in args[0]:
-                # Extract encrypted_value parameter
-                captured_encrypted_value = args[1][1]  # Second parameter
+                captured_encrypted_value = args[1][1]  # encrypted_value parameter
 
         mock_cursor.execute.side_effect = capture_insert
 
         from migrations.migrate_sso_secrets_to_system_secret import migrate
 
-        migrate("postgresql://test")
+        # services.encryption is stubbed in conftest. migrate() reads encrypt/decrypt
+        # off sys.modules["services.encryption"], so patch.object that exact module
+        # with a reversible round-trip rather than a string target (which resolves to
+        # a different auto-child mock and would not intercept migrate's import).
+        enc = sys.modules["services.encryption"]
+        with patch.object(enc, "encrypt_data", side_effect=lambda v: f"encrypted::{v}"), patch.object(
+            enc, "decrypt_data", side_effect=lambda v: v.split("encrypted::", 1)[1]
+        ) as mock_decrypt:
+            migrate("postgresql://test")
 
-        # Verify captured encrypted value can be decrypted
-        if captured_encrypted_value:
-            decrypted = decrypt_data(captured_encrypted_value)
-            assert decrypted == original_secret
+        # Migration stored the encrypted form (not plaintext) and it round-trips back.
+        assert captured_encrypted_value == f"encrypted::{original_secret}"
+        assert captured_encrypted_value != original_secret
+        assert mock_decrypt(captured_encrypted_value) == original_secret
 
-    @patch("migrations.utils.get_connection")
+    @patch("migrations.migrate_sso_secrets_to_system_secret.get_connection")
     def test_secret_key_format_matches_sso_secrets_manager(
         self, mock_get_connection, mock_db_connection, sample_providers_with_plaintext
     ):
@@ -479,7 +485,7 @@ class TestMigrationDataIntegrity:
 class TestMigrationLogging:
     """Tests for migration logging and reporting."""
 
-    @patch("migrations.utils.get_connection")
+    @patch("migrations.migrate_sso_secrets_to_system_secret.get_connection")
     @patch("migrations.migrate_sso_secrets_to_system_secret.logger")
     def test_migration_logs_progress(
         self, mock_logger, mock_get_connection, mock_db_connection, sample_providers_with_plaintext
@@ -498,7 +504,7 @@ class TestMigrationLogging:
         # Verify info logging called
         assert mock_logger.info.call_count >= 3  # Start, per-provider, completion
 
-    @patch("migrations.utils.get_connection")
+    @patch("migrations.migrate_sso_secrets_to_system_secret.get_connection")
     @patch("migrations.migrate_sso_secrets_to_system_secret.logger")
     def test_migration_logs_errors(
         self, mock_logger, mock_get_connection, mock_db_connection, sample_providers_with_plaintext
@@ -517,3 +523,46 @@ class TestMigrationLogging:
 
         # Verify error logged
         mock_logger.error.assert_called_once()
+
+
+class TestMigrationHardening:
+    """Tests for encryption-key validation and error context (GH#9686)."""
+
+    @patch("migrations.migrate_sso_secrets_to_system_secret.get_connection")
+    def test_migrate_aborts_without_encryption_key(self, mock_get_connection, monkeypatch):
+        """Migration fails fast with a clear error and opens no DB connection."""
+        monkeypatch.delenv("SLM_ENCRYPTION_KEY", raising=False)
+        monkeypatch.delenv("SLM_SECRET_KEY", raising=False)
+
+        from migrations.migrate_sso_secrets_to_system_secret import migrate
+
+        with pytest.raises(RuntimeError, match="No encryption key configured"):
+            migrate("postgresql://test")
+
+        # Aborted before touching the database.
+        mock_get_connection.assert_not_called()
+
+    @patch("migrations.migrate_sso_secrets_to_system_secret.get_connection")
+    @patch("migrations.migrate_sso_secrets_to_system_secret.logger")
+    def test_migrate_error_log_includes_provider_and_field_context(
+        self, mock_logger, mock_get_connection, mock_db_connection, sample_providers_with_plaintext
+    ):
+        """A failure mid-field is logged with the provider id and field name."""
+        mock_conn, mock_cursor = mock_db_connection
+        mock_get_connection.return_value = mock_conn
+
+        provider_id, config_json = sample_providers_with_plaintext[0]
+        mock_cursor.fetchall.return_value = [(provider_id, config_json)]
+        # Providers SELECT succeeds; the secret-existence SELECT raises.
+        mock_cursor.execute.side_effect = [None, Exception("boom")]
+
+        from migrations.migrate_sso_secrets_to_system_secret import migrate
+
+        with pytest.raises(Exception, match="boom"):
+            migrate("postgresql://test")
+
+        mock_conn.rollback.assert_called_once()
+        mock_logger.error.assert_called_once()
+        error_msg = str(mock_logger.error.call_args)
+        assert provider_id in error_msg
+        assert "client_secret" in error_msg
