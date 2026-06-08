@@ -10,11 +10,26 @@ to encrypted SystemSecret table. Addresses security vulnerability MVA-1737.
 
 import json
 import logging
+import os
 import sys
 
 from migrations.utils import get_connection
 
 logger = logging.getLogger(__name__)
+
+# Same env vars EncryptionService._load_master_key() reads. Validated up front so
+# the migration fails before any DB changes rather than mid-loop on the first encrypt.
+_ENCRYPTION_KEY_ENV_VARS = ("SLM_ENCRYPTION_KEY", "SLM_SECRET_KEY")
+
+
+def _require_encryption_key() -> None:
+    """Abort before touching the database if no encryption key is configured."""
+    if not any(os.getenv(var) for var in _ENCRYPTION_KEY_ENV_VARS):
+        raise RuntimeError(
+            "No encryption key configured: set one of "
+            f"{', '.join(_ENCRYPTION_KEY_ENV_VARS)} before running the SSO secret "
+            "migration. Aborting before any database changes."
+        )
 
 
 def migrate(db_url: str) -> None:
@@ -28,8 +43,15 @@ def migrate(db_url: str) -> None:
     """
     from services.encryption import encrypt_data
 
+    # Fail fast with a clear message before opening a connection or mutating data.
+    _require_encryption_key()
+
     conn = get_connection(db_url)
     cursor = conn.cursor()
+
+    # Tracks the provider/field in flight so a failure can be reported with context.
+    current_provider_id = None
+    current_field = None
 
     try:
         # Get all SSO providers
@@ -40,6 +62,8 @@ def migrate(db_url: str) -> None:
 
         migrated_count = 0
         for provider_id, config_json in providers:
+            current_provider_id = provider_id
+            current_field = None
             config = json.loads(config_json) if isinstance(config_json, str) else config_json
 
             secrets_to_migrate = {}
@@ -50,6 +74,7 @@ def migrate(db_url: str) -> None:
                 if field in config:
                     value = config[field]
                     if value:
+                        current_field = field
                         secrets_to_migrate[field] = value
 
                         # Create SystemSecret entry
@@ -115,7 +140,12 @@ def migrate(db_url: str) -> None:
 
     except Exception as e:
         conn.rollback()
-        logger.error("Migration failed: %s", type(e).__name__)
+        logger.error(
+            "Migration failed (provider=%s, field=%s): %s — rolled back, no changes committed",
+            current_provider_id,
+            current_field,
+            type(e).__name__,
+        )
         raise
     finally:
         conn.close()
