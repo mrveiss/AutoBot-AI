@@ -1503,6 +1503,10 @@ async def _start_community_clustering_loop(app: FastAPI) -> None:
 
 async def _init_liveness_monitor(app: FastAPI) -> None:
     """Start LLC LivenessMonitor to recover stuck heartbeat runs (GH#9028)."""
+    if not _llc_postgres_available():
+        logger.info("LLC LivenessMonitor: skipped (Postgres disabled — single_user mode)")
+        app.state.llc_liveness_monitor = None
+        return
     logger.info("LLC LivenessMonitor: Starting...")
     try:
         from llc.scheduler.liveness_monitor import LivenessMonitor
@@ -1518,6 +1522,10 @@ async def _init_liveness_monitor(app: FastAPI) -> None:
 
 async def _init_budget_watchdog(app: FastAPI) -> None:
     """Start LLC BudgetWatchdog for per-agent budget enforcement (GH#9029)."""
+    if not _llc_postgres_available():
+        logger.info("LLC BudgetWatchdog: skipped (Postgres disabled — single_user mode)")
+        app.state.llc_budget_watchdog = None
+        return
     logger.info("LLC BudgetWatchdog: Starting...")
     try:
         from llc.scheduler.budget_watchdog import BudgetWatchdog
