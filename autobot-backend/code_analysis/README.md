@@ -351,7 +351,7 @@ python -m pytest code-analysis-suite/tests/test_integration.py
 
 ## 📜 License
 
-MIT License - see LICENSE file for details
+Apache License 2.0 - see the repository-root LICENSE file for details
 
 ## 🆘 Support
 

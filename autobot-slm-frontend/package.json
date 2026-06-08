@@ -2,6 +2,7 @@
   "name": "slm-admin",
   "version": "1.0.0",
   "description": "Service Lifecycle Manager Admin UI",
+  "license": "Apache-2.0",
   "type": "module",
   "scripts": {
     "dev": "vite",

@@ -265,11 +265,23 @@
       font-size:1.125rem;color:var(--text-muted);line-height:1.6;
       animation:fade-up .6s var(--ease) .2s both;
     }
+    .hero-promise{
+      max-width:600px;margin:24px auto 0;
+      font-size:1.0625rem;color:var(--text);line-height:1.6;
+      animation:fade-up .6s var(--ease) .25s both;
+    }
+    .hero-promise strong{color:var(--accent-text);font-weight:700}
     .hero-actions{
       display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:12px;
       margin-top:40px;
       animation:fade-up .6s var(--ease) .3s both;
     }
+    .hero-quiet-link{
+      display:inline-block;margin-top:18px;
+      font-size:.9375rem;color:var(--text-muted);font-weight:500;
+      animation:fade-up .6s var(--ease) .35s both;
+    }
+    .hero-quiet-link:hover{color:var(--accent-text)}
     .btn-primary{
       display:inline-flex;align-items:center;gap:8px;
       padding:13px 28px;border-radius:var(--r-full);
@@ -333,6 +345,8 @@
       background:var(--border);border-radius:var(--r-lg);overflow:hidden;
       box-shadow:var(--shadow-md);
     }
+    .features-grid-3{grid-template-columns:repeat(3,1fr)}
+    @media (max-width:860px){.features-grid-3{grid-template-columns:1fr}}
     .feature-card{
       background:var(--surface);padding:32px;
       display:flex;flex-direction:column;gap:14px;
@@ -597,6 +611,35 @@
       align-self:flex-start;
     }
 
+    /* ── Pricing tiers ──────────────────────────────────────────────── */
+    .tier-price{
+      font-family:var(--font-display);font-size:1.5rem;font-weight:700;color:var(--text);
+      line-height:1.2;
+    }
+    .tier-price span{font-size:.875rem;font-weight:500;color:var(--text-muted)}
+    .tier-price .tier-todo{font-size:.9375rem;font-weight:600;color:var(--accent-text)}
+    .tier-features{list-style:none;display:flex;flex-direction:column;gap:8px;flex:1;margin:4px 0}
+    .tier-features li{
+      font-size:.875rem;color:var(--text-muted);line-height:1.5;
+      padding-left:22px;position:relative;
+    }
+    .tier-features li::before{
+      content:"✓";position:absolute;left:0;top:0;color:var(--accent-text);font-weight:700;
+    }
+    .tier-oem{
+      max-width:760px;margin:24px auto 0;text-align:center;
+      font-size:.875rem;color:var(--text-subtle);line-height:1.6;
+    }
+    .tier-cta-wrap{display:flex;justify-content:center;margin-top:32px}
+    .support-divider{
+      max-width:600px;margin:64px auto 40px;text-align:center;
+      border-top:1px solid var(--border);padding-top:48px;
+    }
+    .support-divider h3{
+      font-family:var(--font-display);font-size:1.375rem;font-weight:600;margin-top:8px;
+    }
+    .support-divider p{color:var(--text-muted);font-size:.9375rem;line-height:1.7;margin-top:12px}
+
     /* ── Footer ─────────────────────────────────────────────────────── */
     footer{
       padding:40px 0;border-top:1px solid var(--border);
@@ -689,7 +732,7 @@
         <a href="#scale" class="nav-link">Scale</a>
         <a href="#knowledge" class="nav-link">Knowledge</a>
         <a href="#deploy" class="nav-link">Deploy</a>
-        <a href="#support" class="nav-link">Donate</a>
+        <a href="#support" class="nav-link">Support</a>
         <a href="https://github.com/mrveiss/AutoBot-AI" class="nav-link" target="_blank" rel="noopener">
           <svg class="icon" style="width:16px;height:16px;display:inline-block;vertical-align:middle"><use href="#i-github"/></svg>
         </a>
@@ -710,24 +753,30 @@
         <svg width="64" height="64" viewBox="0 0 48 48" style="color:var(--accent);margin-bottom:20px;animation:fade-up .5s var(--ease) both"><use href="#logo-mark"/></svg>
         <div class="hero-badge">
           <svg class="icon" style="width:14px;height:14px"><use href="#i-spark"/></svg>
-          Self-hosted · Your data never leaves your server
+          Self-hosted · Your data, your models, your control
         </div>
-        <h1>AI for your runbooks,<br>servers, and workflows.</h1>
+        <h1>Your Data. Your AI.</h1>
         <p class="hero-sub">
-          Deploy once with Docker. Add your docs and fleet nodes. Ask AutoBot to explain,
-          summarize, or run the next operation — without sending your infrastructure
-          knowledge to a SaaS dashboard.
+          AutoBot is the control plane for self-hosted AI. Your data, memory, agents, and
+          knowledge graph live on <em>your</em> infrastructure — pointed at any brain you
+          choose. Run local models today, a frontier API tomorrow. Swap the brain; keep
+          everything you've built.
+        </p>
+        <p class="hero-promise">
+          <strong>Free to explore, self-host, modify, and build on — forever.</strong>
+          Individuals and hobbyists pay nothing, ever.
         </p>
         <div class="hero-actions">
           <a href="#deploy" class="btn-primary">
             <svg class="icon" style="width:18px;height:18px"><use href="#i-spark"/></svg>
-            Deploy locally
+            Deploy with Docker
           </a>
           <a href="https://github.com/mrveiss/AutoBot-AI/blob/Dev_new_gui/docs/GETTING_STARTED_COMPLETE.md" class="btn-secondary" target="_blank" rel="noopener">
             <svg class="icon" style="width:18px;height:18px"><use href="#i-book"/></svg>
             Read docs
           </a>
         </div>
+        <a href="#support" class="hero-quiet-link">Production support &amp; compliance →</a>
 
         <!-- 3-step proof terminal -->
         <div class="hero-terminal">
@@ -743,10 +792,38 @@
             <div style="margin-top:6px"><span class="t-comment"># Step 2 — start</span></div>
             <div><span class="t-cmd">$ docker compose up -d --build</span></div>
             <div style="margin-top:6px"><span class="t-comment"># Step 3 — open dashboard, add your docs and fleet nodes</span></div>
-            <div><span class="t-highlight">→ Open</span> <span class="t-out">http://localhost:7000</span> <span class="t-cursor"></span></div>
+            <div><span class="t-highlight">→ Dashboard</span> <span class="t-out">http://localhost/</span> <span class="t-cursor"></span></div>
+            <div><span class="t-highlight">→ Service Lifecycle Manager</span> <span class="t-out">http://localhost/slm</span></div>
             <div style="margin-top:8px"><span class="t-success">✓ FastAPI backend</span> <span class="t-comment">· Redis · ChromaDB · Ollama all included</span></div>
             <div><span class="t-success">✓ Ask:</span> <span class="t-out">"Summarise last week's Ansible failures and suggest fixes"</span></div>
           </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Why it's different -->
+  <section id="why">
+    <div class="container">
+      <div class="features-header">
+        <span class="section-label">Why it's different</span>
+        <h2 class="section-title">A control plane you own — not a SaaS you rent</h2>
+      </div>
+      <div class="features-grid features-grid-3">
+        <div class="feature-card">
+          <div class="feature-icon"><svg class="icon"><use href="#i-scope"/></svg></div>
+          <h3>You hold the data</h3>
+          <p>Docker on a single VM or bare metal. No SaaS, no telemetry. Your documents, memory, and knowledge graph never leave your infrastructure.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon"><svg class="icon"><use href="#i-cpu"/></svg></div>
+          <h3>You choose the brain — per agent</h3>
+          <p>The SLM manager controls your AI infrastructure: vector DB, Redis, and which agent uses which provider — local or frontier. Swap providers without losing memory, agents, or knowledge graph.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon"><svg class="icon"><use href="#i-mesh"/></svg></div>
+          <h3>It scales with you</h3>
+          <p>Start single-node; split frontend, databases, and workers across a distributed fleet — no re-architecture.</p>
         </div>
       </div>
     </div>
@@ -837,7 +914,7 @@
       <!-- Stats -->
       <div class="stats-bar">
         <div class="stat"><div class="stat-num">6</div><div class="stat-label">VM roles supported</div></div>
-        <div class="stat"><div class="stat-num">MIT</div><div class="stat-label">Open source license</div></div>
+        <div class="stat"><div class="stat-num">Apache-2.0</div><div class="stat-label">Open source license</div></div>
         <div class="stat"><div class="stat-num">25 min</div><div class="stat-label">Full fleet setup</div></div>
         <div class="stat"><div class="stat-num">∞</div><div class="stat-label">Models supported</div></div>
       </div>
@@ -1117,12 +1194,82 @@
   <!-- Support -->
   <section id="support" style="background:var(--surface-sunken)">
     <div class="container">
-      <span class="section-label">Support the project</span>
-      <h2 class="section-title">Keep AutoBot growing</h2>
+      <span class="section-label">Production support</span>
+      <h2 class="section-title">Keep AutoBot alive</h2>
       <div class="support-intro">
         <p style="color:var(--text-muted);font-size:1.0625rem;line-height:1.7;margin-top:12px">
-          AutoBot is free and open source. If it saves you time or powers something you care about,
-          consider supporting continued development — every contribution helps.
+          AutoBot is free to run forever. Paid production support is how the project stays
+          funded and maintained. You're paying for our time, guarantees, and compliance
+          work — never for permission to use the software.
+        </p>
+      </div>
+      <div class="donate-grid">
+        <div class="donate-card">
+          <h3>Community</h3>
+          <div class="tier-price">Free <span>forever</span></div>
+          <ul class="tier-features">
+            <li>Self-host, modify, build, and profit under Apache-2.0</li>
+            <li>Community support via GitHub Issues &amp; Discussions</li>
+            <li>For individuals, hobbyists, and evaluation</li>
+          </ul>
+          <a href="https://github.com/mrveiss/AutoBot-AI/discussions" class="donate-btn donate-btn-secondary" target="_blank" rel="noopener">
+            Browse Discussions
+          </a>
+        </div>
+        <div class="donate-card featured">
+          <span class="badge-featured">
+            <svg class="icon" style="width:12px;height:12px"><use href="#i-spark"/></svg>
+            For businesses
+          </span>
+          <h3>Production Support</h3>
+          <div class="tier-price"><span class="tier-todo">TODO(human): price</span><span>/yr</span></div>
+          <ul class="tier-features">
+            <li>For companies running AutoBot in production</li>
+            <li>Guaranteed security patching &amp; version-pinned stable releases</li>
+            <li>Defined SLA response times &amp; priority bug fixes</li>
+            <li>Upgrade assistance</li>
+          </ul>
+          <a href="#" class="donate-btn donate-btn-primary" data-support-cta>
+            <svg class="icon" style="width:16px;height:16px"><use href="#i-spark"/></svg>
+            Talk to us
+          </a>
+        </div>
+        <div class="donate-card">
+          <h3>Compliance Pack</h3>
+          <div class="tier-price"><span class="tier-todo">TODO(human): price</span></div>
+          <ul class="tier-features">
+            <li>NIS2 / ISO 27001 documentation</li>
+            <li>Security architecture overview &amp; hardening guide</li>
+            <li>Audit-support materials for regulated buyers</li>
+            <li>Builds on AutoBot's existing security framework</li>
+          </ul>
+          <a href="#" class="donate-btn donate-btn-secondary" data-support-cta>
+            Request the pack
+          </a>
+        </div>
+      </div>
+      <!-- TODO(human+lawyer): Vendor / OEM tier — terms not yet defined -->
+      <p class="tier-oem">
+        <strong>Vendor / OEM</strong> — reselling AutoBot-as-a-service requires a separate
+        commercial agreement. <!-- TODO(human+lawyer): commercial/OEM license terms -->
+        <a href="#" data-support-cta>Contact us</a> to discuss.
+      </p>
+      <div class="tier-cta-wrap">
+        <!-- TODO(human): replace href with real contact email (mailto:) or Cal.com link -->
+        <a href="#" class="donate-btn donate-btn-primary" data-support-cta>
+          <svg class="icon" style="width:16px;height:16px"><use href="#i-heart"/></svg>
+          Talk to us about production support
+        </a>
+      </div>
+
+      <!-- Community development support (donations) -->
+      <div class="support-divider">
+        <span class="section-label">Support community development</span>
+        <h3>Fund the free core</h3>
+        <p>
+          Love AutoBot but don't need a support contract? Sponsorships and one-time tips
+          fund the free, open core that individuals and hobbyists use — separate from paid
+          production support.
         </p>
       </div>
       <div class="donate-grid">
@@ -1136,7 +1283,7 @@
           <p>Recurring or one-time sponsorship through GitHub. Directly funds development time and infrastructure costs.</p>
           <a href="https://github.com/sponsors/mrveiss" class="donate-btn donate-btn-primary" target="_blank" rel="noopener">
             <svg class="icon" style="width:16px;height:16px"><use href="#i-heart"/></svg>
-            Sponsor on GitHub
+            Support community development
           </a>
         </div>
         <div class="donate-card">
@@ -1144,7 +1291,7 @@
           <h3>Ko-fi</h3>
           <p>Quick one-time contribution — buy the developer a coffee. No account needed, any amount appreciated.</p>
           <a href="https://ko-fi.com/mrveiss" class="donate-btn donate-btn-secondary" target="_blank" rel="noopener">
-            Support on Ko-fi
+            Support community development
           </a>
         </div>
         <div class="donate-card">
@@ -1187,7 +1334,7 @@
           <a href="https://github.com/mrveiss/AutoBot-AI/blob/Dev_new_gui/docs/GETTING_STARTED_COMPLETE.md" target="_blank" rel="noopener">Docs</a>
           <a href="https://github.com/mrveiss/AutoBot-AI/issues" target="_blank" rel="noopener">Issues</a>
           <a href="https://github.com/sponsors/mrveiss" target="_blank" rel="noopener">Sponsor</a>
-          <a href="https://github.com/mrveiss/AutoBot-AI/blob/Dev_new_gui/LICENSE" target="_blank" rel="noopener">MIT License</a>
+          <a href="https://github.com/mrveiss/AutoBot-AI/blob/Dev_new_gui/LICENSE" target="_blank" rel="noopener">Apache-2.0</a>
         </div>
         <span class="footer-copy">© 2025 mrveiss</span>
       </div>
