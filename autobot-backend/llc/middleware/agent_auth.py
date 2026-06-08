@@ -13,7 +13,7 @@ import logging
 from datetime import datetime, timezone
 
 from fastapi import Request
-from sqlalchemy import select, update
+from sqlalchemy import or_, select, update
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 
@@ -38,6 +38,7 @@ class LLCAgentAuthMiddleware(BaseHTTPMiddleware):
 
         raw_key = auth[len("Bearer ") :]
         key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
+        now = datetime.now(timezone.utc)
 
         factory = get_async_session_factory()
         async with factory() as session:
@@ -45,6 +46,8 @@ class LLCAgentAuthMiddleware(BaseHTTPMiddleware):
                 select(LLCApiKey).where(
                     LLCApiKey.key_hash == key_hash,
                     LLCApiKey.revoked_at.is_(None),
+                    # GH#9623: reject expired ephemeral keys (TTL backstop).
+                    or_(LLCApiKey.expires_at.is_(None), LLCApiKey.expires_at > now),
                 )
             )
             key_record = result.scalar_one_or_none()

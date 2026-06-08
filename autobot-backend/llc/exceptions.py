@@ -30,6 +30,22 @@ class WipLimitExceeded(Exception):
         )
 
 
+class AdapterRunFailed(Exception):
+    """Raised when a registry adapter run ends in a non-success terminal state.
+
+    The heartbeat scheduler raises this (GH#9622) so a FAILED / TIMEOUT /
+    CANCELLED external run is recorded as a failed heartbeat instead of being
+    silently marked COMPLETED.
+    """
+
+    def __init__(self, adapter_type: str, run_id: str, status: object) -> None:
+        self.adapter_type = adapter_type
+        self.run_id = run_id
+        self.status = status
+        status_val = getattr(status, "value", status)
+        super().__init__(f"{adapter_type or 'adapter'} run {run_id} ended in state {status_val!r}")
+
+
 class ProviderRateLimited(Exception):
     """Raised by an adapter when the LLM provider rejects a request due to rate or quota limits.
 
