@@ -61,7 +61,7 @@
     "apexcharts": "^5.12.0",
     "cytoscape": "^3.33.3",
     "cytoscape-fcose": "^2.2.0",
-    "dompurify": "^3.4.5",
+    "dompurify": "^3.4.8",
     "highlight.js": "^11.10.0",
     "npm-normalize-package-bin": "^5.0.0",
     "onnxruntime-web": "^1.26.0",
