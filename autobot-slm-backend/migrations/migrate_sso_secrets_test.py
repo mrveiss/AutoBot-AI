@@ -444,9 +444,10 @@ class TestMigrationDataIntegrity:
         # with a reversible round-trip rather than a string target (which resolves to
         # a different auto-child mock and would not intercept migrate's import).
         enc = sys.modules["services.encryption"]
-        with patch.object(enc, "encrypt_data", side_effect=lambda v: f"encrypted::{v}"), patch.object(
-            enc, "decrypt_data", side_effect=lambda v: v.split("encrypted::", 1)[1]
-        ) as mock_decrypt:
+        with (
+            patch.object(enc, "encrypt_data", side_effect=lambda v: f"encrypted::{v}"),
+            patch.object(enc, "decrypt_data", side_effect=lambda v: v.split("encrypted::", 1)[1]) as mock_decrypt,
+        ):
             migrate("postgresql://test")
 
         # Migration stored the encrypted form (not plaintext) and it round-trips back.
