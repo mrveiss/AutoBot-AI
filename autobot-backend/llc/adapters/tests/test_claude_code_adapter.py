@@ -114,6 +114,27 @@ class TestBuildPrompt:
         assert '{"a": 1}' not in p
         assert '"a": 1' not in p
 
+    def test_wrong_type_fields_handled_gracefully(self) -> None:
+        # GH#9622: helpers guard against mistyped fat-context values.
+        p = self._prompt(
+            {
+                "work_item_detail": "not-a-dict",
+                "goal_ancestry": {"not": "a-list"},
+                "company_context": "not-a-dict",
+                "task_id": "t-ok",
+            }
+        )
+        assert "# Work Item" not in p  # string detail skipped
+        assert "## Goal Ancestry" not in p  # dict ancestry skipped
+        assert "Task ID: t-ok" in p  # valid field still rendered
+
+    def test_kb_chunks_filters_empty_and_nonstring(self) -> None:
+        # GH#9622: blank/whitespace chunks are dropped; an all-empty block is omitted.
+        p = self._prompt({"company_context": {"chunks": ["  ", "", "Real chunk"], "sources": []}})
+        assert "Real chunk" in p
+        empty = self._prompt({"agent_memory": {"chunks": ["", "   "], "sources": []}})
+        assert "## Agent Memory" not in empty
+
 
 # ---------------------------------------------------------------------------
 # invoke
@@ -254,6 +275,10 @@ class TestInvoke:
 
         assert captured_env.get("AUTOBOT_LLC_API_KEY") == "real-key-123"
         assert captured_env.get("AUTOBOT_LLC_API_BASE") == "http://api/llc"
+        # GH#9623: the real key must NOT be duplicated inside the broader
+        # LLC_INVOKE_CONTEXT blob — it is redacted to the placeholder there.
+        assert "real-key-123" not in captured_env.get("LLC_INVOKE_CONTEXT", "")
+        assert "<injected-at-runtime>" in captured_env.get("LLC_INVOKE_CONTEXT", "")
 
     async def test_invoke_skips_placeholder_api_key(self) -> None:
         # GH#9623: the build-time placeholder is never forwarded to the subprocess.

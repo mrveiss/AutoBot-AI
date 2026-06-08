@@ -118,6 +118,18 @@ _RENDERED_CONTEXT_KEYS = frozenset(
 )
 
 
+def _serialize_invoke_context(context: dict) -> str:
+    """Serialize context for ``LLC_INVOKE_CONTEXT`` with the API key redacted.
+
+    The real ``agent_api_key`` is forwarded only via the dedicated
+    ``AUTOBOT_LLC_API_KEY`` env var (GH#9623); it must not be duplicated inside
+    the JSON context blob, which is broader and more likely to be logged.
+    """
+    if context.get("agent_api_key") and context["agent_api_key"] != _AGENT_API_KEY_PLACEHOLDER:
+        context = {**context, "agent_api_key": _AGENT_API_KEY_PLACEHOLDER}
+    return json.dumps(context, default=str)
+
+
 def _render_kb_chunks(label: str, ctx: object) -> str:
     """Render a ``{chunks, sources}`` RAG context block, or '' when empty."""
     if not isinstance(ctx, dict):
@@ -243,7 +255,7 @@ class ClaudeCodeAdapter:
         cmd.append(prompt)
 
         workspace_dir: str | None = context.get("workspace_dir")
-        env = {**os.environ, "LLC_INVOKE_CONTEXT": json.dumps(context, default=str)}
+        env = {**os.environ, "LLC_INVOKE_CONTEXT": _serialize_invoke_context(context)}
         if workspace_dir:
             env["AUTOBOT_WORKSPACE_DIR"] = workspace_dir
 
@@ -284,7 +296,7 @@ class ClaudeCodeAdapter:
                 )
                 context.pop("workspace_dir", None)
                 env.pop("AUTOBOT_WORKSPACE_DIR", None)
-                env["LLC_INVOKE_CONTEXT"] = json.dumps(context, default=str)
+                env["LLC_INVOKE_CONTEXT"] = _serialize_invoke_context(context)
                 workspace_dir = None
                 proc = await asyncio.create_subprocess_exec(
                     *cmd,
