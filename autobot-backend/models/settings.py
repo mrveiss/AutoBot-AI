@@ -172,6 +172,25 @@ class OrchestratorSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="AUTOBOT_ORCHESTRATOR_", case_sensitive=False)
 
 
+class TelemetrySettings(BaseSettings):
+    """Telemetry and analytics configuration. Issue #9035."""
+
+    enabled: bool = Field(
+        default=True,
+        description="Enable telemetry collection (API analytics, voice session tracking, usage metrics)",
+    )
+    anonymous_usage_stats: bool = Field(
+        default=True,
+        description="Record anonymous usage metrics locally (stored in your Redis, never transmitted)",
+    )
+    first_run_prompt_shown: bool = Field(
+        default=False,
+        description="Whether the first-run telemetry consent prompt has been shown",
+    )
+
+    model_config = SettingsConfigDict(env_prefix="AUTOBOT_TELEMETRY_", case_sensitive=False)
+
+
 class AutoBotSettings(BaseSettings):
     """Main AutoBot configuration aggregating all settings."""
 
@@ -184,6 +203,7 @@ class AutoBotSettings(BaseSettings):
     diagnostics: DiagnosticsSettings = Field(default_factory=DiagnosticsSettings)
     memory: MemorySettings = Field(default_factory=MemorySettings)
     orchestrator: OrchestratorSettings = Field(default_factory=OrchestratorSettings)
+    telemetry: TelemetrySettings = Field(default_factory=TelemetrySettings)
 
     # Global settings
     environment: str = Field(default="development", description="Environment (development/production)")
@@ -275,6 +295,11 @@ class AutoBotSettings(BaseSettings):
                 "task_transport": self.orchestrator.task_transport,
                 "max_concurrent_tasks": (self.orchestrator.max_concurrent_tasks),
             },
+            "telemetry": {
+                "enabled": self.telemetry.enabled,
+                "anonymous_usage_stats": self.telemetry.anonymous_usage_stats,
+                "first_run_prompt_shown": self.telemetry.first_run_prompt_shown,
+            },
         }
 
 
@@ -307,3 +332,4 @@ security_settings = settings.security
 diagnostics_settings = settings.diagnostics
 memory_settings = settings.memory
 orchestrator_settings = settings.orchestrator
+telemetry_settings = settings.telemetry
