@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.logging_manager import get_logger
 
-from ..config import AGENT_API_BASE_URL
+from ..config import AGENT_API_BASE_URL, AGENT_API_KEY_PLACEHOLDER
 from ..services.goal import GoalService
 from ..services.work_item_service import WorkItemService
 from .inheritance import KbInheritanceResolver
@@ -98,7 +98,7 @@ class HeartbeatContextBuilder:
         return {
             "work_item_id": str(work_item_id),
             "api_base": AGENT_API_BASE_URL,
-            "agent_api_key": "<injected-at-runtime>",
+            "agent_api_key": AGENT_API_KEY_PLACEHOLDER,
         }
 
     async def _build_fat(
@@ -212,8 +212,8 @@ class HeartbeatContextBuilder:
             "agent_memory": agent_mem,
             "agent_wiki": agent_wiki_md,
             "similar_past_work": past_work,
-            "api_base": "http://localhost:8001/api",
-            "agent_api_key": "<injected-at-runtime>",
+            "api_base": AGENT_API_BASE_URL,
+            "agent_api_key": AGENT_API_KEY_PLACEHOLDER,
         }
 
     def _format_inherited_context(self, results: Optional[List[Dict[str, Any]]]) -> Dict[str, Any]:
