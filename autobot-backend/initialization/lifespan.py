@@ -382,6 +382,40 @@ async def _init_builtin_extensions(app: FastAPI) -> None:
         logger.warning("Built-in extension registration failed (non-critical): %s", ext_error)
 
 
+async def _init_transcriber_db(app: FastAPI) -> None:
+    """Initialize the transcriber SQLite database (GH#9044).
+
+    Non-critical: a failure logs a warning but does not block startup.
+    Skipped entirely when TRANSCRIBER_ENABLED != true.
+    Sets ``app.state.transcriber_db``, ``app.state.transcriber_upload_dir``,
+    and ``app.state.transcriber_export_dir`` for use by the dependency
+    injection layer (``transcriber.deps.get_db``).
+    """
+    import os
+    from pathlib import Path as _Path
+
+    enabled = os.getenv("TRANSCRIBER_ENABLED", "true").lower() == "true"
+    if not enabled:
+        logger.info("Transcriber DB init skipped (TRANSCRIBER_ENABLED != true)")
+        return
+    try:
+        from transcriber.database import Database
+
+        data_dir = _Path(os.getenv("TRANSCRIBER_DATA_DIR", "data/transcriber"))
+        data_dir.mkdir(parents=True, exist_ok=True)
+        (data_dir / "uploads").mkdir(exist_ok=True)
+        (data_dir / "processed").mkdir(exist_ok=True)
+        (data_dir / "exports").mkdir(exist_ok=True)
+        db = Database(str(data_dir / "transcriber.db"))
+        await db.connect()
+        app.state.transcriber_db = db
+        app.state.transcriber_upload_dir = str(data_dir / "uploads")
+        app.state.transcriber_export_dir = str(data_dir / "exports")
+        logger.info("Transcriber DB initialized")
+    except Exception as _tc_err:
+        logger.warning("Transcriber DB init failed (non-critical): %s", _tc_err)
+
+
 async def initialize_critical_services(app: FastAPI):
     """
     Phase 1: Initialize critical services (BLOCKING).
@@ -442,10 +476,12 @@ async def initialize_critical_services(app: FastAPI):
         # --- Tier 3: non-critical services (parallel) ---
         # Issue #743: Register caches with CacheCoordinator for memory optimization
         # Issue #3009: Register built-in extensions (permission enforcement)
+        # GH#9044: Transcriber DB
         await asyncio.gather(
             _init_cache_coordinator(),
             _init_skills(app),
             _init_builtin_extensions(app),
+            _init_transcriber_db(app),
         )
 
         logger.info("✅ [ 60%] PHASE 1 COMPLETE: All critical services operational")
@@ -616,6 +652,30 @@ async def _init_documentation_watcher():
         logger.debug("Documentation watcher not available: %s", import_error)
     except Exception as watcher_error:
         logger.warning("Documentation watcher failed: %s", watcher_error)
+
+
+async def _init_kb_folder_watcher():
+    """
+    Initialize KB folder watcher for automatic document ingestion (NON-CRITICAL).
+
+    Issue #9000: Starts filesystem watcher for user-configured directories to enable
+    automatic ingestion of new files into knowledge base collections.
+    """
+    logger.info("✅ [ 84%] KB Folder Watcher: Initializing KB folder watcher...")
+    try:
+        from services.kb_folder_watcher import start_kb_folder_watcher
+
+        success = await start_kb_folder_watcher()
+
+        if success:
+            logger.info("✅ [ 84%] KB Folder Watcher: KB folder watcher started")
+        else:
+            logger.info("✅ [ 84%] KB Folder Watcher: No watch folders configured")
+
+    except ImportError as import_error:
+        logger.debug("KB folder watcher not available: %s", import_error)
+    except Exception as watcher_error:
+        logger.warning("KB folder watcher failed: %s", watcher_error)
 
 
 async def _run_background_doc_indexing():
@@ -1602,6 +1662,7 @@ async def initialize_background_services(app: FastAPI):
         await _init_slm_client()
         await _init_background_llm_sync(app)
         await _init_documentation_watcher()
+        await _init_kb_folder_watcher()
         await _start_doc_sync_queue_worker(app)
         await _auto_index_documentation()
         await _init_log_forwarding()
@@ -1658,6 +1719,12 @@ async def cleanup_services(app: FastAPI):
     """
     logger.info("🛑 AutoBot Backend shutting down...")
     try:
+        # GH#9044: Close transcriber DB connection
+        transcriber_db = getattr(app.state, "transcriber_db", None)
+        if transcriber_db is not None:
+            await transcriber_db.close()
+            logger.info("Transcriber DB closed")
+
         if hasattr(app.state, "background_llm_sync") and app.state.background_llm_sync:
             await app.state.background_llm_sync.stop()
         if hasattr(app.state, "memory_graph") and app.state.memory_graph:
@@ -1696,6 +1763,17 @@ async def cleanup_services(app: FastAPI):
             await stop_documentation_watcher()
         except ImportError:
             pass  # Watcher not available
+
+        # Issue #9000: Stop KB folder watcher
+        try:
+            from services.kb_folder_watcher import stop_kb_folder_watcher
+
+            await stop_kb_folder_watcher()
+            logger.info("✅ KB folder watcher stopped")
+        except ImportError:
+            pass  # Watcher not available
+        except Exception as kb_watcher_error:
+            logger.warning("KB folder watcher shutdown failed: %s", kb_watcher_error)
 
         # Issue #4453: Stop doc sync queue worker
         worker = getattr(app.state, "doc_sync_queue_worker", None)

@@ -46,7 +46,8 @@ class SSOProvider(Base, TimestampMixin):
     """
     SSO Provider configuration.
 
-    Stores configuration for SSO providers. Config is encrypted at rest.
+    Stores configuration for SSO providers. Sensitive credentials (client_secret, bind_password)
+    are encrypted in the SystemSecret table; config JSONB stores non-sensitive data and references.
     Can be organization-specific or global (for social login in provider mode).
     """
 
@@ -79,8 +80,9 @@ class SSOProvider(Base, TimestampMixin):
         nullable=False,
     )
 
-    # Provider configuration (encrypted JSON)
-    # Contains client_id, client_secret, endpoints, etc.
+    # Provider configuration (JSONB)
+    # Sensitive fields (client_secret, bind_password) are stored encrypted in SystemSecret table.
+    # This config contains non-sensitive data (client_id, endpoints, etc.) and secret references.
     config: Mapped[dict] = mapped_column(
         JSONB,
         nullable=False,

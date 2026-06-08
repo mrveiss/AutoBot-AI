@@ -19,6 +19,7 @@ from api.voice_bundle_constants import (
     VALID_BUNDLES,
     BundleAssignRequest,
 )
+from api.voice_bundle_helpers import _count_tools_for_bundle, _require_admin
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
@@ -54,22 +55,6 @@ class UserBundleResponse(BaseModel):
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
-_tool_count_cache: dict[tuple[str, bool], int] = {}
-
-
-async def _count_tools_for_bundle(bundle: str, is_admin: bool) -> int:
-    """Return the number of tools available in this bundle (cached per bundle+role)."""
-    key = (bundle, is_admin)
-    if key not in _tool_count_cache:
-        from api.redis_mcp.rbac import (  # noqa: PLC0415
-            TOOL_ACCESS_MATRIX,
-            filter_tools_for_bundle,
-        )
-
-        all_tools = list(TOOL_ACCESS_MATRIX.keys())
-        _tool_count_cache[key] = len(filter_tools_for_bundle(all_tools, bundle=bundle, is_admin=is_admin))
-    return _tool_count_cache[key]
 
 
 def _is_admin(user: dict) -> bool:
@@ -185,7 +170,7 @@ async def set_user_bundle(
     user_id: str,
     body: BundleAssignRequest,
     request: Request,
-    current_user: dict = Depends(get_current_user),
+    admin_user: dict = Depends(_require_admin),
 ) -> UserBundleResponse:
     """Assign or clear a voice bundle override for a user.
 
@@ -193,16 +178,13 @@ async def set_user_bundle(
     self-service is explicitly prohibited to prevent privilege escalation
     (GH#8969).
     """
-    if not _is_admin(current_user):
-        raise_auth_error("AUTH_0003", "Only admins may assign voice bundles")
-
     if body.bundle_name is not None and body.bundle_name not in VALID_BUNDLES:
         raise HTTPException(
             status_code=422,
             detail=f"Invalid bundle_name '{body.bundle_name}'. Valid: {sorted(VALID_BUNDLES)}",
         )
 
-    current_user_id = _get_user_id(current_user)
+    current_user_id = _get_user_id(admin_user)
 
     _audit_meta = {
         "target_user_id": user_id,

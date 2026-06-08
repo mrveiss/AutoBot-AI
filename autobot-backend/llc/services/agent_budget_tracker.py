@@ -39,23 +39,42 @@ _TTL_S = 300  # 5 minutes
 
 
 class AgentBudgetState(BaseModel):
-    """Serialisable snapshot of an agent's budget row."""
+    """Serialisable snapshot of an agent's budget row (GH#6630, GH#8997)."""
 
     agent_id: str
+    budget_mode: str  # "dollars" or "tokens"
+
+    # Dollar-based fields
     budget_spent: float
     budget_limit: float
+
+    # Token-based fields (GH#8997)
+    tokens_spent: int
+    token_limit: int | None
+
     alert_threshold: float
 
     @property
     def remaining(self) -> Decimal:
+        """Return remaining budget in the active mode."""
+        if self.budget_mode == "tokens" and self.token_limit is not None:
+            return Decimal(str(self.token_limit - self.tokens_spent))
         return Decimal(str(self.budget_limit)) - Decimal(str(self.budget_spent))
 
     @property
     def is_over_limit(self) -> bool:
+        """Check if budget is exceeded in the active mode."""
+        if self.budget_mode == "tokens" and self.token_limit is not None:
+            return self.tokens_spent > self.token_limit
         return self.budget_spent > self.budget_limit
 
     @property
     def alert_triggered(self) -> bool:
+        """Check if alert threshold crossed in the active mode."""
+        if self.budget_mode == "tokens" and self.token_limit is not None:
+            if self.token_limit <= 0:
+                return False
+            return (self.tokens_spent / self.token_limit) >= self.alert_threshold
         if self.budget_limit <= 0:
             return False
         return (self.budget_spent / self.budget_limit) >= self.alert_threshold

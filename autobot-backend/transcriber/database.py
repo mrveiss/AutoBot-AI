@@ -1,304 +1,406 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
-#
-# Transcriber Database
-# Issue #9044
+"""Transcriber SQLite sidecar — all CRUD for projects, recordings, speakers, segments, notes, kb_pushes."""
 
-"""Database operations for transcriber module."""
-
-import json
-from datetime import datetime
-from pathlib import Path
-from typing import List, Optional
+import os
 
 import aiosqlite
 
 from autobot_shared.logging_manager import get_logger
-from transcriber.models import Recording, RecordingStatus, TranscriptionSegment
 
 logger = get_logger(__name__)
 
-
-class TranscriberDatabase:
-    """Transcriber database operations (SQLite)."""
-
-    def __init__(self, db_path: str = "data/transcriber.db"):
-        """Initialize database connection.
-
-        Args:
-            db_path: Path to SQLite database file
+# Each tuple is (version, sql). Append new entries; never reorder or delete.
+# Migration 1 uses CREATE TABLE IF NOT EXISTS so it is safe to run against an
+# existing pre-migration database — tables already present are left untouched
+# and the version row is inserted, bringing the DB under version-tracked control.
+_MIGRATIONS: list[tuple[int, str]] = [
+    (
+        1,
         """
-        self.db_path = db_path
-        # Ensure data directory exists
-        Path(db_path).parent.mkdir(parents=True, exist_ok=True)
-
-    async def initialize(self) -> None:
-        """Create tables if they don't exist."""
-        async with aiosqlite.connect(self.db_path) as db:
-            await db.execute("""
-                CREATE TABLE IF NOT EXISTS transcriber_recording (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    filename TEXT NOT NULL,
-                    file_path TEXT NOT NULL,
-                    user_id TEXT NOT NULL,
-                    duration REAL,
-                    language TEXT,
-                    status TEXT NOT NULL DEFAULT 'pending',
-                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                    metadata TEXT
-                )
-                """)
-            await db.execute("""
-                CREATE TABLE IF NOT EXISTS transcriber_segment (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    recording_id INTEGER NOT NULL,
-                    speaker_label TEXT NOT NULL,
-                    start_time REAL NOT NULL,
-                    end_time REAL NOT NULL,
-                    text TEXT NOT NULL,
-                    confidence REAL NOT NULL,
-                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (recording_id) REFERENCES transcriber_recording(id)
-                )
-                """)
-            await db.execute("CREATE INDEX IF NOT EXISTS idx_segment_recording ON transcriber_segment(recording_id)")
-            await db.execute("CREATE INDEX IF NOT EXISTS idx_recording_user ON transcriber_recording(user_id)")
-
-            # Migration: Add user_id column if it doesn't exist
-            cursor = await db.execute("PRAGMA table_info(transcriber_recording)")
-            columns = await cursor.fetchall()
-            column_names = [col[1] for col in columns]
-
-            if "user_id" not in column_names:
-                logger.warning("Migrating transcriber_recording table: adding user_id column")
-                # For existing records, set a placeholder user_id
-                # In production, these should be marked for manual review or deleted
-                await db.execute("""
-                    ALTER TABLE transcriber_recording ADD COLUMN user_id TEXT DEFAULT 'unknown-user'
-                """)
-                logger.warning("Migration complete: existing recordings assigned 'unknown-user' as user_id")
-
-            await db.commit()
-            logger.info("Transcriber database initialized at %s", self.db_path)
-
-    async def create_recording(
-        self, filename: str, file_path: str, user_id: str, metadata: Optional[dict] = None
-    ) -> Recording:
-        """Create a new recording entry.
-
-        Args:
-            filename: Original filename
-            file_path: Path to audio file
-            user_id: User ID who owns this recording
-            metadata: Optional metadata dictionary
-
-        Returns:
-            Created Recording object
+CREATE TABLE IF NOT EXISTS projects (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    user_id TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS recordings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    filename TEXT NOT NULL,
+    filepath TEXT NOT NULL,
+    duration REAL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    speaker_count INTEGER DEFAULT 0,
+    process_seconds REAL,
+    engine_used TEXT,
+    language_detected TEXT,
+    uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    user_id TEXT NOT NULL,
+    failure_stage TEXT,
+    failure_reason TEXT
+);
+CREATE TABLE IF NOT EXISTS speakers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    recording_id INTEGER NOT NULL REFERENCES recordings(id) ON DELETE CASCADE,
+    label TEXT NOT NULL,
+    display_name TEXT NOT NULL,
+    language TEXT
+);
+CREATE TABLE IF NOT EXISTS segments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    recording_id INTEGER NOT NULL REFERENCES recordings(id) ON DELETE CASCADE,
+    speaker_id INTEGER REFERENCES speakers(id),
+    start_time REAL NOT NULL,
+    end_time REAL NOT NULL,
+    text TEXT NOT NULL DEFAULT '',
+    original_text TEXT NOT NULL DEFAULT '',
+    is_edited INTEGER NOT NULL DEFAULT 0,
+    is_overlap INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS notes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    segment_id INTEGER NOT NULL REFERENCES segments(id) ON DELETE CASCADE,
+    recording_id INTEGER NOT NULL REFERENCES recordings(id) ON DELETE CASCADE,
+    content TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS kb_pushes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    recording_id INTEGER NOT NULL REFERENCES recordings(id) ON DELETE CASCADE,
+    kb_collection_id TEXT NOT NULL,
+    pushed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    pushed_by TEXT NOT NULL
+);
+""",
+    ),
+    (
+        2,
         """
-        async with aiosqlite.connect(self.db_path) as db:
-            cursor = await db.execute(
-                """
-                INSERT INTO transcriber_recording (filename, file_path, user_id, status, metadata)
-                VALUES (?, ?, ?, ?, ?)
-                """,
-                (
-                    filename,
-                    file_path,
-                    user_id,
-                    RecordingStatus.PENDING.value,
-                    json.dumps(metadata) if metadata else None,
-                ),
-            )
-            await db.commit()
-            recording_id = cursor.lastrowid
+CREATE INDEX IF NOT EXISTS idx_recordings_project_id ON recordings(project_id);
+CREATE INDEX IF NOT EXISTS idx_speakers_recording_id ON speakers(recording_id);
+CREATE INDEX IF NOT EXISTS idx_segments_recording_id ON segments(recording_id);
+CREATE INDEX IF NOT EXISTS idx_segments_speaker_id ON segments(speaker_id);
+CREATE INDEX IF NOT EXISTS idx_notes_recording_id ON notes(recording_id);
+CREATE INDEX IF NOT EXISTS idx_notes_segment_id ON notes(segment_id);
+""",
+    ),
+]
 
-            # Fetch the created recording
-            cursor = await db.execute("SELECT * FROM transcriber_recording WHERE id = ?", (recording_id,))
-            row = await cursor.fetchone()
 
-            return self._row_to_recording(row)
+class Database:
+    def __init__(self, path: str) -> None:
+        self._path = path
+        self._conn: aiosqlite.Connection | None = None
 
-    async def get_recording(self, recording_id: int, user_id: Optional[str] = None) -> Optional[Recording]:
-        """Get recording by ID with optional ownership check.
+    def _db(self) -> aiosqlite.Connection:
+        if self._conn is None:
+            raise RuntimeError("Database.connect() has not been called")
+        return self._conn
 
-        Args:
-            recording_id: Recording ID
-            user_id: Optional user ID for ownership verification (returns None if mismatch)
+    async def connect(self) -> None:
+        if self._conn is not None:
+            return  # already connected — idempotent
+        self._conn = await aiosqlite.connect(self._path)
+        self._conn.row_factory = aiosqlite.Row
+        await self._conn.execute("PRAGMA foreign_keys = ON")
+        await self._run_migrations()
+        logger.info("Transcriber DB connected: %s", self._path)
 
-        Returns:
-            Recording object or None if not found or ownership check fails
-        """
-        async with aiosqlite.connect(self.db_path) as db:
-            if user_id is not None:
-                # Include ownership check
-                cursor = await db.execute(
-                    "SELECT * FROM transcriber_recording WHERE id = ? AND user_id = ?", (recording_id, user_id)
-                )
-            else:
-                # No ownership check (for internal use)
-                cursor = await db.execute("SELECT * FROM transcriber_recording WHERE id = ?", (recording_id,))
+    async def _run_migrations(self) -> None:
+        await self._db().execute(
+            "CREATE TABLE IF NOT EXISTS _schema_migrations "
+            "(version INTEGER PRIMARY KEY, applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
+        )
+        await self._db().commit()
+        cur = await self._db().execute("SELECT COALESCE(MAX(version), 0) FROM _schema_migrations")
+        row = await cur.fetchone()
+        current: int = row[0]
+        for version, sql in _MIGRATIONS:
+            if version <= current:
+                continue
+            await self._db().executescript(sql)
+            await self._db().execute("INSERT INTO _schema_migrations (version) VALUES (?)", (version,))
+            await self._db().commit()
+            logger.info("Transcriber DB: applied migration %d", version)
 
-            row = await cursor.fetchone()
+    async def close(self) -> None:
+        if self._conn is not None:
+            await self._conn.close()
+            self._conn = None
 
-            if row is None:
-                return None
+    # ── Projects ──────────────────────────────────────────────────────────────
 
-            return self._row_to_recording(row)
+    async def create_project(self, name: str, description: str, user_id: str) -> int:
+        cur = await self._db().execute(
+            "INSERT INTO projects (name, description, user_id) VALUES (?,?,?)",
+            (name, description, user_id),
+        )
+        await self._db().commit()
+        return cur.lastrowid
+
+    async def get_project(self, project_id: int) -> dict | None:
+        cur = await self._db().execute("SELECT * FROM projects WHERE id=?", (project_id,))
+        row = await cur.fetchone()
+        return dict(row) if row else None
+
+    async def list_projects(self, user_id: str, *, limit: int = 200, offset: int = 0) -> list[dict]:
+        cur = await self._db().execute(
+            "SELECT * FROM projects WHERE user_id=? ORDER BY created_at DESC LIMIT ? OFFSET ?",
+            (user_id, limit, offset),
+        )
+        return [dict(r) for r in await cur.fetchall()]
+
+    async def update_project(self, project_id: int, name: str, description: str) -> None:
+        cur = await self._db().execute(
+            "UPDATE projects SET name=?, description=? WHERE id=?",
+            (name, description, project_id),
+        )
+        await self._db().commit()
+        if cur.rowcount == 0:
+            raise KeyError(f"no project with id={project_id}")
+
+    async def delete_project(self, project_id: int) -> None:
+        cur = await self._db().execute("DELETE FROM projects WHERE id=?", (project_id,))
+        await self._db().commit()
+        if cur.rowcount == 0:
+            raise KeyError(f"no project with id={project_id}")
+
+    # ── Recordings ────────────────────────────────────────────────────────────
+
+    async def create_recording(self, project_id: int, filename: str, filepath: str, user_id: str) -> int:
+        if not os.path.isabs(filepath):
+            raise ValueError(f"filepath must be absolute, got: {filepath!r}")
+        cur = await self._db().execute(
+            "INSERT INTO recordings (project_id, filename, filepath, user_id) VALUES (?,?,?,?)",
+            (project_id, filename, filepath, user_id),
+        )
+        await self._db().commit()
+        return cur.lastrowid
+
+    async def get_recording(self, recording_id: int) -> dict | None:
+        cur = await self._db().execute("SELECT * FROM recordings WHERE id=?", (recording_id,))
+        row = await cur.fetchone()
+        return dict(row) if row else None
+
+    async def list_recordings(self, project_id: int, *, limit: int = 200, offset: int = 0) -> list[dict]:
+        cur = await self._db().execute(
+            "SELECT * FROM recordings WHERE project_id=? ORDER BY uploaded_at DESC LIMIT ? OFFSET ?",
+            (project_id, limit, offset),
+        )
+        return [dict(r) for r in await cur.fetchall()]
 
     async def update_recording_status(
         self,
         recording_id: int,
-        status: RecordingStatus,
-        duration: Optional[float] = None,
-        language: Optional[str] = None,
+        status: str,
+        *,
+        engine_used: str | None = None,
+        language_detected: str | None = None,
+        speaker_count: int | None = None,
+        process_seconds: float | None = None,
+        failure_stage: str | None = None,
+        failure_reason: str | None = None,
     ) -> None:
-        """Update recording status and optional fields.
+        cur = await self._db().execute(
+            """UPDATE recordings SET status=?,
+               engine_used=COALESCE(?,engine_used),
+               language_detected=COALESCE(?,language_detected),
+               speaker_count=COALESCE(?,speaker_count),
+               process_seconds=COALESCE(?,process_seconds),
+               failure_stage=COALESCE(?,failure_stage),
+               failure_reason=COALESCE(?,failure_reason)
+               WHERE id=?""",
+            (
+                status,
+                engine_used,
+                language_detected,
+                speaker_count,
+                process_seconds,
+                failure_stage,
+                failure_reason,
+                recording_id,
+            ),
+        )
+        await self._db().commit()
+        if cur.rowcount == 0:
+            raise KeyError(f"no recording with id={recording_id}")
 
-        Args:
-            recording_id: Recording ID
-            status: New status
-            duration: Optional audio duration in seconds
-            language: Optional detected language code
+    async def delete_recording(self, recording_id: int) -> None:
+        cur = await self._db().execute("DELETE FROM recordings WHERE id=?", (recording_id,))
+        await self._db().commit()
+        if cur.rowcount == 0:
+            raise KeyError(f"no recording with id={recording_id}")
+
+    # ── Speakers ──────────────────────────────────────────────────────────────
+
+    async def create_speaker(self, recording_id: int, label: str, display_name: str, language: str | None) -> int:
+        cur = await self._db().execute(
+            "INSERT INTO speakers (recording_id, label, display_name, language) VALUES (?,?,?,?)",
+            (recording_id, label, display_name, language),
+        )
+        await self._db().commit()
+        return cur.lastrowid
+
+    async def list_speakers(self, recording_id: int, *, limit: int = 200, offset: int = 0) -> list[dict]:
+        cur = await self._db().execute(
+            "SELECT * FROM speakers WHERE recording_id=? ORDER BY id LIMIT ? OFFSET ?",
+            (recording_id, limit, offset),
+        )
+        return [dict(r) for r in await cur.fetchall()]
+
+    async def get_speaker(self, speaker_id: int) -> dict | None:
+        cur = await self._db().execute("SELECT * FROM speakers WHERE id=?", (speaker_id,))
+        row = await cur.fetchone()
+        return dict(row) if row else None
+
+    async def update_speaker(self, speaker_id: int, display_name: str) -> None:
+        cur = await self._db().execute("UPDATE speakers SET display_name=? WHERE id=?", (display_name, speaker_id))
+        await self._db().commit()
+        if cur.rowcount == 0:
+            raise KeyError(f"no speaker with id={speaker_id}")
+
+    async def merge_speakers(self, source_speaker_id: int, target_speaker_id: int) -> None:
+        """Merge source speaker into target speaker.
+
+        All segments referencing source will point to target, then source is deleted.
         """
-        async with aiosqlite.connect(self.db_path) as db:
-            updates = ["status = ?", "updated_at = CURRENT_TIMESTAMP"]
-            params = [status.value]
+        # Verify both speakers exist and belong to the same recording
+        src_cur = await self._db().execute("SELECT recording_id FROM speakers WHERE id=?", (source_speaker_id,))
+        src_row = await src_cur.fetchone()
+        if not src_row:
+            raise KeyError(f"no speaker with id={source_speaker_id}")
 
-            if duration is not None:
-                updates.append("duration = ?")
-                params.append(duration)
+        tgt_cur = await self._db().execute("SELECT recording_id FROM speakers WHERE id=?", (target_speaker_id,))
+        tgt_row = await tgt_cur.fetchone()
+        if not tgt_row:
+            raise KeyError(f"no speaker with id={target_speaker_id}")
 
-            if language is not None:
-                updates.append("language = ?")
-                params.append(language)
+        if src_row[0] != tgt_row[0]:
+            raise ValueError("Cannot merge speakers from different recordings")
 
-            params.append(recording_id)
+        if source_speaker_id == target_speaker_id:
+            raise ValueError("Cannot merge a speaker into itself")
 
-            await db.execute(
-                f"""
-                UPDATE transcriber_recording
-                SET {', '.join(updates)}
-                WHERE id = ?
-                """,
-                params,
-            )
-            await db.commit()
-
-    async def create_segments(self, segments: List[dict], recording_id: int) -> List[TranscriptionSegment]:
-        """Create transcription segments.
-
-        Args:
-            segments: List of segment dictionaries with speaker_label, start_time, end_time, text, confidence
-            recording_id: Recording ID
-
-        Returns:
-            List of created TranscriptionSegment objects
-        """
-        async with aiosqlite.connect(self.db_path) as db:
-            segment_ids = []
-
-            for seg in segments:
-                cursor = await db.execute(
-                    """
-                    INSERT INTO transcriber_segment
-                    (recording_id, speaker_label, start_time, end_time, text, confidence)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        recording_id,
-                        seg["speaker_label"],
-                        seg["start_time"],
-                        seg["end_time"],
-                        seg["text"],
-                        seg["confidence"],
-                    ),
-                )
-                segment_ids.append(cursor.lastrowid)
-
-            await db.commit()
-
-            # Fetch created segments
-            placeholders = ",".join("?" * len(segment_ids))
-            cursor = await db.execute(
-                f"SELECT * FROM transcriber_segment WHERE id IN ({placeholders})",
-                segment_ids,
-            )
-            rows = await cursor.fetchall()
-
-            return [self._row_to_segment(row) for row in rows]
-
-    async def get_recording_segments(self, recording_id: int) -> List[TranscriptionSegment]:
-        """Get all segments for a recording.
-
-        Args:
-            recording_id: Recording ID
-
-        Returns:
-            List of TranscriptionSegment objects ordered by start_time
-        """
-        async with aiosqlite.connect(self.db_path) as db:
-            cursor = await db.execute(
-                """
-                SELECT * FROM transcriber_segment
-                WHERE recording_id = ?
-                ORDER BY start_time ASC
-                """,
-                (recording_id,),
-            )
-            rows = await cursor.fetchall()
-
-            return [self._row_to_segment(row) for row in rows]
-
-    def _row_to_recording(self, row) -> Recording:
-        """Convert database row to Recording object."""
-        metadata_json = row[9]
-        metadata = json.loads(metadata_json) if metadata_json else None
-
-        return Recording(
-            id=row[0],
-            filename=row[1],
-            file_path=row[2],
-            user_id=row[3],
-            duration=row[4],
-            language=row[5],
-            status=RecordingStatus(row[6]),
-            created_at=datetime.fromisoformat(row[7]),
-            updated_at=datetime.fromisoformat(row[8]),
-            metadata=metadata,
+        # Update all segments that reference source speaker to point to target speaker
+        await self._db().execute(
+            "UPDATE segments SET speaker_id=? WHERE speaker_id=?", (target_speaker_id, source_speaker_id)
         )
 
-    def _row_to_segment(self, row) -> TranscriptionSegment:
-        """Convert database row to TranscriptionSegment object."""
-        return TranscriptionSegment(
-            id=row[0],
-            recording_id=row[1],
-            speaker_label=row[2],
-            start_time=row[3],
-            end_time=row[4],
-            text=row[5],
-            confidence=row[6],
-            created_at=datetime.fromisoformat(row[7]),
+        # Delete the source speaker
+        await self._db().execute("DELETE FROM speakers WHERE id=?", (source_speaker_id,))
+        await self._db().commit()
+
+    # ── Segments ──────────────────────────────────────────────────────────────
+
+    async def create_segment(
+        self,
+        recording_id: int,
+        speaker_id: int | None,
+        start_time: float,
+        end_time: float,
+        text: str,
+        is_overlap: bool = False,
+    ) -> int:
+        cur = await self._db().execute(
+            """INSERT INTO segments
+               (recording_id, speaker_id, start_time, end_time, text, original_text, is_overlap)
+               VALUES (?,?,?,?,?,?,?)""",
+            (recording_id, speaker_id, start_time, end_time, text, text, int(is_overlap)),
         )
+        await self._db().commit()
+        return cur.lastrowid
+
+    async def list_segments(self, recording_id: int, *, limit: int = 200, offset: int = 0) -> list[dict]:
+        cur = await self._db().execute(
+            "SELECT * FROM segments WHERE recording_id=? ORDER BY start_time LIMIT ? OFFSET ?",
+            (recording_id, limit, offset),
+        )
+        return [dict(r) for r in await cur.fetchall()]
+
+    async def get_segment(self, segment_id: int) -> dict | None:
+        cur = await self._db().execute("SELECT * FROM segments WHERE id=?", (segment_id,))
+        row = await cur.fetchone()
+        return dict(row) if row else None
+
+    async def update_segment_text(self, segment_id: int, text: str) -> None:
+        cur = await self._db().execute("UPDATE segments SET text=?, is_edited=1 WHERE id=?", (text, segment_id))
+        await self._db().commit()
+        if cur.rowcount == 0:
+            raise KeyError(f"no segment with id={segment_id}")
+
+    # ── Notes ─────────────────────────────────────────────────────────────────
+
+    async def create_note(self, segment_id: int, recording_id: int, content: str) -> int:
+        cur = await self._db().execute(
+            "INSERT INTO notes (segment_id, recording_id, content) VALUES (?,?,?)",
+            (segment_id, recording_id, content),
+        )
+        await self._db().commit()
+        return cur.lastrowid
+
+    async def get_note(self, note_id: int) -> dict | None:
+        cur = await self._db().execute("SELECT * FROM notes WHERE id=?", (note_id,))
+        row = await cur.fetchone()
+        return dict(row) if row else None
+
+    async def list_notes(self, recording_id: int, *, limit: int = 200, offset: int = 0) -> list[dict]:
+        cur = await self._db().execute(
+            "SELECT * FROM notes WHERE recording_id=? ORDER BY created_at LIMIT ? OFFSET ?",
+            (recording_id, limit, offset),
+        )
+        return [dict(r) for r in await cur.fetchall()]
+
+    async def update_note(self, note_id: int, content: str) -> None:
+        cur = await self._db().execute("UPDATE notes SET content=? WHERE id=?", (content, note_id))
+        await self._db().commit()
+        if cur.rowcount == 0:
+            raise KeyError(f"no note with id={note_id}")
+
+    async def delete_note(self, note_id: int) -> None:
+        cur = await self._db().execute("DELETE FROM notes WHERE id=?", (note_id,))
+        await self._db().commit()
+        if cur.rowcount == 0:
+            raise KeyError(f"no note with id={note_id}")
+
+    # ── KB Pushes ─────────────────────────────────────────────────────────────
+
+    async def create_kb_push(self, recording_id: int, kb_collection_id: str, pushed_by: str) -> int:
+        cur = await self._db().execute(
+            "INSERT INTO kb_pushes (recording_id, kb_collection_id, pushed_by) VALUES (?,?,?)",
+            (recording_id, kb_collection_id, pushed_by),
+        )
+        await self._db().commit()
+        return cur.lastrowid
+
+    async def get_latest_kb_push(self, recording_id: int) -> dict | None:
+        cur = await self._db().execute(
+            "SELECT * FROM kb_pushes WHERE recording_id=? ORDER BY pushed_at DESC LIMIT 1",
+            (recording_id,),
+        )
+        row = await cur.fetchone()
+        return dict(row) if row else None
 
 
-# Singleton instance
-_transcriber_db: Optional[TranscriberDatabase] = None
+# ── Singleton ─────────────────────────────────────────────────────────────
+
+_db_instance: Database | None = None
 
 
-async def get_transcriber_db() -> TranscriberDatabase:
-    """Get or create transcriber database singleton.
+async def get_transcriber_db() -> Database:
+    """Get or create the singleton transcriber database instance.
 
     Returns:
-        TranscriberDatabase instance
+        Database: The shared database connection instance
     """
-    global _transcriber_db
-    if _transcriber_db is None:
-        _transcriber_db = TranscriberDatabase()
-        await _transcriber_db.initialize()
-    return _transcriber_db
-
-
-# Backward compatibility alias
-Database = TranscriberDatabase
+    global _db_instance
+    if _db_instance is None:
+        # Get database path from environment, default to data/transcriber.db
+        db_path = os.getenv("AUTOBOT_TRANSCRIBER_DB_PATH", "data/transcriber.db")
+        _db_instance = Database(db_path)
+        await _db_instance.connect()
+        await _db_instance.migrate()
+        logger.info(f"Transcriber database initialized at {db_path}")
+    return _db_instance

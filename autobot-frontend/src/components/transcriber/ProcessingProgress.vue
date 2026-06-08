@@ -1,8 +1,7 @@
-<!-- autobot-frontend/src/components/transcriber/ProcessingProgress.vue -->
 <!-- AutoBot - AI-Powered Automation Platform -->
 <!-- Copyright (c) 2025 mrveiss -->
 <script setup lang="ts">
-import { onMounted, watch } from 'vue'
+import { onMounted } from 'vue'
 import { useSseProgress } from '@/composables/transcriber/useSseProgress'
 
 const props = defineProps<{ recordingId: number }>()
@@ -14,14 +13,14 @@ onMounted(() => {
   connect()
 })
 
-watch(status, (val) => {
-  if (val === 'complete') emit('complete')
-  if (val === 'error') emit('error')
-})
+function onStatusChange() {
+  if (status.value === 'complete') emit('complete')
+  if (status.value === 'error') emit('error')
+}
 </script>
 
 <template>
-  <div class="processing-progress">
+  <div class="processing-progress" @vue:updated="onStatusChange">
     <div class="progress-bar-track">
       <div class="progress-bar-fill" :style="{ width: `${percent}%` }" />
     </div>

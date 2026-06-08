@@ -226,8 +226,8 @@ async def _cfg_with_credentials(cfg: ConnectorConfig, auth_cls: type | None) -> 
     try:
         full_config = await get_credential_store().load(cfg.secret_id, cfg.config, auth_cls, owner_id)
     except (LookupError, PermissionError) as exc:
-        logger.error("Failed to load credentials for connector %s: %s", cfg.connector_id, exc)
-        raise HTTPException(status_code=403, detail=str(exc)) from exc
+        logger.error("Failed to load credentials for connector %s: %s", cfg.connector_id, exc, exc_info=True)
+        raise HTTPException(status_code=403, detail="Internal server error") from exc
     import dataclasses
 
     return dataclasses.replace(cfg, config=full_config)
@@ -264,7 +264,7 @@ async def _run_sync_background(connector_id: str, incremental: bool) -> None:
     try:
         sync_result = await instance.sync(incremental=incremental)
     except Exception as exc:
-        logger.error("Background sync failed for %s: %s", connector_id, exc)
+        logger.error("Background sync failed for %s: %s", connector_id, exc, exc_info=True)
         sync_result = None
 
     if sync_result is not None:
@@ -342,7 +342,7 @@ async def list_connectors():
             results.append({"config": _cfg_to_dict(cfg), "status": status})
         return {"connectors": results, "total": len(results)}
     except Exception as exc:
-        logger.error("list_connectors failed: %s", exc)
+        logger.error("list_connectors failed: %s", exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -604,7 +604,7 @@ async def test_connector_connection(connector_id: str):
     try:
         healthy = await instance.test_connection()
     except Exception as exc:
-        logger.error("Connector %s connection test failed: %s", connector_id, exc)
+        logger.error("Connector %s connection test failed: %s", connector_id, exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
     return {"connector_id": connector_id, "healthy": healthy}
 

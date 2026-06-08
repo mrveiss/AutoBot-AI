@@ -60,6 +60,7 @@ from .hardware import TORCH_AVAILABLE, HardwareDetector
 
 # Mock providers
 from .mock_providers import LocalLLM, MockPalm, local_llm, palm
+from .model_fallback_coordinator import ModelFallbackCoordinator, get_fallback_coordinator
 from .model_param_registry import (
     ArchitectureFamily,
     apply_model_defaults,
@@ -113,10 +114,12 @@ __all__ = [
     "get_llm_cache",
     # Semantic cache (Issue #8168)
     "SemanticLLMCache",
-    # Fallback chains (GH#8998)
+    # Fallback chains + coordinator (GH#8998)
     "FallbackChain",
     "FallbackChainManager",
     "get_fallback_chain_manager",
+    "ModelFallbackCoordinator",
+    "get_fallback_coordinator",
     # Mock providers
     "LocalLLM",
     "MockPalm",

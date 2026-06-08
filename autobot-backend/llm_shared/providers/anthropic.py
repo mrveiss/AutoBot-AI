@@ -256,6 +256,18 @@ class AnthropicProvider(BaseProvider):
                     )
             finish_reason = "tool_calls" if tool_calls else response.stop_reason
 
+            # MVA-3089: Extract thinking metadata from Anthropic response
+            usage_dict = {
+                "prompt_tokens": response.usage.input_tokens,
+                "completion_tokens": response.usage.output_tokens,
+                "total_tokens": total_tokens,
+            }
+            output_details = getattr(response.usage, "output_tokens_details", None)
+            if output_details:
+                thinking_tokens = getattr(output_details, "thinking_tokens", None)
+                if thinking_tokens is not None and thinking_tokens > 0:
+                    usage_dict["thinking_tokens"] = thinking_tokens
+
             return LLMResponse(
                 content=content,
                 model=response.model,
@@ -263,11 +275,7 @@ class AnthropicProvider(BaseProvider):
                 processing_time=processing_time,
                 request_id=request.request_id,
                 finish_reason=finish_reason,
-                usage={
-                    "prompt_tokens": response.usage.input_tokens,
-                    "completion_tokens": response.usage.output_tokens,
-                    "total_tokens": total_tokens,
-                },
+                usage=usage_dict,
                 tool_calls=tool_calls or None,
                 provider_metadata=self._build_provider_metadata(
                     model_api_name=response.model,

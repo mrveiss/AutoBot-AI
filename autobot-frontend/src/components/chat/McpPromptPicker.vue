@@ -151,7 +151,7 @@ import Icon from '@/components/ui/Icon.vue'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('McpPromptPicker')
-const api = useApi()
+const api = useApiClient()
 
 interface Props {
   disabled?: boolean

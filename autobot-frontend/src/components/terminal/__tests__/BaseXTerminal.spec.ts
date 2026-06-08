@@ -23,7 +23,8 @@ function createTerminalMock(this: Record<string, any>) {
   this.cols = 80
   this.rows = 24
   this.options = {}
-  // eslint-disable-next-line @typescript-eslint/no-this-alias
+
+  // eslint-disable-next-line @typescript-eslint/no-this-alias -- Mock: capturing instance for test assertions
   lastTerminalInstance = this
 }
 

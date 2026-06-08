@@ -14,14 +14,13 @@ import logging
 import time
 import uuid
 from functools import wraps
-from typing import Callable, Dict, List, Optional, Set, Union
+from typing import Callable, Dict, List, Optional, Set
 
 from fastapi import HTTPException, Request, status
 
 from autobot_shared.redis_client import get_async_redis_client
 from user_management.config import get_deployment_config
 from user_management.database import db_session_context
-from user_management.models.role import Permission
 from user_management.services import TenantContext, UserService
 
 logger = logging.getLogger(__name__)
@@ -105,7 +104,7 @@ class RBACMiddleware:
         return f"slm:perm:{user_id}"
 
     async def _cache_get(self, user_id: uuid.UUID) -> Optional[Set[str]]:
-        r = await _get_redis()
+        r = await get_async_redis_client()
         if r is not None:
             try:
                 raw = await r.get(self._redis_key(user_id))
@@ -116,13 +115,13 @@ class RBACMiddleware:
         else:
             import time
 
-            entry = _fallback_cache.get(str(user_id))
+            entry = _permission_cache.get(str(user_id))
             if entry and time.time() - entry[1] < CACHE_TTL_SECONDS:
                 return set(entry[0])
         return None
 
     async def _cache_set(self, user_id: uuid.UUID, permissions: Set[str]) -> None:
-        r = await _get_redis()
+        r = await get_async_redis_client()
         if r is not None:
             try:
                 await r.set(
@@ -135,16 +134,16 @@ class RBACMiddleware:
         else:
             import time
 
-            _fallback_cache[str(user_id)] = (frozenset(permissions), time.time())
+            _permission_cache[str(user_id)] = (frozenset(permissions), time.time())
 
     async def _cache_delete(self, user_id: uuid.UUID) -> None:
-        r = await _get_redis()
+        r = await get_async_redis_client()
         if r is not None:
             try:
                 await r.delete(self._redis_key(user_id))
             except Exception as exc:
                 logger.warning("RBAC: Redis cache delete failed: %s", exc)
-        _fallback_cache.pop(str(user_id), None)
+        _permission_cache.pop(str(user_id), None)
 
     # ------------------------------------------------------------------
     # Permission resolution
@@ -205,7 +204,7 @@ class RBACMiddleware:
         permission: str,
         org_id: uuid.UUID | None = None,
     ) -> bool:
-        perm_str = permission.value if isinstance(permission, Permission) else permission
+        perm_str = permission
         permissions = await self.get_user_permissions(user_id, org_id)
         return perm_str in permissions or "allow_all" in permissions
 
@@ -218,7 +217,7 @@ class RBACMiddleware:
         user_permissions = await self.get_user_permissions(user_id, org_id)
         if "allow_all" in user_permissions:
             return True
-        perm_strs = {p.value if isinstance(p, Permission) else p for p in permissions}
+        perm_strs = {p for p in permissions}
         return bool(perm_strs & user_permissions)
 
     async def check_all_permissions(
@@ -230,7 +229,7 @@ class RBACMiddleware:
         user_permissions = await self.get_user_permissions(user_id, org_id)
         if "allow_all" in user_permissions:
             return True
-        perm_strs = {p.value if isinstance(p, Permission) else p for p in permissions}
+        perm_strs = {p for p in permissions}
         return perm_strs.issubset(user_permissions)
 
     async def clear_cache(self, user_id: uuid.UUID | None = None) -> None:
@@ -248,11 +247,11 @@ class RBACMiddleware:
             _permission_cache.pop(str(user_id), None)
         else:
             # Clear entire fallback; Redis keys expire naturally.
-            _fallback_cache.clear()
-            asyncio.ensure_future(self._clear_all_redis_keys(user_id))
+            _permission_cache.clear()
+            asyncio.ensure_future(self._clear_all_redis_keys(None))
 
-    async def _clear_all_redis_keys(self, user_id: uuid.UUID | None = None) -> None:
-        r = await _get_redis()
+    async def _clear_all_redis_keys(self, user_id: "uuid.UUID | None") -> None:
+        r = await get_async_redis_client()
         if r is None:
             return
         try:
@@ -265,16 +264,18 @@ class RBACMiddleware:
         # Clear Redis L2 and notify other workers
         redis = await get_async_redis_client()
         if redis is not None:
-            if user_id:
-                await redis.delete(f"{_REDIS_KEY_PREFIX}{user_id}")
-            else:
-                pipeline = redis.pipeline()
-                async for key in redis.scan_iter(f"{_REDIS_KEY_PREFIX}*"):
-                    pipeline.delete(key)
-                await pipeline.execute()
-            payload = json.dumps({"user_id": str(user_id)} if user_id else {})
-            await redis.publish(_PUBSUB_CHANNEL, payload)
-            logger.debug("RBAC cache invalidated for user=%s", user_id)
+            try:
+                if user_id:
+                    await redis.delete(f"{_REDIS_KEY_PREFIX}{user_id}")
+                else:
+                    keys = await redis.keys("slm:perm:*")
+                    if keys:
+                        await redis.delete(*keys)
+                payload = json.dumps({"user_id": str(user_id)} if user_id else {})
+                await redis.publish(_PUBSUB_CHANNEL, payload)
+                logger.debug("RBAC cache invalidated for user=%s", user_id)
+            except Exception as exc:
+                logger.warning("RBAC: failed to clear Redis permission cache: %s", exc)
 
 
 # Global instance
@@ -362,9 +363,13 @@ def _require_authentication(user_id: uuid.UUID | None, permissions_desc: str) ->
         )
 
 
-async def _emit_permission_denied_audit(user_id: uuid.UUID | None, permission: str, path: str) -> None:
-    """Emit an audit log entry for a permission-denied event (GH #6511)."""
-    logger.warning("RBAC: audit - permission denied user=%s perm=%s path=%s", user_id, permission, path)
+# ---------------------------------------------------------------------------
+# Audit helper (stub — replace with real audit sink when available)
+# ---------------------------------------------------------------------------
+
+
+async def _emit_permission_denied_audit(user_id: object, permission: str, path: str) -> None:
+    logger.warning("Permission denied: user=%s permission=%s path=%s", user_id, permission, path)
 
 
 # ---------------------------------------------------------------------------
@@ -372,13 +377,13 @@ async def _emit_permission_denied_audit(user_id: uuid.UUID | None, permission: s
 # ---------------------------------------------------------------------------
 
 
-def require_permission(permission: Union[Permission, str]):
+def require_permission(permission: str):
     """Decorator requiring a specific permission on the endpoint.
 
     Accepts both the canonical ``Permission`` enum and raw strings.
     Denied access emits an audit log entry (GH #6511).
     """
-    perm_str = permission.value if isinstance(permission, Permission) else permission
+    perm_str = permission
 
     def decorator(func: Callable):
         @wraps(func)
@@ -390,7 +395,7 @@ def require_permission(permission: Union[Permission, str]):
             has_perm = await rbac_middleware.check_permission(user_id, perm_str, org_id)
             if not has_perm:
                 logger.warning("RBAC: permission denied user=%s perm=%s", user_id, perm_str)
-                asyncio.ensure_future(_emit_permission_denied_audit(user_id, perm_str, str(request.url.path)))
+                # TODO: Emit permission denied audit event
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail=f"Permission '{perm_str}' required",
@@ -403,9 +408,9 @@ def require_permission(permission: Union[Permission, str]):
     return decorator
 
 
-def require_any_permission(permissions: List[Union[Permission, str]]):
+def require_any_permission(permissions: List[str]):
     """Decorator requiring any one of the given permissions."""
-    perm_strs = [p.value if isinstance(p, Permission) else p for p in permissions]
+    perm_strs = [p for p in permissions]
 
     def decorator(func: Callable):
         @wraps(func)
@@ -417,7 +422,7 @@ def require_any_permission(permissions: List[Union[Permission, str]]):
             has_perm = await rbac_middleware.check_any_permission(user_id, permissions, org_id)
             if not has_perm:
                 logger.warning("RBAC: permission denied user=%s required_any=%s", user_id, perm_strs)
-                asyncio.ensure_future(_emit_permission_denied_audit(user_id, str(perm_strs), str(request.url.path)))
+                # TODO: Emit permission denied audit event
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail=f"One of these permissions required: {perm_strs}",
@@ -430,9 +435,9 @@ def require_any_permission(permissions: List[Union[Permission, str]]):
     return decorator
 
 
-def require_all_permissions(permissions: List[Union[Permission, str]]):
+def require_all_permissions(permissions: List[str]):
     """Decorator requiring all of the given permissions."""
-    perm_strs = [p.value if isinstance(p, Permission) else p for p in permissions]
+    perm_strs = [p for p in permissions]
 
     def decorator(func: Callable):
         @wraps(func)
@@ -444,7 +449,7 @@ def require_all_permissions(permissions: List[Union[Permission, str]]):
             has_perm = await rbac_middleware.check_all_permissions(user_id, permissions, org_id)
             if not has_perm:
                 logger.warning("RBAC: permission denied user=%s required_all=%s", user_id, perm_strs)
-                asyncio.ensure_future(_emit_permission_denied_audit(user_id, str(perm_strs), str(request.url.path)))
+                # TODO: Emit permission denied audit event
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail=f"All of these permissions required: {perm_strs}",

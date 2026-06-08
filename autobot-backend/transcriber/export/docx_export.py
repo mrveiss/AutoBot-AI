@@ -47,7 +47,7 @@ def build_docx(
             run.font.color.rgb = color
             p.add_run("  ")
         if include_timestamps:
-            p.add_run(f"[{_fmt_ts(seg['start_time'])} → {_fmt_ts(seg['end_time'])}]  ").italic = True
+            p.add_run(f"[{_fmt_ts(seg['start'])} → {_fmt_ts(seg['end'])}]  ").italic = True
         p.add_run(seg["text"])
         if include_notes and seg.get("notes"):
             for note in seg["notes"]:

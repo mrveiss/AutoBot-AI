@@ -41,6 +41,7 @@ from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from llm_shared import get_provider_registry
+from llm_shared.model_fallback_coordinator import get_fallback_coordinator
 from llm_shared.models import LLMRequest
 from llm_shared.tiered_routing.tier_router import get_tiered_router
 from services.llm_api_key_service import LLMApiKeyRecord, get_llm_api_key_service
@@ -378,8 +379,8 @@ async def chat_completions(
             headers=stream_headers,
         )
 
-    # Non-streaming path
-    llm_response = await provider.chat_completion(llm_request)
+    # Non-streaming path — use fallback coordinator for quota-triggered model switch
+    llm_response = await get_fallback_coordinator().execute_with_fallback(llm_request, registry)
     if llm_response.error:
         raise HTTPException(status_code=502, detail=llm_response.error)
 

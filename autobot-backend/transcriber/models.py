@@ -1,240 +1,125 @@
+# autobot-backend/transcriber/models.py
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
-#
-# Transcriber Data Models
-# Issue #9044, #9214
+"""Pydantic request/response schemas for the transcriber module."""
 
-"""Data models for transcriber module."""
-
-from dataclasses import dataclass
 from datetime import datetime
-from enum import Enum
-from typing import Any, Dict, Literal, Optional
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
 
-class RecordingStatus(str, Enum):
-    """Recording processing status."""
-
-    PENDING = "pending"
-    PROCESSING = "processing"
-    COMPLETED = "completed"
-    FAILED = "failed"
-
-
-@dataclass
-class Recording:
-    """Recording record from database."""
-
-    id: int
-    filename: str
-    file_path: str
-    user_id: str
-    duration: Optional[float]
-    language: Optional[str]
-    status: RecordingStatus
-    created_at: datetime
-    updated_at: datetime
-    metadata: Optional[Dict[str, Any]] = None
-
-
-@dataclass
-class TranscriptionSegment:
-    """Transcription segment with speaker and timestamp."""
-
-    id: int
-    recording_id: int
-    speaker_label: str
-    start_time: float
-    end_time: float
-    text: str
-    confidence: float
-    created_at: datetime
-
-
-# Pydantic schemas for API
-
-
 class ProjectCreate(BaseModel):
-    """Request schema for creating a project."""
-
-    name: str = Field(..., description="Project name", min_length=1, max_length=200)
-    description: str = Field(default="", description="Project description", max_length=1000)
+    name: str = Field(min_length=1, max_length=200)
+    description: str = Field(default="", max_length=1000)
 
 
 class ProjectUpdate(BaseModel):
-    """Request schema for updating a project."""
-
-    name: str = Field(..., description="Project name", min_length=1, max_length=200)
-    description: str = Field(default="", description="Project description", max_length=1000)
+    name: str = Field(min_length=1, max_length=200)
+    description: str = Field(default="", max_length=1000)
 
 
 class ProjectOut(BaseModel):
-    """Response schema for project."""
-
     id: int
     name: str
     description: str
-    user_id: str
     created_at: datetime
+    user_id: str
 
 
 class RecordingCreate(BaseModel):
-    """Request schema for creating a recording.
-
-    Note: file_path is now server-managed after upload.
-    Use POST /api/transcriber/upload to upload files first.
-
-    Issue #9214: Removed client-provided file_path to prevent path injection
-    """
-
-    filename: str = Field(..., description="Original filename")
-    # file_path removed - now server-managed via upload endpoint
+    project_id: int = Field(gt=0, description="Project ID to associate with this recording")
 
 
-class UploadResponse(BaseModel):
-    """Response schema for file upload."""
-
-    file_path: str = Field(..., description="Server-managed file path")
-    filename: str = Field(..., description="Original filename")
-    size_bytes: int = Field(..., description="File size in bytes")
-
-
-class RecordingResponse(BaseModel):
-    """Response schema for recording."""
-
+class RecordingOut(BaseModel):
     id: int
+    project_id: int
     filename: str
-    file_path: str
-    user_id: str
-    duration: Optional[float]
-    language: Optional[str]
-    status: RecordingStatus
-    created_at: datetime
-    updated_at: datetime
-    metadata: Optional[Dict[str, Any]] = None
+    duration: float | None
+    status: Literal["pending", "processing", "complete", "error"]
+    speaker_count: int
+    process_seconds: float | None
+    engine_used: str | None
+    language_detected: str | None
+    uploaded_at: datetime
+    failure_stage: str | None
+    failure_reason: str | None
 
 
-# Alias for backwards compatibility
-RecordingOut = RecordingResponse
-
-
-class SegmentResponse(BaseModel):
-    """Response schema for transcription segment."""
-
+class SpeakerOut(BaseModel):
     id: int
     recording_id: int
-    speaker_label: str
+    label: str
+    display_name: str
+    language: str | None
+
+
+class SpeakerUpdate(BaseModel):
+    display_name: str = Field(min_length=1, max_length=100)
+
+
+class SpeakerMerge(BaseModel):
+    source_speaker_id: int = Field(gt=0, description="Speaker ID to merge from (will be deleted)")
+    target_speaker_id: int = Field(gt=0, description="Speaker ID to merge into (will remain)")
+
+
+class SegmentOut(BaseModel):
+    id: int
+    recording_id: int
+    speaker_id: int | None
     start_time: float
     end_time: float
     text: str
-    confidence: float
+    original_text: str
+    is_edited: bool
+    is_overlap: bool
+
+
+class SegmentUpdate(BaseModel):
+    text: str = Field(min_length=0, max_length=5000)
+
+
+class NoteCreate(BaseModel):
+    content: str = Field(min_length=1, max_length=2000)
+
+
+class NoteUpdate(BaseModel):
+    content: str = Field(min_length=1, max_length=2000)
+
+
+class NoteOut(BaseModel):
+    id: int
+    segment_id: int
+    recording_id: int
+    content: str
     created_at: datetime
 
 
-class ProcessingResponse(BaseModel):
-    """Response schema for processing request."""
-
-    recording_id: int
-    status: RecordingStatus
-    segments_count: int
-    message: str
-
-
-class AiAskRequest(BaseModel):
-    """Request schema for AI analysis."""
-
-    action: Literal["summarize", "key_facts", "protocol", "custom"]
-    custom_question: str | None = None
+class TranscriptOut(BaseModel):
+    recording: RecordingOut
+    speakers: list[SpeakerOut]
+    segments: list[SegmentOut]
 
 
 class ExportRequest(BaseModel):
-    """Request schema for export operations."""
-
     format: Literal["docx", "pdf", "srt", "vtt"]
     include_timestamps: bool = True
     include_notes: bool = True
     include_speaker_names: bool = True
 
 
-class KbPushRequest(BaseModel):
-    """Request schema for pushing transcription to knowledge base."""
+class AiAskRequest(BaseModel):
+    action: Literal["summarize", "key_facts", "protocol", "custom"]
+    custom_question: str | None = None
 
-    collection_id: str = Field(..., description="Knowledge base collection ID")
+
+class KbPushRequest(BaseModel):
+    collection_id: str = Field(min_length=1, max_length=200)
 
 
 class KbPushStatus(BaseModel):
-    """Response schema for knowledge base push status."""
-
-    pushed: bool = Field(..., description="Whether recording has been pushed to KB")
-    pushed_at: Optional[datetime] = Field(None, description="Timestamp of KB push")
-    kb_collection_id: Optional[str] = Field(None, description="KB collection ID")
-    pushed_by: Optional[str] = Field(None, description="User who pushed to KB")
-
-
-# Transcript route models (transcriber/routes/transcripts.py)
-
-
-class SpeakerOut(BaseModel):
-    """Response schema for speaker."""
-
-    id: int
-    recording_id: int
-    speaker_label: str
-    display_name: Optional[str] = None
-
-
-class SpeakerUpdate(BaseModel):
-    """Request schema for updating speaker display name."""
-
-    display_name: str
-
-
-class SegmentOut(BaseModel):
-    """Response schema for transcription segment."""
-
-    id: int
-    recording_id: int
-    speaker_label: str
-    start_time: float
-    end_time: float
-    text: str
-    confidence: float
-    created_at: datetime
-
-
-class SegmentUpdate(BaseModel):
-    """Request schema for updating segment text."""
-
-    text: str
-
-
-class NoteCreate(BaseModel):
-    """Request schema for creating a note."""
-
-    content: str
-
-
-class NoteOut(BaseModel):
-    """Response schema for note."""
-
-    id: int
-    segment_id: int
-    recording_id: int
-    content: str
-
-
-class NoteUpdate(BaseModel):
-    """Request schema for updating note content."""
-
-    content: str
-
-
-class TranscriptOut(BaseModel):
-    """Response schema for full transcript."""
-
-    recording: RecordingOut
-    speakers: list[SpeakerOut]
-    segments: list[SegmentOut]
+    pushed: bool
+    pushed_at: datetime | None
+    kb_collection_id: str | None
+    pushed_by: str | None

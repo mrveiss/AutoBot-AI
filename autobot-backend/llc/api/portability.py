@@ -73,8 +73,8 @@ async def preview_import(
     svc = PortabilityService(session=session)
     try:
         result = await svc.preview_import(body.template, target_company_id=body.target_company_id)
-    except LLCImportError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+    except LLCImportError:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Internal server error")
     return ImportPreviewResponse(**result)
 
 
@@ -97,7 +97,7 @@ async def execute_import(
             remapping_options=remapping,
             secret_mapping=body.secret_mapping or {},
         )
-    except LLCImportError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+    except LLCImportError:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Internal server error")
     await session.commit()
     return ImportExecuteResponse(**result)

@@ -3,8 +3,6 @@ name: Feature request
 about: Suggest an idea for AutoBot
 title: "[FEATURE] "
 labels: feature
-assignees: ''
-
 ---
 
 ## Description

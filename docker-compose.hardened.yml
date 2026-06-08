@@ -8,29 +8,27 @@
 # What this overlay adds on top of the base compose:
 #   • read_only: true on all writable-root services (backend, worker, slm, redis, postgres, chromadb)
 #   • Additional tmpfs mounts required when read_only is enabled
-#   • Docker Secrets replace plain-text env-var credentials (Postgres password,
-#     SLM admin password)
+#   • Docker Secrets replace plain-text env-var credentials (SLM admin password,
+#     SLM JWT secret)
 #   • PID-namespace limit (deploy.resources.limits.pids) on all services to cap fork-bomb risk
 #   • Tighter resource limits (half the base allocation, tunable per operator)
 #
 # Secret files must be created by the operator before first `up`:
 #   mkdir -p secrets/
-#   echo -n "$(openssl rand -hex 32)" > secrets/postgres_password.txt
 #   echo -n "$(openssl rand -hex 32)" > secrets/slm_admin_password.txt
 #   echo -n "your-jwt-secret"          > secrets/slm_jwt_secret.txt
 #   chmod 600 secrets/*.txt
 #
-# Postgres natively reads POSTGRES_PASSWORD_FILE.
 # The SLM service reads SLM_ADMIN_PASSWORD_FILE and SLM_JWT_SECRET_FILE
 # via autobot_shared.secret_file_utils (see docs/developer/secrets.md).
+# Note: Postgres credentials are inherited from the base compose so
+# SLM_DATABASE_URL remains consistent with the Postgres user password.
 #
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 
 secrets:
-  postgres_password:
-    file: ./secrets/postgres_password.txt
   slm_admin_password:
     file: ./secrets/slm_admin_password.txt
   slm_jwt_secret:
@@ -56,13 +54,6 @@ services:
     tmpfs:
       - /tmp
       - /var/run/postgresql
-    secrets:
-      - postgres_password
-    environment:
-      # Override plain-text password with a file-based secret.
-      # Postgres reads POSTGRES_PASSWORD_FILE natively.
-      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
-      POSTGRES_PASSWORD: ""          # clear the base env var
     deploy:
       resources:
         limits:
@@ -113,7 +104,11 @@ services:
     read_only: true
     tmpfs:
       - /tmp
+      - /app/config:mode=1777  # config_manager creates config dir on init
+      - /app/.cache:mode=1777  # matplotlib writes to .cache
+      - /app/.config:mode=1777  # some libs create .config dir on init
       - /app/autobot-backend/.cache:mode=1777
+      - /app/autobot-backend/data:mode=1777  # conversation_file_manager creates data dir on init
       - /app/autobot-backend/logs:mode=1777  # logging_manager creates logs/backup dirs on init
     deploy:
       resources:
@@ -126,7 +121,11 @@ services:
     read_only: true
     tmpfs:
       - /tmp
+      - /app/config:mode=1777  # config_manager creates config dir on init
+      - /app/.cache:mode=1777  # matplotlib writes to .cache
+      - /app/.config:mode=1777  # some libs create .config dir on init
       - /app/autobot-backend/.cache:mode=1777
+      - /app/autobot-backend/data:mode=1777  # conversation_file_manager creates data dir on init
       - /app/autobot-backend/logs:mode=1777  # logging_manager creates logs/backup dirs on init
     deploy:
       resources:
@@ -141,11 +140,18 @@ services:
       - /tmp
       - /var/run
       - /app/data/tmp:mode=1777
+      - /app/autobot-slm-backend/config:mode=1777
+      # /app/logs is writable via slm_logs named volume in base compose
+      # /app/data is writable via slm_data named volume; SLM_DATA_DIR=/app/data in base compose
+      # ensures .slm_keys is written there, not to the image-layer /app/autobot-slm-backend/data
+      # /app/autobot-slm-backend/config is tmpfs; config.py creates it on init
     secrets:
       - slm_admin_password
       - slm_jwt_secret
     environment:
+      # Map-style environment merges with base (list-style would replace)
       # The SLM service reads *_FILE variants via autobot_shared.secret_file_utils.
+      # SLM_DATA_DIR inherited from base compose (set to /app/data)
       SLM_ADMIN_PASSWORD_FILE: /run/secrets/slm_admin_password
       SLM_JWT_SECRET_FILE: /run/secrets/slm_jwt_secret
       SLM_ADMIN_PASSWORD: ""         # clear the plain-text env var

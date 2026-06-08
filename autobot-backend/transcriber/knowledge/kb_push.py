@@ -1,37 +1,60 @@
+# autobot-backend/transcriber/knowledge/kb_push.py
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
-#
-# KB Push Implementation
+"""Manual Knowledge Base push — formats transcript segments as KB documents."""
 
-"""Push transcription segments to knowledge base."""
+from autobot_shared.logging_manager import get_logger
 
-from typing import Any, Dict, List
+logger = get_logger(__name__)
+
+
+def _fmt_ts(seconds: float) -> str:
+    m, s = divmod(int(seconds), 60)
+    h, m = divmod(m, 60)
+    return f"{h:02d}:{m:02d}:{s:02d}"
+
+
+def _get_indexer():
+    from knowledge.documents import DocIndexerService
+
+    return DocIndexerService()
 
 
 async def push_to_kb(
     recording_id: int,
     recording_filename: str,
-    segments: List[Dict[str, Any]],
+    segments: list[dict],
     collection_id: str,
     pushed_by: str,
-) -> Dict[str, Any]:
-    """Push transcription segments to knowledge base.
+) -> dict:
+    """Push all segments as documents to the AutoBot Knowledge Base.
 
-    Args:
-        recording_id: Recording database ID
-        recording_filename: Original recording filename
-        segments: List of transcription segments
-        collection_id: Target knowledge base collection ID
-        pushed_by: User ID performing the push
-
-    Returns:
-        Dict with 'indexed' key containing number of indexed segments
-
-    Note:
-        This is a stub implementation. Full KB integration to be implemented.
-        Issue: MVA-3524
+    Each segment becomes one document: '[Speaker, HH:MM:SS] text'
+    Returns dict with 'indexed' count.
     """
-    # TODO: Implement actual KB push logic
-    # For now, return success with segment count
-    return {"indexed": len(segments), "status": "stub"}
+    documents = [
+        {
+            "content": f"[{seg['speaker_name']}, {_fmt_ts(seg['start'])}] {seg['text']}",
+            "metadata": {
+                "source": "transcriber",
+                "recording_id": recording_id,
+                "recording_filename": recording_filename,
+                "speaker": seg["speaker_name"],
+                "start_time": seg["start"],
+                "end_time": seg["end"],
+            },
+        }
+        for seg in segments
+        if seg["text"].strip()
+    ]
+    indexer = _get_indexer()
+    result = await indexer.add_documents(documents, collection_id=collection_id)
+    logger.info(
+        "KB push: recording=%s collection=%s docs=%s by=%s",
+        recording_id,
+        collection_id,
+        len(documents),
+        pushed_by,
+    )
+    return result

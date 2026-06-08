@@ -31,10 +31,10 @@ export interface UserPreferences {
   contextOverflowMode: ContextOverflowMode
 }
 
-// Default preferences
+// Default preferences (Issue #9040: aligned with design-tokens.css electric blue default)
 const DEFAULT_PREFERENCES: UserPreferences = {
   fontSize: 'medium',
-  accentColor: 'teal',
+  accentColor: 'blue',
   layoutDensity: 'comfortable',
   voiceDisplayMode: 'modal',
   language: 'en',
@@ -43,7 +43,7 @@ const DEFAULT_PREFERENCES: UserPreferences = {
 
 // Reactive preferences state
 const fontSize = ref<FontSize>('medium')
-const accentColor = ref<AccentColor>('teal')
+const accentColor = ref<AccentColor>('blue')
 const layoutDensity = ref<LayoutDensity>('comfortable')
 const voiceDisplayMode = ref<VoiceDisplayMode>('modal')
 const language = ref<string>('en')
@@ -147,26 +147,26 @@ function syncLanguageToBackend(code: string): void {
 }
 
 /**
- * Fetch language preference from backend personality profile and apply it.
- * Called after login to enable cross-device language sync.
- */
-async function loadLanguageFromBackend(): Promise<void> {
-  try {
-    const res = await apiClient.get<any>(`${getApiBase()}/personality/active`)
-    const code: string | undefined = res.data?.language_code
-    if (code && code !== language.value) {
-      await setLanguage(code)
-      logger.debug(`Language loaded from backend: ${code}`)
-    }
-  } catch (error) {
-    logger.warn('Could not load language from backend', error)
-  }
-}
-
-/**
  * Main composable function
  */
 export function usePreferences() {
+  /**
+   * Fetch language preference from backend personality profile and apply it.
+   * Called after login to enable cross-device language sync.
+   */
+  async function loadLanguageFromBackend(): Promise<void> {
+    try {
+      const res = await apiClient.get<any>(`${getApiBase()}/personality/active`)
+      const code: string | undefined = res.data?.language_code
+      if (code && code !== language.value) {
+        await setLanguage(code)
+        logger.debug(`Language loaded from backend: ${code}`)
+      }
+    } catch (error) {
+      logger.warn('Could not load language from backend', error)
+    }
+  }
+
   // Initialize once: load preferences, apply to DOM, register watchers (#1502)
   if (!_initialized) {
     _initialized = true

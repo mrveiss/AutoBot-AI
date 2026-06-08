@@ -457,6 +457,9 @@
       @close="showProfileModal = false"
     />
 
+    <!-- Telemetry Consent Modal (Issue #9035) -->
+    <TelemetryConsentModal />
+
     <!-- System Status Notifications (limit to last 5 to prevent teleport accumulation) -->
     <SystemStatusNotification
       v-for="notif in (appStore?.systemNotifications || []).filter(n => n.visible).slice(-5)"
@@ -560,6 +563,7 @@ import LoadingBoundary from '@/components/ui/LoadingBoundary.vue';
 import ProfileModal from '@/components/profile/ProfileModal.vue';
 import ErrorBoundary from '@/components/common/ErrorBoundary.vue'
 import OfflineBanner from '@/components/ui/OfflineBanner.vue';
+import TelemetryConsentModal from '@/components/modals/TelemetryConsentModal.vue';
 
 const logger = createLogger('App');
 
@@ -578,6 +582,7 @@ export default {
     ErrorBoundary,
     NavOverflowMenu,
     CommandPalette,
+    TelemetryConsentModal,
     DarkModeToggle: defineAsyncComponent(() => import('@/components/ui/DarkModeToggle.vue')),
     LanguageSwitcher: defineAsyncComponent(() => import('@/components/layout/LanguageSwitcher.vue')),
   },

@@ -50,6 +50,11 @@ from api.schemas_knowledge import (
     AudioIngestRequest,
     DocsBrowseRequest,
     OrgKnowledgeConfigPayload,
+    WatchFolderControlRequest,
+    WatchFolderCreateRequest,
+    WatchFolderListResponse,
+    WatchFolderResponse,
+    WatchFolderStatsResponse,
 )
 from api.system_health import ComponentHealth, KnownProbes, register_health_probe
 from auth_middleware import check_admin_permission, get_auth_middleware, get_current_user
@@ -2978,3 +2983,224 @@ try:
     router.include_router(unified_router, tags=["knowledge-unified", "documentation"])
 except ImportError as e:
     logging.warning("Unified knowledge search router not available: %s", e)
+
+
+# ===== KB WATCH FOLDERS (Issue #9000) =====
+
+
+@router.post("/watch-folders", response_model=WatchFolderResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="create_watch_folder",
+    error_code_prefix="KNOWLEDGE",
+)
+async def create_watch_folder(
+    request: WatchFolderCreateRequest,
+    current_user: dict = Depends(get_current_user),
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """
+    Create a new watch folder for auto-ingestion.
+
+    Issue #9000: Register a filesystem path to automatically ingest new files
+    into the knowledge base.
+    """
+    import uuid
+
+    from services.kb_folder_watcher import WatchFolderConfig, get_kb_folder_watcher
+
+    try:
+        watcher = get_kb_folder_watcher()
+
+        # Generate unique folder ID
+        folder_id = str(uuid.uuid4())
+
+        # Create config
+        config = WatchFolderConfig(
+            folder_id=folder_id,
+            path=request.path,
+            collection=request.collection,
+            enabled=request.enabled,
+            file_types=request.file_types,
+            recursive=request.recursive,
+            category=request.category,
+            tags=request.tags,
+        )
+
+        # Add watch folder
+        success = await watcher.add_watch_folder(config)
+
+        if success:
+            return {
+                "success": True,
+                "message": "Watch folder created successfully",
+                "folder_id": folder_id,
+                "folder": config.to_dict(),
+            }
+        else:
+            return {
+                "success": False,
+                "message": "Failed to create watch folder",
+            }
+
+    except Exception as e:
+        logger.error("Error creating watch folder: %s", e)
+        return {
+            "success": False,
+            "message": f"Error: {str(e)}",
+        }
+
+
+@router.get("/watch-folders", response_model=WatchFolderListResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_watch_folders",
+    error_code_prefix="KNOWLEDGE",
+)
+async def list_watch_folders(
+    current_user: dict = Depends(get_current_user),
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """
+    List all configured watch folders.
+
+    Issue #9000: Get all watch folders with their configurations and stats.
+    """
+    from services.kb_folder_watcher import get_kb_folder_watcher
+
+    try:
+        watcher = get_kb_folder_watcher()
+
+        # Initialize if not already done
+        if not watcher._is_running:
+            await watcher.initialize()
+
+        folders = watcher.get_watch_folders()
+
+        return {
+            "success": True,
+            "folders": folders,
+            "total": len(folders),
+        }
+
+    except Exception as e:
+        logger.error("Error listing watch folders: %s", e)
+        return {
+            "success": False,
+            "folders": [],
+            "total": 0,
+        }
+
+
+@router.delete("/watch-folders/{folder_id}", response_model=WatchFolderResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="delete_watch_folder",
+    error_code_prefix="KNOWLEDGE",
+)
+async def delete_watch_folder(
+    folder_id: str,
+    current_user: dict = Depends(get_current_user),
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """
+    Delete a watch folder.
+
+    Issue #9000: Remove a watch folder and stop monitoring it.
+    """
+    from services.kb_folder_watcher import get_kb_folder_watcher
+
+    try:
+        watcher = get_kb_folder_watcher()
+        success = await watcher.remove_watch_folder(folder_id)
+
+        return {
+            "success": success,
+            "message": "Watch folder deleted" if success else "Failed to delete watch folder",
+        }
+
+    except Exception as e:
+        logger.error("Error deleting watch folder: %s", e)
+        return {
+            "success": False,
+            "message": f"Error: {str(e)}",
+        }
+
+
+@router.patch("/watch-folders/{folder_id}/control", response_model=WatchFolderResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="control_watch_folder",
+    error_code_prefix="KNOWLEDGE",
+)
+async def control_watch_folder(
+    folder_id: str,
+    request: WatchFolderControlRequest,
+    current_user: dict = Depends(get_current_user),
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """
+    Enable or disable a watch folder.
+
+    Issue #9000: Control whether a watch folder is actively monitoring for changes.
+    """
+    from services.kb_folder_watcher import get_kb_folder_watcher
+
+    try:
+        watcher = get_kb_folder_watcher()
+
+        enabled = request.action == "enable"
+        success = await watcher.update_watch_folder(folder_id, enabled)
+
+        return {
+            "success": success,
+            "message": (
+                f"Watch folder {'enabled' if enabled else 'disabled'}" if success else "Failed to update watch folder"
+            ),
+        }
+
+    except Exception as e:
+        logger.error("Error controlling watch folder: %s", e)
+        return {
+            "success": False,
+            "message": f"Error: {str(e)}",
+        }
+
+
+@router.get("/watch-folders/stats", response_model=WatchFolderStatsResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_watch_folder_stats",
+    error_code_prefix="KNOWLEDGE",
+)
+async def get_watch_folder_stats(
+    current_user: dict = Depends(get_current_user),
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """
+    Get overall watch folder statistics.
+
+    Issue #9000: Get aggregated stats across all watch folders.
+    """
+    from services.kb_folder_watcher import get_kb_folder_watcher
+
+    try:
+        watcher = get_kb_folder_watcher()
+
+        # Initialize if not already done
+        if not watcher._is_running:
+            await watcher.initialize()
+
+        stats = watcher.get_stats()
+
+        return {
+            "success": True,
+            "stats": stats,
+        }
+
+    except Exception as e:
+        logger.error("Error getting watch folder stats: %s", e)
+        return {
+            "success": False,
+            "stats": {},
+        }

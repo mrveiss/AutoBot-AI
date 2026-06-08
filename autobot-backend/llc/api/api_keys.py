@@ -18,11 +18,13 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
+from autobot_shared.logging_manager import get_logger
 from llc.models.api_key import LLCApiKey
 from llc.services.api_key import ApiKeyService
 from user_management.database import get_async_session
 from user_management.services import TenantContext
 
+logger = get_logger(__name__)
 router = APIRouter(prefix="/agents", tags=["llc-api-keys"])
 _svc = ApiKeyService()
 
@@ -80,7 +82,8 @@ async def revoke_api_key(
     try:
         await _svc.revoke_key(session, agent_id=agent_id, key_id=key_id)
     except KeyError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        logger.error("Exception in API handler: %s", exc, exc_info=True)
+        raise HTTPException(status_code=404, detail="Internal server error") from exc
 
 
 @router.get("/{agent_id}/api-keys", response_model=List[ApiKeyRead])

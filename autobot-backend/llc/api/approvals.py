@@ -16,6 +16,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from user_management.database import get_async_session_factory
 
@@ -27,6 +28,7 @@ from ..services.approval import (
     ApprovalStateError,
 )
 
+logger = get_logger(__name__)
 router = APIRouter(prefix="/approvals", tags=["llc-approvals"])
 _get_service = lazy_singleton(ApprovalService)
 
@@ -142,9 +144,10 @@ async def decide_approval(
                 decided_by=body.decided_by_agent_id or _BOARD_SENTINEL,
             )
     except ApprovalNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc))
-    except (ApprovalStateError, ApprovalRequiredError) as exc:
-        raise HTTPException(status_code=409, detail=str(exc))
+        logger.error("Exception in API handler: %s", exc, exc_info=True)
+        raise HTTPException(status_code=404, detail="Internal server error")
+    except (ApprovalStateError, ApprovalRequiredError):
+        raise HTTPException(status_code=409, detail="Internal server error")
 
     await svc.publish_decided(approval, body.decision)
     await svc.log_decision_to_kb(approval)  # GH#8243: index to decisions KB

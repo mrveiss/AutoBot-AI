@@ -7,6 +7,13 @@ Pydantic Schemas for User Management
 Request/response validation models for API endpoints.
 """
 
+from user_management.schemas.retention_policy import (
+    PolicyType,
+    RetentionPolicyCreate,
+    RetentionPolicyListResponse,
+    RetentionPolicyResponse,
+    RetentionPolicyUpdate,
+)
 from user_management.schemas.user import (
     PasswordChange,
     UserCreate,
@@ -23,4 +30,9 @@ __all__ = [
     "UserListResponse",
     "UserLogin",
     "PasswordChange",
+    "PolicyType",
+    "RetentionPolicyCreate",
+    "RetentionPolicyUpdate",
+    "RetentionPolicyResponse",
+    "RetentionPolicyListResponse",
 ]

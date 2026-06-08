@@ -7,7 +7,7 @@ uvicorn[standard]>=0.48.0
 pydantic>=2.13.4
 
 # Intel OpenVINO for NPU acceleration
-openvino>=2026.1.0
+openvino>=2026.2.0
 openvino-dev>=2024.6.0
 
 # Model and Tokenization (lightweight)
@@ -21,7 +21,7 @@ numpy>=2.4.4,<3.0.0
 # HTTP and API
 aiohttp>=3.13.4  # GH#8323: zip bomb, request smuggling CVEs
 httpx>=0.28.1
-requests>=2.33.0
+requests>=2.34.2
 
 # Utilities
 python-dotenv>=1.2.2
@@ -30,7 +30,7 @@ tenacity>=9.1.4
 async-timeout>=5.0.1
 
 # Redis client for communication
-redis>=7.4.0
+redis>=8.0.0
 
 # Development and Testing
 pytest>=9.0.3

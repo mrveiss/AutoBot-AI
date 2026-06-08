@@ -211,13 +211,13 @@ async def update_document(
         raise HTTPException(status_code=404, detail="Document not found")
     await _assert_ownership(doc, uid)
 
-    if body.title is not None:
+    if "title" in body.model_fields_set:
         doc.title = body.title
-    if body.content is not None:
+    if "content" in body.model_fields_set:
         doc.content = body.content
-    if body.tags is not None:
+    if "tags" in body.model_fields_set:
         doc.tags = body.tags
-    if body.metadata is not None:
+    if "metadata" in body.model_fields_set:
         doc.metadata = body.metadata
     doc.touch()
 

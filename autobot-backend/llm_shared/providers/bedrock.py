@@ -26,7 +26,6 @@ from typing import Any, AsyncIterator, Dict, List
 from autobot_shared.logging_manager import get_logger
 from llm_shared.models import LLMRequest, LLMResponse, ToolCall
 from llm_shared.types import ProviderType
-from services.secrets_service import get_secrets_service
 
 from ..base_provider import BaseProvider
 
@@ -87,54 +86,15 @@ class BedrockProvider(BaseProvider):
 
     def _resolve_credentials(self) -> tuple[str | None, str | None, str | None]:
         """
-        Resolve AWS credentials from SecretsService, settings, or environment.
-
-        Priority order:
-        1. SecretsService (encrypted storage)
-        2. Environment variables (fallback for migration)
-        3. IAM role (boto3 default credential chain)
+        Resolve AWS credentials from settings or environment.
 
         Returns:
             Tuple of (access_key_id, secret_access_key, region).
             Any value can be None to use boto3's default credential chain.
         """
-        access_key = None
-        secret_key = None
-        region = None
-
-        # 1. Try SecretsService first (encrypted, audited)
-        try:
-            secrets_service = get_secrets_service()
-            secret = secrets_service.get_secret(
-                name="bedrock_aws_credentials",
-                secret_type="aws_bedrock_credentials",
-                scope="general",
-                include_value=True,
-                accessed_by="bedrock_provider",
-            )
-            if secret and "value" in secret:
-                creds = json.loads(secret["value"])
-                access_key = creds.get("aws_access_key_id")
-                secret_key = creds.get("aws_secret_access_key")
-                region = creds.get("region")
-                logger.info("Loaded Bedrock credentials from SecretsService (encrypted)")
-        except Exception as exc:
-            logger.debug("SecretsService lookup failed (using fallback): %s", exc)
-
-        # 2. Fall back to environment variables (legacy path during migration)
-        if not (access_key and secret_key):
-            access_key = os.getenv("AWS_ACCESS_KEY_ID")
-            secret_key = os.getenv("AWS_SECRET_ACCESS_KEY")
-            if access_key and secret_key:
-                logger.warning(
-                    "Using plain-text AWS credentials from environment variables. "
-                    "Run migrate_bedrock_credentials.py to store them securely."
-                )
-
-        # Region can come from SecretsService, env, or default
-        if not region:
-            region = os.getenv("AWS_DEFAULT_REGION", "us-east-1")
-
+        access_key = self._get_setting("aws_access_key_id") or os.getenv("AWS_ACCESS_KEY_ID")
+        secret_key = self._get_setting("aws_secret_access_key") or os.getenv("AWS_SECRET_ACCESS_KEY")
+        region = self._get_setting("region") or os.getenv("AWS_DEFAULT_REGION", "us-east-1")
         return access_key, secret_key, region
 
     def _ensure_runtime_client(self):
@@ -159,9 +119,7 @@ class BedrockProvider(BaseProvider):
             client_kwargs["aws_secret_access_key"] = secret_key
 
         self._runtime_client = boto3.client(**client_kwargs)
-        logger.info(
-            "Initialized Bedrock runtime client in region %s", region
-        )  # codeql[py/clear-text-logging-sensitive-data]
+        logger.info("Initialized Bedrock runtime client in region %s", region)
         return self._runtime_client
 
     def _resolve_model_id(self, model_name: str) -> str:
@@ -575,7 +533,7 @@ class BedrockProvider(BaseProvider):
     async def is_available(self) -> bool:
         """Return True if Bedrock credentials are configured and the service is reachable."""
         try:
-            self._ensure_runtime_client()  # Verify runtime client can be created
+            self._ensure_runtime_client()
             # Simple health check - list foundation models (no cost)
             import boto3
 

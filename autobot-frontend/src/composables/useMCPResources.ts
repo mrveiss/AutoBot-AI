@@ -49,7 +49,7 @@ export interface MCPPromptMessages {
  * Provides methods to list and read MCP resources from filesystem, git, and knowledge bridges
  */
 export function useMCPResources() {
-  const api = useApiClient()
+  const { get, post } = useApiClient()
 
   const resources: Ref<MCPResource[]> = ref([])
   const loading = ref(false)
@@ -63,7 +63,7 @@ export function useMCPResources() {
     error.value = null
 
     try {
-      const response = await api.get<MCPResourcesResponse>('/api/filesystem/mcp/resources')
+      const response = await get<MCPResourcesResponse>('/api/filesystem/mcp/resources')
 
       if (response.success) {
         resources.value = response.resources
@@ -89,7 +89,7 @@ export function useMCPResources() {
     error.value = null
 
     try {
-      const response = await api.post<MCPResourceContent>('/api/filesystem/mcp/resources/read', {
+      const response = await post<MCPResourceContent>('/api/filesystem/mcp/resources/read', {
         uri
       })
 
@@ -116,7 +116,7 @@ export function useMCPResources() {
     error.value = null
 
     try {
-      const response = await api.get<MCPPromptsResponse>('/api/filesystem/mcp/prompts')
+      const response = await get<MCPPromptsResponse>('/api/filesystem/mcp/prompts')
 
       if (response.success) {
         return response.prompts
@@ -144,7 +144,7 @@ export function useMCPResources() {
     error.value = null
 
     try {
-      const response = await api.post<MCPPromptMessages>('/api/filesystem/mcp/prompts/get', {
+      const response = await post<MCPPromptMessages>('/api/filesystem/mcp/prompts/get', {
         name,
         arguments: args
       })

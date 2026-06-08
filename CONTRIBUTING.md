@@ -141,6 +141,17 @@ npm install
 npm run dev
 ```
 
+### Pre-commit Hooks (required)
+
+Before your first commit, install pre-commit hooks to catch formatting and linting issues locally:
+
+```bash
+pip install pre-commit
+pre-commit install
+```
+
+Hooks run automatically on each commit, checking Black formatting, isort, flake8, autoflake, mypy, and bandit. Fix any reported issues before committing again. The CI workflow (`enforce-precommit.yml`) validates these same checks on every PR.
+
 ---
 
 ## Good First Issues

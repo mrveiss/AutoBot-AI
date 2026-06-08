@@ -210,6 +210,8 @@
       unarchive:
         src: "{{ deploy_tmp }}/slm-backend.tar.gz"
         dest: "{{ code_base_dir }}/"
+        owner: autobot
+        group: autobot
       tags: [slm, slm-backend]
 
     - name: "[PLAY 1] SLM | Restart autobot-slm-backend service"
@@ -228,11 +230,13 @@
       unarchive:
         src: "{{ deploy_tmp }}/slm-frontend.tar.gz"
         dest: "{{ code_base_dir }}/"
+        owner: autobot
+        group: autobot
       tags: [slm, slm-frontend]
 
     - name: "[PLAY 1] SLM Frontend | Rebuild production dist"
       command:
-        cmd: npm run build
+        cmd: npm run build:slm
         chdir: "{{ code_base_dir }}/autobot-slm-frontend"
       tags: [slm, slm-frontend]
 
@@ -243,6 +247,9 @@
       unarchive:
         src: "{{ deploy_tmp }}/shared.tar.gz"
         dest: "{{ code_base_dir }}/"
+        extra_opts: ['--force-overwrite']
+        owner: autobot
+        group: autobot
       tags: [shared, library]
 
     # Issue #9225: slm-agent needs autobot_shared in PYTHONPATH
@@ -255,6 +262,16 @@
       become: true
       tags: [shared, library, slm-agent]
 
+    # Issue #9565: slm-backend needs autobot_shared in PYTHONPATH
+    - name: "[PLAY 1] SLM Backend | Create autobot_shared symlink for backend imports"
+      ansible.builtin.file:
+        src: "{{ code_base_dir }}/autobot_shared"
+        dest: "{{ code_base_dir }}/autobot-slm-backend/autobot_shared"
+        state: link
+        force: true
+      become: true
+      tags: [shared, library, slm-backend]
+
     # =========================================================================
     # SLM AGENT - Issue #1164: Keep agent code in sync on every fleet update
     # =========================================================================
@@ -263,6 +280,8 @@
         src: "{{ deploy_tmp }}/slm-agent.tar.gz"
         dest: "{{ code_base_dir }}/autobot-slm-agent/"
         extra_opts: ['--strip-components=1']
+        owner: autobot
+        group: autobot
       tags: [slm-agent]
 
     - name: "[PLAY 1] SLM Agent | Restart slm-agent service"
@@ -353,6 +372,8 @@
       unarchive:
         src: "{{ deploy_tmp }}/backend.tar.gz"
         dest: "{{ code_base_dir }}/"
+        owner: autobot
+        group: autobot
       when: "'main' in group_names"
       tags: [backend, user-backend]
 
@@ -386,6 +407,8 @@
       unarchive:
         src: "{{ deploy_tmp }}/frontend.tar.gz"
         dest: "{{ code_base_dir }}/"
+        owner: autobot
+        group: autobot
       when: "'frontend' in group_names"
       tags: [frontend, user-frontend]
 
@@ -427,6 +450,8 @@
       unarchive:
         src: "{{ deploy_tmp }}/npu-worker.tar.gz"
         dest: "{{ code_base_dir }}/"
+        owner: autobot
+        group: autobot
       when: "'npu_worker' in group_names"
       tags: [npu, npu-worker]
 
@@ -445,6 +470,8 @@
       unarchive:
         src: "{{ deploy_tmp }}/browser-worker.tar.gz"
         dest: "{{ code_base_dir }}/"
+        owner: autobot
+        group: autobot
       when: "'browser_worker' in group_names"
       tags: [browser, browser-worker]
 
@@ -465,6 +492,8 @@
         src: "{{ deploy_tmp }}/ai-stack.tar.gz"
         dest: "{{ code_base_dir }}/autobot-ai-stack/"
         extra_opts: ['--strip-components=4']
+        owner: autobot
+        group: autobot
       when: "'aiml' in group_names"
       tags: [ai-stack, aiml]
 
@@ -493,6 +522,9 @@
       unarchive:
         src: "{{ deploy_tmp }}/shared.tar.gz"
         dest: "{{ code_base_dir }}/"
+        extra_opts: ['--force-overwrite']
+        owner: autobot
+        group: autobot
       when: >-
         'main' in group_names or
         'npu_worker' in group_names or
@@ -519,6 +551,8 @@
         src: "{{ deploy_tmp }}/slm-agent.tar.gz"
         dest: "{{ code_base_dir }}/autobot-slm-agent/"
         extra_opts: ['--strip-components=1']
+        owner: autobot
+        group: autobot
       when: slm_node_id is defined
       tags: [slm-agent]
 

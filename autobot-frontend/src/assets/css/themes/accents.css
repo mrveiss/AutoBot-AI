@@ -231,3 +231,49 @@
     --color-primary-bg-hover: oklch(63.7% 0.208 25.3 / 0.15);
   }
 }
+
+/* ============================================
+ * HIGH CONTRAST MODE
+ * Issue #8988: Enhanced readability for accessibility
+ * ============================================ */
+
+[data-high-contrast="true"] {
+  /* Increase contrast ratios to meet WCAG AAA (7:1) */
+  --text-primary: var(--text-on-primary-bg);
+  --border-default: var(--border-strong);
+
+  /* Stronger borders for better visual separation */
+  --border-subtle: rgba(0, 0, 0, 0.2);
+  --border-default: rgba(0, 0, 0, 0.3);
+  --border-strong: rgba(0, 0, 0, 0.5);
+
+  /* Enhanced focus indicators */
+  --shadow-focus: 0 0 0 3px var(--color-primary-bg);
+  --outline-width: 3px;
+}
+
+[data-theme="dark"][data-high-contrast="true"] {
+  /* Dark mode high contrast adjustments */
+  --text-primary: #ffffff;
+  --text-secondary: #e5e5e5;
+  --bg-primary: #000000;
+  --bg-secondary: #0a0a0a;
+  --bg-tertiary: #141414;
+
+  --border-subtle: rgba(255, 255, 255, 0.2);
+  --border-default: rgba(255, 255, 255, 0.3);
+  --border-strong: rgba(255, 255, 255, 0.5);
+}
+
+[data-theme="light"][data-high-contrast="true"] {
+  /* Light mode high contrast adjustments */
+  --text-primary: #000000;
+  --text-secondary: #1a1a1a;
+  --bg-primary: #ffffff;
+  --bg-secondary: #f5f5f5;
+  --bg-tertiary: #e5e5e5;
+
+  --border-subtle: rgba(0, 0, 0, 0.2);
+  --border-default: rgba(0, 0, 0, 0.3);
+  --border-strong: rgba(0, 0, 0, 0.5);
+}

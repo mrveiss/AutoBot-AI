@@ -43,7 +43,6 @@ import argparse
 import dataclasses
 import importlib.util
 import sys
-import types
 import typing
 from enum import Enum
 from pathlib import Path
@@ -182,9 +181,8 @@ def _ts_type(py_type: Any, known_names: Set[str]) -> str:
     origin = get_origin(py_type)
     args = get_args(py_type)
 
-    # Handle both typing.Union and types.UnionType (Python 3.10+ X | Y syntax)
-    if origin is Union or (hasattr(types, 'UnionType') and isinstance(py_type, types.UnionType)):
-        # Handle Optional[X] = Union[X, None] and X | None
+    if origin is Union:
+        # Handle Optional[X] = Union[X, None] specially
         non_none = [a for a in args if a is not type(None)]
         rendered = " | ".join(_ts_type(a, known_names) for a in non_none)
         if type(None) in args:

@@ -38,80 +38,62 @@ import {
  * Test Suite: Optimized Monitoring System
  */
 async function runMonitoringTests() {
-  console.log('🧪 Starting Optimized Monitoring System Tests...\n');
+  const testResults = {
+    performanceBudget: false,
+    adaptiveIntervals: false,
+    healthMonitor: false,
+    smartController: false,
+    configuration: false,
+    performanceImpact: false
+  };
 
   // Test 1: Performance Budget Tracking
-  console.log('Test 1: Performance Budget System');
   const startBudget = performanceBudgetTracker.getBudgetStatus();
-  console.log('✅ Initial budget status:', {
-    maxBudget: startBudget.maxBudget,
-    currentOverhead: startBudget.currentOverhead,
-    percentageUsed: startBudget.percentageUsed
-  });
+  testResults.performanceBudget = startBudget.maxBudget > 0;
 
   // Test 2: Adaptive Intervals
-  console.log('\nTest 2: Adaptive Interval System');
   const healthyInterval = getAdaptiveInterval('HEALTH_CHECK_HEALTHY', 'healthy', false);
   const degradedInterval = getAdaptiveInterval('HEALTH_CHECK_DEGRADED', 'degraded', false);
   const criticalInterval = getAdaptiveInterval('HEALTH_CHECK_CRITICAL', 'critical', false);
   const userActiveInterval = getAdaptiveInterval('HEALTH_CHECK_USER_ACTIVE', 'healthy', true);
 
-  console.log('✅ Adaptive intervals configured correctly:');
-  console.log(`   Healthy: ${healthyInterval/1000}s`);
-  console.log(`   Degraded: ${degradedInterval/1000}s`);
-  console.log(`   Critical: ${criticalInterval/1000}s`);
-  console.log(`   User Active: ${userActiveInterval/1000}s`);
+  testResults.adaptiveIntervals = healthyInterval > 0 && degradedInterval > 0 &&
+    criticalInterval > 0 && userActiveInterval > 0;
 
   // Test 3: Health Monitor Performance
-  console.log('\nTest 3: Health Monitor Performance');
   const startTime = performance.now();
 
   try {
     // Test health monitor initialization
     const healthStatus = optimizedHealthMonitor.getHealthStatus();
-    console.log('✅ Health monitor status:', {
-      overall: healthStatus.overall,
-      isMonitoring: healthStatus.isMonitoring,
-      lastCheck: healthStatus.lastHealthCheck > 0 ? 'Recent' : 'None'
-    });
+    testResults.healthMonitor = healthStatus.overall !== undefined;
 
     // Test performance tracking
     performanceBudgetTracker.trackOperation('testHealthCheck', 5); // 5ms mock operation
     const updatedBudget = performanceBudgetTracker.getBudgetStatus();
-    console.log('✅ Performance tracking working:', {
-      operationTracked: updatedBudget.recentOperations.length > 0,
-      budgetUsage: `${updatedBudget.percentageUsed.toFixed(1)}%`
-    });
+    testResults.healthMonitor = testResults.healthMonitor &&
+      updatedBudget.recentOperations.length > 0;
 
-  } catch (error) {
-    console.error('❌ Health monitor test failed:', error.message);
+  } catch {
+    testResults.healthMonitor = false;
   }
 
   // Test 4: Smart Monitoring Controller
-  console.log('\nTest 4: Smart Monitoring Controller');
   try {
     const systemState = smartMonitoringController.getSystemState();
-    console.log('✅ Smart controller initialized:', {
-      userActive: systemState.userActivity.isActive,
-      systemHealth: systemState.health,
-      systemLoad: systemState.load
-    });
+    testResults.smartController = systemState.userActivity !== undefined &&
+      systemState.health !== undefined;
 
     // Test user activity simulation
     smartMonitoringController.setUserDashboardViewing(true);
     const optimalInterval = smartMonitoringController.getOptimalInterval(120000); // 2 minutes base
-    console.log('✅ Optimal interval calculation:', {
-      baseInterval: '2 minutes',
-      optimizedInterval: `${optimalInterval/1000}s`,
-      improvement: optimalInterval < 120000 ? 'Faster (user active)' : 'Same'
-    });
+    testResults.smartController = testResults.smartController && optimalInterval > 0;
 
-  } catch (error) {
-    console.error('❌ Smart controller test failed:', error.message);
+  } catch {
+    testResults.smartController = false;
   }
 
   // Test 5: Configuration Validation
-  console.log('\nTest 5: Configuration Validation');
   const configTests = {
     performanceModeEnabled: OPTIMIZED_PERFORMANCE.ENABLED,
     adaptiveIntervalsEnabled: OPTIMIZED_PERFORMANCE.FEATURES.ADAPTIVE_INTERVALS,
@@ -120,53 +102,42 @@ async function runMonitoringTests() {
   };
 
   const passedTests = Object.values(configTests).filter(Boolean).length;
-  console.log('✅ Configuration validation:', {
-    testsPassd: `${passedTests}/${Object.keys(configTests).length}`,
-    allPassed: passedTests === Object.keys(configTests).length
-  });
+  testResults.configuration = passedTests === Object.keys(configTests).length;
 
   // Test 6: Performance Impact Measurement
-  console.log('\nTest 6: Performance Impact Measurement');
   const endTime = performance.now();
   const testDuration = endTime - startTime;
 
-  const performanceResults = {
-    testExecutionTime: `${testDuration.toFixed(2)}ms`,
-    budgetCompliant: testDuration < OPTIMIZED_PERFORMANCE.PERFORMANCE.MAX_SINGLE_CHECK_DURATION,
-    memoryUsage: global.performance.memory ?
-      `${((global.performance.memory.usedJSHeapSize / global.performance.memory.totalJSHeapSize) * 100).toFixed(1)}%` :
-      'N/A'
-  };
+  testResults.performanceImpact = testDuration < OPTIMIZED_PERFORMANCE.PERFORMANCE.MAX_SINGLE_CHECK_DURATION;
 
-  console.log('✅ Performance impact assessment:', performanceResults);
-
-  // Final Summary
-  console.log('\n📊 Test Summary:');
-  console.log('✅ Performance Budget System: Working');
-  console.log('✅ Adaptive Intervals: Configured');
-  console.log('✅ Health Monitor: Initialized');
-  console.log('✅ Smart Controller: Active');
-  console.log('✅ Configuration: Valid');
-  console.log(`✅ Performance Impact: ${testDuration < 50 ? 'Minimal' : 'Acceptable'} (${testDuration.toFixed(2)}ms)`);
+  const memoryUsage = global.performance.memory ?
+    ((global.performance.memory.usedJSHeapSize / global.performance.memory.totalJSHeapSize) * 100) : 0;
 
   // Performance Improvement Calculation
   const oldSystemOverhead = 3600; // 3.6 seconds per minute (old system)
   const newSystemOverhead = 50; // 50ms per minute (new system)
   const improvementPercentage = ((oldSystemOverhead - newSystemOverhead) / oldSystemOverhead * 100).toFixed(1);
 
-  console.log('\n🚀 Performance Improvement:');
-  console.log(`   Old System: ${oldSystemOverhead}ms/minute`);
-  console.log(`   New System: ${newSystemOverhead}ms/minute`);
-  console.log(`   Improvement: ${improvementPercentage}% reduction in overhead`);
-  console.log(`   Monitoring Capability: 95% restored`);
-
-  console.log('\n✅ Optimized Monitoring System Tests Completed Successfully!');
+  // Check all tests passed
+  const allTestsPassed = Object.values(testResults).every(result => result === true);
 
   return {
-    success: true,
+    success: allTestsPassed,
     performanceImprovement: improvementPercentage,
     testDuration: testDuration,
-    budgetCompliant: testDuration < 50
+    budgetCompliant: testDuration < 50,
+    testResults,
+    metrics: {
+      startBudget,
+      healthyInterval,
+      degradedInterval,
+      criticalInterval,
+      userActiveInterval,
+      testDuration,
+      memoryUsage,
+      oldSystemOverhead,
+      newSystemOverhead
+    }
   };
 }
 
@@ -175,5 +146,11 @@ export { runMonitoringTests };
 
 // Run tests if executed directly
 if (typeof window === 'undefined') {
-  runMonitoringTests().catch(console.error);
+  runMonitoringTests().then(results => {
+    if (!results.success) {
+      throw new Error('Monitoring tests failed');
+    }
+  }).catch((error) => {
+    throw error;
+  });
 }

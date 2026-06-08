@@ -1,10 +1,6 @@
 ---
 name: General Issue
-about: General issue that does not fit any category
-title: ''
-labels: ''
-assignees: ''
-
+description: Report a bug, suggest an idea, or start a discussion
 ---
 
 ## What's This About?

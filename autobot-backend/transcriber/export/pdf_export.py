@@ -36,11 +36,7 @@ def build_pdf(
         if speaker not in speaker_index:
             speaker_index[speaker] = len(speaker_index)
         color = _SPEAKER_COLORS[speaker_index[speaker] % len(_SPEAKER_COLORS)]
-        ts = (
-            f'<span class="ts">[{_fmt_ts(seg["start_time"])} → {_fmt_ts(seg["end_time"])}]</span> '
-            if include_timestamps
-            else ""
-        )
+        ts = f'<span class="ts">[{_fmt_ts(seg["start"])} → {_fmt_ts(seg["end"])}]</span> ' if include_timestamps else ""
         spk = (
             f'<span class="speaker" style="color:{color}">{html_lib.escape(speaker)}</span> '
             if include_speaker_names

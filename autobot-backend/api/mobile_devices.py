@@ -28,11 +28,13 @@ from api.user_management.dependencies import get_db_session
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.monitoring.prometheus_metrics import get_metrics_manager
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.time_utils import now_utc
 from models.mobile_device import DevicePlatform, MobileDevice
 
 logger = get_logger(__name__)
+metrics = get_metrics_manager()
 router = APIRouter()
 
 # QR challenge TTL — 5 minutes is ample for a human to scan
@@ -74,6 +76,7 @@ class DeviceListResponse(BaseModel):
 
 class PairSuccessResponse(BaseModel):
     device_id: uuid.UUID
+    device_jwt: str = Field(description="Long-lived JWT for device authentication (GH#9493)")
     message: str = "Device paired successfully"
 
 
@@ -155,6 +158,8 @@ async def pair_device(
     key = _redis_challenge_key(body.challenge_token)
     raw = redis.get(key)
     if raw is None:
+        # GH#4463: Record expired/invalid pairing attempts
+        metrics.record_device_pairing_attempt("expired")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Challenge token expired or invalid",
@@ -174,8 +179,16 @@ async def pair_device(
     session.add(device)
     await session.commit()
     await session.refresh(device)
+
+    # GH#9493: Mint device JWT for authentication (read-only scope by default)
+    from services.device_jwt import mint_device_jwt
+
+    device_jwt = mint_device_jwt(device_id=str(device.id), user_id=user_id, scope="read")
+
     logger.info("Mobile device %s paired for user %s (platform=%s)", device.id, user_id, body.platform)
-    return PairSuccessResponse(device_id=device.id)
+    # GH#4463: Record successful pairing attempt
+    metrics.record_device_pairing_attempt("success")
+    return PairSuccessResponse(device_id=device.id, device_jwt=device_jwt)
 
 
 @router.get("", response_model=DeviceListResponse)
@@ -245,4 +258,10 @@ async def delete_device(
 
     await session.delete(device)
     await session.commit()
+
+    # GH#9493: Invalidate device JWT cache to revoke authentication immediately
+    from services.device_jwt import invalidate_device_cache
+
+    await invalidate_device_cache(str(device_id))
+
     logger.info("Mobile device %s unpaired for user %s", device_id, user_id)

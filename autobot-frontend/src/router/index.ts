@@ -335,6 +335,15 @@ export const routes: RouteRecordRaw[] = [
           title: 'Knowledge Maintenance',
           parent: 'knowledge'
         }
+      },
+      {
+        path: 'watch-folders',
+        name: 'knowledge-watch-folders',
+        component: () => import('@/views/knowledge/WatchFoldersView.vue'),
+        meta: {
+          title: 'Watch Folders',
+          parent: 'knowledge'
+        }
       }
     ]
   },
@@ -760,6 +769,19 @@ export const routes: RouteRecordRaw[] = [
       hideInNav: true,
     },
   },
+  // MVA-2999: LLM Providers & Fallback Status admin view
+  {
+    path: '/admin/llm-providers',
+    name: 'llm-providers',
+    component: () => import('@/views/LLMProvidersView.vue'),
+    meta: {
+      title: 'LLM Providers',
+      description: 'View LLM provider fallback chains and active fallback status',
+      requiresAuth: true,
+      admin: true,
+      hideInNav: false,
+    },
+  },
   // Issue #1801: Admin User Management
   {
     path: '/admin/users',
@@ -1030,6 +1052,32 @@ export const routes: RouteRecordRaw[] = [
   { path: '/llc/companies/:companyId/costs', name: 'llc-costs', component: () => import('@/views/llc/CostDashboard.vue'), props: true, meta: { title: 'Cost Dashboard', requiresAuth: true } },
   { path: '/llc/companies/:companyId/heartbeat', name: 'llc-heartbeat', component: () => import('@/views/llc/HeartbeatMonitor.vue'), props: true, meta: { title: 'Heartbeat Monitor', requiresAuth: true } },
   { path: '/llc/companies/:companyId/ceo-chat', name: 'llc-ceo-chat', component: () => import('@/views/llc/CeoChatView.vue'), props: true, meta: { title: 'CEO Chat', requiresAuth: true } },
+  // Issue #9044: Transcriber — audio/video transcription module
+  {
+    path: '/transcriber',
+    component: () => import('@/views/transcriber/TranscriberLayout.vue'),
+    meta: { requiresAuth: true, title: 'Transcriber' },
+    children: [
+      {
+        path: '',
+        name: 'transcriber-projects',
+        component: () => import('@/views/transcriber/ProjectsView.vue'),
+        meta: { title: 'Projects' },
+      },
+      {
+        path: 'projects/:projectId',
+        name: 'transcriber-project-detail',
+        component: () => import('@/views/transcriber/ProjectDetailView.vue'),
+        meta: { title: 'Project' },
+      },
+      {
+        path: 'projects/:projectId/recordings/:recordingId',
+        name: 'transcriber-transcript',
+        component: () => import('@/views/transcriber/TranscriptView.vue'),
+        meta: { title: 'Transcript' },
+      },
+    ],
+  },
   {
     path: '/:pathMatch(.*)*',
     name: 'not-found',

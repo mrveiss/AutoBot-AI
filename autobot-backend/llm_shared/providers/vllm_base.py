@@ -146,7 +146,7 @@ class VLLMBaseProvider(BaseProvider):
         except Exception as exc:
             self._total_errors += 1
             logger.error("vLLM stream completion failed: %s", exc)
-            yield f"Error: {exc}"
+            yield "Error: Stream completion failed"
 
     async def is_available(self) -> bool:
         """Check if vLLM provider is available and healthy."""

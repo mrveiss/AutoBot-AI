@@ -5020,3 +5020,53 @@ class GraphRagMetricsData(BaseModel):
     entity_extraction_enabled: bool = False
     rag_service: Dict[str, Any] = Field(default_factory=dict)
     graph_initialized: bool = False
+
+
+# ---------------------------------------------------------------------------
+# KB Watch Folders (GH #9000)
+# ---------------------------------------------------------------------------
+
+
+class WatchFolderCreateRequest(BaseModel):
+    """Request to create a new watch folder."""
+
+    path: str = Field(description="Filesystem path to watch")
+    collection: str = Field(description="Target KB collection", default="default")
+    enabled: bool = Field(description="Whether to start watching immediately", default=True)
+    file_types: List[str] = Field(
+        description="File types to watch (pdf, docx, txt, md, csv, html)",
+        default=["pdf", "docx", "txt", "md", "csv", "html"],
+    )
+    recursive: bool = Field(description="Watch subdirectories recursively", default=True)
+    category: str = Field(description="KB category for ingested files", default="uploads")
+    tags: List[str] = Field(description="Tags to apply to ingested files", default_factory=list)
+
+
+class WatchFolderResponse(BaseModel):
+    """Response for watch folder operations."""
+
+    success: bool = True
+    message: str | None = None
+    folder_id: str | None = None
+    folder: Dict[str, Any] | None = None
+
+
+class WatchFolderListResponse(BaseModel):
+    """Response for listing watch folders."""
+
+    success: bool = True
+    folders: List[Dict[str, Any]] = Field(default_factory=list)
+    total: int = 0
+
+
+class WatchFolderStatsResponse(BaseModel):
+    """Response for watch folder statistics."""
+
+    success: bool = True
+    stats: Dict[str, Any] = Field(default_factory=dict)
+
+
+class WatchFolderControlRequest(BaseModel):
+    """Request to control a watch folder (enable/disable)."""
+
+    action: str = Field(description="Action to perform: 'enable' or 'disable'")

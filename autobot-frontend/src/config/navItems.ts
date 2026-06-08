@@ -57,6 +57,14 @@ export const navItems: NavItem[] = [
   { to: '/agents/registry', labelKey: 'nav.agentRegistry', icon: 'M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18', iconStroke: true },
   // GH#8748: LLC views consolidated to one "Company OS" entry (was 5 separate items)
   { to: '/llc/dashboard', labelKey: 'nav.companyOs', icon: 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4', iconStroke: true },
+  // Issue #9044: Transcriber — audio/video transcription module
+  {
+    to: '/transcriber',
+    labelKey: 'nav.transcriber',
+    icon: 'M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z',
+    iconStroke: true,
+    featureFlag: 'transcriber',
+  },
 ];
 
 // ─── Profile/settings menu items (GH#8748) ───────────────────────────────────

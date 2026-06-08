@@ -497,6 +497,41 @@ class AuthenticationMiddleware:
             "auth_method": "run_jwt",
         }
 
+    async def _extract_user_from_device_jwt(self, request: Request) -> Dict | None:
+        """Try to authenticate the request with a device-scoped JWT (GH#9493).
+
+        Called as a fallback when user-JWT, session, dev-header, and run-JWT
+        auth all fail. Validates the device JWT signature and checks that the
+        device still exists in the database (revocation on unpair).
+
+        Returns:
+            Synthetic user dict with ``auth_method="device_jwt"`` on success,
+            or ``None`` if the Bearer token is absent or not a valid device JWT.
+        """
+        auth_header = request.headers.get("Authorization")
+        if not auth_header or not auth_header.startswith("Bearer "):
+            return None
+
+        token = auth_header.split(" ", 1)[1]
+        try:
+            from services.device_jwt import validate_device_jwt
+
+            claims = await validate_device_jwt(token)
+        except Exception:
+            return None
+
+        device_id = str(claims.get("device_id", ""))
+        user_id = str(claims.get("user_id", ""))
+        scope = str(claims.get("scope", "read"))
+        return {
+            "username": f"device:{device_id}",
+            "user_id": user_id,
+            "role": "device",
+            "device_id": device_id,
+            "scope": scope,
+            "auth_method": "device_jwt",
+        }
+
     def get_user_from_request(self, request: Request) -> Dict | None:
         """
         Extract and validate user from request using multiple authentication methods.
@@ -655,10 +690,13 @@ async def get_current_user(request: Request) -> Dict:
     MCP bridge workers and long-running tasks can authenticate without a
     full user session.  Scope enforcement is left to individual endpoints.
 
+    MVA-3237: Device JWTs are REJECTED by default. Use require_device_jwt()
+    dependency instead for mobile-accessible endpoints.
+
     Raises HTTPException if authentication fails.
     """
     # Issue #1779: Allow trusted internal services via API key
-    _internal_key = config.internal_api_key
+    _internal_key = config.misc.internal_api_key
     if _internal_key and request.headers.get("X-Internal-API-Key") == _internal_key:
         return {"username": "service:slm", "role": "admin", "service": True}
 
@@ -667,6 +705,13 @@ async def get_current_user(request: Request) -> Dict:
     # Primary: user JWT / session / dev-header auth (sync, no Redis needed)
     user_data = middleware.get_user_from_request(request)
     if user_data:
+        # MVA-3237 Security: Reject device JWTs from get_current_user
+        # Device tokens must use require_device_jwt() dependency explicitly
+        if user_data.get("auth_method") == "device_jwt":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Device tokens not permitted on this endpoint. Use mobile-specific API.",
+            )
         return user_data
 
     # Fallback: run-scoped JWT — async because it hits the Redis denylist.
@@ -682,6 +727,27 @@ async def get_current_user(request: Request) -> Dict:
                 detail="Run JWT not permitted on this endpoint",
             )
         return run_user
+
+    # Fallback: device-scoped JWT (GH#9493) — validates device still exists.
+    # Device JWTs are valid ONLY on /api/devices/ endpoints. Read-scoped tokens
+    # cannot use mutating HTTP methods (POST/PUT/PATCH/DELETE).
+    device_user = await middleware._extract_user_from_device_jwt(request)
+    if device_user:
+        _DEVICE_JWT_ALLOWED_PREFIXES = ("/api/devices/",)
+        if not any(request.url.path.startswith(p) for p in _DEVICE_JWT_ALLOWED_PREFIXES):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Device JWT not permitted on this endpoint",
+            )
+
+        # GH#9493 scope enforcement: read-only tokens cannot use mutating methods
+        scope = device_user.get("scope", "read")
+        if scope == "read" and request.method not in {"GET", "HEAD", "OPTIONS"}:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Read-only device JWT cannot use {request.method} method",
+            )
+        return device_user
 
     raise_auth_error("AUTH_0002", "Authentication required")
 
@@ -703,7 +769,7 @@ def check_admin_permission(request: Request) -> bool:
     """
     # Issue #1145: Allow trusted internal services (e.g. SLM backend) via API key.
     # The key is set via AUTOBOT_INTERNAL_API_KEY env var on both services.
-    _internal_key = config.internal_api_key
+    _internal_key = config.misc.internal_api_key
     if _internal_key and request.headers.get("X-Internal-API-Key") == _internal_key:
         logger.debug("Internal API key auth: granting admin access")
         return True
@@ -730,6 +796,81 @@ def check_admin_permission(request: Request) -> bool:
         raise_auth_error("AUTH_0003", "Admin permission required for this operation")
 
     return True
+
+
+async def require_device_jwt(
+    request: Request,
+    min_scope: str = "read-only",
+) -> Dict:
+    """
+    FastAPI dependency for mobile device JWT authentication (MVA-3237).
+
+    This is the ONLY way device JWTs can authenticate to API endpoints.
+    Validates the device still exists and enforces minimum scope.
+
+    Security model (fail-closed):
+    - Device JWTs are REJECTED by get_current_user() by default
+    - Only endpoints using this dependency accept device tokens
+    - Device existence is validated on every request (revocation check)
+    - Minimum scope is enforced
+
+    Use as:
+        # Read-only endpoint (default)
+        Depends(require_device_jwt)
+
+        # Admin-only endpoint
+        Depends(lambda r: require_device_jwt(r, min_scope="admin"))
+
+    Args:
+        request: FastAPI Request object
+        min_scope: Minimum required scope ("read-only" or "admin")
+
+    Returns:
+        User dict with device-specific fields
+
+    Raises:
+        HTTPException: 401 if not a device JWT, 403 if insufficient scope or device revoked
+    """
+    middleware = get_auth_middleware()
+    user_data = middleware._extract_user_from_device_jwt(request)
+
+    if not user_data:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Valid device token required",
+        )
+
+    # Validate device still exists (revocation check)
+    device_id = user_data.get("device_id")
+    if device_id:
+        from sqlalchemy import select
+
+        from api.user_management.dependencies import get_db_session
+        from models.mobile_device import MobileDevice
+
+        # Get DB session
+        session_gen = get_db_session()
+        session = await anext(session_gen)
+        try:
+            result = await session.execute(select(MobileDevice).where(MobileDevice.id == device_id))
+            device = result.scalar_one_or_none()
+            if device is None:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Device has been revoked",
+                )
+        finally:
+            await session.close()
+
+    # Enforce minimum scope
+    scope = user_data.get("scope", "")
+    if min_scope == "admin" and scope != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Device token requires admin scope for this operation",
+        )
+
+    return user_data
 
 
 async def authenticate_websocket(websocket) -> dict | None:

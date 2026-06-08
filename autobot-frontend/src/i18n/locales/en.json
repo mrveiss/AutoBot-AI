@@ -102,7 +102,7 @@
     "exportCsv": "Export as CSV",
     "download": "Download",
     "filterByCategory": "Filter by category",
-    "copied": "Copied!"
+    "copied": "Copied"
   },
   "chat": {
     "contextWindow": {
@@ -111,7 +111,8 @@
       "warningToast": "Conversation approaching context limit ({percent}%). Older messages may be summarized.",
       "compressedToast": "Context window optimized - older messages summarized",
       "summaryTitle": "Context Summary",
-      "summaryToggle": "Show details"
+      "summaryToggle": "Show details",
+      "summarizing": "Summarizing..."
     },
     "sendMessage": "Send a message...",
     "newChat": "New Chat",
@@ -141,6 +142,10 @@
       "copy": "Copy message",
       "delete": "Delete message",
       "tokens": "{count} tokens",
+      "thinking": {
+        "badge": "🧠 Extended thinking ({count} tokens)",
+        "tooltip": "This response used extended thinking mode to reason through the problem step-by-step"
+      },
       "sender": {
         "user": "You",
         "assistant": "AutoBot",
@@ -316,18 +321,18 @@
       "aiResponding": "AI is responding...",
       "typeMessage": "Type a message...",
       "generate": "Generate",
-      "generateImage": "Generate Image",
-      "generateImageTitle": "Image Generation",
-      "generating": "Generating...",
-      "imagePromptLabel": "Image prompt",
-      "imagePromptPlaceholder": "Describe the image you want to generate...",
+      "generateImage": "Generate image",
+      "generateImageTitle": "generate Image",
+      "generating": "Generating",
+      "imagePromptLabel": "image Prompt",
+      "imagePromptPlaceholder": "Enter image prompt...",
       "imageProvider": "Image provider",
       "selectPromptTemplate": "Select prompt template",
       "thinkingBudget": "Thinking budget",
-      "thinkingOff": "Off",
-      "thinkingOffLabel": "Extended thinking off",
-      "thinkingOn": "On",
-      "thinkingOnLabel": "Extended thinking on"
+      "thinkingOff": "Thinking off",
+      "thinkingOffLabel": "thinking Off",
+      "thinkingOn": "Thinking on",
+      "thinkingOnLabel": "thinking On"
     },
     "translate": {
       "title": "Translate Text",
@@ -371,7 +376,7 @@
       "statusSent": "Sent",
       "statusFailed": "Failed to send",
       "confirmDelete": "Delete this message? This action cannot be undone.",
-      "thinkingUsed": "Thinking used: {tokens} tokens"
+      "thinkingUsed": "Thinking used"
     },
     "approval": {
       "autoApproved": "Auto-Approved",
@@ -560,29 +565,29 @@
       "sharing": "Sharing...",
       "createAnother": "Create another",
       "createLink": "Create link",
-      "creating": "Creating...",
-      "emptyConversation": "This conversation is empty",
+      "creating": "Creating",
+      "emptyConversation": "Empty conversation",
       "enterPassword": "Enter password",
       "expiry": "Expiry",
-      "expiry1d": "1 day",
-      "expiry1h": "1 hour",
-      "expiry30d": "30 days",
-      "expiry7d": "7 days",
-      "expiryNever": "Never",
-      "linkExpired": "This link has expired",
+      "expiry1d": "Expiry1d",
+      "expiry1h": "Expiry1h",
+      "expiry30d": "Expiry30d",
+      "expiry7d": "Expiry7d",
+      "expiryNever": "Expiry never",
+      "linkExpired": "Link expired",
       "linkExpires": "Link expires",
       "linkNotFound": "Link not found",
-      "linkPasswordProtected": "Link is password protected",
+      "linkPasswordProtected": "Link password protected",
       "linkReady": "Link ready",
       "optionalPassword": "Optional password",
-      "passwordGate": "Password required",
-      "passwordGateHint": "This conversation is password protected",
-      "passwordPlaceholder": "Enter password (optional)",
+      "passwordGate": "Password gate",
+      "passwordGateHint": "Password gate hint",
+      "passwordPlaceholder": "Enter password...",
       "publicLink": "Public link",
       "publicView": "Public view",
-      "readOnlyNote": "This is a read-only view",
+      "readOnlyNote": "Read only note",
       "revokeLink": "Revoke link",
-      "revoking": "Revoking...",
+      "revoking": "Revoking",
       "shareWithUsers": "Share with users",
       "unlock": "Unlock",
       "wrongPassword": "Wrong password"
@@ -708,7 +713,7 @@
       "contentRequired": "Content is required"
     },
     "lightweightMode": "Lightweight mode",
-    "lightweightModeTooltip": "Use a faster, more efficient model for simpler tasks"
+    "lightweightModeTooltip": "lightweight Mode tooltip"
   },
   "settings": {
     "title": "Settings",
@@ -4150,7 +4155,15 @@
       "visionClick": "Click Element",
       "visionTypeText": "Type Text",
       "visionOcr": "OCR Extract",
-      "visionWait": "Wait for Element"
+      "visionWait": "Wait for Element",
+      "addCase": "Add case",
+      "addSwitch": "Add switch",
+      "conditionCompare": "Condition compare",
+      "conditionExpr": "Condition expr",
+      "switch": "Switch",
+      "switchDefaultHint": "Switch default hint",
+      "switchLabel": "switch",
+      "switchOnPlaceholder": "Enter switch on..."
     },
     "editStep": {
       "title": "Edit Step {step}",
@@ -4394,7 +4407,7 @@
     "serverError": "Server error. Please try again later.",
     "timeout": "Request timed out.",
     "validation": "Please check your input.",
-    "genericError": "An error occurred"
+    "genericError": "Generic error"
   },
   "status": {
     "online": "Online",
@@ -4676,7 +4689,8 @@
     "never": "Never",
     "themeLight": "Light",
     "themeDark": "Dark",
-    "themeAuto": "Auto"
+    "themeAuto": "Auto",
+    "tabDevices": "Tab devices"
   },
   "redis": {
     "title": "Redis Service",
@@ -4888,10 +4902,10 @@
       "xAxisTitle": "Number of Problems",
       "tooltipProblems": "problems"
     },
-    "ariaLabel": "Chart visualization",
-    "cellPlaceholder": "Chart placeholder",
-    "defaultAriaLabel": "Data visualization chart",
-    "renderError": "Error rendering chart",
+    "ariaLabel": "Accessible label",
+    "cellPlaceholder": "Loading...",
+    "defaultAriaLabel": "default (accessible)",
+    "renderError": "Render error",
     "viewData": "View data"
   },
   "_meta": {
@@ -7519,38 +7533,62 @@
     }
   },
   "code": {
-    "cellPlaceholder": "Code placeholder",
-    "copied": "Copied!",
+    "cellPlaceholder": "Loading...",
+    "copied": "Copied",
     "copy": "Copy",
-    "copyCodeAriaLabel": "Copy code to clipboard",
+    "copyCodeAriaLabel": "copy Code (accessible)",
     "copyFailed": "Copy failed"
   },
+  "devices": {
+    "addDevice": "Add device",
+    "confirmDelete": "Confirm delete",
+    "daysAgo": "Days ago",
+    "error": "Error",
+    "hoursAgo": "Hours ago",
+    "justNow": "Just now",
+    "lastSeen": "Last seen",
+    "loading": "Loading",
+    "minutesAgo": "Minutes ago",
+    "noDevices": "No devices",
+    "pairDevice": "Pair device",
+    "pairFirst": "Pair first",
+    "pairNewDevice": "Pair new device",
+    "paired": "Paired",
+    "pairedDevices": "Paired devices",
+    "pairingInstructions": "Pairing instructions",
+    "pairingNote": "Pairing note",
+    "step1": "Step1",
+    "step2": "Step2",
+    "step3": "Step3",
+    "step4": "Step4",
+    "unpair": "Unpair"
+  },
   "imageCell": {
-    "copyUrl": "Copy URL",
+    "copyUrl": "Copy url",
     "download": "Download",
-    "downloadLabel": "Download image",
+    "downloadLabel": "download",
     "generated": "Generated",
-    "lightbox": "Open in lightbox",
-    "loadError": "Error loading image",
-    "placeholder": "Image placeholder",
-    "viewFull": "View full size"
+    "lightbox": "Lightbox",
+    "loadError": "Load error",
+    "placeholder": "Placeholder",
+    "viewFull": "View full"
   },
   "plugins": {
     "capabilities": {
-      "approvalDescription": "Review and approve plugin capabilities",
-      "approvalTitle": "Capability Approval",
+      "approvalDescription": "Approval description",
+      "approvalTitle": "approval",
       "approveAll": "Approve all",
       "approveSelected": "Approve selected",
-      "approving": "Approving...",
-      "auditLogTitle": "Capability Audit Log",
+      "approving": "Approving",
+      "auditLogTitle": "audit Log",
       "capability": "Capability",
       "denied": "Denied",
       "filterByPlugin": "Filter by plugin",
       "granted": "Granted",
-      "loading": "Loading...",
-      "loadingAudit": "Loading audit log...",
+      "loading": "Loading",
+      "loadingAudit": "Loading audit",
       "noAuditEntries": "No audit entries",
-      "noPending": "No pending capabilities",
+      "noPending": "No pending",
       "operation": "Operation",
       "plugin": "Plugin",
       "status": "Status",

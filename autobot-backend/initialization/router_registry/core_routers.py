@@ -15,6 +15,7 @@ import api.pricing_health  # noqa: F401 — registers KnownProbes.PRICING probe 
 from api.adapters import router as adapters_router  # Issue #1403
 from api.admin_event_logs import router as admin_event_logs_router  # Issue #4461
 from api.admin_pricing import router as admin_pricing_router  # GH#6480
+from api.admin_retention_policies import router as admin_retention_policies_router  # MVA-3145, GH#8995
 from api.admin_schedulers import router as admin_schedulers_router  # GH#6594
 from api.agent import router as agent_router
 from api.agent_config import router as agent_config_router
@@ -72,6 +73,7 @@ from api.llm_providers import router as llm_providers_router
 from api.manual_mcp import router as manual_mcp_router
 from api.mcp_registry import router as mcp_registry_router
 from api.memory import router as memory_router
+from api.mobile_devices import router as mobile_devices_router  # GH#4463
 from api.models import router as models_router
 from api.overseer_handlers import router as overseer_router
 from api.process_management import router as process_management_router  # Issue #1406
@@ -109,6 +111,7 @@ def _get_system_routers() -> list:
     return [
         (admin_event_logs_router, "", ["admin", "compliance"], "admin_event_logs"),  # Issue #4461
         (admin_pricing_router, "", ["admin", "pricing"], "admin_pricing"),  # GH#6480
+        (admin_retention_policies_router, "", ["admin", "retention"], "admin_retention_policies"),  # MVA-3145, GH#8995
         (admin_schedulers_router, "", ["admin", "schedulers"], "admin_schedulers"),  # GH#6594
         (audit_router, "", ["audit"], "audit"),
         (auth_router, "/auth", ["auth"], "auth"),
@@ -123,6 +126,7 @@ def _get_system_routers() -> list:
         (settings_router, "/settings", ["settings"], "settings"),
         (usage_router, "/usage", ["usage", "analytics"], "usage"),  # Issue #1807
         (user_management_router, "", ["user-management"], "user_management"),  # Issue #1801
+        (mobile_devices_router, "/devices", ["devices", "integrations"], "mobile_devices"),  # GH#4463
         (data_storage_router, "", ["data-storage"], "data_storage"),
         (prompts_router, "/prompts", ["prompts"], "prompts"),
         (frontend_config_router, "", ["frontend-config"], "frontend_config"),
@@ -330,6 +334,7 @@ def _get_service_routers() -> list:
         (voice_bundle_user_router, "/voice", ["voice", "rbac"], "voice_bundle_user"),
         (voice_stream_router, "/voice", ["voice", "websocket"], "voice_stream"),
         (wake_word_router, "/wake_word", ["wake_word", "voice"], "wake_word"),
+        (transcriber_router, "", ["transcriber"], "transcriber"),  # Issue #9044, MVA-2186
         (websockets_router, "", ["websockets"], "websockets"),  # Issue #6229
         (live_events_router, "", ["live-events"], "live_events"),  # Issue #6229
         (vnc_router, "/vnc", ["vnc"], "vnc"),
@@ -428,13 +433,6 @@ def _get_canvas_routers() -> list:
     ]
 
 
-def _get_transcriber_routers() -> list:
-    """Transcriber routers (MVA-2186, Issue #9044)."""
-    return [
-        (transcriber_router, "/transcriber", ["transcriber"], "transcriber"),
-    ]
-
-
 def load_core_routers():
     """
     Load and return core API routers (Issue #560: decomposed, #730: plugins).
@@ -457,5 +455,4 @@ def load_core_routers():
     routers.extend(_get_agent_routers())
     routers.extend(_get_plugin_routers())
     routers.extend(_get_canvas_routers())
-    routers.extend(_get_transcriber_routers())
     return routers

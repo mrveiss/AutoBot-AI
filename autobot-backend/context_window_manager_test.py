@@ -529,3 +529,56 @@ class TestAcceptanceCriteria:
         """AC: transformer models must still return the 8192 threshold."""
         mgr = _manager_with_config(_TRANSFORMER_CONFIG)
         assert mgr.get_compression_threshold("llama3") == 8192
+
+
+# ---------------------------------------------------------------------------
+# Issue #9294: Adaptive context budget for models not in YAML
+# ---------------------------------------------------------------------------
+
+
+class TestGetAdaptiveContextLength:
+    """MVA-3098: get_adaptive_context_length() scales unknown models via registry."""
+
+    def test_model_in_yaml_returns_declared_value(self):
+        """AC #9294.1: YAML-configured models return exact context_window_tokens."""
+        mgr = _manager_with_config(_TRANSFORMER_CONFIG)
+        assert mgr.get_adaptive_context_length("llama3") == 4096
+        assert mgr.get_adaptive_context_length("mamba-3b") == 131072
+
+    def test_unknown_model_with_registry_hit_scales_to_85_percent(self):
+        """AC #9294.2: Unknown model with registry hit → 85% of discovered window."""
+        mgr = _manager_with_config(_TRANSFORMER_CONFIG)
+        with patch(
+            "context_window_manager.ContextWindowManager._query_known_context_length",
+            return_value=128000,
+        ):
+            result = mgr.get_adaptive_context_length("new-ollama-model")
+        # 128000 * 0.85 = 108800
+        assert result == 108800
+
+    def test_unknown_model_with_no_registry_falls_back_to_4096(self):
+        """AC #9294.3: Unknown model with no registry entry → YAML default (4096)."""
+        mgr = _manager_with_config(_TRANSFORMER_CONFIG)
+        with patch(
+            "context_window_manager.ContextWindowManager._query_known_context_length",
+            return_value=0,
+        ):
+            result = mgr.get_adaptive_context_length("totally-unknown")
+        assert result == 4096
+
+    def test_very_large_context_capped_at_200k(self):
+        """AC #9294.4: Very large context window (>200k) capped at _CONTEXT_HARD_MAX."""
+        mgr = _manager_with_config(_TRANSFORMER_CONFIG)
+        with patch(
+            "context_window_manager.ContextWindowManager._query_known_context_length",
+            return_value=1_000_000,
+        ):
+            result = mgr.get_adaptive_context_length("huge-model")
+        # 1M * 0.85 = 850k, but capped at 200k
+        assert result == 200_000
+
+    def test_uses_current_model_when_none(self):
+        """get_adaptive_context_length() with no model_name uses current_model."""
+        mgr = _manager_with_config(_TRANSFORMER_CONFIG)
+        mgr.current_model = "jamba-7b"
+        assert mgr.get_adaptive_context_length() == 256000

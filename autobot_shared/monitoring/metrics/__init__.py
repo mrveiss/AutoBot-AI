@@ -11,6 +11,7 @@ Extended with KnowledgeBase, LLMProvider, WebSocket, Redis recorders (Issue #470
 Extended with FrontendMetricsRecorder for RUM metrics (Issue #476).
 Extended with MCPWorkerMetricsRecorder for worker restart budget tracking (Issue #4109).
 Extended with VoiceRealtimeMetricsRecorder for Realtime WebRTC session metrics (Issue #7421).
+Extended with MobileDeviceMetricsRecorder for mobile device pairing metrics (GH#4463).
 
 Package Structure:
 - base.py: Base recorder class with shared functionality
@@ -48,6 +49,9 @@ from .llm_provider import LLMProviderMetricsRecorder
 
 # Issue #4109: MCP worker restart budget exhaustion metrics
 from .mcp_worker import MCPWorkerMetricsRecorder
+
+# GH#4463: Mobile device pairing and push notification metrics
+from .mobile_device import MobileDeviceMetricsRecorder
 from .performance import PerformanceMetricsRecorder
 from .redis import RedisMetricsRecorder
 from .service_health import ServiceHealthMetricsRecorder
@@ -81,4 +85,6 @@ __all__ = [
     "MCPWorkerMetricsRecorder",
     # Issue #7421: Voice Realtime WebRTC session metrics
     "VoiceRealtimeMetricsRecorder",
+    # GH#4463: Mobile device pairing and push notification metrics
+    "MobileDeviceMetricsRecorder",
 ]

@@ -38,6 +38,15 @@ Issue #3286: Comprehensive Theming System
         </div>
       </fieldset>
 
+      <!-- Theme Variant Preference (Ember Theme - Issue #9274 / MVA-3096) -->
+      <fieldset class="preference-section">
+        <legend class="preference-label">
+          <Icon name="fire" size="sm" />
+          Theme Variant
+        </legend>
+        <EmberThemeToggle />
+      </fieldset>
+
       <!-- Font Size Preference -->
       <fieldset class="preference-section">
         <legend class="preference-label">
@@ -123,6 +132,7 @@ import { useI18n } from 'vue-i18n'
 import { usePreferences, type FontSize, type AccentColor, type LayoutDensity } from '@/composables/usePreferences'
 import { createLogger } from '@/utils/debugUtils'
 import ThemeToggle from '@/components/ui/ThemeToggle.vue'
+import EmberThemeToggle from '@/components/theme/EmberThemeToggle.vue'
 import Icon from '@/components/ui/Icon.vue'
 
 const logger = createLogger('PreferencesPanel')

@@ -1,7 +1,7 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
-"""ClaudeCodeAdapter — runs Claude Code CLI sessions as LLC agent heartbeats (GH#8258).
+"""ClaudeCodeAdapter — runs Claude Code CLI sessions as LLC agent heartbeats (GH#8258, GH#9030).
 
 adapter_config schema::
 
@@ -11,12 +11,15 @@ adapter_config schema::
         "allowed_tools": ["Bash", "Read"],
         "output_dir": "/tmp",
         "timeout_seconds": 3600,
+        "streaming_watchdog_timeout_seconds": 120,
         "workspace_dir": "/path/to/worktree"
     }
 
 ``run_id`` is ``"<pid>/<session_id>"``.
 ``workspace_dir`` sets the subprocess cwd; if the directory has been deleted the
 adapter retries without it and clears the config value for subsequent calls.
+``streaming_watchdog_timeout_seconds`` configures per-agent silent-stream timeout
+(defaults to 120s global, overridable per adapter or per agent).
 """
 
 from __future__ import annotations
@@ -40,14 +43,33 @@ from .base import AdapterRunStatus
 logger = get_logger(__name__)
 
 _SESSION_TTL_SECONDS = 4 * 3600
-_SIGTERM_GRACE_SECONDS = 5
-_DEFAULT_TIMEOUT_SECONDS = 3600
+_SIGTERM_GRACE_SECONDS = 10
+_ADAPTER_TIMEOUT_SECONDS = 3600  # per-adapter default (preserves current behavior)
+_DEFAULT_TIMEOUT_SECONDS = 3600  # deprecated, use _ADAPTER_TIMEOUT_SECONDS
 _DEFAULT_OUTPUT_DIR = "/tmp"  # nosec B108 - test/controlled code uses tmpdir intentionally
 _SESSION_KEY = "llc:agent:{agent_id}:claude_session"
 
 
 def _redis_session_key(agent_id: str) -> str:
     return _SESSION_KEY.format(agent_id=agent_id)
+
+
+def _resolve_timeout(cfg: dict) -> int:
+    """Resolve timeout using 3-tier hierarchy:
+    1. Per-agent override via adapter_config.timeout_seconds
+    2. Per-adapter default (_ADAPTER_TIMEOUT_SECONDS)
+    3. Global default (LLC_DEFAULT_ADAPTER_TIMEOUT_SECONDS env var, default: 120s)
+    """
+    # Tier 1: per-agent override
+    if "timeout_seconds" in cfg:
+        return int(cfg["timeout_seconds"])
+
+    # Tier 2/3: global env var, fallback to per-adapter default
+    global_default = os.environ.get("LLC_DEFAULT_ADAPTER_TIMEOUT_SECONDS")
+    if global_default:
+        return int(global_default)
+
+    return _ADAPTER_TIMEOUT_SECONDS
 
 
 def _output_path(output_dir: str, agent_id: str, run_id: str) -> str:
@@ -83,7 +105,7 @@ class ClaudeCodeAdapter:
         cfg = agent_config.get("adapter_config", {})
 
         output_dir: str = cfg.get("output_dir", _DEFAULT_OUTPUT_DIR)
-        timeout_sec: int = int(cfg.get("timeout_seconds", _DEFAULT_TIMEOUT_SECONDS))
+        timeout_sec: int = _resolve_timeout(cfg)
         model: Optional[str] = cfg.get("model")
         max_turns: Optional[int] = cfg.get("max_turns")
         allowed_tools: Optional[list] = cfg.get("allowed_tools")
@@ -121,6 +143,14 @@ class ClaudeCodeAdapter:
         if workspace_dir:
             env["AUTOBOT_WORKSPACE_DIR"] = workspace_dir
 
+        # GH#9624: inject wake env vars for comment-driven wakes
+        wake_reason = context.get("wake_reason")
+        if wake_reason:
+            env["AUTOBOT_LLC_WAKE_REASON"] = wake_reason
+        wake_comment_id = context.get("wake_comment_id")
+        if wake_comment_id:
+            env["AUTOBOT_LLC_WAKE_COMMENT_ID"] = wake_comment_id
+
         out_fh = open(output_file, "w", encoding="utf-8")
         try:
             try:
@@ -132,17 +162,16 @@ class ClaudeCodeAdapter:
                     cwd=workspace_dir or None,
                 )
             except FileNotFoundError as e:
-                if workspace_dir and e.filename and os.path.abspath(str(e.filename)) == os.path.abspath(workspace_dir):
-                    logger.warning(
-                        "ClaudeCodeAdapter: workspace_dir %r missing, retrying without cwd",
-                        workspace_dir,
-                    )
-                    context.pop("workspace_dir", None)
-                    env.pop("AUTOBOT_WORKSPACE_DIR", None)
-                    env["LLC_INVOKE_CONTEXT"] = json.dumps(context, default=str)
-                    workspace_dir = None
-                else:
-                    raise
+                if not (workspace_dir and e.filename and os.path.abspath(e.filename) == os.path.abspath(workspace_dir)):
+                    raise  # missing binary or unrelated path
+                logger.warning(
+                    "ClaudeCodeAdapter: workspace_dir %r missing, retrying without cwd",
+                    workspace_dir,
+                )
+                context.pop("workspace_dir", None)
+                env.pop("AUTOBOT_WORKSPACE_DIR", None)
+                env["LLC_INVOKE_CONTEXT"] = json.dumps(context, default=str)
+                workspace_dir = None
                 proc = await asyncio.create_subprocess_exec(
                     *cmd,
                     stdout=out_fh,
