@@ -200,6 +200,9 @@ services:
       # in the SLM dashboard. Point it at the service name (#9715).
       - AUTOBOT_SLM_HOST=autobot-slm
       - AUTOBOT_SLM_PORT=8000
+      # Shared signing secrets — must match SLM so the node JWT verifies (#9715)
+      - AUTOBOT_JWT_SECRET=${AUTOBOT_JWT_SECRET:-autobot-dev-shared-jwt-secret-change-me}
+      - SECRET_KEY=${SECRET_KEY:-autobot-dev-shared-secret-key-change-me}
     depends_on:
       autobot-redis:
         condition: service_healthy
@@ -272,6 +275,9 @@ services:
       - AUTOBOT_ENCRYPTION_KEY=${AUTOBOT_ENCRYPTION_KEY:-}
       - AUTOBOT_SLM_HOST=autobot-slm
       - AUTOBOT_SLM_PORT=8000
+      # Shared signing secrets — must match SLM so the node JWT verifies (#9715)
+      - AUTOBOT_JWT_SECRET=${AUTOBOT_JWT_SECRET:-autobot-dev-shared-jwt-secret-change-me}
+      - SECRET_KEY=${SECRET_KEY:-autobot-dev-shared-secret-key-change-me}
     healthcheck:
       # $$HOSTNAME (escaped) expands inside the container at runtime. A single
       # $HOSTNAME is interpolated by Compose at parse time to an empty string,
@@ -387,6 +393,12 @@ services:
       - SLM_POSTGRES_HOST=autobot-postgres
       - SLM_ADMIN_PASSWORD=${SLM_ADMIN_PASSWORD:-admin}
       - SLM_DATA_DIR=/app/data
+      # Shared signing secrets so the backend node's JWT verifies on SLM —
+      # without a shared secret each service generates its own and SLM rejects
+      # the node WS with 401, leaving the host shown offline (#9715). CHANGE in
+      # production via AUTOBOT_JWT_SECRET / SECRET_KEY.
+      - AUTOBOT_JWT_SECRET=${AUTOBOT_JWT_SECRET:-autobot-dev-shared-jwt-secret-change-me}
+      - SECRET_KEY=${SECRET_KEY:-autobot-dev-shared-secret-key-change-me}
     depends_on:
       autobot-redis:
         condition: service_healthy
