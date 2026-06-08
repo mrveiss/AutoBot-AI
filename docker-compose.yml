@@ -339,6 +339,15 @@ services:
         condition: service_healthy
       autobot-chromadb:
         condition: service_healthy
+    healthcheck:
+      # Beat serves no HTTP port, so it can't use the backend image's inherited
+      # curl healthcheck (which always failed → false "unhealthy"). Check the
+      # beat process (PID 1) is alive via procfs — no extra tools needed.
+      test: ["CMD-SHELL", "grep -q celery /proc/1/cmdline"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
     deploy:
       resources:
         limits:
