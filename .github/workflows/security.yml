@@ -156,8 +156,8 @@ jobs:
     - name: Bandit Security Linter
       run: |
         echo "## Bandit Security Analysis" >> "$GITHUB_STEP_SUMMARY"
-        python3 -m bandit -r autobot-backend/ autobot-slm-backend/ autobot_shared/ -f json -o bandit-report.json || true
-        python3 -m bandit -r autobot-backend/ autobot-slm-backend/ autobot_shared/ -f txt || true
+        python3 -m bandit -c .bandit -r autobot-backend/ autobot-slm-backend/ autobot_shared/ -f json -o bandit-report.json || true
+        python3 -m bandit -c .bandit -r autobot-backend/ autobot-slm-backend/ autobot_shared/ -f txt || true
 
     - name: Semgrep SAST Scan
       # Blocking: exits non-zero when ERROR-severity findings are present.
