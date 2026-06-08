@@ -334,8 +334,7 @@ async def version_check_task(
             if not _is_git_repo(repo_path):
                 if not _missing_repo_warned:
                     logger.info(
-                        "No local git code source at %s — version checking disabled "
-                        "for this deployment.",
+                        "No local git code source at %s — version checking disabled " "for this deployment.",
                         repo_path,
                     )
                     _missing_repo_warned = True

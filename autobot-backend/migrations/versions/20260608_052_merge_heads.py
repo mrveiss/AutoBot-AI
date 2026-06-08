@@ -11,6 +11,7 @@ Revision ID: 20260608_052
 Revises: 20260524_036b, 20260527_046, 20260604_051
 Create Date: 2026-06-08
 """
+
 from typing import Sequence, Union
 
 # revision identifiers, used by Alembic.
