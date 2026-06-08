@@ -13,7 +13,11 @@ from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision = "20260216_003"
-down_revision = "20260216_002"
+# Parent is the secrets migration, whose revision id is the short "002"
+# (20260216_002_secrets_hierarchical_access.py declares revision = "002").
+# It was previously "20260216_002", which no revision defined → broken chain
+# (KeyError) blocking every fresh-DB upgrade (#9759).
+down_revision = "002"
 branch_labels = None
 depends_on = None
 

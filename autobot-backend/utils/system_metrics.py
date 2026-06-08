@@ -317,7 +317,11 @@ class SystemMetricsCollector:
                     category="performance",
                 )
         except Exception as e:
-            self.logger.warning("Health check failed for %s: %s", service_name, e)
+            # This is a periodic health probe: a down/unreachable service is an
+            # expected state that consumers read from the *_health metric (0.0),
+            # not from logs. Log at debug to avoid per-cycle spam for optional
+            # services like Ollama that aren't running out of the box (#9715).
+            self.logger.debug("Health check failed for %s: %s", service_name, e)
             error_msg = str(e)
 
         metrics[f"{service_name}_health"] = self._create_health_metric(service_name, health_value, timestamp, error_msg)
