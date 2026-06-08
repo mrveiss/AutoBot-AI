@@ -8,6 +8,9 @@
       <button class="btn-export" @click="exportCsv">Export CSV</button>
     </div>
 
+    <div v-if="!companyId" class="state-msg">Select a company to view costs.</div>
+
+    <template v-else>
     <!-- Summary cards -->
     <div class="summary-cards">
       <div class="summary-card">
@@ -214,19 +217,22 @@
         </tbody>
       </table>
     </div>
+    </template>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, reactive, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('CostDashboard')
 const api = useApiClient()
+const route = useRoute()
 
 const props = defineProps<{ companyId?: string }>()
-const companyId = computed(() => props.companyId ?? '00000000-0000-0000-0000-000000000000')
+const companyId = computed(() => (route.params.companyId as string) ?? props.companyId ?? '')
 
 interface BudgetEntry {
   agent_id: string
@@ -429,6 +435,7 @@ async function saveBudgetSettings() {
 }
 
 async function fetchBudgets() {
+  if (!companyId.value) return
   try {
     const data = await api.get<BudgetEntry[] | { items: BudgetEntry[] }>(`/api/llc/budget?company_id=${companyId.value}`)
     budgets.value = Array.isArray(data) ? data : (data as { items: BudgetEntry[] }).items ?? []
@@ -438,6 +445,7 @@ async function fetchBudgets() {
 }
 
 async function fetchCostEvents() {
+  if (!companyId.value) return
   isLoading.value = true
   try {
     const data = await api.get<CostEvent[] | { items: CostEvent[] }>(`/api/llc/cost-events?company_id=${companyId.value}`)
@@ -456,6 +464,7 @@ async function fetchCostEvents() {
 }
 
 onMounted(async () => {
+  if (!companyId.value) return
   await Promise.all([fetchBudgets(), fetchCostEvents()])
 })
 </script>

@@ -9,7 +9,8 @@
         <span class="sidebar-title">Threads</span>
         <button class="btn-new-thread" @click="showNewThread = true">+ New</button>
       </div>
-      <div v-if="threadsLoading" class="state-msg-sm">Loading...</div>
+      <div v-if="!companyId" class="state-msg-sm">Select a company to view threads.</div>
+      <div v-else-if="threadsLoading" class="state-msg-sm">Loading...</div>
       <div v-else-if="threads.length === 0" class="state-msg-sm">No threads yet.</div>
       <div class="thread-list">
         <div
@@ -113,14 +114,16 @@
 
 <script setup lang="ts">
 import { ref, computed, nextTick, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('CeoChatView')
 const api = useApiClient()
+const route = useRoute()
 
 const props = defineProps<{ companyId?: string }>()
-const companyId = computed(() => props.companyId ?? '00000000-0000-0000-0000-000000000000')
+const companyId = computed(() => (route.params.companyId as string) ?? props.companyId ?? '')
 
 interface ChatMessage {
   id: string
@@ -171,6 +174,7 @@ async function scrollToBottom() {
 }
 
 async function fetchThreads() {
+  if (!companyId.value) return
   threadsLoading.value = true
   try {
     const data = await api.get<ChatThread[] | { items: ChatThread[] }>(
@@ -239,7 +243,10 @@ async function createThread() {
   }
 }
 
-onMounted(fetchThreads)
+onMounted(() => {
+  if (!companyId.value) return
+  fetchThreads()
+})
 </script>
 
 <style scoped>

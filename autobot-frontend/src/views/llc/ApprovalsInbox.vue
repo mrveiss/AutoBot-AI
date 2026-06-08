@@ -26,126 +26,132 @@
       </div>
     </div>
 
-    <!-- Filters -->
-    <div class="inbox-filters">
-      <select v-model="filters.type" class="filter-select">
-        <option value="">All Types</option>
-        <option v-for="t in APPROVAL_TYPES" :key="t" :value="t">{{ formatType(t) }}</option>
-      </select>
-      <select v-if="activeTab === 'history'" v-model="filters.status" class="filter-select">
-        <option value="">All Statuses</option>
-        <option value="approved">Approved</option>
-        <option value="rejected">Rejected</option>
-        <option value="changes_requested">Changes Requested</option>
-      </select>
-      <input v-model="filters.search" class="filter-search" placeholder="Search..." type="text" />
-    </div>
+    <div v-if="!companyId" class="state-msg">Select a company to view approvals.</div>
 
-    <!-- Pending Tab -->
-    <div v-if="activeTab === 'pending'" class="approval-list">
-      <div v-if="isLoading" class="state-msg">Loading...</div>
-      <div v-else-if="filteredPending.length === 0" class="state-msg">No pending approvals.</div>
-      <div
-        v-for="item in filteredPending"
-        :key="item.id"
-        class="approval-card"
-      >
-        <div class="card-header">
-          <span class="type-badge" :class="`type-${item.type}`">{{ formatType(item.type) }}</span>
-          <span class="card-meta">Requested by: {{ item.requested_by_agent_id }}</span>
-          <span class="card-meta">{{ formatDate(item.created_at) }}</span>
-        </div>
+    <template v-else>
+      <!-- Filters -->
+      <div class="inbox-filters">
+        <select v-model="filters.type" class="filter-select">
+          <option value="">All Types</option>
+          <option v-for="t in APPROVAL_TYPES" :key="t" :value="t">{{ formatType(t) }}</option>
+        </select>
+        <select v-if="activeTab === 'history'" v-model="filters.status" class="filter-select">
+          <option value="">All Statuses</option>
+          <option value="approved">Approved</option>
+          <option value="rejected">Rejected</option>
+          <option value="changes_requested">Changes Requested</option>
+        </select>
+        <input v-model="filters.search" class="filter-search" placeholder="Search..." type="text" />
+      </div>
 
-        <div class="payload-section">
-          <button class="toggle-payload" @click="togglePayload(item.id)">
-            {{ expandedPayloads.has(item.id) ? 'Hide' : 'Show' }} Payload
-          </button>
-          <pre v-if="expandedPayloads.has(item.id)" class="payload-json">{{ formatJson(item.payload) }}</pre>
-        </div>
+      <!-- Pending Tab -->
+      <div v-if="activeTab === 'pending'" class="approval-list">
+        <div v-if="isLoading" class="state-msg">Loading...</div>
+        <div v-else-if="filteredPending.length === 0" class="state-msg">No pending approvals.</div>
+        <div
+          v-for="item in filteredPending"
+          :key="item.id"
+          class="approval-card"
+        >
+          <div class="card-header">
+            <span class="type-badge" :class="`type-${item.type}`">{{ formatType(item.type) }}</span>
+            <span class="card-meta">Requested by: {{ item.requested_by_agent_id }}</span>
+            <span class="card-meta">{{ formatDate(item.created_at) }}</span>
+          </div>
 
-        <div class="card-actions">
-          <button
-            class="btn-approve"
-            :disabled="processing.has(item.id)"
-            @click="decide(item.id, 'approved')"
-          >
-            Approve
-          </button>
-          <button
-            class="btn-reject"
-            :disabled="processing.has(item.id)"
-            @click="openDecisionNote(item.id, 'rejected')"
-          >
-            Reject
-          </button>
-          <button
-            class="btn-changes"
-            :disabled="processing.has(item.id)"
-            @click="openDecisionNote(item.id, 'changes_requested')"
-          >
-            Request Changes
-          </button>
-        </div>
-
-        <div v-if="noteTarget?.id === item.id" class="note-form">
-          <textarea
-            v-model="decisionNote"
-            class="note-textarea"
-            placeholder="Decision note (required)..."
-            rows="3"
-          />
-          <div class="note-actions">
-            <button class="btn-secondary" @click="noteTarget = null">Cancel</button>
-            <button
-              class="btn-primary"
-              :disabled="!decisionNote.trim() || processing.has(item.id)"
-              @click="submitWithNote(item.id)"
-            >
-              Confirm
+          <div class="payload-section">
+            <button class="toggle-payload" @click="togglePayload(item.id)">
+              {{ expandedPayloads.has(item.id) ? 'Hide' : 'Show' }} Payload
             </button>
+            <pre v-if="expandedPayloads.has(item.id)" class="payload-json">{{ formatJson(item.payload) }}</pre>
+          </div>
+
+          <div class="card-actions">
+            <button
+              class="btn-approve"
+              :disabled="processing.has(item.id)"
+              @click="decide(item.id, 'approved')"
+            >
+              Approve
+            </button>
+            <button
+              class="btn-reject"
+              :disabled="processing.has(item.id)"
+              @click="openDecisionNote(item.id, 'rejected')"
+            >
+              Reject
+            </button>
+            <button
+              class="btn-changes"
+              :disabled="processing.has(item.id)"
+              @click="openDecisionNote(item.id, 'changes_requested')"
+            >
+              Request Changes
+            </button>
+          </div>
+
+          <div v-if="noteTarget?.id === item.id" class="note-form">
+            <textarea
+              v-model="decisionNote"
+              class="note-textarea"
+              placeholder="Decision note (required)..."
+              rows="3"
+            />
+            <div class="note-actions">
+              <button class="btn-secondary" @click="noteTarget = null">Cancel</button>
+              <button
+                class="btn-primary"
+                :disabled="!decisionNote.trim() || processing.has(item.id)"
+                @click="submitWithNote(item.id)"
+              >
+                Confirm
+              </button>
+            </div>
           </div>
         </div>
       </div>
-    </div>
 
-    <!-- History Tab -->
-    <div v-if="activeTab === 'history'" class="approval-list">
-      <div v-if="isLoading" class="state-msg">Loading...</div>
-      <div v-else-if="filteredHistory.length === 0" class="state-msg">No history found.</div>
-      <div
-        v-for="item in filteredHistory"
-        :key="item.id"
-        class="approval-card history-card"
-      >
-        <div class="card-header">
-          <span class="type-badge" :class="`type-${item.type}`">{{ formatType(item.type) }}</span>
-          <span class="status-badge" :class="`status-${item.status}`">{{ formatType(item.status) }}</span>
-          <span class="card-meta">Decided by: {{ item.decided_by_agent_id ?? '—' }}</span>
-          <span class="card-meta">{{ formatDate(item.decided_at ?? item.updated_at) }}</span>
-        </div>
-        <div class="payload-section">
-          <button class="toggle-payload" @click="togglePayload(item.id)">
-            {{ expandedPayloads.has(item.id) ? 'Hide' : 'Show' }} Payload
-          </button>
-          <pre v-if="expandedPayloads.has(item.id)" class="payload-json">{{ formatJson(item.payload) }}</pre>
+      <!-- History Tab -->
+      <div v-if="activeTab === 'history'" class="approval-list">
+        <div v-if="isLoading" class="state-msg">Loading...</div>
+        <div v-else-if="filteredHistory.length === 0" class="state-msg">No history found.</div>
+        <div
+          v-for="item in filteredHistory"
+          :key="item.id"
+          class="approval-card history-card"
+        >
+          <div class="card-header">
+            <span class="type-badge" :class="`type-${item.type}`">{{ formatType(item.type) }}</span>
+            <span class="status-badge" :class="`status-${item.status}`">{{ formatType(item.status) }}</span>
+            <span class="card-meta">Decided by: {{ item.decided_by_agent_id ?? '—' }}</span>
+            <span class="card-meta">{{ formatDate(item.decided_at ?? item.updated_at) }}</span>
+          </div>
+          <div class="payload-section">
+            <button class="toggle-payload" @click="togglePayload(item.id)">
+              {{ expandedPayloads.has(item.id) ? 'Hide' : 'Show' }} Payload
+            </button>
+            <pre v-if="expandedPayloads.has(item.id)" class="payload-json">{{ formatJson(item.payload) }}</pre>
+          </div>
         </div>
       </div>
-    </div>
+    </template>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
 import { useUserStore } from '@/stores/useUserStore'
 
 const logger = createLogger('ApprovalsInbox')
 const api = useApiClient()
+const route = useRoute()
 const userStore = useUserStore()
 
 const props = defineProps<{ companyId?: string }>()
-const companyId = computed(() => props.companyId ?? '00000000-0000-0000-0000-000000000000')
+const companyId = computed(() => (route.params.companyId as string) ?? props.companyId ?? '')
 
 const APPROVAL_TYPES = [
   'budget_increase', 'agent_spawn', 'external_api', 'code_deploy',
@@ -259,6 +265,7 @@ async function submitWithNote(id: string) {
 }
 
 async function fetchApprovals() {
+  if (!companyId.value) return
   isLoading.value = true
   try {
     const data = await api.get<Approval[] | { items: Approval[] }>(
@@ -275,6 +282,7 @@ async function fetchApprovals() {
 let pollInterval: ReturnType<typeof setInterval> | null = null
 
 onMounted(() => {
+  if (!companyId.value) return
   fetchApprovals()
   pollInterval = setInterval(fetchApprovals, 30_000)
 })
