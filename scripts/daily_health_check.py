@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """
 AutoBot Daily Health Check
 Runs 7-point checklist and posts findings to MVA-12

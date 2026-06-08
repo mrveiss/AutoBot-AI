@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """Tests for AgentCapabilityIndexer — agent capabilities indexed into company KB (GH#8244)."""
 
 import uuid

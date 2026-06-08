@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """
 Unit tests for Security API endpoints
 Tests REST API functionality for security management

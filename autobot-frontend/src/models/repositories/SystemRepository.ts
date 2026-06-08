@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 import { ApiRepository } from './ApiRepository'
 import type { AutoBotSettings, DiagnosticsReport } from '@/types/models'
 import { getApiBase } from '@/config/ssot-config'

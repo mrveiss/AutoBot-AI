@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 // GH#8993: Thinking mode composable — manages extended thinking toggle and budget
 // Persists to server API when available; falls back to localStorage.
 import { ref, watch } from 'vue'

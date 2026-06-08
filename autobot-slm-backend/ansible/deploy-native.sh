@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 #
 # AutoBot Native VM Deployment Script
 # Deploys AutoBot services natively on VMs (no Docker containers)

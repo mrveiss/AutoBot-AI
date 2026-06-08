@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """Tests for VTT (WebVTT) subtitle exporter."""
 
 import pytest

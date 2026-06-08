@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 /**
  * Observer Pattern Replacements for setTimeout/setInterval
  * Replaces time-based delays with event-driven and state-based patterns

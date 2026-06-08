@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """
 Performance Fix Agent - Console.log Cleanup Tool
 Intelligently removes console.log statements from production code

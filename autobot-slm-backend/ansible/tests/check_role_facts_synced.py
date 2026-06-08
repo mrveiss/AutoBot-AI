@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """Diff guard: role_*_active facts must stay byte-equal across the two
 copies until #7095 (single source of truth) lands.
 

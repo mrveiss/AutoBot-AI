@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # Copyright (c) mrveiss. All rights reserved.
 """Compatibility shim — all symbols live in autobot_memory_graph (#3612).
 

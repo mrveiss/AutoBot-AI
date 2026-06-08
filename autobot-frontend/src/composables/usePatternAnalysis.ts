@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 /**
  * Vue Composable for Code Pattern Analysis API
  *

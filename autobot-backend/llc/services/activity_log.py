@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """LLC activity log service (GH#8216).
 
 Single injectable service for all LLC mutations. All callers inject this

@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """Registry for AUTOBOT_* environment variables.
 
 Provides discovery, documentation, and type-safe access.

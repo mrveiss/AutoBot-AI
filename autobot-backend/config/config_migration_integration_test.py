@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """
 Integration tests for configuration migration to centralized ConfigManager
 Tests that components properly migrate from direct environment access to centralized config

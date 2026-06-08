@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """
 Performance test for AutoBot GPU optimization
 Tests semantic chunking performance and identifies optimization opportunities.

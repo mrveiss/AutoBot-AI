@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 import { describe, it, expect, afterEach } from 'vitest'
 import { nextTick } from 'vue'
 import { mount, type VueWrapper } from '@vue/test-utils'

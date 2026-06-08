@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """Shared helpers for backend e2e/integration tests."""
 
 from autobot_shared.ssot_config import config

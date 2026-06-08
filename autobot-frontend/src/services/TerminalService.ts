@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 /**
  * Terminal Service for WebSocket-based terminal communication
  * Provides interface for terminal sessions, command execution, and real-time I/O

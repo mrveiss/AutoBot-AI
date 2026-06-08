@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 import { describe, it, expect } from 'vitest'
 import { useSvgIcons, ICON_IDS, STATUS_IDS } from '../useSvgIcons'
 

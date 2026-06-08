@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """Translate en.json to multiple target locales using Google Translate (#1335).
 
 Uses batch translation with in-place tree walking. Preserves JSON structure,

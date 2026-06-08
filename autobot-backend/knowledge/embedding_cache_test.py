@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """
 Unit tests for Embedding Cache - Issue #65 P0 Optimization / Issue #8156 ARC
 Tests the ARC cache with TTL for ChromaDB query embeddings.

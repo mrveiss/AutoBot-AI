@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 import { type Ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useChatStore } from '@/stores/useChatStore'

@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """
 Test suite for centralized configuration management
 Tests the ConfigManager functionality and standardized configuration access

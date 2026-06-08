@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 ---
 # Fix file ownership across all fleet nodes
 # Usage: ansible-playbook -i inventory/slm-nodes.yml playbooks/fix-node-ownership.yml

@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot - Test playbook: assert role_*_active facts (#7056)
 #
 # For each synthetic test host (defined in tests/inventory/test_role_facts.yml),

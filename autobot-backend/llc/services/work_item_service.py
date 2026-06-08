@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """LLC WorkItemService — CRUD, atomic checkout, and status transitions (GH#8213, GH#8230).
 
 Checkout strategy:

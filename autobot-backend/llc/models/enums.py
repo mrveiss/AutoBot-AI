@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """LLC module enum SSOT (GH#8261).
 
 All LLC enums are defined here and imported everywhere — never redefined in

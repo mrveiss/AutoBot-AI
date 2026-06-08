@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot Grafana Configuration Verification
 # Tests that Grafana is properly configured for iframe embedding
 

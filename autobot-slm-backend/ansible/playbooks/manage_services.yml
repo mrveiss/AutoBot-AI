@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 ---
 # Manage Services Playbook
 # Start, stop, restart, or check status of AutoBot services

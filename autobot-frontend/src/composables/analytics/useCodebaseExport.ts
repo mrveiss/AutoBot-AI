@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 /**
  * Composable for codebase analytics export functionality.
  * Extracts report generation and section export from CodebaseAnalytics.vue (#1588).

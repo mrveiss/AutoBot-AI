@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """
 AutoBot Business Intelligence Dashboard
 Advanced analytics, ROI tracking, and performance insights for the distributed system.

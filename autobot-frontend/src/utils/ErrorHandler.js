@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 /**
  * Centralized Error Handling Utility for AutoBot Frontend
  * Provides consistent error handling, logging, and user feedback

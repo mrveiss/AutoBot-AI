@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """
 Testing Coverage Gap Analyzer using Redis and NPU acceleration
 Analyzes codebase for testing gaps, missing test patterns, and coverage issues

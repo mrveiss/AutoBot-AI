@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """
 Test AutoBot Chat and Workflow Integration
 Focus on chat interaction that triggers workflows

@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 /**
  * Knowledge Base API Response Types
  * Type definitions for knowledge base API responses and state management

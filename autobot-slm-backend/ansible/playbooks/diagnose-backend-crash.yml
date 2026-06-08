@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 ---
 # AutoBot Backend Crash-Loop Diagnostic Playbook
 # Issue #893: Investigate backend crash-loop with high memory usage

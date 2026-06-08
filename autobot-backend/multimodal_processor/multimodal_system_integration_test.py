@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """
 Integration tests for the unified multi-modal AI system
 Tests component integration, processing workflows, and system reliability

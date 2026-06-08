@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 import { http, HttpResponse } from 'msw'
 // Issue #156 Fix: Corrected Python-style import to TypeScript syntax
 import {  ServiceURLs } from '@/constants/network'

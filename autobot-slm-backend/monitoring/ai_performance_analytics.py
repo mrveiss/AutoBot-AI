@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """
 AutoBot AI/ML Performance Analytics
 Specialized monitoring for AI workloads, NPU utilization, and multi-modal performance.

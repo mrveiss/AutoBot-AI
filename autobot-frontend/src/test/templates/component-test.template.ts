@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { screen, waitFor } from '@testing-library/vue'
 import userEvent from '@testing-library/user-event'

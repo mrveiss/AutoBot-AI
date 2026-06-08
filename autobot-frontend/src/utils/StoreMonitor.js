@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 /**
  * Store Monitor - Tracks Pinia store performance and state changes
  * Provides debugging insights for store operations

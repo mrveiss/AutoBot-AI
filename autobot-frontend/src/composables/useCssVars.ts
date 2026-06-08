@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 /**
  * Shared CSS variable accessor for JavaScript-side color/font values.
  * Issue #704: CSS-to-JS bridge used by charts, Cytoscape, D3, etc.

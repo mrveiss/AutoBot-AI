@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 ---
 # Reset UFW Firewall and Reapply Clean Rules (Issue #895)
 # This playbook resets UFW to clean state and reapplies only current Ansible rules

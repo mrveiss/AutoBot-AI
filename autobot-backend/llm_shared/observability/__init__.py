@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 from .base import LLMObserver
 from .langfuse_observer import LangFuseObserver
 from .langsmith_observer import LangSmithObserver

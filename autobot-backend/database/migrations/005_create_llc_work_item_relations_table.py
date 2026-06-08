@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """Migration: create llc_work_item_relations table (GH#8252)."""
 
 import sqlalchemy as sa

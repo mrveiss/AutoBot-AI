@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 // API Types - TypeScript definitions for backend API integration
 export interface ApiResponse<T = unknown> {
   success: boolean;

@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """LLC (Lean Lifecycle Controller) module (GH#8204).
 
 Entry point for the LLC module. Exports the FastAPI router so

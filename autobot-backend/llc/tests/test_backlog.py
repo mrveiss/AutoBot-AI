@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """Tests for LLC BacklogService and backlog API routes (GH#8222)."""
 
 import uuid

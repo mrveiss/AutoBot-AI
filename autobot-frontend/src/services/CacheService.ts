@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 /**
  * Centralized Caching Service for Frequently Accessed Data
  * Provides intelligent caching for API responses with TTL and invalidation

@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """
 Phase 2A tests — Vega-Lite spec validation, rich_payload storage, export (MVA-484).
 

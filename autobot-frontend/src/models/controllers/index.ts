@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 // Controller exports - Business logic layer for AutoBot
 export { ChatController } from './ChatController'
 export { KnowledgeController } from './KnowledgeController'

@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 import axios from 'axios'
 import type { AxiosInstance, AxiosResponse, AxiosRequestConfig } from 'axios'
 import { getBackendUrl, getApiBase } from '@/config/ssot-config'

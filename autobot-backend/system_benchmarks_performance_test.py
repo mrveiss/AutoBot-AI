@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """
 Performance benchmarks for AutoBot system components
 Tests performance characteristics, resource usage, and scalability

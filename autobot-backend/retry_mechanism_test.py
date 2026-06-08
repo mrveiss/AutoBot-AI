@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """
 Unit tests for the retry mechanism
 Tests various retry strategies, exception handling, and integration with AutoBot components

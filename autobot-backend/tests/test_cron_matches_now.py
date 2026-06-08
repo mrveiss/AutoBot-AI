@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """Tests for _cron_matches_now — all 5 cron fields evaluated correctly.
 
 Day-of-week field follows standard cron convention:

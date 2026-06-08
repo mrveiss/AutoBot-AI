@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """
 Complete AutoBot Workflow System Test
 Tests the entire workflow orchestration pipeline with backend API

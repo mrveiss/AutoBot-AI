@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """LLC activity log SQLAlchemy model (GH#8216).
 
 Immutable audit trail for all LLC mutations. This table is append-only:

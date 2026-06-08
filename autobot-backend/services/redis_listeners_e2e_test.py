@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """
 Test script for Redis listeners in the Orchestrator.
 Creates mock worker messages to test the Redis pub/sub functionality.

@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 /**
  * API Circuit Breaker - Replaces timeout-based API calls with intelligent failure handling
  * No arbitrary timeouts - immediate success/failure with smart fallback

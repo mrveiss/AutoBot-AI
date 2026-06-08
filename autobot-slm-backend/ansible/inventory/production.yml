@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 ---
 # AutoBot Production Inventory - Hyper-V VMs
 # Update the ansible_host IPs with your actual VM addresses

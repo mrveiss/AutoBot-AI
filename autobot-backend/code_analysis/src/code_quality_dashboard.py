@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """
 Comprehensive Code Quality Dashboard
 Integrates all analyzers: duplicates, environment variables, performance, security, API consistency, testing coverage, and architectural patterns

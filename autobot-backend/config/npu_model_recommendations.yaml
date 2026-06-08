@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # SSOT: VRAM tier → recommended models for NPU worker auto-suggestion (GH#6738)
 # Tiers are evaluated in ascending order; all tiers with min_vram_gb <= available VRAM are eligible.
 tiers:

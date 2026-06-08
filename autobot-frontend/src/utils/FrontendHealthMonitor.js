@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 /**
  * Real-Time Frontend Health Monitor & Auto-Recovery System
  * PERFORMANCE OPTIMIZED VERSION - Reduced aggressive monitoring

@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """
 AutoBot Performance Benchmark Suite
 Comprehensive benchmarking tools for measuring AutoBot distributed system performance
