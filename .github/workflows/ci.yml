@@ -130,8 +130,11 @@ jobs:
       run: |
         echo "🔒 Running security analysis..."
 
-        # Security vulnerability scan — fail on medium+ severity/confidence
-        bandit -r autobot-backend/ autobot-slm-backend/ autobot_shared/ \
+        # Security vulnerability scan — fail on medium+ severity/confidence.
+        # -c .bandit applies the centralized skip list (B101/B104/B105/B106/B108/...)
+        # so known false positives don't fail the gate, matching code-quality.yml
+        # and security.yml (#9694). Real medium+ findings still exit non-zero.
+        bandit -c .bandit -r autobot-backend/ autobot-slm-backend/ autobot_shared/ \
           --severity-level medium --confidence-level medium \
           -f json -o bandit-report.json
         if [ -f bandit-report.json ]; then
