@@ -19,7 +19,7 @@ huggingface-hub>=1.16.1
 numpy>=2.4.4,<3.0.0
 
 # HTTP and API
-aiohttp>=3.13.4  # GH#8323: zip bomb, request smuggling CVEs
+aiohttp>=3.14.1  # GH#8323: zip bomb, request smuggling CVEs
 httpx>=0.28.1
 requests>=2.34.2
 
