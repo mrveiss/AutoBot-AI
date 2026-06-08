@@ -82,7 +82,9 @@ services:
       - POSTGRES_PASSWORD=${AUTOBOT_DB_PASSWORD:-autobot}
       - POSTGRES_DB=${AUTOBOT_DB_NAME:-autobot_slm}
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${AUTOBOT_DB_USER:-autobot}"]
+      # -d targets an existing DB; without it pg_isready connects to db=user
+      # ("autobot"), which is never created → FATAL spam every interval (#9713).
+      test: ["CMD-SHELL", "pg_isready -U ${AUTOBOT_DB_USER:-autobot} -d ${AUTOBOT_DB_NAME:-autobot_slm}"]
       interval: 10s
       timeout: 3s
       retries: 5
@@ -107,18 +109,23 @@ services:
       - autobot-data
 
   autobot-chromadb:
-    image: chromadb/chroma:0.5.23
+    # Match the v1 client (chromadb>=1.5.9 in autobot-backend/requirements.txt).
+    # The old 0.5.23 server couldn't parse v1 client requests → KeyError '_type'
+    # spam (#9717). v1.x persists to /data (was /chroma/chroma in 0.5.x).
+    image: chromadb/chroma:1.5.9
     container_name: autobot-chromadb
     restart: unless-stopped
     ports:
       - "127.0.0.1:8100:8000"
     volumes:
-      - chroma_data:/chroma/chroma
+      - chroma_data:/data
     environment:
       - ANONYMIZED_TELEMETRY=False
       - IS_PERSISTENT=TRUE
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v2/heartbeat"]
+      # The chroma 1.x image is minimal (no curl/wget); use bash /dev/tcp to hit
+      # the v2 heartbeat and confirm a 200 (#9717).
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/localhost/8000; printf 'GET /api/v2/heartbeat HTTP/1.0\r\n\r\n' >&3; grep -q '200 OK' <&3"]
       interval: 15s
       timeout: 5s
       retries: 3
@@ -177,6 +184,25 @@ services:
       - AUTOBOT_LLAMAINDEX_LLM_ENDPOINT=http://${AUTOBOT_OLLAMA_HOST:-autobot-ollama}:11434
       - AUTOBOT_LLAMAINDEX_EMBEDDING_ENDPOINT=http://${AUTOBOT_OLLAMA_HOST:-autobot-ollama}:11434
       - AUTOBOT_AUDIT_LOG_FILE=/app/logs/audit.log
+      # User mode defaults to single_user (no Postgres schema bootstrap needed).
+      # RBAC (single_company → first user becomes admin) is wired and ready — set
+      # AUTOBOT_USER_MODE=single_company once the fresh-DB schema bootstrap lands
+      # (#9759). The Postgres env below is kept so that flip is a single var.
+      - AUTOBOT_USER_MODE=${AUTOBOT_USER_MODE:-single_user}
+      - AUTOBOT_POSTGRES_HOST=autobot-postgres
+      - AUTOBOT_POSTGRES_PORT=5432
+      - AUTOBOT_POSTGRES_DB=${AUTOBOT_USERS_DB_NAME:-autobot_users}
+      - AUTOBOT_POSTGRES_USER=${AUTOBOT_DB_USER:-autobot}
+      - AUTOBOT_POSTGRES_PASSWORD=${AUTOBOT_DB_PASSWORD:-autobot}
+      - AUTOBOT_ENCRYPTION_KEY=${AUTOBOT_ENCRYPTION_KEY:-}
+      # config.slm_url builds from AUTOBOT_SLM_HOST/PORT. The 127.0.0.1 default
+      # left the node unable to reach SLM → connection spam + host shown offline
+      # in the SLM dashboard. Point it at the service name (#9715).
+      - AUTOBOT_SLM_HOST=autobot-slm
+      - AUTOBOT_SLM_PORT=8000
+      # Shared signing secrets — must match SLM so the node JWT verifies (#9715)
+      - AUTOBOT_JWT_SECRET=${AUTOBOT_JWT_SECRET:-autobot-dev-shared-jwt-secret-change-me}
+      - SECRET_KEY=${SECRET_KEY:-autobot-dev-shared-secret-key-change-me}
     depends_on:
       autobot-redis:
         condition: service_healthy
@@ -238,8 +264,25 @@ services:
       - AUTOBOT_CHROMADB_HOST=autobot-chromadb
       - AUTOBOT_CHROMADB_PORT=8000
       - AUTOBOT_AUDIT_LOG_FILE=/app/logs/audit.log
+      # User-mgmt/RBAC tasks need the same Postgres + mode wiring as the backend.
+      # Defaults to single_user; flip AUTOBOT_USER_MODE once #9759 lands.
+      - AUTOBOT_USER_MODE=${AUTOBOT_USER_MODE:-single_user}
+      - AUTOBOT_POSTGRES_HOST=autobot-postgres
+      - AUTOBOT_POSTGRES_PORT=5432
+      - AUTOBOT_POSTGRES_DB=${AUTOBOT_USERS_DB_NAME:-autobot_users}
+      - AUTOBOT_POSTGRES_USER=${AUTOBOT_DB_USER:-autobot}
+      - AUTOBOT_POSTGRES_PASSWORD=${AUTOBOT_DB_PASSWORD:-autobot}
+      - AUTOBOT_ENCRYPTION_KEY=${AUTOBOT_ENCRYPTION_KEY:-}
+      - AUTOBOT_SLM_HOST=autobot-slm
+      - AUTOBOT_SLM_PORT=8000
+      # Shared signing secrets — must match SLM so the node JWT verifies (#9715)
+      - AUTOBOT_JWT_SECRET=${AUTOBOT_JWT_SECRET:-autobot-dev-shared-jwt-secret-change-me}
+      - SECRET_KEY=${SECRET_KEY:-autobot-dev-shared-secret-key-change-me}
     healthcheck:
-      test: ["CMD-SHELL", "python3.12 -m celery -A celery_app inspect ping --destination celery@$HOSTNAME --timeout 5"]
+      # $$HOSTNAME (escaped) expands inside the container at runtime. A single
+      # $HOSTNAME is interpolated by Compose at parse time to an empty string,
+      # making --destination "celery@" match no node → false unhealthy (#9714).
+      test: ["CMD-SHELL", "python3.12 -m celery -A celery_app inspect ping --destination celery@$$HOSTNAME --timeout 5"]
       interval: 30s
       timeout: 10s
       start_period: 30s
@@ -278,14 +321,15 @@ services:
       python3.12 -m celery -A celery_app beat
       --loglevel=info
       --scheduler celery.beat.PersistentScheduler
-      --schedule /var/lib/autobot/celerybeat-schedule
+      --schedule /app/data/celerybeat-schedule
     working_dir: /app/autobot-backend
     env_file:
       - docker/.env.docker
     volumes:
+      # Schedule db lives on the writable backend_data volume. The old
+      # /var/lib/autobot mount was root-owned → gdbm EACCES crash loop (#9712).
       - backend_data:/app/data
       - backend_logs:/app/logs
-      - celerybeat_schedule:/var/lib/autobot
     environment:
       - AUTOBOT_ENVIRONMENT=production
       - AUTOBOT_DEPLOYMENT_MODE=local
@@ -301,6 +345,15 @@ services:
         condition: service_healthy
       autobot-chromadb:
         condition: service_healthy
+    healthcheck:
+      # Beat serves no HTTP port, so it can't use the backend image's inherited
+      # curl healthcheck (which always failed → false "unhealthy"). Check the
+      # beat process (PID 1) is alive via procfs — no extra tools needed.
+      test: ["CMD-SHELL", "grep -q celery /proc/1/cmdline"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
     deploy:
       resources:
         limits:
@@ -340,6 +393,12 @@ services:
       - SLM_POSTGRES_HOST=autobot-postgres
       - SLM_ADMIN_PASSWORD=${SLM_ADMIN_PASSWORD:-admin}
       - SLM_DATA_DIR=/app/data
+      # Shared signing secrets so the backend node's JWT verifies on SLM —
+      # without a shared secret each service generates its own and SLM rejects
+      # the node WS with 401, leaving the host shown offline (#9715). CHANGE in
+      # production via AUTOBOT_JWT_SECRET / SECRET_KEY.
+      - AUTOBOT_JWT_SECRET=${AUTOBOT_JWT_SECRET:-autobot-dev-shared-jwt-secret-change-me}
+      - SECRET_KEY=${SECRET_KEY:-autobot-dev-shared-secret-key-change-me}
     depends_on:
       autobot-redis:
         condition: service_healthy
@@ -421,6 +480,9 @@ services:
       - /var/run
       - /var/cache/nginx
       - /var/lib/nginx
+      # nginx opens its compiled-in default error log before parsing config;
+      # on a read_only rootfs this path must be writable or it alerts (#9718).
+      - /var/log/nginx
     security_opt:
       - no-new-privileges:true
     networks:
@@ -552,7 +614,6 @@ volumes:
   chroma_data:
   backend_data:
   backend_logs:
-  celerybeat_schedule:
   slm_data:
   slm_logs:
   ollama_data:
