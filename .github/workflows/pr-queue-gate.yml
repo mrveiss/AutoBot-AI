@@ -38,6 +38,7 @@ jobs:
             # Build the comment with an indented printf rather than a column-0
             # heredoc: an unindented heredoc body breaks out of the `run: |` YAML
             # block scalar, making the whole workflow invalid YAML (#9722).
+            # shellcheck disable=SC2016  # backticks/$ in single-quoted lines are intentionally literal
             BODY=$(printf '%s\n' \
               "## ⚠️ PR Queue Warning: $EXISTING/$LIMIT PRs Already Open" \
               "" \
