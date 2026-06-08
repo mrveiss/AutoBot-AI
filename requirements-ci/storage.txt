@@ -2,4 +2,4 @@
 redis>=5.0,<6.0
 chromadb==1.5.9
 sqlalchemy==2.0.50
-aiosqlite==0.21.0
+aiosqlite==0.22.1
