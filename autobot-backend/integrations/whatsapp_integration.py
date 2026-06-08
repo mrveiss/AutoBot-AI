@@ -514,7 +514,7 @@ class WhatsAppIntegration(BaseIntegration):
             if client is None:
                 logger.warning(
                     "Redis client unavailable for checking opt-in status (phone=%s)",
-                    _mask_phone(phone_number),
+                    _mask_phone(phone_number),  # codeql[py/clear-text-logging-sensitive-data]
                 )
                 return {
                     "phone_number": phone_number,
@@ -528,7 +528,7 @@ class WhatsAppIntegration(BaseIntegration):
             if not raw:
                 logger.debug(
                     "No opt-in status found for phone=%s (defaulting to opted_in=False)",
-                    _mask_phone(phone_number),
+                    _mask_phone(phone_number),  # codeql[py/clear-text-logging-sensitive-data]
                 )
                 return {
                     "phone_number": phone_number,
@@ -544,7 +544,7 @@ class WhatsAppIntegration(BaseIntegration):
         except json.JSONDecodeError as exc:
             logger.error(
                 "Malformed JSON in opt-in status (phone=%s): %s",
-                _mask_phone(params.get("phone_number")),
+                _mask_phone(params.get("phone_number")),  # codeql[py/clear-text-logging-sensitive-data]
                 exc,
             )
             return {
@@ -556,7 +556,7 @@ class WhatsAppIntegration(BaseIntegration):
         except Exception as exc:
             logger.error(
                 "Failed to check opt-in status (phone=%s): %s",
-                _mask_phone(params.get("phone_number")),
+                _mask_phone(params.get("phone_number")),  # codeql[py/clear-text-logging-sensitive-data]
                 exc,
             )
             return {
@@ -597,7 +597,7 @@ class WhatsAppIntegration(BaseIntegration):
             if client is None:
                 logger.warning(
                     "Redis client unavailable for setting opt-in status (phone=%s)",
-                    _mask_phone(phone_number),
+                    _mask_phone(phone_number),  # codeql[py/clear-text-logging-sensitive-data]
                 )
                 return {"success": False, "phone_number": phone_number}
 
@@ -609,7 +609,7 @@ class WhatsAppIntegration(BaseIntegration):
             )
             logger.info(
                 "Updated opt-in status for phone=%s (opted_in=%s)",
-                _mask_phone(phone_number),
+                _mask_phone(phone_number),  # codeql[py/clear-text-logging-sensitive-data]
                 opted_in,
             )
             return {
@@ -622,7 +622,7 @@ class WhatsAppIntegration(BaseIntegration):
         except Exception as exc:
             logger.error(
                 "Failed to set opt-in status (phone=%s): %s",
-                _mask_phone(params.get("phone_number")),
+                _mask_phone(params.get("phone_number")),  # codeql[py/clear-text-logging-sensitive-data]
                 exc,
             )
             return {
