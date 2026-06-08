@@ -1536,7 +1536,7 @@ class TelemetryConfig(BaseSettings):
     anonymous_usage_stats: bool = Field(
         default=True,
         alias="AUTOBOT_TELEMETRY_ANONYMOUS_USAGE_STATS",
-        description="Share anonymous usage statistics to help improve AutoBot",
+        description="Record anonymous usage metrics locally (stored in your Redis, never transmitted)",
     )
     first_run_prompt_shown: bool = Field(
         default=False,

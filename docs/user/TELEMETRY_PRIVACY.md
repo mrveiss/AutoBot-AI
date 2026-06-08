@@ -1,10 +1,12 @@
-# Telemetry and Privacy
+# Local Usage Metrics and Privacy
 
-**Issue #9035** — AutoBot collects anonymous usage data to improve the platform. You can opt out at any time.
+**Issue #9035** — AutoBot can record anonymous operational metrics **locally** to power your own
+monitoring dashboards. This data stays entirely on your infrastructure and is **never transmitted
+to AutoBot or any third party**. You can disable recording at any time.
 
-## What Data is Collected?
+## What Data is Recorded?
 
-When telemetry is **enabled** (the default), AutoBot collects:
+When recording is **enabled** (the default), AutoBot stores the following in your **local Redis**:
 
 ### API Analytics
 - **Endpoint paths** — which API endpoints are accessed
@@ -12,7 +14,7 @@ When telemetry is **enabled** (the default), AutoBot collects:
 - **Status codes** — success/error rates (reliability tracking)
 - **Timestamps** — when features are used (usage patterns)
 
-### Voice Session Telemetry
+### Voice Session Metrics
 - **Session duration** — how long voice conversations last
 - **Token counts** — input/output tokens for cost estimation
 - **Audio duration** — seconds of audio input/output
@@ -24,29 +26,31 @@ When telemetry is **enabled** (the default), AutoBot collects:
 - **Frequency of use** — how often features are accessed
 - **Error patterns** — which operations fail and how often
 
-## What We Do NOT Collect
+## What is Never Recorded
 
-AutoBot **never** collects:
+AutoBot **never** records:
 
 - ❌ Personal information (usernames, emails, passwords)
 - ❌ Authentication tokens or API keys
 - ❌ Code content, prompts, or chat messages
 - ❌ File paths, hostnames, or IP addresses
 - ❌ Any data that could identify individual users
-- ❌ Data from air-gapped or private deployments when opted out
 
-## How to Opt Out
+And, regardless of this setting, AutoBot **never sends any of this data off your infrastructure** —
+there are no outbound analytics calls at all.
+
+## How to Disable Recording
 
 ### Via Settings UI
 
 1. Navigate to **Settings** → **Privacy** tab
-2. Toggle **"Send Anonymous Usage Statistics"** to **Disabled**
+2. Toggle **"Record Local Usage Metrics"** to **Disabled**
 3. Your preference is saved immediately
 
-When telemetry is disabled:
+When recording is disabled:
 - All API call tracking stops
 - Voice session data is kept in-memory only (for cap enforcement) and never persisted
-- No outbound analytics calls are made
+- Nothing is written to the local Redis analytics database
 
 ### Via Environment Variable
 
@@ -82,30 +86,34 @@ When `config.telemetry.enabled` is `False`:
 - No data is written to the Redis analytics database
 - Response headers indicate `X-Tracked-Analytics: false`
 
+When enabled, all records are stored in the operator's **local Redis** (`analytics` database) with a
+TTL. No component makes any outbound network call to transmit this data.
+
 ### Frontend
 
-The telemetry settings panel (`autobot-frontend/src/components/settings/TelemetrySettingsPanel.vue`) provides:
+The local usage metrics panel (`autobot-frontend/src/components/settings/TelemetrySettingsPanel.vue`) provides:
 
-- Toggle to enable/disable telemetry
-- Detailed disclosure of what data is collected
+- Toggle to enable/disable local recording
+- Detailed disclosure of what is recorded locally
 - Immediate API call to persist the preference
 
-## Privacy for Air-Gapped Deployments
+## Air-Gapped Deployments
 
-For fully isolated, air-gapped deployments:
+Because nothing is ever transmitted, AutoBot's local metrics are fully compatible with air-gapped,
+isolated deployments. To disable local recording entirely:
 
 1. Set `AUTOBOT_TELEMETRY_ENABLED=false` in your deployment configuration
-2. No telemetry data will be collected or transmitted
+2. No metrics will be recorded
 3. All features continue to work normally
 4. Voice session caps still enforce (in-memory tracking only)
 
 ## Data Retention
 
-When telemetry is enabled:
+When recording is enabled (all data is local):
 
-- **API analytics** — retained for 90 days in Redis
+- **API analytics** — retained for 90 days in your Redis
 - **Voice sessions** — retained for configured TTL (default: 7 days)
-- **Aggregated metrics** — retained indefinitely for platform improvements
+- **Aggregated metrics** — retained for your own historical dashboards
 
 ## Questions?
 
@@ -113,9 +121,9 @@ For privacy-related questions or concerns, please open an issue on GitHub or con
 
 ## Related Issues
 
-- [#9035](https://github.com/mrveiss/AutoBot-AI/issues/9035) — feat(admin): telemetry and analytics opt-out
+- [#9035](https://github.com/mrveiss/AutoBot-AI/issues/9035) — feat(admin): local usage metrics opt-out
 
 ---
 
-**Last Updated:** 2026-06-04  
+**Last Updated:** 2026-06-08  
 **Author:** mrveiss

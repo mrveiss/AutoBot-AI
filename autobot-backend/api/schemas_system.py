@@ -4037,7 +4037,7 @@ class TelemetrySettingsResponse(BaseModel):
     """Response for GET /api/settings/telemetry - Issue #9035."""
 
     enabled: bool = Field(..., description="Whether telemetry is enabled")
-    anonymous_usage_stats: bool = Field(..., description="Share anonymous usage statistics")
+    anonymous_usage_stats: bool = Field(..., description="Record anonymous usage metrics locally (never transmitted)")
     first_run_prompt_shown: bool = Field(..., description="First-run prompt has been shown")
 
 
@@ -4047,7 +4047,7 @@ class TelemetrySettingsRequest(BaseModel):
     enabled: bool = Field(..., description="Enable/disable telemetry collection")
     anonymous_usage_stats: bool = Field(
         default=True,
-        description="Share anonymous usage statistics",
+        description="Record anonymous usage metrics locally (never transmitted)",
     )
     first_run_prompt_shown: bool = Field(
         default=False,

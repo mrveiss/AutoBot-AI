@@ -3,8 +3,8 @@ AutoBot - AI-Powered Automation Platform
 Copyright (c) 2025 mrveiss
 Author: mrveiss
 
-TelemetryConsentModal.vue - First-run telemetry consent prompt
-Issue #9035: User-controlled privacy for usage data collection
+TelemetryConsentModal.vue - First-run local usage metrics notice
+Issue #9035: Operator-controlled local usage metrics (never transmitted)
 -->
 
 <template>
@@ -14,20 +14,21 @@ Issue #9035: User-controlled privacy for usage data collection
         <div class="modal-header">
           <h2 id="consent-title" class="modal-title">
             <Icon name="shield-alt" aria-hidden="true" />
-            Help Improve AutoBot
+            Local Usage Metrics
           </h2>
         </div>
 
         <div class="modal-body">
           <p class="consent-intro">
-            AutoBot collects <strong>anonymous usage statistics</strong> to help us improve the platform
-            and prioritize new features.
+            AutoBot can record <strong>anonymous operational metrics</strong> locally to power your
+            own monitoring dashboards. This data stays on your infrastructure and is
+            <strong>never sent to anyone</strong>.
           </p>
 
           <div class="data-summary">
             <h3 class="summary-title">
               <Icon name="chart-line" aria-hidden="true" />
-              What we collect:
+              What's recorded locally:
             </h3>
             <ul class="data-list">
               <li>API endpoint usage and response times</li>
@@ -39,7 +40,7 @@ Issue #9035: User-controlled privacy for usage data collection
           <div class="privacy-note">
             <Icon name="lock" aria-hidden="true" />
             <span>
-              We <strong>never</strong> collect personal data, code content, or chat messages.
+              <strong>Never recorded:</strong> personal data, code content, or chat messages.
             </span>
           </div>
 
@@ -56,7 +57,7 @@ Issue #9035: User-controlled privacy for usage data collection
             :disabled="isProcessing"
           >
             <Icon name="times" aria-hidden="true" />
-            No Thanks
+            Keep Off
           </button>
           <button
             type="button"
@@ -65,7 +66,7 @@ Issue #9035: User-controlled privacy for usage data collection
             :disabled="isProcessing"
           >
             <Icon name="check" aria-hidden="true" />
-            {{ isProcessing ? 'Saving...' : 'Accept' }}
+            {{ isProcessing ? 'Saving...' : 'Enable' }}
           </button>
         </div>
       </div>

@@ -323,7 +323,7 @@ Issue #753: User preference management interface
               <Icon name="shield-alt" />
               Privacy & Telemetry
             </h2>
-            <p class="section-description">Control what usage data AutoBot collects to improve the platform.</p>
+            <p class="section-description">Control which usage metrics AutoBot records locally on your infrastructure. Nothing is ever transmitted.</p>
           </div>
           <div class="section-content">
             <TelemetrySettingsPanel />

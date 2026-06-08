@@ -7,6 +7,9 @@ LLM Provider Switching API endpoints (Issue #536).
 Provides runtime provider switching, provider listing, and per-provider testing.
 """
 
+import json
+from typing import Any, Dict, List
+
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 
@@ -15,6 +18,8 @@ from api.schemas_system import LLMProviderListData, LLMProviderSwitchData, LLMPr
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.redis_client import get_redis_client
+from llm_shared.fallback_chain import get_fallback_chain_manager
 from services.llm_service import get_llm_service
 from utils.advanced_cache_manager import cache_response
 
@@ -92,4 +97,79 @@ async def test_llm_provider(
     return JSONResponse(
         status_code=200,
         content={"provider": provider_name, "available": is_healthy, "error": error},
+    )
+
+
+@router.get("/fallback-status")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_fallback_status",
+    error_code_prefix="LLM_PROVIDERS",
+)
+async def get_fallback_status(
+    current_user: dict = Depends(get_current_user),
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """
+    Get LLM fallback chain status (GH#8998 - MVA-2999).
+
+    Returns:
+        - configured_chains: List of configured fallback chains
+        - active_fallbacks: List of currently active fallback events
+    """
+    # Get configured fallback chains
+    fallback_manager = get_fallback_chain_manager()
+    chains_dict = fallback_manager.list_chains()
+
+    configured_chains = [
+        {
+            "primary_model": primary,
+            "fallback_chain": " → ".join(fallbacks),
+            "provider": "multi",  # Can be multi-provider
+        }
+        for primary, fallbacks in chains_dict.items()
+    ]
+
+    # Get active fallbacks from Redis
+    active_fallbacks: List[Dict[str, Any]] = []
+    try:
+        redis_client = get_redis_client(database="main")
+        # Scan for all active fallback keys
+        cursor = 0
+        while True:
+            cursor, keys = redis_client.scan(
+                cursor,
+                match="llm:fallback:active:*",
+                count=100,
+            )
+
+            for key in keys:
+                try:
+                    data = redis_client.get(key)
+                    if data:
+                        event = json.loads(data)
+                        active_fallbacks.append(event)
+                except Exception as exc:
+                    logger.warning(
+                        "Failed to parse fallback event from key %s: %s",
+                        key,
+                        exc,
+                    )
+
+            if cursor == 0:
+                break
+
+    except Exception as exc:
+        logger.warning(
+            "Failed to fetch active fallbacks from Redis: %s",
+            exc,
+            exc_info=True,
+        )
+
+    return JSONResponse(
+        status_code=200,
+        content={
+            "configured_chains": configured_chains,
+            "active_fallbacks": active_fallbacks,
+        },
     )

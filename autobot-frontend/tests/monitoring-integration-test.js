@@ -74,7 +74,7 @@ async function runMonitoringTests() {
     testResults.healthMonitor = testResults.healthMonitor &&
       updatedBudget.recentOperations.length > 0;
 
-  } catch (error) {
+  } catch {
     testResults.healthMonitor = false;
   }
 
@@ -89,7 +89,7 @@ async function runMonitoringTests() {
     const optimalInterval = smartMonitoringController.getOptimalInterval(120000); // 2 minutes base
     testResults.smartController = testResults.smartController && optimalInterval > 0;
 
-  } catch (error) {
+  } catch {
     testResults.smartController = false;
   }
 

@@ -3,8 +3,8 @@ AutoBot - AI-Powered Automation Platform
 Copyright (c) 2025 mrveiss
 Author: mrveiss
 
-TelemetrySettingsPanel.vue - Telemetry and Analytics Opt-Out Settings
-Issue #9035: User-controlled privacy for usage data collection
+TelemetrySettingsPanel.vue - Local Usage Metrics Settings
+Issue #9035: Operator-controlled local usage metrics (never transmitted)
 -->
 
 <template>
@@ -21,11 +21,12 @@ Issue #9035: User-controlled privacy for usage data collection
       <fieldset class="preference-section">
         <legend class="preference-label">
           <Icon name="chart-line" aria-hidden="true" />
-          Send Anonymous Usage Statistics
+          Record Local Usage Metrics
         </legend>
         <p class="preference-hint">
-          Help improve AutoBot by sharing anonymous usage data. This includes API call patterns,
-          voice session metrics, and feature usage. No personal data or code content is collected.
+          Record anonymous operational metrics &mdash; API call patterns, voice session metrics,
+          and feature usage &mdash; locally on your own infrastructure to power your monitoring
+          dashboards. This data never leaves your servers and is never sent to anyone.
         </p>
         <div class="toggle-wrapper">
           <label class="toggle-switch">
@@ -33,7 +34,7 @@ Issue #9035: User-controlled privacy for usage data collection
               type="checkbox"
               v-model="telemetryEnabled"
               @change="handleTelemetryToggle"
-              :aria-label="'Enable telemetry collection'"
+              :aria-label="'Enable local usage metrics'"
             />
             <span class="toggle-slider"></span>
           </label>
@@ -48,24 +49,24 @@ Issue #9035: User-controlled privacy for usage data collection
         <details class="data-disclosure">
           <summary class="disclosure-summary">
             <Icon name="info-circle" aria-hidden="true" />
-            What data is collected?
+            What is recorded locally?
           </summary>
           <div class="disclosure-content">
-            <h4>When telemetry is enabled, we collect:</h4>
+            <h4>When enabled, AutoBot records locally:</h4>
             <ul>
               <li><strong>API Analytics:</strong> Endpoint paths, response times, status codes</li>
               <li><strong>Voice Sessions:</strong> Duration, token counts, cost estimates</li>
               <li><strong>Feature Usage:</strong> Which features are used and how often</li>
             </ul>
-            <h4>We do NOT collect:</h4>
+            <h4>Never recorded:</h4>
             <ul>
               <li>Personal information or authentication tokens</li>
               <li>Code content, prompts, or chat messages</li>
               <li>File paths, hostnames, or IP addresses</li>
-              <li>Any data from air-gapped or private deployments</li>
             </ul>
             <p class="disclosure-note">
-              All data is anonymized and used solely to improve AutoBot. You can opt out at any time.
+              All metrics stay on your own infrastructure (stored in your local Redis) and are
+              never transmitted to AutoBot or any third party. You can disable recording at any time.
             </p>
           </div>
         </details>
@@ -131,8 +132,8 @@ async function handleTelemetryToggle() {
     })
 
     const message = telemetryEnabled.value
-      ? 'Telemetry enabled. Thank you for helping improve AutoBot!'
-      : 'Telemetry disabled. No usage data will be collected.'
+      ? 'Local usage metrics enabled. Data stays on your infrastructure.'
+      : 'Local usage metrics disabled. No metrics will be recorded.'
 
     statusMessage.value = message
     statusType.value = 'success'
