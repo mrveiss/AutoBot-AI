@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """Tests for token-aware _score_length in TaskComplexityScorer (GH #7348)."""
 
 from llm_shared.tiered_routing.complexity_scorer import TaskComplexityScorer

@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 /**
  * Real User Monitoring (RUM) Agent for Development Mode
  * Tracks performance, errors, and user interactions for debugging

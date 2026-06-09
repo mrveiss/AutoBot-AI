@@ -1,10 +1,11 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 /**
  * Composable for managing per-workflow notification configuration.
  *
  * Issue #3139: Notification Config UI for Workflows.
  *
  * AutoBot - AI-Powered Automation Platform
- * Copyright (c) 2025 mrveiss
  * Author: mrveiss
  */
 

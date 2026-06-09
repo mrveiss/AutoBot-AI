@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # Watchdog for the MV-Stealth-VM GitHub Actions runner.
 #
 # Detects the "ghost busy" condition — runner reports busy=true to GitHub but

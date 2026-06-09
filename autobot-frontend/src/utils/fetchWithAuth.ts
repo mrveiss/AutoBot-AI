@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 /**
  * fetchWithAuth — drop-in replacement for fetch() that injects the JWT
  * Authorization header from localStorage.

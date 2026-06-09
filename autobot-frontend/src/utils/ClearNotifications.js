@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 /**
  * Utility to clear stuck system notifications
  * This addresses the issue where system error notifications with overlay level

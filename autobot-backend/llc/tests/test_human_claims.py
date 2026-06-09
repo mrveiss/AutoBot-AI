@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """Tests for human claim/unclaim on LLC work items (GH#8223).
 
 Mirrors the mock pattern used in test_atomic_checkout.py.

@@ -1,4 +1,5 @@
-# Copyright (c) mrveiss. All rights reserved.
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """Compatibility shim — all symbols live in autobot_memory_graph (#3612).
 
 PRs #3608 and #3609 introduced knowledge/memory_graph/ as a parallel package.

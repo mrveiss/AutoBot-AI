@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """
 Test AutoBot with Containerized Playwright Integration
 Demonstrates the complete workflow with browser automation

@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """
 Unit tests for Redis Prometheus Metrics Integration - Issue #65 P1 Optimization
 Tests that Redis operations properly record metrics to Prometheus.

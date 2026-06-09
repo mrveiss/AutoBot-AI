@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """
 Security tests for configuration management
 Tests security aspects of configuration loading, environment variables, and sensitive data handling

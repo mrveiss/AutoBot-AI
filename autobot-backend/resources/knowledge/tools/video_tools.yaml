@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 metadata:
   category: video_tools
   description: Video downloading, transcript extraction, and media metadata tools

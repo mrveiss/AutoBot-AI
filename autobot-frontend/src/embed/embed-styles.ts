@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 /**
  * All widget styles are inlined into the Shadow DOM so they never
  * conflict with (or inherit from) the host page stylesheet.

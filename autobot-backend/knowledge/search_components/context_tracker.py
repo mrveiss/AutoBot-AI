@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """Per-query context tracker preventing redundant chunk reads (#1994, #2005)."""
 
 from autobot_shared.logging_manager import get_logger

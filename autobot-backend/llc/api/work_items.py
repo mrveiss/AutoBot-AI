@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """LLC work items API routes (GH#8213, GH#8223, GH#8231, GH#8232, GH#8252, GH#8253).
 Routes:
   POST   /api/llc/work-items

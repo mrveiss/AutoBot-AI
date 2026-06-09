@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """Tests for LLC WorkItemService CRUD and status transitions (GH#8213)."""
 
 import uuid

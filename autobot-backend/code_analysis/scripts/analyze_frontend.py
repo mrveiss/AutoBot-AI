@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """
 Analyze frontend code for JavaScript, TypeScript, Vue, React, Angular, and other frontend technologies
 """

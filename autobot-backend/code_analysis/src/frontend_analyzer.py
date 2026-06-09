@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """
 Frontend Code Analyzer
 Extends the analysis suite to support JavaScript, TypeScript, Vue, React, and other frontend technologies

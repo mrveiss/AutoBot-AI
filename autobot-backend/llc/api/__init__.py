@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """LLC API router (GH#8251)."""
 
 from fastapi import APIRouter

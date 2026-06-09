@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 ---
 # Recover Host Playbook
 # Reinstall and reconfigure a host (disaster recovery)

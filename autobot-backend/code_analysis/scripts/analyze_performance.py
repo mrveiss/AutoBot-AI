@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """
 Analyze AutoBot codebase for performance issues, memory leaks, and processing inefficiencies
 """

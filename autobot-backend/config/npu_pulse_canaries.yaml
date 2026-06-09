@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # NPU Pulse-Probe Canary Configuration (GH#6739)
 #
 # Each model family defines a fixed canary prompt and the expected token

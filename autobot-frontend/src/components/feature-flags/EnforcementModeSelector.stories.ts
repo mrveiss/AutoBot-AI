@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 import type { Meta, StoryObj } from '@storybook/vue3';
 import EnforcementModeSelector from './EnforcementModeSelector.vue';
 

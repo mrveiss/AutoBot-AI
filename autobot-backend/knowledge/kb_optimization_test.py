@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """
 Test knowledge base with GPU-optimized semantic chunking
 Verifies that the knowledge base is using 5x faster processing.

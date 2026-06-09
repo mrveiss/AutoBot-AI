@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 /**
  * Shared error extraction utilities for converting unknown caught errors
  * into user-friendly messages. Used across composables and services.

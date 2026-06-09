@@ -1,0 +1,43 @@
+THIRD-PARTY NOTICES
+===================
+
+AutoBot is licensed under the Apache License 2.0 (see LICENSE). It bundles the
+third-party components listed below, each under its own license. These notices
+are provided to satisfy the attribution requirements of those licenses and of
+Apache-2.0 section 4(d). The license texts referenced here are included at the
+listed paths in this repository.
+
+---------------------------------------------------------------------------
+github-mcp-server
+  Path:        .mcp/ (binary: .mcp/github-mcp-server; license: .mcp/LICENSE)
+  License:     MIT
+  Copyright:   Copyright (c) 2025 GitHub
+  Source:      https://github.com/github/github-mcp-server
+
+@upstash/context7-mcp
+  Path:        autobot-infrastructure/shared/mcp/tools/context7/
+  License:     MIT (license: .../context7/LICENSE)
+  Copyright:   Copyright (c) 2021 Upstash, Inc.
+  Source:      https://github.com/upstash/context7
+
+mcp-structured-thinking
+  Path:        autobot-infrastructure/shared/mcp/tools/mcp-structured-thinking/
+  License:     MIT (license: .../mcp-structured-thinking/LICENSE)
+  Copyright:   Copyright (c) 2025 Arben Ademi
+
+mcp-task-manager-server
+  Path:        autobot-infrastructure/shared/mcp/tools/mcp-task-manager-server/
+  License:     UNRESOLVED — the bundled LICENSE file is GNU GPL v3, but the
+               package.json `license` field declares "ISC". These conflict.
+               Until the upstream license is confirmed, treat this component as
+               GPL-3.0 (the more restrictive of the two) for compliance
+               purposes. GPL-3.0 and Apache-2.0 have one-way compatibility, so
+               this MUST be resolved before AutoBot is redistributed with this
+               component included. See repository issue tracker.
+  Copyright:   Not stated by upstream (package "My new MCP Server", v0.1.0).
+---------------------------------------------------------------------------
+
+Note: components fetched at build/deploy time as package dependencies (npm /
+pip) are not vendored in this repository and are therefore not enumerated here;
+their licenses are distributed with those packages. Only third-party code that
+ships inside this repository is listed above.

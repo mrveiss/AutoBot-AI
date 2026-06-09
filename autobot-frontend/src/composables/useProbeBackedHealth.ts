@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 /**
  * Probe-backed health composable (#7247 — DRY identical getHealth templates).
  *

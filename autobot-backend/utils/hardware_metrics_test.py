@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """
 AutoBot Phase 9 Monitoring System Validation Test
 Comprehensive testing of GPU/NPU monitoring, performance optimization, and real-time dashboard.

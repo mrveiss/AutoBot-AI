@@ -1,4 +1,5 @@
-# Copyright (c) mrveiss. All rights reserved.
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """
 AutoBot Memory Graph - Semantic Search Module
 

@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """
 SQLAlchemy 2.0 ORM models for Live Canvas (MVA-359).
 

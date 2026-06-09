@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """LLC WorkItemRelationService — add/remove work-item relations (GH#8252).
 
 Mirror invariant: adding ``blocks`` A→B automatically creates ``blocked_by`` B→A.

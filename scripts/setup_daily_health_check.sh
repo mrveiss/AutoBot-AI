@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # Setup daily health check via Ansible
 #
 # This script validates prerequisites and prints the Ansible command needed to

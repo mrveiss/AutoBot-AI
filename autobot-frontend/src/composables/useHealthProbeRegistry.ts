@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 /**
  * Health-probe registry composable (#7008 wire-in for #7003 / #6917 phase 1).
  *

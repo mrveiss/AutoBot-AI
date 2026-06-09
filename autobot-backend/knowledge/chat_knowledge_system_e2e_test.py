@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """
 Comprehensive test for the Chat Knowledge Management System
 Tests the complete integration of chat context, file associations, and knowledge compilation

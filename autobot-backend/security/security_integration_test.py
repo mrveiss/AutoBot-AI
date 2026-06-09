@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """
 Integration tests for security system end-to-end workflows
 Tests how security components work together with the rest of the AutoBot system

@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 import type { Meta } from '@storybook/vue3'
 // #7273: relaxed to StoryObj<any> for render-only stories that don't match component props
 import type { StoryObj } from '@storybook/vue3'

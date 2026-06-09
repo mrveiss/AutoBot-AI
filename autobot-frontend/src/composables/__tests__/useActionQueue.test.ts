@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 /**
  * Unit Tests for useActionQueue composable
  * Issue #3275: Offline mode — action queue for deferred network operations

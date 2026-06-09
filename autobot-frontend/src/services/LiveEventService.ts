@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 /**
  * Live Event Service - Scoped Real-Time Events (#1408)
  *
@@ -5,7 +7,6 @@
  * Supports channels: agent:{id}, task:{id}, workflow:{id}, global
  *
  * AutoBot - AI-Powered Automation Platform
- * Copyright (c) 2025 mrveiss
  * Author: mrveiss
  */
 

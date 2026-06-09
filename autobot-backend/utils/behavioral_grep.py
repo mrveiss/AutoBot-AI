@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """behavioral_grep.py — Behavioral-grep audit utility for extraction workflows.
 
 Captures the "audit-pass" class of misses: sites that implement the same

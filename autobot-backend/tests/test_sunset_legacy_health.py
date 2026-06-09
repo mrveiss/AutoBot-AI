@@ -1,5 +1,6 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """Issue #6902: SunsetLegacyHealthMiddleware adds Sunset/Deprecation headers
 to legacy /api/<module>/health routes — but NOT to the canonical aggregator

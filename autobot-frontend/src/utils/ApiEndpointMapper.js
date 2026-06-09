@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 /**
  * API Endpoint Mapper
  * Provides graceful fallback handling and caching for API endpoint calls

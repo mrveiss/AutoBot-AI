@@ -1,5 +1,6 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """#7406: extends #7375/#7384 argument-aware risk pattern with two more
 shapes that the prefix-form / first-token-only rules missed:

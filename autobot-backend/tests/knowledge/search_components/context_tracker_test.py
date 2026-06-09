@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """Tests for ContextTracker (#2005)."""
 
 from knowledge.search_components.context_tracker import ContextTracker

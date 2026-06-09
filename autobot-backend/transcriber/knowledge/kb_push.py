@@ -1,6 +1,7 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # autobot-backend/transcriber/knowledge/kb_push.py
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """Manual Knowledge Base push — formats transcript segments as KB documents."""
 

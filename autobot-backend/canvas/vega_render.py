@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """
 Headless Vega-Lite v5 → SVG renderer for server-side export (Phase 2, MVA-484).
 

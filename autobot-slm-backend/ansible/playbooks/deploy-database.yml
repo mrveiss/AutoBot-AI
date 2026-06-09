@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 ---
 # Database Deployment Playbook (VM3)
 # Deploys Redis Stack, model storage, and data persistence infrastructure

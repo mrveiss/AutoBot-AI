@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 /**
  * AutobotWidget — Custom Element wrapping the chat app in a Shadow DOM.
  *

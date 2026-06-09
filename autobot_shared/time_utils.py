@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """Shared UTC timestamp helpers.
 
 Canonical format (#5169): **`+00:00` ISO-8601 produced by `utc_timestamp()`.**

@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """
 Server-side Vega-Lite v5 spec validation for Phase 2 chart cells (MVA-484).
 

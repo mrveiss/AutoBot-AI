@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """LLC activity log API (GH#8216).
 
 GET /api/llc/companies/{company_id}/activity — paginated, filterable audit trail.

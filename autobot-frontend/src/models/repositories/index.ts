@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 // Repository exports - Unified API layer for AutoBot
 export { ApiRepository } from './ApiRepository'
 export { ChatRepository } from './ChatRepository'

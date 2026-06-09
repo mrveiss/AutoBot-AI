@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """Integration tests for transcript export API endpoints.
 
 Tests verify that the mock _get_transcript_mock function and export endpoints

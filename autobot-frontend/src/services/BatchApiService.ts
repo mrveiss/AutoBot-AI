@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 /**
  * Batch API Service - Optimized service for batching multiple API calls
  * Updated to use correct ApiClient singleton with proper error handling

@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 // MSW handlers for Live Canvas API — MVA-399
 // Frozen contract: MVA-359#document-api-contract
 // All 5 REST endpoints + error variants

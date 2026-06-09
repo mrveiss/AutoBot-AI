@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 // Typed fixture factories for Live Canvas API — MVA-399
 // Shapes match the frozen contract at MVA-359#document-api-contract
 

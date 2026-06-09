@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 import { defineAsyncComponent, defineComponent, h } from 'vue'
 import type { AsyncComponentLoader } from 'vue'
 import AsyncErrorFallback from '@/components/async/AsyncErrorFallback.vue'

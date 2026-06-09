@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """Tests for held-out dev/test split enforcement in rag_benchmarks.
 
 Issue #5074 — verifies:

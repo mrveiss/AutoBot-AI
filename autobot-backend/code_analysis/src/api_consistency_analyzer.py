@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """
 API Consistency Analyzer using Redis and NPU acceleration
 Analyzes API endpoints for consistency, patterns, and best practices

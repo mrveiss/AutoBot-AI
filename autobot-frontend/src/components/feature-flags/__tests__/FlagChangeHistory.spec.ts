@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 import { describe, it, expect } from 'vitest'
 import FlagChangeHistory from '../FlagChangeHistory.vue'
 import { renderComponent } from '@/test/utils/test-utils'

@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """Canonical event_type strings for LiveEventManager payloads.
 
 Frontend consumers filter on these values; backend publishers must import

@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 /**
  * Chat ID Generator - Ensures consistent UUID format across the application
  * Matches backend expected format for proper session management

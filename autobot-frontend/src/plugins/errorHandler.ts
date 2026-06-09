@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 /**
  * Global Error Handler Plugin
  * Provides comprehensive error handling for the Vue application
