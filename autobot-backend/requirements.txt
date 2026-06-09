@@ -72,7 +72,7 @@ langchain-ollama>=1.1.0,<2.0.0        # Issue #1572: ChatOllama for QA chain
 langgraph>=1.2.0,<2.0.0               # Issue #1043: StateGraph for chat orchestration
 langgraph-checkpoint-redis>=0.4.1,<1.0.0  # Issue #1043: Redis checkpointer for thread persistence
 markdownify>=1.2.2  # HTML to Markdown conversion
-mcp>=1.27.1            # MCP protocol for skill subprocesses (Issue #731)
+mcp>=1.27.2            # MCP protocol for skill subprocesses (Issue #731)
 PyYAML>=6.0.3            # SKILL.md frontmatter parsing (Phase 3 sync engine)
 
 # Community growth skill (Issue #1161)
