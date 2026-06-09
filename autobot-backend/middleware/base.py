@@ -201,7 +201,7 @@ class Extension:
 
     # ========== Message Preparation Hooks ==========
 
-    async def on_before_message_process(self, ctx: HookContext) -> None | None:
+    async def on_before_message_process(self, ctx: HookContext) -> None:
         """
         Called at the start of message handling.
 
@@ -350,7 +350,7 @@ class Extension:
             False to stop loop, None to continue
         """
 
-    async def on_after_continuation(self, ctx: HookContext) -> None | None:
+    async def on_after_continuation(self, ctx: HookContext) -> None:
         """
         Called after each continuation iteration.
 
@@ -363,7 +363,7 @@ class Extension:
             None
         """
 
-    async def on_loop_complete(self, ctx: HookContext) -> None | None:
+    async def on_loop_complete(self, ctx: HookContext) -> None:
         """
         Called when message loop completes.
 
@@ -391,7 +391,7 @@ class Extension:
             Modified suggestion or None to keep unchanged
         """
 
-    async def on_critical_error(self, ctx: HookContext) -> None | None:
+    async def on_critical_error(self, ctx: HookContext) -> None:
         """
         Called when a critical error occurs.
 
@@ -419,7 +419,7 @@ class Extension:
             Modified response or None to keep unchanged
         """
 
-    async def on_after_response_send(self, ctx: HookContext) -> None | None:
+    async def on_after_response_send(self, ctx: HookContext) -> None:
         """
         Called after response is sent.
 
@@ -434,7 +434,7 @@ class Extension:
 
     # ========== Session Lifecycle Hooks ==========
 
-    async def on_session_create(self, ctx: HookContext) -> None | None:
+    async def on_session_create(self, ctx: HookContext) -> None:
         """
         Called when a new session is created.
 
@@ -447,7 +447,7 @@ class Extension:
             None
         """
 
-    async def on_session_destroy(self, ctx: HookContext) -> None | None:
+    async def on_session_destroy(self, ctx: HookContext) -> None:
         """
         Called when a session is destroyed.
 
@@ -503,7 +503,7 @@ class Extension:
             True to auto-approve, None for normal flow
         """
 
-    async def on_approval_received(self, ctx: HookContext) -> None | None:
+    async def on_approval_received(self, ctx: HookContext) -> None:
         """
         Called when user approval is received.
 

@@ -45,14 +45,33 @@ sys.modules.setdefault("api", _api_mod)
 
 
 def _stub(name: str) -> MagicMock:
-    """Return (or create) a MagicMock stub for *name* in sys.modules."""
+    """Return (or create) a MagicMock stub for *name* in sys.modules.
+
+    Also binds the stub onto its parent package stub as an attribute so the two
+    ways of reaching a submodule converge on the SAME object (#9780):
+
+    - ``from services.encryption import encrypt_data`` reads
+      ``sys.modules["services.encryption"]``.
+    - ``unittest.mock.patch("services.encryption.encrypt_data")`` resolves the
+      target via ``getattr(sys.modules["services"], "encryption")``.
+
+    Without the parent binding the latter auto-creates a *different* child mock,
+    so ``patch("services.encryption.x")`` silently patches an object the code
+    under test never reads (a false-green / confusing-failure trap). Use
+    ``patch.object(sys.modules["services.encryption"], ...)`` if you must target
+    a stubbed submodule on an older conftest.
+    """
     if name not in sys.modules:
         mod = MagicMock()
         mod.__name__ = name
         mod.__package__ = name.split(".")[0]
         mod.__spec__ = None
         sys.modules[name] = mod
-    return sys.modules[name]  # type: ignore[return-value]
+    mod = sys.modules[name]
+    parent_name, _, child = name.rpartition(".")
+    if parent_name and parent_name in sys.modules:
+        setattr(sys.modules[parent_name], child, mod)
+    return mod  # type: ignore[return-value]
 
 
 # ── config ───────────────────────────────────────────────────────────────────

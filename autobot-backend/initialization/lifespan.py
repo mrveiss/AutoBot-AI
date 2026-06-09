@@ -1503,6 +1503,10 @@ async def _start_community_clustering_loop(app: FastAPI) -> None:
 
 async def _init_liveness_monitor(app: FastAPI) -> None:
     """Start LLC LivenessMonitor to recover stuck heartbeat runs (GH#9028)."""
+    if not _llc_postgres_available():
+        logger.info("LLC LivenessMonitor: skipped (Postgres disabled — single_user mode)")
+        app.state.llc_liveness_monitor = None
+        return
     logger.info("LLC LivenessMonitor: Starting...")
     try:
         from llc.scheduler.liveness_monitor import LivenessMonitor
@@ -1518,6 +1522,10 @@ async def _init_liveness_monitor(app: FastAPI) -> None:
 
 async def _init_budget_watchdog(app: FastAPI) -> None:
     """Start LLC BudgetWatchdog for per-agent budget enforcement (GH#9029)."""
+    if not _llc_postgres_available():
+        logger.info("LLC BudgetWatchdog: skipped (Postgres disabled — single_user mode)")
+        app.state.llc_budget_watchdog = None
+        return
     logger.info("LLC BudgetWatchdog: Starting...")
     try:
         from llc.scheduler.budget_watchdog import BudgetWatchdog
@@ -1531,8 +1539,22 @@ async def _init_budget_watchdog(app: FastAPI) -> None:
         app.state.llc_budget_watchdog = None
 
 
+def _llc_postgres_available() -> bool:
+    """LLC persistence requires Postgres (single_company+). In single_user mode
+    it is intentionally unavailable, so callers skip rather than error (#9713)."""
+    try:
+        from user_management.config import get_deployment_config
+
+        return get_deployment_config().postgres_enabled
+    except Exception:
+        return False
+
+
 async def _recover_agent_sessions(app: FastAPI) -> None:
     """Re-queue runs that were interrupted by a previous server crash (GH#9026)."""
+    if not _llc_postgres_available():
+        logger.info("LLC SessionCheckpointer: skipped (Postgres disabled — single_user mode)")
+        return
     logger.info("LLC SessionCheckpointer: recovering incomplete runs...")
     try:
         from llc.scheduler.session_checkpointer import recover_incomplete_runs
@@ -1545,6 +1567,10 @@ async def _recover_agent_sessions(app: FastAPI) -> None:
 
 async def _init_session_checkpointer(app: FastAPI) -> None:
     """Start LLC SessionCheckpointer for periodic session state persistence (GH#9026)."""
+    if not _llc_postgres_available():
+        logger.info("LLC SessionCheckpointer: skipped (Postgres disabled — single_user mode)")
+        app.state.llc_session_checkpointer = None
+        return
     logger.info("LLC SessionCheckpointer: Starting...")
     try:
         from llc.scheduler.session_checkpointer import SessionCheckpointer

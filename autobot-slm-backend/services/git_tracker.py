@@ -32,6 +32,14 @@ VERSION_CHECK_INTERVAL = 300  # 5 minutes
 DEFAULT_REPO_PATH = os.environ.get("SLM_REPO_PATH", "/opt/autobot/code_source")
 DEFAULT_BRANCH = os.environ.get("SLM_REPO_BRANCH", "Dev_new_gui")
 
+# Log the "no local code source" condition once, not every interval (#9716).
+_missing_repo_warned = False
+
+
+def _is_git_repo(repo_path: str) -> bool:
+    """Return True if repo_path is a usable git working tree."""
+    return bool(repo_path) and os.path.isdir(os.path.join(repo_path, ".git"))
+
 
 class GitTracker:
     """
@@ -72,6 +80,15 @@ class GitTracker:
             Tuple of (stdout, return_code)
         """
         cmd = ["git", "-C", self.repo_path, *args]
+
+        # Deployments without a local checkout (docker compose / rsync) have no
+        # code_source dir. Skip the git invocation and let callers fall back to
+        # the DB commit setting, instead of warn-spamming every reconcile cycle
+        # (#9716 guarded only version_check_task; the API/reconciler callers
+        # bypassed it — #9771).
+        if not _is_git_repo(self.repo_path):
+            logger.debug("git_tracker: %s is not a git repo — skipping 'git %s'", self.repo_path, " ".join(args))
+            return "", 1
 
         try:
             proc = await asyncio.create_subprocess_exec(
@@ -314,9 +331,26 @@ async def version_check_task(
     """
     logger.info("Starting version check task (interval: %ds)", interval)
 
+    global _missing_repo_warned
+
     while True:
         try:
             repo_path, branch = await _get_active_code_source_config()
+
+            # Deployments without a local checkout (e.g. docker compose) have no
+            # code_source dir. Skip quietly instead of spamming git failures
+            # every interval; log the condition exactly once (#9716).
+            if not _is_git_repo(repo_path):
+                if not _missing_repo_warned:
+                    logger.info(
+                        "No local git code source at %s — version checking disabled " "for this deployment.",
+                        repo_path,
+                    )
+                    _missing_repo_warned = True
+                await asyncio.sleep(interval)
+                continue
+
+            _missing_repo_warned = False
             tracker = get_git_tracker(repo_path=repo_path, branch=branch)
             result = await tracker.check_for_updates()
 

@@ -44,18 +44,20 @@ target_metadata = [Base.metadata, LLCBase.metadata]
 
 def get_url() -> str:
     """Get database URL from deployment config or environment."""
-    # Try environment variable first
-    url = config.database_url
+    # Try environment variable first. NOTE: `config` here is the Alembic Config
+    # object, which has no `database_url`/`db_host` attributes — reading them
+    # raised AttributeError and broke migrations entirely. Read the env directly.
+    url = os.environ.get("AUTOBOT_DATABASE_URL", "")
     if url:
         return url
 
-    # Fall back to deployment config
+    # Fall back to deployment config (Postgres-backed user modes)
     try:
         deployment_config = get_deployment_config()
         return deployment_config.postgres_sync_url
     except Exception:
         # Default fallback for development
-        db_host = config.db_host
+        db_host = os.environ.get("AUTOBOT_POSTGRES_HOST", "autobot-postgres")
         return f"postgresql://autobot:autobot@{db_host}:5432/autobot"
 
 

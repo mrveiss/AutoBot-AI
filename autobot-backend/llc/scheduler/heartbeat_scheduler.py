@@ -28,6 +28,8 @@ Rate-limit recovery (GH#8204):
 
 import asyncio
 import logging
+import os
+import time
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
@@ -43,10 +45,12 @@ from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
 from user_management.database import get_async_session_factory
 
-from ..adapters import AutoBotAgentAdapter
-from ..exceptions import ProviderRateLimited
+from ..adapters import AutoBotAgentAdapter, get_adapter
+from ..config import AGENT_API_BASE_URL
+from ..exceptions import AdapterRunFailed, ProviderRateLimited
 from ..models.enums import HeartbeatInvocationSource, LLCRunStatus
 from ..models.heartbeat_run import LLCHeartbeatRun
+from ..services.api_key import ApiKeyService
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +61,28 @@ _POLL_INTERVAL = 5.0  # seconds between sorted-set polls
 _RL_BASE_SECONDS = 300  # 5 minutes for the first retry
 _RL_MAX_SECONDS = 14400  # cap at 4 hours
 _MAX_RATE_LIMIT_RETRIES = 10  # demote to failed after this many consecutive retries
+
+
+def _env_float(name: str, default: float) -> float:
+    """Parse a float env var, falling back to *default* on absence or bad value."""
+    raw = os.environ.get(name)
+    if not raw:
+        return default
+    try:
+        return float(raw)
+    except ValueError:
+        logger.warning("Invalid %s=%r — using default %s", name, raw, default)
+        return default
+
+
+# Registry-adapter (e.g. claude_code) completion polling (GH#9622, GH#9623).
+_ADAPTER_POLL_INTERVAL = _env_float("LLC_ADAPTER_POLL_INTERVAL_SECONDS", 5.0)
+_ADAPTER_MAX_WAIT_SECONDS = _env_float("LLC_ADAPTER_MAX_WAIT_SECONDS", 7200.0)
+# Ephemeral run-key TTL backstop — must exceed the max wait so a key never
+# expires mid-run; revocation still happens promptly when the run finishes.
+_RUN_KEY_TTL_SECONDS = _env_float("LLC_RUN_KEY_TTL_SECONDS", _ADAPTER_MAX_WAIT_SECONDS + 600.0)
+# A run is still in flight while in one of these states; everything else is terminal.
+_NONTERMINAL_STATUSES = frozenset({LLCRunStatus.QUEUED, LLCRunStatus.RUNNING})
 
 
 class HeartbeatScheduler:
@@ -628,23 +654,16 @@ def _next_fire(cron_expr: str, base_ts: float) -> float:
 
 
 async def _dispatch_adapter(agent: Dict[str, Any], context: Dict[str, Any]) -> None:
-    """Invoke the configured adapter for this agent via AutoBotAgentAdapter.
+    """Route the heartbeat to the adapter configured for this agent.
 
-    GH#8490: replaces the no-op stub with a real dispatch through
-    ``AutoBotAgentAdapter`` so heartbeat runs actually execute agents.
-
-    The adapter is instantiated per-call using the agent's ``adapter_config``
-    (a JSON dict stored in ``agent_org_nodes.adapter_config``).  For agents
-    without an explicit ``adapter_config`` or ``adapter_type`` we fall back to
-    a minimal noop so existing rows are not broken during rollout.
-
-    Adapters should raise ``ProviderRateLimited`` when the LLM provider
-    rejects the request due to quota or rate limits so the scheduler can
-    schedule an automatic retry rather than marking the run as failed.
+    ``autobot_agent`` agents run in-process via :class:`AutoBotAgentAdapter`
+    (GH#8490).  Every other ``adapter_type`` resolves through the adapter
+    registry (GH#8226) — e.g. ``claude_code`` agents run as Claude Code CLI
+    subprocesses (GH#9622, GH#9623).  Registry adapters are issued an
+    ephemeral, run-scoped LLC API key so the woken agent can authenticate its
+    LLC API calls; the key is revoked when the run finishes.
     """
     adapter_type = agent.get("adapter_type") or "autobot_agent"
-    adapter_config = agent.get("adapter_config") or {}
-
     logger.debug(
         "Dispatching adapter=%s for agent=%s context_keys=%s",
         adapter_type,
@@ -652,6 +671,26 @@ async def _dispatch_adapter(agent: Dict[str, Any], context: Dict[str, Any]) -> N
         sorted(context.keys()),
     )
 
+    if adapter_type == "autobot_agent":
+        await _dispatch_autobot_agent(agent, context)
+        return
+
+    try:
+        adapter = get_adapter(adapter_type)
+    except KeyError:
+        logger.warning(
+            "agent %s: no LLC adapter registered for type %r — skipping dispatch",
+            agent["agent_id"],
+            adapter_type,
+        )
+        return
+
+    await _dispatch_registry_adapter(adapter, agent, context)
+
+
+async def _dispatch_autobot_agent(agent: Dict[str, Any], context: Dict[str, Any]) -> None:
+    """Dispatch an in-process AutoBot agent via :class:`AutoBotAgentAdapter`."""
+    adapter_config = agent.get("adapter_config") or {}
     if not adapter_config.get("agent_class"):
         # No agent_class configured — log and return (graceful degradation).
         logger.warning(
@@ -665,6 +704,110 @@ async def _dispatch_adapter(agent: Dict[str, Any], context: Dict[str, Any]) -> N
     # background task, so blocking here does not stall the poll loop.
     adapter = AutoBotAgentAdapter(agent_config=adapter_config)
     await adapter.run_blocking(dict(context, agent_id=agent["agent_id"]))
+
+
+async def _dispatch_registry_adapter(adapter: Any, agent: Dict[str, Any], context: Dict[str, Any]) -> None:
+    """Invoke a registry adapter, manage its run-scoped key, await completion.
+
+    Issues an ephemeral LLC API key scoped to this agent (GH#9623), injects it
+    plus the API base URL into the context so the adapter forwards them to the
+    subprocess, blocks until the external run reaches a terminal state, then
+    revokes the key — so the credential lives only for the duration of the run.
+
+    Note: registry adapters (e.g. claude_code) do NOT participate in the
+    ``ProviderRateLimited`` exponential-backoff recovery path — provider rate
+    limits surface as a non-success terminal status, recorded as a failed run.
+    """
+    agent_id: str = agent["agent_id"]
+    company_id = str(agent.get("company_id") or "")
+
+    key_record = None
+    enriched = dict(context, agent_id=agent_id, api_base=AGENT_API_BASE_URL)
+    if company_id:
+        key_record, raw_key = await _issue_run_key(agent_id, company_id)
+        if raw_key:
+            # Sensitive: plaintext run-scoped bearer token — never log this value.
+            enriched["agent_api_key"] = raw_key
+    else:
+        logger.warning("agent %s has no company_id — dispatching without an LLC API key", agent_id)
+
+    agent_config = {"agent_id": agent_id, "adapter_config": agent.get("adapter_config") or {}}
+    external_run_id: Optional[str] = None
+    try:
+        external_run_id = await adapter.invoke(agent_config, enriched)
+        final_status = await _await_adapter_completion(adapter, agent_config, external_run_id)
+    except asyncio.CancelledError:
+        # Shutdown / task cancellation — kill the external run so it does not
+        # outlive its about-to-be-revoked key, then propagate.
+        if external_run_id is not None:
+            await _safe_cancel(adapter, agent_config, external_run_id)
+        raise
+    finally:
+        if key_record is not None:
+            await _revoke_run_key(agent_id, key_record.id)
+
+    # GH#9622: surface non-success terminal states so _run_adapter records the
+    # run as FAILED (and the liveness monitor can act) instead of COMPLETED.
+    if final_status != LLCRunStatus.COMPLETED:
+        raise AdapterRunFailed(agent.get("adapter_type") or "", str(external_run_id), final_status)
+
+
+async def _safe_cancel(adapter: Any, agent_config: Dict[str, Any], run_id: str) -> None:
+    """Cancel an external run, swallowing adapter errors (best-effort)."""
+    try:
+        await adapter.cancel(agent_config, run_id)
+    except Exception:
+        logger.exception("Failed to cancel adapter run %s", run_id)
+
+
+async def _issue_run_key(agent_id: str, company_id: str) -> tuple[Any, Optional[str]]:
+    """Issue an ephemeral run-scoped LLC API key. Returns (record, plaintext).
+
+    Best-effort: on failure the agent still runs, just without a key (returns
+    ``(None, None)``) — the run is logged rather than blocked.
+    """
+    factory = get_async_session_factory()
+    try:
+        async with factory() as session:
+            record, raw = await ApiKeyService().issue_key(
+                session,
+                agent_id=agent_id,
+                company_id=company_id,
+                name=f"heartbeat-{agent_id}-{uuid.uuid4().hex[:8]}",
+                expires_at=datetime.now(tz=timezone.utc) + timedelta(seconds=_RUN_KEY_TTL_SECONDS),
+            )
+        return record, raw
+    except Exception:
+        logger.exception("Failed to issue ephemeral heartbeat key for agent %s", agent_id)
+        return None, None
+
+
+async def _revoke_run_key(agent_id: str, key_id: uuid.UUID) -> None:
+    """Revoke an ephemeral run-scoped key (best-effort)."""
+    factory = get_async_session_factory()
+    try:
+        async with factory() as session:
+            await ApiKeyService().revoke_key(session, agent_id=agent_id, key_id=key_id)
+    except Exception:
+        logger.exception("Failed to revoke ephemeral heartbeat key %s for agent %s", key_id, agent_id)
+
+
+async def _await_adapter_completion(adapter: Any, agent_config: Dict[str, Any], run_id: str) -> LLCRunStatus:
+    """Poll ``adapter.status`` until the run is terminal or the max wait elapses.
+
+    Cancels the run if it overruns ``_ADAPTER_MAX_WAIT_SECONDS`` so the
+    ephemeral key is never left live indefinitely.
+    """
+    started = time.monotonic()
+    while time.monotonic() - started < _ADAPTER_MAX_WAIT_SECONDS:
+        result = await adapter.status(agent_config, run_id)
+        if result.status not in _NONTERMINAL_STATUSES:
+            return result.status
+        await asyncio.sleep(_ADAPTER_POLL_INTERVAL)
+
+    logger.warning("Adapter run %s exceeded max wait — cancelling", run_id)
+    await adapter.cancel(agent_config, run_id)
+    return LLCRunStatus.TIMEOUT
 
 
 async def _fetch_recent_decisions(company_id: str, n: int = 5) -> list[Dict[str, Any]]:

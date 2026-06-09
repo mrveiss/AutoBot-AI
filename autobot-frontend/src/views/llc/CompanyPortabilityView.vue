@@ -28,7 +28,7 @@
         <div class="export-buttons">
           <button
             class="btn-primary"
-            :disabled="exportingTemplate"
+            :disabled="exportingTemplate || !effectiveCompanyId"
             @click="exportTemplate"
           >
             <span v-if="exportingTemplate" class="spinner" />
@@ -37,7 +37,7 @@
 
           <button
             class="btn-secondary"
-            :disabled="exportingSnapshot"
+            :disabled="exportingSnapshot || !effectiveCompanyId"
             @click="exportSnapshot"
           >
             <span v-if="exportingSnapshot" class="spinner" />
@@ -45,6 +45,9 @@
           </button>
         </div>
 
+        <p v-if="!effectiveCompanyId" class="export-hint">
+          Select a company to enable exporting.
+        </p>
         <p class="export-hint">
           <strong>Template</strong> — agents, goals, routines, seed tasks (no sprint history, no secrets).<br />
           <strong>Snapshot</strong> — full backup including all work items and sprint history.
@@ -202,6 +205,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import { useRoute } from 'vue-router'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { getApiBase } from '@/config/ssot-config'
 import { useNotificationBus } from '@/composables/useNotificationBus'
@@ -209,10 +213,11 @@ import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('CompanyPortabilityView')
 const { showToast } = useNotificationBus()
+const route = useRoute()
 
 // ── props ────────────────────────────────────────────────────────────────────
 const props = defineProps<{ companyId?: string }>()
-const effectiveCompanyId = computed(() => props.companyId ?? '00000000-0000-0000-0000-000000000000')
+const effectiveCompanyId = computed(() => (route.params.companyId as string) ?? props.companyId ?? '')
 
 // ── state ────────────────────────────────────────────────────────────────────
 const globalError = ref<string | null>(null)
@@ -289,6 +294,7 @@ function extractSecretPlaceholders(json: unknown): string[] {
 
 // ── export ────────────────────────────────────────────────────────────────────
 async function exportTemplate(): Promise<void> {
+  if (!effectiveCompanyId.value) return
   exportingTemplate.value = true
   try {
     const res = await fetchWithAuth(
@@ -307,6 +313,7 @@ async function exportTemplate(): Promise<void> {
 }
 
 async function exportSnapshot(): Promise<void> {
+  if (!effectiveCompanyId.value) return
   exportingSnapshot.value = true
   try {
     const res = await fetchWithAuth(
