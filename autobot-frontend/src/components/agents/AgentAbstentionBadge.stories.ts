@@ -4,7 +4,6 @@
  * Storybook Stories for AgentAbstentionBadge (GH#6626)
  *
  * AutoBot - AI-Powered Automation Platform
- * Copyright (c) 2025 mrveiss
  * Author: mrveiss
  */
 

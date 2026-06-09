@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 /**
  * AutoBot - AI-Powered Automation Platform
- * Copyright (c) 2026 mrveiss
  * Author: mrveiss
  *
  * Composable for managing KB watch folders

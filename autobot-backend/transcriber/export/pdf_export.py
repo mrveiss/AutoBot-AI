@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 # autobot-backend/transcriber/export/pdf_export.py
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """Export transcript to PDF via HTML→WeasyPrint."""
 

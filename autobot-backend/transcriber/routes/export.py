@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 # autobot-backend/transcriber/routes/export.py
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """Export route — DOCX, PDF, SRT, VTT."""
 

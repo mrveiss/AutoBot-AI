@@ -6,7 +6,6 @@
  * Issue #208: Provides reactive state and API integration for
  * code pattern detection and optimization features.
  *
- * Copyright (c) 2025 mrveiss
  * Author: mrveiss
  */
 

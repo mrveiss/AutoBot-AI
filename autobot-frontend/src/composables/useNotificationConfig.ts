@@ -6,7 +6,6 @@
  * Issue #3139: Notification Config UI for Workflows.
  *
  * AutoBot - AI-Powered Automation Platform
- * Copyright (c) 2025 mrveiss
  * Author: mrveiss
  */
 

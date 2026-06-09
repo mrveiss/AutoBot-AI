@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 # autobot-backend/transcriber/routes/recordings.py
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """Recording upload, list, delete routes. Pipeline trigger wired in Plan 2."""
 

@@ -1,7 +1,6 @@
 # Copyright 2025-2026 mrveiss
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
 """Tests for Layer4GoalAncestry and TieredContextBuilder.build() L4 path (GH#6469).
 
 Imports layers.py directly via importlib to avoid the chat_history package

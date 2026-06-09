@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 # autobot-backend/transcriber/routes/projects.py
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """Project CRUD routes for the transcriber module."""
 

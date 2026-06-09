@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 # autobot-backend/transcriber/export/srt_export.py
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """Export transcript segments to SubRip (.srt) format."""
 

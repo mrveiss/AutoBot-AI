@@ -1,7 +1,6 @@
 # Copyright 2025-2026 mrveiss
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """Targeted tests for MVA-1017 gap fixes (GH#8479 #8478 #8476 #8474 #8462 #8461 #8493)."""
 

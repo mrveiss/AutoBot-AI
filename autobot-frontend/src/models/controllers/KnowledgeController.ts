@@ -7,7 +7,6 @@
  * bridging the Pinia store with the KnowledgeRepository API layer.
  *
  * @author mrveiss
- * @copyright (c) 2025 mrveiss
  */
 import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
 import { useAppStore } from '@/stores/useAppStore'

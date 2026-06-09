@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 /**
  * AutoBot - AI-Powered Automation Platform
- * Copyright (c) 2025 mrveiss
  * Author: mrveiss
  *
  * Unit Tests for useKnowledgeVectorization Composable (Sprint 2 #162)

@@ -1,7 +1,6 @@
 # Copyright 2025-2026 mrveiss
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2026 mrveiss
 # Author: mrveiss
 """Response schemas for MCP bridge and RAG feedback endpoints (Issue #5317 batch 4c)."""
 

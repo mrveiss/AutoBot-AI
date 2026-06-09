@@ -7,7 +7,6 @@
  * Do NOT create duplicate repository implementations elsewhere.
  *
  * @author mrveiss
- * @copyright (c) 2025 mrveiss
  */
 import { ApiRepository } from './ApiRepository'
 import type { KnowledgeDocument, SearchResult } from '@/stores/useKnowledgeStore'

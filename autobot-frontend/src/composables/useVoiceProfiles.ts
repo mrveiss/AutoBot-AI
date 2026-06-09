@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 /**
  * AutoBot - AI-Powered Automation Platform
- * Copyright (c) 2025 mrveiss
  * Author: mrveiss
  *
  * useVoiceProfiles.ts - Voice profile management composable (#1054)

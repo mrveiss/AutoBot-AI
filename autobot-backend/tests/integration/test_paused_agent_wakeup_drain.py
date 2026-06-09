@@ -1,7 +1,6 @@
 # Copyright 2025-2026 mrveiss
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2026 mrveiss
 # Author: mrveiss
 """
 Integration test: paused agent wakeup queue drain (GH#6476 AC-9).

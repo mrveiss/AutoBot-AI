@@ -1,7 +1,6 @@
 // Copyright 2025-2026 mrveiss
 // SPDX-License-Identifier: Apache-2.0
 // AutoBot - AI-Powered Automation Platform
-// Copyright (c) 2025 mrveiss
 // Author: mrveiss
 import type { Meta, StoryObj } from '@storybook/vue3';
 import MachineProfilePanel from './MachineProfilePanel.vue';

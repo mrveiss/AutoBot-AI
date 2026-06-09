@@ -7,7 +7,6 @@
  * Supports channels: agent:{id}, task:{id}, workflow:{id}, global
  *
  * AutoBot - AI-Powered Automation Platform
- * Copyright (c) 2025 mrveiss
  * Author: mrveiss
  */
 

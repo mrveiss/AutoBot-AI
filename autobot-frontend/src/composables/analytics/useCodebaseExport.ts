@@ -5,7 +5,6 @@
  * Extracts report generation and section export from CodebaseAnalytics.vue (#1588).
  *
  * AutoBot - AI-Powered Automation Platform
- * Copyright (c) 2025 mrveiss
  * Author: mrveiss
  */
 import type { Ref } from 'vue'

@@ -2,7 +2,6 @@
 # Copyright 2025-2026 mrveiss
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """Migrate existing plaintext SSO provider secrets to AES-256-GCM encryption.
 

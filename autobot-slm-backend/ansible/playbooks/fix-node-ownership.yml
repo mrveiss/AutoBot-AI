@@ -6,7 +6,6 @@
 # Limit to specific node: --limit npu-worker
 #
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
 # Author: mrveiss
 
 - name: "Fix AutoBot file ownership on all nodes"

@@ -6,7 +6,6 @@
 # Called by Claude Code Stop hook.
 #
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
 # Author: mrveiss
 
 set -euo pipefail

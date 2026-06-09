@@ -7,7 +7,6 @@
  * abstention events when an agent cannot confidently complete a task.
  *
  * AutoBot - AI-Powered Automation Platform
- * Copyright (c) 2025 mrveiss
  * Author: mrveiss
  */
 

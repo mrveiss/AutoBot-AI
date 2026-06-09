@@ -5,7 +5,6 @@
  * Provides consistent error handling, logging, and user feedback
  *
  * @author mrveiss
- * @copyright 2025 mrveiss
  */
 
 import { createLogger } from '@/utils/debugUtils';

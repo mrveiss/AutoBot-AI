@@ -1,7 +1,6 @@
 # Copyright 2025-2026 mrveiss
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """LLC adapters package (GH#8226 / GH#8227 / GH#8228 / GH#8258 / GH#9008 / GH#9033).
 
