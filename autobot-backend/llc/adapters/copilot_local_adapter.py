@@ -33,6 +33,7 @@ from autobot_shared.logging_manager import get_logger
 
 from ..models.enums import LLCRunStatus
 from .base import AdapterRunStatus
+from .subprocess_support import inject_agent_credentials, render_context_markdown, serialize_invoke_context
 
 logger = get_logger(__name__)
 
@@ -108,13 +109,15 @@ class CopilotLocalAdapter:
 
         cmd: list[str] = [gh_cli, "copilot", "suggest", "--target", "bash", prompt]
 
-        env = {**os.environ, "LLC_INVOKE_CONTEXT": json.dumps(context, default=str)}
+        env = {**os.environ, "LLC_INVOKE_CONTEXT": serialize_invoke_context(context)}
         if gh_token:
             env["GITHUB_TOKEN"] = gh_token
             env["GH_TOKEN"] = gh_token
         env["GH_COPILOT_MODEL"] = copilot_model
         if workspace_dir:
             env["AUTOBOT_WORKSPACE_DIR"] = workspace_dir
+        # GH#9623/GH#9789: forward the run-scoped LLC bearer token + API base.
+        inject_agent_credentials(env, context)
 
         out_fh = open(output_file, "w", encoding="utf-8")
         try:
@@ -134,10 +137,8 @@ class CopilotLocalAdapter:
                     )
                     env.pop("AUTOBOT_WORKSPACE_DIR", None)
                     workspace_dir = None
-                    env["LLC_INVOKE_CONTEXT"] = json.dumps(
-                        {k: v for k, v in context.items() if k != "workspace_dir"},
-                        default=str,
-                    )
+                    context.pop("workspace_dir", None)
+                    env["LLC_INVOKE_CONTEXT"] = serialize_invoke_context(context)
                 else:
                     raise
                 proc = await asyncio.create_subprocess_exec(
@@ -256,16 +257,12 @@ class CopilotLocalAdapter:
             pass
 
     def _build_prompt(self, context: dict) -> str:
-        parts: list[str] = []
-        if rag_brief := context.get("rag_brief"):
-            parts.append(rag_brief)
-        if task_id := context.get("task_id", ""):
-            parts.append(f"Task ID: {task_id}")
-        if api_base := context.get("api_base_url", ""):
-            parts.append(f"API base URL: {api_base}")
-        if not parts:
-            parts.append(json.dumps(context, default=str))
-        return "\n\n".join(parts)
+        """Render the agent prompt as structured Markdown (GH#9769).
+
+        Shared with the other subprocess adapters via
+        :func:`render_context_markdown` — never a raw ``json.dumps`` blob.
+        """
+        return render_context_markdown(context)
 
     @staticmethod
     def _load_state(state_file: str, safe_dir: str = _DEFAULT_OUTPUT_DIR) -> Optional[dict]:
