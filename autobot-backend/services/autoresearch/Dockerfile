@@ -5,7 +5,7 @@
 # Built and pushed to ghcr.io/mrveiss/autobot-autoresearch by CI.
 # No AutoBot backend code is included — experiment deps only.
 
-FROM python:3.12-slim
+FROM python:3.14-slim
 
 WORKDIR /experiment
 

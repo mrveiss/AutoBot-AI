@@ -3,9 +3,16 @@
 # Requires Docker Compose v2+ for resource limits (deploy.resources).
 #
 # Usage:
-#   docker compose --env-file docker/.env.docker up -d          # Start all core services
-#   docker compose --env-file docker/.env.docker --profile monitoring up -d
-#   docker compose --env-file docker/.env.docker --profile ollama up -d
+#   bash docker/generate-secrets.sh                              # First run only — generate signing secrets
+#   docker compose --env-file docker/.env.docker --env-file docker/.env.secrets up -d          # Start all core services
+#   docker compose --env-file docker/.env.docker --env-file docker/.env.secrets --profile monitoring up -d
+#   docker compose --env-file docker/.env.docker --env-file docker/.env.secrets --profile ollama up -d
+#
+# SECRETS (GH#9775): AUTOBOT_JWT_SECRET / SECRET_KEY have NO static fallback —
+# a committed shared signing secret allows token forgery. Run
+# docker/generate-secrets.sh once to create a gitignored docker/.env.secrets with
+# unique random values, then pass it via --env-file (or set the vars yourself).
+# Compose fails fast with a clear message if they are unset.
 #
 # NOTE: --env-file docker/.env.docker is required when the root .env contains
 # fleet-specific paths (e.g. AUTOBOT_TLS_CERT_DIR=infrastructure/shared/certs)
@@ -201,8 +208,8 @@ services:
       - AUTOBOT_SLM_HOST=autobot-slm
       - AUTOBOT_SLM_PORT=8000
       # Shared signing secrets — must match SLM so the node JWT verifies (#9715)
-      - AUTOBOT_JWT_SECRET=${AUTOBOT_JWT_SECRET:-autobot-dev-shared-jwt-secret-change-me}
-      - SECRET_KEY=${SECRET_KEY:-autobot-dev-shared-secret-key-change-me}
+      - AUTOBOT_JWT_SECRET=${AUTOBOT_JWT_SECRET:?unset - run docker/generate-secrets.sh then add --env-file docker/.env.secrets (GH#9775)}
+      - SECRET_KEY=${SECRET_KEY:?unset - run docker/generate-secrets.sh then add --env-file docker/.env.secrets (GH#9775)}
     depends_on:
       autobot-redis:
         condition: service_healthy
@@ -276,8 +283,8 @@ services:
       - AUTOBOT_SLM_HOST=autobot-slm
       - AUTOBOT_SLM_PORT=8000
       # Shared signing secrets — must match SLM so the node JWT verifies (#9715)
-      - AUTOBOT_JWT_SECRET=${AUTOBOT_JWT_SECRET:-autobot-dev-shared-jwt-secret-change-me}
-      - SECRET_KEY=${SECRET_KEY:-autobot-dev-shared-secret-key-change-me}
+      - AUTOBOT_JWT_SECRET=${AUTOBOT_JWT_SECRET:?unset - run docker/generate-secrets.sh then add --env-file docker/.env.secrets (GH#9775)}
+      - SECRET_KEY=${SECRET_KEY:?unset - run docker/generate-secrets.sh then add --env-file docker/.env.secrets (GH#9775)}
     healthcheck:
       # $$HOSTNAME (escaped) expands inside the container at runtime. A single
       # $HOSTNAME is interpolated by Compose at parse time to an empty string,
@@ -397,8 +404,8 @@ services:
       # without a shared secret each service generates its own and SLM rejects
       # the node WS with 401, leaving the host shown offline (#9715). CHANGE in
       # production via AUTOBOT_JWT_SECRET / SECRET_KEY.
-      - AUTOBOT_JWT_SECRET=${AUTOBOT_JWT_SECRET:-autobot-dev-shared-jwt-secret-change-me}
-      - SECRET_KEY=${SECRET_KEY:-autobot-dev-shared-secret-key-change-me}
+      - AUTOBOT_JWT_SECRET=${AUTOBOT_JWT_SECRET:?unset - run docker/generate-secrets.sh then add --env-file docker/.env.secrets (GH#9775)}
+      - SECRET_KEY=${SECRET_KEY:?unset - run docker/generate-secrets.sh then add --env-file docker/.env.secrets (GH#9775)}
     depends_on:
       autobot-redis:
         condition: service_healthy

@@ -39,6 +39,7 @@ from autobot_shared.redis_client import get_async_redis_client
 
 from ..models.enums import LLCRunStatus
 from .base import AdapterRunStatus
+from .subprocess_support import inject_agent_credentials, render_context_markdown, serialize_invoke_context
 
 logger = get_logger(__name__)
 
@@ -87,122 +88,6 @@ def _resolve_claude_cli() -> str:
     if path is None:
         raise RuntimeError("claude CLI not found on PATH. " "Install Claude Code and ensure 'claude' is on PATH.")
     return path
-
-
-# Placeholder written by HeartbeatContextBuilder before a real key is issued at
-# dispatch time — never forwarded to the agent subprocess (GH#9623).
-_AGENT_API_KEY_PLACEHOLDER = "<injected-at-runtime>"
-
-# Keys rendered by dedicated prompt sections or consumed as env vars — excluded
-# from the generic "Additional Context" catch-all in _render_context_markdown.
-_RENDERED_CONTEXT_KEYS = frozenset(
-    {
-        "rag_brief",
-        "work_item_detail",
-        "work_item_id",
-        "goal_ancestry",
-        "company_context",
-        "project_context",
-        "agent_memory",
-        "agent_wiki",
-        "similar_past_work",
-        "recent_decisions",
-        "task_id",
-        "api_base",
-        "api_base_url",
-        "agent_api_key",
-        "workspace_dir",
-        "wake_reason",
-        "wake_comment_id",
-    }
-)
-
-
-def _serialize_invoke_context(context: dict) -> str:
-    """Serialize context for ``LLC_INVOKE_CONTEXT`` with the API key redacted.
-
-    The real ``agent_api_key`` is forwarded only via the dedicated
-    ``AUTOBOT_LLC_API_KEY`` env var (GH#9623); it must not be duplicated inside
-    the JSON context blob, which is broader and more likely to be logged.
-    """
-    if context.get("agent_api_key") and context["agent_api_key"] != _AGENT_API_KEY_PLACEHOLDER:
-        context = {**context, "agent_api_key": _AGENT_API_KEY_PLACEHOLDER}
-    return json.dumps(context, default=str)
-
-
-def _render_kb_chunks(label: str, ctx: object) -> str:
-    """Render a ``{chunks, sources}`` RAG context block, or '' when empty."""
-    if not isinstance(ctx, dict):
-        return ""
-    chunks = [str(c).strip() for c in ctx.get("chunks") or [] if str(c).strip()]
-    if not chunks:
-        return ""
-    return f"## {label}\n" + "\n\n".join(chunks)
-
-
-def _render_work_item(detail: object) -> str:
-    """Render the ``work_item_detail`` block as a Markdown header + sections."""
-    if not isinstance(detail, dict):
-        return ""
-    lines = [f"# Work Item: {detail.get('title') or 'Untitled'}"]
-    meta = [f"**{k}:** {detail[v]}" for k, v in (("Status", "status"), ("Priority", "priority")) if detail.get(v)]
-    if meta:
-        lines.append(" | ".join(meta))
-    if detail.get("description"):
-        lines.append(f"\n## Description\n{detail['description']}")
-    if detail.get("acceptance_criteria"):
-        lines.append(f"\n## Acceptance Criteria\n{detail['acceptance_criteria']}")
-    return "\n".join(lines)
-
-
-def _render_list_section(label: str, items: object, key: str = "title") -> str:
-    """Render a list of dicts/strings as a bulleted Markdown section, or ''."""
-    if not isinstance(items, (list, tuple)) or not items:
-        return ""
-    bullets = []
-    for item in items:
-        if isinstance(item, dict):
-            text = item.get(key) or item.get("summary") or item.get("description")
-            bullets.append(f"- {text}" if text else f"- {item}")
-        else:
-            bullets.append(f"- {item}")
-    return f"## {label}\n" + "\n".join(bullets)
-
-
-def _render_extra_scalars(context: dict) -> str:
-    """Render leftover scalar context keys as bullets (never a raw JSON dump)."""
-    extras = [
-        f"- {k}: {v}"
-        for k, v in context.items()
-        if k not in _RENDERED_CONTEXT_KEYS and isinstance(v, (str, int, float, bool))
-    ]
-    return "## Additional Context\n" + "\n".join(extras) if extras else ""
-
-
-def _render_context_markdown(context: dict) -> str:
-    """Assemble the agent prompt from recognised context sections (GH#9622).
-
-    Renders the heartbeat fat context (work item, goal ancestry, KB context,
-    agent memory, past work) as readable Markdown.  Never serialises the raw
-    context dict as JSON — unrecognised scalar keys become a bulleted block.
-    """
-    api_base = context.get("api_base") or context.get("api_base_url")
-    sections = [
-        str(context["rag_brief"]) if context.get("rag_brief") else "",
-        _render_work_item(context.get("work_item_detail")),
-        _render_list_section("Goal Ancestry", context.get("goal_ancestry")),
-        _render_kb_chunks("Company Knowledge Base", context.get("company_context")),
-        _render_kb_chunks("Project Knowledge Base", context.get("project_context")),
-        _render_kb_chunks("Agent Memory", context.get("agent_memory")),
-        f"## Agent Wiki\n{context['agent_wiki']}" if context.get("agent_wiki") else "",
-        _render_list_section("Similar Past Work", context.get("similar_past_work")),
-        _render_list_section("Recent Decisions", context.get("recent_decisions"), key="summary"),
-        f"Task ID: {context['task_id']}" if context.get("task_id") else "",
-        f"API base URL: {api_base}" if api_base else "",
-        _render_extra_scalars(context),
-    ]
-    body = "\n\n".join(s for s in sections if s)
-    return body or "Heartbeat invocation: no additional context was provided."
 
 
 class ClaudeCodeAdapter:
@@ -255,7 +140,7 @@ class ClaudeCodeAdapter:
         cmd.append(prompt)
 
         workspace_dir: str | None = context.get("workspace_dir")
-        env = {**os.environ, "LLC_INVOKE_CONTEXT": _serialize_invoke_context(context)}
+        env = {**os.environ, "LLC_INVOKE_CONTEXT": serialize_invoke_context(context)}
         if workspace_dir:
             env["AUTOBOT_WORKSPACE_DIR"] = workspace_dir
 
@@ -267,15 +152,8 @@ class ClaudeCodeAdapter:
         if wake_comment_id:
             env["AUTOBOT_LLC_WAKE_COMMENT_ID"] = wake_comment_id
 
-        # GH#9623: surface the agent's LLC API bearer token + base URL so the
-        # subprocess can authenticate LLC API calls. The build-time placeholder
-        # is skipped — only a real injected key is forwarded.
-        api_key = context.get("agent_api_key")
-        if api_key and api_key != _AGENT_API_KEY_PLACEHOLDER:
-            env["AUTOBOT_LLC_API_KEY"] = api_key
-        api_base_env = context.get("api_base") or context.get("api_base_url")
-        if api_base_env:
-            env["AUTOBOT_LLC_API_BASE"] = api_base_env
+        # GH#9623/GH#9789: forward the run-scoped LLC bearer token + API base.
+        inject_agent_credentials(env, context)
 
         out_fh = open(output_file, "w", encoding="utf-8")
         try:
@@ -296,7 +174,7 @@ class ClaudeCodeAdapter:
                 )
                 context.pop("workspace_dir", None)
                 env.pop("AUTOBOT_WORKSPACE_DIR", None)
-                env["LLC_INVOKE_CONTEXT"] = _serialize_invoke_context(context)
+                env["LLC_INVOKE_CONTEXT"] = serialize_invoke_context(context)
                 workspace_dir = None
                 proc = await asyncio.create_subprocess_exec(
                     *cmd,
@@ -421,10 +299,10 @@ class ClaudeCodeAdapter:
     def _build_prompt(self, context: dict) -> str:
         """Render the agent prompt as structured Markdown (GH#9622).
 
-        Delegates to :func:`_render_context_markdown` so the heartbeat fat
+        Delegates to :func:`render_context_markdown` so the heartbeat fat
         context becomes a readable brief instead of a raw ``json.dumps`` blob.
         """
-        return _render_context_markdown(context)
+        return render_context_markdown(context)
 
     @staticmethod
     def _load_state(state_file: str, safe_dir: str = _DEFAULT_OUTPUT_DIR) -> Optional[dict]:

@@ -118,6 +118,7 @@ config/*.yaml
 config/settings.json
 backend/config/settings.json
 .env
+docker/.env.secrets
 .env.local
 .env.development.local
 .env.test.local
