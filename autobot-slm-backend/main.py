@@ -196,6 +196,7 @@ async def lifespan(app: FastAPI):
         await _seed_default_roles()
         await _seed_default_agents()
         await _ensure_local_node()
+        await _ensure_compose_nodes()
     except Exception as e:
         logger.error("Data seeding failed: %s", e, exc_info=True)
         raise
@@ -217,6 +218,11 @@ async def lifespan(app: FastAPI):
 
     await reconciler_service.start()
 
+    # Heartbeat the SLM's own (and compose-colocated) nodes so they stay online
+    # via the same path VM-node agents use (#9761).
+    self_heartbeat_task = asyncio.create_task(_heartbeat_self_managed_nodes())
+    logger.info("Self-managed node heartbeat started")
+
     # Start version checker background task (Issue #741)
     version_checker_task = start_version_checker()
     logger.info("Version checker started")
@@ -234,8 +240,13 @@ async def lifespan(app: FastAPI):
     yield
 
     logger.info("Shutting down SLM Backend")
+    self_heartbeat_task.cancel()
     version_checker_task.cancel()
     a2a_card_task.cancel()
+    try:
+        await self_heartbeat_task
+    except asyncio.CancelledError:
+        logger.info("Self-managed node heartbeat stopped")
     try:
         await version_checker_task
     except asyncio.CancelledError:
@@ -300,7 +311,11 @@ async def _ensure_local_node() -> None:
                     local_ip,
                 )
                 existing.ip_address = local_ip
-                await session.commit()
+            # Heal detected_roles so the fleet role view shows the SLM roles as
+            # running (older rows predate this).
+            if list(existing.detected_roles or []) != _SLM_ROLES:
+                existing.detected_roles = _SLM_ROLES
+            await session.commit()
             return
 
         node = Node(
@@ -313,6 +328,7 @@ async def _ensure_local_node() -> None:
             auth_method="key",
             status=NodeStatus.ONLINE.value,
             roles=_SLM_ROLES,
+            detected_roles=_SLM_ROLES,
         )
         session.add(node)
         for role_name in _SLM_ROLES:
@@ -326,6 +342,166 @@ async def _ensure_local_node() -> None:
             )
         await session.commit()
         logger.info("Auto-registered SLM manager node (%s / %s)", hostname, local_ip)
+
+
+# Nodes the SLM hosts itself and must heartbeat locally (no external agent).
+_SELF_MANAGED_NODE_IDS: set[str] = {"00-SLM-Manager"}
+
+
+async def _heartbeat_self_managed_nodes() -> None:
+    """Drive heartbeats for nodes the SLM hosts itself (no external agent).
+
+    VM nodes stay online because their autobot-slm-agent POSTs
+    ``/api/nodes/{id}/heartbeat`` -> ``reconciler_service.update_node_heartbeat``.
+    The SLM's own node (and, in compose, the colocated service nodes registered
+    in ``_SELF_MANAGED_NODE_IDS``) have no external agent, so ``last_heartbeat``
+    never updates and the reconciler flips them OFFLINE after
+    ``heartbeat_interval * unhealthy_threshold``. This loop feeds the SAME
+    heartbeat path locally so they stay online — uniform with VM nodes, only the
+    heartbeat source differs (#9761).
+    """
+    import psutil
+
+    from services.database import db_service
+
+    while True:
+        try:
+            cpu = psutil.cpu_percent(interval=None)
+            mem = psutil.virtual_memory().percent
+            disk = psutil.disk_usage("/").percent
+            async with db_service.session() as db:
+                for node_id in sorted(_SELF_MANAGED_NODE_IDS):
+                    # Only heartbeat reachable nodes; unreachable container nodes
+                    # are left to the reconciler's offline path (same as VM nodes).
+                    if not await _node_reachable(node_id):
+                        continue
+                    await reconciler_service.update_node_heartbeat(
+                        db, node_id, cpu, mem, disk, agent_version="slm-local"
+                    )
+        except Exception:
+            logger.exception("Self-managed node heartbeat failed (non-fatal)")
+        await asyncio.sleep(settings.heartbeat_interval)
+
+
+# Compose fleet nodes (#9761): in a single-host docker compose stack each service
+# container is surfaced as a fleet node, using the SAME Node model + heartbeat path
+# as VM nodes. Gated by SLM_COMPOSE_NODES so production (Ansible/VM) fleets are
+# unaffected. port=None => liveness can't be TCP-probed, so it's assumed up.
+# role uses the canonical role-registry names (services/role_registry.py) so the
+# fleet role-assignment view lights the matching chip as "running". celery-beat
+# (scheduler) and postgres have no canonical role yet -> role=None (no chip).
+_COMPOSE_NODE_SPECS: list[dict] = [
+    {"id": "autobot-backend", "role": "backend", "port": 8001, "protocol": "http", "path": "/api/health"},
+    {"id": "autobot-worker", "role": "celery", "port": None, "protocol": "tcp", "path": None},
+    {"id": "autobot-celery-beat", "role": None, "port": None, "protocol": "tcp", "path": None},
+    {"id": "autobot-frontend", "role": "frontend", "port": 80, "protocol": "http", "path": "/"},
+    {"id": "autobot-postgres", "role": None, "port": 5432, "protocol": "tcp", "path": None},
+    {"id": "autobot-redis", "role": "redis", "port": 6379, "protocol": "redis", "path": None},
+    {"id": "autobot-chromadb", "role": "chromadb", "port": 8000, "protocol": "http", "path": "/api/v2/heartbeat"},
+]
+
+
+def _compose_nodes_enabled() -> bool:
+    """True when each compose container should be surfaced as a fleet node."""
+    return os.getenv("SLM_COMPOSE_NODES", "false").strip().lower() in ("1", "true", "yes")
+
+
+def _resolve_ip(host: str) -> str:
+    """Resolve a compose service name to its container IP (falls back to the name)."""
+    import socket
+
+    try:
+        return socket.gethostbyname(host)
+    except OSError:
+        return host
+
+
+async def _probe_tcp(host: str, port: int, timeout: float = 2.0) -> bool:
+    """Return True if a TCP connection to host:port succeeds within timeout."""
+    try:
+        _, writer = await asyncio.wait_for(asyncio.open_connection(host, port), timeout=timeout)
+        writer.close()
+        try:
+            await writer.wait_closed()
+        except Exception:
+            pass
+        return True
+    except Exception:
+        return False
+
+
+async def _node_reachable(node_id: str) -> bool:
+    """Liveness check for a self-managed node before heartbeating it.
+
+    The SLM manager node is the SLM itself (always up). Compose container nodes
+    with a known port are TCP-probed; port-less ones (celery worker/beat) can't be
+    probed and are assumed up while the stack runs.
+    """
+    if node_id == "00-SLM-Manager":
+        return True
+    spec = next((s for s in _COMPOSE_NODE_SPECS if s["id"] == node_id), None)
+    if not spec or not spec["port"]:
+        return True
+    return await _probe_tcp(node_id, spec["port"])
+
+
+async def _ensure_compose_nodes() -> None:
+    """Register each compose service container as a fleet node (#9761).
+
+    Idempotent and gated by SLM_COMPOSE_NODES. Mirrors _ensure_local_node but for
+    the sibling containers, so the fleet view lists every service in the stack and
+    the self-heartbeat loop keeps them online via the same path VM nodes use.
+    """
+    if not _compose_nodes_enabled():
+        return
+
+    from sqlalchemy import select
+
+    from models.database import Node, NodeRole, NodeStatus, Service, ServiceCategory, ServiceStatus
+
+    async with db_service.session() as session:
+        for spec in _COMPOSE_NODE_SPECS:
+            node_id = spec["id"]
+            _SELF_MANAGED_NODE_IDS.add(node_id)
+            ip = _resolve_ip(node_id)
+            role = spec["role"]
+            # The container runs exactly this role; detected_roles drives the
+            # "running" (green) chip, roles drives "assigned".
+            roles = [role] if role else []
+            existing = (await session.execute(select(Node).where(Node.node_id == node_id))).scalar_one_or_none()
+            if existing:
+                existing.ip_address = ip
+                existing.roles = roles
+                existing.detected_roles = roles
+                continue
+            session.add(
+                Node(
+                    node_id=node_id,
+                    ansible_name=node_id,
+                    hostname=node_id,
+                    ip_address=ip,
+                    auth_method="none",
+                    status=NodeStatus.PENDING.value,
+                    roles=roles,
+                    detected_roles=roles,
+                )
+            )
+            if role:
+                session.add(NodeRole(node_id=node_id, role_name=role, status="active", assignment_type="auto"))
+            session.add(
+                Service(
+                    node_id=node_id,
+                    service_name=role or node_id,
+                    status=ServiceStatus.UNKNOWN.value,
+                    category=ServiceCategory.AUTOBOT.value,
+                    port=spec["port"],
+                    protocol=spec["protocol"],
+                    endpoint_path=spec["path"],
+                    is_discoverable=True,
+                )
+            )
+        await session.commit()
+    logger.info("Registered/updated %d compose fleet nodes", len(_COMPOSE_NODE_SPECS))
 
 
 async def _ensure_admin_user():
