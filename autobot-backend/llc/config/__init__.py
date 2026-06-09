@@ -1,17 +1,22 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
-"""LLC configuration package (GH#8487).
+"""LLC configuration (GH#8487, GH#9776).
 
-Re-exports legacy llc/config.py symbols so existing callers continue to work
-now that llc/config/ directory (GH#8487) shadows the old flat module.
+Single source of truth for LLC config constants. The legacy flat module
+``llc/config.py`` was shadowed by this package and therefore dead — its unique
+``DEFAULT_STREAMING_WATCHDOG_TIMEOUT`` was unreachable. It is folded in here and
+the flat module deleted (GH#9776).
 """
 
 import os
 
-# Agent API base URL — re-exported from the legacy flat module so that
-# ``from llc.config import AGENT_API_BASE_URL`` keeps working (GH#8487).
+# Agent API base URL (used for context assembly and heartbeat payloads).
 AGENT_API_BASE_URL = os.environ.get("LLC_AGENT_API_BASE_URL", "http://localhost:8001/api")
+
+# Default streaming watchdog timeout (seconds of silence before kill).
+# Per-agent override via adapter_config["streaming_watchdog_timeout_seconds"].
+DEFAULT_STREAMING_WATCHDOG_TIMEOUT = int(os.environ.get("LLC_STREAMING_WATCHDOG_TIMEOUT", "120"))
 
 # Placeholder written into heartbeat context by HeartbeatContextBuilder before a
 # real run-scoped key is issued at dispatch time. Subprocess adapters skip this
@@ -20,4 +25,8 @@ AGENT_API_BASE_URL = os.environ.get("LLC_AGENT_API_BASE_URL", "http://localhost:
 # can never drift (GH#9777).
 AGENT_API_KEY_PLACEHOLDER = "<injected-at-runtime>"
 
-__all__ = ["AGENT_API_BASE_URL", "AGENT_API_KEY_PLACEHOLDER"]
+__all__ = [
+    "AGENT_API_BASE_URL",
+    "AGENT_API_KEY_PLACEHOLDER",
+    "DEFAULT_STREAMING_WATCHDOG_TIMEOUT",
+]
