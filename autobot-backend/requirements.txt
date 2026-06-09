@@ -39,7 +39,7 @@ torch==2.11.0  # MVA-3684: Pinned to match vllm 0.22.0 exact requirement
 torchvision==0.26.0  # MVA-3684: Pinned to match vllm 0.22.0 exact requirement
 torchaudio==2.11.0  # MVA-3684: Pinned to match vllm 0.22.0 exact requirement
 torchmetrics>=1.9.0  # Issue #904: Training metrics
-opencv-python-headless>=4.10.0,<4.11  # MVA-3684: <4.11 avoids numpy>=2 requirement (compatible with vllm's numpy 1.x)
+opencv-python-headless>=4.13.0.92,<4.14  # MVA-3684: <4.11 avoids numpy>=2 requirement (compatible with vllm's numpy 1.x)
 vanna>=2.0.2  # Issue #723: Natural language to SQL via Vanna.ai
                # SECURITY: CVE unpatched in all published releases (Dependabot alert #298,
                # dismissed tolerable_risk 2026-04-04, Issue #3445). Monitor
