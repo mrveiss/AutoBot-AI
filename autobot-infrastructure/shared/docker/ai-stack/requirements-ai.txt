@@ -16,7 +16,7 @@ chromadb>=1.5.9,<2.0.0           # upper bound guards against breaking API chang
 sentence-transformers>=5.3.0
 
 # Model and Tokenization
-transformers>=5.8.1
+transformers>=5.10.2
 tokenizers>=0.23.1
 huggingface-hub>=1.8.0
 tiktoken>=0.12.0
