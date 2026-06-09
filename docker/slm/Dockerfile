@@ -6,7 +6,7 @@
 # Author: mrveiss
 
 # ---- Dependencies stage ----
-FROM python:3.12-slim-bookworm AS deps
+FROM python:3.14-slim-bookworm AS deps
 
 ENV DEBIAN_FRONTEND=noninteractive
 WORKDIR /app
@@ -29,7 +29,7 @@ RUN grep -v -E "(autobot_shared|^-r )" /tmp/requirements.txt > /app/requirements
 
 
 # ---- Production stage ----
-FROM python:3.12-slim-bookworm AS production
+FROM python:3.14-slim-bookworm AS production
 
 ENV DEBIAN_FRONTEND=noninteractive
 
