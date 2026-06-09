@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """
 Tests for scripts/test_first_remediation.py — covers the limit-detection
 and safety-guard logic without requiring GitHub or a live Claude session.

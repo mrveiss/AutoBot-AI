@@ -1,5 +1,6 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """LLC sprint hierarchy API routes (GH#8219, GH#8224, GH#8220).
 

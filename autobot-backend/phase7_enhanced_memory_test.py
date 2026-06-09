@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """
 Test script for Phase 7 Enhanced Memory System
 Validates core functionality without requiring full backend restart

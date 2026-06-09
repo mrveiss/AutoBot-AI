@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """
 AutoBot Performance Monitor
 Comprehensive performance monitoring system for the 6-VM distributed architecture.

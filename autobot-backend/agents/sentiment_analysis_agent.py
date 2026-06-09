@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 """
 Sentiment Analysis Agent - Specialized for text sentiment and emotion classification.

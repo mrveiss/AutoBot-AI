@@ -1,5 +1,6 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
 # Author: mrveiss
 
 from extensions.builtin.transcriber_extension import TranscriberExtension, get_transcriber_router

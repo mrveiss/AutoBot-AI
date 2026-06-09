@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """
 Code Analysis System using Redis and NPU acceleration
 Analyzes codebase for duplicate functions and refactoring opportunities

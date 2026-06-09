@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 /**
  * useSecretsAuditApi — thin fetch wrappers for infrastructure-host and
  * workflow-usage endpoints used by SecretsManager.

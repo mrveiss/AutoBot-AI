@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """
 Security Vulnerability Analyzer using Redis and NPU acceleration
 Analyzes codebase for security vulnerabilities and defensive coding issues

@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 import { ref, watch, onMounted, onScopeDispose, getCurrentInstance, getCurrentScope, nextTick, type Ref } from 'vue'
 
 const MORE_BUTTON_WIDTH = 90

@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """Tests for HandoffService — agent-to-human handoff (GH#8231)."""
 
 import uuid

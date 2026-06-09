@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """Canonical datetime helpers for timezone-aware UTC operations.
 
 Re-exports and aliases from autobot_shared.time_utils with helper functions

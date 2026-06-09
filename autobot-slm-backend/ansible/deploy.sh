@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 #
 # AutoBot Hyper-V Deployment Script
 # Comprehensive deployment orchestration for migrating AutoBot from Docker to 5 VMs

@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 import { beforeAll, afterAll } from 'vitest'
 import { setupServer } from 'msw/node'
 import { handlers } from './mocks/api-handlers'

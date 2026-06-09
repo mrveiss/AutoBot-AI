@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """Transcript export services."""
 
 from services.transcript_export.base import BaseExporter, Segment, Transcript

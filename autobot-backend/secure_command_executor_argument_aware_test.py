@@ -1,5 +1,6 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """#7384 sub-fixes: argument-aware risk for tools whose base command is
 allowlisted but whose flags / arguments elevate them to attack vectors.

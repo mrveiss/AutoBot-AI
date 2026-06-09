@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 ---
 # AutoBot Infrastructure - Single Source of Truth for Network Configuration
 # Issue #808: Centralize all hardcoded IPs

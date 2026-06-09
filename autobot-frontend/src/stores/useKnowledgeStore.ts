@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
 import ApiClient from '@/utils/ApiClient'

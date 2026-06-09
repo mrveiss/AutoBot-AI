@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 /**
  * Chunk Loading Test Utility
  * Tests and validates chunk loading fixes in development and production modes

@@ -1,5 +1,6 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2026 mrveiss
 # Author: mrveiss
 """
 Tests for SSO secrets migration script (MVA-3883, GH#9685).

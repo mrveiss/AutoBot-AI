@@ -13,6 +13,7 @@ Your data stays on your machine. Your AI stays yours.
 [![Docker Smoke Test](https://github.com/mrveiss/AutoBot-AI/actions/workflows/docker-smoke-test.yml/badge.svg)](https://github.com/mrveiss/AutoBot-AI/actions/workflows/docker-smoke-test.yml)
 [![codecov](https://codecov.io/gh/mrveiss/AutoBot-AI/branch/main/graph/badge.svg)](https://codecov.io/gh/mrveiss/AutoBot-AI)
 [![GitHub Sponsors](https://img.shields.io/github/sponsors/mrveiss?label=Sponsor&logo=GitHub&style=flat-square)](https://github.com/sponsors/mrveiss)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg?style=flat-square)](LICENSE)
 
 </div>
 
@@ -201,6 +202,9 @@ Once running, navigate to **http://localhost** to access:
 - **Fleet Management** — View and orchestrate multiple servers
 - **Analytics** — Monitor system health, performance, and activity
 
+The **Service Lifecycle Manager** (SLM) — the control plane for your AI infrastructure
+(vector DB, Redis, and per-agent provider routing) — lives at **http://localhost/slm**.
+
 ### Example: Managing a Fleet
 ```bash
 # In the AutoBot chat:
@@ -314,7 +318,33 @@ Your support helps us:
 
 ## License
 
-AutoBot is open source. See [LICENSE](LICENSE) for details.
+AutoBot is open source under the **[Apache License 2.0](LICENSE)**. Free forever for
+everyone — use it, modify it, distribute it, and profit from it, no permission or fees
+required. Attribution is required (see [NOTICE](NOTICE)), and the "AutoBot" / "mrveiss"
+names may not be used to endorse derived products without permission.
+
+**Free forever for individuals and hobbyists.** Nothing you can do with AutoBot today
+becomes paid tomorrow. Production support is how we keep it funded — see
+[FUNDING.md](FUNDING.md).
+
+## Production support & funding
+
+AutoBot is free to run forever. Paid **production support** is how the project stays funded
+and maintained — you pay for our time, guarantees, and compliance work, never for permission
+to use the software:
+
+- **Community — Free.** Self-host, modify, build, and profit under Apache-2.0.
+  Support via [GitHub Issues](https://github.com/mrveiss/AutoBot-AI/issues) &
+  [Discussions](https://github.com/mrveiss/AutoBot-AI/discussions).
+- **Production Support** — guaranteed security patching, version-pinned stable releases,
+  defined SLA response times, priority bug fixes, and upgrade assistance for companies
+  running AutoBot in production.
+- **Compliance Pack** — NIS2 / ISO 27001 documentation, security architecture overview,
+  hardening guide, and audit-support materials (builds on AutoBot's existing
+  [security framework](docs/security/SECURITY_FRAMEWORK.md)).
+
+Prefer to chip in toward the free core instead? [GitHub Sponsors](https://github.com/sponsors/mrveiss)
+and [Ko-fi](https://ko-fi.com/mrveiss) fund community development.
 
 ---
 

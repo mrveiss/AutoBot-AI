@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """
 AutoBot Phase 9 Comprehensive Performance Monitoring System
 Advanced GPU/NPU utilization tracking, multi-modal AI performance monitoring,

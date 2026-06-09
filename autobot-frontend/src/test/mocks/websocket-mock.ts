@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 import { vi, type Mock } from 'vitest'
 import { createMockWebSocketEvent } from '../utils/test-utils'
 

@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """
 Quick test to verify Command Execution Queue integration works end-to-end.
 This demonstrates the complete lifecycle: create → approve → execute → complete.

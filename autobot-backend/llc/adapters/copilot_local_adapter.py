@@ -1,5 +1,6 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """CopilotLocalAdapter — wraps a local ``gh copilot`` CLI session as an LLC heartbeat (GH#9008).
 

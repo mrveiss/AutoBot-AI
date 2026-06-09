@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """
 Performance and Memory Leak Analyzer using Redis and NPU acceleration
 Analyzes codebase for performance bottlenecks, memory leaks, and processing inefficiencies

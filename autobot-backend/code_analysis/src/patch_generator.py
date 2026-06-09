@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """
 Automated Fix Recommendation Generator
 Generates specific code fixes and patches based on analysis results from all analyzers

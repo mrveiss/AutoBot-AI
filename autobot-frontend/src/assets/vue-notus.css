@@ -1,3 +1,5 @@
+/* Copyright 2025-2026 mrveiss
+   SPDX-License-Identifier: Apache-2.0 */
 /* Font Awesome and Inter font are imported from local npm packages in main.ts */
 /* This avoids CDN requests that trigger browser tracking prevention warnings */
 

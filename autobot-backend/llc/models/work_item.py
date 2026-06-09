@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """LLC work item SQLAlchemy models (GH#8213, GH#8230).
 
 Covers the full work item hierarchy: Epic → Feature → PBI → Task/Bug/Subtask/Spike/Risk.

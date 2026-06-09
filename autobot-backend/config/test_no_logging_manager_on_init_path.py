@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """Regression test — GH#8766 / MVA-1465
 
 Verifies that every module on the config-manager init path uses only stdlib

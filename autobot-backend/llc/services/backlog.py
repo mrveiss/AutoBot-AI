@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """LLC BacklogService — priority-ordered backlog queries and bulk sprint assignment (GH#8222).
 
 Priority ordering is CRITICAL > HIGH > MEDIUM > LOW, implemented via a SQL CASE

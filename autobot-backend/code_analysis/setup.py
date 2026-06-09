@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """
 Setup script for AutoBot Code Analysis Suite
 """
@@ -31,7 +33,7 @@ setup(
         "Intended Audience :: Developers",
         "Topic :: Software Development :: Quality Assurance",
         "Topic :: Software Development :: Testing",
-        "License :: OSI Approved :: MIT License",
+        "License :: OSI Approved :: Apache Software License",
         "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3.12",
         "Operating System :: OS Independent",

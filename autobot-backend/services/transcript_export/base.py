@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """Base classes and data models for transcript export.
 
 Provides abstract exporter interface and Pydantic models for transcript data.

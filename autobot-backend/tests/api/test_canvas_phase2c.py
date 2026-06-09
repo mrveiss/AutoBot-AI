@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """
 Phase 2C integration tests — CSP header + rich-cell e2e coverage (MVA-486).
 

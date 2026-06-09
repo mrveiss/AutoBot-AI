@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 /**
  * Optimized Frontend Health Monitor
  * Performance-aware monitoring with realistic network timeouts (30s budget per minute)

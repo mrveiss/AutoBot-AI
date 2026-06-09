@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 /**
  * Cache Management Utilities
  * Handles browser cache clearing, service worker updates, and chunk reloading

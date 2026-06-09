@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """Transcript export API endpoints.
 
 Provides endpoints to export transcripts in various formats:

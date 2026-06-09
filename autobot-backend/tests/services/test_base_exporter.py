@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """Tests for transcript export base classes and data models."""
 
 from services.transcript_export.base import Segment, Transcript

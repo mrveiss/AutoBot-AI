@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # gh-pr-update-body.sh — update a PR body via the REST API
 #
 # Replaces `gh pr edit --body` which silently fails on repos with classic

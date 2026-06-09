@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 #
 # AutoBot Hybrid VM Deployment Script
 # Deploys Docker containers to VMs while keeping backend on host

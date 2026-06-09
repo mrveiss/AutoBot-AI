@@ -1,6 +1,7 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # autobot-backend/transcriber/tests/test_export_srt.py
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
 # Author: mrveiss
 from transcriber.export.srt_export import segments_to_srt
 

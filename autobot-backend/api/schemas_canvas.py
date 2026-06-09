@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """Pydantic request/response schemas for the Live Canvas API (MVA-359)."""
 
 import uuid

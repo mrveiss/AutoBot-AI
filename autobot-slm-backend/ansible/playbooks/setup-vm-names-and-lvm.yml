@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 ---
 # Setup VM Hostnames and LVM Expansion
 # This playbook configures VM hostnames and expands LVM volumes for AutoBot deployment

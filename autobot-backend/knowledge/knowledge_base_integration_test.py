@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """
 Integration tests for KnowledgeBase async operations with real Redis connections.
 

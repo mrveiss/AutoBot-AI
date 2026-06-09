@@ -1,5 +1,6 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2026 mrveiss
 # Author: mrveiss
 """
 Knowledge Base Source Verification Workflow API (Issue #1252).

@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """Unit tests for autobot_shared.time_utils — see #5170.
 
 Both helpers ship as production code with implicit format invariants;

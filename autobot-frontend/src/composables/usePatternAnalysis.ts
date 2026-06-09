@@ -1,10 +1,11 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 /**
  * Vue Composable for Code Pattern Analysis API
  *
  * Issue #208: Provides reactive state and API integration for
  * code pattern detection and optimization features.
  *
- * Copyright (c) 2025 mrveiss
  * Author: mrveiss
  */
 

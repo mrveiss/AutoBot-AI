@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 // ChatManager.js - Centralized chat management utility
 import appConfig from '@/config/AppConfig.js';
 import apiClient from '@/utils/ApiClient';

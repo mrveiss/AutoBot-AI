@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 /**
  * KnowledgeRepository - Consolidated Knowledge Base API Repository
  *
@@ -5,7 +7,6 @@
  * Do NOT create duplicate repository implementations elsewhere.
  *
  * @author mrveiss
- * @copyright (c) 2025 mrveiss
  */
 import { ApiRepository } from './ApiRepository'
 import type { KnowledgeDocument, SearchResult } from '@/stores/useKnowledgeStore'

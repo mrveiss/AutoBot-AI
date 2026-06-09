@@ -1,5 +1,6 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """Tests for web_fetch.extractors — HTML-to-Markdown, SPA detection, title extraction,
 and schema-driven structured data extraction (Issue #7405)."""

@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 /**
  * useFakeProgress — simulated progress counter for long-running operations
  * where the backend provides no real progress signal.

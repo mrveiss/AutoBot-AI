@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
 #
 # Phase 4 (#7590): Nightly disk file count monitor for chat SSOT observability.
 #
