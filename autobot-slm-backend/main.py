@@ -195,6 +195,7 @@ async def lifespan(app: FastAPI):
         await _seed_default_roles()
         await _seed_default_agents()
         await _ensure_local_node()
+        await _ensure_compose_nodes()
     except Exception as e:
         logger.error("Data seeding failed: %s", e, exc_info=True)
         raise
@@ -364,12 +365,127 @@ async def _heartbeat_self_managed_nodes() -> None:
             disk = psutil.disk_usage("/").percent
             async with db_service.session() as db:
                 for node_id in sorted(_SELF_MANAGED_NODE_IDS):
+                    # Only heartbeat reachable nodes; unreachable container nodes
+                    # are left to the reconciler's offline path (same as VM nodes).
+                    if not await _node_reachable(node_id):
+                        continue
                     await reconciler_service.update_node_heartbeat(
                         db, node_id, cpu, mem, disk, agent_version="slm-local"
                     )
         except Exception:
             logger.exception("Self-managed node heartbeat failed (non-fatal)")
         await asyncio.sleep(settings.heartbeat_interval)
+
+
+# Compose fleet nodes (#9761): in a single-host docker compose stack each service
+# container is surfaced as a fleet node, using the SAME Node model + heartbeat path
+# as VM nodes. Gated by SLM_COMPOSE_NODES so production (Ansible/VM) fleets are
+# unaffected. port=None => liveness can't be TCP-probed, so it's assumed up.
+_COMPOSE_NODE_SPECS: list[dict] = [
+    {"id": "autobot-backend", "role": "autobot-backend", "port": 8001, "protocol": "http", "path": "/api/health"},
+    {"id": "autobot-worker", "role": "autobot-worker", "port": None, "protocol": "tcp", "path": None},
+    {"id": "autobot-celery-beat", "role": "autobot-scheduler", "port": None, "protocol": "tcp", "path": None},
+    {"id": "autobot-frontend", "role": "autobot-frontend", "port": 80, "protocol": "http", "path": "/"},
+    {"id": "autobot-postgres", "role": "database", "port": 5432, "protocol": "tcp", "path": None},
+    {"id": "autobot-redis", "role": "cache", "port": 6379, "protocol": "redis", "path": None},
+    {"id": "autobot-chromadb", "role": "vectordb", "port": 8000, "protocol": "http", "path": "/api/v2/heartbeat"},
+]
+
+
+def _compose_nodes_enabled() -> bool:
+    """True when each compose container should be surfaced as a fleet node."""
+    return os.getenv("SLM_COMPOSE_NODES", "false").strip().lower() in ("1", "true", "yes")
+
+
+def _resolve_ip(host: str) -> str:
+    """Resolve a compose service name to its container IP (falls back to the name)."""
+    import socket
+
+    try:
+        return socket.gethostbyname(host)
+    except OSError:
+        return host
+
+
+async def _probe_tcp(host: str, port: int, timeout: float = 2.0) -> bool:
+    """Return True if a TCP connection to host:port succeeds within timeout."""
+    try:
+        _, writer = await asyncio.wait_for(asyncio.open_connection(host, port), timeout=timeout)
+        writer.close()
+        try:
+            await writer.wait_closed()
+        except Exception:
+            pass
+        return True
+    except Exception:
+        return False
+
+
+async def _node_reachable(node_id: str) -> bool:
+    """Liveness check for a self-managed node before heartbeating it.
+
+    The SLM manager node is the SLM itself (always up). Compose container nodes
+    with a known port are TCP-probed; port-less ones (celery worker/beat) can't be
+    probed and are assumed up while the stack runs.
+    """
+    if node_id == "00-SLM-Manager":
+        return True
+    spec = next((s for s in _COMPOSE_NODE_SPECS if s["id"] == node_id), None)
+    if not spec or not spec["port"]:
+        return True
+    return await _probe_tcp(node_id, spec["port"])
+
+
+async def _ensure_compose_nodes() -> None:
+    """Register each compose service container as a fleet node (#9761).
+
+    Idempotent and gated by SLM_COMPOSE_NODES. Mirrors _ensure_local_node but for
+    the sibling containers, so the fleet view lists every service in the stack and
+    the self-heartbeat loop keeps them online via the same path VM nodes use.
+    """
+    if not _compose_nodes_enabled():
+        return
+
+    from sqlalchemy import select
+
+    from models.database import Node, NodeRole, NodeStatus, Service, ServiceCategory, ServiceStatus
+
+    async with db_service.session() as session:
+        for spec in _COMPOSE_NODE_SPECS:
+            node_id = spec["id"]
+            _SELF_MANAGED_NODE_IDS.add(node_id)
+            ip = _resolve_ip(node_id)
+            existing = (await session.execute(select(Node).where(Node.node_id == node_id))).scalar_one_or_none()
+            if existing:
+                if existing.ip_address != ip:
+                    existing.ip_address = ip
+                continue
+            session.add(
+                Node(
+                    node_id=node_id,
+                    ansible_name=node_id,
+                    hostname=node_id,
+                    ip_address=ip,
+                    auth_method="none",
+                    status=NodeStatus.PENDING.value,
+                    roles=[spec["role"]],
+                )
+            )
+            session.add(NodeRole(node_id=node_id, role_name=spec["role"], status="active", assignment_type="auto"))
+            session.add(
+                Service(
+                    node_id=node_id,
+                    service_name=spec["role"],
+                    status=ServiceStatus.UNKNOWN.value,
+                    category=ServiceCategory.AUTOBOT.value,
+                    port=spec["port"],
+                    protocol=spec["protocol"],
+                    endpoint_path=spec["path"],
+                    is_discoverable=True,
+                )
+            )
+        await session.commit()
+    logger.info("Registered %d compose fleet nodes", len(_COMPOSE_NODE_SPECS))
 
 
 async def _ensure_admin_user():

@@ -406,6 +406,9 @@ services:
       - SLM_POSTGRES_HOST=autobot-postgres
       - SLM_ADMIN_PASSWORD=${SLM_ADMIN_PASSWORD:-admin}
       - SLM_DATA_DIR=/app/data
+      # Surface each compose service container as a fleet node (#9761). Off by
+      # default so production/Ansible VM fleets are unaffected; on for compose.
+      - SLM_COMPOSE_NODES=${SLM_COMPOSE_NODES:-true}
       # Shared signing secrets so the backend node's JWT verifies on SLM —
       # without a shared secret each service generates its own and SLM rejects
       # the node WS with 401, leaving the host shown offline (#9715). CHANGE in
