@@ -310,7 +310,11 @@ async def _ensure_local_node() -> None:
                     local_ip,
                 )
                 existing.ip_address = local_ip
-                await session.commit()
+            # Heal detected_roles so the fleet role view shows the SLM roles as
+            # running (older rows predate this).
+            if list(existing.detected_roles or []) != _SLM_ROLES:
+                existing.detected_roles = _SLM_ROLES
+            await session.commit()
             return
 
         node = Node(
@@ -323,6 +327,7 @@ async def _ensure_local_node() -> None:
             auth_method="key",
             status=NodeStatus.ONLINE.value,
             roles=_SLM_ROLES,
+            detected_roles=_SLM_ROLES,
         )
         session.add(node)
         for role_name in _SLM_ROLES:
@@ -381,14 +386,17 @@ async def _heartbeat_self_managed_nodes() -> None:
 # container is surfaced as a fleet node, using the SAME Node model + heartbeat path
 # as VM nodes. Gated by SLM_COMPOSE_NODES so production (Ansible/VM) fleets are
 # unaffected. port=None => liveness can't be TCP-probed, so it's assumed up.
+# role uses the canonical role-registry names (services/role_registry.py) so the
+# fleet role-assignment view lights the matching chip as "running". celery-beat
+# (scheduler) and postgres have no canonical role yet -> role=None (no chip).
 _COMPOSE_NODE_SPECS: list[dict] = [
-    {"id": "autobot-backend", "role": "autobot-backend", "port": 8001, "protocol": "http", "path": "/api/health"},
-    {"id": "autobot-worker", "role": "autobot-worker", "port": None, "protocol": "tcp", "path": None},
-    {"id": "autobot-celery-beat", "role": "autobot-scheduler", "port": None, "protocol": "tcp", "path": None},
-    {"id": "autobot-frontend", "role": "autobot-frontend", "port": 80, "protocol": "http", "path": "/"},
-    {"id": "autobot-postgres", "role": "database", "port": 5432, "protocol": "tcp", "path": None},
-    {"id": "autobot-redis", "role": "cache", "port": 6379, "protocol": "redis", "path": None},
-    {"id": "autobot-chromadb", "role": "vectordb", "port": 8000, "protocol": "http", "path": "/api/v2/heartbeat"},
+    {"id": "autobot-backend", "role": "backend", "port": 8001, "protocol": "http", "path": "/api/health"},
+    {"id": "autobot-worker", "role": "celery", "port": None, "protocol": "tcp", "path": None},
+    {"id": "autobot-celery-beat", "role": None, "port": None, "protocol": "tcp", "path": None},
+    {"id": "autobot-frontend", "role": "frontend", "port": 80, "protocol": "http", "path": "/"},
+    {"id": "autobot-postgres", "role": None, "port": 5432, "protocol": "tcp", "path": None},
+    {"id": "autobot-redis", "role": "redis", "port": 6379, "protocol": "redis", "path": None},
+    {"id": "autobot-chromadb", "role": "chromadb", "port": 8000, "protocol": "http", "path": "/api/v2/heartbeat"},
 ]
 
 
@@ -455,10 +463,15 @@ async def _ensure_compose_nodes() -> None:
             node_id = spec["id"]
             _SELF_MANAGED_NODE_IDS.add(node_id)
             ip = _resolve_ip(node_id)
+            role = spec["role"]
+            # The container runs exactly this role; detected_roles drives the
+            # "running" (green) chip, roles drives "assigned".
+            roles = [role] if role else []
             existing = (await session.execute(select(Node).where(Node.node_id == node_id))).scalar_one_or_none()
             if existing:
-                if existing.ip_address != ip:
-                    existing.ip_address = ip
+                existing.ip_address = ip
+                existing.roles = roles
+                existing.detected_roles = roles
                 continue
             session.add(
                 Node(
@@ -468,14 +481,16 @@ async def _ensure_compose_nodes() -> None:
                     ip_address=ip,
                     auth_method="none",
                     status=NodeStatus.PENDING.value,
-                    roles=[spec["role"]],
+                    roles=roles,
+                    detected_roles=roles,
                 )
             )
-            session.add(NodeRole(node_id=node_id, role_name=spec["role"], status="active", assignment_type="auto"))
+            if role:
+                session.add(NodeRole(node_id=node_id, role_name=role, status="active", assignment_type="auto"))
             session.add(
                 Service(
                     node_id=node_id,
-                    service_name=spec["role"],
+                    service_name=role or node_id,
                     status=ServiceStatus.UNKNOWN.value,
                     category=ServiceCategory.AUTOBOT.value,
                     port=spec["port"],
@@ -485,7 +500,7 @@ async def _ensure_compose_nodes() -> None:
                 )
             )
         await session.commit()
-    logger.info("Registered %d compose fleet nodes", len(_COMPOSE_NODE_SPECS))
+    logger.info("Registered/updated %d compose fleet nodes", len(_COMPOSE_NODE_SPECS))
 
 
 async def _ensure_admin_user():
