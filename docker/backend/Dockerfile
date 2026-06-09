@@ -51,7 +51,7 @@ RUN groupadd -r autobot && useradd -r -g autobot -d /app autobot
 WORKDIR /app
 
 # Copy Python packages from deps stage
-COPY --from=deps /usr/local/lib/python3.12/ /usr/local/lib/python3.12/
+COPY --from=deps /usr/local/lib/python3.14/ /usr/local/lib/python3.14/
 COPY --from=deps /usr/local/bin/ /usr/local/bin/
 
 # Copy shared module
