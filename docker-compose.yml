@@ -207,6 +207,9 @@ services:
       # in the SLM dashboard. Point it at the service name (#9715).
       - AUTOBOT_SLM_HOST=autobot-slm
       - AUTOBOT_SLM_PORT=8000
+      # Which fleet node hosts Redis (colocated on the SLM manager in compose) so
+      # backend Redis service routing can target it instead of an empty id (#9761).
+      - REDIS_NODE_ID=${REDIS_NODE_ID:-00-SLM-Manager}
       # Shared signing secrets — must match SLM so the node JWT verifies (#9715)
       - AUTOBOT_JWT_SECRET=${AUTOBOT_JWT_SECRET:?unset - run docker/generate-secrets.sh then add --env-file docker/.env.secrets (GH#9775)}
       - SECRET_KEY=${SECRET_KEY:?unset - run docker/generate-secrets.sh then add --env-file docker/.env.secrets (GH#9775)}
@@ -282,6 +285,9 @@ services:
       - AUTOBOT_ENCRYPTION_KEY=${AUTOBOT_ENCRYPTION_KEY:-}
       - AUTOBOT_SLM_HOST=autobot-slm
       - AUTOBOT_SLM_PORT=8000
+      # Which fleet node hosts Redis (colocated on the SLM manager in compose) so
+      # backend Redis service routing can target it instead of an empty id (#9761).
+      - REDIS_NODE_ID=${REDIS_NODE_ID:-00-SLM-Manager}
       # Shared signing secrets — must match SLM so the node JWT verifies (#9715)
       - AUTOBOT_JWT_SECRET=${AUTOBOT_JWT_SECRET:?unset - run docker/generate-secrets.sh then add --env-file docker/.env.secrets (GH#9775)}
       - SECRET_KEY=${SECRET_KEY:?unset - run docker/generate-secrets.sh then add --env-file docker/.env.secrets (GH#9775)}

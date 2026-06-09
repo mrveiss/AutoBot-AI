@@ -216,6 +216,11 @@ async def lifespan(app: FastAPI):
 
     await reconciler_service.start()
 
+    # Heartbeat the SLM's own (and compose-colocated) nodes so they stay online
+    # via the same path VM-node agents use (#9761).
+    self_heartbeat_task = asyncio.create_task(_heartbeat_self_managed_nodes())
+    logger.info("Self-managed node heartbeat started")
+
     # Start version checker background task (Issue #741)
     version_checker_task = start_version_checker()
     logger.info("Version checker started")
@@ -233,8 +238,13 @@ async def lifespan(app: FastAPI):
     yield
 
     logger.info("Shutting down SLM Backend")
+    self_heartbeat_task.cancel()
     version_checker_task.cancel()
     a2a_card_task.cancel()
+    try:
+        await self_heartbeat_task
+    except asyncio.CancelledError:
+        logger.info("Self-managed node heartbeat stopped")
     try:
         await version_checker_task
     except asyncio.CancelledError:
@@ -325,6 +335,41 @@ async def _ensure_local_node() -> None:
             )
         await session.commit()
         logger.info("Auto-registered SLM manager node (%s / %s)", hostname, local_ip)
+
+
+# Nodes the SLM hosts itself and must heartbeat locally (no external agent).
+_SELF_MANAGED_NODE_IDS: set[str] = {"00-SLM-Manager"}
+
+
+async def _heartbeat_self_managed_nodes() -> None:
+    """Drive heartbeats for nodes the SLM hosts itself (no external agent).
+
+    VM nodes stay online because their autobot-slm-agent POSTs
+    ``/api/nodes/{id}/heartbeat`` -> ``reconciler_service.update_node_heartbeat``.
+    The SLM's own node (and, in compose, the colocated service nodes registered
+    in ``_SELF_MANAGED_NODE_IDS``) have no external agent, so ``last_heartbeat``
+    never updates and the reconciler flips them OFFLINE after
+    ``heartbeat_interval * unhealthy_threshold``. This loop feeds the SAME
+    heartbeat path locally so they stay online — uniform with VM nodes, only the
+    heartbeat source differs (#9761).
+    """
+    import psutil
+
+    from services.database import db_service
+
+    while True:
+        try:
+            cpu = psutil.cpu_percent(interval=None)
+            mem = psutil.virtual_memory().percent
+            disk = psutil.disk_usage("/").percent
+            async with db_service.session() as db:
+                for node_id in sorted(_SELF_MANAGED_NODE_IDS):
+                    await reconciler_service.update_node_heartbeat(
+                        db, node_id, cpu, mem, disk, agent_version="slm-local"
+                    )
+        except Exception:
+            logger.exception("Self-managed node heartbeat failed (non-fatal)")
+        await asyncio.sleep(settings.heartbeat_interval)
 
 
 async def _ensure_admin_user():
