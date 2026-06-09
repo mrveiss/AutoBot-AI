@@ -93,6 +93,14 @@ jobs:
           echo "Final disk space:"
           df -h
 
+      - name: Generate signing secrets (GH#9775)
+        run: |
+          # Base compose now fail-fasts on unset AUTOBOT_JWT_SECRET / SECRET_KEY
+          # (no static fallback). Generate them and expose to all later compose
+          # steps via $GITHUB_ENV so interpolation succeeds.
+          bash docker/generate-secrets.sh
+          cat docker/.env.secrets >> "$GITHUB_ENV"
+
       - name: Start services with Docker Compose
         run: docker compose --env-file docker/.env.docker up -d
 
