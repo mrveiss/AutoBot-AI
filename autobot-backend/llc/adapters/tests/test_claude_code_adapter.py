@@ -175,13 +175,15 @@ class TestInvoke:
 
         with tempfile.TemporaryDirectory() as td:
             cfg = _agent_cfg(output_dir=td)
+            # GH#9763: do NOT patch builtins.open here — the state file must be
+            # written for real to the temp dir so the os.path.exists assertion
+            # below is meaningful. Only the subprocess + redis are mocked.
             with (
                 patch("llc.adapters.claude_code_adapter.shutil.which", return_value="/usr/bin/claude"),
                 patch(
                     "llc.adapters.claude_code_adapter.get_async_redis_client", new_callable=AsyncMock, return_value=None
                 ),
                 patch("asyncio.create_subprocess_exec", new_callable=AsyncMock, return_value=fake_proc),
-                patch("builtins.open", MagicMock(return_value=MagicMock())),
             ):
                 run_id = await adapter.invoke(cfg, {"task_id": "t99"})
 

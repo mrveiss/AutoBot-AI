@@ -159,8 +159,8 @@ class CopilotSubscriptionAdapter(CopilotLocalAdapter):
         """Check status and parse token usage from output."""
         base_status = await super().status(agent_config, run_id)
 
-        # If run completed, check for quota exhaustion in output
-        if base_status.status in (LLCRunStatus.COMPLETED, LLCRunStatus.FAILED):
+        # On any terminal state, check the output for quota exhaustion (GH#9777).
+        if base_status.status.is_terminal():
             cfg = agent_config.get("adapter_config", {})
             output_dir: str = cfg.get("output_dir", "/tmp")  # nosec B108
             agent_id: str = agent_config.get("agent_id", "unknown")

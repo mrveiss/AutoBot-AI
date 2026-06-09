@@ -81,8 +81,6 @@ _ADAPTER_MAX_WAIT_SECONDS = _env_float("LLC_ADAPTER_MAX_WAIT_SECONDS", 7200.0)
 # Ephemeral run-key TTL backstop — must exceed the max wait so a key never
 # expires mid-run; revocation still happens promptly when the run finishes.
 _RUN_KEY_TTL_SECONDS = _env_float("LLC_RUN_KEY_TTL_SECONDS", _ADAPTER_MAX_WAIT_SECONDS + 600.0)
-# A run is still in flight while in one of these states; everything else is terminal.
-_NONTERMINAL_STATUSES = frozenset({LLCRunStatus.QUEUED, LLCRunStatus.RUNNING})
 
 
 class HeartbeatScheduler:
@@ -801,7 +799,7 @@ async def _await_adapter_completion(adapter: Any, agent_config: Dict[str, Any], 
     started = time.monotonic()
     while time.monotonic() - started < _ADAPTER_MAX_WAIT_SECONDS:
         result = await adapter.status(agent_config, run_id)
-        if result.status not in _NONTERMINAL_STATUSES:
+        if result.status.is_terminal():
             return result.status
         await asyncio.sleep(_ADAPTER_POLL_INTERVAL)
 

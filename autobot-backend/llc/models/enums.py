@@ -136,6 +136,19 @@ class LLCRunStatus(str, Enum):
     CANCELLED = "cancelled"
     RATE_LIMITED = "rate_limited"
 
+    def is_terminal(self) -> bool:
+        """True once the run has reached a final state (not queued/running).
+
+        Single source of truth for the terminal/non-terminal split (GH#9777),
+        replacing ad-hoc ``status in (COMPLETED, FAILED)`` / ``{QUEUED, RUNNING}``
+        checks scattered across the scheduler and adapters.
+        """
+        return self not in _NONTERMINAL_RUN_STATUSES
+
+
+# Run states that are still in flight; everything else is terminal (GH#9777).
+_NONTERMINAL_RUN_STATUSES = frozenset({LLCRunStatus.QUEUED, LLCRunStatus.RUNNING})
+
 
 class HeartbeatInvocationSource(str, Enum):
     """How a heartbeat run was triggered (GH#8225, GH#9624)."""
