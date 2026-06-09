@@ -2,7 +2,7 @@
 # Optimized for Intel NPU acceleration
 
 # Core Framework
-fastapi>=0.136.1
+fastapi>=0.136.3
 uvicorn[standard]>=0.48.0
 pydantic>=2.13.4
 
@@ -12,11 +12,11 @@ openvino-dev>=2024.6.0
 
 # Model and Tokenization (lightweight)
 tokenizers>=0.23.1
-transformers>=5.9.0
+transformers>=5.10.2
 huggingface-hub>=1.16.1
 
 # Tensor Operations (NPU optimized)
-numpy>=2.4.4,<3.0.0
+numpy>=2.4.6,<3.0.0
 
 # HTTP and API
 aiohttp>=3.13.4  # GH#8323: zip bomb, request smuggling CVEs

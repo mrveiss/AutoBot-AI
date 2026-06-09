@@ -11,7 +11,30 @@ from unittest.mock import AsyncMock
 import pytest
 
 from integrations.base import IntegrationConfig, IntegrationStatus
-from integrations.whatsapp_integration import WhatsAppIntegration
+from integrations.whatsapp_integration import WhatsAppIntegration, _mask_phone
+
+
+class TestMaskPhone:
+    """_mask_phone redacts PII phone numbers for logging (GH#9725)."""
+
+    def test_keeps_last_four_digits(self):
+        assert _mask_phone("+15551234567") == "***4567"
+
+    def test_strips_non_digits_before_masking(self):
+        assert _mask_phone("+1 (555) 123-4567") == "***4567"
+
+    def test_short_numbers_fully_masked(self):
+        assert _mask_phone("1234") == "***"
+        assert _mask_phone("12") == "***"
+
+    def test_empty_and_none(self):
+        assert _mask_phone("") == "<none>"
+        assert _mask_phone(None) == "<none>"
+
+    def test_full_number_never_appears_in_output(self):
+        full = "+15551234567"
+        assert full not in _mask_phone(full)
+        assert "555123" not in _mask_phone(full)
 
 
 @pytest.fixture

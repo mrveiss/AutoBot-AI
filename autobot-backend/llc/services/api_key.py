@@ -11,7 +11,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional, Tuple
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from llc.models.api_key import LLCApiKey
@@ -36,8 +36,13 @@ class ApiKeyService(LLCServiceBase):
         agent_id: str,
         company_id: str,
         name: str,
+        expires_at: Optional[datetime] = None,
     ) -> Tuple[LLCApiKey, str]:
-        """Create a new API key. Returns (record, plaintext). Plaintext shown once."""
+        """Create a new API key. Returns (record, plaintext). Plaintext shown once.
+
+        ``expires_at`` (optional) sets a TTL backstop — after it passes the key
+        is rejected by :meth:`validate_key` even if never explicitly revoked.
+        """
         raw = _KEY_PREFIX + secrets.token_urlsafe(48)
         record = LLCApiKey(
             id=uuid.uuid4(),
@@ -45,6 +50,7 @@ class ApiKeyService(LLCServiceBase):
             company_id=company_id,
             name=name,
             key_hash=_hash_key(raw),
+            expires_at=expires_at,
             created_at=datetime.now(timezone.utc),
         )
         session.add(record)
@@ -77,12 +83,14 @@ class ApiKeyService(LLCServiceBase):
         session: AsyncSession,
         raw_key: str,
     ) -> Optional[LLCApiKey]:
-        """Return the key record if valid and active, else None."""
+        """Return the key record if valid (not revoked, not expired), else None."""
         key_hash = _hash_key(raw_key)
+        now = datetime.now(timezone.utc)
         result = await session.execute(
             select(LLCApiKey).where(
                 LLCApiKey.key_hash == key_hash,
                 LLCApiKey.revoked_at.is_(None),
+                or_(LLCApiKey.expires_at.is_(None), LLCApiKey.expires_at > now),
             )
         )
         return result.scalar_one_or_none()

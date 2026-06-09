@@ -12,13 +12,14 @@ pydantic>=2.12.5
 email-validator>=2.2.0  # Issue #2953: required by pydantic for EmailStr validation
 cachetools>=7.1.4
 celery>=5.6.3  # Issue #892: Background task processing
-vulture>=2.11  # MVA-1065: dead code scanner for audit_dead_code task
+vulture>=2.16  # MVA-1065: dead code scanner for audit_dead_code task
 psutil>=7.2.2  # Issue #927: CPU monitoring for wake word optimization
 
 # Database
 sqlalchemy>=2.0.50
 alembic>=1.18.4
 aiosqlite>=0.21.0
+asyncpg>=0.31.0  # Async PostgreSQL driver — required for RBAC user modes (single_company+) (#9713)
 
 # Document Generation (MVA-2174)
 python-docx>=1.1.0  # DOCX export for transcripts
@@ -28,14 +29,14 @@ openpyxl>=3.1.0     # Excel file parsing for OneDrive connector (GH#9004)
 python-pptx>=0.6.23 # PowerPoint file parsing for OneDrive connector (GH#9004)
 
 # AI/ML
-openai>=2.32.0
+openai>=2.41.0
 anthropic>=0.105.2
-boto3>=1.43.22                       # GH#9010: AWS Bedrock provider
+boto3>=1.43.25                       # GH#9010: AWS Bedrock provider
 chromadb>=1.5.9,<2.0.0             # upper bound guards against breaking API changes; 1.5.5+ uses regenerated protos compatible with protobuf 5.x (#4053)
 protobuf>=5.29.6,<8.0.0           # required floor for chromadb 1.5.5+ opentelemetry exporter; resolves googleapis-common-protos conflict (#4061)
 sentence-transformers>=5.4.1
-torch==2.11.0  # MVA-3684: Pinned to match vllm 0.22.0 exact requirement
-torchvision==0.26.0  # MVA-3684: Pinned to match vllm 0.22.0 exact requirement
+torch==2.12.0  # MVA-3684: Pinned to match vllm 0.22.0 exact requirement
+torchvision==0.27.0  # MVA-3684: Pinned to match vllm 0.22.0 exact requirement
 torchaudio==2.11.0  # MVA-3684: Pinned to match vllm 0.22.0 exact requirement
 torchmetrics>=1.9.0  # Issue #904: Training metrics
 opencv-python-headless>=4.10.0,<4.11  # MVA-3684: <4.11 avoids numpy>=2 requirement (compatible with vllm's numpy 1.x)
@@ -71,7 +72,7 @@ langchain-ollama>=1.1.0,<2.0.0        # Issue #1572: ChatOllama for QA chain
 langgraph>=1.2.0,<2.0.0               # Issue #1043: StateGraph for chat orchestration
 langgraph-checkpoint-redis>=0.4.1,<1.0.0  # Issue #1043: Redis checkpointer for thread persistence
 markdownify>=1.2.2  # HTML to Markdown conversion
-mcp>=1.27.1            # MCP protocol for skill subprocesses (Issue #731)
+mcp>=1.27.2            # MCP protocol for skill subprocesses (Issue #731)
 PyYAML>=6.0.3            # SKILL.md frontmatter parsing (Phase 3 sync engine)
 
 # Community growth skill (Issue #1161)

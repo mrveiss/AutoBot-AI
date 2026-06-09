@@ -34,6 +34,23 @@ from integrations.base import (
 
 logger = get_logger(__name__)
 
+
+def _mask_phone(phone: object) -> str:
+    """Mask a phone number for logging — keep the last 4 digits, redact the rest.
+
+    WhatsApp recipient numbers are PII; logging them in clear text trips CodeQL's
+    clear-text-logging-of-sensitive-data query (GH#9725). Routing every logged
+    number through this helper keeps logs debuggable (last 4) without exposing the
+    full number.
+    """
+    if not phone:
+        return "<none>"
+    digits = "".join(ch for ch in str(phone) if ch.isdigit())
+    if len(digits) <= 4:
+        return "***"
+    return f"***{digits[-4:]}"
+
+
 _OPT_STATUS_KEY_PREFIX = "whatsapp:opt_status:"
 _OPT_STATUS_TTL = 31536000  # 1 year
 _MESSAGE_CACHE_KEY_PREFIX = "whatsapp:message_cache:"
@@ -251,7 +268,7 @@ class WhatsAppIntegration(BaseIntegration):
             if not opt_status.get("opted_in", False):
                 logger.warning(
                     "Skipping message to %s — user has not opted in",
-                    to,
+                    _mask_phone(to),
                 )
                 return {
                     "ok": False,
@@ -278,7 +295,7 @@ class WhatsAppIntegration(BaseIntegration):
             result = await self._make_request("POST", url, headers=headers, json_data=payload)
 
             if result.get("status_code") == 200:
-                logger.info("Sent WhatsApp text message to %s", to)
+                logger.info("Sent WhatsApp text message to %s", _mask_phone(to))
                 return {
                     "ok": True,
                     "message_id": result["body"]["messages"][0]["id"],
@@ -288,7 +305,7 @@ class WhatsAppIntegration(BaseIntegration):
             error_msg = result.get("body", {}).get("error", {}).get("message", "Unknown error")
             logger.error(
                 "Failed to send WhatsApp text message to %s: %s",
-                to,
+                _mask_phone(to),
                 error_msg,
             )
             return {"ok": False, "error": error_msg, "to": to}
@@ -296,7 +313,7 @@ class WhatsAppIntegration(BaseIntegration):
         except Exception as exc:
             logger.error(
                 "Exception sending WhatsApp text message to %s: %s",
-                params.get("to"),
+                _mask_phone(params.get("to")),
                 exc,
             )
             return {
@@ -329,7 +346,7 @@ class WhatsAppIntegration(BaseIntegration):
             if not opt_status.get("opted_in", False):
                 logger.warning(
                     "Skipping media message to %s — user has not opted in",
-                    to,
+                    _mask_phone(to),
                 )
                 return {
                     "ok": False,
@@ -360,7 +377,7 @@ class WhatsAppIntegration(BaseIntegration):
             result = await self._make_request("POST", url, headers=headers, json_data=payload)
 
             if result.get("status_code") == 200:
-                logger.info("Sent WhatsApp %s message to %s", media_type, to)
+                logger.info("Sent WhatsApp %s message to %s", media_type, _mask_phone(to))
                 return {
                     "ok": True,
                     "message_id": result["body"]["messages"][0]["id"],
@@ -372,7 +389,7 @@ class WhatsAppIntegration(BaseIntegration):
             logger.error(
                 "Failed to send WhatsApp %s message to %s: %s",
                 media_type,
-                to,
+                _mask_phone(to),
                 error_msg,
             )
             return {"ok": False, "error": error_msg, "to": to}
@@ -380,7 +397,7 @@ class WhatsAppIntegration(BaseIntegration):
         except Exception as exc:
             logger.error(
                 "Exception sending WhatsApp media message to %s: %s",
-                params.get("to"),
+                _mask_phone(params.get("to")),
                 exc,
             )
             return {
@@ -415,7 +432,7 @@ class WhatsAppIntegration(BaseIntegration):
             if not opt_status.get("opted_in", False):
                 logger.warning(
                     "Skipping template message to %s — user has not opted in",
-                    to,
+                    _mask_phone(to),
                 )
                 return {
                     "ok": False,
@@ -450,7 +467,7 @@ class WhatsAppIntegration(BaseIntegration):
                 logger.info(
                     "Sent WhatsApp template message '%s' to %s",
                     template_name,
-                    to,
+                    _mask_phone(to),
                 )
                 return {
                     "ok": True,
@@ -463,7 +480,7 @@ class WhatsAppIntegration(BaseIntegration):
             logger.error(
                 "Failed to send WhatsApp template message '%s' to %s: %s",
                 template_name,
-                to,
+                _mask_phone(to),
                 error_msg,
             )
             return {"ok": False, "error": error_msg, "to": to}
@@ -471,7 +488,7 @@ class WhatsAppIntegration(BaseIntegration):
         except Exception as exc:
             logger.error(
                 "Exception sending WhatsApp template message to %s: %s",
-                params.get("to"),
+                _mask_phone(params.get("to")),
                 exc,
             )
             return {
@@ -498,7 +515,7 @@ class WhatsAppIntegration(BaseIntegration):
             if client is None:
                 logger.warning(
                     "Redis client unavailable for checking opt-in status (phone=%s)",
-                    phone_number,
+                    _mask_phone(phone_number),  # codeql[py/clear-text-logging-sensitive-data]
                 )
                 return {
                     "phone_number": phone_number,
@@ -512,7 +529,7 @@ class WhatsAppIntegration(BaseIntegration):
             if not raw:
                 logger.debug(
                     "No opt-in status found for phone=%s (defaulting to opted_in=False)",
-                    phone_number,
+                    _mask_phone(phone_number),  # codeql[py/clear-text-logging-sensitive-data]
                 )
                 return {
                     "phone_number": phone_number,
@@ -528,7 +545,7 @@ class WhatsAppIntegration(BaseIntegration):
         except json.JSONDecodeError as exc:
             logger.error(
                 "Malformed JSON in opt-in status (phone=%s): %s",
-                params.get("phone_number"),
+                _mask_phone(params.get("phone_number")),  # codeql[py/clear-text-logging-sensitive-data]
                 exc,
             )
             return {
@@ -540,7 +557,7 @@ class WhatsAppIntegration(BaseIntegration):
         except Exception as exc:
             logger.error(
                 "Failed to check opt-in status (phone=%s): %s",
-                params.get("phone_number"),
+                _mask_phone(params.get("phone_number")),  # codeql[py/clear-text-logging-sensitive-data]
                 exc,
             )
             return {
@@ -581,7 +598,7 @@ class WhatsAppIntegration(BaseIntegration):
             if client is None:
                 logger.warning(
                     "Redis client unavailable for setting opt-in status (phone=%s)",
-                    phone_number,
+                    _mask_phone(phone_number),  # codeql[py/clear-text-logging-sensitive-data]
                 )
                 return {"success": False, "phone_number": phone_number}
 
@@ -593,7 +610,7 @@ class WhatsAppIntegration(BaseIntegration):
             )
             logger.info(
                 "Updated opt-in status for phone=%s (opted_in=%s)",
-                phone_number,
+                _mask_phone(phone_number),  # codeql[py/clear-text-logging-sensitive-data]
                 opted_in,
             )
             return {
@@ -606,7 +623,7 @@ class WhatsAppIntegration(BaseIntegration):
         except Exception as exc:
             logger.error(
                 "Failed to set opt-in status (phone=%s): %s",
-                params.get("phone_number"),
+                _mask_phone(params.get("phone_number")),  # codeql[py/clear-text-logging-sensitive-data]
                 exc,
             )
             return {

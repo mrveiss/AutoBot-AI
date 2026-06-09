@@ -37,6 +37,7 @@ from autobot_shared.logging_manager import get_logger
 from ..models.enums import LLCRunStatus
 from .base import AdapterRunStatus
 from .claude_code_adapter import ClaudeCodeAdapter, _output_path, _resolve_claude_cli, _state_path
+from .subprocess_support import inject_agent_credentials, serialize_invoke_context
 
 logger = get_logger(__name__)
 
@@ -117,7 +118,7 @@ class ClaudeCodeSubscriptionAdapter(ClaudeCodeAdapter):
                     )
                     context.pop("workspace_dir", None)
                     env.pop("AUTOBOT_WORKSPACE_DIR", None)
-                    env["LLC_INVOKE_CONTEXT"] = json.dumps(context, default=str)
+                    env["LLC_INVOKE_CONTEXT"] = serialize_invoke_context(context)
                     workspace_dir = None
                 else:
                     raise
@@ -168,20 +169,22 @@ class ClaudeCodeSubscriptionAdapter(ClaudeCodeAdapter):
                 logger.debug("ClaudeCodeSubscriptionAdapter: removing %s from environment", key)
                 env.pop(key)
 
-        # Add standard context
-        env["LLC_INVOKE_CONTEXT"] = json.dumps(context, default=str)
+        # Add standard context (provider keys stripped above; the LLC platform
+        # bearer token is a separate credential and IS forwarded — GH#9789).
+        env["LLC_INVOKE_CONTEXT"] = serialize_invoke_context(context)
         if workspace_dir:
             env["AUTOBOT_WORKSPACE_DIR"] = workspace_dir
+        inject_agent_credentials(env, context)
 
-        logger.info("ClaudeCodeSubscriptionAdapter: subscription mode enforced (API keys stripped)")
+        logger.info("ClaudeCodeSubscriptionAdapter: subscription mode enforced (provider API keys stripped)")
         return env
 
     async def status(self, agent_config: dict, run_id: str) -> AdapterRunStatus:
         """Check status and parse token usage from output."""
         base_status = await super().status(agent_config, run_id)
 
-        # If run completed, check for quota exhaustion in output
-        if base_status.status in (LLCRunStatus.COMPLETED, LLCRunStatus.FAILED):
+        # On any terminal state, check the output for quota exhaustion (GH#9777).
+        if base_status.status.is_terminal():
             cfg = agent_config.get("adapter_config", {})
             output_dir: str = cfg.get("output_dir", "/tmp")  # nosec B108
             agent_id: str = agent_config.get("agent_id", "unknown")

@@ -38,6 +38,7 @@ from autobot_shared.logging_manager import get_logger
 from ..models.enums import LLCRunStatus
 from .base import AdapterRunStatus
 from .copilot_local_adapter import CopilotLocalAdapter, _output_path, _resolve_gh_cli, _state_path
+from .subprocess_support import inject_agent_credentials, serialize_invoke_context
 
 logger = get_logger(__name__)
 
@@ -73,13 +74,15 @@ class CopilotSubscriptionAdapter(CopilotLocalAdapter):
 
         cmd: list[str] = [gh_cli, "copilot", "suggest", "--target", "bash", prompt]
 
-        env = {**os.environ, "LLC_INVOKE_CONTEXT": json.dumps(context, default=str)}
+        env = {**os.environ, "LLC_INVOKE_CONTEXT": serialize_invoke_context(context)}
         if gh_token:
             env["GITHUB_TOKEN"] = gh_token
             env["GH_TOKEN"] = gh_token
         env["GH_COPILOT_MODEL"] = copilot_model
         if workspace_dir:
             env["AUTOBOT_WORKSPACE_DIR"] = workspace_dir
+        # GH#9623/GH#9789: forward the run-scoped LLC bearer token + API base.
+        inject_agent_credentials(env, context)
 
         # Verify GitHub authentication (subscription mode requires logged-in gh CLI)
         try:
@@ -118,10 +121,8 @@ class CopilotSubscriptionAdapter(CopilotLocalAdapter):
                     )
                     env.pop("AUTOBOT_WORKSPACE_DIR", None)
                     workspace_dir = None
-                    env["LLC_INVOKE_CONTEXT"] = json.dumps(
-                        {k: v for k, v in context.items() if k != "workspace_dir"},
-                        default=str,
-                    )
+                    context.pop("workspace_dir", None)
+                    env["LLC_INVOKE_CONTEXT"] = serialize_invoke_context(context)
                 else:
                     raise
                 proc = await asyncio.create_subprocess_exec(
@@ -159,8 +160,8 @@ class CopilotSubscriptionAdapter(CopilotLocalAdapter):
         """Check status and parse token usage from output."""
         base_status = await super().status(agent_config, run_id)
 
-        # If run completed, check for quota exhaustion in output
-        if base_status.status in (LLCRunStatus.COMPLETED, LLCRunStatus.FAILED):
+        # On any terminal state, check the output for quota exhaustion (GH#9777).
+        if base_status.status.is_terminal():
             cfg = agent_config.get("adapter_config", {})
             output_dir: str = cfg.get("output_dir", "/tmp")  # nosec B108
             agent_id: str = agent_config.get("agent_id", "unknown")

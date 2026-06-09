@@ -228,7 +228,11 @@ class HTTPClientManager:
                 self._error_count += 1
                 # Also decrement active on error since we're not returning response
                 self._active_requests = max(0, self._active_requests - 1)
-            logger.error("HTTP request failed: %s", e)
+            # The exception is re-raised, so the caller logs it at the severity
+            # that fits its context. Logging error here too double-logs and
+            # spams for expected failures (e.g. health probes to optional,
+            # not-running services like Ollama) (#9715).
+            logger.debug("HTTP request failed: %s", e)
             raise
 
     async def decrement_active(self) -> None:

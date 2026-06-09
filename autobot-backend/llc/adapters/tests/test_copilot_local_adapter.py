@@ -149,6 +149,32 @@ class TestInvoke:
         assert captured_envs[0].get("GITHUB_TOKEN") == _AUTH_STUB
         assert captured_envs[0].get("GH_TOKEN") == _AUTH_STUB
 
+    async def test_invoke_forwards_llc_api_key_and_redacts_blob(self) -> None:
+        # GH#9789: copilot adapter must forward AUTOBOT_LLC_API_KEY and NOT leak
+        # the real key into LLC_INVOKE_CONTEXT (regression that #9789 fixes).
+        adapter = CopilotLocalAdapter()
+        fake_proc = _make_fake_proc(66)
+        captured_envs: list[dict] = []
+
+        async def fake_exec(*args, **kwargs):
+            captured_envs.append(dict(kwargs.get("env", {})))
+            return fake_proc
+
+        with tempfile.TemporaryDirectory() as td:
+            cfg = _agent_cfg(output_dir=td)
+            with (
+                patch("llc.adapters.copilot_local_adapter.shutil.which", return_value="/usr/bin/gh"),
+                patch("asyncio.create_subprocess_exec", side_effect=fake_exec),
+                patch("builtins.open", MagicMock(return_value=MagicMock())),
+            ):
+                await adapter.invoke(cfg, {"agent_api_key": "llc_realkey", "api_base": "http://api/llc"})
+
+        env = captured_envs[0]
+        assert env.get("AUTOBOT_LLC_API_KEY") == "llc_realkey"
+        assert env.get("AUTOBOT_LLC_API_BASE") == "http://api/llc"
+        assert "llc_realkey" not in env.get("LLC_INVOKE_CONTEXT", "")
+        assert "<injected-at-runtime>" in env.get("LLC_INVOKE_CONTEXT", "")
+
     async def test_invoke_sets_copilot_model_env_var(self) -> None:
         adapter = CopilotLocalAdapter()
         fake_proc = _make_fake_proc(55)

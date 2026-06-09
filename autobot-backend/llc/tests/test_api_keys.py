@@ -88,3 +88,24 @@ def test_hash_key_deterministic() -> None:
 
 def test_hash_key_different_for_different_keys() -> None:
     assert _hash_key("llc_a") != _hash_key("llc_b")
+
+
+@pytest.mark.asyncio
+async def test_issue_key_sets_expires_at() -> None:
+    # GH#9623: ephemeral run-scoped keys carry a TTL backstop.
+    session = _make_session()
+    svc = ApiKeyService()
+    exp = datetime(2030, 1, 1, tzinfo=timezone.utc)
+    await svc.issue_key(session, "agent-001", "co-001", "ephemeral", expires_at=exp)
+    added = session.add.call_args[0][0]
+    assert added.expires_at == exp
+
+
+@pytest.mark.asyncio
+async def test_issue_key_defaults_no_expiry() -> None:
+    # GH#9623: long-lived keys still default to no expiry (NULL).
+    session = _make_session()
+    svc = ApiKeyService()
+    await svc.issue_key(session, "agent-001", "co-001", "longlived")
+    added = session.add.call_args[0][0]
+    assert added.expires_at is None

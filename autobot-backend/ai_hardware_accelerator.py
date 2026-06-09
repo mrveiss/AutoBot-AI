@@ -291,7 +291,10 @@ class AIHardwareAccelerator:
                     logger.warning(f"NPU Worker health check failed: {response.status}")
                     self.device_status[HardwareDevice.NPU]["available"] = False
         except Exception as e:
-            logger.warning("NPU Worker connection failed: %s", e)
+            # An NPU worker is optional hardware; its absence is the normal case
+            # (e.g. docker compose, no Intel NPU). Record unavailable and log at
+            # debug so we don't spam warnings every poll cycle (#9715).
+            logger.debug("NPU Worker unavailable: %s", e)
             self.device_status[HardwareDevice.NPU]["available"] = False
 
     async def _check_gpu_availability(self):

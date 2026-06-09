@@ -40,6 +40,7 @@ from autobot_shared.redis_client import get_async_redis_client
 
 from ..models.enums import LLCRunStatus
 from .base import AdapterRunStatus
+from .subprocess_support import inject_agent_credentials, render_context_markdown, serialize_invoke_context
 
 logger = get_logger(__name__)
 
@@ -140,7 +141,7 @@ class ClaudeCodeAdapter:
         cmd.append(prompt)
 
         workspace_dir: str | None = context.get("workspace_dir")
-        env = {**os.environ, "LLC_INVOKE_CONTEXT": json.dumps(context, default=str)}
+        env = {**os.environ, "LLC_INVOKE_CONTEXT": serialize_invoke_context(context)}
         if workspace_dir:
             env["AUTOBOT_WORKSPACE_DIR"] = workspace_dir
 
@@ -151,6 +152,9 @@ class ClaudeCodeAdapter:
         wake_comment_id = context.get("wake_comment_id")
         if wake_comment_id:
             env["AUTOBOT_LLC_WAKE_COMMENT_ID"] = wake_comment_id
+
+        # GH#9623/GH#9789: forward the run-scoped LLC bearer token + API base.
+        inject_agent_credentials(env, context)
 
         out_fh = open(output_file, "w", encoding="utf-8")
         try:
@@ -171,7 +175,7 @@ class ClaudeCodeAdapter:
                 )
                 context.pop("workspace_dir", None)
                 env.pop("AUTOBOT_WORKSPACE_DIR", None)
-                env["LLC_INVOKE_CONTEXT"] = json.dumps(context, default=str)
+                env["LLC_INVOKE_CONTEXT"] = serialize_invoke_context(context)
                 workspace_dir = None
                 proc = await asyncio.create_subprocess_exec(
                     *cmd,
@@ -294,16 +298,12 @@ class ClaudeCodeAdapter:
             pass
 
     def _build_prompt(self, context: dict) -> str:
-        parts: list[str] = []
-        if rag_brief := context.get("rag_brief"):
-            parts.append(rag_brief)
-        if task_id := context.get("task_id", ""):
-            parts.append(f"Task ID: {task_id}")
-        if api_base := context.get("api_base_url", ""):
-            parts.append(f"API base URL: {api_base}")
-        if not parts:
-            parts.append(json.dumps(context, default=str))
-        return "\n\n".join(parts)
+        """Render the agent prompt as structured Markdown (GH#9622).
+
+        Delegates to :func:`render_context_markdown` so the heartbeat fat
+        context becomes a readable brief instead of a raw ``json.dumps`` blob.
+        """
+        return render_context_markdown(context)
 
     @staticmethod
     def _load_state(state_file: str, safe_dir: str = _DEFAULT_OUTPUT_DIR) -> Optional[dict]:

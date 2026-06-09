@@ -51,7 +51,7 @@ class LoggingExtension(Extension):
         self.include_data = False
         self._session_start_times: dict = {}
 
-    async def on_before_message_process(self, ctx: HookContext) -> None | None:
+    async def on_before_message_process(self, ctx: HookContext) -> None:
         """Log message processing start."""
         message_preview = ctx.message[:100] if ctx.message else "(empty)"
         if len(ctx.message) > 100:
@@ -121,7 +121,7 @@ class LoggingExtension(Extension):
 
         return None  # Don't cancel
 
-    async def on_after_tool_execute(self, ctx: HookContext) -> None | None:
+    async def on_after_tool_execute(self, ctx: HookContext) -> None:
         """Log tool execution complete."""
         tool_name = ctx.get("tool_name", "unknown")
         success = ctx.get("success", True)
@@ -138,7 +138,7 @@ class LoggingExtension(Extension):
         )
         return None
 
-    async def on_tool_error(self, ctx: HookContext) -> None | None:
+    async def on_tool_error(self, ctx: HookContext) -> None:
         """Log tool errors."""
         tool_name = ctx.get("tool_name", "unknown")
         error = ctx.get("error", "unknown error")
@@ -164,7 +164,7 @@ class LoggingExtension(Extension):
         )
         return None  # Don't modify suggestion
 
-    async def on_critical_error(self, ctx: HookContext) -> None | None:
+    async def on_critical_error(self, ctx: HookContext) -> None:
         """Log critical errors."""
         error = ctx.get("error", "")
 
@@ -175,7 +175,7 @@ class LoggingExtension(Extension):
         )
         return None
 
-    async def on_loop_complete(self, ctx: HookContext) -> None | None:
+    async def on_loop_complete(self, ctx: HookContext) -> None:
         """Log message loop completion with timing."""
         session_id = ctx.session_id or "no-session"
         start_time = self._session_start_times.pop(session_id, None)
@@ -197,7 +197,7 @@ class LoggingExtension(Extension):
 
         return None
 
-    async def on_session_create(self, ctx: HookContext) -> None | None:
+    async def on_session_create(self, ctx: HookContext) -> None:
         """Log session creation."""
         logger.log(
             self.log_level,
@@ -206,7 +206,7 @@ class LoggingExtension(Extension):
         )
         return None
 
-    async def on_session_destroy(self, ctx: HookContext) -> None | None:
+    async def on_session_destroy(self, ctx: HookContext) -> None:
         """Log session destruction."""
         logger.log(
             self.log_level,
@@ -231,7 +231,7 @@ class LoggingExtension(Extension):
         )
         return None
 
-    async def on_after_rag_results(self, ctx: HookContext) -> None | None:
+    async def on_after_rag_results(self, ctx: HookContext) -> None:
         """Log RAG results."""
         results = ctx.get("results", [])
         logger.log(
@@ -253,7 +253,7 @@ class LoggingExtension(Extension):
         )
         return None  # Don't auto-approve
 
-    async def on_approval_received(self, ctx: HookContext) -> None | None:
+    async def on_approval_received(self, ctx: HookContext) -> None:
         """Log approval received."""
         tool_name = ctx.get("tool_name", "unknown")
         approved = ctx.get("approved", False)

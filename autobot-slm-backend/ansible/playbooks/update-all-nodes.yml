@@ -334,7 +334,11 @@
 
     - name: "[PLAY 1] SLM | Rebuild frontend production build"
       command:
-        cmd: npm run build
+        # build:slm = "VITE_API_URL=/slm vite build" — the SLM frontend is served
+        # under /slm, so a plain `npm run build` bakes in the wrong API base and
+        # the SLM dashboard calls the wrong endpoints (#9563, #9710). Matches the
+        # canonical ansible/update-all-nodes.yml.
+        cmd: npm run build:slm
         chdir: /opt/autobot/autobot-slm-frontend
       register: slm_build
       tags: [slm, slm-frontend]

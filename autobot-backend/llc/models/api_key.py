@@ -30,6 +30,10 @@ class LLCApiKey(Base):
     key_hash: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
     last_used_at: Mapped[Optional[datetime]] = mapped_column(nullable=True)
     revoked_at: Mapped[Optional[datetime]] = mapped_column(nullable=True)
+    # GH#9623: optional TTL backstop for ephemeral run-scoped keys. NULL = never
+    # expires (default for long-lived keys); a value self-expires the key even if
+    # explicit revocation never runs (e.g. scheduler crash mid-run).
+    expires_at: Mapped[Optional[datetime]] = mapped_column(nullable=True)
     created_at: Mapped[datetime] = mapped_column(nullable=False)
 
 
