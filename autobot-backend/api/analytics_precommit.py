@@ -35,9 +35,9 @@ from api.schemas_analytics import (
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
-from constants.network_constants import NetworkConstants
 from code_intelligence.precommit_analyzer import BUILTIN_CHECKS as _ENGINE_BUILTIN_CHECKS
 from code_intelligence.precommit_analyzer import CheckDefinition as _EngineCheckDefinition
+from constants.network_constants import NetworkConstants
 
 logger = get_logger(__name__)
 
@@ -80,8 +80,7 @@ def _engine_check_to_schema(check: _EngineCheckDefinition) -> CheckDefinition:
 
 
 BUILTIN_CHECKS: dict[str, CheckDefinition] = {
-    check_id: _engine_check_to_schema(check)
-    for check_id, check in _ENGINE_BUILTIN_CHECKS.items()
+    check_id: _engine_check_to_schema(check) for check_id, check in _ENGINE_BUILTIN_CHECKS.items()
 }
 
 # In-memory storage for configuration
