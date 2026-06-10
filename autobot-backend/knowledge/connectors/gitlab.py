@@ -33,7 +33,6 @@ Gitea/Forgejo-specific config:
     repos (list[str]): Repositories in "owner/repo" format. Required.
 """
 
-import hashlib
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 from urllib.parse import quote
@@ -44,6 +43,7 @@ from autobot_shared.auth import ApiKeyAuth
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc, parse_utc_iso
 from knowledge.connectors.base import AbstractConnector, RetryableError
+from knowledge.connectors.content_extraction import content_hash as _content_hash
 from knowledge.connectors.models import (
     ChangeInfo,
     ConnectorConfig,
@@ -61,10 +61,6 @@ _REDIS_TS_TTL = 86400 * 30  # 30 days
 # ---------------------------------------------------------------------------
 # Shared helpers
 # ---------------------------------------------------------------------------
-
-
-def _content_hash(text: str) -> str:
-    return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
 def _issue_to_text(issue: Dict[str, Any], *, is_pr: bool = False) -> str:

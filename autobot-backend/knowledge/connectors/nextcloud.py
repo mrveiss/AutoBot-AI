@@ -24,7 +24,6 @@ Config keys:
 Nextcloud WebDAV endpoint: {nextcloud_url}/remote.php/dav/files/{username}/
 """
 
-import hashlib
 from datetime import datetime
 from typing import List, Optional
 from urllib.parse import quote, urljoin, urlparse
@@ -36,6 +35,7 @@ from autobot_shared.auth import BasicAuth
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
 from knowledge.connectors.base import AbstractConnector, RetryableError
+from knowledge.connectors.content_extraction import content_hash as _content_hash
 from knowledge.connectors.models import (
     ChangeInfo,
     ConnectorConfig,
@@ -57,11 +57,6 @@ DEFAULT_FILE_EXTENSIONS = ["pdf", "docx", "odt", "md", "txt"]
 # Redis key prefix for storing last-modified timestamps
 _REDIS_TS_PREFIX = "connector:nextcloud:ts:"
 _REDIS_TS_TTL = 86400 * 30  # 30 days
-
-
-def _content_hash(text: str) -> str:
-    """Generate SHA256 hash of content for change detection."""
-    return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
 def _is_supported_file(path: str, extensions: List[str]) -> bool:
