@@ -34,13 +34,14 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.user_management.dependencies import get_current_user
+from api.user_management.dependencies import get_current_user, require_org_context
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
 from models.agent_org import AgentOrgNode
 from user_management.database import get_async_session_factory
 from user_management.models.user import User
+from user_management.services import TenantContext
 
 from ..kb.collections import KbCollectionManager
 from ..models.enums import (
@@ -70,7 +71,9 @@ from ..services.work_item_service import (
     WorkItemService,
     resolve_actor_role,
 )
+from ..services.activity_log import ActivityLogQuery, LLCActivityLogService
 from ..services.work_product_service import WorkProductService
+from .activity import ActivityLogEntry, ActivityLogResponse
 
 
 class HumanClaimRequest(BaseModel):
@@ -108,6 +111,7 @@ _get_relation_service = lazy_singleton(WorkItemRelationService)
 _get_attachment_service = lazy_singleton(AttachmentService)
 _get_comment_wake_service = lazy_singleton(CommentWakeService)
 _get_heartbeat_scheduler = lazy_singleton(HeartbeatScheduler)
+_get_activity_service = lazy_singleton(LLCActivityLogService)
 
 
 def _service() -> WorkItemService:
@@ -866,6 +870,62 @@ async def list_work_products(
         ],
         "total": len(products),
     }
+
+
+@router.get("/{work_item_id}/activity", response_model=ActivityLogResponse)
+async def list_work_item_activity(
+    work_item_id: str,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
+    session: AsyncSession = Depends(get_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
+) -> ActivityLogResponse:
+    """Per-work-item activity trail (GH#9851).
+
+    Tenant scope is derived from the authenticated org context, never the
+    requested resource: the item must belong to the caller's org (else 404,
+    indistinguishable from "missing"), and the activity query is filtered by
+    ctx.org_id. Newest first.
+    """
+    item = await _service().get(session, work_item_id)
+    if item is None or str(item.company_id) != str(ctx.org_id):
+        raise HTTPException(status_code=404, detail="Work item not found")
+
+    params = ActivityLogQuery(
+        entity_type="work_item",
+        entity_id=work_item_id,
+        page=page,
+        page_size=page_size,
+    )
+    result = await _get_activity_service().query(
+        session=session, company_id=str(ctx.org_id), params=params
+    )
+
+    items = [
+        ActivityLogEntry(
+            id=str(row.id),
+            company_id=str(row.company_id),
+            actor_type=row.actor_type,
+            actor_agent_id=str(row.actor_agent_id) if row.actor_agent_id else None,
+            actor_user_id=str(row.actor_user_id) if row.actor_user_id else None,
+            entity_type=row.entity_type,
+            entity_id=str(row.entity_id),
+            action=row.action,
+            before_state=row.before_state,
+            after_state=row.after_state,
+            metadata=row.log_metadata,
+            occurred_at=row.occurred_at,
+        )
+        for row in result.items
+    ]
+    return ActivityLogResponse(
+        items=items,
+        page=result.page,
+        page_size=result.page_size,
+        total=result.total,
+        has_next=result.has_next,
+    )
 
 
 # ------------------------------------------------------------------

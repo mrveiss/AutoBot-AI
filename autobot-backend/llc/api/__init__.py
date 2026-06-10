@@ -27,6 +27,7 @@ from .labels import router as labels_router
 from .portability import router as portability_router
 from .review_gate_policies import router as review_gate_router
 from .routines import router as routines_router
+from .runs import heartbeat_runs_router
 from .runs import router as runs_router
 from .secrets import router as secrets_router
 from .sprints import router as sprints_router
@@ -53,6 +54,7 @@ router.include_router(agent_router)
 router.include_router(agents_router)
 router.include_router(agent_wiki_router)
 router.include_router(runs_router)
+router.include_router(heartbeat_runs_router)
 router.include_router(ceo_chat_router)
 router.include_router(decisions_router)
 router.include_router(routines_router)
