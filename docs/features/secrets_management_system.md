@@ -5,6 +5,13 @@
 **Priority**: High
 **Status:** 🔄 **IN PROGRESS**
 
+> **Implementation note (encryption at rest).** This document is the design plan. The
+> shipped implementation (`autobot-backend/services/secrets_service.py`) encrypts stored
+> secrets with **Fernet** (AES-128-CBC + HMAC-SHA256, an authenticated symmetric scheme),
+> not the AES-256-GCM described in the design below. Treat the AES-256-GCM / per-user
+> master-key / PBKDF2 design as the target, not current behavior. Tracked in
+> [#9894](https://github.com/mrveiss/AutoBot-AI/issues/9894).
+
 ## Overview
 
 The AutoBot system requires a comprehensive secrets management system to securely handle SSH keys, passwords, API keys, and other sensitive credentials needed for agents to access resources. This system must support both GUI-based management and chat-scoped secrets with proper isolation and transfer capabilities.
@@ -34,7 +41,7 @@ The AutoBot system requires a comprehensive secrets management system to securel
 - **Custom Fields**: User-defined secret types
 
 #### 4. Security Features
-- **Encryption at Rest**: AES-256 encryption for stored secrets
+- **Encryption at Rest**: authenticated symmetric encryption for stored secrets (shipped: Fernet / AES-128-CBC + HMAC-SHA256; AES-256-GCM is the design target — see implementation note above)
 - **Access Control**: Role-based secret access
 - **Audit Logging**: Track secret usage and modifications
 - **Expiration Management**: Time-based secret expiration
@@ -258,7 +265,7 @@ async function handleAddSecretCommand(command, args) {
 #### 1. Encryption Strategy
 - **Master Key**: Per-user master key for secret encryption
 - **Key Derivation**: PBKDF2 with user password + salt
-- **Algorithm**: AES-256-GCM for authenticated encryption
+- **Algorithm**: AES-256-GCM for authenticated encryption *(design target; shipped today is Fernet — AES-128-CBC + HMAC-SHA256)*
 - **Key Rotation**: Quarterly automatic key rotation
 - **Backup Keys**: Encrypted key backups for recovery
 
