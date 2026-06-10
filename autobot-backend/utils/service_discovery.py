@@ -6,6 +6,13 @@
 """
 Service Discovery System for AutoBot Distributed Architecture
 Provides dynamic service resolution and health monitoring across 6 VMs
+
+Wiring status (#9893): This is an available library API for dynamic service
+discovery. It is intentionally NOT wired into the production inter-service path,
+which resolves endpoints via SSOT config and communicates over ServiceMessageBus
+(Redis streams) + mTLS (autobot_shared.tls.get_internal_tls_context). Retained
+deliberately (not dead code); wire it in only when a concrete dynamic-node-
+resolution requirement appears (e.g. dynamically-scaled fleet nodes).
 """
 
 from __future__ import annotations
