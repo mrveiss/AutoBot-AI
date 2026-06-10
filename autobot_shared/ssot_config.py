@@ -1354,7 +1354,9 @@ class MiscConfig(BaseSettings):
     celery_result_backend: str = Field(default="", alias="CELERY_RESULT_BACKEND")
     ci: str = Field(default="", alias="CI")
     codebase_index_batch_size: int = Field(default=0, alias="CODEBASE_INDEX_BATCH_SIZE")
-    codebase_index_embedding_mode: int = Field(default=0, alias="CODEBASE_INDEX_EMBEDDING_MODE")
+    codebase_index_embedding_mode: str = Field(
+        default="precompute", alias="CODEBASE_INDEX_EMBEDDING_MODE"
+    )
     codebase_index_embed_batch_size: int = Field(default=0, alias="CODEBASE_INDEX_EMBED_BATCH_SIZE")
     codebase_index_incremental: str = Field(default="", alias="CODEBASE_INDEX_INCREMENTAL")
     codebase_index_parallel_batches: str = Field(default="", alias="CODEBASE_INDEX_PARALLEL_BATCHES")

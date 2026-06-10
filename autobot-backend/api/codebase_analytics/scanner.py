@@ -29,7 +29,7 @@ import asyncio
 import threading
 from collections import deque
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Callable, Dict, List, Tuple
 
 from fastapi import HTTPException
 
@@ -258,7 +258,7 @@ _analyze_single_file = _analyze_single_file_bound
 
 async def scan_codebase(
     root_path: str | None = None,
-    progress_callback: callable | None = None,
+    progress_callback: Callable | None = None,
     immediate_store_collection=None,
     redis_client=None,
     source_id: str | None = None,
