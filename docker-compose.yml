@@ -179,6 +179,9 @@ services:
     environment:
       - AUTOBOT_ENVIRONMENT=production
       - AUTOBOT_DEPLOYMENT_MODE=local
+      # No AI Stack VM ships with compose — disable the poll to stop the per-boot
+      # connection-error warning flood (#9782). Set to true if you run an AI Stack.
+      - AUTOBOT_AI_STACK_ENABLED=${AUTOBOT_AI_STACK_ENABLED:-false}
       - AUTOBOT_LOG_LEVEL=${AUTOBOT_LOG_LEVEL:-INFO}
       - AUTOBOT_REDIS_HOST=autobot-redis
       - AUTOBOT_REDIS_PORT=6379
@@ -274,6 +277,9 @@ services:
     environment:
       - AUTOBOT_ENVIRONMENT=production
       - AUTOBOT_DEPLOYMENT_MODE=local
+      # No AI Stack VM ships with compose — disable the poll to stop the per-boot
+      # connection-error warning flood (#9782). Set to true if you run an AI Stack.
+      - AUTOBOT_AI_STACK_ENABLED=${AUTOBOT_AI_STACK_ENABLED:-false}
       - AUTOBOT_LOG_LEVEL=${AUTOBOT_LOG_LEVEL:-INFO}
       - AUTOBOT_REDIS_HOST=autobot-redis
       - AUTOBOT_REDIS_PORT=6379
@@ -356,6 +362,9 @@ services:
     environment:
       - AUTOBOT_ENVIRONMENT=production
       - AUTOBOT_DEPLOYMENT_MODE=local
+      # No AI Stack VM ships with compose — disable the poll to stop the per-boot
+      # connection-error warning flood (#9782). Set to true if you run an AI Stack.
+      - AUTOBOT_AI_STACK_ENABLED=${AUTOBOT_AI_STACK_ENABLED:-false}
       - AUTOBOT_LOG_LEVEL=${AUTOBOT_LOG_LEVEL:-INFO}
       - AUTOBOT_REDIS_HOST=autobot-redis
       - AUTOBOT_REDIS_PORT=6379

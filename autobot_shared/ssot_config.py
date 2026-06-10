@@ -1186,6 +1186,7 @@ class MiscConfig(BaseSettings):
     autoresearch_staged_eval_fraction: str = Field(default="", alias="AUTOBOT_AUTORESEARCH_STAGED_EVAL_FRACTION")
     autoresearch_staged_eval_threshold: float = Field(default=0.0, alias="AUTOBOT_AUTORESEARCH_STAGED_EVAL_THRESHOLD")
     autoresearch_timeout: int = Field(default=0, alias="AUTOBOT_AUTORESEARCH_TIMEOUT")
+    ai_stack_enabled: bool = Field(default=True, alias="AUTOBOT_AI_STACK_ENABLED")
     cache_enabled: bool = Field(default=False, alias="AUTOBOT_CACHE_ENABLED")
     cache_size: int = Field(default=0, alias="AUTOBOT_CACHE_SIZE")
     cache_l1_size: int = Field(

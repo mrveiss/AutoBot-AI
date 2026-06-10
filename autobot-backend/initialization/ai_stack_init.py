@@ -50,7 +50,12 @@ async def initialize_ai_stack(app: FastAPI, update_status_fn, append_error_fn) -
         health_status = await ai_client.health_check()
         app.state.ai_stack_client = ai_client
 
-        if health_status["status"] == "healthy":
+        if health_status["status"] == "disabled":
+            await update_status_fn("ai_stack", "disabled")
+            log_initialization_step(
+                "AI Stack", "AI Stack disabled — skipping (single_user/compose)", 100, True
+            )
+        elif health_status["status"] == "healthy":
             await update_status_fn("ai_stack", "connected")
             log_initialization_step("AI Stack", "AI Stack connection established", 50, True)
 
