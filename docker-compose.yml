@@ -187,8 +187,11 @@ services:
     image: autobot/backend:latest
     container_name: autobot-backend
     restart: unless-stopped
-    # GH#9905: load the shared auto-generated signing secret, then run the image CMD.
+    # GH#9905: load the shared auto-generated signing secret, then run the app.
+    # NB: overriding entrypoint clears the image CMD, so the command is
+    # re-declared here (kept in sync with docker/backend/Dockerfile).
     entrypoint: ["/bin/sh", "/usr/local/bin/with-secrets.sh"]
+    command: ["python3", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8001", "--workers", "1", "--app-dir", "/app/autobot-backend"]
     env_file:
       - docker/.env.docker
     volumes:
@@ -446,8 +449,11 @@ services:
     container_name: autobot-slm
     restart: unless-stopped
     # GH#9905: load the shared secret, then chain the image's own entrypoint
-    # (/app/entrypoint.sh) so SLM startup is unchanged.
+    # (/app/entrypoint.sh) so SLM startup is unchanged. Overriding entrypoint
+    # clears the image CMD, so it is re-declared here (kept in sync with
+    # docker/slm/Dockerfile); /app/entrypoint.sh runs migrations then exec "$@".
     entrypoint: ["/bin/sh", "/usr/local/bin/with-secrets.sh", "/app/entrypoint.sh"]
+    command: ["python3", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1", "--app-dir", "/app/autobot-slm-backend"]
     volumes:
       - slm_data:/app/data
       - slm_logs:/app/logs

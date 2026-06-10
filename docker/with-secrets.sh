@@ -16,7 +16,7 @@ set -eu
 
 SECRETS_FILE="/secrets/autobot.env"
 
-if [ -f "$SECRETS_FILE" ]; then
+if [ -r "$SECRETS_FILE" ]; then
     # _GEN_JWT / _GEN_SECRET_KEY are defined by docker/secrets-init.sh.
     . "$SECRETS_FILE"
     # `:=` assigns only when the variable is unset OR empty.
