@@ -41,11 +41,14 @@ async function fetchTree() {
 }
 
 async function toggleAgentPause(node: OrgNode) {
-  const action = node.status === 'paused' ? 'resume' : 'pause'
   if (!companyId.value) return
+  const willPause = node.status !== 'paused'
+  const base = `/api/llc/companies/${companyId.value}/controls/agents/${node.id}`
   try {
-    await api.post(`/api/llc/companies/${companyId.value}/controls/agents/${node.id}/${action}`, {})
-    node.status = action === 'pause' ? 'paused' : 'idle'
+    // Explicit literal paths (not a template action) so the route resolves to
+    // the canonical /controls/agents/{id}/pause | /resume endpoints.
+    await api.post(willPause ? `${base}/pause` : `${base}/resume`, {})
+    node.status = willPause ? 'paused' : 'idle'
     if (selectedNode.value?.id === node.id) selectedNode.value = { ...node }
   } catch (err: unknown) {
     logger.error('Toggle pause failed', err)
