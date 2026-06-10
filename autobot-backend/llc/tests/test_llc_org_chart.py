@@ -37,11 +37,11 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from llc.models.budget import LLCAgentBudget
 from llc.models.enums import HeartbeatInvocationSource, LLCRunStatus
+from llc.models.heartbeat_run import LLCHeartbeatRun
 
 # Importing the harness registers the SQLite compile shims and all loop models
 # (including AgentOrgNode + LLCHeartbeatRun + LLCAgentBudget) on Base.metadata.
 from llc.tests import _e2e_harness as harness
-from llc.models.heartbeat_run import LLCHeartbeatRun
 from models.agent_org import AgentOrgNode, OrgRole
 
 _FIXED_USER_ID = uuid.UUID("11111111-1111-1111-1111-111111111111")
@@ -232,9 +232,7 @@ async def test_org_chart_forest_shape_and_budget(app, client, session_factory): 
     manager_id = await _seed_org_node(
         session_factory, company_id, name="Manager", role=OrgRole.MANAGER.value, title="VP Eng"
     )
-    report_id = await _seed_org_node(
-        session_factory, company_id, name="Report", reports_to=manager_id
-    )
+    report_id = await _seed_org_node(session_factory, company_id, name="Report", reports_to=manager_id)
 
     # Budget composition (optional assert): manager carries a budget row.
     await _seed_budget(session_factory, company_id, manager_id, limit="100.000000", spent="42.500000")
@@ -322,12 +320,8 @@ async def test_org_chart_cycle_safety(app, client, session_factory):  # noqa: AN
     from sqlalchemy import update
 
     async with session_factory() as session:
-        await session.execute(
-            update(AgentOrgNode).where(AgentOrgNode.agent_id == agent_a).values(reports_to=agent_b)
-        )
-        await session.execute(
-            update(AgentOrgNode).where(AgentOrgNode.agent_id == agent_b).values(reports_to=agent_a)
-        )
+        await session.execute(update(AgentOrgNode).where(AgentOrgNode.agent_id == agent_a).values(reports_to=agent_b))
+        await session.execute(update(AgentOrgNode).where(AgentOrgNode.agent_id == agent_b).values(reports_to=agent_a))
         await session.commit()
 
     resp = await client.get(f"/api/llc/companies/{company_id}/org-chart")
