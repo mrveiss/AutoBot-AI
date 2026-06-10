@@ -197,7 +197,9 @@ class TestHookInvokerInvocation:
         # Return wrong type
         manager.invoke_with_transform = AsyncMock(return_value=123)
 
-        with patch("extensions.hook_invoker.logger") as mock_logger:
+        # Implementation lives in middleware/ (#7426); patch the canonical module
+        # the shimmed HookInvoker actually logs through (#9794).
+        with patch("middleware.hook_invoker.logger") as mock_logger:
             result = await invoker.invoke(HookPoint.AFTER_PROMPT_BUILD, ctx)
             assert result == 123
             mock_logger.warning.assert_called()
