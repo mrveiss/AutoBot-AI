@@ -9,13 +9,17 @@ import { useWebSocket } from '@/composables/useWebSocket'
 import { getBackendUrl } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 import { useRoute, useRouter } from 'vue-router'
+import { useLlcCompanyContext } from '@/composables/llc/useLlcCompanyContext'
 
 const logger = createLogger('CompanyDashboard')
 const api = useApiClient()
 const route = useRoute()
 const router = useRouter()
+const { resolveCompanyId } = useLlcCompanyContext()
 
-const companyId = computed(() => route.params.companyId as string)
+// Resolved at mount: the top-level /llc/dashboard nav entry carries no
+// :companyId, so fall back to ?company= or the first company (#9861).
+const companyId = ref<string>('')
 
 interface AgentStatus {
   id: string
@@ -69,7 +73,7 @@ const wsUrl = computed(
   () => `${getBackendUrl().replace(/^http/, 'ws')}/api/llc/ws/activity/${companyId.value}`
 )
 
-const { lastMessage, connect, disconnect } = useWebSocket(wsUrl.value, {
+const { lastMessage, connect, disconnect } = useWebSocket(wsUrl, {
   autoConnect: false,
   autoReconnect: true,
 })
@@ -155,6 +159,7 @@ function formatTime(ts: string): string {
 }
 
 onMounted(async () => {
+  await resolveCompanyId().then((id) => { companyId.value = id })
   if (!companyId.value) return
   await fetchDashboardData()
   connect()
