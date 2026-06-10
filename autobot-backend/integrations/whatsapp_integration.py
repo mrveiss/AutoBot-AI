@@ -273,7 +273,7 @@ class WhatsAppIntegration(BaseIntegration):
                 return {
                     "ok": False,
                     "error": "recipient_not_opted_in",
-                    "to": to,
+                    "to": _mask_phone(to),
                 }
 
             url = f"{self.base_url}/{self.phone_number_id}/messages"
@@ -299,7 +299,7 @@ class WhatsAppIntegration(BaseIntegration):
                 return {
                     "ok": True,
                     "message_id": result["body"]["messages"][0]["id"],
-                    "to": to,
+                    "to": _mask_phone(to),
                 }
 
             error_msg = result.get("body", {}).get("error", {}).get("message", "Unknown error")
@@ -308,7 +308,7 @@ class WhatsAppIntegration(BaseIntegration):
                 _mask_phone(to),
                 error_msg,
             )
-            return {"ok": False, "error": error_msg, "to": to}
+            return {"ok": False, "error": error_msg, "to": _mask_phone(to)}
 
         except Exception as exc:
             logger.error(
@@ -319,7 +319,7 @@ class WhatsAppIntegration(BaseIntegration):
             return {
                 "ok": False,
                 "error": str(exc),
-                "to": params.get("to"),
+                "to": _mask_phone(params.get("to")),
             }
 
     async def send_media_message(self, params: Dict[str, Any]) -> Dict[str, Any]:
@@ -351,7 +351,7 @@ class WhatsAppIntegration(BaseIntegration):
                 return {
                     "ok": False,
                     "error": "recipient_not_opted_in",
-                    "to": to,
+                    "to": _mask_phone(to),
                 }
 
             url = f"{self.base_url}/{self.phone_number_id}/messages"
@@ -381,7 +381,7 @@ class WhatsAppIntegration(BaseIntegration):
                 return {
                     "ok": True,
                     "message_id": result["body"]["messages"][0]["id"],
-                    "to": to,
+                    "to": _mask_phone(to),
                     "media_type": media_type,
                 }
 
@@ -392,7 +392,7 @@ class WhatsAppIntegration(BaseIntegration):
                 _mask_phone(to),
                 error_msg,
             )
-            return {"ok": False, "error": error_msg, "to": to}
+            return {"ok": False, "error": error_msg, "to": _mask_phone(to)}
 
         except Exception as exc:
             logger.error(
@@ -403,7 +403,7 @@ class WhatsAppIntegration(BaseIntegration):
             return {
                 "ok": False,
                 "error": str(exc),
-                "to": params.get("to"),
+                "to": _mask_phone(params.get("to")),
             }
 
     async def send_template_message(self, params: Dict[str, Any]) -> Dict[str, Any]:
@@ -437,7 +437,7 @@ class WhatsAppIntegration(BaseIntegration):
                 return {
                     "ok": False,
                     "error": "recipient_not_opted_in",
-                    "to": to,
+                    "to": _mask_phone(to),
                 }
 
             url = f"{self.base_url}/{self.phone_number_id}/messages"
@@ -472,7 +472,7 @@ class WhatsAppIntegration(BaseIntegration):
                 return {
                     "ok": True,
                     "message_id": result["body"]["messages"][0]["id"],
-                    "to": to,
+                    "to": _mask_phone(to),
                     "template_name": template_name,
                 }
 
@@ -483,7 +483,7 @@ class WhatsAppIntegration(BaseIntegration):
                 _mask_phone(to),
                 error_msg,
             )
-            return {"ok": False, "error": error_msg, "to": to}
+            return {"ok": False, "error": error_msg, "to": _mask_phone(to)}
 
         except Exception as exc:
             logger.error(
@@ -494,7 +494,7 @@ class WhatsAppIntegration(BaseIntegration):
             return {
                 "ok": False,
                 "error": str(exc),
-                "to": params.get("to"),
+                "to": _mask_phone(params.get("to")),
             }
 
     async def check_opt_in_status(self, params: Dict[str, Any]) -> Dict[str, Any]:
@@ -518,7 +518,7 @@ class WhatsAppIntegration(BaseIntegration):
                     _mask_phone(phone_number),  # codeql[py/clear-text-logging-sensitive-data]
                 )
                 return {
-                    "phone_number": phone_number,
+                    "phone_number": _mask_phone(phone_number),
                     "opted_in": False,
                     "opted_in_at": None,
                     "opted_out_at": None,
@@ -532,7 +532,7 @@ class WhatsAppIntegration(BaseIntegration):
                     _mask_phone(phone_number),  # codeql[py/clear-text-logging-sensitive-data]
                 )
                 return {
-                    "phone_number": phone_number,
+                    "phone_number": _mask_phone(phone_number),
                     "opted_in": False,
                     "opted_in_at": None,
                     "opted_out_at": None,
@@ -540,7 +540,11 @@ class WhatsAppIntegration(BaseIntegration):
 
             data = json.loads(raw)
             status = WhatsAppOptInStatus.from_dict(data)
-            return status.to_dict()
+            # Mask the echoed number at the API boundary (#9788); to_dict() itself
+            # is left intact because it is also used to persist to Redis.
+            result = status.to_dict()
+            result["phone_number"] = _mask_phone(result.get("phone_number"))
+            return result
 
         except json.JSONDecodeError as exc:
             logger.error(
@@ -549,7 +553,7 @@ class WhatsAppIntegration(BaseIntegration):
                 exc,
             )
             return {
-                "phone_number": params.get("phone_number"),
+                "phone_number": _mask_phone(params.get("phone_number")),
                 "opted_in": False,
                 "opted_in_at": None,
                 "opted_out_at": None,
@@ -561,7 +565,7 @@ class WhatsAppIntegration(BaseIntegration):
                 exc,
             )
             return {
-                "phone_number": params.get("phone_number"),
+                "phone_number": _mask_phone(params.get("phone_number")),
                 "opted_in": False,
                 "opted_in_at": None,
                 "opted_out_at": None,
@@ -600,7 +604,7 @@ class WhatsAppIntegration(BaseIntegration):
                     "Redis client unavailable for setting opt-in status (phone=%s)",
                     _mask_phone(phone_number),  # codeql[py/clear-text-logging-sensitive-data]
                 )
-                return {"success": False, "phone_number": phone_number}
+                return {"success": False, "phone_number": _mask_phone(phone_number)}
 
             key = f"{_OPT_STATUS_KEY_PREFIX}{phone_number}"
             await client.set(
@@ -615,7 +619,7 @@ class WhatsAppIntegration(BaseIntegration):
             )
             return {
                 "success": True,
-                "phone_number": phone_number,
+                "phone_number": _mask_phone(phone_number),
                 "opted_in": opted_in,
                 "timestamp": timestamp,
             }
@@ -628,7 +632,7 @@ class WhatsAppIntegration(BaseIntegration):
             )
             return {
                 "success": False,
-                "phone_number": params.get("phone_number"),
+                "phone_number": _mask_phone(params.get("phone_number")),
                 "error": str(exc),
             }
 
