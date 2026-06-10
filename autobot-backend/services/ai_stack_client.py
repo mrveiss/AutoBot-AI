@@ -202,9 +202,7 @@ class AIStackClient:
     async def connect(self) -> None:
         """Initialize HTTP session and verify AI Stack reachability."""
         if not self.enabled:
-            logger.info(
-                "AI Stack disabled (AUTOBOT_AI_STACK_ENABLED=false) — skipping connection"
-            )
+            logger.info("AI Stack disabled (AUTOBOT_AI_STACK_ENABLED=false) — skipping connection")
             self.connection_status = "disabled"
             return
         logger.info("AI Stack client connecting to %s", self.base_url)

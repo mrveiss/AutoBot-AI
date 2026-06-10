@@ -36,9 +36,5 @@ def test_get_vm_env_config_uses_canonical_subconfig_attrs() -> None:
 def test_get_fallback_endpoints_builds_without_attribute_error() -> None:
     eps = _instance()._get_fallback_endpoints()
     assert eps["backend_api"] == f"http://{config.vm.main}:{config.port.backend}/health"
-    assert eps["web_interface"] == (
-        f"http://{config.vm.frontend}:{config.port.frontend}/health"
-    )
-    assert eps["ai_processing"] == (
-        f"http://{config.vm.aistack}:{config.port.aistack}/health"
-    )
+    assert eps["web_interface"] == (f"http://{config.vm.frontend}:{config.port.frontend}/health")
+    assert eps["ai_processing"] == (f"http://{config.vm.aistack}:{config.port.aistack}/health")

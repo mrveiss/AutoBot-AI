@@ -117,9 +117,7 @@ class TestReturnDictPhoneMasking:
     """
 
     @pytest.mark.asyncio
-    async def test_send_text_masks_returned_to_but_payload_keeps_real_number(
-        self, whatsapp_integration
-    ):
+    async def test_send_text_masks_returned_to_but_payload_keeps_real_number(self, whatsapp_integration):
         whatsapp_integration.check_opt_in_status = AsyncMock(return_value={"opted_in": True})
         whatsapp_integration._make_request = AsyncMock(
             return_value={
@@ -128,9 +126,7 @@ class TestReturnDictPhoneMasking:
             }
         )
 
-        result = await whatsapp_integration.send_text_message(
-            {"to": "+1234567890", "body": "hi"}
-        )
+        result = await whatsapp_integration.send_text_message({"to": "+1234567890", "body": "hi"})
 
         # Return echoes only the masked number.
         assert result["to"] == _mask_phone("+1234567890") == "***7890"
@@ -141,27 +137,19 @@ class TestReturnDictPhoneMasking:
 
     @pytest.mark.asyncio
     async def test_send_text_error_return_masks_to(self, whatsapp_integration):
-        whatsapp_integration.check_opt_in_status = AsyncMock(
-            return_value={"opted_in": False}
-        )
-        result = await whatsapp_integration.send_text_message(
-            {"to": "+1234567890", "body": "hi"}
-        )
+        whatsapp_integration.check_opt_in_status = AsyncMock(return_value={"opted_in": False})
+        result = await whatsapp_integration.send_text_message({"to": "+1234567890", "body": "hi"})
         assert result["ok"] is False
         assert result["to"] == "***7890"
         assert "+1234567890" not in str(result)
 
     @pytest.mark.asyncio
-    async def test_check_opt_in_status_masks_returned_phone_number(
-        self, whatsapp_integration, monkeypatch
-    ):
+    async def test_check_opt_in_status_masks_returned_phone_number(self, whatsapp_integration, monkeypatch):
         # Redis unavailable → early return path carries phone_number.
         monkeypatch.setattr(
             "integrations.whatsapp_integration.get_async_redis_client",
             AsyncMock(return_value=None),
         )
-        result = await whatsapp_integration.check_opt_in_status(
-            {"phone_number": "+1234567890"}
-        )
+        result = await whatsapp_integration.check_opt_in_status({"phone_number": "+1234567890"})
         assert result["phone_number"] == "***7890"
         assert "+1234567890" not in str(result)

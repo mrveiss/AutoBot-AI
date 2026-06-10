@@ -20,19 +20,16 @@ async def _run_request(suppress: bool) -> None:
     client = HTTPClientManager()
     fake_session = AsyncMock()
     fake_session.request = AsyncMock(side_effect=ConnectionError("boom"))
-    with patch.object(client, "get_session", AsyncMock(return_value=fake_session)), patch.object(
-        client, "_adjust_pool_size", AsyncMock(return_value=None)
+    with (
+        patch.object(client, "get_session", AsyncMock(return_value=fake_session)),
+        patch.object(client, "_adjust_pool_size", AsyncMock(return_value=None)),
     ):
         with pytest.raises(ConnectionError):
             await client.request("GET", "http://unreachable", suppress_error_log=suppress)
 
 
 def _failure_records(caplog, level):
-    return [
-        r
-        for r in caplog.records
-        if r.levelno == level and "HTTP request failed" in r.getMessage()
-    ]
+    return [r for r in caplog.records if r.levelno == level and "HTTP request failed" in r.getMessage()]
 
 
 @pytest.mark.asyncio
