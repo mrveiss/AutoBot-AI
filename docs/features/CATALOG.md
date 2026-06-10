@@ -15,26 +15,22 @@ status: current
 
 **This is the single registry for AutoBot features.** Feature documentation lives in one
 place — `docs/features/` — and this catalog is its index: every capability maps to a
-**design doc** and a **tracking issue**, with verification owned by the issue. It includes
-capabilities that were previously documented only in archived plans, design specs, and
-implementation reports and were not reachable from the main navigation.
+**design doc** and a **tracking issue**. It includes capabilities that were previously
+documented only in archived plans, design specs, and implementation reports and were not
+reachable from the main navigation.
 
-> **Tracking & verification.** Every capability below links to a verification issue
-> (filed under umbrella [#9872][u]). **Verification tasks live in the issues, not here** —
-> each issue carries the per-feature checklist (locate design → backend reachable →
-> frontend wired → e2e matches → correct status → promote/archive).
-
-> **About the Status column.** Status is *derived from each capability's own
-> documentation* and has **not** been independently re-verified against the running
-> code. Treat it as a pointer, not a guarantee:
-> - **Shipped** — the source doc describes it as implemented/complete.
-> - **Partial** — built but incomplete, or backend-only/awaiting wire-in.
-> - **Planned** — specified in a PRD/plan, implementation not confirmed started.
+> **Verified.** Statuses below were verified against the codebase on **2026-06-10**
+> (evidence captured in the linked issues [#9874][i-voice]–[#9885][i-trans], under
+> umbrella [#9872][u]). Most capabilities verified as **more complete** than first
+> documented. Remaining gaps are tracked as discovery issues — see
+> [Gaps found during verification](#gaps-found-during-verification).
+>
+> - **Shipped** — implemented and wired end-to-end (backend + frontend where applicable), with code evidence.
+> - **Partial** — backend shipped but no frontend consumer, or a sub-capability still planned. Each has a wire-in issue.
+> - **Planned** — specified, implementation not yet started.
 > - **Design** — design spec only.
 >
-> Before making any headline/marketing claim from this table, verify the specific
-> capability against the codebase (that is what the verification issues are for). See the
-> [Platform Model](../architecture/PLATFORM_MODEL.md) for how these capabilities fit together.
+> See the [Platform Model](../architecture/PLATFORM_MODEL.md) for how these fit together.
 
 ---
 
@@ -45,9 +41,9 @@ Some capabilities are packaged as **installable modules** built on the
 
 | Module | Status | Design doc | Issue | What it adds |
 |--------|--------|------------|-------|--------------|
-| **AutoBot LLC** | Planned | [llc/_index](../llc/_index.md), [PRD](../planning/PRD_AutoBot_LLC_Module.md) | [#9883][i-llc] | Autonomous agent-company: agents, goals, backlog, heartbeat scheduling, board governance |
-| **Codebase Analytics** | Shipped | [code-intelligence-dashboard-design](../archives/plans/2026-02-04-code-intelligence-dashboard-design.md) | [#9884][i-analytics] | Code structure analysis, risk detection, dependency insights — on your own hardware |
-| **Transcriber** | Partial | [transcriber-plan-1-foundation](../superpowers/plans/2026-05-30-transcriber-plan-1-foundation.md) | [#9885][i-trans] | Audio transcription module: projects, recordings, local transcription, export |
+| **AutoBot LLC** | Shipped | [llc/_index](../llc/_index.md), [PRD](../planning/PRD_AutoBot_LLC_Module.md) | [#9883][i-llc] | Autonomous agent-company: 27 LLC routers under `/api/llc`, heartbeat/adapters, full `views/llc/` UI (incremental follow-ups remain) |
+| **Codebase Analytics** | Shipped | [code-intelligence-dashboard-design](../archives/plans/2026-02-04-code-intelligence-dashboard-design.md) | [#9884][i-analytics] | Code structure analysis, risk detection, dependency insights — `/analytics/codebase` end-to-end |
+| **Transcriber** | Shipped | [transcriber-plan-1-foundation](../superpowers/plans/2026-05-30-transcriber-plan-1-foundation.md) | [#9885][i-trans] | Audio transcription module: projects, recordings, local pipeline (diarization), export (srt/vtt/docx/pdf), UI |
 
 The themed tables below break down the capabilities inside the core and these modules.
 
@@ -57,106 +53,118 @@ The themed tables below break down the capabilities inside the core and these mo
 
 | Capability | Status | Design doc | Issue | What it does |
 |------------|--------|------------|-------|--------------|
-| Voice conversation mode | Design | [voice-conversation-mode-design](../archives/plans/2026-02-20-voice-conversation-mode-design.md) | [#9874][i-voice] | Walkie-talkie, hands-free, and duplex voice interaction modes |
-| Streaming TTS (per-sentence) | Design | [archives/plans](../archives/_index.md) | [#9874][i-voice] | Real-time per-sentence text-to-speech (1.5–3s latency) instead of waiting for the full reply |
-| Chat knowledge management | Shipped | [CHAT_KNOWLEDGE_MANAGEMENT](CHAT_KNOWLEDGE_MANAGEMENT.md) | [#9874][i-voice] | Chat-scoped knowledge context, file associations, conversation→KB compilation, topic detection |
+| Voice conversation mode | Shipped | [voice-conversation-mode-design](../archives/plans/2026-02-20-voice-conversation-mode-design.md) | [#9874][i-voice] | Walkie-talkie, hands-free, duplex, and realtime-WebRTC modes (`/voice` WS + `useVoiceConversation`) |
+| Streaming TTS (per-sentence) | Shipped | [archives/plans](../archives/_index.md) | [#9874][i-voice] | Real-time pipelined per-sentence text-to-speech (`_tts_queue_worker`, `AUTOBOT_TTS_PIPELINE_DEPTH`) |
+| Chat knowledge management | Shipped | [CHAT_KNOWLEDGE_MANAGEMENT](CHAT_KNOWLEDGE_MANAGEMENT.md) | [#9874][i-voice] | Chat-scoped knowledge, file associations, conversation→KB compilation (11 endpoints) |
 
 ## Knowledge, RAG & Memory
 
 | Capability | Status | Design doc | Issue | What it does |
 |------------|--------|------------|-------|--------------|
-| Graph-RAG hybrid search | Shipped | [issue-55-complete-summary](../planning/issue-55-complete-summary.md) | [#9875][i-rag] | Weighted vector + knowledge-graph retrieval with entity extraction at query time |
-| Graph entity extractor | Shipped | [issue-55-complete-summary](../planning/issue-55-complete-summary.md) | [#9875][i-rag] | Extracts facts/entities from conversations and infers relationships (REST API) |
-| Memory graph semantic search | Shipped | [MEMORY_GRAPH_SEMANTIC_SEARCH](MEMORY_GRAPH_SEMANTIC_SEARCH.md) | [#9875][i-rag] | Hybrid full-text + vector search over the memory graph (<100ms target) |
+| Graph-RAG hybrid search | Shipped | [issue-55-complete-summary](../planning/issue-55-complete-summary.md) | [#9875][i-rag] | Weighted vector + knowledge-graph retrieval with entity extraction at query time (`/graph-rag/search`) |
+| Graph entity extractor | Shipped | [issue-55-complete-summary](../planning/issue-55-complete-summary.md) | [#9875][i-rag] | Extracts facts/entities from conversations, infers relationships (`/entities/extract`) |
+| Memory graph semantic search | Shipped | [MEMORY_GRAPH_SEMANTIC_SEARCH](MEMORY_GRAPH_SEMANTIC_SEARCH.md) | [#9875][i-rag] | Hybrid full-text + vector over the memory graph (service layer; consumed internally — no public REST) |
 | Enhanced memory manager | Shipped | [PHASE_7_MEMORY_ENHANCEMENT](PHASE_7_MEMORY_ENHANCEMENT.md) | [#9875][i-rag] | Task execution history, embedding cache, subtask relationships, task lifecycle |
-| RAG optimization suite | Planned | [RAG_Optimization_Implementation_Plan](../planning/RAG_Optimization_Implementation_Plan.md) | [#9875][i-rag] | Semantic chunking, atomic facts, entity resolution, temporal invalidation, temporal KG |
-| Neural Mesh RAG | Design | [neural-mesh-rag-design](../archives/plans/2026-03-22-neural-mesh-rag-design.md) | [#9875][i-rag] | Self-evolving RAG architecture with multi-hop reasoning |
-| Individual document vectorization | Partial | [individual-document-vectorization-ux-spec](individual-document-vectorization-ux-spec.md) | [#9875][i-rag] | Per-document vectorization triggers and status indicators in the file browser |
-| Knowledge-enhanced chat | Partial | [knowledge_chat_integration](knowledge_chat_integration.md) | [#9875][i-rag] | RAG context augmentation with source citation in chat |
+| RAG optimization suite | Shipped | [RAG_Optimization_Implementation_Plan](../planning/RAG_Optimization_Implementation_Plan.md) | [#9875][i-rag] | Semantic chunking, atomic facts, entity resolution, temporal invalidation + temporal KG (all four pillars present) |
+| Neural Mesh RAG | Shipped | [neural-mesh-rag-design](../archives/plans/2026-03-22-neural-mesh-rag-design.md) | [#9875][i-rag] | Self-evolving RAG (`neural_mesh_retriever` + `mesh_brain/`: promoter, pruner, edge-learner; mesh tables) |
+| Individual document vectorization | Shipped | [individual-document-vectorization-ux-spec](individual-document-vectorization-ux-spec.md) | [#9875][i-rag] | Per-document vectorization triggers + status badges in the file tree (both ends wired) |
+| Knowledge-enhanced chat | Shipped | [knowledge_chat_integration](knowledge_chat_integration.md) | [#9875][i-rag] | RAG context augmentation with source citations in chat (`CitationsDisplay.vue`) |
 | MCP knowledge-base tools | Shipped | [mcp-knowledge-base-integration](mcp-knowledge-base-integration.md) | [#9875][i-rag] | Direct LLM access to the KB via MCP (search, add, similarity, QA chain) |
 
 ## Code Intelligence & Analytics
 
 | Capability | Status | Design doc | Issue | What it does |
 |------------|--------|------------|-------|--------------|
-| Advanced code intelligence | Planned | [AutoBot_Advanced_Code_Intelligence](AutoBot_Advanced_Code_Intelligence.md) | [#9876][i-code] | ~30 analyses: semantic code search, git-evolution mining, CFG/data-flow, bug prediction, auto review |
-| Code intelligence dashboard | Shipped | [code-intelligence-dashboard-design](../archives/plans/2026-02-04-code-intelligence-dashboard-design.md) | [#9876][i-code] | Real-time code-health dashboard with bug-prediction trends |
-| Code pattern detection | Planned | [Graph_code_patern_detection](Graph_code_patern_detection.md) | [#9876][i-code] | RAG-based duplicate/anti-pattern detection, dead-code and complexity hotspots |
-| Error monitoring | Shipped | [code-intelligence-dashboard-design](../archives/plans/2026-02-04-code-intelligence-dashboard-design.md) | [#9876][i-code] | Live error monitoring with auto-refresh |
-| Causal inference engine | Shipped | [changelog](../changelog/_index.md) | [#9876][i-code] | Root-cause and confounder analysis |
-| Advanced visualizations | Shipped | [ADVANCED_VISUALIZATIONS](ADVANCED_VISUALIZATIONS.md) | [#9876][i-code] | Resource heatmaps, animated workflow graphs, agent-activity dashboards |
+| Advanced code intelligence | Partial | [AutoBot_Advanced_Code_Intelligence](AutoBot_Advanced_Code_Intelligence.md) | [#9876][i-code] | 31 endpoints: git-evolution, CFG/data-flow, bug prediction, auto review (shipped); semantic NL code search still planned |
+| Code intelligence dashboard | Shipped | [code-intelligence-dashboard-design](../archives/plans/2026-02-04-code-intelligence-dashboard-design.md) | [#9876][i-code] | Real-time code-health dashboard with bug-prediction trends (`useCodeIntelligence`) |
+| Code pattern detection | Shipped | [Graph_code_patern_detection](Graph_code_patern_detection.md) | [#9876][i-code] | RAG-based duplicate/anti-pattern detection (ChromaDB + NPU embeddings), dead-code/complexity |
+| Error monitoring | Partial | [code-intelligence-dashboard-design](../archives/plans/2026-02-04-code-intelligence-dashboard-design.md) | [#9876][i-code] | 12 backend endpoints shipped; **no frontend consumer** (wire-in [#9891](https://github.com/mrveiss/AutoBot-AI/issues/9891)) |
+| Causal inference engine | Partial | [changelog](../changelog/_index.md) | [#9876][i-code] | Root-cause/confounder analysis shipped (`/diagnostics/analyze-failure`); **no UI consumer** (wire-in [#9892](https://github.com/mrveiss/AutoBot-AI/issues/9892)) |
+| Advanced visualizations | Shipped | [ADVANCED_VISUALIZATIONS](ADVANCED_VISUALIZATIONS.md) | [#9876][i-code] | Resource heatmaps, workflow graphs, agent-activity dashboards (in `CustomDashboard.vue`) |
 
 ## Vision, Browser & Desktop
 
 | Capability | Status | Design doc | Issue | What it does |
 |------------|--------|------------|-------|--------------|
-| Interactive browser control | Design | [interactive-browser-control-design](../archives/plans/2026-03-06-interactive-browser-control-design.md) | [#9877][i-vision] | Screenshot-guided browser automation with visual feedback loops |
-| Desktop streaming & takeover | Shipped | [PHASE_8_ENHANCED_INTERFACE](PHASE_8_ENHANCED_INTERFACE.md) | [#9877][i-vision] | NoVNC desktop streaming with human takeover/approval workflow |
-| Vision-automation integration | Design | [archives/plans](../archives/_index.md) | [#9877][i-vision] | Vision-guided UI testing and automation |
+| Interactive browser control | Shipped | [interactive-browser-control-design](../archives/plans/2026-03-06-interactive-browser-control-design.md) | [#9877][i-vision] | Navigate/click/fill/screenshot automation + live stream (`/browser`, `BrowserAutomationView.vue`) |
+| Desktop streaming & takeover | Shipped | [PHASE_8_ENHANCED_INTERFACE](PHASE_8_ENHANCED_INTERFACE.md) | [#9877][i-vision] | NoVNC desktop streaming with human takeover/approval (`/streaming/*`, `/takeover/*`) |
+| Vision-automation integration | Partial | [archives/plans](../archives/_index.md) | [#9877][i-vision] | Vision `/analyze`,`/ocr`,`/automation-opportunities` shipped; **no frontend consumer** (wire-in [#9890](https://github.com/mrveiss/AutoBot-AI/issues/9890)) |
 
 ## Automation, Safety & Human-in-the-loop
 
 | Capability | Status | Design doc | Issue | What it does |
 |------------|--------|------------|-------|--------------|
-| Session takeover & control | Shipped | [COMPLETE_SESSION_TAKEOVER_IMPLEMENTATION](COMPLETE_SESSION_TAKEOVER_IMPLEMENTATION.md) | [#9878][i-auto] | Pause/resume, step confirmation, emergency kill, risk assessment |
-| Terminal safety | Shipped | [TERMINAL_SAFETY_IMPLEMENTATION](TERMINAL_SAFETY_IMPLEMENTATION.md) | [#9878][i-auto] | Command risk assessment, dangerous-command confirmation, Ctrl+C interrupt |
-| Skills system | Shipped | [skills-system](../archives/plans/2026-02-18-skills-system.md) | [#9878][i-auto] | Dynamic skill discovery and routing (e.g. two-phase Research skill) |
+| Session takeover & control | Shipped | [COMPLETE_SESSION_TAKEOVER_IMPLEMENTATION](COMPLETE_SESSION_TAKEOVER_IMPLEMENTATION.md) | [#9878][i-auto] | Pause/resume, approval gate, risk triggers (`takeover_manager`, `/takeover/*`) |
+| Terminal safety | Shipped | [TERMINAL_SAFETY_IMPLEMENTATION](TERMINAL_SAFETY_IMPLEMENTATION.md) | [#9878][i-auto] | Command risk assessment + dangerous-command confirmation gate (`command_patterns`, `security_risk_judge`) |
+| Skills system | Shipped | [skills-system](../archives/plans/2026-02-18-skills-system.md) | [#9878][i-auto] | Skill discovery + 3-phase routing (`skill_router`, `/skills`) |
 
 ## Fleet, SLM & Infrastructure Ops
 
 | Capability | Status | Design doc | Issue | What it does |
 |------------|--------|------------|-------|--------------|
-| Service Lifecycle Manager (SLM) | Shipped | [slm-docker-ansible-deployment](../guides/slm-docker-ansible-deployment.md) | [#9879][i-fleet] | Deploy, operate, and scale the AI infrastructure fleet (see [Platform Model](../architecture/PLATFORM_MODEL.md)) |
-| SLM bash execution | Shipped | [slm-bash-execution](../guides/slm-bash-execution.md) | [#9879][i-fleet] | Run bash across target groups of fleet nodes |
-| NPU worker pool | Design | [npu-worker-pool-design](../archives/plans/2026-02-05-npu-worker-pool-design.md) | [#9879][i-fleet] | Load-balanced NPU inference pool with circuit breaker + health monitoring |
-| Windows native NPU deployment | Planned | [INTEL_NPU_WINDOWS_DEPLOYMENT_ANALYSIS](../research/INTEL_NPU_WINDOWS_DEPLOYMENT_ANALYSIS.md) | [#9879][i-fleet] | Intel NPU acceleration natively on a Windows host via OpenVINO |
-| Release system (git-cliff) | Shipped | [release-system-design](../archives/plans/2026-03-01-release-system-design.md) | [#9879][i-fleet] | Automated release notes + in-app system update indicators |
-| Service discovery & message bus | Design | [service-discovery-design](../archives/plans/2026-02-02-service-discovery-design.md) | [#9879][i-fleet] | Dynamic service discovery, message bus + state machine, mTLS service auth |
-| Configuration management | Planned | [CONFIGURATION_MANAGEMENT_IMPLEMENTATION_PLAN](../planning/CONFIGURATION_MANAGEMENT_IMPLEMENTATION_PLAN.md) | [#9879][i-fleet] | Env-var priority enforcement, startup validation, settings sync, hot reload |
+| Service Lifecycle Manager (SLM) | Shipped | [slm-docker-ansible-deployment](../guides/slm-docker-ansible-deployment.md) | [#9879][i-fleet] | Fleet deploy/operate/scale control plane (`autobot-slm-backend`, 40+ routers, ansible suite) |
+| SLM bash execution | Shipped | [slm-bash-execution](../guides/slm-bash-execution.md) | [#9879][i-fleet] | Run bash across node groups (`/infrastructure/execute`) + per-node execution |
+| NPU worker pool | Shipped | [npu-worker-pool-design](../archives/plans/2026-02-05-npu-worker-pool-design.md) | [#9879][i-fleet] | Load-balanced NPU pool with health loop + failover (`npu_worker_manager`, `autobot-npu-worker`) |
+| Windows native NPU deployment | Shipped | [INTEL_NPU_WINDOWS_DEPLOYMENT_ANALYSIS](../research/INTEL_NPU_WINDOWS_DEPLOYMENT_ANALYSIS.md) | [#9879][i-fleet] | OpenVINO worker + Windows PowerShell deployment scripts (not research-only) |
+| Release system (git-cliff) | Shipped | [release-system-design](../archives/plans/2026-03-01-release-system-design.md) | [#9879][i-fleet] | Automated release notes (`cliff.toml`, release.yml) + SLM package-update indicators |
+| Service discovery & message bus | Partial | [service-discovery-design](../archives/plans/2026-02-02-service-discovery-design.md) | [#9879][i-fleet] | Message bus + mTLS shipped; dynamic service-discovery modules unwired (wire-in [#9893](https://github.com/mrveiss/AutoBot-AI/issues/9893)) |
+| Configuration management | Partial | [CONFIGURATION_MANAGEMENT_IMPLEMENTATION_PLAN](../planning/CONFIGURATION_MANAGEMENT_IMPLEMENTATION_PLAN.md) | [#9879][i-fleet] | Env-var priority + validation shipped (`ssot_config`); full config hot-reload + cross-service settings-sync not present |
 
 ## Security & Governance
 
 | Capability | Status | Design doc | Issue | What it does |
 |------------|--------|------------|-------|--------------|
-| Service auth enforcement | Shipped | [WEEK_3_ENFORCEMENT_MODE_DEPLOYMENT_PLAN](../planning/WEEK_3_ENFORCEMENT_MODE_DEPLOYMENT_PLAN.md) | [#9880][i-sec] | JWT service-to-service authentication across the fleet |
-| Secrets management | Partial | [secrets_management_system](secrets_management_system.md) | [#9880][i-sec] | AES-256 encrypted, dual-scope (general + chat) secrets with audit logging |
+| Service auth enforcement | Shipped | [WEEK_3_ENFORCEMENT_MODE_DEPLOYMENT_PLAN](../planning/WEEK_3_ENFORCEMENT_MODE_DEPLOYMENT_PLAN.md) | [#9880][i-sec] | JWT service-to-service authentication across the fleet (registered middleware) |
+| Secrets management | Shipped | [secrets_management_system](secrets_management_system.md) | [#9880][i-sec] | Encrypted, dual-scope (general + chat) secrets with audit log (cipher is Fernet, not AES-256 — see [#9894](https://github.com/mrveiss/AutoBot-AI/issues/9894)) |
 
 ## Platform Extensibility
 
 | Capability | Status | Design doc | Issue | What it does |
 |------------|--------|------------|-------|--------------|
-| Plugin SDK | Partial | [plugin-sdk-required-env](../superpowers/plans/2026-05-05-plugin-sdk-required-env.md) | [#9881][i-ext] | Build modules/adapters against the platform via the plugin SDK |
-| MCP agent workflows | Shipped | [mcp_agent_workflows](../examples/mcp_agent_workflows/README.md) | [#9881][i-ext] | Example MCP agent workflows (code analysis, research, VNC monitoring) |
-| Language switcher (i18n) | Partial | [language-switcher](../superpowers/plans/2026-04-07-language-switcher.md) | [#9881][i-ext] | Multi-language UI with dynamic switching |
+| Plugin SDK | Shipped | [plugin-sdk-required-env](../superpowers/plans/2026-05-05-plugin-sdk-required-env.md) | [#9881][i-ext] | `plugin_sdk` + `plugin_manager` API (install/load/enable/env-status) + core plugins |
+| MCP agent workflows | Shipped | [mcp_agent_workflows](../examples/mcp_agent_workflows/README.md) | [#9881][i-ext] | Four runnable example workflows (code analysis, research, VNC monitoring) |
+| Language switcher (i18n) | Shipped | [language-switcher](../superpowers/plans/2026-04-07-language-switcher.md) | [#9881][i-ext] | vue-i18n, 11 locales (incl. RTL), `LanguageSwitcher.vue` + settings panel |
 
 ## Emerging Surfaces
 
 | Capability | Status | Design doc | Issue | What it does |
 |------------|--------|------------|-------|--------------|
-| Live Canvas | Partial | [live-canvas-phase1](../superpowers/plans/2026-05-16-live-canvas-phase1.md) | [#9882][i-emerge] | Collaborative agent/user canvas with streaming cells and multi-format export |
-| AutoResearch | Partial | [autoresearch-m3](../superpowers/plans/2026-04-01-autoresearch-m3.md) | [#9882][i-emerge] | Self-improving research system with a dashboard |
+| Live Canvas | Shipped | [live-canvas-phase1](../superpowers/plans/2026-05-16-live-canvas-phase1.md) | [#9882][i-emerge] | Vue canvas + streaming cells + export (md/json/html/pdf) (`/canvas`, `CanvasView.vue`) |
+| AutoResearch | Shipped | [autoresearch-m3](../superpowers/plans/2026-04-01-autoresearch-m3.md) | [#9882][i-emerge] | Self-improving loop (meta-agent patch proposal + prompt optimizer) + dashboard (`/experiments`) |
 
 ---
+
+## Gaps found during verification
+
+Verification (2026-06-10) confirmed nearly all capabilities are real and wired. The
+remaining gaps are tracked as discovery issues:
+
+| Gap | Issue |
+|-----|-------|
+| Vision automation backend shipped, no frontend consumer | [#9890](https://github.com/mrveiss/AutoBot-AI/issues/9890) |
+| Error-monitoring backend (12 endpoints) has no frontend | [#9891](https://github.com/mrveiss/AutoBot-AI/issues/9891) |
+| Causal-inference engine (`/diagnostics/analyze-failure`) has no UI | [#9892](https://github.com/mrveiss/AutoBot-AI/issues/9892) |
+| Service-discovery modules written but unwired (zero callers) | [#9893](https://github.com/mrveiss/AutoBot-AI/issues/9893) |
+| Secrets cipher: doc says AES-256-GCM, code is Fernet (AES-128) | [#9894](https://github.com/mrveiss/AutoBot-AI/issues/9894) |
+
+Smaller notes: *Advanced code intelligence* has all sub-analyzers shipped except
+**semantic NL code search** (still planned); *Configuration management* lacks full config
+hot-reload + cross-service settings-sync; *Memory graph semantic search* is a service-layer
+component with no public REST route (by design).
 
 ## Single home for feature docs
 
 `docs/features/` is the **single canonical home** for feature documentation, and this
-catalog is its registry. Many capabilities above still have their design docs in other
-zones (`implementation/`, `design/`, `archives/plans/`, `superpowers/plans/`,
-`planning/`, `research/`). Consolidating those into the single home — with inbound links
-rewritten to preserve the Obsidian graph and Jekyll — is tracked under [#9872][u].
+catalog is its registry. Some capabilities still have their design docs in other zones
+(`archives/plans/`, `superpowers/plans/`, `planning/`, `research/`); consolidating those
+into the single home is tracked under [#9872][u].
 
 ## How this catalog was built
 
 This catalog consolidates a sweep of the archived/planning/design/implementation
-documentation zones (`archives/`, `planning/`, `discovery/`, `research/`, `design/`,
-`designs/`, `implementation/`, `superpowers/`, `examples/`, `changelog/`, `releases/`)
-for capabilities that were not reachable from [INDEX.md](../INDEX.md). Pure refactors,
-CI plumbing, and internal test infrastructure were excluded.
-
-Per-feature verification happens in the issues linked above (under [#9872][u]). When a
-capability is confirmed shipped, promote it into [INDEX.md](../INDEX.md); if it is stale
-or abandoned, move its design doc to [archives/](../archives/_index.md) and update the row.
+documentation zones for capabilities that were not reachable from [INDEX.md](../INDEX.md).
+Pure refactors, CI plumbing, and internal test infrastructure were excluded. Per-feature
+verification (with code evidence) is recorded in the issues linked above under [#9872][u].
 
 ## Related
 
