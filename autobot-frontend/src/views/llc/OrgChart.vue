@@ -6,11 +6,13 @@
 import { ref, onMounted } from 'vue'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
+import { useLlcCompanyContext } from '@/composables/llc/useLlcCompanyContext'
 import OrgTreeNode from './OrgTreeNode.vue'
 import type { OrgNode } from './OrgTreeNode.vue'
 
 const logger = createLogger('OrgChart')
 const api = useApiClient()
+const { companyId, resolveCompanyId } = useLlcCompanyContext()
 
 const tree = ref<OrgNode[]>([])
 const isLoading = ref(false)
@@ -22,8 +24,13 @@ async function fetchTree() {
   isLoading.value = true
   error.value = null
   try {
-    const resp = await api.get<{ data: { nodes: OrgNode[] } }>('/api/llc/org-chart')
-    tree.value = (resp as { data: { nodes: OrgNode[] } }).data?.nodes ?? []
+    const cid = await resolveCompanyId()
+    if (!cid) {
+      tree.value = []
+      return
+    }
+    const resp = await api.get<{ nodes: OrgNode[] }>(`/api/llc/companies/${cid}/org-chart`)
+    tree.value = resp?.nodes ?? []
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)
     logger.error('Failed to fetch org chart:', msg)
@@ -35,8 +42,9 @@ async function fetchTree() {
 
 async function toggleAgentPause(node: OrgNode) {
   const action = node.status === 'paused' ? 'resume' : 'pause'
+  if (!companyId.value) return
   try {
-    await api.post(`/api/llc/agents/${node.id}/${action}`, {})
+    await api.post(`/api/llc/companies/${companyId.value}/controls/agents/${node.id}/${action}`, {})
     node.status = action === 'pause' ? 'paused' : 'idle'
     if (selectedNode.value?.id === node.id) selectedNode.value = { ...node }
   } catch (err: unknown) {
