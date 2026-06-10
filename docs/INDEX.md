@@ -11,9 +11,13 @@ cssclasses:
 
 # AutoBot Documentation Index
 
-> **AutoBot: Autonomous AI-Powered Linux Administration Platform**
+> **Your data. Your AI.**
 >
-> Multi-modal AI with 20+ specialized agents, NPU hardware acceleration, and RBAC security.
+> AutoBot is a self-hosted AI platform you own: a small, solid core, a management
+> layer that runs the hard infrastructure for you, and modules you install on top.
+>
+> New here? Read **[The AutoBot Platform Model](architecture/PLATFORM_MODEL.md)** —
+> the core → SLM → modules picture that everything below builds on.
 
 ---
 
@@ -30,6 +34,16 @@ cssclasses:
 | [Changelog](../changelog/_index.md) | Per-version release notes and unreleased fragments |
 | [Dependencies](DEPENDENCIES.md) | Dependency reference |
 | [Roadmap (2025–2026)](ROADMAP_2025.md) | Product roadmap |
+
+---
+
+## Platform & Modules
+
+| Document | Description |
+|----------|-------------|
+| [The AutoBot Platform Model](architecture/PLATFORM_MODEL.md) | Core → SLM management layer → modules |
+| [Service Lifecycle Manager (SLM)](guides/slm-docker-ansible-deployment.md) | The management layer: deploy, operate, scale your AI infrastructure |
+| [AutoBot LLC](llc/_index.md) | Flagship module: an autonomous agent-company you install |
 
 ---
 

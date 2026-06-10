@@ -8,7 +8,10 @@ aliases:
 
 # AutoBot-AI Documentation
 
-Welcome to the AutoBot-AI documentation. Use this index to navigate all documentation sections.
+**Your data. Your AI.** AutoBot is a self-hosted AI platform you own: a small, solid
+core, a management layer that runs the hard infrastructure for you, and modules you
+install on top. Start with [[architecture/PLATFORM_MODEL|The AutoBot Platform Model]]
+for the core → SLM → modules picture, then use this index to navigate everything else.
 
 ## Getting Started
 
