@@ -93,15 +93,11 @@ jobs:
           echo "Final disk space:"
           df -h
 
-      - name: Generate signing secrets (GH#9775)
-        run: |
-          # Base compose now fail-fasts on unset AUTOBOT_JWT_SECRET / SECRET_KEY
-          # (no static fallback). Generate them and expose to all later compose
-          # steps via $GITHUB_ENV so interpolation succeeds.
-          bash docker/generate-secrets.sh
-          cat docker/.env.secrets >> "$GITHUB_ENV"
-
       - name: Start services with Docker Compose
+        # GH#9905: no manual secret step — the stack auto-provisions unique
+        # signing secrets via the autobot-secrets-init service + shared volume.
+        # Starting with NO secret in env IS the real out-of-the-box test: if the
+        # auto-gen/loader path regresses, services won't reach healthy below.
         run: docker compose --env-file docker/.env.docker up -d
 
       - name: Wait for services to be healthy
