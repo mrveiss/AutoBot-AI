@@ -29,13 +29,14 @@ if [ -f "$SECRETS_FILE" ] && grep -q '^_GEN_JWT=' "$SECRETS_FILE" 2>/dev/null \
 fi
 
 echo "secrets-init: generating per-deployment signing secrets in $SECRETS_FILE"
+# Never world-readable, even momentarily: write under a restrictive umask, then
+# grant access by OWNERSHIP to the autobot service user (uid/gid 999, pinned in
+# both the backend and slm images) rather than by a permissive mode.
+umask 077
 {
     printf '_GEN_JWT=%s\n' "$(gen_hex)"
     printf '_GEN_SECRET_KEY=%s\n' "$(gen_hex)"
 } >"$SECRETS_FILE"
-# World-readable: the secret-consuming services (backend/worker/slm) run as the
-# non-root `autobot` user and must read this file. The security boundary is the
-# private named volume (never in git, not host-mounted), not the file mode —
-# anything that can read this volume already runs inside the trusted stack.
-chmod 644 "$SECRETS_FILE"
+chown 999:999 "$SECRETS_FILE"
+chmod 640 "$SECRETS_FILE"
 echo "secrets-init: done (values not printed)."
