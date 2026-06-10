@@ -43,11 +43,15 @@ async function fetchTree() {
 async function toggleAgentPause(node: OrgNode) {
   if (!companyId.value) return
   const willPause = node.status !== 'paused'
-  const base = `/api/llc/companies/${companyId.value}/controls/agents/${node.id}`
+  const cid = companyId.value
   try {
-    // Explicit literal paths (not a template action) so the route resolves to
-    // the canonical /controls/agents/{id}/pause | /resume endpoints.
-    await api.post(willPause ? `${base}/pause` : `${base}/resume`, {})
+    // Explicit literal paths (not a template action) so each resolves to the
+    // canonical /controls/agents/{id}/pause | /resume endpoint.
+    if (willPause) {
+      await api.post(`/api/llc/companies/${cid}/controls/agents/${node.id}/pause`, {})
+    } else {
+      await api.post(`/api/llc/companies/${cid}/controls/agents/${node.id}/resume`, {})
+    }
     node.status = willPause ? 'paused' : 'idle'
     if (selectedNode.value?.id === node.id) selectedNode.value = { ...node }
   } catch (err: unknown) {
