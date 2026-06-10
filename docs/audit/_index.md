@@ -15,7 +15,7 @@ Audit reports covering frontend components, code quality, and system reviews.
 | Document | Description |
 | --- | --- |
 | [[frontend-orphaned-components-4194]] | Frontend orphaned component audit (issue #4194) |
-| [[orphan-audit-2026-06-04]] | Vault orphan audit (2026-06-04) |
+| [Vault orphan audit (2026-06-04)](../orphan-audit-2026-06-04.md) | Vault orphan audit (2026-06-04) |
 
 ## Related Sections
 
