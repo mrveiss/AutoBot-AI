@@ -155,9 +155,12 @@ component with no public REST route (by design).
 ## Single home for feature docs
 
 `docs/features/` is the **single canonical home** for feature documentation, and this
-catalog is its registry. Some capabilities still have their design docs in other zones
-(`archives/plans/`, `superpowers/plans/`, `planning/`, `research/`); consolidating those
-into the single home is tracked under [#9872][u].
+catalog is its **single registry** — the one place that indexes every capability. By
+decision (#9872), this is a *registry-only* model: design specs that are dated/historical
+stay in their zones (`archives/plans/`, `superpowers/plans/`, `planning/`, `research/`)
+and this catalog links them. The genuine current feature docs already live in
+`docs/features/`; archival/planning specs are intentionally **not** relocated, to keep the
+zone taxonomy and the Obsidian graph intact.
 
 ## How this catalog was built
 
