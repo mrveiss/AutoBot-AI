@@ -1,0 +1,79 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+#
+# Duplication regression guard (#9794).
+#
+# Runs the copy-paste detector (jscpd, the `cpd` 5.x CLI) over the backend and
+# frontend source with the exact flags used for the 2026-06-10 dedup sweep, and
+# fails if the duplication percentage exceeds the documented post-cleanup
+# baseline. This is a *threshold* gate, not a "zero duplication" gate: the repo
+# carries known, deliberately-deferred clusters (broken security package #9856,
+# the Vue CSS/HTML campaign #9859) that need their own PRs. The gate ensures no
+# PR grows duplication past where the sweep left it.
+#
+# Post-cleanup baseline (2026-06-10, after PRs landing #9794):
+#   duplication = 1.04%  (14,983 duplicated lines / 776 clones)
+# THRESHOLD is set a hair above (1.05) to absorb measurement jitter from minor
+# jscpd version drift. When a cleanup PR lowers duplication, tighten THRESHOLD
+# in the same PR so the ratchet only ever goes down.
+#
+# Why --threshold and not bare --exit-code: --exit-code fails whenever ANY
+# duplicate exists (always true here), which can't express "no growth past
+# baseline". --threshold N exits 1 only when the percentage exceeds N.
+#
+# Security: no untrusted GitHub event data is interpolated into run: commands;
+# all inputs are static repo paths and constants.
+
+name: duplication-guard
+
+on:
+  pull_request:
+    paths:
+      - 'autobot-backend/**/*.py'
+      - 'autobot-frontend/src/**/*.ts'
+      - 'autobot-frontend/src/**/*.js'
+      - 'autobot-frontend/src/**/*.vue'
+      - '.github/workflows/duplication-guard.yml'
+  push:
+    branches: [Dev_new_gui]
+    paths:
+      - 'autobot-backend/**/*.py'
+      - 'autobot-frontend/src/**/*.ts'
+      - 'autobot-frontend/src/**/*.js'
+      - 'autobot-frontend/src/**/*.vue'
+
+permissions:
+  contents: read
+
+jobs:
+  duplication-guard:
+    runs-on: ubuntu-latest
+    env:
+      # Maximum allowed duplication percentage. Ratchet DOWN only.
+      THRESHOLD: '1.05'
+      JSCPD_VERSION: '5.0.6'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v6.4.0
+        with:
+          node-version: '22'
+
+      - name: Run duplication detector
+        run: |
+          npx --yes "jscpd@${JSCPD_VERSION}" \
+            autobot-backend autobot-frontend/src \
+            -k 70 -l 8 --skip-comments \
+            -f python,typescript,javascript,vue \
+            -i "**/node_modules/**,**/__pycache__/**,**/tests/**,**/test_*,**/*_test.py,**/*.test.ts,**/__tests__/**,**/*.stories.*,**/generated/**,**/migrations/**,**/mocks/**,**/i18n/**" \
+            -r threshold,console \
+            --threshold "${THRESHOLD}"
+
+      - name: Explain failure
+        if: failure()
+        run: |
+          echo "::error::Code duplication exceeded the baseline threshold of ${THRESHOLD}%."
+          echo "Reduce duplication (extract shared modules / shims) or, if the new"
+          echo "duplication is unavoidable and justified, raise THRESHOLD in"
+          echo ".github/workflows/duplication-guard.yml with a documented reason."
+          echo "See DEDUP_REPORT.md and the dedup methodology in #9794."
