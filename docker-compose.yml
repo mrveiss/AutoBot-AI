@@ -73,7 +73,9 @@ services:
     security_opt:
       - no-new-privileges:true
     networks:
-      - autobot-data
+      autobot-mgmt:
+        ipv4_address: 172.30.0.10
+      autobot-data:
 
   autobot-postgres:
     image: postgres:16-bookworm
@@ -113,7 +115,9 @@ services:
     security_opt:
       - no-new-privileges:true
     networks:
-      - autobot-data
+      autobot-mgmt:
+        ipv4_address: 172.30.0.11
+      autobot-data:
 
   autobot-chromadb:
     # Match the v1 client (chromadb>=1.5.9 in autobot-backend/requirements.txt).
@@ -154,7 +158,9 @@ services:
     security_opt:
       - no-new-privileges:true
     networks:
-      - autobot-data
+      autobot-mgmt:
+        ipv4_address: 172.30.0.12
+      autobot-data:
 
   # ---- Application Layer ----
 
@@ -242,8 +248,10 @@ services:
     security_opt:
       - no-new-privileges:true
     networks:
-      - autobot-data
-      - autobot-app
+      autobot-mgmt:
+        ipv4_address: 172.30.0.13
+      autobot-data:
+      autobot-app:
 
   autobot-worker:
     build:
@@ -323,8 +331,10 @@ services:
     security_opt:
       - no-new-privileges:true
     networks:
-      - autobot-data
-      - autobot-app
+      autobot-mgmt:
+        ipv4_address: 172.30.0.14
+      autobot-data:
+      autobot-app:
 
   autobot-celery-beat:
     image: autobot/backend:latest
@@ -384,7 +394,9 @@ services:
     security_opt:
       - no-new-privileges:true
     networks:
-      - autobot-data
+      autobot-mgmt:
+        ipv4_address: 172.30.0.15
+      autobot-data:
 
   autobot-slm:
     build:
@@ -444,8 +456,10 @@ services:
     security_opt:
       - no-new-privileges:true
     networks:
-      - autobot-data
-      - autobot-app
+      autobot-mgmt:
+        ipv4_address: 172.30.0.16
+      autobot-data:
+      autobot-app:
 
   autobot-frontend:
     build:
@@ -502,7 +516,9 @@ services:
     security_opt:
       - no-new-privileges:true
     networks:
-      - autobot-app
+      autobot-mgmt:
+        ipv4_address: 172.30.0.17
+      autobot-app:
 
   # ---- Optional: Local LLM ----
 
@@ -539,6 +555,7 @@ services:
     security_opt:
       - no-new-privileges:true
     networks:
+      - autobot-mgmt
       - autobot-app
     profiles:
       - ollama
@@ -577,6 +594,7 @@ services:
     security_opt:
       - no-new-privileges:true
     networks:
+      - autobot-mgmt
       - autobot-app
     profiles:
       - monitoring
@@ -620,6 +638,7 @@ services:
     security_opt:
       - no-new-privileges:true
     networks:
+      - autobot-mgmt
       - autobot-app
     profiles:
       - monitoring
@@ -641,3 +660,10 @@ networks:
     driver: bridge
   autobot-app:
     driver: bridge
+  # Shared management network: every service joins this single subnet so all
+  # fleet nodes report IPs from one range, regardless of app/data tier (#9761).
+  autobot-mgmt:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
