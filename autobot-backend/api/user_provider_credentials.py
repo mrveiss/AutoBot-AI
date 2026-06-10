@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from auth_middleware import get_current_user_id, get_db_session
+from api.user_management.dependencies import get_current_user_id, get_db_session
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from models.secret import Secret, SecretScope, SecretType
@@ -26,7 +26,7 @@ from services.secrets_service import SecretsService
 
 logger = get_logger(__name__)
 
-router = APIRouter(prefix="/api/user/provider-credentials", tags=["user-provider-credentials"])
+router = APIRouter(prefix="/user/provider-credentials", tags=["user-provider-credentials"])
 
 
 class ProviderCredentialCreate(BaseModel):

@@ -71,6 +71,31 @@ def get_current_user(request: Request) -> dict:
     return user_data
 
 
+def get_current_user_id(
+    current_user: dict = Depends(get_current_user),
+) -> uuid.UUID:
+    """Resolve the authenticated user's UUID id.
+
+    GH#9037: per-user resources (e.g. provider credentials) key on the user's
+    UUID. Real authenticated users carry an ``id``/``user_id``/``sub`` claim;
+    service/internal principals do not, so they are rejected here. Deployment-
+    mode gating (single_user → 503) is handled by ``get_db_session``.
+    """
+    raw = current_user.get("id") or current_user.get("user_id") or current_user.get("sub")
+    if not raw:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User identity required",
+        )
+    try:
+        return uuid.UUID(str(raw))
+    except (ValueError, TypeError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User identity is not a valid id",
+        ) from exc
+
+
 def get_tenant_context(
     request: Request,
     current_user: dict = Depends(get_current_user),
