@@ -1,20 +1,44 @@
 # Product Requirements Document
-# AutoBot LLC — Autonomous Company Operating System
+# AutoBot LLC — Autonomous Agent-Company Module
 
 **Document status:** Draft v1.0  
 **Date:** 2026-05-19  
 **Owner:** mrveiss  
 **Target branch:** Dev_new_gui  
 
+> **Read first:** [The AutoBot Platform Model](../architecture/PLATFORM_MODEL.md) and the
+> [LLC module overview](../llc/_index.md). This PRD assumes the platform model — a small
+> core, the Service Lifecycle Manager (SLM) management layer, and modules on top.
+
 ---
 
 ## 1. Executive Summary
 
-AutoBot LLC is a new first-class module within the AutoBot platform that turns AutoBot into a complete **autonomous company operating system**. It allows operators to define companies, build org charts of AI agents and human workers, set strategic goals, plan and execute work through a full product backlog hierarchy, enforce budgets, govern decisions through approval gates, and monitor costs — all from a single control plane.
+**AutoBot LLC is a module you install on AutoBot** — an autonomous *agent-company*. It
+lets operators define companies, build org charts of AI agents and human workers, set
+strategic goals, plan and execute work through a full product backlog hierarchy, enforce
+budgets, govern decisions through approval gates, and monitor costs — all from a single
+control plane.
 
-Every AI capability AutoBot already provides — the Knowledge Base, RAG pipeline, LLM gateway, multi-modal processing, NPU acceleration, WebSocket chat, memory graph, and plugin system — is **deeply wired into** the LLC module. The result is a platform where AI agents and human workers operate side-by-side, share organizational knowledge, and continuously improve through memory that persists across execution cycles.
+LLC is built **on the platform's bones**, not beside them. Rather than reimplementing
+infrastructure, its agents **inherit** the primitives the AutoBot core already provides:
 
-This is not a bolt-on feature. It is a new structural layer that unifies AutoBot's existing capabilities under a company-centric, goal-anchored, budget-governed operating model.
+| LLC needs… | …inherited from the platform core |
+|------------|-----------------------------------|
+| Agents that remember across runs and share organizational context | **Institutional memory** — the Knowledge Base (RAG pipeline) + memory graph |
+| Affordable 24/7 autonomous execution | **Local inference at zero marginal cost** — models run on hardware you own |
+| Wiring agents into scheduled, event-driven work | **Hooks** — the platform's extension points and plugin system |
+| Budget caps, approval gates, and access control | **Governance** — RBAC, review gates, and budgets enforced by the core |
+
+Because the hard parts (memory, inference, governance, multi-modal processing, the LLM
+gateway, WebSocket chat) already live in the platform, LLC stays small relative to what
+it delivers. It contributes the *company-shaped* layer — companies, org charts, goals,
+backlogs, sprints, heartbeat scheduling, board governance, and cost tracking — and leans
+on the core for everything else.
+
+This is not a bolt-on script and not a standalone product. It is a module that unifies
+AutoBot's existing capabilities under a company-centric, goal-anchored, budget-governed
+operating model.
 
 ---
 
