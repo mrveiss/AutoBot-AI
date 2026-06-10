@@ -8,10 +8,15 @@ aliases:
 
 # Architecture Documentation
 
+> Start here: **[The AutoBot Platform Model](PLATFORM_MODEL.md)** — the three-layer
+> picture (platform core → SLM management layer → modules) that the rest of these
+> documents build on.
+
 ## Overview
 
 | Document | Description |
 | --- | --- |
+| [Platform Model](PLATFORM_MODEL.md) | What AutoBot is: core, SLM management layer, and modules |
 | [README](README.md) | Architecture overview |
 | [INDEX](INDEX.md) | Architecture index |
 | [VISUAL_ARCHITECTURE](VISUAL_ARCHITECTURE.md) | Visual architecture diagram |
