@@ -226,6 +226,22 @@ class TestAutoBotConfig:
             config = AutoBotConfig()
             assert config.get_service_url("backend") == "http://10.0.0.20:8001"
             assert config.get_service_url("redis") == "redis://10.0.0.23:6379"
+
+    def test_slm_url_built_from_host_port_when_unset(self) -> None:
+        """slm_url builds from host/port when SLM_URL is not set (#9768)."""
+        from autobot_shared.ssot_config import AutoBotConfig
+
+        with patch.dict(os.environ, {}, clear=True):
+            config = AutoBotConfig()
+            assert config.slm_url == f"http://{config.vm.slm}:{config.port.slm}"
+
+    def test_slm_url_honors_explicit_env(self) -> None:
+        """An explicit SLM_URL wins over the host/port build (#9768)."""
+        from autobot_shared.ssot_config import AutoBotConfig
+
+        with patch.dict(os.environ, {"SLM_URL": "https://custom-slm:9443"}, clear=True):
+            config = AutoBotConfig()
+            assert config.slm_url == "https://custom-slm:9443"
             assert config.get_service_url("unknown") is None
 
     def test_get_vm_ip(self) -> None:

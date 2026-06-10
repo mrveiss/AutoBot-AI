@@ -1774,7 +1774,15 @@ class AutoBotConfig(BaseSettings):
 
     @property
     def slm_url(self) -> str:
-        """Get the SLM Admin server URL (Issue #768)."""
+        """Get the SLM Admin server URL (Issue #768).
+
+        Honor an explicit ``SLM_URL`` when set, otherwise build it from
+        ``AUTOBOT_SLM_HOST``/``AUTOBOT_SLM_PORT`` so the alias is not a silent
+        no-op (#9768).
+        """
+        explicit = self.misc.slm_url
+        if explicit:
+            return explicit
         if self.tls.slm_tls_enabled:
             return f"https://{self.vm.slm}:{self.tls.slm_tls_port}"
         return f"http://{self.vm.slm}:{self.port.slm}"
