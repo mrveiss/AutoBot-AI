@@ -51,6 +51,7 @@ from ..models.enums import (
     WorkItemType,
 )
 from ..scheduler.heartbeat_scheduler import HeartbeatScheduler
+from ..services.activity_log import ActivityLogQuery, LLCActivityLogService
 from ..services.attachment_service import (
     AttachmentNotFound,
     AttachmentService,
@@ -71,7 +72,6 @@ from ..services.work_item_service import (
     WorkItemService,
     resolve_actor_role,
 )
-from ..services.activity_log import ActivityLogQuery, LLCActivityLogService
 from ..services.work_product_service import WorkProductService
 from .activity import ActivityLogEntry, ActivityLogResponse
 
@@ -898,9 +898,7 @@ async def list_work_item_activity(
         page=page,
         page_size=page_size,
     )
-    result = await _get_activity_service().query(
-        session=session, company_id=str(ctx.org_id), params=params
-    )
+    result = await _get_activity_service().query(session=session, company_id=str(ctx.org_id), params=params)
 
     items = [
         ActivityLogEntry(

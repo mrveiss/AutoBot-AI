@@ -129,7 +129,6 @@ def _get_system_routers() -> list:
         (usage_router, "/usage", ["usage", "analytics"], "usage"),  # Issue #1807
         (user_management_router, "", ["user-management"], "user_management"),  # Issue #1801
         (user_provider_credentials_router, "", ["user-provider-credentials"], "user_provider_credentials"),  # GH#9037
-
         (mobile_devices_router, "/devices", ["devices", "integrations"], "mobile_devices"),  # GH#4463
         (data_storage_router, "", ["data-storage"], "data_storage"),
         (prompts_router, "/prompts", ["prompts"], "prompts"),
