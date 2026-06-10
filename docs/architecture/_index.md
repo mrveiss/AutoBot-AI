@@ -8,10 +8,15 @@ aliases:
 
 # Architecture Documentation
 
+> Start here: **[The AutoBot Platform Model](PLATFORM_MODEL.md)** — the three-layer
+> picture (platform core → SLM management layer → modules) that the rest of these
+> documents build on.
+
 ## Overview
 
 | Document | Description |
 | --- | --- |
+| [Platform Model](PLATFORM_MODEL.md) | What AutoBot is: core, SLM management layer, and modules |
 | [README](README.md) | Architecture overview |
 | [INDEX](INDEX.md) | Architecture index |
 | [VISUAL_ARCHITECTURE](VISUAL_ARCHITECTURE.md) | Visual architecture diagram |
@@ -21,12 +26,15 @@ aliases:
 | [NETWORK_TOPOLOGY](NETWORK_TOPOLOGY.md) | Network topology |
 | [data-flows](data-flows.md) | Data flow diagrams |
 | [dependency_injection](dependency_injection.md) | Dependency injection patterns |
+| [auth](auth.md) | Authentication architecture |
+| [counterfactual-reasoning](counterfactual-reasoning.md) | Counterfactual reasoning design |
 
 ## Agent System
 
 | Document | Description |
 | --- | --- |
 | [AGENT_SYSTEM_ARCHITECTURE](AGENT_SYSTEM_ARCHITECTURE.md) | Agent system design |
+| [agent-terminal](agent-terminal.md) | Agent terminal architecture |
 | [Agent_Communication_Protocol](Agent_Communication_Protocol.md) | Agent communication protocol |
 | [INDUSTRY_AGENT_PATTERNS_ANALYSIS](INDUSTRY_AGENT_PATTERNS_ANALYSIS.md) | Industry agent patterns |
 | [COEXISTENCE_MATRIX](COEXISTENCE_MATRIX.md) | Agent coexistence matrix |

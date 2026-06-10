@@ -11,9 +11,13 @@ cssclasses:
 
 # AutoBot Documentation Index
 
-> **AutoBot: Autonomous AI-Powered Linux Administration Platform**
+> **Your data. Your AI.**
 >
-> Multi-modal AI with 20+ specialized agents, NPU hardware acceleration, and RBAC security.
+> AutoBot is a self-hosted AI platform you own: a small, solid core, a management
+> layer that runs the hard infrastructure for you, and modules you install on top.
+>
+> New here? Read **[The AutoBot Platform Model](architecture/PLATFORM_MODEL.md)** —
+> the core → SLM → modules picture that everything below builds on.
 
 ---
 
@@ -30,6 +34,18 @@ cssclasses:
 | [Changelog](../changelog/_index.md) | Per-version release notes and unreleased fragments |
 | [Dependencies](DEPENDENCIES.md) | Dependency reference |
 | [Roadmap (2025–2026)](ROADMAP_2025.md) | Product roadmap |
+
+---
+
+## Platform & Modules
+
+| Document | Description |
+|----------|-------------|
+| [The AutoBot Platform Model](architecture/PLATFORM_MODEL.md) | Core → SLM management layer → modules |
+| [Why Self-Hosted](self-hosted-advantages.md) | The case for owning your AI platform |
+| [Service Lifecycle Manager (SLM)](guides/slm-docker-ansible-deployment.md) | The management layer: deploy, operate, scale your AI infrastructure |
+| [AutoBot LLC](llc/_index.md) | Flagship module: an autonomous agent-company you install |
+| [Demos](DEMOS.md) | Feature walkthroughs and demo recording scripts |
 
 ---
 
@@ -57,8 +73,6 @@ cssclasses:
 | [Process Flow](developer/02-process-flow.md) | Request handling flow |
 | [API Reference](developer/03-api-reference.md) | Complete API documentation |
 | [Configuration Reference](developer/04-configuration.md) | Configuration options |
-| [CLAUDE Rules](developer/CLAUDE_RULES.md) | Core development rules |
-| [CLAUDE Workflow](developer/CLAUDE_WORKFLOW.md) | Development workflow |
 | [AutoBot Reference](developer/AUTOBOT_REFERENCE.md) | IPs, playbooks, quick reference |
 
 ---
@@ -107,6 +121,7 @@ cssclasses:
 
 | Document | Description |
 |----------|-------------|
+| [Capability Catalog](features/CATALOG.md) | Full map of what AutoBot can do — including previously buried capabilities |
 | [Features Index](features/_index.md) | All feature documentation |
 | [Knowledge Graph](features/KNOWLEDGE_GRAPH.md) | Knowledge management |
 | [Advanced Analytics](features/ADVANCED_ANALYTICS.md) | Codebase analytics |
@@ -236,7 +251,6 @@ cssclasses:
 | Document | Description |
 | --- | --- |
 | [Implementation Index](implementation/_index.md) | All implementation reports |
-| [Reports Index](reports/_index.md) | All reports |
 | [Refactoring Index](refactoring/_index.md) | All refactoring documentation |
 
 ---

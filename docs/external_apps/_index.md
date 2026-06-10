@@ -41,3 +41,4 @@ Archived collection of system prompts and model configurations from external AI 
 | Document | Description |
 | --- | --- |
 | [README](system-prompts-and-models-of-ai-tools-main/system-prompts-and-models-of-ai-tools-main/README.md) | Source archive README |
+| [Archive index](system-prompts-and-models-of-ai-tools-main/system-prompts-and-models-of-ai-tools-main/_index.md) | Source archive index |

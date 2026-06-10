@@ -22,13 +22,9 @@ Technical design documents covering architecture, UX specifications, and system 
 | --- | --- |
 | [[MEMORY_GRAPH_SEARCH_ARCHITECTURE]] | Memory graph search architecture design |
 <<<<<<< HEAD
-| [[MEMORY_GRAPH_SEMANTIC_SEARCH]] | Memory graph semantic search design |
 | [[TECHNICAL_PRECISION_THEME]] | Technical precision theme design |
-| [[individual-document-vectorization-ux-spec]] | Individual document vectorization UX spec |
 =======
-| [[MEMORY_GRAPH_SEMANTIC_SEARCH]] | Semantic search integration for the memory graph |
 | [[TECHNICAL_PRECISION_THEME]] | Technical precision theme and design guidelines |
-| [[individual-document-vectorization-ux-spec]] | UX specification for individual document vectorization |
 
 ## Related Sections
 
