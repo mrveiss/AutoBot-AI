@@ -45,8 +45,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Create non-root user
-RUN groupadd -r autobot && useradd -r -g autobot -d /app autobot
+# Create non-root user. Pin uid/gid 999 to match the SLM image (#9905) so the
+# shared autobot_secrets volume is owned/readable consistently across services.
+RUN groupadd -r --gid 999 autobot && useradd -r --uid 999 -g autobot -d /app autobot
 
 WORKDIR /app
 
