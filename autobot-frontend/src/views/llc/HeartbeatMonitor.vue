@@ -165,8 +165,11 @@ function toggleRun(id: string) {
 async function fetchAgents() {
   isLoading.value = true
   try {
-    const qs = companyId.value ? `?company_id=${companyId.value}` : ''
-    const data = await api.get<Agent[] | { items: Agent[] }>(`/api/llc/agents${qs}`)
+    // company_id passed as a query param; backend defaults to the caller's
+    // org when omitted (companyId is always present via the :companyId route).
+    const data = await api.get<Agent[] | { items: Agent[] }>(
+      `/api/llc/agents?company_id=${companyId.value}`,
+    )
     agents.value = Array.isArray(data) ? data : (data as { items: Agent[] }).items ?? []
   } catch (err) {
     logger.error('Failed to fetch agents', err)
