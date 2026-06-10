@@ -23,6 +23,31 @@ aliases:
 | [knowledge_chat_integration](knowledge_chat_integration.md) | Knowledge-chat integration |
 | [mcp-knowledge-base-integration](mcp-knowledge-base-integration.md) | MCP knowledge base integration |
 | [kb-librarian-role-with-mcp](kb-librarian-role-with-mcp.md) | KB librarian role with MCP |
+| [CHAT_KNOWLEDGE_MANAGEMENT](CHAT_KNOWLEDGE_MANAGEMENT.md) | Chat-scoped knowledge management |
+| [PHASE_7_MEMORY_ENHANCEMENT](PHASE_7_MEMORY_ENHANCEMENT.md) | Enhanced memory manager |
+| [MEMORY_GRAPH_SEMANTIC_SEARCH](MEMORY_GRAPH_SEMANTIC_SEARCH.md) | Memory graph semantic search |
+| [individual-document-vectorization-ux-spec](individual-document-vectorization-ux-spec.md) | Individual document vectorization (UX spec) |
+
+## Code Intelligence
+
+| Document | Description |
+| --- | --- |
+| [AutoBot_Advanced_Code_Intelligence](AutoBot_Advanced_Code_Intelligence.md) | Advanced code intelligence |
+| [Graph_code_patern_detection](Graph_code_patern_detection.md) | Graph-based code pattern detection |
+
+## Automation & Safety
+
+| Document | Description |
+| --- | --- |
+| [COMPLETE_SESSION_TAKEOVER_IMPLEMENTATION](COMPLETE_SESSION_TAKEOVER_IMPLEMENTATION.md) | Session takeover & control |
+| [TERMINAL_SAFETY_IMPLEMENTATION](TERMINAL_SAFETY_IMPLEMENTATION.md) | Terminal safety |
+| [PHASE_8_ENHANCED_INTERFACE](PHASE_8_ENHANCED_INTERFACE.md) | Desktop streaming & takeover |
+
+## Security
+
+| Document | Description |
+| --- | --- |
+| [secrets_management_system](secrets_management_system.md) | Secrets management system |
 
 ## Monitoring & Analytics
 

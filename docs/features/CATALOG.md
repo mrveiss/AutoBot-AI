@@ -59,7 +59,7 @@ The themed tables below break down the capabilities inside the core and these mo
 |------------|--------|------------|-------|--------------|
 | Voice conversation mode | Design | [voice-conversation-mode-design](../archives/plans/2026-02-20-voice-conversation-mode-design.md) | [#9874][i-voice] | Walkie-talkie, hands-free, and duplex voice interaction modes |
 | Streaming TTS (per-sentence) | Design | [archives/plans](../archives/_index.md) | [#9874][i-voice] | Real-time per-sentence text-to-speech (1.5–3s latency) instead of waiting for the full reply |
-| Chat knowledge management | Shipped | [CHAT_KNOWLEDGE_MANAGEMENT](../implementation/CHAT_KNOWLEDGE_MANAGEMENT.md) | [#9874][i-voice] | Chat-scoped knowledge context, file associations, conversation→KB compilation, topic detection |
+| Chat knowledge management | Shipped | [CHAT_KNOWLEDGE_MANAGEMENT](CHAT_KNOWLEDGE_MANAGEMENT.md) | [#9874][i-voice] | Chat-scoped knowledge context, file associations, conversation→KB compilation, topic detection |
 
 ## Knowledge, RAG & Memory
 
@@ -67,11 +67,11 @@ The themed tables below break down the capabilities inside the core and these mo
 |------------|--------|------------|-------|--------------|
 | Graph-RAG hybrid search | Shipped | [issue-55-complete-summary](../planning/issue-55-complete-summary.md) | [#9875][i-rag] | Weighted vector + knowledge-graph retrieval with entity extraction at query time |
 | Graph entity extractor | Shipped | [issue-55-complete-summary](../planning/issue-55-complete-summary.md) | [#9875][i-rag] | Extracts facts/entities from conversations and infers relationships (REST API) |
-| Memory graph semantic search | Shipped | [MEMORY_GRAPH_SEMANTIC_SEARCH](../design/MEMORY_GRAPH_SEMANTIC_SEARCH.md) | [#9875][i-rag] | Hybrid full-text + vector search over the memory graph (<100ms target) |
-| Enhanced memory manager | Shipped | [PHASE_7_MEMORY_ENHANCEMENT](../implementation/PHASE_7_MEMORY_ENHANCEMENT.md) | [#9875][i-rag] | Task execution history, embedding cache, subtask relationships, task lifecycle |
+| Memory graph semantic search | Shipped | [MEMORY_GRAPH_SEMANTIC_SEARCH](MEMORY_GRAPH_SEMANTIC_SEARCH.md) | [#9875][i-rag] | Hybrid full-text + vector search over the memory graph (<100ms target) |
+| Enhanced memory manager | Shipped | [PHASE_7_MEMORY_ENHANCEMENT](PHASE_7_MEMORY_ENHANCEMENT.md) | [#9875][i-rag] | Task execution history, embedding cache, subtask relationships, task lifecycle |
 | RAG optimization suite | Planned | [RAG_Optimization_Implementation_Plan](../planning/RAG_Optimization_Implementation_Plan.md) | [#9875][i-rag] | Semantic chunking, atomic facts, entity resolution, temporal invalidation, temporal KG |
 | Neural Mesh RAG | Design | [neural-mesh-rag-design](../archives/plans/2026-03-22-neural-mesh-rag-design.md) | [#9875][i-rag] | Self-evolving RAG architecture with multi-hop reasoning |
-| Individual document vectorization | Partial | [individual-document-vectorization-ux-spec](../design/individual-document-vectorization-ux-spec.md) | [#9875][i-rag] | Per-document vectorization triggers and status indicators in the file browser |
+| Individual document vectorization | Partial | [individual-document-vectorization-ux-spec](individual-document-vectorization-ux-spec.md) | [#9875][i-rag] | Per-document vectorization triggers and status indicators in the file browser |
 | Knowledge-enhanced chat | Partial | [knowledge_chat_integration](knowledge_chat_integration.md) | [#9875][i-rag] | RAG context augmentation with source citation in chat |
 | MCP knowledge-base tools | Shipped | [mcp-knowledge-base-integration](mcp-knowledge-base-integration.md) | [#9875][i-rag] | Direct LLM access to the KB via MCP (search, add, similarity, QA chain) |
 
@@ -79,9 +79,9 @@ The themed tables below break down the capabilities inside the core and these mo
 
 | Capability | Status | Design doc | Issue | What it does |
 |------------|--------|------------|-------|--------------|
-| Advanced code intelligence | Planned | [AutoBot_Advanced_Code_Intelligence](../implementation/AutoBot_Advanced_Code_Intelligence.md) | [#9876][i-code] | ~30 analyses: semantic code search, git-evolution mining, CFG/data-flow, bug prediction, auto review |
+| Advanced code intelligence | Planned | [AutoBot_Advanced_Code_Intelligence](AutoBot_Advanced_Code_Intelligence.md) | [#9876][i-code] | ~30 analyses: semantic code search, git-evolution mining, CFG/data-flow, bug prediction, auto review |
 | Code intelligence dashboard | Shipped | [code-intelligence-dashboard-design](../archives/plans/2026-02-04-code-intelligence-dashboard-design.md) | [#9876][i-code] | Real-time code-health dashboard with bug-prediction trends |
-| Code pattern detection | Planned | [Graph_code_patern_detection](../implementation/Graph_code_patern_detection.md) | [#9876][i-code] | RAG-based duplicate/anti-pattern detection, dead-code and complexity hotspots |
+| Code pattern detection | Planned | [Graph_code_patern_detection](Graph_code_patern_detection.md) | [#9876][i-code] | RAG-based duplicate/anti-pattern detection, dead-code and complexity hotspots |
 | Error monitoring | Shipped | [code-intelligence-dashboard-design](../archives/plans/2026-02-04-code-intelligence-dashboard-design.md) | [#9876][i-code] | Live error monitoring with auto-refresh |
 | Causal inference engine | Shipped | [changelog](../changelog/_index.md) | [#9876][i-code] | Root-cause and confounder analysis |
 | Advanced visualizations | Shipped | [ADVANCED_VISUALIZATIONS](ADVANCED_VISUALIZATIONS.md) | [#9876][i-code] | Resource heatmaps, animated workflow graphs, agent-activity dashboards |
@@ -91,15 +91,15 @@ The themed tables below break down the capabilities inside the core and these mo
 | Capability | Status | Design doc | Issue | What it does |
 |------------|--------|------------|-------|--------------|
 | Interactive browser control | Design | [interactive-browser-control-design](../archives/plans/2026-03-06-interactive-browser-control-design.md) | [#9877][i-vision] | Screenshot-guided browser automation with visual feedback loops |
-| Desktop streaming & takeover | Shipped | [PHASE_8_ENHANCED_INTERFACE](../implementation/PHASE_8_ENHANCED_INTERFACE.md) | [#9877][i-vision] | NoVNC desktop streaming with human takeover/approval workflow |
+| Desktop streaming & takeover | Shipped | [PHASE_8_ENHANCED_INTERFACE](PHASE_8_ENHANCED_INTERFACE.md) | [#9877][i-vision] | NoVNC desktop streaming with human takeover/approval workflow |
 | Vision-automation integration | Design | [archives/plans](../archives/_index.md) | [#9877][i-vision] | Vision-guided UI testing and automation |
 
 ## Automation, Safety & Human-in-the-loop
 
 | Capability | Status | Design doc | Issue | What it does |
 |------------|--------|------------|-------|--------------|
-| Session takeover & control | Shipped | [COMPLETE_SESSION_TAKEOVER_IMPLEMENTATION](../implementation/COMPLETE_SESSION_TAKEOVER_IMPLEMENTATION.md) | [#9878][i-auto] | Pause/resume, step confirmation, emergency kill, risk assessment |
-| Terminal safety | Shipped | [TERMINAL_SAFETY_IMPLEMENTATION](../implementation/TERMINAL_SAFETY_IMPLEMENTATION.md) | [#9878][i-auto] | Command risk assessment, dangerous-command confirmation, Ctrl+C interrupt |
+| Session takeover & control | Shipped | [COMPLETE_SESSION_TAKEOVER_IMPLEMENTATION](COMPLETE_SESSION_TAKEOVER_IMPLEMENTATION.md) | [#9878][i-auto] | Pause/resume, step confirmation, emergency kill, risk assessment |
+| Terminal safety | Shipped | [TERMINAL_SAFETY_IMPLEMENTATION](TERMINAL_SAFETY_IMPLEMENTATION.md) | [#9878][i-auto] | Command risk assessment, dangerous-command confirmation, Ctrl+C interrupt |
 | Skills system | Shipped | [skills-system](../archives/plans/2026-02-18-skills-system.md) | [#9878][i-auto] | Dynamic skill discovery and routing (e.g. two-phase Research skill) |
 
 ## Fleet, SLM & Infrastructure Ops
@@ -119,7 +119,7 @@ The themed tables below break down the capabilities inside the core and these mo
 | Capability | Status | Design doc | Issue | What it does |
 |------------|--------|------------|-------|--------------|
 | Service auth enforcement | Shipped | [WEEK_3_ENFORCEMENT_MODE_DEPLOYMENT_PLAN](../planning/WEEK_3_ENFORCEMENT_MODE_DEPLOYMENT_PLAN.md) | [#9880][i-sec] | JWT service-to-service authentication across the fleet |
-| Secrets management | Partial | [secrets_management_system](../implementation/secrets_management_system.md) | [#9880][i-sec] | AES-256 encrypted, dual-scope (general + chat) secrets with audit logging |
+| Secrets management | Partial | [secrets_management_system](secrets_management_system.md) | [#9880][i-sec] | AES-256 encrypted, dual-scope (general + chat) secrets with audit logging |
 
 ## Platform Extensibility
 
