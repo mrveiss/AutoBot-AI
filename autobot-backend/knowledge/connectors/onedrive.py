@@ -39,11 +39,8 @@ from autobot_shared.auth import BearerAuth
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc, parse_utc_iso
 from knowledge.connectors.base import AbstractConnector
-from knowledge.connectors.content_extraction import (
-    content_hash as _content_hash,
-    extract_text_from_docx as _extract_text_from_docx,
-    extract_text_from_pdf as _extract_text_from_pdf,
-)
+from knowledge.connectors.content_extraction import extract_text_from_docx as _extract_text_from_docx
+from knowledge.connectors.content_extraction import extract_text_from_pdf as _extract_text_from_pdf
 from knowledge.connectors.models import (
     ChangeInfo,
     ConnectorConfig,

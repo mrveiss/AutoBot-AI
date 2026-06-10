@@ -35,7 +35,6 @@ from autobot_shared.auth import BasicAuth
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
 from knowledge.connectors.base import AbstractConnector, RetryableError
-from knowledge.connectors.content_extraction import content_hash as _content_hash
 from knowledge.connectors.models import (
     ChangeInfo,
     ConnectorConfig,
