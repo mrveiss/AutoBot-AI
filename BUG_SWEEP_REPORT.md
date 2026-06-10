@@ -36,8 +36,29 @@ Scope: all 24 open `bug`-labeled issues. Backend is canonical. One commit per fi
 
 ## Phase 2 — Fixes
 
-_(filled in as each lands)_
+Order: security/crash → functional → cosmetic. Every fix has a test that was red pre-fix (verified by stashing the source) and green post-fix.
+
+| # | Commit | What | Test (red→green) |
+|---|---|---|---|
+| (prereq) | `ac540cbd1` | `mocks.py` add `from __future__ import annotations` (`"AsyncMock" \| None` eager-eval) — unblocks `audit_logger_test` collection | filed **#9896**; existing `audit_logger_test` now collects |
+| 9832 | `95df94afe` | `config.backend_host`→`config.vm.*`/`config.port.*` at 3 sites (audit_logger + EFM ×2); also fixed `backend_port`/`frontend_host`/`vnc_port`/`ai_stack_*`/`browser_*` in EFM which raise identically | `enterprise_feature_manager_test.py` (new) + `audit_logger_test.py` (8 were red) |
+| 9788 | `3c2622932` | mask `to`/`phone_number` in all whatsapp return dicts; payloads + `to_dict()` persistence left intact | `whatsapp_integration_test.py` (3 new; payload keeps real number) |
+| 9785 | `7f9d14590` | `add_column_if_not_exists`/`create_index_if_not_exists` table-aware via existing `table_exists()` | `migrations/utils_test.py` (new) |
+| 9782 | `0ea397521` | `AUTOBOT_AI_STACK_ENABLED` gate (default on); disabled → no network, no flood; compose sets false | `ai_stack_client_gate_test.py` (new) |
+| 9783 | `1b1610d77` | gate 4 Postgres-dependent lifespan init steps with `_llc_postgres_available()` | `lifespan_postgres_gate_test.py` (new); Redis-index facet split to **#9904** |
+| 9767 | `6f10289e3` | `http_client.request` `suppress_error_log` opt-in; default ERROR restored; 2 probe sites opt in | `http_client_test.py` (new) |
+| 9768 | `625d3d97d` | `slm_url` property honors `SLM_URL` field | `ssot_config_test.py` (2 new) |
+
+**7 issues fixed**, 8 commits. Combined backend test group: **35 passed**.
+
+Discoveries filed during the sweep: **#9896** (mocks.py future-import), **#9904** (RediSearch index on db!=0). Also noted but not yet filed: `ssot_config_test.py` uses non-existent `from config.ssot_config` (whole `TestAutoBotConfig` class red); ambiguous top-level `tests` namespace shadows `autobot-backend/tests`.
 
 ## Phase 3 — Loop closure
 
-_(filled in at end)_
+**DUPLICATE/STALE (closed):**
+- **#9784** — root cause (`codebase_index_embedding_mode: int=0`.`lower()` at import) fixed by #9862 (`b25418f95` int→str). Verified via `git show`. Closed.
+- **#9710** — both `update-all-nodes.yml` copies now use `npm run build:slm`; deploy-breaking drift gone. Closed (de-dup is optional follow-up).
+
+**NEEDS-REPRO (commented + labeled):** #9670, #9697, #9693, #9766, #9852 — each asked for the specific missing info (repro/logs/env/decision).
+
+**TOO-BIG (analysis comment):** #9863, #9759, #9793, #9794, #9856, #9861, #9851 + #9664. **Already owned by active worktrees (left alone):** #9873 (`issue-9873`/`issue-9873b`), #9489 (`pr-9630`).
