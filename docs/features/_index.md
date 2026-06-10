@@ -8,8 +8,10 @@ aliases:
 
 # Feature Documentation
 
-> **[Capability Catalog](CATALOG.md)** — the full map of what AutoBot can do,
-> including capabilities previously reachable only from archived/planning docs.
+> **`docs/features/` is the single home for feature documentation.**
+> The **[Capability Catalog](CATALOG.md)** is its registry — the full map of what AutoBot
+> can do, with each capability linked to a design doc and a tracking issue. The documents
+> below are the feature docs that already live in this folder.
 
 ## AI & Knowledge
 
