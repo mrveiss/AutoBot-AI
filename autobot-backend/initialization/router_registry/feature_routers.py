@@ -676,16 +676,12 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
     # as a system router. Duplicate registration caused routes to appear twice.
     # GH#4459: Web push notification endpoints (subscribe/unsubscribe/vapid-key)
     ("api.push", "/push", ["push", "notifications"], "push"),
-    # GH#9044: Transcriber module — project + recording CRUD under /api/transcriber
-    # Guarded by TRANSCRIBER_ENABLED env var (defaults to true).
-    # The combined router in transcriber_extension carries its own /api/transcriber
-    # prefix so we use "" here to avoid a double-prefix.
-    (
-        "extensions.builtin.transcriber_extension",
-        "",
-        ["transcriber"],
-        "transcriber",
-    ),
+    # GH#9044: Transcriber routes are mounted by core_routers via
+    # api.transcriber.router (prefix "/transcriber" → /api/transcriber/*).
+    # The transcriber_extension combined router carries a full "/api/transcriber"
+    # prefix, so registering it here mounted a duplicate at /api/api/transcriber/*
+    # (app_factory prepends "/api"). Removed to eliminate the double-prefix; the
+    # core registration already serves the full transcriber surface (incl. kb).
 ]
 
 
