@@ -207,7 +207,10 @@ class SystemMetricsCollector:
             Tuple of (health_value, response_time_ms or None on failure)
         """
         start_time = time.time()
-        async with await http_client.get(url, timeout=timeout) as response:
+        # Health probe to a possibly-absent service — keep failures at DEBUG (#9767).
+        async with await http_client.get(
+            url, timeout=timeout, suppress_error_log=True
+        ) as response:
             response_time = time.time() - start_time
             health_value = 1.0 if response.status == 200 else 0.0
             return health_value, response_time * 1000  # Convert to ms
