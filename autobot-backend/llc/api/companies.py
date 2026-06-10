@@ -499,12 +499,13 @@ class OrgChartResponse(BaseModel):
 
 
 def _heartbeat_status_to_org_status(run_status: Optional[str]) -> str:
-    """Map a heartbeat run status onto the org-chart node status vocabulary."""
+    """Map an ``LLCRunStatus`` value onto the org-chart node status vocabulary."""
     if run_status == "running":
         return "active"
-    if run_status in ("failed", "error", "timed_out"):
+    # LLCRunStatus failure-ish terminal states (values, not names).
+    if run_status in ("failed", "timeout", "interrupted"):
         return "error"
-    # completed / succeeded / cancelled / no-run → idle
+    # completed / cancelled / rate_limited / queued / no-run → idle
     return "idle"
 
 
@@ -529,7 +530,7 @@ async def get_org_chart(
     from models.agent_org import AgentOrgNode
 
     cid = str(company_id)
-    if str(ctx.org_id) != cid and not getattr(ctx, "is_superuser", False):
+    if str(ctx.org_id) != cid and not ctx.is_platform_admin:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
 
     # 1. Hierarchy rows for the company.
@@ -579,7 +580,11 @@ async def get_org_chart(
             status=_heartbeat_status_to_org_status(run.status if run else None),
             adapter_type=row.org_role,
             is_human=False,
-            last_heartbeat=run.started_at.isoformat() if run and run.started_at else None,
+            # Liveness: latest run is picked by created_at; a just-queued run
+            # may have no started_at, so fall back to created_at.
+            last_heartbeat=(
+                (run.started_at or run.created_at).isoformat() if run and (run.started_at or run.created_at) else None
+            ),
             budget_spent=float(budget.budget_spent) if budget else 0.0,
             budget_total=float(budget.budget_limit) if budget else 0.0,
             assigned_item_count=0,
@@ -587,11 +592,29 @@ async def get_org_chart(
             children=[],
         )
 
-    # Assemble the forest from reports_to edges.
+    def _chain_resolves_to_root(agent_id: str) -> bool:
+        """True if following reports_to from ``agent_id`` ends at a node with no
+        (or missing/self) parent without revisiting a node — i.e. no cycle."""
+        seen: set[str] = set()
+        cur: Optional[OrgChartNode] = flat.get(agent_id)
+        while cur is not None and cur.parent_id:
+            if cur.id in seen:
+                return False  # cycle
+            seen.add(cur.id)
+            parent = flat.get(cur.parent_id)
+            if parent is None or parent.id == cur.id:
+                return True  # parent absent/self → effectively rooted
+            cur = parent
+        return True
+
+    # Assemble the forest from reports_to edges. Attach a node to its parent
+    # only when its chain is acyclic; cycle members (and nodes whose parent is
+    # absent/self) become roots with no parent edge, so the output is always a
+    # true forest — every agent appears exactly once, never infinitely nested.
     roots: List[OrgChartNode] = []
-    for agent_id, node in flat.items():
+    for node in flat.values():
         parent = flat.get(node.parent_id) if node.parent_id else None
-        if parent is not None and parent.id != node.id:
+        if parent is not None and parent.id != node.id and _chain_resolves_to_root(node.id):
             parent.children.append(node)
         else:
             roots.append(node)

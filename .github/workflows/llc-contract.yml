@@ -88,8 +88,8 @@ jobs:
           # Hermetic e2e essentials (no Postgres/Redis/network needed).
           python -m pip install aiosqlite pytest pytest-asyncio httpx --prefer-binary
 
-      - name: Run LLC core-loop e2e test (blocking)
+      - name: Run LLC core-loop + org-chart e2e tests (blocking)
         working-directory: autobot-backend
         run: |
           export PYTHONPATH="$PWD/..:$PWD:${PYTHONPATH:-}"
-          python -m pytest llc/tests/test_llc_e2e_loop.py -x -q
+          python -m pytest llc/tests/test_llc_e2e_loop.py llc/tests/test_llc_org_chart.py -x -q

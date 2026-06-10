@@ -61,6 +61,65 @@ interface ActivityEvent {
   timestamp: string
 }
 
+// Raw backend shapes (differ from the display interfaces above) + mappers.
+interface RawAgentRow {
+  id: string
+  name: string
+  last_heartbeat_at: string | null
+  last_run_status: string | null
+}
+interface RawBudgetRow {
+  agent_id: string
+  budget_limit: string | number
+  budget_spent: string | number
+}
+interface RawRunRow {
+  id: string
+  agent_id: string
+  status: string
+  started_at: string | null
+  finished_at: string | null
+}
+
+function runStatusToAgentStatus(s: string | null): AgentStatus['status'] {
+  if (s === 'running') return 'active'
+  if (s === 'failed' || s === 'timeout' || s === 'interrupted') return 'error'
+  return 'idle'
+}
+function mapAgent(r: RawAgentRow): AgentStatus {
+  return {
+    id: r.id,
+    name: r.name,
+    title: '',
+    status: runStatusToAgentStatus(r.last_run_status),
+    adapter_type: '',
+    last_heartbeat: r.last_heartbeat_at,
+  }
+}
+function mapBudget(r: RawBudgetRow): BudgetInfo {
+  return {
+    spent: Number(r.budget_spent) || 0,
+    total: Number(r.budget_limit) || 0,
+    label: r.agent_id,
+  }
+}
+function mapRun(r: RawRunRow): HeartbeatRun {
+  const status: HeartbeatRun['status'] =
+    r.status === 'completed' ? 'done' : r.status === 'running' ? 'running' : 'failed'
+  const duration =
+    r.started_at && r.finished_at
+      ? new Date(r.finished_at).getTime() - new Date(r.started_at).getTime()
+      : null
+  return {
+    agent_id: r.agent_id,
+    agent_name: r.agent_id,
+    run_id: r.id,
+    status,
+    started_at: r.started_at ?? '',
+    duration_ms: duration,
+  }
+}
+
 const agents = ref<AgentStatus[]>([])
 const pendingApprovals = ref<PendingApproval[]>([])
 const budgets = ref<BudgetInfo[]>([])
@@ -109,21 +168,23 @@ async function fetchDashboardData() {
   isLoading.value = true
   error.value = null
   try {
-    // GH#9851: align with canonical LLC routes. The api client returns parsed
-    // JSON directly (no {data:{...}} envelope); these endpoints return arrays
-    // (agents/approvals/budget/runs) or an ActivityLogResponse ({items}).
+    // GH#9851/#9861: canonical LLC routes. The api client returns parsed JSON
+    // directly (no {data:{...}} envelope); these endpoints return arrays
+    // (agents/approvals/budget/runs) or an ActivityLogResponse ({items}). The
+    // backend field shapes differ from this view's display interfaces, so map
+    // them explicitly (#9861 — was rendering NaN budgets / unstyled statuses).
     const cid = companyId.value
     const [agentsResp, approvalsResp, budgetsResp, runsResp, activityResp] = await Promise.all([
-      api.get<AgentStatus[]>(`/api/llc/agents?company_id=${cid}`),
+      api.get<RawAgentRow[]>(`/api/llc/agents?company_id=${cid}`),
       api.get<PendingApproval[]>(`/api/llc/approvals?company_id=${cid}`),
-      api.get<BudgetInfo[]>(`/api/llc/budget?company_id=${cid}`),
-      api.get<HeartbeatRun[]>('/api/llc/heartbeat-runs?limit=20'),
+      api.get<RawBudgetRow[]>(`/api/llc/budget?company_id=${cid}`),
+      api.get<RawRunRow[]>('/api/llc/heartbeat-runs?limit=20'),
       api.get<{ items: ActivityEvent[] }>(`/api/llc/companies/${cid}/activity?page_size=50`),
     ])
-    agents.value = agentsResp ?? []
+    agents.value = (agentsResp ?? []).map(mapAgent)
     pendingApprovals.value = approvalsResp ?? []
-    budgets.value = budgetsResp ?? []
-    heartbeatRuns.value = runsResp ?? []
+    budgets.value = (budgetsResp ?? []).map(mapBudget)
+    heartbeatRuns.value = (runsResp ?? []).map(mapRun)
     activityFeed.value = activityResp?.items ?? []
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)
