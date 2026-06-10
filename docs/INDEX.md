@@ -121,6 +121,7 @@ cssclasses:
 
 | Document | Description |
 |----------|-------------|
+| [Capability Catalog](features/CATALOG.md) | Full map of what AutoBot can do — including previously buried capabilities |
 | [Features Index](features/_index.md) | All feature documentation |
 | [Knowledge Graph](features/KNOWLEDGE_GRAPH.md) | Knowledge management |
 | [Advanced Analytics](features/ADVANCED_ANALYTICS.md) | Codebase analytics |

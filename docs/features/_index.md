@@ -8,6 +8,9 @@ aliases:
 
 # Feature Documentation
 
+> **[Capability Catalog](CATALOG.md)** — the full map of what AutoBot can do,
+> including capabilities previously reachable only from archived/planning docs.
+
 ## AI & Knowledge
 
 | Document | Description |
