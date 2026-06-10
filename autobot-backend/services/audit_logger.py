@@ -218,7 +218,7 @@ class AuditLogger(AsyncInitializable):
         self.batch_timeout_seconds = batch_timeout_seconds
 
         # Get VM identification
-        self.vm_source = config.backend_host
+        self.vm_source = config.vm.main
         self.vm_name = self._get_vm_name()
 
         # Batch processing
