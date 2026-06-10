@@ -6,23 +6,63 @@
 import { ref, onMounted } from 'vue'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
+import { useLlcCompanyContext } from '@/composables/llc/useLlcCompanyContext'
 import GoalTreeNode from './GoalTreeNode.vue'
 import type { Goal } from './GoalTreeNode.vue'
 
 const logger = createLogger('GoalTree')
 const api = useApiClient()
+const { resolveCompanyId } = useLlcCompanyContext()
 
 const goals = ref<Goal[]>([])
 const isLoading = ref(false)
 const error = ref<string | null>(null)
 const selectedGoal = ref<Goal | null>(null)
 
+// Flat goal row returned by GET /api/llc/goals?company_id=.
+interface FlatGoal {
+  id: string
+  parent_goal_id: string | null
+  title: string
+  status: string
+}
+
+/** Assemble a tree from flat goals using parent_goal_id edges. */
+function buildGoalTree(flat: FlatGoal[]): Goal[] {
+  const byId = new Map<string, Goal>()
+  for (const g of flat) {
+    byId.set(g.id, {
+      id: g.id,
+      title: g.title,
+      status: g.status as Goal['status'],
+      linked_item_count: 0,
+      children: [],
+      expanded: false,
+    } as Goal)
+  }
+  const roots: Goal[] = []
+  for (const g of flat) {
+    const node = byId.get(g.id)!
+    const parent = g.parent_goal_id ? byId.get(g.parent_goal_id) : undefined
+    if (parent && parent.id !== node.id) parent.children.push(node)
+    else roots.push(node)
+  }
+  return roots
+}
+
 async function fetchGoals() {
   isLoading.value = true
   error.value = null
   try {
-    const resp = await api.get<{ data: { goals: Goal[] } }>('/api/llc/goals/tree')
-    goals.value = (resp as { data: { goals: Goal[] } }).data?.goals ?? []
+    const cid = await resolveCompanyId()
+    if (!cid) {
+      goals.value = []
+      return
+    }
+    // No /goals/tree route — fetch flat goals and assemble the tree client-side
+    // from parent_goal_id (#9861).
+    const flat = await api.get<FlatGoal[]>(`/api/llc/goals?company_id=${cid}`)
+    goals.value = buildGoalTree(flat ?? [])
     markExpanded(goals.value, true)
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)

@@ -203,6 +203,10 @@ def main() -> int:
                     help="also report backend paths with no frontend consumer")
     ap.add_argument("--fail-on-unwired", action="store_true",
                     help="exit non-zero if any unwired call or unmounted router found")
+    ap.add_argument("--only-prefix", metavar="PREFIX",
+                    help="restrict unwired-call reporting and exit code to frontend "
+                         "calls under PREFIX (e.g. /api/llc). Lets CI gate one module "
+                         "while other pre-existing findings are tracked separately.")
     args = ap.parse_args()
 
     if args.dump_openapi:
@@ -220,6 +224,9 @@ def main() -> int:
     print(f"backend paths: {len(backend)} | frontend distinct /api/ paths: {len(fe)}\n")
 
     unwired = {p: files for p, files in sorted(fe.items()) if not matches(p, backend)}
+    if args.only_prefix:
+        unwired = {p: files for p, files in unwired.items() if p.startswith(args.only_prefix)}
+        print(f"(scoped to {args.only_prefix})")
     print(f"== UNWIRED FRONTEND CALLS: {len(unwired)} ==")
     for p, files in unwired.items():
         print(f"  {p}")
@@ -245,7 +252,9 @@ def main() -> int:
     if args.fail_on_unwired:
         if unwired:
             rc |= 1
-        if unmounted:
+        # When scoped to a single module, don't fail on repo-wide unmounted
+        # routers — those are tracked outside the scoped gate.
+        if unmounted and not args.only_prefix:
             rc |= 2
     return rc
 

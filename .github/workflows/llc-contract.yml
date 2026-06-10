@@ -1,0 +1,95 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+#
+# LLC Contract Gate (GH#9861)
+# Blocking gate for the LLC module:
+#   1. Every /api/llc/* path the frontend calls must resolve to a real backend
+#      route (authoritative OpenAPI audit, scoped to /api/llc).
+#   2. The core LLC loop e2e test must pass.
+#
+# Unlike the repo-wide api-wiring.yml (non-blocking, has tracked false
+# positives elsewhere), this gate is scoped to LLC and IS blocking — the LLC
+# surface was brought to zero unwired calls in #9861 and must stay there.
+
+name: LLC Contract Gate
+
+on:
+  push:
+    branches: [ main, Dev_new_gui ]
+    paths: &paths
+      - 'autobot-backend/llc/**'
+      - 'autobot-backend/api/llc/**'
+      - 'autobot-backend/models/agent_org.py'
+      - 'autobot-frontend/src/views/llc/**'
+      - 'autobot-frontend/src/composables/llc/**'
+      - 'scripts/audit_api_wiring.py'
+      - '.github/workflows/llc-contract.yml'
+  pull_request:
+    branches: [ main, Dev_new_gui ]
+    paths: *paths
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  llc-wiring-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: |
+            requirements*.txt
+            autobot-backend/requirements*.txt
+
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install -r requirements-ci.txt --prefer-binary || true
+
+      - name: Audit /api/llc wiring (blocking)
+        run: |
+          set -o pipefail
+          export PYTHONPATH="$PWD:$PWD/autobot-backend:${PYTHONPATH:-}"
+          mkdir -p data logs static config
+          # Absolute path: --dump-openapi chdir()s into autobot-backend/.
+          python scripts/audit_api_wiring.py --dump-openapi "$PWD/openapi.json"
+          python scripts/audit_api_wiring.py \
+            --openapi "$PWD/openapi.json" \
+            --only-prefix /api/llc \
+            --fail-on-unwired
+
+  llc-e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: |
+            requirements*.txt
+            autobot-backend/requirements*.txt
+
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install -r requirements-ci.txt --prefer-binary || true
+          # Hermetic e2e essentials (no Postgres/Redis/network needed).
+          python -m pip install aiosqlite pytest pytest-asyncio httpx --prefer-binary
+
+      - name: Run LLC core-loop + org-chart e2e tests (blocking)
+        working-directory: autobot-backend
+        run: |
+          export PYTHONPATH="$PWD/..:$PWD:${PYTHONPATH:-}"
+          python -m pytest llc/tests/test_llc_e2e_loop.py llc/tests/test_llc_org_chart.py -x -q

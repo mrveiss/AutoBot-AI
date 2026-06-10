@@ -76,7 +76,7 @@
             :key="item.id"
             class="backlog-row"
             :class="{ selected: selectedIds.has(item.id) }"
-            draggable="true"
+            :draggable="backlogReorderEnabled"
             @dragstart="onDragStart(item)"
             @dragover.prevent
             @drop="onDrop(item)"
@@ -159,6 +159,7 @@
           <div class="ac-header">
             <label>Acceptance Criteria</label>
             <button
+              v-if="suggestAcEnabled"
               class="btn-suggest"
               :disabled="!newItem.title || isSuggestingAC"
               @click="suggestAC"
@@ -228,6 +229,13 @@ const api = useApiClient()
 const route = useRoute()
 
 const companyId = computed(() => route.params.companyId as string)
+
+// Feature flags (#9861): both await a backend route that does not exist yet.
+// - backlog reorder: needs POST /api/llc/companies/{id}/backlog/reorder
+// - AC suggestion: needs an LLM-backed POST /api/llc/work-items/suggest-ac
+// Disabled by default — no dead buttons / no calls to missing endpoints.
+const backlogReorderEnabled = import.meta.env.VITE_FEATURE_LLC_BACKLOG_REORDER === 'true'
+const suggestAcEnabled = import.meta.env.VITE_FEATURE_LLC_SUGGEST_AC === 'true'
 
 const WORK_ITEM_TYPES = [
   { value: 'epic', label: 'Epic' },
@@ -333,6 +341,7 @@ function onDragStart(item: WorkItem) {
 }
 
 async function onDrop(target: WorkItem) {
+  if (!backlogReorderEnabled) return
   if (!draggedItem.value || draggedItem.value.id === target.id) return
   const fromIdx = items.value.findIndex(i => i.id === draggedItem.value!.id)
   const toIdx = items.value.findIndex(i => i.id === target.id)
@@ -344,31 +353,23 @@ async function onDrop(target: WorkItem) {
   items.value = reordered
   draggedItem.value = null
 
-  try {
-    await api.post<unknown>(`/api/llc/companies/${companyId.value}/backlog/reorder`, {
-      ordered_ids: reordered.map(i => i.id),
-    })
-  } catch (err) {
-    logger.error('Reorder failed', err)
-    await fetchBacklog()
-  }
+  // Persistence awaits a backend route (#9861): when implemented, POST the
+  // new ordering to companies/{companyId}/backlog/reorder { ordered_ids }.
+  // Until then this branch is unreachable (backlogReorderEnabled === false).
+  await persistBacklogOrder(reordered)
+}
+
+async function persistBacklogOrder(_ordered: WorkItem[]): Promise<void> {
+  // Intentionally a no-op until the reorder endpoint exists (#9861).
+  logger.warn('Backlog reorder persistence is not yet available (awaiting backend).')
 }
 
 async function suggestAC() {
-  if (!newItem.value.title) return
-  isSuggestingAC.value = true
-  try {
-    const result = await api.post<{ suggestions: string[] }>(`/api/llc/work-items/suggest-ac`, {
-      title: newItem.value.title,
-      type: newItem.value.type,
-      description: newItem.value.description,
-    })
-    suggestedACs.value = result.suggestions.map(text => ({ text, selected: true }))
-  } catch (err) {
-    logger.error('AC suggestion failed', err)
-  } finally {
-    isSuggestingAC.value = false
-  }
+  // Awaits an LLM-backed backend route (#9861): POST work-items/suggest-ac
+  // { title, type, description } -> { suggestions: string[] }. The button is
+  // hidden until then (suggestAcEnabled === false), so this is unreachable.
+  if (!suggestAcEnabled || !newItem.value.title) return
+  logger.warn('AC suggestion is not yet available (awaiting backend).')
 }
 
 async function createItem() {

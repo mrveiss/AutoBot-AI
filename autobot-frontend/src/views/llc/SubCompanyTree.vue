@@ -18,12 +18,46 @@ const tree = ref<CompanyNode[]>([])
 const isLoading = ref(false)
 const error = ref<string | null>(null)
 
+// Raw recursive shape returned by GET /api/llc/companies/{id}/tree.
+interface RawCompanyTreeNode {
+  id: string
+  name: string
+  slug?: string
+  llc_status?: string
+  children?: RawCompanyTreeNode[]
+}
+
+function statusOf(llcStatus?: string): CompanyNode['status'] {
+  if (llcStatus === 'active') return 'active'
+  if (llcStatus === 'paused') return 'paused'
+  return 'inactive'
+}
+
+function mapNode(raw: RawCompanyTreeNode): CompanyNode {
+  return {
+    id: raw.id,
+    name: raw.name,
+    status: statusOf(raw.llc_status),
+    // Budget is not exposed by the tree endpoint; shown as 0 until a
+    // budget-aware tree endpoint exists (#9861).
+    budget_spent: 0,
+    budget_total: 0,
+    children: (raw.children ?? []).map(mapNode),
+    expanded: false,
+  }
+}
+
 async function fetchTree() {
   isLoading.value = true
   error.value = null
   try {
-    const resp = await api.get<{ data: { companies: CompanyNode[] } }>('/api/llc/companies/tree')
-    tree.value = (resp as { data: { companies: CompanyNode[] } }).data?.companies ?? []
+    // No global tree route exists — build the forest from the root-company
+    // list plus each root's recursive subtree (#9861).
+    const roots = await api.get<{ id: string }[]>('/api/llc/companies/')
+    const subtrees = await Promise.all(
+      (roots ?? []).map((c) => api.get<RawCompanyTreeNode>(`/api/llc/companies/${c.id}/tree`)),
+    )
+    tree.value = subtrees.filter(Boolean).map(mapNode)
     markExpanded(tree.value, true)
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)
