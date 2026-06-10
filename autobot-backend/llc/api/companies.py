@@ -30,6 +30,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.user_management.dependencies import get_current_user, require_org_context
 from autobot_shared.logging_manager import get_logger
 from llc.kb.collections import KbCollectionManager
 from llc.models.company import (
@@ -57,6 +58,7 @@ from llc.services.membership_service import (
 from llc.services.portability import PortabilityService
 from user_management.database import get_async_session
 from user_management.models.organization import Organization
+from user_management.services import TenantContext
 
 logger = get_logger(__name__)
 
@@ -463,6 +465,135 @@ class AgentSearchResult(BaseModel):
     role: str
     capabilities: str
     manager_name: Optional[str] = None
+
+
+# ------------------------------------------------------------------
+# Org chart (GH#9861) — read-only composition of existing models
+# ------------------------------------------------------------------
+
+
+class OrgChartNode(BaseModel):
+    """One agent node in the company org chart.
+
+    Composed read-only from ``agent_org_nodes`` (hierarchy/title/role),
+    ``llc_agent_budgets`` (budget), and the latest ``llc_heartbeat_runs`` row
+    (liveness/status). No new persistence is introduced.
+    """
+
+    id: str
+    name: str
+    title: str
+    status: str  # active | idle | error | paused
+    adapter_type: str
+    is_human: bool
+    last_heartbeat: Optional[str]
+    budget_spent: float
+    budget_total: float
+    assigned_item_count: int
+    parent_id: Optional[str]
+    children: List["OrgChartNode"] = []
+
+
+class OrgChartResponse(BaseModel):
+    nodes: List[OrgChartNode]
+
+
+def _heartbeat_status_to_org_status(run_status: Optional[str]) -> str:
+    """Map a heartbeat run status onto the org-chart node status vocabulary."""
+    if run_status == "running":
+        return "active"
+    if run_status in ("failed", "error", "timed_out"):
+        return "error"
+    # completed / succeeded / cancelled / no-run → idle
+    return "idle"
+
+
+@router.get("/{company_id}/org-chart", response_model=OrgChartResponse)
+async def get_org_chart(
+    company_id: uuid.UUID,
+    session: AsyncSession = Depends(get_async_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
+) -> OrgChartResponse:
+    """Return the agent reporting hierarchy for a company (GH#9861).
+
+    Read-only composition — joins the org-hierarchy, budget, and latest
+    heartbeat for each agent scoped to the company, then assembles a forest
+    from the self-referencing ``reports_to`` edges. Tenant access is enforced
+    via :func:`require_org_context`.
+    """
+    from sqlalchemy import func, select
+
+    from llc.models.budget import LLCAgentBudget
+    from llc.models.heartbeat_run import LLCHeartbeatRun
+    from models.agent_org import AgentOrgNode
+
+    cid = str(company_id)
+    if str(ctx.org_id) != cid and not getattr(ctx, "is_superuser", False):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+
+    # 1. Hierarchy rows for the company.
+    org_rows = (
+        await session.execute(select(AgentOrgNode).where(AgentOrgNode.company_id == company_id))
+    ).scalars().all()
+
+    # 2. Budgets keyed by agent_id.
+    budget_rows = (
+        await session.execute(select(LLCAgentBudget).where(LLCAgentBudget.company_id == cid))
+    ).scalars().all()
+    budgets = {b.agent_id: b for b in budget_rows}
+
+    # 3. Latest heartbeat run per agent (status + liveness).
+    subq = (
+        select(
+            LLCHeartbeatRun.agent_id,
+            func.max(LLCHeartbeatRun.created_at).label("latest_at"),
+        )
+        .where(LLCHeartbeatRun.company_id == company_id)
+        .group_by(LLCHeartbeatRun.agent_id)
+        .subquery()
+    )
+    latest_runs = (
+        await session.execute(
+            select(LLCHeartbeatRun).join(
+                subq,
+                (LLCHeartbeatRun.agent_id == subq.c.agent_id)
+                & (LLCHeartbeatRun.created_at == subq.c.latest_at),
+            )
+        )
+    ).scalars().all()
+    runs = {r.agent_id: r for r in latest_runs}
+
+    # Compose flat nodes.
+    flat: Dict[str, OrgChartNode] = {}
+    for row in org_rows:
+        budget = budgets.get(row.agent_id)
+        run = runs.get(row.agent_id)
+        flat[row.agent_id] = OrgChartNode(
+            id=row.agent_id,
+            name=row.name,
+            title=row.title or row.org_role,
+            status=_heartbeat_status_to_org_status(run.status if run else None),
+            adapter_type=row.org_role,
+            is_human=False,
+            last_heartbeat=run.started_at.isoformat() if run and run.started_at else None,
+            budget_spent=float(budget.budget_spent) if budget else 0.0,
+            budget_total=float(budget.budget_limit) if budget else 0.0,
+            assigned_item_count=0,
+            parent_id=row.reports_to,
+            children=[],
+        )
+
+    # Assemble the forest from reports_to edges.
+    roots: List[OrgChartNode] = []
+    for agent_id, node in flat.items():
+        parent = flat.get(node.parent_id) if node.parent_id else None
+        if parent is not None and parent.id != node.id:
+            parent.children.append(node)
+        else:
+            roots.append(node)
+
+    return OrgChartResponse(nodes=roots)
 
 
 @router.get("/{company_id}/agents/search")
