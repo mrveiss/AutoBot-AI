@@ -57,13 +57,13 @@ import pytest_asyncio
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-# Importing the harness registers the SQLite compile shims and all loop models
-# on Base.metadata. Must happen before any model/table is touched.
-from llc.tests import _e2e_harness as harness
-
 from llc.models.budget import LLCAgentBudget
 from llc.models.enums import HeartbeatInvocationSource, LLCRunStatus
 from llc.models.heartbeat_run import LLCHeartbeatRun
+
+# Importing the harness registers the SQLite compile shims and all loop models
+# on Base.metadata. Must happen before any model/table is touched.
+from llc.tests import _e2e_harness as harness
 from models.agent_org import AgentOrgNode, OrgRole
 
 # A model present in MODEL_PRICING_PER_1M_TOKENS so the cost is non-zero.

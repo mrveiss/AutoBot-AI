@@ -42,7 +42,8 @@ from __future__ import annotations
 from typing import List
 
 import sqlalchemy as sa
-from sqlalchemy.dialects.postgresql import JSONB, UUID as PG_UUID
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.sql.elements import TextClause
 
@@ -67,33 +68,31 @@ def _uuid_sqlite(type_, compiler, **kw):  # noqa: ANN001, ANN202
 #    The Base is user_management.models.base.Base (shared by all LLC models).
 # ---------------------------------------------------------------------------
 
-from user_management.models.base import Base  # noqa: E402
-
-# Organization IS the company in the LLC layer (org_id == company_id).
-from user_management.models.organization import Organization  # noqa: E402
-
 # LLC models touched by the loop (work item, budget, heartbeat run, review
 # gate, goal/work-product/relation/comment that work_item relationships need).
 import llc.models.company  # noqa: E402,F401
 import llc.models.goal  # noqa: E402,F401  (work_item FK target)
+from llc.models.budget import LLCAgentBudget  # noqa: E402
+from llc.models.goal import LLCGoal  # noqa: E402
+from llc.models.heartbeat_run import LLCHeartbeatRun  # noqa: E402
+from llc.models.label import LLCLabel, LLCWorkItemLabel  # noqa: E402
+from llc.models.membership import LLCCompanyMembership  # noqa: E402
+from llc.models.review_gate import LLCReviewGatePolicy  # noqa: E402
 from llc.models.work_item import (  # noqa: E402
     LLCWorkItem,
     LLCWorkItemComment,
     LLCWorkItemRelation,
 )
 from llc.models.work_product import LLCWorkProduct  # noqa: E402
-from llc.models.budget import LLCAgentBudget  # noqa: E402
-from llc.models.heartbeat_run import LLCHeartbeatRun  # noqa: E402
-from llc.models.review_gate import LLCReviewGatePolicy  # noqa: E402
-from llc.models.membership import LLCCompanyMembership  # noqa: E402
-from llc.models.label import LLCLabel, LLCWorkItemLabel  # noqa: E402
-from llc.models.goal import LLCGoal  # noqa: E402
 from models.agent_org import AgentOrgNode  # noqa: E402
+from user_management.models.base import Base  # noqa: E402
+
+# Organization IS the company in the LLC layer (org_id == company_id).
+from user_management.models.organization import Organization  # noqa: E402
 
 # Needed for the assignee-display lookup in _item_to_dict after handoff to a
 # human reviewer (queries users.display_name / users.username).
 from user_management.models.user import User  # noqa: E402
-
 
 # The exact set of tables the loop touches. Creating only these avoids the
 # dozens of unrelated models on the shared Base that carry further Postgres-

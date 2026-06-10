@@ -534,13 +534,13 @@ async def get_org_chart(
 
     # 1. Hierarchy rows for the company.
     org_rows = (
-        await session.execute(select(AgentOrgNode).where(AgentOrgNode.company_id == company_id))
-    ).scalars().all()
+        (await session.execute(select(AgentOrgNode).where(AgentOrgNode.company_id == company_id))).scalars().all()
+    )
 
     # 2. Budgets keyed by agent_id.
     budget_rows = (
-        await session.execute(select(LLCAgentBudget).where(LLCAgentBudget.company_id == cid))
-    ).scalars().all()
+        (await session.execute(select(LLCAgentBudget).where(LLCAgentBudget.company_id == cid))).scalars().all()
+    )
     budgets = {b.agent_id: b for b in budget_rows}
 
     # 3. Latest heartbeat run per agent (status + liveness).
@@ -554,14 +554,17 @@ async def get_org_chart(
         .subquery()
     )
     latest_runs = (
-        await session.execute(
-            select(LLCHeartbeatRun).join(
-                subq,
-                (LLCHeartbeatRun.agent_id == subq.c.agent_id)
-                & (LLCHeartbeatRun.created_at == subq.c.latest_at),
+        (
+            await session.execute(
+                select(LLCHeartbeatRun).join(
+                    subq,
+                    (LLCHeartbeatRun.agent_id == subq.c.agent_id) & (LLCHeartbeatRun.created_at == subq.c.latest_at),
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     runs = {r.agent_id: r for r in latest_runs}
 
     # Compose flat nodes.
