@@ -185,13 +185,25 @@ class HTTPClientManager:
             if adjusted and self._session and not self._session.closed:
                 await self._handle_pool_recreation()
 
-    async def request(self, method: str, url: str, **kwargs) -> aiohttp.ClientResponse:
+    async def request(
+        self,
+        method: str,
+        url: str,
+        *,
+        suppress_error_log: bool = False,
+        **kwargs,
+    ) -> aiohttp.ClientResponse:
         """
         Make an HTTP request using the shared session.
 
         Args:
             method: HTTP method (GET, POST, etc.)
             url: Target URL
+            suppress_error_log: When True, log request failures at DEBUG instead
+                of ERROR. Pass this only from call sites where failure is
+                expected and noisy (e.g. health probes to optional services like
+                Ollama / NPU worker). Default False so genuine outbound-call
+                failures are still surfaced at ERROR everywhere else (#9767).
             **kwargs: Additional arguments for aiohttp request
 
         Returns:
@@ -228,11 +240,13 @@ class HTTPClientManager:
                 self._error_count += 1
                 # Also decrement active on error since we're not returning response
                 self._active_requests = max(0, self._active_requests - 1)
-            # The exception is re-raised, so the caller logs it at the severity
-            # that fits its context. Logging error here too double-logs and
-            # spams for expected failures (e.g. health probes to optional,
-            # not-running services like Ollama) (#9715).
-            logger.debug("HTTP request failed: %s", e)
+            # Default to ERROR so genuine outbound-call failures are visible.
+            # Health-probe call sites opt out via suppress_error_log=True to avoid
+            # spamming for expected failures against optional services (#9767).
+            if suppress_error_log:
+                logger.debug("HTTP request failed: %s", e)
+            else:
+                logger.error("HTTP request failed: %s", e)
             raise
 
     async def decrement_active(self) -> None:

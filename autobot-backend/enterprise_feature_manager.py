@@ -79,19 +79,19 @@ class EnterpriseFeatureManager:
         """Get VM environment configuration variables."""
 
         return {
-            "backend_host": config.backend_host,
-            "backend_port": config.backend_port,
-            "vnc_port": config.vnc_port,
-            "frontend_host": config.frontend_host,
-            "frontend_port": config.frontend_port,
+            "backend_host": config.vm.main,
+            "backend_port": config.port.backend,
+            "vnc_port": config.port.vnc,
+            "frontend_host": config.vm.frontend,
+            "frontend_port": config.port.frontend,
             "npu_worker_host": config.npu_worker_host,
             "npu_worker_port": config.npu_worker_port,
             "redis_host": config.redis_host,
             "redis_port": config.redis_port,
-            "ai_stack_host": config.ai_stack_host,
-            "ai_stack_port": config.ai_stack_port,
-            "browser_host": config.browser_service_host,
-            "browser_port": config.browser_service_port,
+            "ai_stack_host": config.vm.aistack,
+            "ai_stack_port": config.port.aistack,
+            "browser_host": config.vm.browser,
+            "browser_port": config.port.browser,
         }
 
     def _validate_vm_env_config(self, cfg: Dict[str, str | None]) -> None:
@@ -866,12 +866,12 @@ class EnterpriseFeatureManager:
     def _get_fallback_endpoints(self) -> Dict[str, str]:
         """Get fallback service endpoints"""
 
-        backend_host = config.backend_host
-        backend_port = config.backend_port
-        frontend_host = config.frontend_host
-        frontend_port = config.frontend_port
-        ai_stack_host = config.ai_stack_host
-        ai_stack_port = config.ai_stack_port
+        backend_host = config.vm.main
+        backend_port = config.port.backend
+        frontend_host = config.vm.frontend
+        frontend_port = config.port.frontend
+        ai_stack_host = config.vm.aistack
+        ai_stack_port = config.port.aistack
 
         if not all(
             [

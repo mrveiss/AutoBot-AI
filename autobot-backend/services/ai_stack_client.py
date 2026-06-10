@@ -130,11 +130,18 @@ class AIStackClient:
 
     RETRY_INTERVAL_SECONDS = 60
 
-    def __init__(self, base_url: str | None = None) -> None:
-        """Initialize AI Stack client with base URL and HTTP client configuration."""
-        # Connection status: "unknown" -> "connected" | "error"
+    def __init__(self, base_url: str | None = None, enabled: bool | None = None) -> None:
+        """Initialize AI Stack client with base URL and HTTP client configuration.
+
+        When `enabled` is False (env AUTOBOT_AI_STACK_ENABLED=false, default off
+        for compose/single_user with no AI Stack VM), health probes short-circuit
+        to a "disabled" status with no network attempts — stopping the per-boot
+        warning flood (#9782).
+        """
+        # Connection status: "unknown" -> "connected" | "error" | "disabled"
         self.connection_status: str = "unknown"
         self._retry_task: asyncio.Task | None = None
+        self.enabled: bool = config.ai_stack_enabled if enabled is None else enabled
 
         # Use NetworkConstants for AI Stack configuration
         ai_stack_config = {
@@ -194,6 +201,10 @@ class AIStackClient:
 
     async def connect(self) -> None:
         """Initialize HTTP session and verify AI Stack reachability."""
+        if not self.enabled:
+            logger.info("AI Stack disabled (AUTOBOT_AI_STACK_ENABLED=false) — skipping connection")
+            self.connection_status = "disabled"
+            return
         logger.info("AI Stack client connecting to %s", self.base_url)
         check = await self.health_check()
         if check["status"] != "healthy":
@@ -210,6 +221,8 @@ class AIStackClient:
 
     def start_retry_loop(self) -> None:
         """Start background task that retries AI Stack health every 60s."""
+        if not self.enabled:
+            return  # Disabled — nothing to retry
         if self._retry_task and not self._retry_task.done():
             return  # Already running
         self._retry_task = asyncio.create_task(self._retry_health_loop())
@@ -334,6 +347,14 @@ class AIStackClient:
 
     async def health_check(self) -> Metadata:
         """Check AI Stack health — uses Ollama as backing service when configured (#6228)."""
+        if not self.enabled:
+            # Gated off (#9782): no network attempt, no warning flood.
+            self.connection_status = "disabled"
+            return {
+                "status": "disabled",
+                "backend": "none",
+                "timestamp": utc_timestamp(),
+            }
         if self._ollama_url:
             try:
                 async with aiohttp.ClientSession() as _sess:

@@ -793,6 +793,9 @@ async def _init_llc_outbound_sync(app: FastAPI) -> None:
 
 async def _init_llc_routine_scheduler(app: FastAPI) -> None:
     """Start the LLC RoutineScheduler that fires cron-based routines (GH#8229)."""
+    if not _llc_postgres_available():
+        logger.info("LLC Routine Scheduler: skipped (Postgres disabled — single_user mode)")
+        return
     logger.info("LLC Routine Scheduler: Starting...")
     try:
         from llc.scheduler.routine_scheduler import RoutineScheduler
@@ -814,6 +817,12 @@ async def _init_heartbeat_scheduler(app: FastAPI) -> None:
     GH#8225: Prefers the LLC HeartbeatScheduler; falls back to legacy when
     the LLC package is unavailable, preventing duplicate sorted-set writes.
     """
+    # Both the LLC and legacy paths need the Postgres-backed agent DB; in
+    # single_user mode get_async_session_factory() hard-raises (#9783).
+    if not _llc_postgres_available():
+        logger.info("Heartbeat scheduler: skipped (Postgres disabled — single_user mode)")
+        app.state.heartbeat_scheduler = None
+        return
     # GH#8225: Try LLC scheduler first; it owns llc:heartbeat:schedule.
     # Use get_heartbeat_scheduler() — same lazy_singleton instance used by API routes —
     # so cleanup_services.stop() drains tasks from both startup-fired and API-triggered runs.
@@ -1203,6 +1212,9 @@ async def _init_background_llm_sync(app: FastAPI):
 
 async def _seed_agent_registry() -> None:
     """Populate agents table from DEFAULT_AGENT_CONFIGS (#1754)."""
+    if not _llc_postgres_available():
+        logger.info("[ 97%%] Agent Registry: skipped (Postgres disabled — single_user mode)")
+        return
     logger.info("[ 97%%] Agent Registry: Seeding agents table...")
     try:
         from services.agent_registry_service import seed_agents_from_config
@@ -1220,6 +1232,10 @@ async def _init_process_adapter(app: FastAPI) -> None:
 
     NON-CRITICAL: process management endpoints return 503 until this completes.
     """
+    if not _llc_postgres_available():
+        logger.info("[ 96%%] Process Adapter: skipped (Postgres disabled — single_user mode)")
+        app.state.process_adapter_service = None
+        return
     logger.info("[ 96%%] Process Adapter: Initializing...")
     try:
         from api.process_management import set_process_adapter_service
