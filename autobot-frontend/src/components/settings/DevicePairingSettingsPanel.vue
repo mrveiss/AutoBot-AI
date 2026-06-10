@@ -229,8 +229,10 @@ onMounted(async () => {
 // Methods
 async function loadPairedDevices() {
   try {
-    const response = await apiClient.get('/api/devices/paired')
-    pairedDevices.value = response.data || []
+    // GH#9851: canonical list route is GET /api/devices → { devices: [...] }.
+    // ApiClient returns parsed JSON directly (no axios .data envelope).
+    const response = await apiClient.get<{ devices: typeof pairedDevices.value }>('/api/devices')
+    pairedDevices.value = response.devices || []
   } catch (error) {
     logger.error('Failed to load paired devices', error)
     showToast('Failed to load paired devices', 'error')
@@ -242,9 +244,10 @@ async function startPairingFlow() {
     pairingInProgress.value = true
     pairingError.value = ''
 
-    // Request pairing code from backend
-    const response = await apiClient.post('/api/devices/pairing/generate-code')
-    pairingCode.value = response.data.code
+    // GH#9851: backend issues a QR challenge token via GET /api/devices/pair-qr.
+    // The mobile app scans it and completes pairing by POSTing to /api/devices/pair.
+    const response = await apiClient.get<{ challenge_token: string }>('/api/devices/pair-qr')
+    pairingCode.value = response.challenge_token
 
     // Reset UI state
     pairingStep.value = 1
@@ -313,13 +316,10 @@ async function completePairing() {
   try {
     pairingInProgress.value = true
 
-    // Complete pairing with backend
-    const response = await apiClient.post('/api/devices/pairing/confirm', {
-      code: pairingCode.value,
-      deviceName: deviceName.value
-    })
-
-    // Update paired devices list
+    // GH#9851: there is no desktop-side "confirm" endpoint — pairing is completed
+    // by the mobile device POSTing the scanned challenge token to /api/devices/pair.
+    // The desktop confirms by refreshing the device list and checking the device
+    // now appears.
     await loadPairedDevices()
 
     // Show success message
