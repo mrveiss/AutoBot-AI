@@ -28,6 +28,7 @@ for the core → SLM → modules picture, then use this index to navigate everyt
 | [[agents/_index\|Agents]] | Agent roles, configuration, and capabilities |
 | [[api/_index\|API]] | REST API endpoint reference, auth, schemas |
 | [[architecture/_index\|Architecture]] | System design, component diagrams, data flow |
+| [[backend/_index\|Backend]] | Backend services, LLM gateway, fallback configuration |
 | [[changelog/_index\|Changelog]] | Release notes and version history |
 | [[configuration/_index\|Configuration]] | Environment variables, config keys, settings |
 | [[connectors/_index\|Connectors]] | Third-party integrations and connector docs |

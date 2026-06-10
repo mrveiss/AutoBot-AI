@@ -20,8 +20,8 @@ aliases:
 
 | Document | Description |
 | --- | --- |
-| [CLAUDE_RULES](CLAUDE_RULES.md) | Core development rules (check before writing, reuse, verify) |
-| [CLAUDE_WORKFLOW](CLAUDE_WORKFLOW.md) | Full development workflow |
+| [CODE_REVIEW_HARDENING](CODE_REVIEW_HARDENING.md) | Code review hardening guidance |
+| [doc-management](doc-management.md) | Documentation management, zones, and tagging |
 | [AUTOBOT_REFERENCE](AUTOBOT_REFERENCE.md) | IPs, playbooks, quick reference |
 | [DEVELOPER_SETUP](DEVELOPER_SETUP.md) | Developer onboarding |
 | [HARDCODING_PREVENTION](HARDCODING_PREVENTION.md) | Rules against hardcoded values |

@@ -26,12 +26,15 @@ aliases:
 | [NETWORK_TOPOLOGY](NETWORK_TOPOLOGY.md) | Network topology |
 | [data-flows](data-flows.md) | Data flow diagrams |
 | [dependency_injection](dependency_injection.md) | Dependency injection patterns |
+| [auth](auth.md) | Authentication architecture |
+| [counterfactual-reasoning](counterfactual-reasoning.md) | Counterfactual reasoning design |
 
 ## Agent System
 
 | Document | Description |
 | --- | --- |
 | [AGENT_SYSTEM_ARCHITECTURE](AGENT_SYSTEM_ARCHITECTURE.md) | Agent system design |
+| [agent-terminal](agent-terminal.md) | Agent terminal architecture |
 | [Agent_Communication_Protocol](Agent_Communication_Protocol.md) | Agent communication protocol |
 | [INDUSTRY_AGENT_PATTERNS_ANALYSIS](INDUSTRY_AGENT_PATTERNS_ANALYSIS.md) | Industry agent patterns |
 | [COEXISTENCE_MATRIX](COEXISTENCE_MATRIX.md) | Agent coexistence matrix |

@@ -13,6 +13,7 @@ aliases:
 | Document | Description |
 | --- | --- |
 | [SECURITY_FRAMEWORK](SECURITY_FRAMEWORK.md) | Security framework implementation |
+| [WEBHOOK_AUTHENTICATION](WEBHOOK_AUTHENTICATION.md) | Webhook authentication |
 | [FILE_PERMISSIONS_SECURITY_ARCHITECTURE](FILE_PERMISSIONS_SECURITY_ARCHITECTURE.md) | File permissions architecture |
 | [SECURITY_AGENTS_SUMMARY](SECURITY_AGENTS_SUMMARY.md) | Security agents summary |
 | [SECURITY_IMPLEMENTATION_SUMMARY](SECURITY_IMPLEMENTATION_SUMMARY.md) | Implementation summary |
