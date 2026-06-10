@@ -2,77 +2,20 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""
-Transcriber builtin extension.
+"""Backwards-compat shim — canonical implementation is in middleware/builtin/.
 
-Mounts all transcriber routes under /api/transcriber and manages
-DB lifecycle (connect on app startup, close on shutdown).
-Enabled via TRANSCRIBER_ENABLED=true in environment.
-
-The module-level ``router`` attribute is consumed by feature_routers.py
-(``_load_single_router`` fetches ``module.router`` via ``getattr``).
-``get_transcriber_router()`` is provided for callers that prefer the
-factory-function style and for unit-test assertions.
+The ``extensions`` package was renamed to ``middleware`` (#7426); the builtin
+extensions live under ``middleware/builtin/``. This module re-exports the public
+API so the legacy ``extensions.builtin.transcriber_extension`` import keeps
+working, and removes a full-file duplicate (#9794). The module-level ``router``
+is re-exported because feature_routers.py fetches it via ``getattr``. Remove
+together with the rest of the extensions→middleware shim.
 """
 
-import os
-from pathlib import Path
+from middleware.builtin.transcriber_extension import (
+    TranscriberExtension,
+    get_transcriber_router,
+    router,
+)
 
-from fastapi import APIRouter
-
-from autobot_shared.logging_manager import get_logger
-from extensions.base import Extension
-
-logger = get_logger(__name__)
-
-_ENABLED = os.getenv("TRANSCRIBER_ENABLED", "true").lower() == "true"
-_DATA_DIR = Path(os.getenv("TRANSCRIBER_DATA_DIR", "data/transcriber"))
-
-
-def get_transcriber_router() -> APIRouter:
-    """Return a combined APIRouter with all transcriber sub-routers.
-
-    All transcriber sub-routers (projects, recordings, transcripts, export,
-    AI analysis, KB push) are included under the shared /api/transcriber
-    prefix so feature_routers.py can mount the result at the top-level
-    application with a single include_router call.
-    """
-    from transcriber.routes.ai import router as ai_router
-    from transcriber.routes.export import router as export_router
-    from transcriber.routes.kb import router as kb_router
-    from transcriber.routes.projects import router as projects_router
-    from transcriber.routes.recordings import router as recordings_router
-    from transcriber.routes.transcripts import router as transcripts_router
-
-    combined = APIRouter(prefix="/api/transcriber")
-    combined.include_router(projects_router)
-    combined.include_router(recordings_router)
-    combined.include_router(transcripts_router)
-    combined.include_router(export_router)
-    combined.include_router(ai_router)
-    combined.include_router(kb_router)
-    return combined
-
-
-# Module-level router consumed by feature_routers._load_single_router via
-# ``getattr(module, "router")``.  Built once at import time so repeated
-# calls to load_feature_routers() in test environments get the same object.
-router: APIRouter = get_transcriber_router()
-
-
-class TranscriberExtension(Extension):
-    """Builtin extension that registers the transcriber module.
-
-    The Extension base class provides agent-lifecycle hooks (HookPoint-based).
-    App-level DB startup/shutdown is wired separately in
-    ``initialization/lifespan.py`` via ``_init_transcriber_db()`` and
-    ``cleanup_services()``.  This class exists so the extension manager
-    can discover and track the transcriber feature by name.
-
-    Attributes:
-        name: ``"transcriber"``
-        priority: 10 (runs before default-priority extensions)
-    """
-
-    name = "transcriber"
-    priority = 10
+__all__ = ["TranscriberExtension", "get_transcriber_router", "router"]

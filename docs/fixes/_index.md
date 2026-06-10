@@ -6,17 +6,6 @@ aliases:
   - Fixes Index
 ---
 
-<<<<<<< HEAD
-# Fixes
-
-Bug fix reports and consistency fix documentation.
-
-| Document | Description |
-| --- | --- |
-| [[CONVERSATION_TERMINATION_REPORT]] | Conversation termination fix report |
-| [[SESSION_ID_VALIDATION_REPORT]] | Session ID validation fix report |
-| [[terminal_input_consistency_fix]] | Terminal input consistency fix documentation |
-=======
 # Fixes Documentation
 
 Reports documenting applied bug fixes, session patches, and terminal corrections.
@@ -35,4 +24,3 @@ Reports documenting applied bug fixes, session patches, and terminal corrections
 - [[../audit/_index\|Audit]] — Audit reports that surface bugs
 - [[../discovery/_index\|Discovery]] — Discovery of issues requiring fixes
 - [[../migration/_index\|Migration]] — Migration-related fixes
->>>>>>> origin/Dev_new_gui

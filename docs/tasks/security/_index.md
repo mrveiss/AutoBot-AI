@@ -9,13 +9,6 @@ aliases:
 
 # Security Tasks
 
-<<<<<<< HEAD
-Security implementation task documentation.
-
-| Document | Description |
-| --- | --- |
-| [[tls-implementation]] | TLS implementation task documentation |
-=======
 Security-related task documentation and implementation reports.
 
 ## Documents
@@ -29,4 +22,3 @@ Security-related task documentation and implementation reports.
 - [[../_index|Tasks]] — Parent tasks section
 - [[../../security/_index|Security]] — Security implementation documentation
 - [[../../audit/_index|Audit]] — Security audit reports
->>>>>>> origin/Dev_new_gui

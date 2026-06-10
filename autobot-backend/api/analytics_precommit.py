@@ -10,7 +10,6 @@ Features fast pattern checking, clear error messages, and bypass mechanism.
 """
 
 import asyncio
-import re
 import subprocess  # nosec B404
 import threading
 from datetime import datetime, timezone
@@ -35,166 +34,55 @@ from api.schemas_analytics import (
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from code_intelligence.precommit_analyzer import BUILTIN_CHECKS as _ENGINE_BUILTIN_CHECKS
+from code_intelligence.precommit_analyzer import CheckDefinition as _EngineCheckDefinition
+from code_intelligence.precommit_analyzer import CheckResult as _EngineCheckResult
+from code_intelligence.precommit_analyzer import PrecommitAnalyzer
 from constants.network_constants import NetworkConstants
 
 logger = get_logger(__name__)
 
 router = APIRouter(tags=["precommit", "analytics"])  # Prefix set in router_registry
 
-# Issue #380: Module-level frozenset for expensive checks to skip in fast mode
-_EXPENSIVE_CHECKS = frozenset({"QUA002", "DOC001"})
-
 
 # ============================================================================
 # Check Definitions
 # ============================================================================
 
+# ---------------------------------------------------------------------------
+# Single source of truth (#9873): this module is a thin HTTP layer over the
+# analyzer engine (code_intelligence.precommit_analyzer). Both the check
+# *catalog* (BUILTIN_CHECKS) and check *execution* are delegated to the engine
+# via PrecommitAnalyzer, so the API can never drift from what actually runs.
+# Previously this module kept its own hand-copied catalog AND a duplicate
+# regex runner, which had forked (stale catalog, conflicting QUA002/SEC004
+# definitions, a fast-mode skip list that no longer matched, and a runner that
+# could not execute the engine's multiline checks).
+# ---------------------------------------------------------------------------
+
+
+def _engine_check_to_schema(check: _EngineCheckDefinition) -> CheckDefinition:
+    """Convert an engine ``CheckDefinition`` (dataclass) to the API schema model.
+
+    Engine and API enums share identical values but are distinct classes, so
+    they are mapped by ``.value``. The engine-only ``multiline`` flag has no API
+    schema field (the engine owns execution, so the API never needs it).
+    """
+    return CheckDefinition(
+        id=check.id,
+        name=check.name,
+        category=CheckCategory(check.category.value),
+        severity=CheckSeverity(check.severity.value),
+        pattern=check.pattern,
+        description=check.description,
+        suggestion=check.suggestion,
+        file_patterns=list(check.file_patterns),
+        enabled=check.enabled,
+    )
+
+
 BUILTIN_CHECKS: dict[str, CheckDefinition] = {
-    # Security Checks
-    "SEC001": CheckDefinition(
-        id="SEC001",
-        name="Hardcoded Password",
-        category=CheckCategory.SECURITY,
-        severity=CheckSeverity.BLOCK,
-        pattern=r'(?i)(password|passwd|pwd)\s*[=:]\s*["\'][^"\']{4,}["\']',
-        description="Detected hardcoded password",
-        suggestion="Use environment variables or secrets manager",
-        file_patterns=["*.py", "*.js", "*.ts", "*.json", "*.yaml", "*.yml"],
-    ),
-    "SEC002": CheckDefinition(
-        id="SEC002",
-        name="API Key Exposure",
-        category=CheckCategory.SECURITY,
-        severity=CheckSeverity.BLOCK,
-        pattern=r'(?i)(api[_-]?key|apikey|secret[_-]?key)\s*[=:]\s*["\'][a-zA-Z0-9]{16,}["\']',
-        description="Detected exposed API key",
-        suggestion="Store API keys in environment variables",
-        file_patterns=["*.py", "*.js", "*.ts", "*.json", "*.env"],
-    ),
-    "SEC003": CheckDefinition(
-        id="SEC003",
-        name="Private Key in Code",
-        category=CheckCategory.SECURITY,
-        severity=CheckSeverity.BLOCK,
-        pattern=r"-----BEGIN\s+(RSA\s+)?PRIVATE\s+KEY-----",
-        description="Private key detected in source file",
-        suggestion="Never commit private keys - use key management service",
-        file_patterns=["*"],
-    ),
-    "SEC004": CheckDefinition(
-        id="SEC004",
-        name="Hardcoded IP Address",
-        category=CheckCategory.SECURITY,
-        severity=CheckSeverity.WARN,
-        pattern=r"\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b(?!.*(?:0\.0\.0\.0|127\.0\.0\.1|localhost))",  # noqa: E501
-        description="Hardcoded IP address detected",
-        suggestion="Use configuration or environment variables for IP addresses",
-        file_patterns=["*.py", "*.js", "*.ts"],
-    ),
-    # Debug Checks
-    "DBG001": CheckDefinition(
-        id="DBG001",
-        name="Console.log Statement",
-        category=CheckCategory.DEBUG,
-        severity=CheckSeverity.WARN,
-        pattern=r"console\.(log|debug|info|warn)\s*\(",
-        description="Console statement found",
-        suggestion="Remove console statements before committing",
-        file_patterns=["*.js", "*.ts", "*.vue"],
-    ),
-    "DBG002": CheckDefinition(
-        id="DBG002",
-        name="Print Statement",
-        category=CheckCategory.DEBUG,
-        severity=CheckSeverity.WARN,
-        pattern=r"^\s*print\s*\(",
-        description="Print statement found",
-        suggestion="Replace with proper logging",
-        file_patterns=["*.py"],
-    ),
-    "DBG003": CheckDefinition(
-        id="DBG003",
-        name="Debugger Statement",
-        category=CheckCategory.DEBUG,
-        severity=CheckSeverity.BLOCK,
-        pattern=r"\bdebugger\b|import\s+pdb|pdb\.set_trace\(\)",
-        description="Debugger statement found",
-        suggestion="Remove debugger statements before committing",
-        file_patterns=["*.py", "*.js", "*.ts"],
-    ),
-    "DBG004": CheckDefinition(
-        id="DBG004",
-        name="TODO/FIXME Comment",
-        category=CheckCategory.DEBUG,
-        severity=CheckSeverity.INFO,
-        pattern=r"(?i)#\s*(TODO|FIXME|XXX|HACK|BUG):",
-        description="TODO/FIXME comment found",
-        suggestion="Consider addressing before committing",
-        file_patterns=["*.py", "*.js", "*.ts", "*.vue"],
-    ),
-    # Quality Checks
-    "QUA001": CheckDefinition(
-        id="QUA001",
-        name="Empty Except Block",
-        category=CheckCategory.QUALITY,
-        severity=CheckSeverity.WARN,
-        pattern=r"except\s*(?:\w+\s*)?:\s*(?:pass|\.\.\.)\s*$",
-        description="Empty exception handler found (note: may match inside multi-line strings #2911)",
-        suggestion="Add proper error handling or logging",
-        file_patterns=["*.py"],
-    ),
-    "QUA002": CheckDefinition(
-        id="QUA002",
-        name="Magic Number",
-        category=CheckCategory.QUALITY,
-        severity=CheckSeverity.INFO,
-        pattern=r"(?<![a-zA-Z_])\b(?:(?!0|1|2|10|100|1000)\d{2,})\b(?!\s*[=:])",
-        description="Magic number detected",
-        suggestion="Extract to named constant",
-        file_patterns=["*.py", "*.js", "*.ts"],
-    ),
-    "QUA003": CheckDefinition(
-        id="QUA003",
-        name="Long Line",
-        category=CheckCategory.QUALITY,
-        severity=CheckSeverity.INFO,
-        pattern=r"^.{121,}$",
-        description="Line exceeds 120 characters",
-        suggestion="Break line for readability",
-        file_patterns=["*.py"],
-    ),
-    # Style Checks
-    "STY001": CheckDefinition(
-        id="STY001",
-        name="Trailing Whitespace",
-        category=CheckCategory.STYLE,
-        severity=CheckSeverity.INFO,
-        pattern=r"[ \t]+$",
-        description="Trailing whitespace detected",
-        suggestion="Remove trailing whitespace",
-        file_patterns=["*"],
-    ),
-    "STY002": CheckDefinition(
-        id="STY002",
-        name="Mixed Tabs and Spaces",
-        category=CheckCategory.STYLE,
-        severity=CheckSeverity.WARN,
-        pattern=r"^(\t+ +| +\t+)",
-        description="Mixed tabs and spaces in indentation",
-        suggestion="Use consistent indentation",
-        file_patterns=["*.py", "*.js", "*.ts"],
-    ),
-    # Documentation Checks
-    "DOC001": CheckDefinition(
-        id="DOC001",
-        name="Missing Docstring",
-        category=CheckCategory.DOCS,
-        severity=CheckSeverity.INFO,
-        pattern=r"^\s*def\s+(?!_)[a-zA-Z_]\w*\s*\([^)]*\)\s*:\s*$",
-        description="Public function missing docstring",
-        suggestion="Add docstring describing function purpose",
-        file_patterns=["*.py"],
-    ),
+    check_id: _engine_check_to_schema(check) for check_id, check in _ENGINE_BUILTIN_CHECKS.items()
 }
 
 # In-memory storage for configuration
@@ -250,80 +138,55 @@ def get_file_content(filepath: str) -> str | None:
         return None
 
 
-def matches_file_pattern(filepath: str, patterns: list[str]) -> bool:
-    """Check if filepath matches any of the patterns."""
-    from fnmatch import fnmatch
-
-    filename = Path(filepath).name
-    for pattern in patterns:
-        if pattern == "*" or fnmatch(filename, pattern) or fnmatch(filepath, pattern):
-            return True
-    return False
-
-
-def run_check(check: CheckDefinition, filepath: str, content: str) -> list[CheckResult]:
-    """Run a single check against file content."""
-    results = []
-
-    if not matches_file_pattern(filepath, check.file_patterns):
-        return results
-
-    try:
-        pattern = re.compile(check.pattern, re.MULTILINE)
-        lines = content.split("\n")
-
-        for i, line in enumerate(lines, 1):
-            matches = pattern.finditer(line)
-            for _ in matches:  # Issue #382: match object unused
-                # Get snippet context
-                start = max(0, i - 2)
-                end = min(len(lines), i + 1)
-                snippet_lines = lines[start:end]
-                snippet = "\n".join(f"{start + j + 1}: {l}" for j, l in enumerate(snippet_lines))
-
-                results.append(
-                    CheckResult(
-                        check_id=check.id,
-                        name=check.name,
-                        category=check.category,
-                        severity=check.severity,
-                        passed=False,
-                        message=check.description,
-                        file=filepath,
-                        line=i,
-                        snippet=snippet,
-                        suggestion=check.suggestion,
-                    )
-                )
-    except re.error as e:
-        logger.warning("Invalid regex in check %s: %s", check.id, e)
-
-    return results
+def _engine_result_to_schema(result: _EngineCheckResult) -> CheckResult:
+    """Convert an engine ``CheckResult`` (dataclass) to the API schema model."""
+    return CheckResult(
+        check_id=result.check_id,
+        name=result.name,
+        category=CheckCategory(result.category.value),
+        severity=CheckSeverity(result.severity.value),
+        passed=result.passed,
+        message=result.message,
+        file=result.file_path or None,
+        line=result.line,
+        snippet=result.snippet or None,
+        suggestion=result.suggestion or None,
+    )
 
 
-def _filter_enabled_checks(fast_mode: bool) -> dict:
+def _active_engine_checks(fast_mode: bool) -> dict[str, _EngineCheckDefinition]:
+    """Engine check definitions the API should run for a request.
+
+    Honors the API's enable/disable configuration (the per-check ``enabled``
+    toggle plus the ``HookConfig`` allow/deny lists) and, in fast mode, the
+    engine's own expensive-check set — so catalog, skip list and runner all
+    stay sourced from the engine and can never disagree (#9873).
     """
-    Filter checks based on configuration and fast mode.
+    expensive = PrecommitAnalyzer().expensive_checks
+    active: dict[str, _EngineCheckDefinition] = {}
+    for check_id, engine_check in _ENGINE_BUILTIN_CHECKS.items():
+        if not BUILTIN_CHECKS[check_id].enabled:
+            continue
+        if check_id in _hook_config.disabled_checks:
+            continue
+        if _hook_config.enabled_checks and check_id not in _hook_config.enabled_checks:
+            continue
+        if fast_mode and check_id in expensive:
+            continue
+        active[check_id] = engine_check
+    return active
 
-    Issue #620: Extracted from check_staged_files to reduce function length.
 
-    Args:
-        fast_mode: Whether to skip expensive checks
+def _run_engine_checks(active_checks: dict, filepath: str, content: str) -> list[CheckResult]:
+    """Execute the given engine checks against content via the engine analyzer.
 
-    Returns:
-        Dictionary of enabled check IDs to PreCommitCheck objects
+    The duplicate API runner was removed (#9873): execution is delegated to
+    PrecommitAnalyzer so multiline checks, patterns and severities always match
+    what the engine actually enforces. ``active_checks`` is already filtered, so
+    the analyzer runs with ``fast_mode=False`` to avoid double-filtering.
     """
-    enabled_checks = {k: v for k, v in BUILTIN_CHECKS.items() if v.enabled and k not in _hook_config.disabled_checks}
-
-    # If specific checks enabled, filter to those
-    if _hook_config.enabled_checks:
-        enabled_checks = {k: v for k, v in enabled_checks.items() if k in _hook_config.enabled_checks}
-
-    # Skip expensive checks in fast mode (Issue #380: use module-level constant)
-    if fast_mode:
-        enabled_checks = {k: v for k, v in enabled_checks.items() if k not in _EXPENSIVE_CHECKS}
-
-    return enabled_checks
+    analyzer = PrecommitAnalyzer(checks=active_checks, fast_mode=False)
+    return [_engine_result_to_schema(r) for r in analyzer.analyze_content(content, filepath)]
 
 
 def _calculate_check_statistics(
@@ -392,15 +255,15 @@ async def check_staged_files(
     if not staged_files:
         staged_files = ["src/example.py", "src/config.js"]  # Demo mode
 
-    # Filter enabled checks (Issue #620)
-    enabled_checks = _filter_enabled_checks(fast_mode)
+    # Engine-delegated execution (#9873): the set of checks to run and the
+    # runner both come from the analyzer engine.
+    enabled_checks = _active_engine_checks(fast_mode)
 
-    # Run checks on all files
+    # Run checks on all files via the engine analyzer
     results: list[CheckResult] = []
     for filepath in staged_files:
         content = get_file_content(filepath) or get_demo_content(filepath)
-        for check in enabled_checks.values():
-            results.extend(run_check(check, filepath, content))
+        results.extend(_run_engine_checks(enabled_checks, filepath, content))
 
     # Calculate statistics (Issue #620)
     stats = _calculate_check_statistics(results, enabled_checks, staged_files, start_time)
@@ -445,14 +308,9 @@ async def check_content(
 
     Issue #744: Requires admin authentication.
     """
-    results: list[CheckResult] = []
-
-    for check in BUILTIN_CHECKS.values():
-        if check.enabled:
-            check_results = run_check(check, filepath, content)
-            results.extend(check_results)
-
-    return results
+    # Engine-delegated execution (#9873). fast_mode is not applied here — this
+    # endpoint has always run every enabled check against the supplied content.
+    return _run_engine_checks(_active_engine_checks(fast_mode=False), filepath, content)
 
 
 @router.get("/checks", response_model=list[CheckDefinition])

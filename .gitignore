@@ -41,6 +41,11 @@ frontend/static/assets/
 frontend/static/js/
 static/assets/
 static/js/
+# Backend serves the built SPA from autobot-backend/static/; the hashed
+# index-*.js/css bundles are vite build artifacts (outDir dist/, copied on
+# deploy), not source. Anchored patterns above don't reach this subdir.
+autobot-backend/static/assets/
+autobot-backend/static/js/
 
 # Vue.js build outputs and cache
 autobot-vue/dist/

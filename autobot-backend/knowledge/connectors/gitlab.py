@@ -33,7 +33,6 @@ Gitea/Forgejo-specific config:
     repos (list[str]): Repositories in "owner/repo" format. Required.
 """
 
-import hashlib
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 from urllib.parse import quote
@@ -61,10 +60,6 @@ _REDIS_TS_TTL = 86400 * 30  # 30 days
 # ---------------------------------------------------------------------------
 # Shared helpers
 # ---------------------------------------------------------------------------
-
-
-def _content_hash(text: str) -> str:
-    return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
 def _issue_to_text(issue: Dict[str, Any], *, is_pr: bool = False) -> str:
