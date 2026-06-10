@@ -36,6 +36,8 @@ from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from constants.network_constants import NetworkConstants
+from code_intelligence.precommit_analyzer import BUILTIN_CHECKS as _ENGINE_BUILTIN_CHECKS
+from code_intelligence.precommit_analyzer import CheckDefinition as _EngineCheckDefinition
 
 logger = get_logger(__name__)
 
@@ -49,152 +51,37 @@ _EXPENSIVE_CHECKS = frozenset({"QUA002", "DOC001"})
 # Check Definitions
 # ============================================================================
 
+# ---------------------------------------------------------------------------
+# Single source of truth (#9873): the API check catalog is DERIVED from the
+# analyzer engine's BUILTIN_CHECKS so it can never drift from what the engine
+# actually runs. This module previously kept a hand-copied dict that had gone
+# stale (missing SEC005, SEC006, DOC002, QUA004, STY003).
+# ---------------------------------------------------------------------------
+
+
+def _engine_check_to_schema(check: _EngineCheckDefinition) -> CheckDefinition:
+    """Convert an engine ``CheckDefinition`` (dataclass) to the API schema model.
+
+    Engine and API enums share identical values but are distinct classes, so
+    they are mapped by ``.value``. The engine-only ``multiline`` flag is dropped
+    because the API runner always compiles patterns with ``re.MULTILINE``.
+    """
+    return CheckDefinition(
+        id=check.id,
+        name=check.name,
+        category=CheckCategory(check.category.value),
+        severity=CheckSeverity(check.severity.value),
+        pattern=check.pattern,
+        description=check.description,
+        suggestion=check.suggestion,
+        file_patterns=list(check.file_patterns),
+        enabled=check.enabled,
+    )
+
+
 BUILTIN_CHECKS: dict[str, CheckDefinition] = {
-    # Security Checks
-    "SEC001": CheckDefinition(
-        id="SEC001",
-        name="Hardcoded Password",
-        category=CheckCategory.SECURITY,
-        severity=CheckSeverity.BLOCK,
-        pattern=r'(?i)(password|passwd|pwd)\s*[=:]\s*["\'][^"\']{4,}["\']',
-        description="Detected hardcoded password",
-        suggestion="Use environment variables or secrets manager",
-        file_patterns=["*.py", "*.js", "*.ts", "*.json", "*.yaml", "*.yml"],
-    ),
-    "SEC002": CheckDefinition(
-        id="SEC002",
-        name="API Key Exposure",
-        category=CheckCategory.SECURITY,
-        severity=CheckSeverity.BLOCK,
-        pattern=r'(?i)(api[_-]?key|apikey|secret[_-]?key)\s*[=:]\s*["\'][a-zA-Z0-9]{16,}["\']',
-        description="Detected exposed API key",
-        suggestion="Store API keys in environment variables",
-        file_patterns=["*.py", "*.js", "*.ts", "*.json", "*.env"],
-    ),
-    "SEC003": CheckDefinition(
-        id="SEC003",
-        name="Private Key in Code",
-        category=CheckCategory.SECURITY,
-        severity=CheckSeverity.BLOCK,
-        pattern=r"-----BEGIN\s+(RSA\s+)?PRIVATE\s+KEY-----",
-        description="Private key detected in source file",
-        suggestion="Never commit private keys - use key management service",
-        file_patterns=["*"],
-    ),
-    "SEC004": CheckDefinition(
-        id="SEC004",
-        name="Hardcoded IP Address",
-        category=CheckCategory.SECURITY,
-        severity=CheckSeverity.WARN,
-        pattern=r"\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b(?!.*(?:0\.0\.0\.0|127\.0\.0\.1|localhost))",  # noqa: E501
-        description="Hardcoded IP address detected",
-        suggestion="Use configuration or environment variables for IP addresses",
-        file_patterns=["*.py", "*.js", "*.ts"],
-    ),
-    # Debug Checks
-    "DBG001": CheckDefinition(
-        id="DBG001",
-        name="Console.log Statement",
-        category=CheckCategory.DEBUG,
-        severity=CheckSeverity.WARN,
-        pattern=r"console\.(log|debug|info|warn)\s*\(",
-        description="Console statement found",
-        suggestion="Remove console statements before committing",
-        file_patterns=["*.js", "*.ts", "*.vue"],
-    ),
-    "DBG002": CheckDefinition(
-        id="DBG002",
-        name="Print Statement",
-        category=CheckCategory.DEBUG,
-        severity=CheckSeverity.WARN,
-        pattern=r"^\s*print\s*\(",
-        description="Print statement found",
-        suggestion="Replace with proper logging",
-        file_patterns=["*.py"],
-    ),
-    "DBG003": CheckDefinition(
-        id="DBG003",
-        name="Debugger Statement",
-        category=CheckCategory.DEBUG,
-        severity=CheckSeverity.BLOCK,
-        pattern=r"\bdebugger\b|import\s+pdb|pdb\.set_trace\(\)",
-        description="Debugger statement found",
-        suggestion="Remove debugger statements before committing",
-        file_patterns=["*.py", "*.js", "*.ts"],
-    ),
-    "DBG004": CheckDefinition(
-        id="DBG004",
-        name="TODO/FIXME Comment",
-        category=CheckCategory.DEBUG,
-        severity=CheckSeverity.INFO,
-        pattern=r"(?i)#\s*(TODO|FIXME|XXX|HACK|BUG):",
-        description="TODO/FIXME comment found",
-        suggestion="Consider addressing before committing",
-        file_patterns=["*.py", "*.js", "*.ts", "*.vue"],
-    ),
-    # Quality Checks
-    "QUA001": CheckDefinition(
-        id="QUA001",
-        name="Empty Except Block",
-        category=CheckCategory.QUALITY,
-        severity=CheckSeverity.WARN,
-        pattern=r"except\s*(?:\w+\s*)?:\s*(?:pass|\.\.\.)\s*$",
-        description="Empty exception handler found (note: may match inside multi-line strings #2911)",
-        suggestion="Add proper error handling or logging",
-        file_patterns=["*.py"],
-    ),
-    "QUA002": CheckDefinition(
-        id="QUA002",
-        name="Magic Number",
-        category=CheckCategory.QUALITY,
-        severity=CheckSeverity.INFO,
-        pattern=r"(?<![a-zA-Z_])\b(?:(?!0|1|2|10|100|1000)\d{2,})\b(?!\s*[=:])",
-        description="Magic number detected",
-        suggestion="Extract to named constant",
-        file_patterns=["*.py", "*.js", "*.ts"],
-    ),
-    "QUA003": CheckDefinition(
-        id="QUA003",
-        name="Long Line",
-        category=CheckCategory.QUALITY,
-        severity=CheckSeverity.INFO,
-        pattern=r"^.{121,}$",
-        description="Line exceeds 120 characters",
-        suggestion="Break line for readability",
-        file_patterns=["*.py"],
-    ),
-    # Style Checks
-    "STY001": CheckDefinition(
-        id="STY001",
-        name="Trailing Whitespace",
-        category=CheckCategory.STYLE,
-        severity=CheckSeverity.INFO,
-        pattern=r"[ \t]+$",
-        description="Trailing whitespace detected",
-        suggestion="Remove trailing whitespace",
-        file_patterns=["*"],
-    ),
-    "STY002": CheckDefinition(
-        id="STY002",
-        name="Mixed Tabs and Spaces",
-        category=CheckCategory.STYLE,
-        severity=CheckSeverity.WARN,
-        pattern=r"^(\t+ +| +\t+)",
-        description="Mixed tabs and spaces in indentation",
-        suggestion="Use consistent indentation",
-        file_patterns=["*.py", "*.js", "*.ts"],
-    ),
-    # Documentation Checks
-    "DOC001": CheckDefinition(
-        id="DOC001",
-        name="Missing Docstring",
-        category=CheckCategory.DOCS,
-        severity=CheckSeverity.INFO,
-        pattern=r"^\s*def\s+(?!_)[a-zA-Z_]\w*\s*\([^)]*\)\s*:\s*$",
-        description="Public function missing docstring",
-        suggestion="Add docstring describing function purpose",
-        file_patterns=["*.py"],
-    ),
+    check_id: _engine_check_to_schema(check)
+    for check_id, check in _ENGINE_BUILTIN_CHECKS.items()
 }
 
 # In-memory storage for configuration
