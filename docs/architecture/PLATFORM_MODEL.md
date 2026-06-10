@@ -36,6 +36,8 @@ AutoBot is best understood as three layers, bottom to top:
 graph TB
     subgraph Modules["Modules — installable capabilities"]
         LLC["AutoBot LLC<br/>(autonomous agent-company)"]
+        Analytics["Codebase Analytics"]
+        Transcriber["Transcriber"]
         More["…your modules"]
     end
     subgraph SLM["Management Layer — Service Lifecycle Manager (SLM)"]
@@ -111,6 +113,17 @@ it is built on the platform's bones and **inherits** what the core already provi
 
 Because modules inherit these primitives, they are small relative to what they deliver:
 the hard parts (memory, inference, governance, lifecycle) already live in the platform.
+
+Modules that ship with or for AutoBot include:
+
+| Module | What it adds |
+|--------|--------------|
+| **[AutoBot LLC](../llc/_index.md)** | An autonomous *agent-company* — agents, goals, backlog, heartbeat scheduling, and board governance |
+| **Codebase Analytics** | Code structure analysis, risk detection, and dependency insights — all on your own hardware |
+| **Transcriber** | A general-purpose audio transcription module: projects, recordings, local transcription, and export |
+
+See the [Capability Catalog](../features/CATALOG.md) for the full picture of what each
+module and the core provide.
 
 ---
 

@@ -32,6 +32,21 @@ platform's real feature set.
 
 ---
 
+## Modules
+
+Some capabilities are packaged as **installable modules** built on the
+[platform core](../architecture/PLATFORM_MODEL.md), not as part of the core itself:
+
+| Module | Status | Source | What it adds |
+|--------|--------|--------|--------------|
+| **AutoBot LLC** | Planned | [llc/_index](../llc/_index.md) | Autonomous agent-company: agents, goals, backlog, heartbeat scheduling, board governance |
+| **Codebase Analytics** | Shipped | [archives/plans/2026-02-04-code-intelligence-dashboard-design](../archives/plans/2026-02-04-code-intelligence-dashboard-design.md) | Code structure analysis, risk detection, dependency insights — on your own hardware |
+| **Transcriber** | Partial | [superpowers/plans/2026-05-30-transcriber-plan-1-foundation](../superpowers/plans/2026-05-30-transcriber-plan-1-foundation.md) | Audio transcription module: projects, recordings, local transcription, export |
+
+The themed tables below break down the capabilities inside the core and these modules.
+
+---
+
 ## Conversation & Voice
 
 | Capability | Status | Source | What it does |
