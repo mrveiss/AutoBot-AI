@@ -79,7 +79,7 @@ class EnterpriseFeatureManager:
         """Get VM environment configuration variables."""
 
         return {
-            "backend_host": config.backend_host,
+            "backend_host": config.vm.main,
             "backend_port": config.backend_port,
             "vnc_port": config.vnc_port,
             "frontend_host": config.frontend_host,
@@ -866,7 +866,7 @@ class EnterpriseFeatureManager:
     def _get_fallback_endpoints(self) -> Dict[str, str]:
         """Get fallback service endpoints"""
 
-        backend_host = config.backend_host
+        backend_host = config.vm.main
         backend_port = config.backend_port
         frontend_host = config.frontend_host
         frontend_port = config.frontend_port
