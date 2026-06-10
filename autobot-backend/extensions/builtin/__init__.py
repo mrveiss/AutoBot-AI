@@ -2,20 +2,20 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""
-Built-in extensions for the extension hooks system.
+"""Backwards-compat shim — canonical implementations are in middleware/builtin/.
 
-Issue #658: Provides default extensions that demonstrate the
-extension system and provide useful functionality.
-
-Issue #3009: Adds PermissionEnforcementExtension for per-operation RBAC.
-Issue #9044: Adds TranscriberExtension for the transcriber module.
+The ``extensions`` package was renamed to ``middleware`` (#7426). This package
+re-exports the builtin extensions so legacy ``extensions.builtin`` imports keep
+working, and removes a full-file duplicate (#9794). Remove together with the
+rest of the extensions→middleware shim.
 """
 
-from extensions.builtin.logging_extension import LoggingExtension
-from extensions.builtin.permission_enforcement import PermissionEnforcementExtension
-from extensions.builtin.secret_masking import SecretMaskingExtension
-from extensions.builtin.transcriber_extension import TranscriberExtension
+from middleware.builtin import (
+    LoggingExtension,
+    PermissionEnforcementExtension,
+    SecretMaskingExtension,
+    TranscriberExtension,
+)
 
 __all__ = [
     "LoggingExtension",
