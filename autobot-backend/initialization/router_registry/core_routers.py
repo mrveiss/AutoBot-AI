@@ -91,6 +91,7 @@ from api.telegram_bot import router as telegram_bot_router  # MVA-2074
 from api.transcriber import router as transcriber_router  # Issue #9044, MVA-2186
 from api.usage import router as usage_router  # Issue #1807
 from api.user_management.router import router as user_management_router  # Issue #1801
+from api.user_provider_credentials import router as user_provider_credentials_router  # GH#9037
 from api.vnc_manager import router as vnc_router
 from api.vnc_mcp import router as vnc_mcp_router
 from api.vnc_proxy import router as vnc_proxy_router
@@ -127,6 +128,7 @@ def _get_system_routers() -> list:
         (settings_router, "/settings", ["settings"], "settings"),
         (usage_router, "/usage", ["usage", "analytics"], "usage"),  # Issue #1807
         (user_management_router, "", ["user-management"], "user_management"),  # Issue #1801
+        (user_provider_credentials_router, "", ["user-provider-credentials"], "user_provider_credentials"),  # GH#9037
         (mobile_devices_router, "/devices", ["devices", "integrations"], "mobile_devices"),  # GH#4463
         (data_storage_router, "", ["data-storage"], "data_storage"),
         (prompts_router, "/prompts", ["prompts"], "prompts"),

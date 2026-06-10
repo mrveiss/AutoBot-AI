@@ -53,8 +53,9 @@ async function selectGoal(goal: Goal) {
   if (!goal.linked_items && goal.linked_item_count > 0) {
     goal.loading_items = true
     try {
-      const resp = await api.get<{ data: { items: Goal['linked_items'] } }>(`/api/llc/goals/${goal.id}/items`)
-      goal.linked_items = (resp as { data: { items: Goal['linked_items'] } }).data?.items ?? []
+      // GH#9851: backend route is /tasks and returns an array directly.
+      const resp = await api.get<NonNullable<Goal['linked_items']>>(`/api/llc/goals/${goal.id}/tasks`)
+      goal.linked_items = resp ?? []
     } catch (err: unknown) {
       logger.error('Failed to fetch goal items', err)
       goal.linked_items = []

@@ -105,18 +105,22 @@ async function fetchDashboardData() {
   isLoading.value = true
   error.value = null
   try {
+    // GH#9851: align with canonical LLC routes. The api client returns parsed
+    // JSON directly (no {data:{...}} envelope); these endpoints return arrays
+    // (agents/approvals/budget/runs) or an ActivityLogResponse ({items}).
+    const cid = companyId.value
     const [agentsResp, approvalsResp, budgetsResp, runsResp, activityResp] = await Promise.all([
-      api.get<{ data: { agents: AgentStatus[] } }>('/api/llc/agents/status'),
-      api.get<{ data: { approvals: PendingApproval[] } }>('/api/llc/approvals/pending'),
-      api.get<{ data: { budgets: BudgetInfo[] } }>('/api/llc/budgets'),
-      api.get<{ data: { runs: HeartbeatRun[] } }>('/api/llc/heartbeat-runs?limit=20'),
-      api.get<{ data: { events: ActivityEvent[] } }>('/api/llc/activity?limit=50'),
+      api.get<AgentStatus[]>(`/api/llc/agents?company_id=${cid}`),
+      api.get<PendingApproval[]>(`/api/llc/approvals?company_id=${cid}`),
+      api.get<BudgetInfo[]>(`/api/llc/budget?company_id=${cid}`),
+      api.get<HeartbeatRun[]>('/api/llc/heartbeat-runs?limit=20'),
+      api.get<{ items: ActivityEvent[] }>(`/api/llc/companies/${cid}/activity?page_size=50`),
     ])
-    agents.value = (agentsResp as { data: { agents: AgentStatus[] } }).data?.agents ?? []
-    pendingApprovals.value = (approvalsResp as { data: { approvals: PendingApproval[] } }).data?.approvals ?? []
-    budgets.value = (budgetsResp as { data: { budgets: BudgetInfo[] } }).data?.budgets ?? []
-    heartbeatRuns.value = (runsResp as { data: { runs: HeartbeatRun[] } }).data?.runs ?? []
-    activityFeed.value = (activityResp as { data: { events: ActivityEvent[] } }).data?.events ?? []
+    agents.value = agentsResp ?? []
+    pendingApprovals.value = approvalsResp ?? []
+    budgets.value = budgetsResp ?? []
+    heartbeatRuns.value = runsResp ?? []
+    activityFeed.value = activityResp?.items ?? []
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)
     logger.error('Failed to fetch dashboard data:', msg)
@@ -128,7 +132,7 @@ async function fetchDashboardData() {
 
 async function quickApprove(approvalId: string) {
   try {
-    await api.post(`/api/llc/approvals/${approvalId}/approve`, {})
+    await api.post(`/api/llc/approvals/${approvalId}/decide`, { decision: 'approved' })
     pendingApprovals.value = pendingApprovals.value.filter(a => a.id !== approvalId)
   } catch (err: unknown) {
     logger.error('Quick approve failed', err)
