@@ -1,3 +1,16 @@
+---
+tags:
+  - planning
+  - llc
+  - module
+  - prd
+aliases:
+  - LLC PRD
+  - AutoBot LLC Module PRD
+  - Autonomous Agent-Company Module
+status: current
+---
+
 # Product Requirements Document
 # AutoBot LLC — Autonomous Agent-Company Module
 
