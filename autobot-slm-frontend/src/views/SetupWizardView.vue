@@ -632,8 +632,8 @@ interface DeploymentGroup {
 const DEPLOYMENT_GROUPS: DeploymentGroup[] = [
   {
     label: 'Backend Stack',
-    description: 'API server and task queue',
-    roles: ['backend', 'celery'],
+    description: 'API server, task queue, and beat scheduler',
+    roles: ['backend', 'celery', 'scheduler'],
   },
   {
     label: 'Frontend',
@@ -642,8 +642,8 @@ const DEPLOYMENT_GROUPS: DeploymentGroup[] = [
   },
   {
     label: 'Database',
-    description: 'Redis Stack persistence layer',
-    roles: ['redis'],
+    description: 'Redis Stack and PostgreSQL persistence layers',
+    roles: ['redis', 'postgres'],
   },
   {
     label: 'AI Stack',

@@ -120,6 +120,18 @@ _BACKEND_ROLES = [
         "degraded_without": [],
         "ansible_playbook": "deploy-backend.yml",
     },
+    {
+        "name": "scheduler",
+        "display_name": "Celery Beat Scheduler",
+        "sync_type": SyncType.COMPONENT.value,
+        "source_paths": ["autobot-backend/"],
+        "target_path": _BASE_DIR,
+        "systemd_service": "autobot-celery-beat",
+        "auto_restart": True,
+        "required": True,
+        "degraded_without": [],
+        "ansible_playbook": "deploy-backend.yml",
+    },
 ]
 
 # ---------------------------------------------------------------------------
@@ -157,6 +169,18 @@ _DATABASE_ROLES = [
         "required": True,
         "degraded_without": [],
         "ansible_playbook": "setup-redis-stack.yml",
+    },
+    {
+        "name": "postgres",
+        "display_name": "PostgreSQL",
+        "sync_type": None,
+        "source_paths": [],
+        "target_path": "",
+        "systemd_service": "postgresql",
+        "auto_restart": True,
+        "required": True,
+        "degraded_without": [],
+        "ansible_playbook": "deploy-backend.yml",
     },
 ]
 
@@ -342,11 +366,13 @@ DEFAULT_ROLES = (
 ROLE_ANSIBLE_GROUPS: Dict[str, str] = {
     "backend": "backend",
     "celery": "backend",
+    "scheduler": "backend",
     "vnc": "backend",
     "frontend": "frontend",
     "ai-stack": "ai_stack",
     "chromadb": "ai_stack",
     "redis": "databases",
+    "postgres": "databases",
     "npu-worker": "npu_worker",
     "browser-service": "browser_automation",
     "autobot-llm-cpu": "llm_nodes",
@@ -374,13 +400,17 @@ ROLE_DEPENDENCIES: Dict[str, List[str]] = {
     # Service roles
     "backend": ["python312", "nginx"],
     "celery": ["python312"],
+    "scheduler": ["python312"],
     "frontend": ["nodejs", "nginx"],
     "redis": [],
+    "postgres": ["postgresql"],
     "ai-stack": ["python312"],
     "chromadb": ["python312"],
     "browser-service": ["nodejs"],
     "npu-worker": ["python312"],
     "tts-worker": ["python312"],
+    "autobot-llm-cpu": [],
+    "autobot-llm-gpu": [],
     "vnc": [],
     "slm-agent": [],
 }
