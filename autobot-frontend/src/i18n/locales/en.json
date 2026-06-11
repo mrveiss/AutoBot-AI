@@ -6653,6 +6653,64 @@
       "toastSavedToGallery": "Saved to gallery",
       "errorNoFrames": "No frames could be processed",
       "errorInvalidFile": "Please drop a valid video file"
+    },
+    "visionAutomation": {
+      "title": "Vision Automation",
+      "subtitle": "Screen analysis, UI element detection, OCR, and automation opportunity discovery",
+      "serviceStatus": "Service",
+      "sessionContext": "Session Context (optional)",
+      "sessionIdPlaceholder": "Session ID for context",
+      "tabsAriaLabel": "Vision automation tabs",
+      "analyzing": "Analyzing...",
+      "detecting": "Detecting...",
+      "extracting": "Extracting...",
+      "errorLabel": "Error",
+      "tabs": {
+        "analysis": "Screen Analysis",
+        "elements": "Element Detection",
+        "ocr": "OCR",
+        "opportunities": "Automation Opportunities"
+      },
+      "columns": {
+        "id": "ID",
+        "type": "Type",
+        "confidence": "Confidence",
+        "text": "Text",
+        "interactions": "Interactions",
+        "position": "Center"
+      },
+      "analysis": {
+        "cardTitle": "Capture & Analyze Screen",
+        "trigger": "Capture & Analyze",
+        "elementsFound": "Elements",
+        "textRegions": "Text Regions",
+        "confidence": "Confidence",
+        "automationOpps": "Opportunities",
+        "detectedElements": "Detected UI Elements",
+        "empty": "Press Capture and Analyze to analyze the current screen"
+      },
+      "elements": {
+        "cardTitle": "Detect UI Elements",
+        "trigger": "Detect Elements",
+        "typePlaceholder": "Filter by element type (e.g. button)",
+        "minConfidence": "Min Confidence",
+        "results": "{filtered} of {total} elements",
+        "empty": "No elements match the current filter"
+      },
+      "ocr": {
+        "cardTitle": "OCR Text Extraction",
+        "trigger": "Extract Text",
+        "regionsFound": "{count} text region(s) found",
+        "noRegions": "No text regions detected",
+        "empty": "Press Extract Text to run OCR on the current screen"
+      },
+      "opportunities": {
+        "cardTitle": "Automation Opportunities",
+        "trigger": "Scan for Opportunities",
+        "total": "Total Opportunities",
+        "empty": "No automation opportunities found",
+        "emptyHint": "Press Scan for Opportunities to discover interactive elements"
+      }
     }
   },
   "visualizations": {
@@ -7414,6 +7472,7 @@
     "preferences": "Preferences",
     "llmConfig": "LLM Config",
     "browserAutomation": "Browser",
+    "visionAutomation": "Vision",
     "devSpeedup": "Dev Tools",
     "desktop": "Desktop",
     "customDashboard": "Custom Dashboard",
