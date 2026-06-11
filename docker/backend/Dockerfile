@@ -86,6 +86,9 @@ COPY autobot-backend/ /app/autobot-backend/
 COPY autobot-infrastructure/shared/config/llm_models.yaml /app/autobot-backend/config/llm_models.yaml
 COPY autobot-infrastructure/shared/config/permission_rules.yaml /app/autobot-backend/config/permission_rules.yaml
 
+# Copy entrypoint script (runs migrations before app start, #9759)
+COPY docker/backend/entrypoint.sh /app/entrypoint.sh
+
 # Create required directories (including /opt/autobot for model storage)
 RUN mkdir -p /app/data /app/logs /app/autobot-backend/data /opt/autobot/data \
     && chown -R autobot:autobot /app /opt/autobot
@@ -106,6 +109,9 @@ EXPOSE 8001
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=3 \
     CMD curl -f http://localhost:8001/api/system/health || exit 1
+
+# Runs Alembic migrations for Postgres-backed user modes, then exec's CMD (#9759)
+ENTRYPOINT ["/app/entrypoint.sh"]
 
 CMD ["python3", "-m", "uvicorn", "main:app", \
      "--host", "0.0.0.0", "--port", "8001", \

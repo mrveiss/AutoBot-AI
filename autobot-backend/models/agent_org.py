@@ -12,8 +12,8 @@ Table: agent_org_nodes
 import uuid
 from enum import Enum
 
-from sqlalchemy import Column, String, Text
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import Boolean, Column, DateTime, String, Text, text
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.types import Uuid
 
 from user_management.models.base import Base
@@ -46,6 +46,21 @@ class AgentOrgNode(Base):
     title = Column(String(255), nullable=True)
     capabilities = Column(Text, nullable=True)
     company_id = Column(UUID(as_uuid=True), nullable=True, index=True)
+
+    # Heartbeat scheduler fields — migration 20260523_036 (GH#8225, #9899)
+    heartbeat_cron = Column(Text, nullable=True)
+    heartbeat_enabled = Column(Boolean, nullable=False, default=False, server_default=text("false"))
+    last_heartbeat_at = Column(DateTime(timezone=True), nullable=True)
+    adapter_type = Column(Text, nullable=True)
+    adapter_config = Column(JSONB, nullable=True)
+    context_mode = Column(String(16), nullable=False, default="thin", server_default=text("'thin'"))
+
+    # Pause/resume state — migration 20260525_039 (GH#8256, #9899)
+    pre_pause_status = Column(String(32), nullable=True)
+
+    # Model tier + instructions — migration 20260525_042 (GH#8486, #9899)
+    model = Column(String(255), nullable=True)
+    instructions_file_path = Column(Text, nullable=True)
 
     def __repr__(self) -> str:
         return f"<AgentOrgNode agent={self.agent_id!r} role={self.org_role!r} " f"reports_to={self.reports_to!r}>"

@@ -187,10 +187,12 @@ services:
     image: autobot/backend:latest
     container_name: autobot-backend
     restart: unless-stopped
-    # GH#9905: load the shared auto-generated signing secret, then run the app.
-    # NB: overriding entrypoint clears the image CMD, so the command is
-    # re-declared here (kept in sync with docker/backend/Dockerfile).
-    entrypoint: ["/bin/sh", "/usr/local/bin/with-secrets.sh"]
+    # GH#9905: load the shared auto-generated signing secret, then chain the
+    # image's own entrypoint (/app/entrypoint.sh), which runs Alembic
+    # migrations for Postgres-backed user modes before exec'ing the app
+    # (#9759). NB: overriding entrypoint clears the image CMD, so the command
+    # is re-declared here (kept in sync with docker/backend/Dockerfile).
+    entrypoint: ["/bin/sh", "/usr/local/bin/with-secrets.sh", "/app/entrypoint.sh"]
     command: ["python3", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8001", "--workers", "1", "--app-dir", "/app/autobot-backend"]
     env_file:
       - docker/.env.docker
@@ -224,9 +226,9 @@ services:
       - AUTOBOT_LLAMAINDEX_EMBEDDING_ENDPOINT=http://${AUTOBOT_OLLAMA_HOST:-autobot-ollama}:11434
       - AUTOBOT_AUDIT_LOG_FILE=/app/logs/audit.log
       # User mode defaults to single_user (no Postgres schema bootstrap needed).
-      # RBAC (single_company → first user becomes admin) is wired and ready — set
-      # AUTOBOT_USER_MODE=single_company once the fresh-DB schema bootstrap lands
-      # (#9759). The Postgres env below is kept so that flip is a single var.
+      # RBAC (single_company → first user becomes admin) is wired and ready —
+      # setting AUTOBOT_USER_MODE=single_company is now a single-var flip: the
+      # entrypoint bootstraps the schema via `alembic upgrade head` (#9759).
       - AUTOBOT_USER_MODE=${AUTOBOT_USER_MODE:-single_user}
       - AUTOBOT_POSTGRES_HOST=autobot-postgres
       - AUTOBOT_POSTGRES_PORT=5432
@@ -261,6 +263,10 @@ services:
       autobot-redis:
         condition: service_healthy
       autobot-chromadb:
+        condition: service_healthy
+      # Startup migrations (#9759) need Postgres reachable before the
+      # entrypoint runs `alembic upgrade head`.
+      autobot-postgres:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8001/api/system/health"]
@@ -334,7 +340,8 @@ services:
       - AUTOBOT_CHROMADB_PORT=8000
       - AUTOBOT_AUDIT_LOG_FILE=/app/logs/audit.log
       # User-mgmt/RBAC tasks need the same Postgres + mode wiring as the backend.
-      # Defaults to single_user; flip AUTOBOT_USER_MODE once #9759 lands.
+      # Defaults to single_user; the backend entrypoint bootstraps the schema
+      # on flip (#9759), so no manual migration step is needed here.
       - AUTOBOT_USER_MODE=${AUTOBOT_USER_MODE:-single_user}
       - AUTOBOT_POSTGRES_HOST=autobot-postgres
       - AUTOBOT_POSTGRES_PORT=5432
@@ -369,6 +376,11 @@ services:
         condition: service_healthy
       autobot-chromadb:
         condition: service_healthy
+      # The backend entrypoint runs the schema migrations (#9759); waiting for
+      # it to be healthy stops worker tasks hitting a not-yet-migrated DB on
+      # first boot in Postgres-backed user modes.
+      autobot-backend:
+        condition: service_healthy
     deploy:
       resources:
         limits:
@@ -396,6 +408,10 @@ services:
     image: autobot/backend:latest
     container_name: autobot-celery-beat
     restart: unless-stopped
+    # NB: inherits the image ENTRYPOINT (/app/entrypoint.sh, #9759). Migrations
+    # stay skipped here because AUTOBOT_USER_MODE is deliberately NOT set for
+    # beat — do not add it, or beat and the backend would run
+    # `alembic upgrade head` concurrently (alembic takes no advisory lock).
     command: >
       python3.12 -m celery -A celery_app beat
       --loglevel=info

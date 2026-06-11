@@ -16,17 +16,7 @@ from llc.adapters.codex_subscription_adapter import CodexSubscriptionAdapter
 from llc.adapters.copilot_subscription_adapter import CopilotSubscriptionAdapter
 from llc.models.enums import LLCRunStatus
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
-def _agent_cfg(agent_id: str = "agent-1", output_dir: str | None = None, **kwargs) -> dict:
-    cfg: dict = {"agent_id": agent_id, "adapter_config": {**kwargs}}
-    if output_dir:
-        cfg["adapter_config"]["output_dir"] = output_dir
-    return cfg
-
+from .conftest import agent_cfg as _agent_cfg
 
 # ---------------------------------------------------------------------------
 # ClaudeCodeSubscriptionAdapter
