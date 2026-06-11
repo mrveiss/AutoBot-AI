@@ -18,8 +18,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.singleton_factory import lazy_singleton
-from user_management.database import get_async_session_factory
+from llc.deps import get_session, service_dep
 
 from ..models.enums import ApprovalStatus, ApprovalType
 from ..services.approval import (
@@ -31,17 +30,7 @@ from ..services.approval import (
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/approvals", tags=["llc-approvals"])
-_get_service = lazy_singleton(ApprovalService)
-
-
-def _service() -> ApprovalService:
-    return _get_service()
-
-
-async def get_session() -> AsyncSession:
-    factory = get_async_session_factory()
-    async with factory() as session:
-        yield session
+_service = service_dep(ApprovalService)
 
 
 # ------------------------------------------------------------------
