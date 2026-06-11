@@ -3,14 +3,23 @@
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
 """
-Transcript Analysis and KB Integration API (MVA-2176).
+Transcript Analysis and KB Integration API (MVA-2176, #9863).
 
-Provides WebSocket streaming for AI analysis and manual KB push endpoints.
+Provides WebSocket streaming for AI analysis and per-segment KB push
+endpoints on top of the transcriber recording storage (GH#9044).
 """
 
 from typing import AsyncIterator
 
-from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    Request,
+    WebSocket,
+    WebSocketDisconnect,
+)
+from starlette.datastructures import State
 from starlette.websockets import WebSocketState
 
 from api.schemas_transcripts import (
@@ -19,45 +28,73 @@ from api.schemas_transcripts import (
     TranscriptKBPushRequest,
     TranscriptKBPushResponse,
 )
-from auth_middleware import get_current_user
+from auth_middleware import authenticate_websocket, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from knowledge import get_knowledge_base
 from llm_shared import LLMRequest, get_provider_registry
+from transcriber.ai.context import build_context
+from transcriber.ai.prompts import get_system_prompt
+from transcriber.deps import DEFAULT_USER, can_access
+from transcriber.export.segments import build_segment_list
 
 logger = get_logger(__name__)
 router = APIRouter()
 
+# HTTPException status → WebSocket close code (RFC 6455 + app-specific 4xxx)
+_WS_CLOSE_CODES = {404: 4004, 400: 1008}
 
-def _get_analysis_prompt(analysis_type: AnalysisType, content: str, custom_prompt: str | None = None) -> str:
-    """Generate analysis prompt based on type."""
-    prompts = {
-        AnalysisType.SUMMARIZE: f"Summarize the following transcript in a clear and concise manner:\n\n{content}",
-        AnalysisType.KEY_FACTS: (f"Extract the key facts and important information from this transcript:\n\n{content}"),
-        AnalysisType.PROTOCOL: (
-            f"Identify any protocols, procedures, or standard processes " f"mentioned in this transcript:\n\n{content}"
-        ),
-    }
 
-    if analysis_type == AnalysisType.CUSTOM:
-        if not custom_prompt:
-            raise ValueError("Custom analysis requires a custom_prompt")
-        return f"{custom_prompt}\n\nTranscript:\n{content}"
+def _resolve_user_id(user: dict) -> str:
+    """Map an auth payload to the transcriber user-id convention."""
+    return str(user.get("user_id") or user.get("username") or DEFAULT_USER)
 
-    return prompts[analysis_type]
+
+async def _load_recording(state: State, transcript_id: str, caller_id: str) -> dict:
+    """Fetch the transcriber recording backing a transcript id."""
+    db = getattr(state, "transcriber_db", None)
+    if db is None:
+        raise HTTPException(status_code=503, detail="Transcriber storage unavailable")
+    try:
+        recording_id = int(transcript_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Transcript not found") from None
+    rec = await db.get_recording(recording_id)
+    if not rec or not can_access(rec, caller_id):
+        raise HTTPException(status_code=404, detail="Transcript not found")
+    return rec
+
+
+async def _load_transcript_content(state: State, transcript_id: str, caller_id: str) -> str:
+    """Build the full transcript text for a recording (segments + speakers)."""
+    rec = await _load_recording(state, transcript_id, caller_id)
+    if rec["status"] != "complete":
+        raise HTTPException(status_code=400, detail="Recording not yet transcribed")
+    segments = await build_segment_list(rec["id"], state.transcriber_db)
+    return build_context(segments)
+
+
+def _validate_analysis_request(request: TranscriptAnalyzeRequest) -> None:
+    """Reject CUSTOM analysis requests without a custom prompt."""
+    if request.analysis_type == AnalysisType.CUSTOM and not request.custom_prompt:
+        raise ValueError("Custom analysis requires a custom_prompt")
 
 
 async def _stream_analysis(transcript_content: str, request: TranscriptAnalyzeRequest) -> AsyncIterator[str]:
-    """Stream AI analysis of transcript content using llm_shared."""
+    """Stream AI analysis of transcript content using llm_shared.
+
+    Prompts are shared with the transcriber SSE endpoint
+    (transcriber/routes/ai.py) via transcriber.ai.prompts so the two
+    analysis surfaces cannot drift.
+    """
     try:
-        # Build LLM prompt
-        prompt = _get_analysis_prompt(request.analysis_type, transcript_content, request.custom_prompt)
+        system_prompt = get_system_prompt(request.analysis_type.value, custom_question=request.custom_prompt)
 
         # Security: Pass context as separate system message boundary instead of concatenating
-        messages = []
+        messages = [{"role": "system", "content": system_prompt}]
         if request.context:
             messages.append({"role": "system", "content": f"Context: {request.context}"})
-        messages.append({"role": "user", "content": prompt})
+        messages.append({"role": "user", "content": f"Transcript:\n\n{transcript_content}"})
 
         # Create LLM request
         llm_request = LLMRequest(
@@ -83,17 +120,26 @@ async def _stream_analysis(transcript_content: str, request: TranscriptAnalyzeRe
         yield "\n\n[ERROR: Analysis failed. Please try again later.]"
 
 
-def _verify_ws_token(token: str) -> dict | None:
-    """Verify JWT token for WebSocket; returns payload dict or None if invalid."""
-    if not token:
-        return None
-    try:
-        from auth_middleware import get_auth_middleware
+async def _run_analysis_session(websocket: WebSocket, transcript_id: str, user: dict) -> None:
+    """Receive one analysis request, stream the result, close the socket."""
+    data = await websocket.receive_json()
+    request = TranscriptAnalyzeRequest(**data)
+    _validate_analysis_request(request)
 
-        return get_auth_middleware().verify_jwt_token(token)
-    except Exception as exc:
-        logger.warning("WebSocket token verification failed: %s", exc)
-        return None
+    try:
+        content = await _load_transcript_content(websocket.app.state, transcript_id, _resolve_user_id(user))
+    except HTTPException as exc:
+        await websocket.send_json({"error": exc.detail})
+        await websocket.close(code=_WS_CLOSE_CODES.get(exc.status_code, 1011))
+        return
+
+    async for chunk in _stream_analysis(content, request):
+        if websocket.client_state == WebSocketState.DISCONNECTED:
+            break
+        await websocket.send_text(chunk)
+
+    if websocket.client_state == WebSocketState.CONNECTED:
+        await websocket.close()
 
 
 @router.websocket("/transcripts/{transcript_id}/analyze")
@@ -107,44 +153,17 @@ async def analyze_transcript_ws(websocket: WebSocket, transcript_id: str):
       Server streams: Analysis chunks as text
       On completion: Server closes connection
 
-    Security: Requires JWT authentication via query parameter.
+    Security: Requires JWT authentication (Issue #2818 handshake-level rejection).
     """
-    # Security: Authenticate before accepting connection
-    token = websocket.query_params.get("token")
-    user_payload = _verify_ws_token(token)
-
-    if not user_payload:
+    user = await authenticate_websocket(websocket)
+    if user is None:
         await websocket.close(code=4001, reason="Unauthorized")
         return
 
     await websocket.accept()
 
     try:
-        # Receive analysis request
-        data = await websocket.receive_json()
-        request = TranscriptAnalyzeRequest(**data)
-
-        # TODO(MVA-2155): Verify transcript ownership when storage is implemented
-        # transcript = await get_transcript(transcript_id)
-        # if transcript.user_id != user_payload.get("user_id"):
-        #     await websocket.send_json({"error": "Forbidden"})
-        #     await websocket.close(code=4003)
-        #     return
-
-        # TODO: Fetch actual transcript content from storage
-        # For now, using placeholder. Parent issue MVA-2155 should define storage.
-        transcript_content = f"[Transcript {transcript_id} content placeholder]"
-
-        # Stream analysis
-        async for chunk in _stream_analysis(transcript_content, request):
-            if websocket.client_state == WebSocketState.DISCONNECTED:
-                break
-            await websocket.send_text(chunk)
-
-        # Close connection after streaming completes
-        if websocket.client_state == WebSocketState.CONNECTED:
-            await websocket.close()
-
+        await _run_analysis_session(websocket, transcript_id, user)
     except WebSocketDisconnect:
         logger.info("Client disconnected from transcript analysis WebSocket: %s", transcript_id)
     except ValueError as e:
@@ -159,11 +178,36 @@ async def analyze_transcript_ws(websocket: WebSocket, transcript_id: str):
             await websocket.close(code=1011)
 
 
+def _build_kb_metadata(request: TranscriptKBPushRequest, transcript_id: str, caller_id: str) -> dict:
+    """Build KB metadata; system fields last so clients cannot override them."""
+    user_metadata = {}
+    if request.speaker:
+        user_metadata["speaker"] = request.speaker
+    if request.confidence is not None:
+        user_metadata["confidence"] = request.confidence
+    if request.language:
+        user_metadata["language"] = request.language
+    if request.segment_start is not None:
+        user_metadata["segment_start"] = request.segment_start
+    if request.segment_end is not None:
+        user_metadata["segment_end"] = request.segment_end
+
+    return {
+        **user_metadata,
+        "source_type": "transcript",
+        "transcript_id": transcript_id,
+        "source": f"transcript:{transcript_id}",
+        "verification_status": "unverified",
+        "user_id": caller_id,
+    }
+
+
 @router.post("/transcripts/{transcript_id}/kb-push", response_model=TranscriptKBPushResponse)
 @with_error_handling(category=ErrorCategory.DATABASE)
 async def push_transcript_to_kb(
     transcript_id: str,
     request: TranscriptKBPushRequest,
+    raw_request: Request,
     user: dict = Depends(get_current_user),
 ):
     """
@@ -171,45 +215,17 @@ async def push_transcript_to_kb(
 
     Creates a KB entry from the provided transcript segment with metadata.
 
-    Security: Requires authentication. Verifies transcript ownership.
+    Security: Requires authentication. Verifies the backing recording
+    exists and is accessible to the caller before indexing.
     """
+    caller_id = _resolve_user_id(user)
+    await _load_recording(raw_request.app.state, transcript_id, caller_id)
+
     try:
-        # TODO(MVA-2155): Verify transcript ownership when storage is implemented
-        # transcript = await get_transcript(transcript_id)
-        # if transcript.user_id != user.get("user_id"):
-        #     raise HTTPException(status_code=403, detail="Forbidden")
-
         kb = await get_knowledge_base()
-
-        # Security: Build metadata with system fields AFTER user fields to prevent override
-        user_metadata = {}
-        if request.speaker:
-            user_metadata["speaker"] = request.speaker
-        if request.confidence is not None:
-            user_metadata["confidence"] = request.confidence
-        if request.language:
-            user_metadata["language"] = request.language
-
-        # Add segment timing if provided
-        if request.segment_start is not None:
-            user_metadata["segment_start"] = request.segment_start
-        if request.segment_end is not None:
-            user_metadata["segment_end"] = request.segment_end
-
-        # System-controlled metadata (cannot be overridden by client)
-        metadata = {
-            **user_metadata,
-            "source_type": "transcript",
-            "transcript_id": transcript_id,
-            "source": f"transcript:{transcript_id}",
-            "verification_status": "unverified",
-            "user_id": user.get("user_id"),
-        }
-
-        # Add to knowledge base
         result = await kb.add_document(
             content=request.segment_text,
-            metadata=metadata,
+            metadata=_build_kb_metadata(request, transcript_id, caller_id),
         )
 
         if result.get("status") == "success":
@@ -218,11 +234,16 @@ async def push_transcript_to_kb(
                 doc_id=result.get("doc_id"),
                 message="Transcript segment added to Knowledge Base",
             )
-        else:
-            return TranscriptKBPushResponse(
-                success=False,
-                message=result.get("message", "Failed to add to Knowledge Base"),
-            )
+        # Security: log the KB-internal reason; return only a generic message
+        logger.warning(
+            "KB push rejected for transcript %s: %s",
+            transcript_id,
+            result.get("message"),
+        )
+        return TranscriptKBPushResponse(
+            success=False,
+            message="Failed to add to Knowledge Base",
+        )
 
     except Exception as e:
         # Security: Log full error but only send generic message to client

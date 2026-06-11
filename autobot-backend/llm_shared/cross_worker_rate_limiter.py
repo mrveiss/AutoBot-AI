@@ -53,10 +53,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 import time
 from contextlib import asynccontextmanager
 from typing import AsyncIterator, Dict, Optional, Tuple
+
+from autobot_shared.env_utils import env_int
 
 logger = logging.getLogger(__name__)
 
@@ -112,21 +113,14 @@ end
 _KEY_PREFIX = "autobot:llm:rl"
 
 
-def _env_int(key: str, default: int) -> int:
-    try:
-        return int(os.environ[key])
-    except (KeyError, ValueError):
-        return default
-
-
 def _provider_limits(provider: str) -> Tuple[float, float]:
     """Return (capacity, refill_rate_tokens_per_second) for a provider."""
     pname = provider.upper()
     rpm_key = f"AUTOBOT_LLM_RL_{pname}_RPM"
     burst_key = f"AUTOBOT_LLM_RL_{pname}_BURST"
     defaults = _PROVIDER_DEFAULTS.get(provider.lower(), _PROVIDER_DEFAULTS["default"])
-    rpm = _env_int(rpm_key, defaults[0])
-    burst = _env_int(burst_key, defaults[1])
+    rpm = env_int(rpm_key, defaults[0])
+    burst = env_int(burst_key, defaults[1])
     return float(burst), float(rpm) / 60.0  # capacity, tokens/sec
 
 

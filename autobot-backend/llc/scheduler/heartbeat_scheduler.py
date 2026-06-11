@@ -29,7 +29,6 @@ Rate-limit recovery (GH#8204):
 
 import asyncio
 import logging
-import os
 import time
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -42,6 +41,7 @@ except ImportError:
 from sqlalchemy import select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.env_utils import env_float
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
 from user_management.database import get_async_session_factory
@@ -65,24 +65,12 @@ _RL_MAX_SECONDS = 14400  # cap at 4 hours
 _MAX_RATE_LIMIT_RETRIES = 10  # demote to failed after this many consecutive retries
 
 
-def _env_float(name: str, default: float) -> float:
-    """Parse a float env var, falling back to *default* on absence or bad value."""
-    raw = os.environ.get(name)
-    if not raw:
-        return default
-    try:
-        return float(raw)
-    except ValueError:
-        logger.warning("Invalid %s=%r — using default %s", name, raw, default)
-        return default
-
-
 # Registry-adapter (e.g. claude_code) completion polling (GH#9622, GH#9623).
-_ADAPTER_POLL_INTERVAL = _env_float("LLC_ADAPTER_POLL_INTERVAL_SECONDS", 5.0)
-_ADAPTER_MAX_WAIT_SECONDS = _env_float("LLC_ADAPTER_MAX_WAIT_SECONDS", 7200.0)
+_ADAPTER_POLL_INTERVAL = env_float("LLC_ADAPTER_POLL_INTERVAL_SECONDS", 5.0)
+_ADAPTER_MAX_WAIT_SECONDS = env_float("LLC_ADAPTER_MAX_WAIT_SECONDS", 7200.0)
 # Ephemeral run-key TTL backstop — must exceed the max wait so a key never
 # expires mid-run; revocation still happens promptly when the run finishes.
-_RUN_KEY_TTL_SECONDS = _env_float("LLC_RUN_KEY_TTL_SECONDS", _ADAPTER_MAX_WAIT_SECONDS + 600.0)
+_RUN_KEY_TTL_SECONDS = env_float("LLC_RUN_KEY_TTL_SECONDS", _ADAPTER_MAX_WAIT_SECONDS + 600.0)
 
 
 class HeartbeatScheduler:
