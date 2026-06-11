@@ -482,9 +482,7 @@ class TestWsAuthFailureGuard:
         assert client._ws_auth_fail_count == 0
 
         close_frame = websockets.frames.Close(4001, "Invalid or expired token")
-        exc = websockets.exceptions.ConnectionClosedError(
-            rcvd=close_frame, sent=None
-        )
+        exc = websockets.exceptions.ConnectionClosedError(rcvd=close_frame, sent=None)
 
         mock_ws_ctx = MagicMock()
         mock_ws_ctx.__aenter__ = AsyncMock(side_effect=exc)
@@ -503,14 +501,13 @@ class TestWsAuthFailureGuard:
         """After _WS_AUTH_FAIL_THRESHOLD consecutive 4001s, a warning is logged
         and reconnect delay is pinned to _max_reconnect_delay."""
         import websockets.frames
+
         from services.slm_client import _WS_AUTH_FAIL_THRESHOLD
 
         client = self._make_client()
 
         close_frame = websockets.frames.Close(4001, "Invalid or expired token")
-        exc = websockets.exceptions.ConnectionClosedError(
-            rcvd=close_frame, sent=None
-        )
+        exc = websockets.exceptions.ConnectionClosedError(rcvd=close_frame, sent=None)
 
         mock_ws_ctx = MagicMock()
         mock_ws_ctx.__aenter__ = AsyncMock(side_effect=exc)
@@ -527,9 +524,9 @@ class TestWsAuthFailureGuard:
         assert client._reconnect_delay == client._max_reconnect_delay
         # One warning naming the secret-pair requirement must have been logged
         warning_calls = [str(c) for c in mock_logger.warning.call_args_list]
-        assert any("SLM_SECRET_KEY" in msg for msg in warning_calls), (
-            "Warning must name SLM_SECRET_KEY to guide operator"
-        )
+        assert any(
+            "SLM_SECRET_KEY" in msg for msg in warning_calls
+        ), "Warning must name SLM_SECRET_KEY to guide operator"
 
     @pytest.mark.asyncio
     async def test_auth_fail_count_resets_on_successful_connect(self) -> None:
