@@ -160,7 +160,7 @@ def _build_available_roles() -> List[RoleInfo]:
                     reg.get("display_name", name),
                 ),
                 category=meta.get("category", "core"),
-                ansible_role=reg.get("ansible_playbook", ""),
+                ansible_role=reg.get("ansible_playbook") or "",
                 required=reg.get("required", False),
                 degraded_without=reg.get("degraded_without", []),
                 dependencies=[],

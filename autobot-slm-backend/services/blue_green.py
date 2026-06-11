@@ -45,13 +45,21 @@ VALID_ROLES = frozenset(
     {
         "slm-agent",
         "redis",
+        "postgres",
         "backend",
+        "celery",
+        "scheduler",
         "frontend",
         "npu-worker",
         "browser-automation",
+        "browser-service",
         "monitoring",
         "ai-stack",
+        "chromadb",
         "llm",
+        "autobot-llm-cpu",
+        "autobot-llm-gpu",
+        "tts-worker",
         "vnc",
     }
 )
