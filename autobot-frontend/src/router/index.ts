@@ -375,6 +375,17 @@ export const routes: RouteRecordRaw[] = [
           requiresAuth: true
         }
       },
+      // Issue #9890: Vision Automation panel — dedicated component route
+      {
+        path: 'vision-automation',
+        name: 'vision-automation',
+        component: () => import('@/views/VisionAutomationView.vue'),
+        meta: {
+          title: 'Vision Automation',
+          description: 'Screen analysis, element detection, OCR, and automation opportunities',
+          requiresAuth: true
+        }
+      },
       // GH#8750: URL-routed sections — rendered inline in WorkflowBuilderView via route.params.section
       {
         path: ':section',
