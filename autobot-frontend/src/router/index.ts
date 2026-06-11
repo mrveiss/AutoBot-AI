@@ -611,6 +611,16 @@ export const routes: RouteRecordRaw[] = [
           parent: 'analytics'
         }
       },
+      // Issue #9892: Failure Analysis — causal inference engine diagnostics UI
+      {
+        path: 'diagnostics',
+        name: 'analytics-diagnostics',
+        component: () => import('@/views/FailureAnalysisDashboard.vue'),
+        meta: {
+          title: 'Failure Analysis',
+          parent: 'analytics'
+        }
+      },
     ]
   },
   // Issue #753: User preferences (appearance, font size, colors, etc.)
