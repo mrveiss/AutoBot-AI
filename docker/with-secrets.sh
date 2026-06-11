@@ -26,8 +26,10 @@ if [ -r "$SECRETS_FILE" ]; then
     # `:=` assigns only when the variable is unset OR empty.
     : "${AUTOBOT_JWT_SECRET:=${_GEN_JWT:-}}"
     : "${SECRET_KEY:=${_GEN_SECRET_KEY:-}}"
-    # SLM reads SLM_SECRET_KEY; share the same value so service JWTs verify.
-    : "${SLM_SECRET_KEY:=${_GEN_SECRET_KEY:-}}"
+    # SLM reads SLM_SECRET_KEY for decode_token.  The backend signs service
+    # JWTs with AUTOBOT_JWT_SECRET (_GEN_JWT), so SLM_SECRET_KEY MUST be the
+    # same value — NOT _GEN_SECRET_KEY (GH#9852: signing-secret alignment).
+    : "${SLM_SECRET_KEY:=${_GEN_JWT:-}}"
     export AUTOBOT_JWT_SECRET SECRET_KEY SLM_SECRET_KEY
 fi
 

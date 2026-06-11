@@ -275,12 +275,12 @@ class TestMintServiceJwt:
         payload = decode_jwt(token, secret=_TEST_SECRET)
         assert payload["sub"] == "service:backend"
 
-    def test_admin_and_role_claims_present(self) -> None:
-        """Token carries admin=True and role='admin' for SLM permission checks."""
+    def test_admin_and_role_claims_absent(self) -> None:
+        """Token must NOT carry admin or role claims (least-privilege, GH#9852)."""
         token = _mint_service_jwt(_TEST_SECRET)
         payload = decode_jwt(token, secret=_TEST_SECRET)
-        assert payload.get("admin") is True
-        assert payload.get("role") == "admin"
+        assert "admin" not in payload, "admin claim must be absent from service JWT"
+        assert "role" not in payload, "role claim must be absent from service JWT"
 
     def test_service_claim_present(self) -> None:
         """Token carries service=True to distinguish machine from user tokens."""
@@ -349,11 +349,10 @@ class TestWsConnectAndListenJwtMinting:
 
     @pytest.mark.asyncio
     async def test_mints_token_when_auth_token_unset(self) -> None:
-        """When auth_token is empty and a signing secret exists, a JWT is minted."""
+        """When auth_token is empty and a signing secret exists, a JWT is minted
+        and passed via Sec-WebSocket-Protocol subprotocols (GH#9852 transport)."""
         client = self._make_client()
         assert not client.auth_token  # no static token
-
-        ws_urls_seen: list[str] = []
 
         mock_ws_ctx = MagicMock()
         mock_ws_ctx.__aenter__ = AsyncMock(side_effect=Exception("stop-after-connect"))
@@ -367,9 +366,15 @@ class TestWsConnectAndListenJwtMinting:
             await client._ws_connect_and_listen()
 
         mock_mint.assert_called_once_with(_TEST_SECRET)
-        # URL should have a ?token= query param
+        # Token must NOT appear in the URL
         call_url = mock_connect.call_args[0][0]
-        assert "?token=" in call_url
+        assert "?token=" not in call_url, "JWT must not be placed in the WebSocket URL"
+        # Token must be passed as subprotocols=['bearer', <token>]
+        call_kwargs = mock_connect.call_args[1]
+        subprotocols = call_kwargs.get("subprotocols", [])
+        assert len(subprotocols) == 2
+        assert subprotocols[0] == "bearer"
+        assert subprotocols[1]  # non-empty token
 
     @pytest.mark.asyncio
     async def test_skips_connection_when_no_secret(self) -> None:
@@ -386,7 +391,7 @@ class TestWsConnectAndListenJwtMinting:
 
     @pytest.mark.asyncio
     async def test_static_auth_token_takes_precedence(self) -> None:
-        """When auth_token is set, it is used directly without minting."""
+        """When auth_token is set, it is used directly via subprotocols without minting."""
         client = self._make_client()
         client.auth_token = "static-operator-token"
 
@@ -401,5 +406,153 @@ class TestWsConnectAndListenJwtMinting:
             await client._ws_connect_and_listen()
 
         mock_mint.assert_not_called()
+        # Token must not be in the URL
         call_url = mock_connect.call_args[0][0]
-        assert "token=static-operator-token" in call_url
+        assert "token=" not in call_url, "JWT must not be placed in the WebSocket URL"
+        # Token must appear in subprotocols
+        call_kwargs = mock_connect.call_args[1]
+        subprotocols = call_kwargs.get("subprotocols", [])
+        assert subprotocols == ["bearer", "static-operator-token"]
+
+
+# ---------------------------------------------------------------------------
+# Compose wiring contract (GH#9852)
+# ---------------------------------------------------------------------------
+
+
+class TestComposeWiringContract:
+    """Static contract test: with-secrets.sh must wire SLM_SECRET_KEY from
+    the same generated value that _get_slm_signing_secret prefers
+    (AUTOBOT_JWT_SECRET / _GEN_JWT).
+
+    This test parses docker/with-secrets.sh and asserts the env-var pairing
+    so any future edit that breaks the alignment fails immediately.
+    """
+
+    def _read_with_secrets_sh(self) -> str:
+        import pathlib
+
+        # Navigate from autobot-backend/services/ to repo root / docker/
+        root = pathlib.Path(__file__).parents[2]
+        path = root / "docker" / "with-secrets.sh"
+        return path.read_text(encoding="utf-8")
+
+    def test_slm_secret_key_uses_gen_jwt_not_gen_secret_key(self) -> None:
+        """SLM_SECRET_KEY must be sourced from _GEN_JWT (not _GEN_SECRET_KEY).
+
+        The backend signs with AUTOBOT_JWT_SECRET = _GEN_JWT.
+        The SLM verifies with SLM_SECRET_KEY.
+        Both must come from the same generated value or tokens will never verify.
+        """
+        content = self._read_with_secrets_sh()
+        # Must contain the aligned assignment
+        assert "SLM_SECRET_KEY:=${_GEN_JWT" in content, (
+            "with-secrets.sh must set SLM_SECRET_KEY from _GEN_JWT "
+            "to align with the backend's AUTOBOT_JWT_SECRET signing key"
+        )
+        # Must NOT use the wrong key
+        assert "SLM_SECRET_KEY:=${_GEN_SECRET_KEY" not in content, (
+            "SLM_SECRET_KEY must NOT be sourced from _GEN_SECRET_KEY — "
+            "that value is independent of AUTOBOT_JWT_SECRET"
+        )
+
+    def test_autobot_jwt_secret_uses_gen_jwt(self) -> None:
+        """AUTOBOT_JWT_SECRET must be sourced from _GEN_JWT (unchanged from #9905)."""
+        content = self._read_with_secrets_sh()
+        assert "AUTOBOT_JWT_SECRET:=${_GEN_JWT" in content
+
+
+# ---------------------------------------------------------------------------
+# Auth-failure guard (GH#9852 item 6)
+# ---------------------------------------------------------------------------
+
+
+class TestWsAuthFailureGuard:
+    """Tests for the consecutive 4001 auth-failure backoff guard."""
+
+    def _make_client(self) -> SLMClient:
+        return SLMClient(slm_url="http://autobot-slm:8000")
+
+    @pytest.mark.asyncio
+    async def test_auth_fail_count_increments_on_4001(self) -> None:
+        """_ws_auth_fail_count increments when the SLM closes with code 4001."""
+        import websockets.frames
+
+        client = self._make_client()
+        assert client._ws_auth_fail_count == 0
+
+        close_frame = websockets.frames.Close(4001, "Invalid or expired token")
+        exc = websockets.exceptions.ConnectionClosedError(
+            rcvd=close_frame, sent=None
+        )
+
+        mock_ws_ctx = MagicMock()
+        mock_ws_ctx.__aenter__ = AsyncMock(side_effect=exc)
+        mock_ws_ctx.__aexit__ = AsyncMock(return_value=False)
+
+        with (
+            patch("services.slm_client._get_slm_signing_secret", return_value=_TEST_SECRET),
+            patch("websockets.connect", side_effect=lambda url, **kw: mock_ws_ctx),
+        ):
+            await client._ws_connect_and_listen()
+
+        assert client._ws_auth_fail_count == 1
+
+    @pytest.mark.asyncio
+    async def test_threshold_triggers_warning_and_max_backoff(self) -> None:
+        """After _WS_AUTH_FAIL_THRESHOLD consecutive 4001s, a warning is logged
+        and reconnect delay is pinned to _max_reconnect_delay."""
+        import websockets.frames
+        from services.slm_client import _WS_AUTH_FAIL_THRESHOLD
+
+        client = self._make_client()
+
+        close_frame = websockets.frames.Close(4001, "Invalid or expired token")
+        exc = websockets.exceptions.ConnectionClosedError(
+            rcvd=close_frame, sent=None
+        )
+
+        mock_ws_ctx = MagicMock()
+        mock_ws_ctx.__aenter__ = AsyncMock(side_effect=exc)
+        mock_ws_ctx.__aexit__ = AsyncMock(return_value=False)
+
+        with (
+            patch("services.slm_client._get_slm_signing_secret", return_value=_TEST_SECRET),
+            patch("websockets.connect", side_effect=lambda url, **kw: mock_ws_ctx),
+            patch("services.slm_client.logger") as mock_logger,
+        ):
+            for _ in range(_WS_AUTH_FAIL_THRESHOLD):
+                await client._ws_connect_and_listen()
+
+        assert client._reconnect_delay == client._max_reconnect_delay
+        # One warning naming the secret-pair requirement must have been logged
+        warning_calls = [str(c) for c in mock_logger.warning.call_args_list]
+        assert any("SLM_SECRET_KEY" in msg for msg in warning_calls), (
+            "Warning must name SLM_SECRET_KEY to guide operator"
+        )
+
+    @pytest.mark.asyncio
+    async def test_auth_fail_count_resets_on_successful_connect(self) -> None:
+        """_ws_auth_fail_count resets to 0 on a successful WebSocket handshake."""
+        client = self._make_client()
+        client._ws_auth_fail_count = 2  # simulate prior failures
+
+        mock_ws = AsyncMock()
+        mock_ws.__aiter__ = MagicMock(return_value=iter([]))  # no messages
+
+        mock_ws_ctx = MagicMock()
+
+        async def _enter(_):
+            client._shutdown = True  # stop after one iteration
+            return mock_ws
+
+        mock_ws_ctx.__aenter__ = _enter
+        mock_ws_ctx.__aexit__ = AsyncMock(return_value=False)
+
+        with (
+            patch("services.slm_client._get_slm_signing_secret", return_value=_TEST_SECRET),
+            patch("websockets.connect", side_effect=lambda url, **kw: mock_ws_ctx),
+        ):
+            await client._ws_connect_and_listen()
+
+        assert client._ws_auth_fail_count == 0
