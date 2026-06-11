@@ -16,14 +16,17 @@ from typing import Sequence, Union
 
 import sqlalchemy as sa
 from alembic import op
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.dialects.postgresql import ENUM, JSONB, UUID
 
 revision: str = "20260523_032"
 down_revision: Union[str, None] = "20260523_031"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
-_boardtype = sa.Enum("kanban", "sprint", name="boardtype")
+# postgresql.ENUM with create_type=False: created explicitly in upgrade() with
+# checkfirst=True. Generic sa.Enum silently IGNORES create_type, so
+# op.create_table re-emitted CREATE TYPE and aborted on fresh databases (#9759).
+_boardtype = ENUM("kanban", "sprint", name="boardtype", create_type=False)
 
 
 def upgrade() -> None:
@@ -41,7 +44,7 @@ def upgrade() -> None:
         sa.Column("company_id", UUID(as_uuid=True), nullable=False),
         sa.Column("project_id", UUID(as_uuid=True), nullable=True),
         sa.Column("sprint_id", UUID(as_uuid=True), nullable=True),
-        sa.Column("type", sa.Enum("kanban", "sprint", name="boardtype", create_type=False), nullable=False),
+        sa.Column("type", _boardtype, nullable=False),
         sa.Column("name", sa.Text, nullable=False),
         sa.Column(
             "created_at",

@@ -22,17 +22,29 @@ from typing import Sequence, Union
 
 import sqlalchemy as sa
 from alembic import op
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.dialects.postgresql import ENUM, JSONB, UUID
 
 revision: str = "20260523_030"
 down_revision: Union[str, None] = "20260523_029"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
-_portfolio_status = sa.Enum("active", "paused", "archived", name="portfoliostatus")
-_program_status = sa.Enum("active", "paused", "archived", name="programstatus")
-_project_status = sa.Enum("backlog", "planned", "in_progress", "completed", "cancelled", name="projectstatus")
-_sprint_status = sa.Enum(
+# postgresql.ENUM with create_type=False: the enums are created explicitly in
+# upgrade() with checkfirst=True. Generic sa.Enum silently IGNORES
+# create_type, so op.create_table re-emitted an unconditional CREATE TYPE for
+# each enum column and aborted on fresh databases (#9759).
+_portfolio_status = ENUM("active", "paused", "archived", name="portfoliostatus", create_type=False)
+_program_status = ENUM("active", "paused", "archived", name="programstatus", create_type=False)
+_project_status = ENUM(
+    "backlog",
+    "planned",
+    "in_progress",
+    "completed",
+    "cancelled",
+    name="projectstatus",
+    create_type=False,
+)
+_sprint_status = ENUM(
     "planning",
     "active",
     "review",
@@ -40,6 +52,7 @@ _sprint_status = sa.Enum(
     "closed",
     "cancelled",
     name="sprintstatus",
+    create_type=False,
 )
 
 
