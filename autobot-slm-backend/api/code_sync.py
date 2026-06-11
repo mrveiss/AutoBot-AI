@@ -15,7 +15,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -1092,6 +1092,8 @@ async def _ansible_self_update(node_id: str) -> None:
     callers must poll health rather than await a result.
 
     Issue #9224: Update node version in DB after successful sync.
+    C2-a: Clear the resume plan on playbook failure (before restart) so stale
+          plans do not auto-fire forever.
     """
     executor = get_playbook_executor()
     limit = ["localhost", node_id]
@@ -1102,12 +1104,15 @@ async def _ansible_self_update(node_id: str) -> None:
         )
         if not result["success"]:
             logger.error("Ansible full-machine update failed for %s: %s", node_id, result["output"][:500])
+            # C2-a: playbook failed before restart — clear plan so it never auto-fires
+            await _clear_resume_plan()
         else:
             logger.info("Ansible full-machine update complete for %s", node_id)
             # Update node version in DB (Issue #9224)
             await _update_fleet_node_version(node_id)
     except Exception as exc:
         logger.error("Ansible full-machine update error for %s: %s", node_id, exc)
+        await _clear_resume_plan()
 
 
 @router.post("/self-update", response_model=NodeSyncResponse)
@@ -2162,3 +2167,859 @@ async def sync_role(
         "nodes_synced": success_count,
         "results": results,
     }
+
+
+# =============================================================================
+# One-Click Full-Pipeline Update (Issue #9971)
+# =============================================================================
+
+import json as _json
+
+_UPDATE_ALL_RESUME_KEY = "slm_update_all_resume"
+_DEPS_FILES = ["requirements.txt", "package-lock.json"]
+_RESUME_PLAN_VERSION = 1
+_RESUME_PLAN_TTL_SECONDS = 7200  # 2 hours (C2-b)
+
+# Known secret extra-var key prefixes — values are redacted from log lines (Security).
+_SECRET_EXTRA_VAR_PREFIXES = (
+    "password",
+    "secret",
+    "token",
+    "key",
+    "pass",
+    "credential",
+    "cert",
+    "private",
+)
+
+# In-memory slot for the active orchestration job (at most one at a time).
+# Holds the last job even after it completes so GET /status keeps returning it (C3-a).
+_active_update_all: Dict[str, Any] = {}
+
+# Module-level references to tasks created by the update-all pipeline (M3).
+_update_all_task: Optional[asyncio.Task] = None
+_resume_task: Optional[asyncio.Task] = None
+
+
+class _StageStatus:
+    PENDING = "pending"
+    RUNNING = "running"
+    SUCCESS = "success"
+    FAILED = "failed"
+    SKIPPED = "skipped"
+    CURRENT = "current"  # C4: already at target commit
+
+
+class UpdateAllStage(BaseModel):
+    """State of one pipeline stage."""
+
+    name: str  # github_fetch | code_source_pull | slm_self_update | fleet_nodes
+    status: str = _StageStatus.PENDING
+    message: Optional[str] = None
+    sha: Optional[str] = None  # git SHA relevant to this stage
+    deps_changed: bool = False
+    log_lines: List[str] = []
+    started_at: Optional[str] = None
+    completed_at: Optional[str] = None
+
+
+class UpdateAllJob(BaseModel):
+    """Full orchestration job state for update-all."""
+
+    job_id: str
+    status: str = "pending"  # pending | running | completed | failed | already_current
+    stages: List[UpdateAllStage] = []
+    total_fleet_nodes: int = 0
+    completed_fleet_nodes: int = 0
+    failed_fleet_nodes: int = 0
+    created_at: str = ""
+    completed_at: Optional[str] = None
+    failure_reason: Optional[str] = None
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _short_sha(sha: Optional[str]) -> Optional[str]:
+    return sha[:12] if sha else None
+
+
+def _make_stage(name: str) -> UpdateAllStage:
+    return UpdateAllStage(name=name)
+
+
+def _mask_secret_extra_vars(extra_vars: Dict[str, str]) -> Dict[str, str]:
+    """Return a copy of extra_vars with secret values replaced by '***' (Security)."""
+    masked: Dict[str, str] = {}
+    for k, v in extra_vars.items():
+        lower_k = k.lower()
+        if any(lower_k.startswith(pfx) or pfx in lower_k for pfx in _SECRET_EXTRA_VAR_PREFIXES):
+            masked[k] = "***"
+        else:
+            masked[k] = v
+    return masked
+
+
+async def _check_deps_changed(code_source_dir: str, deployed_dir: str, dep_file: str) -> bool:
+    """Compare a dependency file between code_source and deployed directories.
+
+    Returns True if the file differs (by content hash) or exists only in one location.
+    """
+    import hashlib
+
+    def _hash_file(path: str) -> Optional[str]:
+        p = Path(path)
+        if not p.exists():
+            return None
+        try:
+            return hashlib.sha256(p.read_bytes()).hexdigest()
+        except OSError:
+            return None
+
+    loop = asyncio.get_running_loop()
+    src_path = f"{code_source_dir}/{dep_file}"
+    dep_path = f"{deployed_dir}/{dep_file}"
+    src_hash, dep_hash = await asyncio.gather(
+        loop.run_in_executor(None, _hash_file, src_path),
+        loop.run_in_executor(None, _hash_file, dep_path),
+    )
+    if src_hash is None and dep_hash is None:
+        return False
+    return src_hash != dep_hash
+
+
+async def _compute_deps_changed(component: str) -> bool:
+    """Return True if any watched dependency file differs for a component."""
+    try:
+        source_dir = get_default_source_dir(component)
+        deployed_dir = get_default_deployed_dir(component)
+    except ValueError:
+        return False
+    except Exception:
+        return False
+    for dep_file in _DEPS_FILES:
+        if await _check_deps_changed(source_dir, deployed_dir, dep_file):
+            return True
+    return False
+
+
+def _get_update_all_job() -> Optional[UpdateAllJob]:
+    """Return the last known orchestration job (running or terminal) or None (C3-a)."""
+    raw = _active_update_all.get("job")
+    if raw is None:
+        return None
+    if isinstance(raw, UpdateAllJob):
+        return raw
+    return None
+
+
+def _set_update_all_job(job: UpdateAllJob) -> None:
+    _active_update_all["job"] = job
+
+
+def _clear_update_all_job() -> None:
+    # Do NOT pop — keep the last job for GET /status (C3-a).
+    # Caller sets job.status to terminal before this is called.
+    pass
+
+
+def _get_stage(job: UpdateAllJob, name: str) -> UpdateAllStage:
+    for s in job.stages:
+        if s.name == name:
+            return s
+    raise KeyError(f"Stage {name} not in job")
+
+
+def _stage_log(stage: UpdateAllStage, msg: str) -> None:
+    stage.log_lines.append(msg)
+    if len(stage.log_lines) > 200:
+        stage.log_lines = stage.log_lines[-200:]
+    logger.info("[update-all:%s] %s", stage.name, msg)
+
+
+async def _persist_resume_plan(
+    job: UpdateAllJob,
+    remaining_node_ids: List[str],
+    target_commit: str,
+) -> None:
+    """Write resume plan to Settings so a fresh SLM process can continue fleet stage.
+
+    Includes target_commit (C1) and version sentinel (M2).
+    Always called even when remaining_node_ids is empty (C5).
+    """
+    from services.database import db_service
+
+    plan = {
+        "version": _RESUME_PLAN_VERSION,  # M2
+        "job_id": job.job_id,
+        "remaining_node_ids": remaining_node_ids,
+        "target_commit": target_commit,  # C1
+        "created_at": job.created_at,
+    }
+    async with db_service.session() as db:
+        result = await db.execute(select(Setting).where(Setting.key == _UPDATE_ALL_RESUME_KEY))
+        setting = result.scalar_one_or_none()
+        if setting:
+            setting.value = _json.dumps(plan)
+        else:
+            db.add(Setting(key=_UPDATE_ALL_RESUME_KEY, value=_json.dumps(plan)))
+        await db.commit()
+    logger.info(
+        "update-all: persisted resume plan for %d fleet nodes (target=%s)",
+        len(remaining_node_ids),
+        _short_sha(target_commit),
+    )
+
+
+async def _clear_resume_plan() -> None:
+    """Remove resume plan from Settings after fleet stage completes."""
+    from services.database import db_service
+
+    try:
+        async with db_service.session() as db:
+            result = await db.execute(select(Setting).where(Setting.key == _UPDATE_ALL_RESUME_KEY))
+            setting = result.scalar_one_or_none()
+            if setting:
+                await db.delete(setting)
+                await db.commit()
+    except Exception as exc:
+        logger.warning("update-all: failed to clear resume plan: %s", exc)
+
+
+async def _get_slm_deployed_commit() -> Optional[str]:
+    """Return the commit hash currently deployed on this SLM instance (C1).
+
+    Reads from git_tracker (git rev-parse HEAD) with DB fallback — the same
+    source used by the /code-sync/status endpoint's local_version field.
+    """
+    git_tracker_inst = get_git_tracker()
+    return await git_tracker_inst.get_local_commit()
+
+
+async def _run_github_stage(job: UpdateAllJob, db_service_ref) -> Optional[str]:
+    """Stage 1: git fetch + persist slm_agent_latest_commit.
+
+    Returns the remote commit SHA on success, None on failure.
+    Sets job.status='failed' and returns None on any error.
+    """
+    stage = _get_stage(job, "github_fetch")
+    stage.status = _StageStatus.RUNNING
+    stage.started_at = _now_iso()
+    _stage_log(stage, "Fetching latest commit from GitHub ...")
+    try:
+        async with db_service_ref.session() as db:
+            tracker = await _get_tracker_for_db(db)
+            result = await tracker.check_for_updates(fetch=True)
+            remote_commit = result.get("remote_commit")
+            if not remote_commit:
+                stage.status = _StageStatus.FAILED
+                stage.message = "git fetch returned no remote commit"
+                stage.completed_at = _now_iso()
+                job.status = "failed"
+                job.failure_reason = stage.message
+                job.completed_at = _now_iso()
+                return None
+            setting_result = await db.execute(select(Setting).where(Setting.key == "slm_agent_latest_commit"))
+            setting = setting_result.scalar_one_or_none()
+            if setting:
+                setting.value = remote_commit
+            else:
+                db.add(Setting(key="slm_agent_latest_commit", value=remote_commit))
+            await db.commit()
+        stage.sha = _short_sha(remote_commit)
+        stage.status = _StageStatus.SUCCESS
+        stage.message = f"Latest commit: {_short_sha(remote_commit)}"
+        stage.completed_at = _now_iso()
+        _stage_log(stage, f"Fetched remote commit {_short_sha(remote_commit)}")
+        return remote_commit
+    except Exception as exc:
+        stage.status = _StageStatus.FAILED
+        stage.message = str(exc)[:300]
+        stage.completed_at = _now_iso()
+        job.status = "failed"
+        job.failure_reason = f"GitHub fetch failed: {exc}"
+        job.completed_at = _now_iso()
+        return None
+
+
+async def _run_pull_stage(job: UpdateAllJob, db_service_ref) -> Optional[str]:
+    """Stage 2: pull code_source and return pulled commit SHA (or None on failure).
+
+    Sets job.status='failed' and returns None on any error.
+    """
+    stage = _get_stage(job, "code_source_pull")
+    stage.status = _StageStatus.RUNNING
+    stage.started_at = _now_iso()
+    _stage_log(stage, "Pulling code_source from source node ...")
+    try:
+        slm_deps_before = await _compute_deps_changed("autobot-slm-backend")
+        orchestrator = get_sync_orchestrator()
+        success, message, commit = await orchestrator.pull_from_source()
+        if not success:
+            stage.status = _StageStatus.FAILED
+            stage.message = message or "pull_from_source returned failure"
+            stage.completed_at = _now_iso()
+            job.status = "failed"
+            job.failure_reason = f"code_source pull failed: {stage.message}"
+            job.completed_at = _now_iso()
+            return None
+        stage.deps_changed = slm_deps_before or await _compute_deps_changed("autobot-slm-backend")
+        stage.sha = _short_sha(commit)
+        stage.status = _StageStatus.SUCCESS
+        stage.message = message or f"Pulled {_short_sha(commit)}"
+        stage.completed_at = _now_iso()
+        _stage_log(stage, f"Pulled commit {_short_sha(commit)}, deps_changed={stage.deps_changed}")
+        if commit:
+            async with db_service_ref.session() as db:
+                await _update_version_setting(db, commit)
+                await db.commit()
+        return commit
+    except Exception as exc:
+        stage.status = _StageStatus.FAILED
+        stage.message = str(exc)[:300]
+        stage.completed_at = _now_iso()
+        job.status = "failed"
+        job.failure_reason = f"code_source pull error: {exc}"
+        job.completed_at = _now_iso()
+        return None
+
+
+async def _run_slm_stage(
+    job: UpdateAllJob,
+    remote_commit: str,
+    outdated_node_ids: List[str],
+    db_service_ref,
+) -> bool:
+    """Stage 3: SLM self-update (fire-and-forget before restart).
+
+    C4: Skip when deployed commit already equals remote_commit.
+    C5: Always persist resume plan when this stage fires.
+    Returns True if the stage fired (caller must return immediately).
+    Returns False if the stage was skipped (no SLM node or already current).
+    Sets job.status='failed' on error.
+    """
+    stage = _get_stage(job, "slm_self_update")
+    stage.status = _StageStatus.RUNNING
+    stage.started_at = _now_iso()
+    _stage_log(stage, "Starting Ansible SLM self-update ...")
+    try:
+        slm_own_ip = urlparse(settings.external_url).hostname or ""
+        async with db_service_ref.session() as db:
+            slm_result = await db.execute(select(Node).where(Node.ip_address == slm_own_ip))
+            slm_node = slm_result.scalar_one_or_none()
+
+        if slm_node is None:
+            stage.status = _StageStatus.SKIPPED
+            stage.message = "SLM node not found in DB — skipping self-update"
+            stage.completed_at = _now_iso()
+            _stage_log(stage, stage.message)
+            return False
+
+        # C4: compare deployed commit to target
+        deployed_commit = await _get_slm_deployed_commit()
+        if deployed_commit and deployed_commit == remote_commit:
+            stage.status = _StageStatus.CURRENT
+            stage.sha = _short_sha(remote_commit)
+            stage.message = f"SLM already at {_short_sha(remote_commit)} — no restart needed"
+            stage.completed_at = _now_iso()
+            _stage_log(stage, stage.message)
+            return False
+
+        stage.deps_changed = await _compute_deps_changed("autobot-slm-backend")
+        stage.sha = _short_sha(remote_commit)
+
+        # C5: Always persist resume plan before firing (even empty remaining list)
+        await _persist_resume_plan(job, outdated_node_ids, remote_commit)
+
+        _stage_log(stage, f"Firing Ansible self-update for {slm_node.node_id} (fire-and-forget)")
+        stage.message = "Ansible SLM self-update queued; service will restart"
+        asyncio.create_task(_ansible_self_update(slm_node.node_id))
+        return True
+
+    except Exception as exc:
+        stage.status = _StageStatus.FAILED
+        stage.message = str(exc)[:300]
+        stage.completed_at = _now_iso()
+        job.status = "failed"
+        job.failure_reason = f"SLM self-update error: {exc}"
+        job.completed_at = _now_iso()
+        await _clear_resume_plan()
+        return False
+
+
+def _fail_fleet_stage(
+    job: UpdateAllJob,
+    stage: UpdateAllStage,
+    reason: str,
+) -> None:
+    """Mark fleet stage and job as failed with a common reason string."""
+    stage.status = _StageStatus.FAILED
+    stage.message = reason[:300]
+    stage.completed_at = _now_iso()
+    job.status = "failed"
+    job.failure_reason = reason[:300]
+    job.completed_at = _now_iso()
+
+
+async def _sync_fleet_node(
+    executor,
+    node_id: str,
+    job: UpdateAllJob,
+    stage: UpdateAllStage,
+    slm_own_ip: str,
+) -> bool:
+    """Sync one fleet node. Returns True to continue loop, False to halt.
+
+    M1: node-not-found halts (returns False, caller clears plan).
+    """
+    from services.database import db_service
+
+    async with db_service.session() as db:
+        result = await db.execute(select(Node).where(Node.node_id == node_id))
+        node = result.scalar_one_or_none()
+
+    if node is None:
+        # M1: node-not-found halts the stage
+        job.failed_fleet_nodes += 1
+        _stage_log(stage, f"Node {node_id} not found in DB — aborting fleet stage")
+        _fail_fleet_stage(job, stage, f"Fleet node {node_id} not found in DB")
+        return False
+
+    if slm_own_ip and node.ip_address == slm_own_ip:
+        _stage_log(stage, f"Node {node_id} is SLM self-node — already handled, skipping")
+        job.completed_fleet_nodes += 1
+        return True
+
+    playbook_result = await executor.execute_playbook(
+        playbook_name="update-all-nodes.yml",
+        limit=["localhost", node_id],
+    )
+    if playbook_result["success"]:
+        await _update_fleet_node_version(node_id)
+        job.completed_fleet_nodes += 1
+        _stage_log(stage, f"Node {node_id} updated successfully")
+        return True
+
+    job.failed_fleet_nodes += 1
+    _stage_log(stage, f"Node {node_id} FAILED: {playbook_result['output'][:300]}")
+    _fail_fleet_stage(job, stage, f"Fleet node {node_id} playbook failed")
+    return False
+
+
+async def _run_fleet_stage(job: UpdateAllJob, node_ids: List[str]) -> None:
+    """Execute stage 4: sequential full update of each outdated fleet node.
+
+    Runs nodes SEQUENTIALLY (playbook executor is a singleton resource).
+    Marks job completed/failed when done. Clears the resume plan.
+    M1: node-not-found is treated as stage failure (halts pipeline).
+    """
+    stage = _get_stage(job, "fleet_nodes")
+    stage.status = _StageStatus.RUNNING
+    stage.started_at = _now_iso()
+    job.total_fleet_nodes = len(node_ids)
+    job.completed_fleet_nodes = 0
+    job.failed_fleet_nodes = 0
+
+    executor = get_playbook_executor()
+    slm_own_ip = urlparse(settings.external_url).hostname or ""
+
+    for node_id in node_ids:
+        _stage_log(stage, f"Syncing fleet node {node_id} ...")
+        try:
+            cont = await _sync_fleet_node(executor, node_id, job, stage, slm_own_ip)
+        except Exception as exc:
+            job.failed_fleet_nodes += 1
+            _stage_log(stage, f"Node {node_id} error: {exc}")
+            _fail_fleet_stage(job, stage, f"Fleet node {node_id} error: {exc}")
+            cont = False
+        if not cont:
+            await _clear_resume_plan()
+            return
+
+    stage.status = _StageStatus.SUCCESS
+    stage.message = f"Updated {job.completed_fleet_nodes}/{job.total_fleet_nodes} nodes"
+    stage.completed_at = _now_iso()
+    job.status = "completed"
+    job.completed_at = _now_iso()
+    _stage_log(stage, f"Fleet stage complete: {job.completed_fleet_nodes}/{job.total_fleet_nodes}")
+    await _clear_resume_plan()
+
+
+async def _collect_outdated_node_ids(job: UpdateAllJob, remote_commit: str, db_service_ref) -> List[str]:
+    """Query DB for outdated / service-failed fleet node IDs and annotate fleet stage."""
+    try:
+        async with db_service_ref.session() as db:
+            nodes_result = await db.execute(
+                select(Node)
+                .where(Node.code_status.in_([CodeStatus.OUTDATED.value, CodeStatus.CODE_CURRENT_SERVICE_FAILED.value]))
+                .order_by(Node.hostname)
+            )
+            outdated_nodes = nodes_result.scalars().all()
+            outdated_node_ids = [n.node_id for n in outdated_nodes]
+
+        stage_fleet = _get_stage(job, "fleet_nodes")
+        stage_fleet.sha = _short_sha(remote_commit)
+        if outdated_node_ids:
+            stage_fleet.deps_changed = await _compute_deps_changed("autobot-backend")
+        _stage_log(
+            _get_stage(job, "slm_self_update"),
+            f"Collected {len(outdated_node_ids)} outdated fleet node(s)",
+        )
+        return outdated_node_ids
+    except Exception as exc:
+        logger.warning("update-all: could not collect outdated nodes: %s", exc)
+        return []
+
+
+async def _run_fleet_stage_or_already_current(
+    job: UpdateAllJob,
+    outdated_node_ids: List[str],
+    remote_commit: str,
+) -> None:
+    """Stage 4 dispatch: run fleet updates or mark already_current (C4)."""
+    if outdated_node_ids:
+        await _run_fleet_stage(job, outdated_node_ids)
+        return
+
+    stage_fleet = _get_stage(job, "fleet_nodes")
+    stage_fleet.status = _StageStatus.SKIPPED
+    stage_fleet.message = "No outdated fleet nodes"
+    stage_fleet.completed_at = _now_iso()
+
+    # C4: already_current when SLM is also at target
+    deployed = await _get_slm_deployed_commit()
+    slm_stage = _get_stage(job, "slm_self_update")
+    is_already_current = deployed == remote_commit or slm_stage.status in (_StageStatus.CURRENT, _StageStatus.SKIPPED)
+    if is_already_current:
+        job.status = "already_current"
+        _stage_log(stage_fleet, "Everything already current — pipeline complete")
+    else:
+        job.status = "completed"
+        _stage_log(stage_fleet, "No outdated nodes — pipeline complete")
+    job.completed_at = _now_iso()
+
+
+async def _run_update_all_orchestration(job: UpdateAllJob, db_service_ref) -> None:
+    """Background task: run the 4-stage one-click update pipeline (M4).
+
+    Stage order:
+      1. github_fetch      — git fetch + update slm_agent_latest_commit setting
+      2. code_source_pull  — pull code_source from the source node
+      3. slm_self_update   — Ansible self-update of SLM (fire-and-forget before restart)
+      4. fleet_nodes       — sequential Ansible playbook per outdated node
+
+    C4: SLM stage skipped if already at target commit.
+    C5: Resume plan always persisted before stage 3 fires (even empty fleet list).
+    """
+    job.status = "running"
+
+    remote_commit = await _run_github_stage(job, db_service_ref)
+    if remote_commit is None:
+        return
+
+    pulled_commit = await _run_pull_stage(job, db_service_ref)
+    if pulled_commit is None:
+        return
+
+    outdated_node_ids = await _collect_outdated_node_ids(job, remote_commit, db_service_ref)
+
+    slm_fired = await _run_slm_stage(job, remote_commit, outdated_node_ids, db_service_ref)
+    if job.status == "failed":
+        return
+    if slm_fired:
+        return  # process restarts; resume hook handles fleet stage
+
+    await _run_fleet_stage_or_already_current(job, outdated_node_ids, remote_commit)
+
+
+async def _read_and_validate_resume_plan() -> Optional[Dict[str, Any]]:
+    """Read, version-check, and staleness-gate the resume plan.
+
+    Returns the plan dict if valid, None if no plan or plan should be discarded.
+    Clears the plan in Settings when it is discarded (M2, C2-b).
+    """
+    from services.database import db_service
+
+    try:
+        async with db_service.session() as db:
+            result = await db.execute(select(Setting).where(Setting.key == _UPDATE_ALL_RESUME_KEY))
+            setting = result.scalar_one_or_none()
+            if not setting:
+                return None
+            plan = _json.loads(setting.value)
+    except Exception as exc:
+        logger.warning("update-all resume: could not read plan: %s", exc)
+        return None
+
+    # M2: version check
+    if plan.get("version") != _RESUME_PLAN_VERSION:
+        logger.warning(
+            "update-all resume: unknown plan version %s (expected %d) — discarding",
+            plan.get("version"),
+            _RESUME_PLAN_VERSION,
+        )
+        await _clear_resume_plan()
+        return None
+
+    # C2-b: staleness gate
+    plan_created_at_str = plan.get("created_at", "")
+    if plan_created_at_str:
+        try:
+            plan_ts = datetime.fromisoformat(plan_created_at_str)
+            if plan_ts.tzinfo is None:
+                plan_ts = plan_ts.replace(tzinfo=timezone.utc)
+            age = (datetime.now(timezone.utc) - plan_ts).total_seconds()
+            if age > _RESUME_PLAN_TTL_SECONDS:
+                logger.warning(
+                    "update-all resume: plan is %.0fs old (TTL=%ds) — discarding stale plan",
+                    age,
+                    _RESUME_PLAN_TTL_SECONDS,
+                )
+                await _clear_resume_plan()
+                return None
+        except (ValueError, TypeError) as exc:
+            logger.warning("update-all resume: could not parse plan created_at: %s", exc)
+
+    return plan
+
+
+async def _resume_verify_slm_stage(job: UpdateAllJob, target_commit: Optional[str]) -> bool:
+    """C1: Verify deployed commit == target_commit before touching the fleet.
+
+    Returns True if verification passes (or no target_commit to check).
+    Returns False and marks job failed if mismatch detected.
+    """
+    if not target_commit:
+        return True
+    deployed_commit = await _get_slm_deployed_commit()
+    if deployed_commit == target_commit:
+        return True
+    err_msg = (
+        f"SLM deployed commit {_short_sha(deployed_commit)} " f"!= target {_short_sha(target_commit)} — stage 3 failed"
+    )
+    logger.error("update-all resume: %s", err_msg)
+    stage_slm = _get_stage(job, "slm_self_update")
+    stage_slm.status = _StageStatus.FAILED
+    stage_slm.message = err_msg
+    stage_slm.completed_at = _now_iso()
+    job.status = "failed"
+    job.failure_reason = err_msg
+    job.completed_at = _now_iso()
+    await _clear_resume_plan()
+    return False
+
+
+async def _execute_resume(
+    job: UpdateAllJob,
+    target_commit: Optional[str],
+    remaining: List[str],
+) -> None:
+    """C2-c: Inner resume execution — always clears plan on any exception.
+
+    C1: verifies deployed commit; C2-c: try/except wraps everything.
+    """
+    global _resume_task
+    try:
+        if not await _resume_verify_slm_stage(job, target_commit):
+            return
+
+        stage_slm = _get_stage(job, "slm_self_update")
+        stage_slm.status = _StageStatus.SUCCESS
+        stage_slm.message = f"SLM restarted at {_short_sha(target_commit)}"
+        stage_slm.sha = _short_sha(target_commit)
+        stage_slm.completed_at = _now_iso()
+
+        if not remaining:
+            stage_fleet = _get_stage(job, "fleet_nodes")
+            stage_fleet.status = _StageStatus.SKIPPED
+            stage_fleet.message = "No fleet nodes to update"
+            stage_fleet.completed_at = _now_iso()
+            job.status = "completed"
+            job.completed_at = _now_iso()
+            await _clear_resume_plan()
+            return
+
+        await _run_fleet_stage(job, remaining)
+    except Exception as exc:
+        logger.error("update-all resume: unhandled error: %s", exc, exc_info=True)
+        job.status = "failed"
+        job.failure_reason = f"Resume error: {exc}"
+        job.completed_at = _now_iso()
+        await _clear_resume_plan()
+    finally:
+        _resume_task = None
+
+
+async def resume_update_all_orchestration() -> None:
+    """Called on SLM startup to continue a fleet stage interrupted by SLM restart.
+
+    C1: Verifies the now-running SLM's deployed commit matches target_commit.
+    C2-b: Discards stale plans (older than _RESUME_PLAN_TTL_SECONDS).
+    C2-c: Wraps execution in try/except to always clear plan on failure.
+    M2: Rejects unknown plan versions.
+    """
+    global _resume_task
+
+    plan = await _read_and_validate_resume_plan()
+    if plan is None:
+        return
+
+    target_commit: Optional[str] = plan.get("target_commit")
+    remaining: List[str] = plan.get("remaining_node_ids", [])
+    job_id: str = plan.get("job_id", str(uuid.uuid4())[:16])
+    plan_created_at_val: str = plan.get("created_at", _now_iso())
+
+    logger.info(
+        "update-all resume: found plan job=%s target=%s fleet_nodes=%d",
+        job_id,
+        _short_sha(target_commit),
+        len(remaining),
+    )
+
+    job = UpdateAllJob(
+        job_id=job_id,
+        status="running",
+        created_at=plan_created_at_val,
+        stages=[
+            UpdateAllStage(name="github_fetch", status=_StageStatus.SUCCESS, message="completed before restart"),
+            UpdateAllStage(name="code_source_pull", status=_StageStatus.SUCCESS, message="completed before restart"),
+            UpdateAllStage(name="slm_self_update", status=_StageStatus.RUNNING, message="SLM restarting ..."),
+            _make_stage("fleet_nodes"),
+        ],
+    )
+    _set_update_all_job(job)
+    _resume_task = asyncio.create_task(_execute_resume(job, target_commit, remaining))
+
+
+async def _check_persisted_plan_exists() -> bool:
+    """Return True if a resume plan is currently stored in Settings (C3-b)."""
+    from services.database import db_service
+
+    try:
+        async with db_service.session() as db:
+            result = await db.execute(select(Setting).where(Setting.key == _UPDATE_ALL_RESUME_KEY))
+            return result.scalar_one_or_none() is not None
+    except Exception:
+        return False
+
+
+@router.post("/update-all", status_code=202)
+async def start_update_all(
+    _: Annotated[dict, Depends(get_current_user)],
+) -> UpdateAllJob:
+    """Start the one-click full-pipeline update (#9971).
+
+    Stages: GitHub fetch -> code_source pull -> SLM self-update -> fleet nodes.
+    Returns 409 if an orchestration job is already running OR a persisted plan
+    exists (self-update in flight) — prevents double-orchestration race (C3-b).
+    Returns 202 Accepted with the initial job state (polling via GET /update-all/status).
+    """
+    global _update_all_task
+
+    existing = _get_update_all_job()
+    if existing and existing.status in ("pending", "running"):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"An update-all job is already running (job_id={existing.job_id})",
+        )
+
+    # C3-b: also block when a persisted resume plan is present (restart in flight)
+    if await _check_persisted_plan_exists():
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="SLM self-update is in flight (persisted resume plan found) — wait for restart to complete",
+        )
+
+    job_id = str(uuid.uuid4())[:16]
+    job = UpdateAllJob(
+        job_id=job_id,
+        status="pending",
+        created_at=_now_iso(),
+        stages=[
+            _make_stage("github_fetch"),
+            _make_stage("code_source_pull"),
+            _make_stage("slm_self_update"),
+            _make_stage("fleet_nodes"),
+        ],
+    )
+    _set_update_all_job(job)
+
+    from services.database import db_service as _db_svc
+
+    async def _run() -> None:
+        global _update_all_task
+        try:
+            await _run_update_all_orchestration(job, _db_svc)
+        except Exception as exc:
+            logger.error("update-all orchestration unhandled error: %s", exc, exc_info=True)
+            job.status = "failed"
+            job.failure_reason = str(exc)[:300]
+            job.completed_at = _now_iso()
+            await _clear_resume_plan()
+        finally:
+            _update_all_task = None
+
+    _update_all_task = asyncio.create_task(_run())
+    logger.info("update-all orchestration started: job %s", job_id)
+    return job
+
+
+@router.get("/update-all/status")
+async def get_update_all_status(
+    _: Annotated[dict, Depends(get_current_user)],
+) -> UpdateAllJob:
+    """Return status of the current or most-recently-completed update-all job (#9971).
+
+    C3-a: Returns the last job even after it completes (terminal jobs stay visible).
+    When no in-memory job exists but a persisted plan does (SLM restarting after
+    stage 3), synthesizes a status response so polling during the restart window
+    gets a meaningful stage-3-running response instead of 404.
+    Returns 404 only when no job has ever run this process AND no plan exists.
+    """
+    job = _get_update_all_job()
+    if job is not None:
+        return job
+
+    # C3-a: check for persisted plan — synthesize status for restart window
+    from services.database import db_service
+
+    try:
+        async with db_service.session() as db:
+            result = await db.execute(select(Setting).where(Setting.key == _UPDATE_ALL_RESUME_KEY))
+            setting = result.scalar_one_or_none()
+            if setting:
+                plan = _json.loads(setting.value)
+                job_id = plan.get("job_id", "unknown")
+                target_commit = plan.get("target_commit")
+                return UpdateAllJob(
+                    job_id=job_id,
+                    status="running",
+                    created_at=plan.get("created_at", _now_iso()),
+                    stages=[
+                        UpdateAllStage(
+                            name="github_fetch",
+                            status=_StageStatus.SUCCESS,
+                            message="completed before restart",
+                        ),
+                        UpdateAllStage(
+                            name="code_source_pull",
+                            status=_StageStatus.SUCCESS,
+                            message="completed before restart",
+                        ),
+                        UpdateAllStage(
+                            name="slm_self_update",
+                            status=_StageStatus.RUNNING,
+                            sha=_short_sha(target_commit),
+                            message="SLM restarting",
+                        ),
+                        _make_stage("fleet_nodes"),
+                    ],
+                )
+    except Exception as exc:
+        logger.debug("update-all status: could not read plan for synthesis: %s", exc)
+
+    raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="No update-all job found. POST /code-sync/update-all to start one.",
+    )

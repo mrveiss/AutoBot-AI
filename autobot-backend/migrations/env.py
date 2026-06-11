@@ -14,7 +14,7 @@ from logging.config import fileConfig
 
 from alembic import context
 from sqlalchemy import pool
-from sqlalchemy.engine import Connection
+from sqlalchemy.engine import Connection, make_url
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 # Add project root to path
@@ -100,6 +100,19 @@ def do_run_migrations(connection: Connection) -> None:
         context.run_migrations()
 
 
+def _as_async_url(url: str) -> str:
+    """Force the asyncpg driver onto a Postgres URL.
+
+    ``get_url()`` fallbacks return sync URLs (``postgresql://`` → psycopg2,
+    which is not installed); the engine built here is async, so a plain-driver
+    URL aborted migrations before ever connecting (#9759).
+    """
+    sa_url = make_url(url)
+    if sa_url.drivername in ("postgresql", "postgresql+psycopg2", "postgresql+psycopg"):
+        sa_url = sa_url.set(drivername="postgresql+asyncpg")
+    return sa_url.render_as_string(hide_password=False)
+
+
 async def run_async_migrations() -> None:
     """Run migrations asynchronously.
 
@@ -107,7 +120,7 @@ async def run_async_migrations() -> None:
     and associate a connection with the context.
     """
     configuration = config.get_section(config.config_ini_section) or {}
-    configuration["sqlalchemy.url"] = get_url()
+    configuration["sqlalchemy.url"] = _as_async_url(get_url())
 
     connectable = async_engine_from_config(
         configuration,

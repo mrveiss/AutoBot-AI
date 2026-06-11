@@ -20,14 +20,18 @@ from typing import Sequence, Union
 
 import sqlalchemy as sa
 from alembic import op
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.dialects.postgresql import ENUM, JSONB, UUID
 
 revision: str = "20260523_022"
 down_revision: Union[str, None] = "20260522_021"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
-_workitemtype = sa.Enum(
+# postgresql.ENUM with create_type=False: the enums are created explicitly in
+# upgrade() with checkfirst=True. Generic sa.Enum silently IGNORES
+# create_type, so op.create_table re-emitted an unconditional CREATE TYPE for
+# each enum column and aborted on fresh databases (#9759).
+_workitemtype = ENUM(
     "epic",
     "feature",
     "pbi",
@@ -37,8 +41,9 @@ _workitemtype = sa.Enum(
     "spike",
     "risk",
     name="workitemtype",
+    create_type=False,
 )
-_workitemstatus = sa.Enum(
+_workitemstatus = ENUM(
     "backlog",
     "ready",
     "in_progress",
@@ -47,13 +52,15 @@ _workitemstatus = sa.Enum(
     "cancelled",
     "blocked",
     name="workitemstatus",
+    create_type=False,
 )
-_workitempriority = sa.Enum(
+_workitempriority = ENUM(
     "critical",
     "high",
     "medium",
     "low",
     name="workitempriority",
+    create_type=False,
 )
 
 
