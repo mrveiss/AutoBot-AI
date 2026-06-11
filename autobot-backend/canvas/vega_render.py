@@ -20,11 +20,12 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
 import pathlib
 
+from autobot_shared.env_utils import env_float
+
 _SCRIPT_PATH = str(pathlib.Path(__file__).parent / "scripts" / "vega_render.mjs")
-_DEFAULT_TIMEOUT = float(os.environ.get("VEGA_RENDER_TIMEOUT_S", "10"))
+_DEFAULT_TIMEOUT = env_float("VEGA_RENDER_TIMEOUT_S", 10.0)
 
 
 class VegaRenderError(RuntimeError):
