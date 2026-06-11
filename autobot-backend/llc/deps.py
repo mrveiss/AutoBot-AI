@@ -51,6 +51,10 @@ async def get_session() -> AsyncGenerator[AsyncSession, None]:
     (``session.begin()`` / ``session.commit()``).  This mirrors the
     pre-refactor per-router ``get_session`` implementations exactly so that
     endpoint behaviour is unchanged.
+
+    Because every LLC router shares this single function object, a test's
+    ``app.dependency_overrides[get_session]`` overrides the session for ALL
+    migrated llc routers mounted on that app, not just one module.
     """
     factory = get_async_session_factory()
     async with factory() as session:

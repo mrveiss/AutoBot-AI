@@ -38,6 +38,7 @@ from api.user_management.dependencies import get_current_user, require_org_conte
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
+from llc.deps import get_session, service_dep
 from models.agent_org import AgentOrgNode
 from user_management.models.user import User
 from user_management.services import TenantContext
@@ -99,8 +100,6 @@ class CoworkerRequest(BaseModel):
     actor_agent_id: Optional[str] = None
     actor_user_id: Optional[str] = None
 
-
-from llc.deps import get_session, service_dep
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/work-items", tags=["llc-work-items"])
