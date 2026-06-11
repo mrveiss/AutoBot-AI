@@ -354,7 +354,7 @@ onMounted(async () => {
               :disabled="isLoading"
               @click="handleFetchOpportunities"
             >
-              {{ isLoading ? t('vision.visionAutomation.analyzing') : t('vision.visionAutomation.opportunities.trigger') }}
+              {{ isLoading ? t('vision.visionAutomation.scanning') : t('vision.visionAutomation.opportunities.trigger') }}
             </button>
           </div>
           <div v-if="opportunities" class="card-body">

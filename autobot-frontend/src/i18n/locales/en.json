@@ -6664,6 +6664,7 @@
       "analyzing": "Analyzing...",
       "detecting": "Detecting...",
       "extracting": "Extracting...",
+      "scanning": "Scanning...",
       "errorLabel": "Error",
       "tabs": {
         "analysis": "Screen Analysis",

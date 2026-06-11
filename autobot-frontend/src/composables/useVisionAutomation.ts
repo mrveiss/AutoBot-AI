@@ -11,80 +11,31 @@ import { ref } from 'vue'
 import { useApiClient } from '@/plugins/api'
 import { getApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
+import type {
+  VisionUIElement,
+  VisionDetectElementsResponse,
+  VisionTextRegion,
+  VisionOCRResponse,
+  VisionAutomationOpportunity,
+  VisionAutomationOpportunitiesResponse,
+  VisionStatusFeatures,
+  VisionStatusResponse,
+  ScreenAnalysisResponse,
+} from '@/types/vision'
+
+export type {
+  VisionUIElement,
+  VisionDetectElementsResponse,
+  VisionTextRegion,
+  VisionOCRResponse,
+  VisionAutomationOpportunity,
+  VisionAutomationOpportunitiesResponse,
+  VisionStatusFeatures,
+  VisionStatusResponse,
+  ScreenAnalysisResponse,
+}
 
 const logger = createLogger('useVisionAutomation')
-
-// ---------------------------------------------------------------------------
-// Types — mirrored from backend Pydantic schemas
-// ---------------------------------------------------------------------------
-
-export interface VisionUIElement {
-  element_id: string
-  element_type: string
-  bbox: Record<string, number>
-  center_point: number[]
-  confidence: number
-  text_content: string | null
-  possible_interactions: string[]
-}
-
-export interface VisionDetectElementsResponse {
-  total_detected: number
-  filtered_count: number
-  elements: VisionUIElement[]
-  filter_applied: Record<string, unknown>
-}
-
-export interface VisionTextRegion {
-  [key: string]: unknown
-}
-
-export interface VisionOCRResponse {
-  region_specified: boolean
-  text_regions: VisionTextRegion[]
-  total_text_regions: number
-  region?: Record<string, number> | null
-}
-
-export interface VisionAutomationOpportunity {
-  [key: string]: unknown
-}
-
-export interface VisionAutomationOpportunitiesResponse {
-  opportunities: VisionAutomationOpportunity[]
-  total_opportunities: number
-  context: Record<string, unknown>
-  confidence: number
-}
-
-export interface VisionStatusFeatures {
-  screen_analysis: boolean
-  element_detection: boolean
-  ocr_extraction: boolean
-  template_matching: boolean
-  multimodal_processing: boolean
-}
-
-export interface VisionStatusResponse {
-  service: string
-  status: string
-  features?: VisionStatusFeatures
-  supported_element_types?: number
-  supported_interaction_types?: number
-  error?: string
-}
-
-export interface ScreenAnalysisResponse {
-  timestamp: number
-  ui_elements: VisionUIElement[]
-  text_regions: Record<string, unknown>[]
-  dominant_colors: Record<string, unknown>[]
-  layout_structure: Record<string, unknown>
-  automation_opportunities: Record<string, unknown>[]
-  context_analysis: Record<string, unknown>
-  confidence_score: number
-  multimodal_analysis?: Record<string, unknown>[] | null
-}
 
 // ---------------------------------------------------------------------------
 // Composable
@@ -105,6 +56,7 @@ export function useVisionAutomation() {
   const base = () => `${getApiBase()}/vision`
 
   async function fetchStatus(): Promise<void> {
+    error.value = null
     try {
       const data = await api.get<VisionStatusResponse>(`${base()}/status`)
       status.value = data

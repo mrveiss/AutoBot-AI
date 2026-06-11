@@ -66,14 +66,9 @@ export const navItems: NavItem[] = [
     iconStroke: true,
     featureFlag: 'transcriber',
   },
-  // Issue #9890: Vision Automation — screen analysis, OCR, element detection
-  {
-    to: '/automation/vision-automation',
-    labelKey: 'nav.visionAutomation',
-    icon: 'M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z',
-    iconStroke: true,
-    featureFlag: 'vision',
-  },
+  // Issue #9890: Vision Automation is reachable via Workflow Builder sidebar + direct route.
+  // It is NOT in the primary nav rail — the featureFlag mechanism is dead (App.vue:977,
+  // #8820 stopped filtering), so a flag-gated entry would never hide the item.
 ];
 
 // ─── Profile/settings menu items (GH#8748) ───────────────────────────────────
