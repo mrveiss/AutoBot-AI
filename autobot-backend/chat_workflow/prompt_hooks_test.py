@@ -17,9 +17,9 @@ Tests verify:
 import pytest
 
 from chat_workflow.llm_handler import _emit_full_prompt_ready, _emit_system_prompt_ready
-from extensions.base import Extension, HookContext
-from extensions.hooks import HookPoint
-from extensions.manager import reset_extension_manager
+from middleware.base import Extension, HookContext
+from middleware.hooks import HookPoint
+from middleware.manager import reset_extension_manager
 
 
 class _SystemPromptWatcher(Extension):
@@ -104,7 +104,7 @@ class TestEmitSystemPromptReady:
     async def test_extension_receives_correct_args(self):
         """Extension receives system_prompt and session via HookContext."""
         watcher = _SystemPromptWatcher(return_value=None)
-        from extensions.manager import get_extension_manager
+        from middleware.manager import get_extension_manager
 
         get_extension_manager().register(watcher)
 
@@ -119,7 +119,7 @@ class TestEmitSystemPromptReady:
         """A non-None str returned by extension replaces the system prompt."""
         modified = "You are AutoBot [modified by extension]."
         watcher = _SystemPromptWatcher(return_value=modified)
-        from extensions.manager import get_extension_manager
+        from middleware.manager import get_extension_manager
 
         get_extension_manager().register(watcher)
 
@@ -130,7 +130,7 @@ class TestEmitSystemPromptReady:
     async def test_none_return_keeps_original(self):
         """Returning None from extension keeps the original prompt."""
         watcher = _SystemPromptWatcher(return_value=None)
-        from extensions.manager import get_extension_manager
+        from middleware.manager import get_extension_manager
 
         get_extension_manager().register(watcher)
 
@@ -153,7 +153,7 @@ class TestEmitFullPromptReady:
     async def test_extension_receives_correct_args(self):
         """Extension receives prompt, llm_params and context via HookContext."""
         watcher = _FullPromptWatcher(return_value=None)
-        from extensions.manager import get_extension_manager
+        from middleware.manager import get_extension_manager
 
         get_extension_manager().register(watcher)
 
@@ -172,7 +172,7 @@ class TestEmitFullPromptReady:
         """A non-None str returned by extension replaces the full prompt."""
         modified = "System prompt\n\nUser: hello\n\nAssistant:\n\n[hint: be concise]"
         watcher = _FullPromptWatcher(return_value=modified)
-        from extensions.manager import get_extension_manager
+        from middleware.manager import get_extension_manager
 
         get_extension_manager().register(watcher)
 
@@ -182,7 +182,7 @@ class TestEmitFullPromptReady:
     @pytest.mark.asyncio
     async def test_extension_error_does_not_crash_pipeline(self):
         """An exception inside an extension is swallowed; original prompt is returned."""
-        from extensions.manager import get_extension_manager
+        from middleware.manager import get_extension_manager
 
         get_extension_manager().register(_ErrorExtension())
 
