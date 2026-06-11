@@ -601,6 +601,16 @@ export const routes: RouteRecordRaw[] = [
           parent: 'analytics'
         }
       },
+      // Issue #9891: Error monitoring dashboard wired to /api/errors/* endpoints
+      {
+        path: 'errors',
+        name: 'analytics-errors',
+        component: () => import('@/views/ErrorMonitoringView.vue'),
+        meta: {
+          title: 'Error Monitoring',
+          parent: 'analytics'
+        }
+      },
     ]
   },
   // Issue #753: User preferences (appearance, font size, colors, etc.)

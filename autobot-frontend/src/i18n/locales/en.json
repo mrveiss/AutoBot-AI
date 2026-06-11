@@ -1392,7 +1392,9 @@
         "usage": "Usage",
         "usageAria": "Usage & Costs",
         "operations": "Operations",
-        "operationsAria": "Long-running operations"
+        "operationsAria": "Long-running operations",
+        "errors": "Errors",
+        "errorsAria": "Error monitoring"
       }
     },
     "header": {
@@ -7653,6 +7655,29 @@
       "plugin": "Plugin",
       "status": "Status",
       "timestamp": "Timestamp"
+    }
+  },
+  "errorMonitoring": {
+    "title": "Error Monitoring",
+    "subtitle": "System-wide error statistics, recent errors, and component breakdown",
+    "lastUpdate": "Last updated",
+    "noMessage": "(no message)",
+    "cards": {
+      "totalErrors": "Total Errors"
+    },
+    "filters": {
+      "category": "Category",
+      "component": "Component",
+      "all": "All"
+    },
+    "sections": {
+      "recentErrors": "Recent Errors",
+      "categories": "Errors by Category",
+      "components": "Errors by Component"
+    },
+    "empty": {
+      "noErrors": "No errors recorded",
+      "noData": "No data available"
     }
   }
 }
