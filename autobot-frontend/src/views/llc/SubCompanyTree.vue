@@ -7,6 +7,7 @@ import { ref, onMounted } from 'vue'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
 import { useRouter } from 'vue-router'
+import { markExpanded, mapTree } from '@/composables/llc/useLlcTree'
 import CompanyTreeNode from './CompanyTreeNode.vue'
 import type { CompanyNode } from './CompanyTreeNode.vue'
 
@@ -33,7 +34,7 @@ function statusOf(llcStatus?: string): CompanyNode['status'] {
   return 'inactive'
 }
 
-function mapNode(raw: RawCompanyTreeNode): CompanyNode {
+function toCompanyNode(raw: RawCompanyTreeNode, children: CompanyNode[]): CompanyNode {
   return {
     id: raw.id,
     name: raw.name,
@@ -42,7 +43,7 @@ function mapNode(raw: RawCompanyTreeNode): CompanyNode {
     // budget-aware tree endpoint exists (#9861).
     budget_spent: 0,
     budget_total: 0,
-    children: (raw.children ?? []).map(mapNode),
+    children,
     expanded: false,
   }
 }
@@ -57,7 +58,7 @@ async function fetchTree() {
     const subtrees = await Promise.all(
       (roots ?? []).map((c) => api.get<RawCompanyTreeNode>(`/api/llc/companies/${c.id}/tree`)),
     )
-    tree.value = subtrees.filter(Boolean).map(mapNode)
+    tree.value = subtrees.filter(Boolean).map((subtree) => mapTree(subtree, toCompanyNode))
     markExpanded(tree.value, true)
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)
@@ -65,13 +66,6 @@ async function fetchTree() {
     error.value = msg
   } finally {
     isLoading.value = false
-  }
-}
-
-function markExpanded(nodes: CompanyNode[], expanded: boolean) {
-  for (const node of nodes) {
-    node.expanded = expanded
-    if (node.children) markExpanded(node.children, false)
   }
 }
 

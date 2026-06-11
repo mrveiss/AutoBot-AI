@@ -611,6 +611,21 @@ _SLM_COMPONENTS = [
 ]
 
 
+# #9970: secret/runtime paths that must survive every sync. The deployed .env
+# is the systemd EnvironmentFile (#2824) and exists only in the deployment --
+# a delete-style sync without these excludes removes it and the service cannot
+# start ("Failed to load environment files"). `data` holds per-service runtime
+# state with the same property. Applied at the rsync chokepoint so no caller
+# or future component list can forget them.
+_PROTECTED_EXCLUDES: List[str] = [".env", "data"]
+
+
+def _rsync_exclude_args(excludes: List[str]) -> List[str]:
+    """Build --exclude args from caller excludes plus protected paths (#9970)."""
+    merged = list(dict.fromkeys([*excludes, *_PROTECTED_EXCLUDES]))
+    return [f"--exclude={exc}" for exc in merged]
+
+
 async def _rsync_component(
     source_user: str,
     source_ip: str,
@@ -632,8 +647,7 @@ async def _rsync_component(
         ssh_opts,
         "--rsync-path=sudo rsync",  # source may need root to read e.g. /home/${USER:-autobot}/  # noqa
     ]
-    for exc in excludes:
-        cmd.append(f"--exclude={exc}")
+    cmd.extend(_rsync_exclude_args(excludes))
     cmd.append(f"{source_user}@{source_ip}:{source_path}/{component}/")
     cmd.append(f"/opt/autobot/{component}/")
 
@@ -666,8 +680,7 @@ async def _rsync_component_local(
     Used when source_ip matches the SLM server's own IP — no SSH needed.
     """
     cmd = ["rsync", "-avz", "--delete", "--no-group", "--no-owner"]
-    for exc in excludes:
-        cmd.append(f"--exclude={exc}")
+    cmd.extend(_rsync_exclude_args(excludes))
     cmd.append(f"{source_path}/{component}/")
     cmd.append(f"/opt/autobot/{component}/")
     try:

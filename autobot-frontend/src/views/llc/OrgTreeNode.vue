@@ -3,13 +3,14 @@
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
 
-import { defineProps, defineEmits } from 'vue'
+import { agentStatusColor } from '@/composables/llc/llcStatus'
+import type { AgentDisplayStatus } from '@/composables/llc/llcStatus'
 
 export interface OrgNode {
   id: string
   name: string
   title: string
-  status: 'active' | 'idle' | 'error' | 'paused'
+  status: AgentDisplayStatus
   adapter_type: string
   is_human: boolean
   last_heartbeat: string | null
@@ -21,15 +22,8 @@ export interface OrgNode {
   expanded?: boolean
 }
 
-const props = defineProps<{ node: OrgNode; depth?: number }>()
+defineProps<{ node: OrgNode; depth?: number }>()
 const emit = defineEmits<{ select: [node: OrgNode] }>()
-
-const statusColor = (status: string) => {
-  if (status === 'active') return 'bg-green-500'
-  if (status === 'idle') return 'bg-yellow-400'
-  if (status === 'error') return 'bg-red-500'
-  return 'bg-gray-400'
-}
 </script>
 
 <template>
@@ -50,7 +44,7 @@ const statusColor = (status: string) => {
       <p class="text-xs font-semibold text-gray-900 dark:text-gray-100 truncate">{{ node.name }}</p>
       <p class="text-xs text-gray-500 truncate">{{ node.title }}</p>
       <div class="flex justify-center items-center gap-1 mt-1">
-        <span class="w-2 h-2 rounded-full" :class="statusColor(node.status)" />
+        <span class="w-2 h-2 rounded-full" :class="agentStatusColor(node.status)" />
         <span class="text-xs text-gray-400">{{ node.adapter_type }}</span>
       </div>
     </div>
