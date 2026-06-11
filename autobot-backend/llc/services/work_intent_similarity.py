@@ -77,8 +77,7 @@ async def check_similarity(
 
         if score < _ALERT_THRESHOLD:
             logger.warning(
-                "work_intent_similarity: very low alignment for work_item=%s "
-                "(score=%.3f<%.1f); intent=%r title=%r",
+                "work_intent_similarity: very low alignment for work_item=%s " "(score=%.3f<%.1f); intent=%r title=%r",
                 work_item_id,
                 score,
                 _ALERT_THRESHOLD,
@@ -87,8 +86,7 @@ async def check_similarity(
             )
         elif score < _WARN_THRESHOLD:
             logger.info(
-                "work_intent_similarity: low alignment for work_item=%s "
-                "(score=%.3f<%.1f); intent=%r title=%r",
+                "work_intent_similarity: low alignment for work_item=%s " "(score=%.3f<%.1f); intent=%r title=%r",
                 work_item_id,
                 score,
                 _WARN_THRESHOLD,

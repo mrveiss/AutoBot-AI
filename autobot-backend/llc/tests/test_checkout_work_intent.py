@@ -24,7 +24,6 @@ from llc.models.enums import WorkItemPriority, WorkItemStatus, WorkItemType
 from llc.models.work_item import LLCWorkItem
 from llc.services.work_item_service import WorkItemService
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -97,14 +96,18 @@ class TestWorkIntentCheckout:
         item = _make_item()
         mock_session._db_result.scalar_one_or_none.return_value = item
 
-        with patch(
-            "llc.services.work_item_service.get_async_redis_client",
-            new=AsyncMock(return_value=mock_redis),
-        ), patch(
-            "llc.services.work_item_service._schedule_intent_similarity",
-        ), patch(
-            "llc.services.work_item_service._post_checkout_comment",
-            new=AsyncMock(),
+        with (
+            patch(
+                "llc.services.work_item_service.get_async_redis_client",
+                new=AsyncMock(return_value=mock_redis),
+            ),
+            patch(
+                "llc.services.work_item_service._schedule_intent_similarity",
+            ),
+            patch(
+                "llc.services.work_item_service._post_checkout_comment",
+                new=AsyncMock(),
+            ),
         ):
             result = await service.checkout(
                 mock_session,
@@ -137,15 +140,19 @@ class TestWorkIntentCheckout:
 
         schedule_mock = MagicMock()
         comment_mock = AsyncMock()
-        with patch(
-            "llc.services.work_item_service.get_async_redis_client",
-            new=AsyncMock(return_value=mock_redis),
-        ), patch(
-            "llc.services.work_item_service._schedule_intent_similarity",
-            new=schedule_mock,
-        ), patch(
-            "llc.services.work_item_service._post_checkout_comment",
-            new=comment_mock,
+        with (
+            patch(
+                "llc.services.work_item_service.get_async_redis_client",
+                new=AsyncMock(return_value=mock_redis),
+            ),
+            patch(
+                "llc.services.work_item_service._schedule_intent_similarity",
+                new=schedule_mock,
+            ),
+            patch(
+                "llc.services.work_item_service._post_checkout_comment",
+                new=comment_mock,
+            ),
         ):
             await service.checkout(
                 mock_session,
@@ -163,12 +170,15 @@ class TestWorkIntentCheckout:
         mock_session._db_result.scalar_one_or_none.return_value = item
 
         schedule_mock = MagicMock()
-        with patch(
-            "llc.services.work_item_service.get_async_redis_client",
-            new=AsyncMock(return_value=mock_redis),
-        ), patch(
-            "llc.services.work_item_service._schedule_intent_similarity",
-            new=schedule_mock,
+        with (
+            patch(
+                "llc.services.work_item_service.get_async_redis_client",
+                new=AsyncMock(return_value=mock_redis),
+            ),
+            patch(
+                "llc.services.work_item_service._schedule_intent_similarity",
+                new=schedule_mock,
+            ),
         ):
             await service.checkout(mock_session, str(item.id), agent_id)
 
@@ -183,15 +193,19 @@ class TestWorkIntentCheckout:
         def _bad_schedule(*args, **kwargs):
             raise RuntimeError("embedding service down")
 
-        with patch(
-            "llc.services.work_item_service.get_async_redis_client",
-            new=AsyncMock(return_value=mock_redis),
-        ), patch(
-            "llc.services.work_item_service._schedule_intent_similarity",
-            side_effect=_bad_schedule,
-        ), patch(
-            "llc.services.work_item_service._post_checkout_comment",
-            new=AsyncMock(),
+        with (
+            patch(
+                "llc.services.work_item_service.get_async_redis_client",
+                new=AsyncMock(return_value=mock_redis),
+            ),
+            patch(
+                "llc.services.work_item_service._schedule_intent_similarity",
+                side_effect=_bad_schedule,
+            ),
+            patch(
+                "llc.services.work_item_service._post_checkout_comment",
+                new=AsyncMock(),
+            ),
         ):
             result = await service.checkout(
                 mock_session,
@@ -210,14 +224,18 @@ class TestWorkIntentCheckout:
         mock_session._db_result.scalar_one_or_none.return_value = item
 
         comment_mock = AsyncMock()
-        with patch(
-            "llc.services.work_item_service.get_async_redis_client",
-            new=AsyncMock(return_value=mock_redis),
-        ), patch(
-            "llc.services.work_item_service._schedule_intent_similarity",
-        ), patch(
-            "llc.services.work_item_service._post_checkout_comment",
-            new=comment_mock,
+        with (
+            patch(
+                "llc.services.work_item_service.get_async_redis_client",
+                new=AsyncMock(return_value=mock_redis),
+            ),
+            patch(
+                "llc.services.work_item_service._schedule_intent_similarity",
+            ),
+            patch(
+                "llc.services.work_item_service._post_checkout_comment",
+                new=comment_mock,
+            ),
         ):
             await service.checkout(
                 mock_session,
@@ -229,7 +247,7 @@ class TestWorkIntentCheckout:
         comment_mock.assert_awaited_once()
         call_args = comment_mock.call_args
         assert call_args[0][2] == "fix login bug"  # work_intent arg
-        assert call_args[0][3] == agent_id          # agent_id arg
+        assert call_args[0][3] == agent_id  # agent_id arg
 
     async def test_checkout_succeeds_when_comment_raises(self, service, mock_session, mock_redis):
         """Checkout succeeds even when comment posting raises an exception."""
@@ -237,14 +255,18 @@ class TestWorkIntentCheckout:
         item = _make_item()
         mock_session._db_result.scalar_one_or_none.return_value = item
 
-        with patch(
-            "llc.services.work_item_service.get_async_redis_client",
-            new=AsyncMock(return_value=mock_redis),
-        ), patch(
-            "llc.services.work_item_service._schedule_intent_similarity",
-        ), patch(
-            "llc.services.work_item_service._post_checkout_comment",
-            new=AsyncMock(side_effect=Exception("DB error")),
+        with (
+            patch(
+                "llc.services.work_item_service.get_async_redis_client",
+                new=AsyncMock(return_value=mock_redis),
+            ),
+            patch(
+                "llc.services.work_item_service._schedule_intent_similarity",
+            ),
+            patch(
+                "llc.services.work_item_service._post_checkout_comment",
+                new=AsyncMock(side_effect=Exception("DB error")),
+            ),
         ):
             result = await service.checkout(
                 mock_session,
@@ -275,8 +297,6 @@ class TestPostCheckoutCommentSavepoint:
 
         # Simulate a session whose begin_nested context manager rolls back on
         # flush error but allows subsequent operations on the outer transaction.
-        flush_calls = []
-        outer_flush_count = 0
 
         class _FakeNestedTxn:
             async def __aenter__(self_inner):
@@ -306,7 +326,6 @@ class TestPostCheckoutCommentSavepoint:
 
         item = _make_item(identifier="WI-999")
         agent_id = str(uuid.uuid4())
-        captured_body = []
 
         class _FakeNestedTxn:
             async def __aenter__(self_inner):
@@ -355,7 +374,7 @@ class TestPostCheckoutCommentSavepoint:
 
         await _post_checkout_comment(session, item, "do work", agent_id, service=mock_svc)
 
-        positional = mock_svc.add_comment.call_args[0]
+        mock_svc.add_comment.call_args[0]
         kw = mock_svc.add_comment.call_args[1]
         # author_agent_id is passed as keyword arg
         assert kw.get("author_agent_id") == agent_id
@@ -437,10 +456,13 @@ class TestWorkIntentSimilarity:
         low_vec = [1.0, 0.0]
         high_vec = [0.0, 1.0]
 
-        with patch(
-            "llc.services.work_intent_similarity._embed",
-            new=AsyncMock(side_effect=[low_vec, high_vec]),
-        ), caplog.at_level(logging.WARNING, logger="llc.services.work_intent_similarity"):
+        with (
+            patch(
+                "llc.services.work_intent_similarity._embed",
+                new=AsyncMock(side_effect=[low_vec, high_vec]),
+            ),
+            caplog.at_level(logging.WARNING, logger="llc.services.work_intent_similarity"),
+        ):
             await check_similarity("unrelated topic", "completely different title", "wi-001")
 
         assert any("very low alignment" in r.message for r in caplog.records)
@@ -455,15 +477,15 @@ class TestWorkIntentSimilarity:
         a_vec = [1.0, 0.0]
         b_vec = [0.6, 0.8]
 
-        with patch(
-            "llc.services.work_intent_similarity._embed",
-            new=AsyncMock(side_effect=[a_vec, b_vec]),
-        ), caplog.at_level(logging.INFO, logger="llc.services.work_intent_similarity"):
+        with (
+            patch(
+                "llc.services.work_intent_similarity._embed",
+                new=AsyncMock(side_effect=[a_vec, b_vec]),
+            ),
+            caplog.at_level(logging.INFO, logger="llc.services.work_intent_similarity"),
+        ):
             score = await check_similarity("topic A", "related title", "wi-002")
 
         assert score is not None
         assert 0.5 <= score < 0.7
-        assert any(
-            "low alignment" in r.message and r.levelno == logging.INFO
-            for r in caplog.records
-        )
+        assert any("low alignment" in r.message and r.levelno == logging.INFO for r in caplog.records)
