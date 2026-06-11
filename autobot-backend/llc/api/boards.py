@@ -20,8 +20,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.singleton_factory import lazy_singleton
-from user_management.database import get_async_session_factory
+from llc.deps import get_session, service_dep
 
 from ..exceptions import WipLimitExceeded
 from ..services.board import BoardService
@@ -29,17 +28,7 @@ from ..services.work_item_service import InvalidTransition
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/boards", tags=["llc-boards"])
-_get_service = lazy_singleton(BoardService)
-
-
-def _service() -> BoardService:
-    return _get_service()
-
-
-async def get_session() -> AsyncSession:
-    factory = get_async_session_factory()
-    async with factory() as session:
-        yield session
+_service = service_dep(BoardService)
 
 
 # ------------------------------------------------------------------

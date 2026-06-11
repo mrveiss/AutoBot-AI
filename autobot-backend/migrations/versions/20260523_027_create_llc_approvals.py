@@ -14,28 +14,33 @@ from typing import Sequence, Union
 
 import sqlalchemy as sa
 from alembic import op
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.dialects.postgresql import ENUM, JSONB, UUID
 
 revision: str = "20260523_027"
 down_revision: Union[str, None] = "20260523_026"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
-_approvaltype = sa.Enum(
+# postgresql.ENUM with create_type=False: created explicitly in upgrade() with
+# checkfirst=True. Generic sa.Enum silently IGNORES create_type, so
+# op.create_table re-emitted CREATE TYPE and aborted on fresh databases (#9759).
+_approvaltype = ENUM(
     "hire",
     "strategy",
     "budget_override",
     "sprint_close",
     name="approvaltype",
+    create_type=False,
 )
 
-_approvalstatus = sa.Enum(
+_approvalstatus = ENUM(
     "pending",
     "approved",
     "rejected",
     "withdrawn",
     "expired",
     name="approvalstatus",
+    create_type=False,
 )
 
 
@@ -55,27 +60,12 @@ def upgrade() -> None:
         sa.Column("company_id", UUID(as_uuid=True), nullable=False),
         sa.Column(
             "type",
-            sa.Enum(
-                "hire",
-                "strategy",
-                "budget_override",
-                "sprint_close",
-                name="approvaltype",
-                create_type=False,
-            ),
+            _approvaltype,
             nullable=False,
         ),
         sa.Column(
             "status",
-            sa.Enum(
-                "pending",
-                "approved",
-                "rejected",
-                "withdrawn",
-                "expired",
-                name="approvalstatus",
-                create_type=False,
-            ),
+            _approvalstatus,
             nullable=False,
             server_default="pending",
         ),

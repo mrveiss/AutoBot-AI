@@ -57,7 +57,9 @@ export const navItems: NavItem[] = [
   // Issue #4703 / #6634: single Agents nav entry — Activity and Heartbeat are reached as tabs
   { to: '/agents/registry', labelKey: 'nav.agentRegistry', icon: 'M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18', iconStroke: true },
   // GH#8748: LLC views consolidated to one "Company OS" entry (was 5 separate items)
-  { to: '/llc/dashboard', labelKey: 'nav.companyOs', icon: 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4', iconStroke: true },
+  // GH#9627: entry point is the company selector; LLC sub-views are reached
+  // via the contextual LLC sidebar once a company is selected.
+  { to: '/llc/select-company', labelKey: 'nav.companyOs', icon: 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4', iconStroke: true },
   // Issue #9044: Transcriber — audio/video transcription module
   {
     to: '/transcriber',
@@ -89,6 +91,9 @@ export const profileMenuItems: NavItem[] = [
 export const adminMenuItems: NavItem[] = [
   // Issue #1440: AutoResearch experiment dashboard
   { to: '/experiments', labelKey: 'nav.experiments', icon: 'M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z' },
+  // MVA-2999: LLM provider fallback status (added here via GH#9627 — route was
+  // missing both hideInNav and a menu entry, failing nav-items-coverage)
+  { to: '/admin/llm-providers', labelKey: 'nav.llmProviders', icon: 'M13 10V3L4 14h7v7l9-11h-7z', iconStroke: true },
   // Issue #6590: Virtual LLM API keys admin view
   { to: '/admin/llm-keys', labelKey: 'nav.llmApiKeys', icon: 'M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z', iconRule: 'evenodd' },
   // Issue #7773: Sandbox file inspector

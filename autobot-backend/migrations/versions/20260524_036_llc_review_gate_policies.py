@@ -14,6 +14,7 @@ from typing import Sequence, Union
 
 import sqlalchemy as sa
 from alembic import op
+from sqlalchemy.dialects.postgresql import ENUM
 
 revision: str = "20260524_036"
 down_revision: Union[str, None] = "20260523_035"
@@ -33,7 +34,10 @@ def upgrade() -> None:
         sa.Column("company_id", sa.dialects.postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column(
             "item_type",
-            sa.Enum(
+            # postgresql.ENUM: the type already exists (created by 20260523_022);
+            # generic sa.Enum silently IGNORES create_type and re-emitted
+            # CREATE TYPE here, aborting fresh-database upgrades (#9759).
+            ENUM(
                 "epic",
                 "feature",
                 "pbi",

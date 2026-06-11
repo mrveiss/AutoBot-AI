@@ -180,10 +180,19 @@ class ClaudeCodeSubscriptionAdapter(ClaudeCodeAdapter):
         return env
 
     async def status(self, agent_config: dict, run_id: str) -> AdapterRunStatus:
-        """Check status and parse token usage from output."""
+        """Check status and parse token usage from output.
+
+        Quota-exhaustion (subscription limit) takes precedence over RATE_LIMITED
+        (per-minute API rate limit) when both could apply.  ``_check_quota_exhaustion``
+        is evaluated first on any terminal state so that a subscription-limit hit
+        always returns FAILED (no retry loop) rather than RATE_LIMITED (backoff loop).
+        """
         base_status = await super().status(agent_config, run_id)
 
         # On any terminal state, check the output for quota exhaustion (GH#9777).
+        # This check runs BEFORE honoring an inherited RATE_LIMITED so that a
+        # subscription-quota hit (→ FAILED, no retry) beats a transient rate-limit
+        # (→ RATE_LIMITED, exponential backoff) when both patterns match (M2).
         if base_status.status.is_terminal():
             cfg = agent_config.get("adapter_config", {})
             output_dir: str = cfg.get("output_dir", "/tmp")  # nosec B108
