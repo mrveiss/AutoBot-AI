@@ -26,7 +26,6 @@ import asyncio
 import os
 import time
 from dataclasses import dataclass
-from datetime import timedelta
 from typing import Callable, Dict
 
 import aiohttp
@@ -96,6 +95,7 @@ def _mint_service_jwt(secret: str) -> str:
         secret=secret,
         expiry_hours=_SERVICE_JWT_TTL_HOURS,
     )
+
 
 # SLM server URL from environment.  On co-located deployments (backend and SLM
 # share the same host) the env var is often not set, so default to localhost.

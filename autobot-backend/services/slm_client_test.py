@@ -10,15 +10,14 @@ and service JWT minting (#9852).
 import os
 import ssl
 import tempfile
-from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from autobot_shared.auth.jwt_core import decode_jwt
 from services.slm_client import (
-    SLMClient,
     _SERVICE_JWT_TTL_HOURS,
+    SLMClient,
     _create_permissive_ssl_context,
     _get_slm_signing_secret,
     _mint_service_jwt,
