@@ -77,12 +77,14 @@ class AuthenticationMiddleware:
         # Priority order: AUTOBOT_JWT_SECRET -> SECRET_KEY -> Config file -> Generated secret
 
         # 1. Check dedicated JWT secret env var first (most specific)
-        secret = config.jwt_secret
+        # #9960: module-global `config` is the ConfigManager — the ssot fields
+        # live on `ssot_config` (same fix class as #9828 / internal_api_key).
+        secret = ssot_config.jwt_secret
         if secret:
             return secret
 
         # 2. Fall back to SECRET_KEY env var (stable across restarts)
-        secret = config.secret_key
+        secret = ssot_config.secret_key
         if secret:
             return secret
 
