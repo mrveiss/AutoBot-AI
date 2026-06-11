@@ -3,19 +3,25 @@
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
 """
-Tests for SLM client SSL context and WebSocket reconnect backoff (#4664).
+Tests for SLM client SSL context, WebSocket reconnect backoff (#4664),
+and service JWT minting (#9852).
 """
 
 import os
 import ssl
 import tempfile
+from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from autobot_shared.auth.jwt_core import decode_jwt
 from services.slm_client import (
     SLMClient,
+    _SERVICE_JWT_TTL_HOURS,
     _create_permissive_ssl_context,
+    _get_slm_signing_secret,
+    _mint_service_jwt,
 )
 
 
@@ -246,3 +252,155 @@ class TestSLMClientReconnectBackoff:
         assert mock_logger.error.called
         logged_msg = str(mock_logger.error.call_args)
         assert "WebSocket" in logged_msg or "error" in logged_msg.lower()
+
+
+# ---------------------------------------------------------------------------
+# Service JWT minting (GH#9852)
+# ---------------------------------------------------------------------------
+
+_TEST_SECRET = "test-slm-signing-secret-for-unit-tests-32chars"
+
+
+class TestMintServiceJwt:
+    """Unit tests for _mint_service_jwt — claims, algorithm, and expiry."""
+
+    def test_returns_decodable_token(self) -> None:
+        """Minted token can be decoded with the same secret."""
+        token = _mint_service_jwt(_TEST_SECRET)
+        payload = decode_jwt(token, secret=_TEST_SECRET)
+        assert payload is not None
+
+    def test_sub_claim_identifies_backend_service(self) -> None:
+        """'sub' claim is 'service:backend'."""
+        token = _mint_service_jwt(_TEST_SECRET)
+        payload = decode_jwt(token, secret=_TEST_SECRET)
+        assert payload["sub"] == "service:backend"
+
+    def test_admin_and_role_claims_present(self) -> None:
+        """Token carries admin=True and role='admin' for SLM permission checks."""
+        token = _mint_service_jwt(_TEST_SECRET)
+        payload = decode_jwt(token, secret=_TEST_SECRET)
+        assert payload.get("admin") is True
+        assert payload.get("role") == "admin"
+
+    def test_service_claim_present(self) -> None:
+        """Token carries service=True to distinguish machine from user tokens."""
+        token = _mint_service_jwt(_TEST_SECRET)
+        payload = decode_jwt(token, secret=_TEST_SECRET)
+        assert payload.get("service") is True
+
+    def test_token_has_expiry(self) -> None:
+        """Minted token carries an 'exp' claim."""
+        token = _mint_service_jwt(_TEST_SECRET)
+        payload = decode_jwt(token, secret=_TEST_SECRET)
+        assert "exp" in payload
+
+    def test_expiry_roughly_one_hour(self) -> None:
+        """Expiry is within ±5 s of _SERVICE_JWT_TTL_HOURS from now."""
+        import time
+
+        token = _mint_service_jwt(_TEST_SECRET)
+        payload = decode_jwt(token, secret=_TEST_SECRET)
+        expected_ttl_secs = _SERVICE_JWT_TTL_HOURS * 3600
+        actual_remaining = payload["exp"] - time.time()
+        assert abs(actual_remaining - expected_ttl_secs) < 5
+
+    def test_wrong_secret_fails_decode(self) -> None:
+        """Token minted with one secret cannot be decoded with another."""
+        from autobot_shared.auth.jwt_core import JWTDecodeError
+
+        token = _mint_service_jwt(_TEST_SECRET)
+        with pytest.raises(JWTDecodeError):
+            decode_jwt(token, secret="wrong-secret-key-for-unit-tests-32chars")
+
+
+class TestGetSlmSigningSecret:
+    """Unit tests for _get_slm_signing_secret secret priority."""
+
+    def test_returns_jwt_secret_when_set(self) -> None:
+        """AUTOBOT_JWT_SECRET is returned when present."""
+        with patch("services.slm_client.config") as mock_cfg:
+            mock_cfg.jwt_secret = "my-jwt-secret"
+            mock_cfg.secret_key = "my-secret-key"
+            result = _get_slm_signing_secret()
+        assert result == "my-jwt-secret"
+
+    def test_falls_back_to_secret_key(self) -> None:
+        """SECRET_KEY is used when AUTOBOT_JWT_SECRET is empty."""
+        with patch("services.slm_client.config") as mock_cfg:
+            mock_cfg.jwt_secret = ""
+            mock_cfg.secret_key = "my-secret-key"
+            result = _get_slm_signing_secret()
+        assert result == "my-secret-key"
+
+    def test_returns_none_when_both_empty(self) -> None:
+        """Returns None when neither env var is set."""
+        with patch("services.slm_client.config") as mock_cfg:
+            mock_cfg.jwt_secret = ""
+            mock_cfg.secret_key = ""
+            result = _get_slm_signing_secret()
+        assert result is None
+
+
+class TestWsConnectAndListenJwtMinting:
+    """Tests that _ws_connect_and_listen mints a token when auth_token is absent."""
+
+    def _make_client(self) -> SLMClient:
+        return SLMClient(slm_url="http://autobot-slm:8000")
+
+    @pytest.mark.asyncio
+    async def test_mints_token_when_auth_token_unset(self) -> None:
+        """When auth_token is empty and a signing secret exists, a JWT is minted."""
+        client = self._make_client()
+        assert not client.auth_token  # no static token
+
+        ws_urls_seen: list[str] = []
+
+        mock_ws_ctx = MagicMock()
+        mock_ws_ctx.__aenter__ = AsyncMock(side_effect=Exception("stop-after-connect"))
+        mock_ws_ctx.__aexit__ = AsyncMock(return_value=False)
+
+        with (
+            patch("services.slm_client._get_slm_signing_secret", return_value=_TEST_SECRET),
+            patch("services.slm_client._mint_service_jwt", wraps=_mint_service_jwt) as mock_mint,
+            patch("websockets.connect", side_effect=lambda url, **kw: mock_ws_ctx) as mock_connect,
+        ):
+            await client._ws_connect_and_listen()
+
+        mock_mint.assert_called_once_with(_TEST_SECRET)
+        # URL should have a ?token= query param
+        call_url = mock_connect.call_args[0][0]
+        assert "?token=" in call_url
+
+    @pytest.mark.asyncio
+    async def test_skips_connection_when_no_secret(self) -> None:
+        """When auth_token is empty and no signing secret exists, connection is skipped."""
+        client = self._make_client()
+
+        with (
+            patch("services.slm_client._get_slm_signing_secret", return_value=None),
+            patch("websockets.connect") as mock_connect,
+        ):
+            await client._ws_connect_and_listen()
+
+        mock_connect.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_static_auth_token_takes_precedence(self) -> None:
+        """When auth_token is set, it is used directly without minting."""
+        client = self._make_client()
+        client.auth_token = "static-operator-token"
+
+        mock_ws_ctx = MagicMock()
+        mock_ws_ctx.__aenter__ = AsyncMock(side_effect=Exception("stop-after-connect"))
+        mock_ws_ctx.__aexit__ = AsyncMock(return_value=False)
+
+        with (
+            patch("services.slm_client._mint_service_jwt") as mock_mint,
+            patch("websockets.connect", side_effect=lambda url, **kw: mock_ws_ctx) as mock_connect,
+        ):
+            await client._ws_connect_and_listen()
+
+        mock_mint.assert_not_called()
+        call_url = mock_connect.call_args[0][0]
+        assert "token=static-operator-token" in call_url

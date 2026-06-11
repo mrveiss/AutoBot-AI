@@ -26,17 +26,76 @@ import asyncio
 import os
 import time
 from dataclasses import dataclass
+from datetime import timedelta
 from typing import Callable, Dict
 
 import aiohttp
 import websockets
 from websockets.exceptions import ConnectionClosed, WebSocketException
 
+from autobot_shared.auth.jwt_core import encode_jwt
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
 from constants.ttl_constants import TTL_5_MINUTES
 
 logger = get_logger(__name__)
+
+# TTL for minted service JWTs — short enough to limit exposure, long enough to
+# survive a container restart followed by SLM reconnect backoff (max 60 s).
+_SERVICE_JWT_TTL_HOURS: float = 1.0
+
+
+def _get_slm_signing_secret() -> str | None:
+    """Return the shared HS256 secret used to sign service JWTs for the SLM.
+
+    Priority mirrors auth_middleware._get_jwt_secret:
+    1. AUTOBOT_JWT_SECRET
+    2. SECRET_KEY
+
+    Returns None when neither is set (compose deployment not yet initialised
+    or operator deliberately cleared the vars).
+    """
+    secret = config.jwt_secret or config.secret_key
+    return secret if secret else None
+
+
+def _mint_service_jwt(secret: str) -> str:
+    """Mint a short-lived HS256 service JWT accepted by the SLM's auth_service.
+
+    The SLM's ``auth_service.decode_token`` calls ``decode_jwt_or_none(token,
+    settings.secret_key)``, which requires a structurally valid, non-expired
+    HS256 token signed with ``SLM_SECRET_KEY``.  The ``with-secrets.sh``
+    entrypoint now maps ``SLM_SECRET_KEY`` from the same ``_GEN_SECRET_KEY``
+    value as ``SECRET_KEY`` / ``AUTOBOT_JWT_SECRET``, so the key is shared
+    across the backend and SLM containers (GH#9852, GH#9905).
+
+    Claims mirror the user-token shape produced by
+    ``AuthService.create_token_response`` so no special-casing is needed in
+    the SLM WebSocket handler.  The ``sub`` identifies the calling service.
+
+    Transport note: the existing ``_ws_connect_and_listen`` passes the token
+    via ``?token=`` query param, matching the ``_extract_ws_token`` fallback
+    in the SLM's websocket.py.  Moving to the ``Sec-WebSocket-Protocol``
+    subprotocol header (the preferred path per project memory) is out of scope
+    for this fix (#9852) and is tracked separately.
+
+    Args:
+        secret: Shared HS256 signing secret (``AUTOBOT_JWT_SECRET`` /
+            ``SECRET_KEY`` / ``SLM_SECRET_KEY``).
+
+    Returns:
+        Signed JWT string, valid for ``_SERVICE_JWT_TTL_HOURS`` hours.
+    """
+    return encode_jwt(
+        {
+            "sub": "service:backend",
+            "admin": True,
+            "role": "admin",
+            "service": True,
+        },
+        secret=secret,
+        expiry_hours=_SERVICE_JWT_TTL_HOURS,
+    )
 
 # SLM server URL from environment.  On co-located deployments (backend and SLM
 # share the same host) the env var is often not set, so default to localhost.
@@ -488,12 +547,32 @@ class SLMClient:
         """Connect to WebSocket and listen for events."""
         ws_url = self.slm_url.replace("http://", "ws://").replace("https://", "wss://")
         ws_url = f"{ws_url}/api/ws/events"
-        # SLM backend authenticates via ?token= query param, not Authorization header (#6839)
-        if self.auth_token:
-            ws_url = f"{ws_url}?token={self.auth_token}"
-        else:
-            logger.debug("No auth token configured; skipping WebSocket connection to SLM")
-            return
+
+        # Resolve the auth token for this connection attempt.
+        # Operator-provided SLM_AUTH_TOKEN takes precedence; when absent, mint a
+        # short-lived service JWT from the shared HS256 secret so the SLM's
+        # auth_service.decode_token can verify it (GH#9852).
+        # A fresh token is minted on every reconnect so an expired token never
+        # causes a permanent authentication failure.
+        token = self.auth_token
+        if not token:
+            secret = _get_slm_signing_secret()
+            if secret:
+                token = _mint_service_jwt(secret)
+                logger.debug("Minted service JWT for SLM WebSocket connection")
+            else:
+                logger.warning(
+                    "No SLM auth token and no signing secret available "
+                    "(AUTOBOT_JWT_SECRET / SECRET_KEY unset); "
+                    "skipping WebSocket connection to SLM"
+                )
+                return
+
+        # SLM backend authenticates via ?token= query param, not Authorization
+        # header (#6839).  The preferred Sec-WebSocket-Protocol subprotocol path
+        # is tracked as a follow-up (see project memory: WebSocket JWT must NOT
+        # go in URL).
+        ws_url = f"{ws_url}?token={token}"
 
         logger.info("Connecting to WebSocket at %s", ws_url.split("?")[0])  # don't log token
 

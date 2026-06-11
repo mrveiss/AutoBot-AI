@@ -1141,9 +1141,10 @@ async def _init_slm_client():
         slm_url = get_config().slm_url
         slm_token = get_config().slm_auth_token
         if not slm_token:
-            logger.warning(
-                "SLM_AUTH_TOKEN is unset — SLM WebSocket will connect without auth header. "
-                "Set SERVICE_AUTH_ENFORCEMENT_MODE=false or configure the token to avoid 403 errors."
+            logger.debug(
+                "SLM_AUTH_TOKEN is unset — a short-lived service JWT will be minted "
+                "from AUTOBOT_JWT_SECRET / SECRET_KEY at each WebSocket connection "
+                "attempt (GH#9852). Set SLM_AUTH_TOKEN explicitly to override."
             )
 
         await init_slm_client(slm_url, slm_token)

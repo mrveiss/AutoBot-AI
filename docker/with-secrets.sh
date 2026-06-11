@@ -10,6 +10,10 @@
 # operator-provided AUTOBOT_JWT_SECRET / SECRET_KEY (e.g. real production
 # secrets via --env-file or the host environment) always takes precedence.
 #
+# SLM_SECRET_KEY is also propagated from _GEN_SECRET_KEY so the SLM and the
+# backend share one HS256 signing secret, enabling the backend to mint a
+# service JWT that the SLM's auth_service.decode_token can verify (GH#9852).
+#
 # Then it execs the real command (passed as "$@"), so the service's normal
 # entrypoint/CMD runs unchanged.
 set -eu
@@ -22,7 +26,9 @@ if [ -r "$SECRETS_FILE" ]; then
     # `:=` assigns only when the variable is unset OR empty.
     : "${AUTOBOT_JWT_SECRET:=${_GEN_JWT:-}}"
     : "${SECRET_KEY:=${_GEN_SECRET_KEY:-}}"
-    export AUTOBOT_JWT_SECRET SECRET_KEY
+    # SLM reads SLM_SECRET_KEY; share the same value so service JWTs verify.
+    : "${SLM_SECRET_KEY:=${_GEN_SECRET_KEY:-}}"
+    export AUTOBOT_JWT_SECRET SECRET_KEY SLM_SECRET_KEY
 fi
 
 exec "$@"
