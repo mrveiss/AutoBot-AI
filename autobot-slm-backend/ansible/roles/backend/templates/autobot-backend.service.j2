@@ -24,6 +24,13 @@ Restart=always
 RestartSec=5
 StartLimitInterval=120
 StartLimitBurst=5
+# #9934: Raise the file-descriptor ceiling. The backend runs multiple uvicorn
+# workers with DB/Redis/ChromaDB pools + HTTP clients and exhausts the default
+# soft limit on busy/co-located hosts (OSError: [Errno 24] Too many open files →
+# socket.accept() out of system resource → #3687 health gate never goes green).
+# Matches the convention used by every other AutoBot unit (slm-agent, frontend,
+# ollama, browser, coordinator = 65535/65536).
+LimitNOFILE={{ backend_nofile_limit | default(65536) }}
 StandardOutput=append:{{ backend_log_dir }}/backend.log
 StandardError=append:{{ backend_log_dir }}/backend-error.log
 
