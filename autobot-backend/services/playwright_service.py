@@ -425,7 +425,7 @@ async def get_playwright_service() -> PlaywrightService:
             # Double-check after acquiring lock
             if _playwright_service is None:
                 # Use correct Playwright container IP address
-                container_host = config.browser_service_host
+                container_host = config.vm.browser
                 if not container_host:
                     raise ValueError("AUTOBOT_BROWSER_SERVICE_HOST environment variable must be set")
                 _playwright_service = PlaywrightService(container_host=container_host)
