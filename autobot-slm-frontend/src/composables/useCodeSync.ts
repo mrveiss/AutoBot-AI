@@ -786,7 +786,8 @@ export function useCodeSync() {
 
   /**
    * Start the one-click update-all orchestration pipeline.
-   * Returns the initial UpdateAllJob or throws on 409 (already running).
+   * Returns the initial UpdateAllJob or null on 409 (already running).
+   * F1: distinguishes 404 (no job) from transient errors (network/5xx).
    */
   async function startUpdateAll(): Promise<UpdateAllJob | null> {
     try {
@@ -795,7 +796,7 @@ export function useCodeSync() {
     } catch (e: unknown) {
       const axiosErr = e as { response?: { status?: number; data?: { detail?: string } } }
       if (axiosErr?.response?.status === 409) {
-        error.value = axiosErr.response.data?.detail || 'Update already running'
+        error.value = axiosErr.response?.data?.detail || 'Update already running'
       } else {
         error.value = axiosErr?.response?.data?.detail || 'Failed to start update'
       }
@@ -805,18 +806,23 @@ export function useCodeSync() {
 
   /**
    * Poll the status of the current update-all job.
-   * Returns null when no job exists (404).
+   *
+   * F1: Returns null ONLY on true 404 (no job ever started).
+   *     Returns undefined on transient errors (network refused / 5xx during
+   *     SLM restart) so the caller can distinguish "stop polling" from "keep polling".
    */
-  async function getUpdateAllStatus(): Promise<UpdateAllJob | null> {
+  async function getUpdateAllStatus(): Promise<UpdateAllJob | null | undefined> {
     try {
       const response = await client.get<UpdateAllJob>('/code-sync/update-all/status')
       return response.data
     } catch (e: unknown) {
-      const axiosErr = e as { response?: { status?: number } }
+      const axiosErr = e as { response?: { status?: number }; code?: string; message?: string }
+      // True 404 = no job started yet → stop polling
       if (axiosErr?.response?.status === 404) {
         return null
       }
-      return null
+      // Network error or 5xx during SLM restart → transient, keep polling
+      return undefined
     }
   }
 
