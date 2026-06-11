@@ -139,6 +139,44 @@ async def resolve_actor_role(session: AsyncSession, actor_id: Optional[str], com
     return "member"
 
 
+async def _run_intent_similarity(work_intent: str, item_title: str, work_item_id: str) -> None:
+    """Fire-and-forget similarity check — never raises (GH#9532)."""
+    try:
+        from .work_intent_similarity import check_similarity
+
+        await check_similarity(work_intent, item_title, work_item_id)
+    except Exception as exc:
+        logger.debug("_run_intent_similarity: non-critical failure: %s", exc)
+
+
+async def _post_checkout_comment(
+    session: AsyncSession,
+    item: LLCWorkItem,
+    work_intent: str,
+    agent_id: str,
+) -> None:
+    """Add the audit comment 'Starting <id>: <intent>' — never raises (GH#9532)."""
+    try:
+        comment_body = f"Starting {item.identifier}: {work_intent}"
+        comment = LLCWorkItemComment(
+            id=uuid.uuid4(),
+            company_id=item.company_id,
+            work_item_id=item.id,
+            body=comment_body,
+            author_agent_id=item.assignee_agent_id,
+            author_user_id=None,
+        )
+        session.add(comment)
+        await session.flush()
+        logger.debug(
+            "_post_checkout_comment: posted comment for work_item=%s agent=%s",
+            item.id,
+            agent_id,
+        )
+    except Exception as exc:
+        logger.warning("_post_checkout_comment: failed (non-critical): %s", exc)
+
+
 class WorkItemService(LLCServiceBase):
     """Service for LLC work item lifecycle management."""
 
@@ -291,14 +329,18 @@ class WorkItemService(LLCServiceBase):
         work_item_id: str,
         agent_id: str,
         run_id: Optional[str] = None,
+        work_intent: Optional[str] = None,
     ) -> LLCWorkItem:
         """Atomically claim a work item for an agent.
 
         Step 1: Redis SET NX EX as fast-path fence.
         Step 2: SELECT FOR UPDATE to prevent race across DB workers.
         Step 3: Write checkout fields + transition to IN_PROGRESS.
+        Step 4: (non-blocking) intent similarity check vs. title.
+        Step 5: Auto-post audit comment when work_intent is supplied.
 
         Raises CheckoutConflict if another agent holds the lock.
+        The work_intent parameter is optional; omitting it preserves existing behaviour exactly.
         """
         redis_key = f"llc:checkout:{work_item_id}"
         redis = await get_async_redis_client()
@@ -329,12 +371,25 @@ class WorkItemService(LLCServiceBase):
         item.checkout_locked_at = datetime.now(timezone.utc)
         item.assignee_agent_id = uuid.UUID(agent_id)
         item.assignee_type = "agent"
+        item.checkout_intent = work_intent  # GH#9532 — persist intent for audit trail
         item.version += 1
         if item.status in (WorkItemStatus.BACKLOG, WorkItemStatus.READY):
             item.status = WorkItemStatus.IN_PROGRESS
             item.started_at = item.started_at or datetime.now(timezone.utc)
 
         await session.flush()
+
+        # GH#9532: non-blocking advisory checks — never block or fail the checkout
+        if work_intent:
+            try:
+                await _run_intent_similarity(work_intent, item.title, work_item_id)
+            except Exception as _exc:
+                logger.debug("checkout: similarity check skipped (non-critical): %s", _exc)
+            try:
+                await _post_checkout_comment(session, item, work_intent, agent_id)
+            except Exception as _exc:
+                logger.debug("checkout: comment post skipped (non-critical): %s", _exc)
+
         return item
 
     async def release(

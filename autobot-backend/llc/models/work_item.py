@@ -100,6 +100,8 @@ class LLCWorkItem(Base):
     # Atomic checkout lock fields
     checkout_run_id: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     checkout_locked_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Free-text intent supplied at checkout time — audit trail (GH#9532)
+    checkout_intent: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Optimistic concurrency version counter
     version: Mapped[int] = mapped_column(Integer, nullable=False, server_default="1")
