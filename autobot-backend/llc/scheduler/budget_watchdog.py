@@ -13,12 +13,10 @@ For soft-threshold agents: publishes a notification to
 For agents at or over 100%: calls BudgetService hard stop (idempotent).
 """
 
-import asyncio
 import json
 import logging
 from datetime import datetime, timezone
 from decimal import Decimal
-from typing import Optional
 
 from sqlalchemy import or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -29,6 +27,7 @@ from user_management.models.organization import Organization
 
 from ..models.budget import LLCAgentBudget
 from ..services.budget import BudgetService
+from .base import PollLoopScheduler
 
 logger = logging.getLogger(__name__)
 
@@ -37,38 +36,23 @@ _HARD_THRESHOLD = Decimal("1.00")
 _POLL_INTERVAL_SECONDS = 300  # 5 minutes
 
 
-class BudgetWatchdog:
+class BudgetWatchdog(PollLoopScheduler):
     """Periodic watchdog that enforces company and agent budget limits."""
 
+    _task_name = "llc-budget-watchdog"
+
     def __init__(self, poll_interval: int = _POLL_INTERVAL_SECONDS) -> None:
-        self._poll_interval = poll_interval
-        self._running = False
-        self._task: Optional[asyncio.Task[None]] = None
+        super().__init__(poll_interval)
         self._budget_svc = BudgetService()
 
     def start(self) -> None:
         """Start the background polling loop."""
-        if self._running:
-            return
-        self._running = True
-        self._task = asyncio.create_task(self._loop(), name="llc-budget-watchdog")
-        logger.info("BudgetWatchdog started (poll interval: %ds)", self._poll_interval)
+        super().start()
+        if self._task is not None:
+            logger.info("BudgetWatchdog started (poll interval: %ds)", self._poll_interval)
 
-    def stop(self) -> None:
-        """Stop the background polling loop."""
-        self._running = False
-        if self._task and not self._task.done():
-            self._task.cancel()
-
-    async def _loop(self) -> None:
-        while self._running:
-            try:
-                await self._check_once()
-            except asyncio.CancelledError:
-                break
-            except Exception:
-                logger.exception("BudgetWatchdog._check_once failed")
-            await asyncio.sleep(self._poll_interval)
+    async def _tick(self) -> None:
+        await self._check_once()
 
     async def _check_once(self) -> None:
         """Single scan — find over-threshold agents and notify / hard-stop."""

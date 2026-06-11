@@ -14,13 +14,11 @@ scheduler begins dispatching.  For each ``status='running'`` run it:
   3. Re-queues agent in ``llc:heartbeat:schedule`` sorted set at score=now
 """
 
-import asyncio
 import json
 import logging
 import os
 import time
 from datetime import datetime, timezone
-from typing import Optional
 
 from sqlalchemy import select
 
@@ -29,6 +27,7 @@ from user_management.database import get_async_session_factory
 
 from ..models.enums import LLCRunStatus
 from ..models.heartbeat_run import LLCHeartbeatRun
+from .base import PollLoopScheduler
 
 logger = logging.getLogger(__name__)
 
@@ -62,41 +61,22 @@ logger.info(
 )
 
 
-class SessionCheckpointer:
+class SessionCheckpointer(PollLoopScheduler):
     """Periodic checkpointer that writes session state to Redis for crash recovery."""
 
-    def __init__(self, poll_interval: int = LLC_CHECKPOINT_INTERVAL_SECONDS) -> None:
-        self._poll_interval = poll_interval
-        self._running = False
-        self._task: Optional[asyncio.Task[None]] = None
+    _task_name = "llc-session-checkpointer"
 
-    @property
-    def is_running(self) -> bool:
-        return self._running and self._task is not None and not self._task.done()
+    def __init__(self, poll_interval: int = LLC_CHECKPOINT_INTERVAL_SECONDS) -> None:
+        super().__init__(poll_interval)
 
     def start(self) -> None:
         """Start the background polling loop."""
-        if self._running:
-            return
-        self._running = True
-        self._task = asyncio.create_task(self._loop(), name="llc-session-checkpointer")
-        logger.info("SessionCheckpointer started (poll interval: %ds)", self._poll_interval)
+        super().start()
+        if self._task is not None:
+            logger.info("SessionCheckpointer started (poll interval: %ds)", self._poll_interval)
 
-    def stop(self) -> None:
-        """Stop the background polling loop."""
-        self._running = False
-        if self._task and not self._task.done():
-            self._task.cancel()
-
-    async def _loop(self) -> None:
-        while self._running:
-            try:
-                await self._check_once()
-            except asyncio.CancelledError:
-                break
-            except Exception:
-                logger.exception("SessionCheckpointer._check_once failed")
-            await asyncio.sleep(self._poll_interval)
+    async def _tick(self) -> None:
+        await self._check_once()
 
     async def _check_once(self) -> None:
         """Single scan — write checkpoints for all currently running runs."""

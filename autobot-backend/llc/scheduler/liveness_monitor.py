@@ -15,7 +15,6 @@ For each stuck run:
   6. Writes an activity log entry
 """
 
-import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
 from typing import Optional
@@ -32,6 +31,7 @@ from ..models.heartbeat_run import LLCHeartbeatRun
 from ..models.work_item import LLCWorkItem
 from ..services.activity_log import LLCActivityLogService
 from ..services.work_item_service import WorkItemService
+from .base import PollLoopScheduler
 
 logger = logging.getLogger(__name__)
 
@@ -39,46 +39,27 @@ _DEFAULT_TIMEOUT_MINUTES = 30
 _POLL_INTERVAL_SECONDS = 60
 
 
-class LivenessMonitor:
+class LivenessMonitor(PollLoopScheduler):
     """Periodic monitor that detects and recovers stuck heartbeat runs."""
+
+    _task_name = "llc-liveness-monitor"
 
     def __init__(
         self,
         activity_log: Optional[LLCActivityLogService] = None,
         poll_interval: int = _POLL_INTERVAL_SECONDS,
     ) -> None:
+        super().__init__(poll_interval)
         self._activity_log = activity_log
-        self._poll_interval = poll_interval
-        self._running = False
-        self._task: Optional[asyncio.Task] = None  # type: ignore[type-arg]
-
-    @property
-    def is_running(self) -> bool:
-        return self._running and self._task is not None and not self._task.done()
 
     def start(self) -> None:
         """Start the background polling loop."""
-        if self._running:
-            return
-        self._running = True
-        self._task = asyncio.create_task(self._loop(), name="llc-liveness-monitor")
-        logger.info("LivenessMonitor started (poll interval: %ds)", self._poll_interval)
+        super().start()
+        if self._task is not None:
+            logger.info("LivenessMonitor started (poll interval: %ds)", self._poll_interval)
 
-    def stop(self) -> None:
-        """Stop the background polling loop."""
-        self._running = False
-        if self._task and not self._task.done():
-            self._task.cancel()
-
-    async def _loop(self) -> None:
-        while self._running:
-            try:
-                await self._check_once()
-            except asyncio.CancelledError:
-                break
-            except Exception:
-                logger.exception("LivenessMonitor._check_once failed")
-            await asyncio.sleep(self._poll_interval)
+    async def _tick(self) -> None:
+        await self._check_once()
 
     async def _check_once(self) -> None:
         """Single scan — find stuck runs and trigger recovery for each."""
