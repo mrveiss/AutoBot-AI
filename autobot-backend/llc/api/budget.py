@@ -7,7 +7,7 @@
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy import select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -69,6 +69,18 @@ class UpdateLimitRequest(BaseModel):
     alert_threshold: Optional[float] = None
 
 
+class ProvisionRequest(BaseModel):
+    """Request body for POST /budget/{agent_id} (GH#9901).
+
+    All fields are optional — omitting budget_limit uses the
+    LLC_DEFAULT_BUDGET_LIMIT env-var value (default $10).
+    company_id is required so the row is properly company-scoped.
+    """
+
+    company_id: str
+    budget_limit: Optional[Decimal] = None
+
+
 def _build_response(row: LLCAgentBudget, remaining: Decimal, is_over: bool, alert: bool) -> BudgetResponse:
     """Build BudgetResponse with token support (GH#8997)."""
     return BudgetResponse(
@@ -83,6 +95,42 @@ def _build_response(row: LLCAgentBudget, remaining: Decimal, is_over: bool, aler
         is_over_limit=is_over,
         alert_triggered=alert,
     )
+
+
+@router.post("/{agent_id}", response_model=BudgetResponse, status_code=status.HTTP_201_CREATED)
+async def provision_budget(
+    agent_id: str,
+    body: ProvisionRequest,
+    session: AsyncSession = Depends(get_async_session),
+) -> BudgetResponse:
+    """Provision a default budget row for an agent (GH#9901).
+
+    Returns 201 on creation, 409 if a row already exists.
+    Returns 404 if the agent does not exist in agent_org_nodes.
+    """
+    # Validate agent exists — 404 prevents silent budget orphans.
+    agent_check = await session.execute(
+        text("SELECT 1 FROM agent_org_nodes WHERE agent_id = :agent_id LIMIT 1"),
+        {"agent_id": agent_id},
+    )
+    if agent_check.fetchone() is None:
+        raise HTTPException(status_code=404, detail=f"Agent {agent_id!r} not found")
+
+    svc = BudgetService()
+    row, created = await svc.provision_budget(session, agent_id, body.company_id, body.budget_limit)
+    if not created:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Budget row already exists for agent {agent_id}",
+        )
+
+    spent = Decimal(str(row.budget_spent))
+    limit = Decimal(str(row.budget_limit))
+    threshold = Decimal(str(row.alert_threshold))
+    remaining = limit - spent
+    is_over = spent > limit
+    alert = limit > Decimal("0") and spent / limit >= threshold
+    return _build_response(row, remaining, is_over, alert)
 
 
 @router.get("", response_model=List[Dict[str, Any]])

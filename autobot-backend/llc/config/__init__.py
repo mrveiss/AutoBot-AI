@@ -11,9 +11,14 @@ the flat module deleted (GH#9776).
 """
 
 import os
+from decimal import Decimal
 
 # Agent API base URL (used for context assembly and heartbeat payloads).
 AGENT_API_BASE_URL = os.environ.get("LLC_AGENT_API_BASE_URL", "http://localhost:8001/api")
+
+# Default dollar budget limit for newly provisioned agent budget rows.
+# Override via LLC_DEFAULT_BUDGET_LIMIT env var (GH#9901).
+DEFAULT_BUDGET_LIMIT: Decimal = Decimal(os.environ.get("LLC_DEFAULT_BUDGET_LIMIT", "10.00"))
 
 # Default streaming watchdog timeout (seconds of silence before kill).
 # Per-agent override via adapter_config["streaming_watchdog_timeout_seconds"].
@@ -29,5 +34,6 @@ AGENT_API_KEY_PLACEHOLDER = "<injected-at-runtime>"
 __all__ = [
     "AGENT_API_BASE_URL",
     "AGENT_API_KEY_PLACEHOLDER",
+    "DEFAULT_BUDGET_LIMIT",
     "DEFAULT_STREAMING_WATCHDOG_TIMEOUT",
 ]
