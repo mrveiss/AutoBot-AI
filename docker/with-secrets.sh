@@ -10,9 +10,10 @@
 # operator-provided AUTOBOT_JWT_SECRET / SECRET_KEY (e.g. real production
 # secrets via --env-file or the host environment) always takes precedence.
 #
-# SLM_SECRET_KEY is also propagated from _GEN_SECRET_KEY so the SLM and the
-# backend share one HS256 signing secret, enabling the backend to mint a
-# service JWT that the SLM's auth_service.decode_token can verify (GH#9852).
+# SLM_SECRET_KEY is also propagated from _GEN_JWT (AUTOBOT_JWT_SECRET) so the
+# SLM and the backend share one HS256 signing secret, enabling the backend to
+# mint a service JWT that the SLM's auth_service.decode_token can verify
+# (GH#9852).
 #
 # Then it execs the real command (passed as "$@"), so the service's normal
 # entrypoint/CMD runs unchanged.
