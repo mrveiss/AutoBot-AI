@@ -180,13 +180,18 @@
   when: ufw_enabled | bool
   tags: ['common', 'firewall']
 
+# #9915: Sanitize to a valid DNS hostname (underscores etc. are rejected by
+# hostnamectl) and skip ANY SLM-Manager label variant — the wizard may label it
+# `node_00_SLM_Manager`, which the old literal `!= '00-SLM-Manager'` guard missed.
 - name: "Common | Set hostname"
   hostname:
-    name: "{{ inventory_hostname }}"
+    name: "{{ _hostname_sanitized }}"
   become: true
+  vars:
+    _hostname_sanitized: "{{ inventory_hostname | regex_replace('[^A-Za-z0-9-]', '-') | lower }}"
   when:
     - inventory_hostname is defined
-    - inventory_hostname != '00-SLM-Manager'
+    - "'slm-manager' not in _hostname_sanitized"
   tags: ['common', 'hostname']
 
 - name: "Common | Update /etc/hosts"

@@ -119,6 +119,25 @@
     backend_slm_auth_tok: "{{ _backend_slm_auth_tok.stdout | default('') | trim }}"
   tags: ['backend', 'config']
 
+# #9914: Deploy the systemd unit BEFORE any stop/start so a fresh VM provisions
+# out-of-box. Previously the unit was deployed after the MVA-1633 start task, so
+# first-run on a clean node failed: "Could not find the requested service
+# autobot-backend". Tagged backend,config so tag-filtered runs register it too.
+- name: "Backend | Deploy backend systemd service (#9914)"
+  ansible.builtin.template:
+    src: autobot-backend.service.j2
+    dest: /etc/systemd/system/autobot-backend.service
+    mode: "0644"
+  notify:
+    - reload systemd
+    - restart backend
+  tags: ['backend', 'config']
+
+- name: "Backend | Reload systemd so the unit is registered before start (#9914)"
+  ansible.builtin.systemd:
+    daemon_reload: true
+  tags: ['backend', 'config']
+
 # MVA-1633: Prevent systemd Restart=always race during env updates.
 # The backend service may restart BEFORE the new .env is written if we use
 # async notify. Stop explicitly, write env files, verify they exist, then start.
@@ -623,15 +642,6 @@
     state: started
     daemon_reload: false
   tags: ['backend', 'config']
-
-- name: Deploy backend systemd service
-  ansible.builtin.template:
-    src: autobot-backend.service.j2
-    dest: /etc/systemd/system/autobot-backend.service
-    mode: "0644"
-  notify:
-    - reload systemd
-    - restart backend
 
 - name: Enable and start backend service
   ansible.builtin.systemd:
