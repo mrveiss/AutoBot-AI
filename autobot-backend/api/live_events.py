@@ -36,19 +36,6 @@ router = APIRouter()
 _PING_INTERVAL = 30  # seconds between server-side pings
 
 
-def _verify_token(token: str) -> dict | None:
-    """Verify JWT token; returns payload dict or None if invalid."""
-    if not token:
-        return None
-    try:
-        from auth_middleware import get_auth_middleware
-
-        return get_auth_middleware().verify_jwt_token(token)
-    except Exception as exc:
-        logger.warning("Token verification failed: %s", exc)
-        return None
-
-
 def _auth_required() -> bool:
     """Return True when JWT auth is enabled in app config."""
     try:
@@ -129,14 +116,18 @@ async def _keepalive_loop(ws: WebSocket, stop_event: asyncio.Event) -> None:
 )
 async def live_events_endpoint(websocket: WebSocket):
     """WebSocket endpoint for scoped real-time event streaming (#1408)."""
-    token = websocket.query_params.get("token", "")
-    user_payload: dict | None = None
-    if _auth_required():
-        user_payload = _verify_token(token)
-        if user_payload is None:
-            await websocket.close(code=4001, reason="Unauthorized")
-            logger.info("Live events WebSocket rejected: invalid token")  # codeql[py/clear-text-logging-sensitive-data]
-            return
+    # #9963: use the canonical WS auth (JWT + single-user-mode bypass), same
+    # as /api/ws — the local raw-JWT check rejected single_user deployments.
+    from auth_middleware import authenticate_websocket
+
+    user_payload: dict | None = await authenticate_websocket(websocket)
+    if _auth_required() and user_payload is None:
+        # accept() before close(4001) so clients see a clean close frame
+        # instead of a handshake 403 (project WS rule).
+        await websocket.accept()
+        await websocket.close(code=4001, reason="Unauthorized")
+        logger.info("Live events WebSocket rejected: invalid token")  # codeql[py/clear-text-logging-sensitive-data]
+        return
     await websocket.accept()
     logger.info(
         "Live events WebSocket connected: %s (user=%s)",
