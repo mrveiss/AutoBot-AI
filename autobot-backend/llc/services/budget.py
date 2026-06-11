@@ -13,14 +13,17 @@ uvicorn workers share live budget state without extra DB round-trips.
 
 import json
 import logging
+import uuid
 from decimal import Decimal
-from typing import Tuple
+from typing import Optional, Tuple
 
 from sqlalchemy import select, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.ssot_constants import MODEL_PRICING_PER_1M_TOKENS
+from llc.config import DEFAULT_BUDGET_LIMIT
 from llc.exceptions import BudgetExhausted
 from llc.models.budget import LLCAgentBudget
 
@@ -34,6 +37,51 @@ _tracker = AgentBudgetTracker()  # noqa: SRB001 — canonical SharedRuntimeBag c
 
 class BudgetService(LLCServiceBase):
     """Per-agent budget enforcement: cost ingest, hard stop, soft alert."""
+
+    async def provision_budget(
+        self,
+        session: AsyncSession,
+        agent_id: str,
+        company_id: str,
+        budget_limit: Optional[Decimal] = None,
+    ) -> Tuple[LLCAgentBudget, bool]:
+        """Create a default LLCAgentBudget row for an agent if one does not exist (GH#9901).
+
+        Idempotent: if a row already exists, returns it with ``created=False``.
+        Returns ``(row, created)`` where ``created`` is True only for new rows.
+        """
+        existing = (
+            await session.execute(select(LLCAgentBudget).where(LLCAgentBudget.agent_id == agent_id))
+        ).scalar_one_or_none()
+        if existing is not None:
+            logger.debug("Budget row already exists for agent %s — skipping provision", agent_id)
+            return existing, False
+
+        limit = budget_limit if budget_limit is not None else DEFAULT_BUDGET_LIMIT
+        row = LLCAgentBudget(
+            id=uuid.uuid4(),
+            company_id=company_id,
+            agent_id=agent_id,
+            budget_mode="dollars",
+            budget_limit=limit,
+            budget_spent=Decimal("0"),
+            tokens_spent=0,
+            alert_threshold=0.8,
+        )
+        session.add(row)
+        try:
+            async with session.begin_nested():
+                await session.flush()
+        except IntegrityError:
+            # Concurrent provision won the race — re-select and return existing row.
+            existing = (
+                await session.execute(select(LLCAgentBudget).where(LLCAgentBudget.agent_id == agent_id))
+            ).scalar_one_or_none()
+            logger.debug("Race on provision_budget for agent %s — returning existing row", agent_id)
+            return existing, False
+
+        logger.info("Provisioned budget for agent %s (company=%s limit=%s)", agent_id, company_id, limit)
+        return row, True
 
     async def ingest_cost_event(
         self,

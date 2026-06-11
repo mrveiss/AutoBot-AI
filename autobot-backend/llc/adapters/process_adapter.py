@@ -18,15 +18,16 @@ The ``run_id`` is the string-encoded PID of the spawned process.
 import asyncio
 import json
 import os
-import signal
 
 from autobot_shared.logging_manager import get_logger
 
 from ..models.enums import LLCRunStatus
 from .base import AdapterRunStatus
+from .subprocess_support import probe_pid, terminate_pid
 
 logger = get_logger(__name__)
 
+_LOG_NAME = "ProcessAdapter"
 _SIGTERM_GRACE_SECONDS = 5
 
 
@@ -56,38 +57,13 @@ class ProcessAdapter:
             pid = int(run_id)
         except ValueError as exc:
             return AdapterRunStatus(status=LLCRunStatus.FAILED, error=str(exc))
-        try:
-            # Signal 0 checks existence without delivering a signal.
-            os.kill(pid, 0)
-            return AdapterRunStatus(status=LLCRunStatus.RUNNING)
-        except ProcessLookupError:
-            # PID gone — we cannot recover exit code after the fact without
-            # holding a Popen handle, so report completed.
-            return AdapterRunStatus(status=LLCRunStatus.COMPLETED)
-        except PermissionError:
-            # Process exists but we can't signal it (different uid).
-            return AdapterRunStatus(status=LLCRunStatus.RUNNING)
-        except OSError as exc:
-            return AdapterRunStatus(status=LLCRunStatus.FAILED, error=str(exc))
+        return probe_pid(pid)
 
     async def cancel(self, agent_config: dict, run_id: str) -> None:
         pid = int(run_id)
-        try:
-            os.kill(pid, signal.SIGTERM)
-            logger.info("ProcessAdapter: sent SIGTERM to PID %d", pid)
-        except ProcessLookupError:
-            return  # already gone
-
-        # Wait for graceful exit; escalate to SIGKILL if needed.
-        for _ in range(_SIGTERM_GRACE_SECONDS * 10):
-            await asyncio.sleep(0.1)
-            try:
-                os.kill(pid, 0)
-            except ProcessLookupError:
-                return
-
-        try:
-            os.kill(pid, signal.SIGKILL)
-            logger.warning("ProcessAdapter: SIGKILL sent to PID %d (did not exit after SIGTERM)", pid)
-        except ProcessLookupError:
-            pass
+        # terminate_pid returns True when the process was already gone
+        # (SIGTERM raised ProcessLookupError) — match the original early-return
+        # behavior: no further action needed when the process is already dead.
+        already_gone = await terminate_pid(pid, _SIGTERM_GRACE_SECONDS, _LOG_NAME)
+        if already_gone:
+            return

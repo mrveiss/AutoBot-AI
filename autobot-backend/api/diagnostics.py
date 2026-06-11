@@ -9,8 +9,7 @@ Issue #4069: Causal inference engine integration.
 
 Provides:
 - POST /api/diagnostics/analyze-failure — Analyze error event via CausalInferenceEngine
-- GET /api/diagnostics/health — System health check
-- POST /api/diagnostics/inspect-task — Inspect task execution history
+- GET /api/diagnostics/analyze-failure — Same analysis via query params (integration testing)
 
 Used for:
 - Postmortem analysis (what went wrong?)
@@ -31,8 +30,9 @@ from services.causal_inference_engine import CausalInferenceEngine
 
 logger = get_logger(__name__)
 
-# Create router
-router = APIRouter(prefix="/api/diagnostics", tags=["diagnostics"])
+# Create router — prefix must NOT include "/api"; the app factory prepends it
+# (#9892: the old "/api/diagnostics" prefix produced /api/api/diagnostics/*).
+router = APIRouter(prefix="/diagnostics", tags=["diagnostics"])
 
 # Singleton engine instance
 _engine: CausalInferenceEngine | None = None
