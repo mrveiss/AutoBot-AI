@@ -3,17 +3,37 @@
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
 """
-Unit tests for transcript AI analysis and KB integration (MVA-2176).
+Unit tests for transcript AI analysis and KB integration (MVA-2176, #9863).
 """
 
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from fastapi import HTTPException
 
 from api.schemas_transcripts import (
     AnalysisType,
     TranscriptKBPushRequest,
 )
+
+MOCK_USER = {"user_id": "test-user", "roles": ["user"]}
+
+
+def _make_raw_request(db) -> SimpleNamespace:
+    """Build a request-like object exposing app.state.transcriber_db."""
+    return SimpleNamespace(
+        app=SimpleNamespace(state=SimpleNamespace(transcriber_db=db))
+    )
+
+
+def _make_db(recording: dict | None) -> AsyncMock:
+    db = AsyncMock()
+    db.get_recording = AsyncMock(return_value=recording)
+    return db
+
+
+DEFAULT_RECORDING = {"id": 456, "user_id": "default", "status": "complete"}
 
 
 @pytest.mark.asyncio
@@ -23,7 +43,9 @@ async def test_kb_push_success():
 
     # Mock KB
     mock_kb = AsyncMock()
-    mock_kb.add_document = AsyncMock(return_value={"status": "success", "doc_id": "test-doc-123"})
+    mock_kb.add_document = AsyncMock(
+        return_value={"status": "success", "doc_id": "test-doc-123"}
+    )
 
     # Mock request
     request = TranscriptKBPushRequest(
@@ -34,14 +56,12 @@ async def test_kb_push_success():
         confidence=0.95,
     )
 
-    # Mock user
-    mock_user = {"user_id": "test-user", "roles": ["user"]}
-
     with patch("api.transcripts.get_knowledge_base", return_value=mock_kb):
         response = await push_transcript_to_kb(
-            transcript_id="transcript-456",
+            transcript_id="456",
             request=request,
-            user=mock_user,
+            raw_request=_make_raw_request(_make_db(DEFAULT_RECORDING)),
+            user=MOCK_USER,
         )
 
     # Verify response
@@ -57,13 +77,14 @@ async def test_kb_push_success():
     # Verify metadata
     metadata = call_args.kwargs["metadata"]
     assert metadata["source_type"] == "transcript"
-    assert metadata["transcript_id"] == "transcript-456"
-    assert metadata["source"] == "transcript:transcript-456"
+    assert metadata["transcript_id"] == "456"
+    assert metadata["source"] == "transcript:456"
     assert metadata["segment_start"] == 10.5
     assert metadata["segment_end"] == 25.3
     assert metadata["speaker"] == "John"
     assert metadata["confidence"] == 0.95
     assert metadata["verification_status"] == "unverified"
+    assert metadata["user_id"] == "test-user"
 
 
 @pytest.mark.asyncio
@@ -72,19 +93,20 @@ async def test_kb_push_without_timing():
     from api.transcripts import push_transcript_to_kb
 
     mock_kb = AsyncMock()
-    mock_kb.add_document = AsyncMock(return_value={"status": "success", "doc_id": "test-doc-789"})
+    mock_kb.add_document = AsyncMock(
+        return_value={"status": "success", "doc_id": "test-doc-789"}
+    )
 
     request = TranscriptKBPushRequest(
         segment_text="Segment without timing.",
     )
 
-    mock_user = {"user_id": "test-user", "roles": ["user"]}
-
     with patch("api.transcripts.get_knowledge_base", return_value=mock_kb):
         response = await push_transcript_to_kb(
-            transcript_id="transcript-789",
+            transcript_id="456",
             request=request,
-            user=mock_user,
+            raw_request=_make_raw_request(_make_db(DEFAULT_RECORDING)),
+            user=MOCK_USER,
         )
 
     assert response.success is True
@@ -103,24 +125,25 @@ async def test_kb_push_failure():
     from api.transcripts import push_transcript_to_kb
 
     mock_kb = AsyncMock()
-    mock_kb.add_document = AsyncMock(return_value={"status": "error", "message": "KB timeout"})
+    mock_kb.add_document = AsyncMock(
+        return_value={"status": "error", "message": "KB timeout"}
+    )
 
     request = TranscriptKBPushRequest(
         segment_text="Test segment.",
     )
 
-    mock_user = {"user_id": "test-user", "roles": ["user"]}
-
     with patch("api.transcripts.get_knowledge_base", return_value=mock_kb):
         response = await push_transcript_to_kb(
-            transcript_id="transcript-fail",
+            transcript_id="456",
             request=request,
-            user=mock_user,
+            raw_request=_make_raw_request(_make_db(DEFAULT_RECORDING)),
+            user=MOCK_USER,
         )
 
     assert response.success is False
-    # Security: Error message should be generic, not expose internal details
-    assert "failed" in response.message.lower()
+    # KB error status surfaces the KB-provided message
+    assert response.message == "KB timeout"
 
 
 @pytest.mark.asyncio
@@ -135,13 +158,12 @@ async def test_kb_push_exception():
         segment_text="Test segment.",
     )
 
-    mock_user = {"user_id": "test-user", "roles": ["user"]}
-
     with patch("api.transcripts.get_knowledge_base", return_value=mock_kb):
         response = await push_transcript_to_kb(
-            transcript_id="transcript-error",
+            transcript_id="456",
             request=request,
-            user=mock_user,
+            raw_request=_make_raw_request(_make_db(DEFAULT_RECORDING)),
+            user=MOCK_USER,
         )
 
     assert response.success is False
@@ -149,6 +171,111 @@ async def test_kb_push_exception():
     assert "failed" in response.message.lower()
     # Security: Should NOT expose internal exception details
     assert "Database error" not in response.message
+
+
+@pytest.mark.asyncio
+async def test_kb_push_unknown_recording_404():
+    """Test KB push rejects transcript ids with no backing recording."""
+    from api.transcripts import push_transcript_to_kb
+
+    request = TranscriptKBPushRequest(segment_text="Test segment.")
+
+    with pytest.raises(HTTPException) as exc_info:
+        await push_transcript_to_kb(
+            transcript_id="999",
+            request=request,
+            raw_request=_make_raw_request(_make_db(None)),
+            user=MOCK_USER,
+        )
+
+    assert exc_info.value.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_kb_push_non_numeric_id_404():
+    """Test KB push rejects non-numeric transcript ids."""
+    from api.transcripts import push_transcript_to_kb
+
+    request = TranscriptKBPushRequest(segment_text="Test segment.")
+
+    with pytest.raises(HTTPException) as exc_info:
+        await push_transcript_to_kb(
+            transcript_id="not-a-recording",
+            request=request,
+            raw_request=_make_raw_request(_make_db(DEFAULT_RECORDING)),
+            user=MOCK_USER,
+        )
+
+    assert exc_info.value.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_kb_push_other_users_recording_404():
+    """Test KB push hides recordings owned by another user."""
+    from api.transcripts import push_transcript_to_kb
+
+    request = TranscriptKBPushRequest(segment_text="Test segment.")
+    foreign = {"id": 456, "user_id": "someone-else", "status": "complete"}
+
+    with pytest.raises(HTTPException) as exc_info:
+        await push_transcript_to_kb(
+            transcript_id="456",
+            request=request,
+            raw_request=_make_raw_request(_make_db(foreign)),
+            user=MOCK_USER,
+        )
+
+    assert exc_info.value.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_kb_push_storage_unavailable_503():
+    """Test KB push returns 503 when transcriber storage is not initialized."""
+    from api.transcripts import push_transcript_to_kb
+
+    request = TranscriptKBPushRequest(segment_text="Test segment.")
+    raw_request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace()))
+
+    with pytest.raises(HTTPException) as exc_info:
+        await push_transcript_to_kb(
+            transcript_id="456",
+            request=request,
+            raw_request=raw_request,
+            user=MOCK_USER,
+        )
+
+    assert exc_info.value.status_code == 503
+
+
+@pytest.mark.asyncio
+async def test_load_transcript_content_uses_segments():
+    """Test transcript content is built from stored segments."""
+    from api.transcripts import _load_transcript_content
+
+    db = _make_db(DEFAULT_RECORDING)
+    state = SimpleNamespace(transcriber_db=db)
+    segments = [
+        {"text": "Hello world", "speaker_name": "John", "start": 0.0, "notes": []}
+    ]
+
+    with patch("api.transcripts._build_segment_list", AsyncMock(return_value=segments)):
+        content = await _load_transcript_content(state, "456", "test-user")
+
+    assert "Hello world" in content
+
+
+@pytest.mark.asyncio
+async def test_load_transcript_content_incomplete_400():
+    """Test analysis of an untranscribed recording is rejected."""
+    from api.transcripts import _load_transcript_content
+
+    pending = {"id": 456, "user_id": "default", "status": "processing"}
+    state = SimpleNamespace(transcriber_db=_make_db(pending))
+
+    with pytest.raises(HTTPException) as exc_info:
+        await _load_transcript_content(state, "456", "test-user")
+
+    assert exc_info.value.status_code == 400
 
 
 def test_analysis_prompt_generation():

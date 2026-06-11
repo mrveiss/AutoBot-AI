@@ -31,6 +31,7 @@ aliases:
 | [IP_ADDRESSING_SCHEME](IP_ADDRESSING_SCHEME.md) | IP addressing scheme |
 | [FRONTEND_INTEGRATION_API_SPECS](FRONTEND_INTEGRATION_API_SPECS.md) | Frontend integration specs |
 | [CODE_VECTORIZATION_API](CODE_VECTORIZATION_API.md) | Code vectorization API |
+| [transcript-analysis](transcript-analysis.md) | Transcript AI analysis & KB push API |
 
 ## Analysis & Cleanup
 
