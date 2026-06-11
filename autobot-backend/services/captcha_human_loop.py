@@ -123,7 +123,7 @@ class CaptchaHumanLoop:
         self.auto_skip_on_timeout = auto_skip_on_timeout
         # Use environment variable or NetworkConstants for VNC URL
         vnc_host = config.vnc_host
-        vnc_port = config.vnc_port
+        vnc_port = config.port.vnc
         self.vnc_url = vnc_url or f"http://{vnc_host}:{vnc_port}/vnc.html"
         self.enable_auto_solve = enable_auto_solve
         self._auto_solver = None

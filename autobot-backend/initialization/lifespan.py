@@ -11,6 +11,7 @@ Handles application startup and shutdown with 2-phase initialization:
 """
 
 import asyncio
+import functools
 import json
 import logging
 from concurrent.futures import ThreadPoolExecutor
@@ -74,6 +75,36 @@ async def update_app_state_multi(**kwargs) -> None:
     """Thread-safe update of multiple app_state keys."""
     async with _app_state_lock:
         app_state.update(kwargs)
+
+
+def _llc_postgres_available() -> bool:
+    """LLC persistence requires Postgres (single_company+). In single_user mode
+    it is intentionally unavailable, so callers skip rather than error (#9713)."""
+    try:
+        from user_management.config import get_deployment_config
+
+        return get_deployment_config().postgres_enabled
+    except Exception:
+        return False
+
+
+def requires_postgres(feature: str):
+    """Decorator: skip the wrapped async function with one INFO line when Postgres
+    is disabled (single_user mode).  Apply to startup helpers that have no
+    app.state side-effect on skip; for functions that must also set
+    app.state.X = None on skip keep an explicit guard instead (#9913 #9765)."""
+
+    def deco(fn):
+        @functools.wraps(fn)
+        async def wrapper(*args, **kwargs):
+            if not _llc_postgres_available():
+                logger.info("%s: skipped (Postgres disabled — single_user mode)", feature)
+                return None
+            return await fn(*args, **kwargs)
+
+        return wrapper
+
+    return deco
 
 
 def configure_logging():
@@ -791,11 +822,9 @@ async def _init_llc_outbound_sync(app: FastAPI) -> None:
         app.state.llc_outbound_sync = None
 
 
+@requires_postgres("LLC Routine Scheduler")
 async def _init_llc_routine_scheduler(app: FastAPI) -> None:
     """Start the LLC RoutineScheduler that fires cron-based routines (GH#8229)."""
-    if not _llc_postgres_available():
-        logger.info("LLC Routine Scheduler: skipped (Postgres disabled — single_user mode)")
-        return
     logger.info("LLC Routine Scheduler: Starting...")
     try:
         from llc.scheduler.routine_scheduler import RoutineScheduler
@@ -954,66 +983,70 @@ async def _init_graph_rag_service(app: FastAPI, memory_graph):
             # Build mesh brain components and register them so every RAGService.initialize()
             # can construct its OWN NeuralMeshRetriever with closures bound to its own
             # optimizer — eliminating the shared-singleton coupling (#4765).
-            try:
-                from autobot_shared.redis_client import get_async_redis_client
-                from knowledge.search_components.query_classifier import QueryClassifier
-                from knowledge.search_components.reranking import ResultReranker
-                from services.mesh_brain.edge_learner import EdgeLearner
-                from services.mesh_brain.mesh_db_adapter import create_mesh_db_adapter
-                from services.mesh_brain.ppr import PersonalizedPageRank
-                from user_management.database import get_async_engine
+            # NeuralMesh requires the Postgres-backed engine; skip cleanly in single_user (#9765).
+            if not _llc_postgres_available():
+                logger.info("Neural Mesh RAG: skipped (Postgres disabled — single_user mode)")
+            else:
+                try:
+                    from autobot_shared.redis_client import get_async_redis_client
+                    from knowledge.search_components.query_classifier import QueryClassifier
+                    from knowledge.search_components.reranking import ResultReranker
+                    from services.mesh_brain.edge_learner import EdgeLearner
+                    from services.mesh_brain.mesh_db_adapter import create_mesh_db_adapter
+                    from services.mesh_brain.ppr import PersonalizedPageRank
+                    from user_management.database import get_async_engine
 
-                _mesh_db = create_mesh_db_adapter(get_async_engine())
-                _redis = get_async_redis_client()
-                _ppr = PersonalizedPageRank(db=_mesh_db)
-                _edge_learner = EdgeLearner(db=_mesh_db, redis=_redis)
+                    _mesh_db = create_mesh_db_adapter(get_async_engine())
+                    _redis = get_async_redis_client()
+                    _ppr = PersonalizedPageRank(db=_mesh_db)
+                    _edge_learner = EdgeLearner(db=_mesh_db, redis=_redis)
 
-                _mesh_components = {
-                    "mesh_db": _mesh_db,
-                    "ppr": _ppr,
-                    "edge_learner": _edge_learner,
-                    "reranker": ResultReranker(),
-                    "classifier": QueryClassifier(),
-                    "llm": None,
-                }
+                    _mesh_components = {
+                        "mesh_db": _mesh_db,
+                        "ppr": _ppr,
+                        "edge_learner": _edge_learner,
+                        "reranker": ResultReranker(),
+                        "classifier": QueryClassifier(),
+                        "llm": None,
+                    }
 
-                # Store on app.state for introspection / health checks.
-                app.state.mesh_components = _mesh_components
+                    # Store on app.state for introspection / health checks.
+                    app.state.mesh_components = _mesh_components
 
-                # Expose mesh_db on app.state so _start_community_clustering_loop can use it (#4834).
-                app.state.mesh_db = _mesh_db
+                    # Expose mesh_db on app.state so _start_community_clustering_loop can use it (#4834).
+                    app.state.mesh_db = _mesh_db
 
-                # Register components; each future RAGService.initialize() builds its own
-                # retriever from these, binding closures to its own optimizer (#4765).
-                register_shared_mesh_components(_mesh_components)
+                    # Register components; each future RAGService.initialize() builds its own
+                    # retriever from these, binding closures to its own optimizer (#4765).
+                    register_shared_mesh_components(_mesh_components)
 
-                # Trigger re-initialization for already-created RAGService instances so they
-                # also build per-instance retrievers (covers chat_workflow_manager and the
-                # get_rag_service() singleton that were created before this point).
-                import services.rag_service as _rag_mod
+                    # Trigger re-initialization for already-created RAGService instances so they
+                    # also build per-instance retrievers (covers chat_workflow_manager and the
+                    # get_rag_service() singleton that were created before this point).
+                    import services.rag_service as _rag_mod
 
-                for _existing in [
-                    _rag_mod._rag_service_instance,
-                    getattr(
+                    for _existing in [
+                        _rag_mod._rag_service_instance,
                         getattr(
-                            getattr(app.state, "chat_workflow_manager", None),
-                            "knowledge_service",
+                            getattr(
+                                getattr(app.state, "chat_workflow_manager", None),
+                                "knowledge_service",
+                                None,
+                            ),
+                            "rag_service",
                             None,
                         ),
-                        "rag_service",
-                        None,
-                    ),
-                ]:
-                    if _existing is not None and _existing._mesh_retriever is None:
-                        _existing._initialized = False  # force re-init on next call
-                        logger.info("Queued per-instance NeuralMeshRetriever build for existing RAGService (#4765)")
+                    ]:
+                        if _existing is not None and _existing._mesh_retriever is None:
+                            _existing._initialized = False  # force re-init on next call
+                            logger.info("Queued per-instance NeuralMeshRetriever build for existing RAGService (#4765)")
 
-                logger.info(
-                    "✅ [ 87%] Neural Mesh RAG: mesh components registered; "
-                    "per-instance NeuralMeshRetriever will build on next initialize() (#4765)"
-                )
-            except Exception as _mesh_wire_err:
-                logger.warning("Neural Mesh RAG wiring skipped (non-fatal): %s", _mesh_wire_err)
+                    logger.info(
+                        "✅ [ 87%] Neural Mesh RAG: mesh components registered; "
+                        "per-instance NeuralMeshRetriever will build on next initialize() (#4765)"
+                    )
+                except Exception as _mesh_wire_err:
+                    logger.warning("Neural Mesh RAG wiring skipped (non-fatal): %s", _mesh_wire_err)
 
             graph_rag_service = GraphRAGService(
                 rag_service=rag_service,
@@ -1210,11 +1243,9 @@ async def _init_background_llm_sync(app: FastAPI):
         logger.warning("Background LLM sync initialization failed: %s", sync_error)
 
 
+@requires_postgres("Agent Registry")
 async def _seed_agent_registry() -> None:
     """Populate agents table from DEFAULT_AGENT_CONFIGS (#1754)."""
-    if not _llc_postgres_available():
-        logger.info("[ 97%%] Agent Registry: skipped (Postgres disabled — single_user mode)")
-        return
     logger.info("[ 97%%] Agent Registry: Seeding agents table...")
     try:
         from services.agent_registry_service import seed_agents_from_config
@@ -1274,8 +1305,12 @@ async def _ensure_agent_memory_index() -> None:
 
     Idempotent — safe to call on every startup. If the index already exists,
     handle_redis_vector_create_index returns immediately without error.
-    Uses the vectors database (Redis DB 8) with default agent-memory schema:
-    HNSW, FLOAT32, 1536 dimensions, COSINE distance.
+
+    RediSearch FT.CREATE only operates on Redis logical DB 0.  Agent memory
+    data keys (autobot:agent:memory:*) are written to DB 0 ("main") by the
+    MCP data-access layer, so the index must live on the same DB.  The
+    "memory" database alias resolves to DB 0 and documents this constraint
+    explicitly (see autobot_shared/redis_management/types.py _ALIASES).
     """
     logger.info("[ 93%%] Agent Memory Index: Ensuring idx:agent_memory exists...")
     try:
@@ -1287,7 +1322,7 @@ async def _ensure_agent_memory_index() -> None:
             vector_field="embedding",
             dimensions=1536,
             distance_metric="COSINE",
-            database="vectors",
+            database="memory",
         )
         if result.get("message") == "Index already exists":
             logger.info("[ 93%%] Agent Memory Index: idx:agent_memory already exists")
@@ -1556,22 +1591,9 @@ async def _init_budget_watchdog(app: FastAPI) -> None:
         app.state.llc_budget_watchdog = None
 
 
-def _llc_postgres_available() -> bool:
-    """LLC persistence requires Postgres (single_company+). In single_user mode
-    it is intentionally unavailable, so callers skip rather than error (#9713)."""
-    try:
-        from user_management.config import get_deployment_config
-
-        return get_deployment_config().postgres_enabled
-    except Exception:
-        return False
-
-
+@requires_postgres("LLC SessionCheckpointer")
 async def _recover_agent_sessions(app: FastAPI) -> None:
     """Re-queue runs that were interrupted by a previous server crash (GH#9026)."""
-    if not _llc_postgres_available():
-        logger.info("LLC SessionCheckpointer: skipped (Postgres disabled — single_user mode)")
-        return
     logger.info("LLC SessionCheckpointer: recovering incomplete runs...")
     try:
         from llc.scheduler.session_checkpointer import recover_incomplete_runs
