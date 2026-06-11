@@ -59,13 +59,18 @@ class PollLoopScheduler:
     # Lifecycle
     # ------------------------------------------------------------------
 
-    def start(self) -> None:
-        """Start the background polling loop (idempotent)."""
+    def start(self) -> bool:
+        """Start the background polling loop (idempotent).
+
+        Returns True when the task was created by this call, False on a
+        redundant start — so subclasses can log "started" exactly once.
+        """
         if self._running:
-            return
+            return False
         self._running = True
         task_name = self._task_name or type(self).__name__
         self._task = asyncio.create_task(self._loop(), name=task_name)
+        return True
 
     def stop(self) -> None:
         """Stop the background polling loop.
@@ -95,7 +100,13 @@ class PollLoopScheduler:
             except asyncio.CancelledError:
                 break
             except Exception:
-                logger.exception("%s._tick() failed", type(self).__name__)
+                # Attribute tick failures to the subclass's module logger so
+                # per-module log-level filtering keeps working as it did
+                # before the extraction; the base logger only carries
+                # lifecycle events.
+                logging.getLogger(type(self).__module__).exception(
+                    "%s._tick() failed", type(self).__name__
+                )
             await asyncio.sleep(self._poll_interval)
 
     # ------------------------------------------------------------------

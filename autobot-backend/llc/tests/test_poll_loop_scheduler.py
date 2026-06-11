@@ -5,7 +5,7 @@
 """Unit tests for PollLoopScheduler base class (GH#9842)."""
 
 import asyncio
-from unittest.mock import patch
+import logging
 
 import pytest
 
@@ -155,10 +155,10 @@ def test_task_name_falls_back_to_class_name_when_empty() -> None:
 
 
 @pytest.mark.asyncio
-async def test_tick_exception_does_not_kill_loop() -> None:
+async def test_tick_exception_does_not_kill_loop(caplog: pytest.LogCaptureFixture) -> None:
     """When _tick() raises, the loop continues (exception is caught and logged)."""
     sched = _ErrorScheduler(poll_interval=0.0)
-    with patch("llc.scheduler.base.logger") as mock_log:
+    with caplog.at_level(logging.ERROR, logger=_ErrorScheduler.__module__):
         sched.start()
         # Allow a couple of iterations — if the loop were killed by the first
         # exception, tick_count would stay at 1.
@@ -167,22 +167,24 @@ async def test_tick_exception_does_not_kill_loop() -> None:
         await asyncio.sleep(0)  # let cancellation propagate
 
     assert sched.tick_count >= 2, "loop must survive tick exceptions"
-    assert mock_log.exception.called, "exception must be logged"
+    assert any("_tick() failed" in r.message for r in caplog.records), "exception must be logged"
 
 
 @pytest.mark.asyncio
-async def test_tick_exception_logs_class_name() -> None:
-    """The exception log message includes the concrete class name."""
+async def test_tick_exception_logs_class_name(caplog: pytest.LogCaptureFixture) -> None:
+    """Tick failures log the concrete class name under the subclass's module logger."""
     sched = _ErrorScheduler(poll_interval=0.0)
-    with patch("llc.scheduler.base.logger") as mock_log:
+    with caplog.at_level(logging.ERROR, logger=_ErrorScheduler.__module__):
         sched.start()
         await asyncio.sleep(0.05)
         sched.stop()
         await asyncio.sleep(0)
 
-    # The format string contains the class name
-    call_args = mock_log.exception.call_args
-    assert "_ErrorScheduler" in call_args[0][0] % (call_args[0][1],)
+    failures = [r for r in caplog.records if "_tick() failed" in r.message]
+    assert failures, "exception must be logged"
+    # Attributed to the subclass's module logger, naming the concrete class
+    assert failures[0].name == _ErrorScheduler.__module__
+    assert "_ErrorScheduler" in failures[0].message
 
 
 # ---------------------------------------------------------------------------

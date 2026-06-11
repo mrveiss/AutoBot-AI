@@ -71,8 +71,7 @@ class SessionCheckpointer(PollLoopScheduler):
 
     def start(self) -> None:
         """Start the background polling loop."""
-        super().start()
-        if self._task is not None:
+        if super().start():
             logger.info("SessionCheckpointer started (poll interval: %ds)", self._poll_interval)
 
     async def _tick(self) -> None:
