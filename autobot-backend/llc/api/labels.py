@@ -19,9 +19,6 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from autobot_shared.singleton_factory import lazy_singleton
-from user_management.database import get_async_session_factory
-
 from ..services.label_service import (
     LabelNameConflict,
     LabelNotFound,
@@ -29,19 +26,10 @@ from ..services.label_service import (
     WorkItemNotFound,
     _label_to_dict,
 )
+from llc.deps import get_session, service_dep
 
 router = APIRouter(prefix="/companies/{company_id}/labels", tags=["llc-labels"])
-_get_service = lazy_singleton(LLCLabelService)
-
-
-def _service() -> LLCLabelService:
-    return _get_service()
-
-
-async def get_session() -> AsyncSession:
-    factory = get_async_session_factory()
-    async with factory() as session:
-        yield session
+_service = service_dep(LLCLabelService)
 
 
 # ------------------------------------------------------------------

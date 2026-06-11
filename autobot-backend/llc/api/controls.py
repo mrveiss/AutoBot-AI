@@ -26,7 +26,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user
 from autobot_shared.singleton_factory import lazy_singleton
-from user_management.database import get_async_session_factory
 
 from ..models.enums import MembershipRole
 from ..services.controls_service import (
@@ -36,6 +35,7 @@ from ..services.controls_service import (
     SprintNotFoundError,
 )
 from ..services.membership_service import MembershipService
+from llc.deps import get_session
 
 router = APIRouter(tags=["llc-controls"])
 
@@ -43,12 +43,6 @@ _get_controls = lazy_singleton(ControlsService)
 _get_membership = lazy_singleton(MembershipService)
 
 _ALLOWED_ROLES = {MembershipRole.OWNER, MembershipRole.ADMIN}
-
-
-async def get_session() -> AsyncSession:
-    factory = get_async_session_factory()
-    async with factory() as session:
-        yield session
 
 
 def _controls_svc() -> ControlsService:

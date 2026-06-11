@@ -13,25 +13,13 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from autobot_shared.singleton_factory import lazy_singleton
-from user_management.database import get_async_session_factory
-
 from ..models.enums import WorkItemStatus, WorkItemType
 from ..models.work_item import LLCWorkItem
 from ..services.backlog import BacklogService
+from llc.deps import get_session, service_dep
 
 router = APIRouter(prefix="/backlog", tags=["llc-backlog"])
-_get_service = lazy_singleton(BacklogService)
-
-
-def _service() -> BacklogService:
-    return _get_service()
-
-
-async def get_session() -> AsyncSession:
-    factory = get_async_session_factory()
-    async with factory() as session:
-        yield session
+_service = service_dep(BacklogService)
 
 
 def _item_to_dict(item: LLCWorkItem) -> Dict[str, Any]:

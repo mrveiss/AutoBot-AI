@@ -29,25 +29,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user
 from autobot_shared.redis_client import get_async_redis_client
-from autobot_shared.singleton_factory import lazy_singleton
-from user_management.database import get_async_session_factory
 
 from ..models.enums import RoutineProduces, RoutineStatus
 from ..scheduler.routine_scheduler import _SCHEDULE_KEY
 from ..services.routine_service import RoutineService
+from llc.deps import get_session, service_dep
 
 router = APIRouter(tags=["llc-routines"])
-_get_service = lazy_singleton(RoutineService)
-
-
-def _service() -> RoutineService:
-    return _get_service()
-
-
-async def get_session() -> AsyncSession:
-    factory = get_async_session_factory()
-    async with factory() as session:
-        yield session
+_service = service_dep(RoutineService)
 
 
 # ------------------------------------------------------------------
