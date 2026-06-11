@@ -131,6 +131,14 @@ class Secret(Base):
         comment="Session ID for session-scoped secrets",
     )
 
+    # Migration 20260324_017 (Issue #2153, #9975)
+    workflow_id: Mapped[str | None] = mapped_column(
+        String(128),
+        nullable=True,
+        index=True,
+        comment="Workflow ID for workflow-scoped secrets (Issue #2153). Set when scope='workflow'.",
+    )
+
     shared_with: Mapped[dict] = mapped_column(
         JSONB,
         default=list,
