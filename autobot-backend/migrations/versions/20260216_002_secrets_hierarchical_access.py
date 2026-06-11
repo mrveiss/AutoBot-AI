@@ -68,6 +68,21 @@ def _create_secrets_table() -> None:
         sa.Column("expires_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("true")),
         sa.Column("extra_data", postgresql.JSONB, nullable=False, server_default="{}"),
+        # Inherited from the declarative Base (user_management/models/base.py),
+        # so every create_all-built secrets table carries them and the ORM
+        # always selects them.
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.func.now(),
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.func.now(),
+        ),
     )
     op.create_index("ix_secrets_owner_id", "secrets", ["owner_id"])
     op.create_index("ix_secrets_name", "secrets", ["name"])
