@@ -125,8 +125,11 @@ def test_postgres_role_present():
     assert role["systemd_service"] == "postgresql"
     assert role["required"] is True
     assert role["auto_restart"] is True
-    assert role["ansible_playbook"] == "deploy-backend.yml"
+    # No AutoBot playbook owns postgres provisioning; api/roles.py returns 422.
+    assert role["ansible_playbook"] is None
     assert role["sync_type"] is None
+    # Non-empty target_path ensures role_detector activates path + systemd checks.
+    assert role["target_path"] == "/var/lib/postgresql"
 
 
 def test_postgres_in_databases_ansible_group():

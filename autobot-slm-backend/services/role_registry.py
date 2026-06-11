@@ -175,12 +175,19 @@ _DATABASE_ROLES = [
         "display_name": "PostgreSQL",
         "sync_type": None,
         "source_paths": [],
-        "target_path": "",
+        # /var/lib/postgresql is the standard Debian/Ubuntu postgres data dir.
+        # Providing a non-empty target_path lets role_detector.py:76-77 skip its
+        # early-exit guard and activate path-existence + systemd checks, so a
+        # bare-metal postgres node can turn green when the service is running.
+        "target_path": "/var/lib/postgresql",
         "systemd_service": "postgresql",
         "auto_restart": True,
         "required": True,
         "degraded_without": [],
-        "ansible_playbook": "deploy-backend.yml",
+        # No AutoBot-owned playbook provisions postgres; deploy-database.yml
+        # provisions Redis Stack only.  api/roles.py:338-341 returns HTTP 422
+        # for None — correct behaviour for an externally managed service.
+        "ansible_playbook": None,
     },
 ]
 
