@@ -401,8 +401,22 @@ class KnowledgeBaseCore:
             self.chromadb_collection,
         )
 
-        collection_count = await asyncio.to_thread(abc_collection.count)
-        logger.info("ChromaDB collection contains %d vectors", collection_count)
+        try:
+            collection_count = await asyncio.to_thread(abc_collection.count)
+        except Exception as _count_exc:
+            logger.debug("Could not query ChromaDB collection count: %s", _count_exc)
+            collection_count = None
+
+        if collection_count is not None:
+            logger.info("ChromaDB collection contains %d vectors", collection_count)
+            if collection_count == 0:
+                logger.warning(
+                    "Knowledge base collection '%s' is empty. "
+                    "If this deployment previously had indexed data, the ChromaDB 1.x "
+                    "upgrade (PR #9762) requires re-indexing the knowledge base. "
+                    "See docs/operations/chromadb-1x-upgrade.md",
+                    self.chromadb_collection,
+                )
 
     async def _init_vector_store(self):
         """Initialize LlamaIndex vector store with ChromaDB (Issue #398: refactored)."""
