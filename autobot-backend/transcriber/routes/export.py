@@ -12,7 +12,8 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import Response
 
 from transcriber.database import Database
-from transcriber.deps import DEFAULT_USER, get_db
+from transcriber.deps import DEFAULT_USER, can_access, get_db
+from transcriber.export.segments import build_segment_list
 from transcriber.models import ExportRequest
 
 router = APIRouter(tags=["transcriber-export"])
@@ -33,26 +34,6 @@ _MIME = {
 _EXT = {"docx": "docx", "pdf": "pdf", "srt": "srt", "vtt": "vtt"}
 
 
-async def _build_segment_list(recording_id: int, db: Database) -> list[dict]:
-    speakers = {s["id"]: s for s in await db.list_speakers(recording_id)}
-    segments = await db.list_segments(recording_id)
-    notes = await db.list_notes(recording_id)
-    notes_by_seg: dict[int, list] = {}
-    for n in notes:
-        notes_by_seg.setdefault(n["segment_id"], []).append(n)
-    result = []
-    for seg in segments:
-        spk = speakers.get(seg["speaker_id"], {})
-        result.append(
-            {
-                **seg,
-                "speaker_name": spk.get("display_name", "Unknown"),
-                "notes": notes_by_seg.get(seg["id"], []),
-            }
-        )
-    return result
-
-
 @router.post("/recordings/{recording_id}/export")
 async def export_recording(
     recording_id: int,
@@ -61,9 +42,9 @@ async def export_recording(
     db: Database = Depends(get_db),
 ):
     rec = await db.get_recording(recording_id)
-    if not rec or rec["user_id"] != _user_id(request):
+    if not rec or not can_access(rec, _user_id(request)):
         raise HTTPException(404, "Recording not found")
-    segments = await _build_segment_list(recording_id, db)
+    segments = await build_segment_list(recording_id, db)
     title = rec["filename"]
     fmt = body.format
 
