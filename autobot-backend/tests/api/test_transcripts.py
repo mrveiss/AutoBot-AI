@@ -22,9 +22,7 @@ MOCK_USER = {"user_id": "test-user", "roles": ["user"]}
 
 def _make_raw_request(db) -> SimpleNamespace:
     """Build a request-like object exposing app.state.transcriber_db."""
-    return SimpleNamespace(
-        app=SimpleNamespace(state=SimpleNamespace(transcriber_db=db))
-    )
+    return SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(transcriber_db=db)))
 
 
 def _make_db(recording: dict | None) -> AsyncMock:
@@ -43,9 +41,7 @@ async def test_kb_push_success():
 
     # Mock KB
     mock_kb = AsyncMock()
-    mock_kb.add_document = AsyncMock(
-        return_value={"status": "success", "doc_id": "test-doc-123"}
-    )
+    mock_kb.add_document = AsyncMock(return_value={"status": "success", "doc_id": "test-doc-123"})
 
     # Mock request
     request = TranscriptKBPushRequest(
@@ -93,9 +89,7 @@ async def test_kb_push_without_timing():
     from api.transcripts import push_transcript_to_kb
 
     mock_kb = AsyncMock()
-    mock_kb.add_document = AsyncMock(
-        return_value={"status": "success", "doc_id": "test-doc-789"}
-    )
+    mock_kb.add_document = AsyncMock(return_value={"status": "success", "doc_id": "test-doc-789"})
 
     request = TranscriptKBPushRequest(
         segment_text="Segment without timing.",
@@ -125,9 +119,7 @@ async def test_kb_push_failure():
     from api.transcripts import push_transcript_to_kb
 
     mock_kb = AsyncMock()
-    mock_kb.add_document = AsyncMock(
-        return_value={"status": "error", "message": "KB timeout"}
-    )
+    mock_kb.add_document = AsyncMock(return_value={"status": "error", "message": "KB timeout"})
 
     request = TranscriptKBPushRequest(
         segment_text="Test segment.",
@@ -254,9 +246,7 @@ async def test_load_transcript_content_uses_segments():
 
     db = _make_db(DEFAULT_RECORDING)
     state = SimpleNamespace(transcriber_db=db)
-    segments = [
-        {"text": "Hello world", "speaker_name": "John", "start": 0.0, "notes": []}
-    ]
+    segments = [{"text": "Hello world", "speaker_name": "John", "start": 0.0, "notes": []}]
 
     with patch("api.transcripts._build_segment_list", AsyncMock(return_value=segments)):
         content = await _load_transcript_content(state, "456", "test-user")

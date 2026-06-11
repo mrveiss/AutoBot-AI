@@ -69,9 +69,7 @@ async def _load_recording(state: State, transcript_id: str, caller_id: str) -> d
     return rec
 
 
-async def _load_transcript_content(
-    state: State, transcript_id: str, caller_id: str
-) -> str:
+async def _load_transcript_content(state: State, transcript_id: str, caller_id: str) -> str:
     """Build the full transcript text for a recording (segments + speakers)."""
     rec = await _load_recording(state, transcript_id, caller_id)
     if rec["status"] != "complete":
@@ -80,18 +78,13 @@ async def _load_transcript_content(
     return build_context(segments)
 
 
-def _get_analysis_prompt(
-    analysis_type: AnalysisType, content: str, custom_prompt: str | None = None
-) -> str:
+def _get_analysis_prompt(analysis_type: AnalysisType, content: str, custom_prompt: str | None = None) -> str:
     """Generate analysis prompt based on type."""
     prompts = {
         AnalysisType.SUMMARIZE: f"Summarize the following transcript in a clear and concise manner:\n\n{content}",
-        AnalysisType.KEY_FACTS: (
-            f"Extract the key facts and important information from this transcript:\n\n{content}"
-        ),
+        AnalysisType.KEY_FACTS: (f"Extract the key facts and important information from this transcript:\n\n{content}"),
         AnalysisType.PROTOCOL: (
-            f"Identify any protocols, procedures, or standard processes "
-            f"mentioned in this transcript:\n\n{content}"
+            f"Identify any protocols, procedures, or standard processes " f"mentioned in this transcript:\n\n{content}"
         ),
     }
 
@@ -103,22 +96,16 @@ def _get_analysis_prompt(
     return prompts[analysis_type]
 
 
-async def _stream_analysis(
-    transcript_content: str, request: TranscriptAnalyzeRequest
-) -> AsyncIterator[str]:
+async def _stream_analysis(transcript_content: str, request: TranscriptAnalyzeRequest) -> AsyncIterator[str]:
     """Stream AI analysis of transcript content using llm_shared."""
     try:
         # Build LLM prompt
-        prompt = _get_analysis_prompt(
-            request.analysis_type, transcript_content, request.custom_prompt
-        )
+        prompt = _get_analysis_prompt(request.analysis_type, transcript_content, request.custom_prompt)
 
         # Security: Pass context as separate system message boundary instead of concatenating
         messages = []
         if request.context:
-            messages.append(
-                {"role": "system", "content": f"Context: {request.context}"}
-            )
+            messages.append({"role": "system", "content": f"Context: {request.context}"})
         messages.append({"role": "user", "content": prompt})
 
         # Create LLM request
@@ -171,9 +158,7 @@ async def analyze_transcript_ws(websocket: WebSocket, transcript_id: str):
         request = TranscriptAnalyzeRequest(**data)
 
         try:
-            content = await _load_transcript_content(
-                websocket.app.state, transcript_id, _resolve_user_id(user)
-            )
+            content = await _load_transcript_content(websocket.app.state, transcript_id, _resolve_user_id(user))
         except HTTPException as exc:
             await websocket.send_json({"error": exc.detail})
             await websocket.close(code=4004 if exc.status_code == 404 else 1008)
@@ -190,9 +175,7 @@ async def analyze_transcript_ws(websocket: WebSocket, transcript_id: str):
             await websocket.close()
 
     except WebSocketDisconnect:
-        logger.info(
-            "Client disconnected from transcript analysis WebSocket: %s", transcript_id
-        )
+        logger.info("Client disconnected from transcript analysis WebSocket: %s", transcript_id)
     except ValueError as e:
         logger.warning("Invalid analysis request: %s", e)
         if websocket.client_state == WebSocketState.CONNECTED:
@@ -205,9 +188,7 @@ async def analyze_transcript_ws(websocket: WebSocket, transcript_id: str):
             await websocket.close(code=1011)
 
 
-def _build_kb_metadata(
-    request: TranscriptKBPushRequest, transcript_id: str, caller_id: str
-) -> dict:
+def _build_kb_metadata(request: TranscriptKBPushRequest, transcript_id: str, caller_id: str) -> dict:
     """Build KB metadata; system fields last so clients cannot override them."""
     user_metadata = {}
     if request.speaker:
@@ -231,9 +212,7 @@ def _build_kb_metadata(
     }
 
 
-@router.post(
-    "/transcripts/{transcript_id}/kb-push", response_model=TranscriptKBPushResponse
-)
+@router.post("/transcripts/{transcript_id}/kb-push", response_model=TranscriptKBPushResponse)
 @with_error_handling(category=ErrorCategory.DATABASE)
 async def push_transcript_to_kb(
     transcript_id: str,
@@ -272,9 +251,7 @@ async def push_transcript_to_kb(
 
     except Exception as e:
         # Security: Log full error but only send generic message to client
-        logger.error(
-            "KB push failed for transcript %s: %s", transcript_id, e, exc_info=True
-        )
+        logger.error("KB push failed for transcript %s: %s", transcript_id, e, exc_info=True)
         return TranscriptKBPushResponse(
             success=False,
             message="KB push failed. Please try again later.",
