@@ -35,6 +35,59 @@ from .base import AdapterRunStatus
 
 _logger = get_logger(__name__)
 
+# Keywords that identify a provider rate-limit or quota error in CLI output or
+# exception messages.  Shared by subprocess adapters (output-file scan) and
+# AutoBotAgentAdapter (exception message matching).  GH#9773.
+_RL_KEYWORDS: frozenset[str] = frozenset(
+    {
+        "rate_limit_error",
+        "rate limit",
+        "too many requests",
+        "quota",
+        "overloaded",
+        "capacity_error",
+        "429",
+        "529",
+    }
+)
+
+
+def is_rate_limit_output(text: str | None) -> bool:
+    """Return True if *text* contains a provider rate-limit signal.
+
+    Conservative: only matches clear, known markers from ``_RL_KEYWORDS``.
+    Used by subprocess adapters to classify CLI output on process exit so
+    that rate-limited runs trigger backoff recovery instead of plain FAILED.
+    """
+    if not text:
+        return False
+    lower = text.lower()
+    return any(kw in lower for kw in _RL_KEYWORDS)
+
+
+# Maximum bytes read from the tail of a subprocess output file when scanning
+# for rate-limit markers.  Limits memory use for large output files; the
+# relevant error message almost always appears near the end.
+_OUTPUT_SCAN_TAIL_BYTES = 4096
+
+
+def read_output_tail(output_file: str) -> str:
+    """Return the last ``_OUTPUT_SCAN_TAIL_BYTES`` bytes of *output_file* as str.
+
+    Returns an empty string if the file does not exist or cannot be read
+    (best-effort; callers treat empty as "no rate-limit detected").
+    """
+    try:
+        with open(output_file, encoding="utf-8", errors="replace") as fh:
+            fh.seek(0, 2)
+            size = fh.tell()
+            start = max(0, size - _OUTPUT_SCAN_TAIL_BYTES)
+            fh.seek(start)
+            return fh.read()
+    except OSError:
+        return ""
+
+
 # Context keys rendered by dedicated prompt sections or consumed as env vars —
 # excluded from the generic "Additional Context" catch-all.
 _RENDERED_CONTEXT_KEYS = frozenset(
@@ -220,6 +273,9 @@ async def terminate_pid(pid: int, grace_seconds: int, log_name: str) -> bool:
 
 __all__ = [
     "AGENT_API_KEY_PLACEHOLDER",
+    "_RL_KEYWORDS",
+    "is_rate_limit_output",
+    "read_output_tail",
     "render_context_markdown",
     "serialize_invoke_context",
     "inject_agent_credentials",

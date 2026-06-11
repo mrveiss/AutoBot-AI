@@ -39,11 +39,18 @@ from typing import Optional
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 
+from .base import AdapterRunStatus
 from .subprocess_base import DEFAULT_OUTPUT_DIR as _DEFAULT_OUTPUT_DIR
 from .subprocess_base import SIGTERM_GRACE_SECONDS as _SIGTERM_GRACE_SECONDS
 from .subprocess_base import SubprocessLifecycleAdapter
 from .subprocess_base import resolve_timeout as _resolve_timeout
-from .subprocess_support import inject_agent_credentials, serialize_invoke_context
+from .subprocess_support import (
+    inject_agent_credentials,
+    is_rate_limit_output,
+    read_output_tail,
+    serialize_invoke_context,
+)
+from ..models.enums import LLCRunStatus
 
 logger = get_logger(__name__)
 
@@ -190,6 +197,43 @@ class ClaudeCodeAdapter(SubprocessLifecycleAdapter):
 
         await self._store_session(agent_id, session_id)
         return run_id
+
+    async def _status(self, agent_config: dict, run_id: str) -> AdapterRunStatus:
+        """Extend base status to detect provider rate-limiting on process exit (GH#9773).
+
+        When the process is gone (base returns COMPLETED), read the tail of the
+        output file and reclassify as RATE_LIMITED if clear rate-limit markers
+        are present.  RATE_LIMITED is a terminal state — ``_await_adapter_completion``
+        in the heartbeat scheduler will translate it into a raised ``ProviderRateLimited``
+        so the standard exponential-backoff path applies (GH#8204).
+
+        Detection is conservative: only the shared ``_RL_KEYWORDS`` set triggers
+        reclassification; every other exit is left as COMPLETED.
+        """
+        base = await super()._status(agent_config, run_id)
+
+        if base.status != LLCRunStatus.COMPLETED:
+            return base
+
+        state = self._load_state(
+            self._state_path(
+                agent_config.get("adapter_config", {}).get("output_dir", _DEFAULT_OUTPUT_DIR),
+                run_id,
+            ),
+            agent_config.get("adapter_config", {}).get("output_dir", _DEFAULT_OUTPUT_DIR),
+        )
+        output_file: Optional[str] = state.get("output_file") if state else None
+        if output_file and is_rate_limit_output(read_output_tail(output_file)):
+            logger.warning(
+                "ClaudeCodeAdapter: rate-limit markers in output for run %s — signalling RATE_LIMITED",
+                run_id,
+            )
+            return AdapterRunStatus(
+                status=LLCRunStatus.RATE_LIMITED,
+                error="provider rate-limited (detected in CLI output)",
+            )
+
+        return base
 
     async def _post_cancel(self, agent_config: dict, run_id: str) -> None:
         """Clear the Redis resume session so the next run starts fresh (GH#9834)."""

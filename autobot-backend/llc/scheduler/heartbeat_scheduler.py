@@ -713,9 +713,12 @@ async def _dispatch_registry_adapter(adapter: Any, agent: Dict[str, Any], contex
     subprocess, blocks until the external run reaches a terminal state, then
     revokes the key — so the credential lives only for the duration of the run.
 
-    Note: registry adapters (e.g. claude_code) do NOT participate in the
-    ``ProviderRateLimited`` exponential-backoff recovery path — provider rate
-    limits surface as a non-success terminal status, recorded as a failed run.
+    RATE_LIMITED terminal state (GH#9773): when the adapter signals that the
+    external run hit a provider rate limit, this function raises
+    ``ProviderRateLimited`` so ``_run_adapter``'s existing exponential-backoff
+    path (GH#8204) applies uniformly for registry adapters — the run is not
+    recorded as FAILED, the checkout is preserved, and the agent is re-queued
+    at the computed retry-after time.
     """
     agent_id: str = agent["agent_id"]
     company_id = str(agent.get("company_id") or "")
@@ -744,6 +747,18 @@ async def _dispatch_registry_adapter(adapter: Any, agent: Dict[str, Any], contex
     finally:
         if key_record is not None:
             await _revoke_run_key(agent_id, key_record.id)
+
+    # GH#9773: RATE_LIMITED is scheduler-internal — translate to ProviderRateLimited
+    # so the GH#8204 backoff path applies uniformly for registry adapters.
+    # This exception is caught by _run_adapter which then calls _handle_rate_limited.
+    # It never reaches the DB as a RATE_LIMITED terminal adapter status.
+    if final_status == LLCRunStatus.RATE_LIMITED:
+        logger.warning(
+            "agent %s: registry adapter signalled RATE_LIMITED for run %s — raising ProviderRateLimited",
+            agent_id,
+            external_run_id,
+        )
+        raise ProviderRateLimited(provider="", retry_after_seconds=0)
 
     # GH#9622: surface non-success terminal states so _run_adapter records the
     # run as FAILED (and the liveness monitor can act) instead of COMPLETED.
