@@ -38,6 +38,11 @@ _tracker = AgentBudgetTracker()  # noqa: SRB001 — canonical SharedRuntimeBag c
 class BudgetService(LLCServiceBase):
     """Per-agent budget enforcement: cost ingest, hard stop, soft alert."""
 
+    @staticmethod
+    async def invalidate_cache(agent_id: str) -> None:
+        """Drop the tracker cache for an agent after its limits/mode change."""
+        await _tracker.invalidate(agent_id)
+
     async def provision_budget(
         self,
         session: AsyncSession,

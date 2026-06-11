@@ -20,7 +20,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import select, text
+from sqlalchemy import or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.redis_client import get_async_redis_client
@@ -82,16 +82,30 @@ class BudgetWatchdog:
     # ------------------------------------------------------------------
 
     async def _check_agent_budgets(self, session: AsyncSession) -> None:
-        """Check all agent budget rows for threshold violations."""
-        result = await session.execute(select(LLCAgentBudget).where(LLCAgentBudget.budget_limit > 0))
+        """Check all agent budget rows for threshold violations (GH#8997).
+
+        Evaluates each agent in its active budget mode:
+        - DOLLARS: ratio = budget_spent / budget_limit
+        - TOKENS: ratio = tokens_spent / token_limit; a tokens-mode row with no
+          token_limit falls back to dollar enforcement, matching
+          BudgetService.check_budget / _derive_status semantics.
+        """
+        result = await session.execute(
+            select(LLCAgentBudget).where(or_(LLCAgentBudget.budget_limit > 0, LLCAgentBudget.token_limit > 0))
+        )
         rows = list(result.scalars().all())
 
         for row in rows:
-            spent = Decimal(str(row.budget_spent))
-            limit = Decimal(str(row.budget_limit))
-            if limit <= Decimal("0"):
-                continue
-            ratio = spent / limit
+            budget_mode = str(row.budget_mode)
+            token_limit = int(row.token_limit) if row.token_limit is not None else 0
+            if budget_mode == "tokens" and token_limit > 0:
+                tokens_spent = int(row.tokens_spent)
+                ratio = Decimal(str(tokens_spent)) / Decimal(str(token_limit))
+            else:
+                limit = Decimal(str(row.budget_limit))
+                if limit <= Decimal("0"):
+                    continue
+                ratio = Decimal(str(row.budget_spent)) / limit
 
             if ratio >= _HARD_THRESHOLD:
                 await self._hard_stop_agent(session, row)
@@ -99,25 +113,40 @@ class BudgetWatchdog:
                 await self._notify_agent_soft(row, ratio)
 
     async def _hard_stop_agent(self, session: AsyncSession, row: LLCAgentBudget) -> None:
-        """Idempotent hard stop: pause the agent if not already paused."""
+        """Idempotent hard stop: pause the agent if not already paused (GH#8997)."""
         try:
             # BudgetService.check_budget returns (remaining, is_over, alert)
             _, is_over, _ = await self._budget_svc.check_budget(session, row.agent_id)
             if not is_over:
                 return  # race condition — already under limit, skip
-            logger.warning(
-                "BudgetWatchdog: agent %s has exhausted budget (%.2f / %.2f) — hard stop",
-                row.agent_id,
-                float(row.budget_spent),
-                float(row.budget_limit),
-            )
+            budget_mode = str(row.budget_mode)
+            if budget_mode == "tokens":
+                spent_val = int(row.tokens_spent)
+                limit_val = int(row.token_limit) if row.token_limit is not None else 0
+                logger.warning(
+                    "BudgetWatchdog: agent %s exhausted token budget (%d / %d) — hard stop",
+                    row.agent_id,
+                    spent_val,
+                    limit_val,
+                )
+            else:
+                spent_val = float(row.budget_spent)
+                limit_val = float(row.budget_limit)
+                logger.warning(
+                    "BudgetWatchdog: agent %s exhausted dollar budget (%.2f / %.2f) — hard stop",
+                    row.agent_id,
+                    spent_val,
+                    limit_val,
+                )
             await self._notify(
                 company_id=row.company_id,
                 event_type="budget.hard_stop",
                 payload={
                     "agent_id": row.agent_id,
-                    "spent": float(row.budget_spent),
-                    "limit": float(row.budget_limit),
+                    "budget_mode": budget_mode,
+                    "spent": spent_val,
+                    "limit": limit_val,
+                    "shadow_cost_usd": float(row.budget_spent) if budget_mode == "tokens" else None,
                     "ts": datetime.now(tz=timezone.utc).isoformat(),
                 },
             )
@@ -127,20 +156,28 @@ class BudgetWatchdog:
             logger.exception("hard_stop_agent failed for %s (swallowed)", row.agent_id)
 
     async def _notify_agent_soft(self, row: LLCAgentBudget, ratio: Decimal) -> None:
-        """Publish soft-threshold notification."""
+        """Publish soft-threshold notification (GH#8997)."""
         try:
             logger.info(
                 "BudgetWatchdog: agent %s at %.0f%% of budget — soft alert",
                 row.agent_id,
                 float(ratio) * 100,
             )
+            budget_mode = str(row.budget_mode)
+            if budget_mode == "tokens":
+                spent_val = int(row.tokens_spent)
+                limit_val = int(row.token_limit) if row.token_limit is not None else 0
+            else:
+                spent_val = float(row.budget_spent)
+                limit_val = float(row.budget_limit)
             await self._notify(
                 company_id=row.company_id,
                 event_type="budget.soft_alert",
                 payload={
                     "agent_id": row.agent_id,
-                    "spent": float(row.budget_spent),
-                    "limit": float(row.budget_limit),
+                    "budget_mode": budget_mode,
+                    "spent": spent_val,
+                    "limit": limit_val,
                     "ratio": float(ratio),
                     "ts": datetime.now(tz=timezone.utc).isoformat(),
                 },
