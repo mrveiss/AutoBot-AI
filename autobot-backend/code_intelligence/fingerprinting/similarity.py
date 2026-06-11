@@ -56,7 +56,7 @@ class SimilarityCalculator:
         feature_sim = self._feature_similarity(fragment1.ast_node, fragment2.ast_node)
 
         # Weighted average
-        weights = {"structural": 0.5, "token": 0.3, "feature": 0.2}
+        weights = {"structural": 0.5, "token": 0.3, "feature": 0.2}  # nosec B105 - similarity metric weights dict, 'token' key is code token type not a credential
         similarity = (
             weights["structural"] * structural_sim + weights["token"] * token_sim + weights["feature"] * feature_sim
         )

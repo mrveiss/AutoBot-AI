@@ -66,7 +66,7 @@ def main() -> int:
     cmd = [sys.executable, train_script] + _build_train_args()
     logger.info("Running: %s", " ".join(cmd))
 
-    result = subprocess.run(
+    result = subprocess.run(  # nosec B603 - cmd uses sys.executable with fixed train_script; _build_train_args returns validated args
         cmd,
         capture_output=True,
         text=True,

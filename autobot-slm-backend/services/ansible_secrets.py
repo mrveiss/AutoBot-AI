@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 #     #3512).  Stored via the SLM secrets UI; injected as an Ansible extra_var
 #     and rendered into slm-secrets.env and backend.env.
 _SECRET_TO_ANSIBLE_VAR: dict[str, str] = {
-    "hf_token": "tts_hf_token",
+    "hf_token": "tts_hf_token",  # nosec B105 - dict maps secret DB key names to Ansible variable names, not credential values
     "autobot_internal_api_key": "autobot_internal_api_key",
 }
 

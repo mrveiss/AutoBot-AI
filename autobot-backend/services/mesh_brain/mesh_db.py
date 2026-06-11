@@ -170,7 +170,7 @@ class MeshDB:
         if origin is not None:
             updates.append("origin = :origin")
             params["origin"] = origin
-        sql = text(f"UPDATE mesh_edges SET {', '.join(updates)} WHERE id = :edge_id::uuid")
+        sql = text(f"UPDATE mesh_edges SET {', '.join(updates)} WHERE id = :edge_id::uuid")  # nosec B608 - column names are hardcoded string literals; all values use SQLAlchemy named params
         async with self.engine.begin() as conn:
             await conn.execute(sql, params)
         logger.debug("Updated edge %s", edge_id)

@@ -23,8 +23,8 @@ from autobot_shared.redis_client import get_redis_client
 logger = get_logger(__name__)
 
 # Redis keys for storing Telegram bot config
-TELEGRAM_BOT_TOKEN_KEY = "autobot:settings:telegram_bot_token"
-TELEGRAM_WEBHOOK_SECRET_KEY = "autobot:settings:telegram_webhook_secret"
+TELEGRAM_BOT_TOKEN_KEY = "autobot:settings:telegram_bot_token"  # nosec B105 - Redis key name for storing the token, not the token itself
+TELEGRAM_WEBHOOK_SECRET_KEY = "autobot:settings:telegram_webhook_secret"  # nosec B105 - Redis key name for storing the secret, not the secret itself
 
 # Sentinel prefix for encrypted values (backward compatibility)
 _ENCRYPTED_PREFIX = "enc:"

@@ -280,7 +280,7 @@ class TerminalSecretsService:
         """
         try:
             # Try to read key without passphrase using ssh-keygen
-            result = subprocess.run(  # nosec B607 - ssh-keygen is a trusted system tool
+            result = subprocess.run(  # nosec B603 B607 - fixed ssh-keygen argv for passphrase check; key_path is an admin-supplied path
                 ["ssh-keygen", "-y", "-P", "", "-f", key_path],
                 capture_output=True,
                 timeout=5,
