@@ -37,32 +37,18 @@ from llc.exceptions import BudgetExhausted, ProviderRateLimited
 from llc.models.enums import LLCRunStatus
 
 from .base import AdapterRunStatus
+from .subprocess_support import is_rate_limit_output as _is_rate_limit_output
 
 logger = logging.getLogger(__name__)
 
-# Keywords that identify a provider rate-limit or quota error in an error string.
-_RL_KEYWORDS: frozenset[str] = frozenset(
-    {
-        "rate_limit_error",
-        "rate limit",
-        "too many requests",
-        "quota",
-        "overloaded",
-        "capacity_error",
-        "429",
-        "529",
-    }
-)
-
-# ── Rate-limit detection helpers (GH#8502) ────────────────────────────────────
+# ── Rate-limit detection helpers (GH#8502, GH#9773) ──────────────────────────
+# _RL_KEYWORDS is now canonical in subprocess_support (shared with subprocess
+# adapters for CLI output scanning — GH#9773).
 
 
 def _is_rate_limit_error_str(error_str: str | None) -> bool:
     """Return True if *error_str* contains a provider rate-limit signal."""
-    if not error_str:
-        return False
-    lower = error_str.lower()
-    return any(kw in lower for kw in _RL_KEYWORDS)
+    return _is_rate_limit_output(error_str)
 
 
 def _extract_retry_after(exc: BaseException) -> int:
