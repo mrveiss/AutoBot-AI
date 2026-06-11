@@ -17,7 +17,6 @@ from llc.models.enums import LLCRunStatus
 
 from .conftest import agent_cfg as _agent_cfg
 
-
 # ---------------------------------------------------------------------------
 # ClaudeCodeSubscriptionAdapter
 # ---------------------------------------------------------------------------

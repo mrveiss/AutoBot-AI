@@ -27,7 +27,6 @@ from llc.adapters.subprocess_base import (
 )
 from llc.models.enums import LLCRunStatus
 
-
 # ---------------------------------------------------------------------------
 # Minimal concrete adapter for exercising base-class paths
 # ---------------------------------------------------------------------------

@@ -28,7 +28,6 @@ from llc.adapters.claude_code_adapter import (
 from .conftest import agent_cfg as _agent_cfg
 from .conftest import make_fake_proc as _make_fake_proc
 
-
 # ---------------------------------------------------------------------------
 # Protocol conformance
 # ---------------------------------------------------------------------------
