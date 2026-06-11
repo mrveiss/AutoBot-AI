@@ -91,9 +91,7 @@ class BudgetWatchdog:
           BudgetService.check_budget / _derive_status semantics.
         """
         result = await session.execute(
-            select(LLCAgentBudget).where(
-                or_(LLCAgentBudget.budget_limit > 0, LLCAgentBudget.token_limit > 0)
-            )
+            select(LLCAgentBudget).where(or_(LLCAgentBudget.budget_limit > 0, LLCAgentBudget.token_limit > 0))
         )
         rows = list(result.scalars().all())
 

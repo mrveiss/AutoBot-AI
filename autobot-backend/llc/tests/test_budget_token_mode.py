@@ -20,11 +20,10 @@ from decimal import Decimal
 from typing import AsyncIterator
 from unittest.mock import AsyncMock, patch
 
-from sqlalchemy import select
-
 import httpx
 import pytest
 import pytest_asyncio
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from llc.exceptions import BudgetExhausted
@@ -32,7 +31,6 @@ from llc.models.budget import LLCAgentBudget
 from llc.models.enums import BudgetMode
 from llc.services.budget import BudgetService
 from llc.tests import _e2e_harness as harness
-
 
 # ---------------------------------------------------------------------------
 # DB fixtures — in-memory SQLite backed, reusing the e2e harness schema
@@ -119,7 +117,7 @@ async def test_token_mode_budget_enforcement(session: AsyncSession, budget_servi
     assert cost > Decimal("0"), "Dollar cost should be tracked for shadow cost analytics"
 
     remaining, is_over, alert = await budget_service.check_budget(session, agent_id)
-    assert remaining == Decimal("500")   # 1000 - 500
+    assert remaining == Decimal("500")  # 1000 - 500
     assert not is_over
     assert not alert  # 500/1000 = 50% < 80%
 
@@ -131,7 +129,7 @@ async def test_token_mode_budget_enforcement(session: AsyncSession, budget_servi
         )
 
     remaining, is_over, alert = await budget_service.check_budget(session, agent_id)
-    assert remaining == Decimal("150")   # 1000 - 850
+    assert remaining == Decimal("150")  # 1000 - 850
     assert not is_over
     assert alert  # 850/1000 = 85% >= 80%
 
@@ -185,7 +183,7 @@ async def test_dollar_mode_budget_enforcement(session: AsyncSession, budget_serv
 
     assert cost == Decimal("1.60")
     remaining, is_over, alert = await budget_service.check_budget(session, agent_id)
-    assert remaining == Decimal("0.40")   # $2.00 - $1.60
+    assert remaining == Decimal("0.40")  # $2.00 - $1.60
     assert not is_over
     assert alert  # 1.60/2.00 = 80% — threshold is >= 0.8, so alert fires at exactly 80%
 
@@ -193,9 +191,7 @@ async def test_dollar_mode_budget_enforcement(session: AsyncSession, budget_serv
         with patch("llc.services.budget.get_async_redis_client", new_callable=AsyncMock) as mock_redis:
             mock_redis.return_value = None
             # 1M in + 500k out = $0.80 + $2.00 = $2.80 → total $4.40 > $2.00 limit
-            await budget_service.ingest_cost_event(
-                session, agent_id, 1_000_000, 500_000, "claude-haiku-4-5-20251001"
-            )
+            await budget_service.ingest_cost_event(session, agent_id, 1_000_000, 500_000, "claude-haiku-4-5-20251001")
 
 
 # ---------------------------------------------------------------------------
@@ -215,9 +211,7 @@ async def test_both_modes_track_tokens(session: AsyncSession, budget_service: Bu
         mock_redis.return_value = None
         await budget_service.ingest_cost_event(session, agent_id, 1000, 500, "claude-haiku-4-5-20251001")
 
-    result = await session.execute(
-        select(LLCAgentBudget).where(LLCAgentBudget.agent_id == agent_id)
-    )
+    result = await session.execute(select(LLCAgentBudget).where(LLCAgentBudget.agent_id == agent_id))
     row = result.scalar_one()
     assert row.tokens_spent == 1500  # shadow cost tracked in dollars mode
     assert row.budget_spent > Decimal("0")
@@ -238,9 +232,7 @@ async def test_token_mode_shadow_cost_usd(session: AsyncSession, budget_service:
     # USD shadow cost must be positive
     assert cost > Decimal("0"), "Shadow cost must be calculated and returned in token mode"
 
-    result = await session.execute(
-        select(LLCAgentBudget).where(LLCAgentBudget.agent_id == agent_id)
-    )
+    result = await session.execute(select(LLCAgentBudget).where(LLCAgentBudget.agent_id == agent_id))
     row = result.scalar_one()
     assert row.budget_spent > Decimal("0"), "budget_spent (USD shadow) must be tracked in token mode"
 
@@ -348,9 +340,7 @@ async def _seed_budget(session_factory, mode: str = "dollars") -> str:  # noqa: 
 
 
 @pytest.mark.asyncio
-async def test_update_limit_rejects_token_limit_in_dollars_mode(
-    client: httpx.AsyncClient, session_factory
-) -> None:
+async def test_update_limit_rejects_token_limit_in_dollars_mode(client: httpx.AsyncClient, session_factory) -> None:
     """PATCH /limit must return 400 when token_limit is set and budget_mode is 'dollars' (GH#8997)."""
     agent_id = await _seed_budget(session_factory, mode="dollars")
 
@@ -378,9 +368,7 @@ async def test_update_limit_rejects_budget_limit_when_switching_to_tokens(
 
 
 @pytest.mark.asyncio
-async def test_update_limit_accepts_token_limit_in_tokens_mode(
-    client: httpx.AsyncClient, session_factory
-) -> None:
+async def test_update_limit_accepts_token_limit_in_tokens_mode(client: httpx.AsyncClient, session_factory) -> None:
     """PATCH /limit accepts token_limit when budget_mode is 'tokens' (GH#8997)."""
     agent_id = await _seed_budget(session_factory, mode="dollars")
 
@@ -397,9 +385,7 @@ async def test_update_limit_accepts_token_limit_in_tokens_mode(
 
 
 @pytest.mark.asyncio
-async def test_update_limit_accepts_budget_limit_in_dollars_mode(
-    client: httpx.AsyncClient, session_factory
-) -> None:
+async def test_update_limit_accepts_budget_limit_in_dollars_mode(client: httpx.AsyncClient, session_factory) -> None:
     """PATCH /limit accepts budget_limit when budget_mode is 'dollars' (GH#8997)."""
     agent_id = await _seed_budget(session_factory, mode="dollars")
 
@@ -422,9 +408,9 @@ async def test_update_limit_accepts_budget_limit_in_dollars_mode(
 async def test_watchdog_token_mode_hard_stop() -> None:
     """BudgetWatchdog fires hard_stop for a token-mode agent at 100% (GH#8997)."""
     import json
+    from unittest.mock import MagicMock
 
     from llc.scheduler.budget_watchdog import BudgetWatchdog
-    from unittest.mock import MagicMock
 
     company_id = str(uuid.uuid4())
     row = LLCAgentBudget(
@@ -433,9 +419,9 @@ async def test_watchdog_token_mode_hard_stop() -> None:
         agent_id=f"wa-{uuid.uuid4().hex[:6]}",
         budget_mode=BudgetMode.TOKENS.value,
         budget_limit=Decimal("100.00"),
-        budget_spent=Decimal("0.05"),   # shadow cost
+        budget_spent=Decimal("0.05"),  # shadow cost
         token_limit=1000,
-        tokens_spent=1200,              # over 1000 limit
+        tokens_spent=1200,  # over 1000 limit
         alert_threshold=0.8,
     )
 
@@ -483,9 +469,9 @@ async def test_watchdog_token_mode_hard_stop() -> None:
 async def test_watchdog_token_mode_soft_alert() -> None:
     """BudgetWatchdog fires soft_alert for a token-mode agent at 85% (GH#8997)."""
     import json
+    from unittest.mock import MagicMock
 
     from llc.scheduler.budget_watchdog import BudgetWatchdog
-    from unittest.mock import MagicMock
 
     company_id = str(uuid.uuid4())
     row = LLCAgentBudget(
@@ -528,8 +514,9 @@ async def test_watchdog_token_mode_soft_alert() -> None:
 @pytest.mark.asyncio
 async def test_watchdog_token_mode_under_threshold_no_alert() -> None:
     """BudgetWatchdog does NOT alert for a token-mode agent at 50% (GH#8997)."""
-    from llc.scheduler.budget_watchdog import BudgetWatchdog
     from unittest.mock import MagicMock
+
+    from llc.scheduler.budget_watchdog import BudgetWatchdog
 
     row = LLCAgentBudget(
         id=uuid.uuid4(),
