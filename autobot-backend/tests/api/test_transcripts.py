@@ -3,17 +3,35 @@
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
 """
-Unit tests for transcript AI analysis and KB integration (MVA-2176).
+Unit tests for transcript AI analysis and KB integration (MVA-2176, #9863).
 """
 
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from fastapi import HTTPException
 
 from api.schemas_transcripts import (
     AnalysisType,
     TranscriptKBPushRequest,
 )
+
+MOCK_USER = {"user_id": "test-user", "roles": ["user"]}
+
+
+def _make_raw_request(db) -> SimpleNamespace:
+    """Build a request-like object exposing app.state.transcriber_db."""
+    return SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(transcriber_db=db)))
+
+
+def _make_db(recording: dict | None) -> AsyncMock:
+    db = AsyncMock()
+    db.get_recording = AsyncMock(return_value=recording)
+    return db
+
+
+DEFAULT_RECORDING = {"id": 456, "user_id": "default", "status": "complete"}
 
 
 @pytest.mark.asyncio
@@ -34,14 +52,12 @@ async def test_kb_push_success():
         confidence=0.95,
     )
 
-    # Mock user
-    mock_user = {"user_id": "test-user", "roles": ["user"]}
-
     with patch("api.transcripts.get_knowledge_base", return_value=mock_kb):
         response = await push_transcript_to_kb(
-            transcript_id="transcript-456",
+            transcript_id="456",
             request=request,
-            user=mock_user,
+            raw_request=_make_raw_request(_make_db(DEFAULT_RECORDING)),
+            user=MOCK_USER,
         )
 
     # Verify response
@@ -57,13 +73,14 @@ async def test_kb_push_success():
     # Verify metadata
     metadata = call_args.kwargs["metadata"]
     assert metadata["source_type"] == "transcript"
-    assert metadata["transcript_id"] == "transcript-456"
-    assert metadata["source"] == "transcript:transcript-456"
+    assert metadata["transcript_id"] == "456"
+    assert metadata["source"] == "transcript:456"
     assert metadata["segment_start"] == 10.5
     assert metadata["segment_end"] == 25.3
     assert metadata["speaker"] == "John"
     assert metadata["confidence"] == 0.95
     assert metadata["verification_status"] == "unverified"
+    assert metadata["user_id"] == "test-user"
 
 
 @pytest.mark.asyncio
@@ -78,13 +95,12 @@ async def test_kb_push_without_timing():
         segment_text="Segment without timing.",
     )
 
-    mock_user = {"user_id": "test-user", "roles": ["user"]}
-
     with patch("api.transcripts.get_knowledge_base", return_value=mock_kb):
         response = await push_transcript_to_kb(
-            transcript_id="transcript-789",
+            transcript_id="456",
             request=request,
-            user=mock_user,
+            raw_request=_make_raw_request(_make_db(DEFAULT_RECORDING)),
+            user=MOCK_USER,
         )
 
     assert response.success is True
@@ -109,18 +125,18 @@ async def test_kb_push_failure():
         segment_text="Test segment.",
     )
 
-    mock_user = {"user_id": "test-user", "roles": ["user"]}
-
     with patch("api.transcripts.get_knowledge_base", return_value=mock_kb):
         response = await push_transcript_to_kb(
-            transcript_id="transcript-fail",
+            transcript_id="456",
             request=request,
-            user=mock_user,
+            raw_request=_make_raw_request(_make_db(DEFAULT_RECORDING)),
+            user=MOCK_USER,
         )
 
     assert response.success is False
-    # Security: Error message should be generic, not expose internal details
-    assert "failed" in response.message.lower()
+    # Security: KB-internal reason is logged, client gets a generic message
+    assert response.message == "Failed to add to Knowledge Base"
+    assert "KB timeout" not in response.message
 
 
 @pytest.mark.asyncio
@@ -135,13 +151,12 @@ async def test_kb_push_exception():
         segment_text="Test segment.",
     )
 
-    mock_user = {"user_id": "test-user", "roles": ["user"]}
-
     with patch("api.transcripts.get_knowledge_base", return_value=mock_kb):
         response = await push_transcript_to_kb(
-            transcript_id="transcript-error",
+            transcript_id="456",
             request=request,
-            user=mock_user,
+            raw_request=_make_raw_request(_make_db(DEFAULT_RECORDING)),
+            user=MOCK_USER,
         )
 
     assert response.success is False
@@ -151,37 +166,200 @@ async def test_kb_push_exception():
     assert "Database error" not in response.message
 
 
-def test_analysis_prompt_generation():
-    """Test analysis prompt generation for different types."""
-    from api.transcripts import _get_analysis_prompt
+@pytest.mark.asyncio
+async def test_kb_push_unknown_recording_404():
+    """Test KB push rejects transcript ids with no backing recording."""
+    from api.transcripts import push_transcript_to_kb
 
-    content = "Sample transcript content"
+    request = TranscriptKBPushRequest(segment_text="Test segment.")
 
-    # Test SUMMARIZE
-    prompt = _get_analysis_prompt(AnalysisType.SUMMARIZE, content)
-    assert "Summarize" in prompt
-    assert content in prompt
+    with pytest.raises(HTTPException) as exc_info:
+        await push_transcript_to_kb(
+            transcript_id="999",
+            request=request,
+            raw_request=_make_raw_request(_make_db(None)),
+            user=MOCK_USER,
+        )
 
-    # Test KEY_FACTS
-    prompt = _get_analysis_prompt(AnalysisType.KEY_FACTS, content)
-    assert "key facts" in prompt.lower()
-    assert content in prompt
-
-    # Test PROTOCOL
-    prompt = _get_analysis_prompt(AnalysisType.PROTOCOL, content)
-    assert "protocol" in prompt.lower()
-    assert content in prompt
-
-    # Test CUSTOM with custom_prompt
-    custom = "Extract action items"
-    prompt = _get_analysis_prompt(AnalysisType.CUSTOM, content, custom)
-    assert custom in prompt
-    assert content in prompt
+    assert exc_info.value.status_code == 404
 
 
-def test_analysis_prompt_custom_requires_prompt():
+@pytest.mark.asyncio
+async def test_kb_push_non_numeric_id_404():
+    """Test KB push rejects non-numeric transcript ids."""
+    from api.transcripts import push_transcript_to_kb
+
+    request = TranscriptKBPushRequest(segment_text="Test segment.")
+
+    with pytest.raises(HTTPException) as exc_info:
+        await push_transcript_to_kb(
+            transcript_id="not-a-recording",
+            request=request,
+            raw_request=_make_raw_request(_make_db(DEFAULT_RECORDING)),
+            user=MOCK_USER,
+        )
+
+    assert exc_info.value.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_kb_push_other_users_recording_404():
+    """Test KB push hides recordings owned by another user."""
+    from api.transcripts import push_transcript_to_kb
+
+    request = TranscriptKBPushRequest(segment_text="Test segment.")
+    foreign = {"id": 456, "user_id": "someone-else", "status": "complete"}
+
+    with pytest.raises(HTTPException) as exc_info:
+        await push_transcript_to_kb(
+            transcript_id="456",
+            request=request,
+            raw_request=_make_raw_request(_make_db(foreign)),
+            user=MOCK_USER,
+        )
+
+    assert exc_info.value.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_kb_push_storage_unavailable_503():
+    """Test KB push returns 503 when transcriber storage is not initialized."""
+    from api.transcripts import push_transcript_to_kb
+
+    request = TranscriptKBPushRequest(segment_text="Test segment.")
+    raw_request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace()))
+
+    with pytest.raises(HTTPException) as exc_info:
+        await push_transcript_to_kb(
+            transcript_id="456",
+            request=request,
+            raw_request=raw_request,
+            user=MOCK_USER,
+        )
+
+    assert exc_info.value.status_code == 503
+
+
+@pytest.mark.asyncio
+async def test_load_transcript_content_uses_segments():
+    """Test transcript content is built from stored segments."""
+    from api.transcripts import _load_transcript_content
+
+    db = _make_db(DEFAULT_RECORDING)
+    state = SimpleNamespace(transcriber_db=db)
+    segments = [{"text": "Hello world", "speaker_name": "John", "start": 0.0, "notes": []}]
+
+    with patch("api.transcripts.build_segment_list", AsyncMock(return_value=segments)):
+        content = await _load_transcript_content(state, "456", "test-user")
+
+    assert "Hello world" in content
+
+
+@pytest.mark.asyncio
+async def test_load_transcript_content_incomplete_400():
+    """Test analysis of an untranscribed recording is rejected."""
+    from api.transcripts import _load_transcript_content
+
+    pending = {"id": 456, "user_id": "default", "status": "processing"}
+    state = SimpleNamespace(transcriber_db=_make_db(pending))
+
+    with pytest.raises(HTTPException) as exc_info:
+        await _load_transcript_content(state, "456", "test-user")
+
+    assert exc_info.value.status_code == 400
+
+
+def test_validate_analysis_request_custom_requires_prompt():
     """Test CUSTOM analysis type requires custom_prompt."""
-    from api.transcripts import _get_analysis_prompt
+    from api.schemas_transcripts import TranscriptAnalyzeRequest
+    from api.transcripts import _validate_analysis_request
+
+    # Non-custom types pass without a prompt
+    _validate_analysis_request(TranscriptAnalyzeRequest(analysis_type=AnalysisType.SUMMARIZE))
+    # Custom with a prompt passes
+    _validate_analysis_request(
+        TranscriptAnalyzeRequest(analysis_type=AnalysisType.CUSTOM, custom_prompt="Extract action items")
+    )
+
+
+def test_validate_analysis_request_custom_missing_prompt_raises():
+    """Test CUSTOM analysis without custom_prompt raises ValueError."""
+    from api.schemas_transcripts import TranscriptAnalyzeRequest
+    from api.transcripts import _validate_analysis_request
 
     with pytest.raises(ValueError, match="custom_prompt"):
-        _get_analysis_prompt(AnalysisType.CUSTOM, "content", None)
+        _validate_analysis_request(TranscriptAnalyzeRequest(analysis_type=AnalysisType.CUSTOM))
+
+
+# --- WebSocket endpoint tests (#9863 review) ---
+
+
+def _make_ws_client(db, user):
+    """Build a TestClient over a minimal app mounting the transcripts router."""
+    from fastapi import FastAPI
+    from starlette.testclient import TestClient
+
+    from api.transcripts import router
+
+    app = FastAPI()
+    app.include_router(router, prefix="/api")
+    if db is not None:
+        app.state.transcriber_db = db
+    return TestClient(app)
+
+
+def test_ws_analyze_rejects_unauthenticated():
+    """Test WS closes 4001 before accept when authentication fails."""
+    from starlette.websockets import WebSocketDisconnect
+
+    client = _make_ws_client(_make_db(DEFAULT_RECORDING), user=None)
+
+    with patch("api.transcripts.authenticate_websocket", AsyncMock(return_value=None)):
+        with pytest.raises(WebSocketDisconnect) as exc_info:
+            with client.websocket_connect("/api/transcripts/456/analyze"):
+                pass
+
+    assert exc_info.value.code == 4001
+
+
+def test_ws_analyze_streams_and_closes():
+    """Test WS streams analysis chunks for a valid recording, then closes."""
+    from starlette.websockets import WebSocketDisconnect
+
+    async def fake_stream(content, request):
+        yield "analysis-chunk"
+
+    client = _make_ws_client(_make_db(DEFAULT_RECORDING), user=MOCK_USER)
+    segments = [{"text": "Hello", "speaker_name": "John", "start": 0.0, "notes": []}]
+
+    with (
+        patch(
+            "api.transcripts.authenticate_websocket",
+            AsyncMock(return_value=MOCK_USER),
+        ),
+        patch("api.transcripts.build_segment_list", AsyncMock(return_value=segments)),
+        patch("api.transcripts._stream_analysis", fake_stream),
+    ):
+        with client.websocket_connect("/api/transcripts/456/analyze") as ws:
+            ws.send_json({"analysis_type": "summarize"})
+            assert ws.receive_text() == "analysis-chunk"
+            with pytest.raises(WebSocketDisconnect) as exc_info:
+                ws.receive_text()
+
+    assert exc_info.value.code == 1000
+
+
+def test_ws_analyze_unknown_recording_closes_4004():
+    """Test WS sends an error payload and closes 4004 for unknown recordings."""
+    from starlette.websockets import WebSocketDisconnect
+
+    client = _make_ws_client(_make_db(None), user=MOCK_USER)
+
+    with patch("api.transcripts.authenticate_websocket", AsyncMock(return_value=MOCK_USER)):
+        with client.websocket_connect("/api/transcripts/999/analyze") as ws:
+            ws.send_json({"analysis_type": "summarize"})
+            assert ws.receive_json() == {"error": "Transcript not found"}
+            with pytest.raises(WebSocketDisconnect) as exc_info:
+                ws.receive_text()
+
+    assert exc_info.value.code == 4004
