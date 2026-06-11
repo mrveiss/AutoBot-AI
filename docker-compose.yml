@@ -376,6 +376,11 @@ services:
         condition: service_healthy
       autobot-chromadb:
         condition: service_healthy
+      # The backend entrypoint runs the schema migrations (#9759); waiting for
+      # it to be healthy stops worker tasks hitting a not-yet-migrated DB on
+      # first boot in Postgres-backed user modes.
+      autobot-backend:
+        condition: service_healthy
     deploy:
       resources:
         limits:
@@ -403,6 +408,10 @@ services:
     image: autobot/backend:latest
     container_name: autobot-celery-beat
     restart: unless-stopped
+    # NB: inherits the image ENTRYPOINT (/app/entrypoint.sh, #9759). Migrations
+    # stay skipped here because AUTOBOT_USER_MODE is deliberately NOT set for
+    # beat — do not add it, or beat and the backend would run
+    # `alembic upgrade head` concurrently (alembic takes no advisory lock).
     command: >
       python3.12 -m celery -A celery_app beat
       --loglevel=info

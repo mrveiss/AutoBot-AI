@@ -13,13 +13,19 @@ set -eu
 
 USER_MODE="${AUTOBOT_USER_MODE:-single_user}"
 
+# Subshell keeps the app's cwd at the image WORKDIR (/app) — the backend
+# writes relative paths from there, so leaking the cd into exec would
+# silently relocate runtime data when the user mode flips.
+run_migrations() {
+    (cd /app/autobot-backend && python3 -m alembic -c migrations/alembic.ini upgrade head)
+}
+
 if [ "$USER_MODE" != "single_user" ]; then
-    cd /app/autobot-backend
     echo "Running backend database migrations (user mode: ${USER_MODE})..."
-    python3 -m alembic -c migrations/alembic.ini upgrade head || {
+    run_migrations || {
         echo "ERROR: Migration failed — retrying in 5s..."
         sleep 5
-        python3 -m alembic -c migrations/alembic.ini upgrade head || {
+        run_migrations || {
             echo "FATAL: Migration failed after retry. Aborting."
             exit 1
         }

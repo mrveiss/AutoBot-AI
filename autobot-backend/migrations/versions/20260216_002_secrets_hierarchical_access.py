@@ -140,7 +140,12 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    """Remove org_id and team_ids columns from secrets table."""
+    """Remove org_id and team_ids columns from secrets table.
+
+    Intentionally NOT the inverse of upgrade(): the secrets table itself is
+    left in place even when upgrade() created it, matching the historical
+    create_all-owned state that revision 001 never managed (#9759).
+    """
     # Remove team_ids column
     op.drop_column("secrets", "team_ids")
 

@@ -108,7 +108,7 @@ def _as_async_url(url: str) -> str:
     URL aborted migrations before ever connecting (#9759).
     """
     sa_url = make_url(url)
-    if sa_url.drivername in ("postgresql", "postgresql+psycopg2"):
+    if sa_url.drivername in ("postgresql", "postgresql+psycopg2", "postgresql+psycopg"):
         sa_url = sa_url.set(drivername="postgresql+asyncpg")
     return sa_url.render_as_string(hide_password=False)
 
