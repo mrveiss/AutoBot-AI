@@ -16,7 +16,7 @@ Create Date: 2026-05-23
 
 import sqlalchemy as sa
 from alembic import op
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import ENUM, UUID
 
 revision = "20260523_031"
 down_revision = "20260523_030"
@@ -39,7 +39,10 @@ def upgrade() -> None:
         sa.Column("user_id", UUID(as_uuid=True), nullable=False),
         sa.Column(
             "role",
-            sa.Enum(
+            # postgresql.ENUM: generic sa.Enum silently IGNORES create_type,
+            # re-emitting CREATE TYPE after the op.execute above and aborting
+            # fresh-database upgrades (#9759).
+            ENUM(
                 "owner",
                 "admin",
                 "member",
