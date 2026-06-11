@@ -40,9 +40,30 @@ FROM python:3.12-slim-bookworm AS production
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install runtime deps
+# Install runtime deps + LLC agent CLIs (GH#9793).
+# gh: official GitHub apt repo (keyring + sources list + apt-get install).
+# claude: the official installer verifies a sha256 manifest but ONLY installs
+#   to $HOME/.local/bin (CLAUDE_INSTALL_DIR is not honored — proven by the
+#   smoke-test build gate). Redirect HOME to a world-readable prefix and
+#   symlink the launcher into /usr/local/bin so the autobot user can run it.
+#   "stable" pins the release channel (GH#9950 hardening).
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
+    && install -m 0755 -d /etc/apt/keyrings \
+    && curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+       | tee /etc/apt/keyrings/githubcli-archive-keyring.gpg > /dev/null \
+    && chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
+       > /etc/apt/sources.list.d/github-cli.list \
+    && apt-get update && apt-get install -y --no-install-recommends gh \
+    && install -m 0755 -d /opt/claude-cli \
+    && curl -fsSL https://claude.ai/install.sh | HOME=/opt/claude-cli bash -s -- stable \
+    && ln -s /opt/claude-cli/.local/bin/claude /usr/local/bin/claude \
+    && chmod -R a+rX /opt/claude-cli \
+    # Build-time proof both CLIs resolve on PATH — without this, an installer
+    # prefix change would silently break LLC dispatch (gate skips forever).
+    && gh --version \
+    && claude --version \
     && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user. Pin uid/gid 999 to match the SLM image (#9905) so the
