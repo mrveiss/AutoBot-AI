@@ -11,7 +11,6 @@ import pytest
 
 from llc.scheduler.base import PollLoopScheduler
 
-
 # ---------------------------------------------------------------------------
 # Test double — concrete subclass with a controllable tick
 # ---------------------------------------------------------------------------

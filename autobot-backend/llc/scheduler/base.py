@@ -104,9 +104,7 @@ class PollLoopScheduler:
                 # per-module log-level filtering keeps working as it did
                 # before the extraction; the base logger only carries
                 # lifecycle events.
-                logging.getLogger(type(self).__module__).exception(
-                    "%s._tick() failed", type(self).__name__
-                )
+                logging.getLogger(type(self).__module__).exception("%s._tick() failed", type(self).__name__)
             await asyncio.sleep(self._poll_interval)
 
     # ------------------------------------------------------------------
