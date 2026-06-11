@@ -24,6 +24,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Dict, List
 
+from autobot_shared.env_utils import env_int
 from autobot_shared.ssot_config import config
 
 
@@ -50,14 +51,6 @@ class BridgePolicy:
 # Per-bridge risk categorisation (#3229 issue table).
 _HIGH_RISK = frozenset({"filesystem_mcp", "browser_mcp", "vnc_mcp"})
 _ALWAYS_INPROCESS = frozenset({"knowledge_mcp", "sequential_thinking_mcp", "structured_thinking_mcp"})
-
-
-def _env_int(name: str, default: int) -> int:
-    """Return int env var or default on parse failure."""
-    try:
-        return int(os.environ.get(name, str(default)))
-    except ValueError:
-        return default
 
 
 def _global_mode() -> IsolationMode:
@@ -96,19 +89,19 @@ def policy_for(bridge: str) -> BridgePolicy:
     return BridgePolicy(
         bridge=bridge,
         mode=resolve_mode(bridge),
-        cpu_seconds=_env_int(
+        cpu_seconds=env_int(
             f"MCP_BRIDGE_CPU_LIMIT_{upper}",
-            _env_int("MCP_BRIDGE_CPU_LIMIT", 30),
+            env_int("MCP_BRIDGE_CPU_LIMIT", 30),
         ),
-        memory_mb=_env_int(
+        memory_mb=env_int(
             f"MCP_BRIDGE_MEM_LIMIT_MB_{upper}",
-            _env_int("MCP_BRIDGE_MEM_LIMIT_MB", 512),
+            env_int("MCP_BRIDGE_MEM_LIMIT_MB", 512),
         ),
-        nofile=_env_int(
+        nofile=env_int(
             f"MCP_BRIDGE_NOFILE_LIMIT_{upper}",
-            _env_int("MCP_BRIDGE_NOFILE_LIMIT", 256),
+            env_int("MCP_BRIDGE_NOFILE_LIMIT", 256),
         ),
-        restart_max=_env_int("MCP_BRIDGE_RESTART_MAX", 5),
+        restart_max=env_int("MCP_BRIDGE_RESTART_MAX", 5),
     )
 
 
