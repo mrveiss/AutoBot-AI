@@ -33,6 +33,7 @@ class SecretScope(str, Enum):
     SHARED = "shared"  # Explicitly shared with specific users
     GROUP = "group"  # Accessible to team members
     ORGANIZATION = "organization"  # Accessible to all org members
+    WORKFLOW = "workflow"  # Scoped to a specific workflow (Issue #2153)
 
 
 class SecretType(str, Enum):
@@ -114,7 +115,7 @@ class Secret(Base):
         nullable=False,
         default=SecretScope.USER.value,
         index=True,
-        comment="Visibility scope: user, session, shared, group, or organization",
+        comment="Visibility scope: user, session, shared, group, organization, or workflow",
     )
 
     team_ids: Mapped[dict] = mapped_column(
