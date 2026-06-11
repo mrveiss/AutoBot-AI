@@ -48,7 +48,6 @@ ENV DEBIAN_FRONTEND=noninteractive
 #   USER autobot so they reach /usr/local/bin with the correct ownership.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
-    gnupg \
     && install -m 0755 -d /etc/apt/keyrings \
     && curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
        | tee /etc/apt/keyrings/githubcli-archive-keyring.gpg > /dev/null \
@@ -57,6 +56,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
        > /etc/apt/sources.list.d/github-cli.list \
     && apt-get update && apt-get install -y --no-install-recommends gh \
     && CLAUDE_INSTALL_DIR=/usr/local curl -fsSL https://claude.ai/install.sh | bash \
+    # Build-time proof both CLIs resolve on PATH — without this, an installer
+    # prefix change would silently break LLC dispatch (gate skips forever).
+    && gh --version \
+    && claude --version \
     && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user. Pin uid/gid 999 to match the SLM image (#9905) so the
