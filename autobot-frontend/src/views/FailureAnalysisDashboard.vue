@@ -196,7 +196,7 @@
           <span class="count-badge">{{ result.confounders.length }}</span>
         </h3>
         <div class="confounders-list">
-          <div v-for="(conf, idx) in result.confounders" :key="conf.event_id || idx" class="event-card">
+          <div v-for="(conf, idx) in result.confounders" :key="String(conf.event_id || idx)" class="event-card">
             <div class="event-header">
               <span class="event-name">{{ conf.name }}</span>
               <span class="event-type-badge">{{ conf.event_type }}</span>

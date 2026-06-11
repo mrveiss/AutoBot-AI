@@ -9,8 +9,7 @@ Issue #4069: Causal inference engine integration.
 
 Provides:
 - POST /api/diagnostics/analyze-failure — Analyze error event via CausalInferenceEngine
-- GET /api/diagnostics/health — System health check
-- POST /api/diagnostics/inspect-task — Inspect task execution history
+- GET /api/diagnostics/analyze-failure — Same analysis via query params (integration testing)
 
 Used for:
 - Postmortem analysis (what went wrong?)

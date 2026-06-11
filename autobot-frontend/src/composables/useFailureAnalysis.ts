@@ -81,38 +81,15 @@ export function useFailureAnalysis() {
     error.value = null
     return wrap(async () => {
       try {
-        const response = await api.post<{ data: Record<string, unknown> }>(
+        const response = await api.post<{ data: CausalAnalysisData }>(
           `${getApiBase()}/diagnostics/analyze-failure`,
           { task_id: taskId, error_description: errorDescription ?? null }
         )
-        result.value = response.data as unknown as CausalAnalysisData
+        result.value = response.data
         return result.value
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : 'Failure analysis request failed'
         logger.error('analyzeFailure failed', err)
-        error.value = msg
-        return null
-      }
-    })
-  }
-
-  /**
-   * Retrieve a prior failure analysis by task ID (GET).
-   */
-  async function fetchAnalysis(taskId: string, errorDescription?: string): Promise<CausalAnalysisData | null> {
-    error.value = null
-    return wrap(async () => {
-      try {
-        const params = new URLSearchParams({ task_id: taskId })
-        if (errorDescription) params.append('error_description', errorDescription)
-        const response = await api.get<{ data: Record<string, unknown> }>(
-          `${getApiBase()}/diagnostics/analyze-failure?${params.toString()}`
-        )
-        result.value = response.data as unknown as CausalAnalysisData
-        return result.value
-      } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : 'Failed to fetch failure analysis'
-        logger.error('fetchAnalysis failed', err)
         error.value = msg
         return null
       }
@@ -129,7 +106,6 @@ export function useFailureAnalysis() {
     error,
     result,
     analyzeFailure,
-    fetchAnalysis,
     clearResult,
   }
 }
