@@ -177,6 +177,32 @@ export interface DriftResolveResponse {
 // Re-export role types for consumers (Issue #779)
 export type { Role, SyncResult }
 
+// Issue #9971: One-click update-all types
+export type StageStatus = 'pending' | 'running' | 'success' | 'failed' | 'skipped'
+
+export interface UpdateAllStage {
+  name: string
+  status: StageStatus
+  message: string | null
+  sha: string | null
+  deps_changed: boolean
+  log_lines: string[]
+  started_at: string | null
+  completed_at: string | null
+}
+
+export interface UpdateAllJob {
+  job_id: string
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'already_current'
+  stages: UpdateAllStage[]
+  total_fleet_nodes: number
+  completed_fleet_nodes: number
+  failed_fleet_nodes: number
+  created_at: string
+  completed_at: string | null
+  failure_reason: string | null
+}
+
 // =============================================================================
 // Composable
 // =============================================================================
@@ -748,6 +774,50 @@ export function useCodeSync() {
 
     // SLM self-update (#9073)
     selfUpdate,
+
+    // One-click full-pipeline update (#9971)
+    startUpdateAll,
+    getUpdateAllStatus,
+  }
+
+  // ---------------------------------------------------------------------------
+  // One-click full-pipeline update (#9971)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Start the one-click update-all orchestration pipeline.
+   * Returns the initial UpdateAllJob or throws on 409 (already running).
+   */
+  async function startUpdateAll(): Promise<UpdateAllJob | null> {
+    try {
+      const response = await client.post<UpdateAllJob>('/code-sync/update-all')
+      return response.data
+    } catch (e: unknown) {
+      const axiosErr = e as { response?: { status?: number; data?: { detail?: string } } }
+      if (axiosErr?.response?.status === 409) {
+        error.value = axiosErr.response.data?.detail || 'Update already running'
+      } else {
+        error.value = axiosErr?.response?.data?.detail || 'Failed to start update'
+      }
+      return null
+    }
+  }
+
+  /**
+   * Poll the status of the current update-all job.
+   * Returns null when no job exists (404).
+   */
+  async function getUpdateAllStatus(): Promise<UpdateAllJob | null> {
+    try {
+      const response = await client.get<UpdateAllJob>('/code-sync/update-all/status')
+      return response.data
+    } catch (e: unknown) {
+      const axiosErr = e as { response?: { status?: number } }
+      if (axiosErr?.response?.status === 404) {
+        return null
+      }
+      return null
+    }
   }
 
   async function selfUpdate(): Promise<{ success: boolean; message: string }> {

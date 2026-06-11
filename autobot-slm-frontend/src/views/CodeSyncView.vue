@@ -4,11 +4,11 @@
 // Author: mrveiss
 
 /**
- * Code Sync View (Issue #741, #779)
+ * Code Sync View (Issue #741, #779, #9971)
  *
  * Dedicated page for managing code version updates across the fleet.
- * Provides status overview, pending updates table, role-based sync,
- * and scheduled update management.
+ * Provides a one-click full-pipeline update CTA (#9971), pipeline progress
+ * display, and an Advanced section with existing per-node controls.
  */
 
 import { ref, watch, onMounted, onUnmounted, computed, type DeepReadonly } from 'vue'
@@ -19,6 +19,8 @@ import {
   type UpdateSchedule,
   type ScheduleCreateRequest,
   type FileDriftReport,
+  type UpdateAllJob,
+  type UpdateAllStage,
 } from '@/composables/useCodeSync'
 import { createLogger } from '@/utils/debugUtils'
 import { formatDateTime } from '@/composables/useTimezone'
@@ -74,6 +76,88 @@ watch(selectedDriftComponent, () => {
   driftReport.value = null
   showDriftDetails.value = false
 })
+
+// =============================================================================
+// One-click update-all state (#9971)
+// =============================================================================
+const updateAllJob = ref<UpdateAllJob | null>(null)
+const updateAllPolling = ref(false)
+let updateAllPollTimer: ReturnType<typeof setTimeout> | null = null
+const showAdvanced = ref(false)
+const expandedStageLogs = ref<Set<string>>(new Set())
+
+// Stage display metadata
+const STAGE_LABELS: Record<string, string> = {
+  github_fetch: 'GitHub',
+  code_source_pull: 'code_source',
+  slm_self_update: 'SLM server',
+  fleet_nodes: 'Fleet nodes',
+}
+
+function stageLabel(name: string): string {
+  return STAGE_LABELS[name] ?? name
+}
+
+function stageStatusClass(status: string): string {
+  const map: Record<string, string> = {
+    pending: 'bg-gray-100 text-gray-500',
+    running: 'bg-blue-100 text-blue-700',
+    success: 'bg-green-100 text-green-700',
+    failed: 'bg-red-100 text-red-700',
+    skipped: 'bg-gray-100 text-gray-400',
+  }
+  return map[status] ?? 'bg-gray-100 text-gray-500'
+}
+
+function stageStatusText(stage: UpdateAllStage): string {
+  if (stage.status === 'running') {
+    if (stage.name === 'fleet_nodes' && updateAllJob.value) {
+      const j = updateAllJob.value
+      return `${j.completed_fleet_nodes} / ${j.total_fleet_nodes}`
+    }
+    return 'updating...'
+  }
+  const labels: Record<string, string> = {
+    pending: 'pending',
+    success: 'done',
+    failed: 'failed',
+    skipped: 'skipped',
+  }
+  return labels[stage.status] ?? stage.status
+}
+
+const updateAllButtonLabel = computed(() => {
+  const job = updateAllJob.value
+  if (!job) {
+    // Compute how many stages would actually run
+    const outdated = codeSync.outdatedCount.value
+    const hasUpdate = codeSync.hasUpdate.value
+    if (!hasUpdate && outdated === 0) return null // "already current" label
+    return outdated > 0 ? `Update Everything (${outdated} node${outdated !== 1 ? 's' : ''})` : 'Update Everything'
+  }
+  if (job.status === 'running' || job.status === 'pending') return null // button shows spinner text
+  if (job.status === 'completed') return null
+  if (job.status === 'already_current') return null
+  return 'Update Everything'
+})
+
+const updateAllIsRunning = computed(() => {
+  const s = updateAllJob.value?.status
+  return s === 'pending' || s === 'running'
+})
+
+const updateAllIsDone = computed(() => {
+  const s = updateAllJob.value?.status
+  return s === 'completed' || s === 'already_current' || s === 'failed'
+})
+
+function toggleStageLog(name: string): void {
+  if (expandedStageLogs.value.has(name)) {
+    expandedStageLogs.value.delete(name)
+  } else {
+    expandedStageLogs.value.add(name)
+  }
+}
 
 // =============================================================================
 // Computed Properties
@@ -422,6 +506,59 @@ async function handleResolveDrift(): Promise<void> {
 }
 
 // =============================================================================
+// One-click update-all methods (#9971)
+// =============================================================================
+
+function _stopUpdateAllPoll(): void {
+  if (updateAllPollTimer) {
+    clearTimeout(updateAllPollTimer)
+    updateAllPollTimer = null
+  }
+  updateAllPolling.value = false
+}
+
+function _scheduleUpdateAllPoll(): void {
+  if (updateAllPolling.value) return
+  updateAllPolling.value = true
+  const poll = async () => {
+    const job = await codeSync.getUpdateAllStatus()
+    if (job) {
+      updateAllJob.value = job
+      if (job.status === 'running' || job.status === 'pending') {
+        updateAllPollTimer = setTimeout(poll, 2000)
+      } else {
+        updateAllPolling.value = false
+        // Refresh status / pending nodes once pipeline finishes
+        await Promise.all([codeSync.fetchStatus(), codeSync.fetchPendingNodes()])
+      }
+    } else {
+      _stopUpdateAllPoll()
+    }
+  }
+  updateAllPollTimer = setTimeout(poll, 1000)
+}
+
+async function handleUpdateAll(): Promise<void> {
+  codeSync.clearError()
+  const job = await codeSync.startUpdateAll()
+  if (job) {
+    updateAllJob.value = job
+    _scheduleUpdateAllPoll()
+  }
+}
+
+// Resume polling if a job is already running when the view mounts
+async function _checkExistingUpdateAllJob(): Promise<void> {
+  const job = await codeSync.getUpdateAllStatus()
+  if (job && (job.status === 'running' || job.status === 'pending')) {
+    updateAllJob.value = job
+    _scheduleUpdateAllPoll()
+  } else if (job) {
+    updateAllJob.value = job
+  }
+}
+
+// =============================================================================
 // Lifecycle
 // =============================================================================
 
@@ -433,11 +570,13 @@ onMounted(async () => {
     codeSync.fetchSchedules(),
     codeSync.fetchRoles(),
     codeSourceComposable.fetchCodeSource(),
+    _checkExistingUpdateAllJob(),
   ])
 })
 
 onUnmounted(() => {
   if (slmRefreshTimer) clearTimeout(slmRefreshTimer)
+  _stopUpdateAllPoll()
 })
 </script>
 
@@ -452,47 +591,6 @@ onUnmounted(() => {
         </p>
       </div>
       <div class="flex items-center gap-2">
-        <button
-          @click="handlePullFromSource"
-          :disabled="isPulling"
-          class="btn btn-secondary flex items-center gap-2"
-        >
-          <svg
-            :class="['w-4 h-4', isPulling ? 'animate-spin' : '']"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-            />
-          </svg>
-          {{ isPulling ? 'Pulling...' : 'Pull from Source' }}
-        </button>
-        <button
-          @click="handleSelfUpdate"
-          :disabled="selfUpdating || slmRestartPending"
-          class="btn btn-primary flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-          title="Sync code from source and restart this SLM server"
-        >
-          <svg
-            :class="['w-4 h-4', selfUpdating ? 'animate-spin' : '']"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
-            />
-          </svg>
-          {{ selfUpdating ? 'Updating...' : 'Update This Server' }}
-        </button>
         <button
           @click="handleRefresh"
           :disabled="codeSync.loading.value"
@@ -513,6 +611,136 @@ onUnmounted(() => {
           </svg>
           {{ codeSync.loading.value ? 'Refreshing...' : 'Refresh' }}
         </button>
+      </div>
+    </div>
+
+    <!-- PRIMARY CTA: One-click update everything (#9971) -->
+    <div class="card p-5 mb-6">
+      <div class="flex items-start justify-between gap-4">
+        <div class="flex-1">
+          <h2 class="text-lg font-semibold text-gray-900 mb-1">{{ $t('codeSyncView.updatePipelineTitle') }}</h2>
+          <p class="text-sm text-gray-500">{{ $t('codeSyncView.updatePipelineDesc') }}</p>
+        </div>
+        <div class="shrink-0">
+          <!-- Already current state -->
+          <button
+            v-if="!codeSync.hasUpdate.value && codeSync.outdatedCount.value === 0 && !updateAllIsRunning"
+            disabled
+            class="btn btn-primary opacity-50 cursor-not-allowed flex items-center gap-2 min-w-[220px] justify-center"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+            </svg>
+            {{ $t('codeSyncView.updateAllAlreadyCurrent') }}
+          </button>
+          <!-- Running state -->
+          <button
+            v-else-if="updateAllIsRunning"
+            disabled
+            class="btn btn-primary opacity-75 cursor-not-allowed flex items-center gap-2 min-w-[220px] justify-center"
+          >
+            <svg class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            {{ $t('codeSyncView.updateAllRunning') }}
+          </button>
+          <!-- Active state -->
+          <button
+            v-else
+            @click="handleUpdateAll"
+            class="btn btn-primary flex items-center gap-2 min-w-[220px] justify-center"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+            </svg>
+            {{ updateAllButtonLabel || $t('codeSyncView.updateAll') }}
+          </button>
+        </div>
+      </div>
+
+      <!-- Pipeline progress display (shown when job exists) -->
+      <div v-if="updateAllJob" class="mt-5">
+        <!-- Stage track -->
+        <div class="flex items-start gap-0 overflow-x-auto">
+          <template v-for="(stage, idx) in updateAllJob.stages" :key="stage.name">
+            <!-- Stage box -->
+            <div class="flex flex-col items-center min-w-[120px]">
+              <div
+                :class="['px-3 py-2 rounded-lg text-xs font-medium w-full text-center', stageStatusClass(stage.status)]"
+              >
+                <div class="font-semibold mb-0.5">{{ stageLabel(stage.name) }}</div>
+                <!-- Running spinner -->
+                <div v-if="stage.status === 'running'" class="flex items-center justify-center gap-1">
+                  <svg class="w-3 h-3 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  <span>{{ stageStatusText(stage) }}</span>
+                </div>
+                <div v-else class="text-xs">{{ stageStatusText(stage) }}</div>
+              </div>
+              <!-- SHA badge -->
+              <div v-if="stage.sha" class="mt-1 text-xs text-gray-400">
+                <a
+                  v-if="getCommitUrl(stage.sha)"
+                  :href="getCommitUrl(stage.sha)!"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="font-mono text-primary-600 hover:underline"
+                  :title="stage.sha"
+                >{{ stage.sha }}</a>
+                <span v-else class="font-mono">{{ stage.sha }}</span>
+              </div>
+              <!-- Deps badge -->
+              <div v-if="stage.deps_changed" class="mt-1">
+                <span class="inline-flex items-center px-1.5 py-0.5 rounded-sm text-xs bg-amber-100 text-amber-700 font-medium">
+                  {{ $t('codeSyncView.depsBadge') }}
+                </span>
+              </div>
+              <!-- Log expand toggle -->
+              <button
+                v-if="stage.log_lines && stage.log_lines.length > 0"
+                @click="toggleStageLog(stage.name)"
+                class="mt-1 text-xs text-primary-600 hover:text-primary-800"
+              >
+                {{ expandedStageLogs.has(stage.name) ? $t('codeSyncView.collapseLog') : $t('codeSyncView.expandLog') }}
+              </button>
+            </div>
+            <!-- Connector arrow (not after last) -->
+            <div
+              v-if="idx < updateAllJob.stages.length - 1"
+              class="flex items-center pt-4 px-1 text-gray-300 text-lg select-none"
+            >›</div>
+          </template>
+        </div>
+
+        <!-- Expanded stage logs -->
+        <template v-for="stage in updateAllJob.stages" :key="`log-${stage.name}`">
+          <div
+            v-if="expandedStageLogs.has(stage.name) && stage.log_lines.length > 0"
+            class="mt-3 bg-gray-900 rounded-md p-3 font-mono text-xs text-green-300 max-h-40 overflow-y-auto"
+          >
+            <div v-for="(line, i) in stage.log_lines" :key="i" class="leading-5">{{ line }}</div>
+          </div>
+        </template>
+
+        <!-- Failure reason -->
+        <div
+          v-if="updateAllJob.status === 'failed' && updateAllJob.failure_reason"
+          class="mt-3 bg-red-50 border border-red-200 rounded-md p-3 text-sm text-red-700"
+        >
+          {{ updateAllJob.failure_reason }}
+        </div>
+
+        <!-- Completed success -->
+        <div
+          v-if="updateAllJob.status === 'completed' || updateAllJob.status === 'already_current'"
+          class="mt-3 flex items-center gap-2 text-sm text-green-700"
+        >
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+          </svg>
+          {{ updateAllJob.status === 'already_current' ? $t('codeSyncView.alreadyCurrent') : 'Update complete' }}
+        </div>
       </div>
     </div>
 
@@ -610,6 +838,75 @@ onUnmounted(() => {
           </div>
         </div>
       </div>
+    </div>
+
+    <!-- Advanced / Diagnostics accordion (#9971 — demoted from primary) -->
+    <div class="mb-6">
+      <button
+        @click="showAdvanced = !showAdvanced"
+        class="w-full flex items-center justify-between px-4 py-3 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium text-gray-700 transition-colors"
+        :aria-expanded="showAdvanced"
+      >
+        <span>{{ $t('codeSyncView.advancedDiagnostics') }}</span>
+        <svg
+          :class="['w-4 h-4 transition-transform', showAdvanced ? 'rotate-180' : '']"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+      <div v-if="showAdvanced" class="mt-1 p-3 bg-amber-50 border border-amber-200 rounded-b-lg text-xs text-amber-700 leading-5">
+        {{ $t('codeSyncView.advancedWarning') }}
+      </div>
+    </div>
+
+    <div v-if="showAdvanced">
+
+    <!-- Advanced: Pull / Self-Update buttons -->
+    <div class="flex items-center gap-2 mb-6">
+      <button
+        @click="handlePullFromSource"
+        :disabled="isPulling"
+        class="btn btn-secondary flex items-center gap-2"
+      >
+        <svg
+          :class="['w-4 h-4', isPulling ? 'animate-spin' : '']"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+          />
+        </svg>
+        {{ isPulling ? 'Pulling...' : 'Pull from Source' }}
+      </button>
+      <button
+        @click="handleSelfUpdate"
+        :disabled="selfUpdating || slmRestartPending"
+        class="btn btn-secondary flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+        title="Sync code from source and restart this SLM server (files only — see Advanced warning)"
+      >
+        <svg
+          :class="['w-4 h-4', selfUpdating ? 'animate-spin' : '']"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
+          />
+        </svg>
+        {{ selfUpdating ? 'Updating...' : 'Update This Server' }}
+      </button>
     </div>
 
     <!-- Code Source Card (Issue #779) -->
@@ -1168,7 +1465,9 @@ onUnmounted(() => {
       @save="handleSaveSchedule"
     />
 
-    <!-- Code Source Modal (Issue #779) -->
+    </div><!-- end v-if="showAdvanced" -->
+
+    <!-- Code Source Modal (Issue #779) — always mounted for advanced section -->
     <CodeSourceModal
       v-if="showCodeSourceModal"
       :current-node-id="codeSourceData?.node_id"
