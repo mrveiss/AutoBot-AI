@@ -232,10 +232,24 @@ async def update_limit(
     # GH#8462: pass Decimal directly — Pydantic already validates it as Decimal,
     # no str() conversion needed (which would silently coerce to TEXT in the ORM).
     # GH#8997: support budget_mode and token_limit updates.
+    # Validate mode-appropriate fields (GH#8997 "not both"):
+    # - Setting token_limit while explicitly targeting dollars mode is rejected.
+    # - Setting budget_limit while explicitly targeting tokens mode is rejected.
+    effective_mode = body.budget_mode if body.budget_mode is not None else str(row.budget_mode)
+    if body.budget_mode is not None and body.budget_mode not in ("dollars", "tokens"):
+        raise HTTPException(status_code=400, detail="budget_mode must be 'dollars' or 'tokens'")
+    if effective_mode == "dollars" and body.token_limit is not None:
+        raise HTTPException(
+            status_code=400,
+            detail="token_limit cannot be set when budget_mode is 'dollars'",
+        )
+    if effective_mode == "tokens" and body.budget_limit is not None and body.budget_mode == "tokens":
+        raise HTTPException(
+            status_code=400,
+            detail="budget_limit cannot be set when switching to budget_mode 'tokens'; set token_limit instead",
+        )
     values: dict = {}
     if body.budget_mode is not None:
-        if body.budget_mode not in ("dollars", "tokens"):
-            raise HTTPException(status_code=400, detail="budget_mode must be 'dollars' or 'tokens'")
         values["budget_mode"] = body.budget_mode
     if body.budget_limit is not None:
         values["budget_limit"] = body.budget_limit
