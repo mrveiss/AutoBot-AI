@@ -223,6 +223,14 @@ async def lifespan(app: FastAPI):
     except Exception:
         logger.exception("Failed to reconcile stale fleet sync jobs")
 
+    # Resume any update-all fleet stage interrupted by SLM self-update restart (#9971)
+    try:
+        from api.code_sync import resume_update_all_orchestration
+
+        await resume_update_all_orchestration()
+    except Exception:
+        logger.exception("Failed to resume update-all orchestration")
+
     # Initialize manifest loader singleton (Issue #926 Phase 3)
     from services.manifest_loader import init_manifest_loader
 
