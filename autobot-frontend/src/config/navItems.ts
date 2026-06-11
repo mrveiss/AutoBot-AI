@@ -66,6 +66,9 @@ export const navItems: NavItem[] = [
     iconStroke: true,
     featureFlag: 'transcriber',
   },
+  // Issue #9890: Vision Automation is reachable via Workflow Builder sidebar + direct route.
+  // It is NOT in the primary nav rail — the featureFlag mechanism is dead (App.vue:977,
+  // #8820 stopped filtering), so a flag-gated entry would never hide the item.
 ];
 
 // ─── Profile/settings menu items (GH#8748) ───────────────────────────────────

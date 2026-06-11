@@ -21,10 +21,19 @@ prompts, no API key, and a leaked key in the context blob.
 
 from __future__ import annotations
 
+import asyncio
 import json
+import os
+import signal
 from typing import Any
 
+from autobot_shared.logging_manager import get_logger
+
 from ..config import AGENT_API_BASE_URL, AGENT_API_KEY_PLACEHOLDER
+from ..models.enums import LLCRunStatus
+from .base import AdapterRunStatus
+
+_logger = get_logger(__name__)
 
 # Context keys rendered by dedicated prompt sections or consumed as env vars —
 # excluded from the generic "Additional Context" catch-all.
@@ -154,9 +163,66 @@ def inject_agent_credentials(env: dict, context: dict) -> None:
         env["AUTOBOT_LLC_API_BASE"] = api_base
 
 
+def probe_pid(pid: int) -> AdapterRunStatus:
+    """Return an :class:`AdapterRunStatus` reflecting the liveness of *pid*.
+
+    Uses ``os.kill(pid, 0)`` (signal 0 — existence check, no delivery):
+
+    * RUNNING    — process exists and is signallable
+    * COMPLETED  — ``ProcessLookupError`` (PID gone; we have no exit code)
+    * RUNNING    — ``PermissionError`` (process exists, different uid)
+    * FAILED     — any other ``OSError``
+    """
+    try:
+        os.kill(pid, 0)
+        return AdapterRunStatus(status=LLCRunStatus.RUNNING)
+    except ProcessLookupError:
+        return AdapterRunStatus(status=LLCRunStatus.COMPLETED)
+    except PermissionError:
+        return AdapterRunStatus(status=LLCRunStatus.RUNNING)
+    except OSError as exc:
+        return AdapterRunStatus(status=LLCRunStatus.FAILED, error=str(exc))
+
+
+async def terminate_pid(pid: int, grace_seconds: int, log_name: str) -> bool:
+    """Send SIGTERM to *pid*, poll for exit, then SIGKILL if needed.
+
+    Returns ``True`` if the process was already gone when SIGTERM was sent
+    (``ProcessLookupError`` on the initial signal), ``False`` otherwise.
+    Callers that want to short-circuit on an already-dead process should
+    check the return value; callers with post-cancel cleanup to do can
+    ignore it.
+
+    The grace poll uses 0.1 s intervals for *grace_seconds* seconds before
+    escalating to SIGKILL.
+    """
+    try:
+        os.kill(pid, signal.SIGTERM)
+        _logger.info("%s: SIGTERM -> PID %d", log_name, pid)
+    except ProcessLookupError:
+        return True
+
+    for _ in range(grace_seconds * 10):
+        await asyncio.sleep(0.1)
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return False
+
+    try:
+        os.kill(pid, signal.SIGKILL)
+        _logger.warning("%s: SIGKILL -> PID %d", log_name, pid)
+    except ProcessLookupError:
+        pass
+
+    return False
+
+
 __all__ = [
     "AGENT_API_KEY_PLACEHOLDER",
     "render_context_markdown",
     "serialize_invoke_context",
     "inject_agent_credentials",
+    "probe_pid",
+    "terminate_pid",
 ]

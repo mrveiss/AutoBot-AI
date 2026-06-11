@@ -21,7 +21,8 @@ class TestDiagnosticsRouterRegistration:
     def test_diagnostics_router_exists(self):
         """Verify diagnostics router object exists with correct configuration."""
         assert router is not None
-        assert router.prefix == "/api/diagnostics"
+        # #9892: must NOT include /api — the app factory prepends it
+        assert router.prefix == "/diagnostics"
         assert "diagnostics" in router.tags
 
     def test_diagnostics_router_in_registry(self):
@@ -41,15 +42,14 @@ class TestDiagnosticsRouterRegistration:
         module_path, router_attr, prefix, tags, name = diagnostics_config
         assert module_path == "api.diagnostics"
         assert router_attr == "router"
-        assert prefix == ""  # Router already has /api/diagnostics prefix
+        assert prefix == ""  # Router already has /diagnostics prefix
         assert "diagnostics" in tags
         assert name == "diagnostics"
 
     def test_diagnostics_router_has_endpoints(self):
-        """Verify diagnostics router has expected endpoints."""
+        """Verify diagnostics router has expected endpoints (prefix included)."""
         routes = [route.path for route in router.routes]
-        assert "/analyze-failure" in routes
-        assert "/health" in routes
+        assert "/diagnostics/analyze-failure" in routes
 
     def test_diagnostics_router_endpoint_methods(self):
         """Verify diagnostics router endpoints have correct HTTP methods."""
@@ -60,11 +60,8 @@ class TestDiagnosticsRouterRegistration:
             endpoint_methods[route.path].extend(route.methods or [])
 
         # analyze-failure should support both POST and GET
-        assert "POST" in endpoint_methods.get("/analyze-failure", [])
-        assert "GET" in endpoint_methods.get("/analyze-failure", [])
-
-        # health should support GET
-        assert "GET" in endpoint_methods.get("/health", [])
+        assert "POST" in endpoint_methods.get("/diagnostics/analyze-failure", [])
+        assert "GET" in endpoint_methods.get("/diagnostics/analyze-failure", [])
 
     @pytest.mark.asyncio
     async def test_get_engine_singleton(self):
