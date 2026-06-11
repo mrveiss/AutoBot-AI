@@ -21,7 +21,7 @@
 #   -e "slm_admin_user=myuser" -e "slm_admin_password=mypass"
 #
 # Override API URL:
-#   -e "slm_api_url=https://<slm-host>"
+#   -e "slm_api_url=https://<slm-host>/slm"
 ---
 - name: Seed Fleet Nodes into SLM Database
   hosts: localhost
@@ -29,7 +29,10 @@
   gather_facts: false
 
   vars:
-    slm_api_url: "https://{{ hostvars['00-SLM-Manager']['ansible_host'] | default('127.0.0.1') }}"
+    # #9953: /slm prefix is the UNIVERSAL SLM API path — served in both
+    # co-located and dedicated nginx modes (#3268). The bare /api/ path routes
+    # to the USER backend on co-located hosts, so SLM auth there returns 401.
+    slm_api_url: "https://{{ hostvars['00-SLM-Manager']['ansible_host'] | default('127.0.0.1') }}/slm"
     slm_admin_user: "admin"
     # Password comes from hostvars (set by slm_manager role) or override
     slm_admin_password: >-

@@ -75,6 +75,7 @@ class CopilotLocalAdapter(SubprocessLifecycleAdapter):
 
     _LOG_NAME = "CopilotLocalAdapter"
     _state_path = staticmethod(_state_path)
+    _required_cli = "gh"  # GH#9793: CLI-availability gate in heartbeat dispatch
 
     async def _invoke(self, agent_config: dict, context: dict) -> str:
         gh_cli = _resolve_gh_cli()
