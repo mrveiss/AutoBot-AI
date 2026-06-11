@@ -2518,14 +2518,16 @@ async def _run_update_all_orchestration(job: UpdateAllJob, db_service_ref) -> No
         remote_sha = remote_commit
         async with db_service_ref.session() as db:
             nodes_result = await db.execute(
-                select(Node).where(
+                select(Node)
+                .where(
                     Node.code_status.in_(
                         [
                             CodeStatus.OUTDATED.value,
                             CodeStatus.CODE_CURRENT_SERVICE_FAILED.value,
                         ]
                     )
-                ).order_by(Node.hostname)
+                )
+                .order_by(Node.hostname)
             )
             outdated_nodes = nodes_result.scalars().all()
             outdated_node_ids = [n.node_id for n in outdated_nodes]
