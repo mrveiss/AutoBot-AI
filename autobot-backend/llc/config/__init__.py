@@ -23,9 +23,7 @@ def _env_decimal(name: str, default: str) -> Decimal:
     try:
         return Decimal(raw)
     except InvalidOperation:
-        _cfg_logger.warning(
-            "LLC config: %s=%r is not a valid decimal — using default %s", name, raw, default
-        )
+        _cfg_logger.warning("LLC config: %s=%r is not a valid decimal — using default %s", name, raw, default)
         return Decimal(default)
 
 

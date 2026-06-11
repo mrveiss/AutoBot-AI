@@ -337,22 +337,29 @@ async def test_hire_endpoint_calls_provision_budget(client, session_factory) -> 
 
     company_id = str(uuid.uuid4())
 
-    mock_provision = AsyncMock(return_value=(MagicMock(
-        agent_id="stub",
-        company_id=company_id,
-        budget_mode="dollars",
-        budget_spent=Decimal("0"),
-        budget_limit=Decimal("10.00"),
-        token_limit=None,
-        tokens_spent=0,
-        alert_threshold=0.8,
-    ), True))
+    mock_provision = AsyncMock(
+        return_value=(
+            MagicMock(
+                agent_id="stub",
+                company_id=company_id,
+                budget_mode="dollars",
+                budget_spent=Decimal("0"),
+                budget_limit=Decimal("10.00"),
+                token_limit=None,
+                tokens_spent=0,
+                alert_threshold=0.8,
+            ),
+            True,
+        )
+    )
 
     # Stub session.execute so the ::jsonb INSERT doesn't hit SQLite.
     mock_execute = AsyncMock(return_value=MagicMock())
 
-    with patch("llc.api.agent_hires.BudgetService.provision_budget", mock_provision), \
-            patch("sqlalchemy.ext.asyncio.AsyncSession.execute", mock_execute):
+    with (
+        patch("llc.api.agent_hires.BudgetService.provision_budget", mock_provision),
+        patch("sqlalchemy.ext.asyncio.AsyncSession.execute", mock_execute),
+    ):
         resp = await client.post(
             f"/api/llc/companies/{company_id}/agent-hires",
             json={"agent_name": "TestAgent"},
@@ -360,13 +367,13 @@ async def test_hire_endpoint_calls_provision_budget(client, session_factory) -> 
 
     # provision_budget must have been awaited exactly once.
     assert mock_provision.await_count == 1, (
-        f"provision_budget called {mock_provision.await_count}x — "
-        f"response {resp.status_code}: {resp.text}"
+        f"provision_budget called {mock_provision.await_count}x — " f"response {resp.status_code}: {resp.text}"
     )
     # The company_id passed to provision_budget must match the URL path parameter.
     call_args = mock_provision.call_args
-    called_company = call_args.args[2] if call_args.args and len(call_args.args) > 2 else \
-        call_args.kwargs.get("company_id")
+    called_company = (
+        call_args.args[2] if call_args.args and len(call_args.args) > 2 else call_args.kwargs.get("company_id")
+    )
     assert called_company == str(company_id)
 
 

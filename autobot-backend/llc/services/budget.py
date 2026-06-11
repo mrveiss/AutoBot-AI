@@ -77,9 +77,7 @@ class BudgetService(LLCServiceBase):
             existing = (
                 await session.execute(select(LLCAgentBudget).where(LLCAgentBudget.agent_id == agent_id))
             ).scalar_one_or_none()
-            logger.debug(
-                "Race on provision_budget for agent %s — returning existing row", agent_id
-            )
+            logger.debug("Race on provision_budget for agent %s — returning existing row", agent_id)
             return existing, False
 
         logger.info("Provisioned budget for agent %s (company=%s limit=%s)", agent_id, company_id, limit)
