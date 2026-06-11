@@ -87,6 +87,7 @@ ROLE_DEPENDENCIES = _rr.ROLE_DEPENDENCIES
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _role(name: str) -> dict:
     """Return the DEFAULT_ROLES entry matching *name*, or raise."""
     for r in DEFAULT_ROLES:
@@ -117,6 +118,7 @@ def test_role_names_are_unique():
 # Postgres role (#9853)
 # ---------------------------------------------------------------------------
 
+
 def test_postgres_role_present():
     role = _role("postgres")
     assert role["display_name"] == "PostgreSQL"
@@ -139,6 +141,7 @@ def test_postgres_dependencies():
 # Scheduler role (#9853)
 # ---------------------------------------------------------------------------
 
+
 def test_scheduler_role_present():
     role = _role("scheduler")
     assert role["display_name"] == "Celery Beat Scheduler"
@@ -160,6 +163,7 @@ def test_scheduler_dependencies():
 # Cross-registry consistency
 # ---------------------------------------------------------------------------
 
+
 def test_all_default_roles_have_ansible_group_entry():
     """Every role in DEFAULT_ROLES that is not an infra-only role must appear
     in ROLE_ANSIBLE_GROUPS so the dynamic inventory builder works."""
@@ -170,9 +174,7 @@ def test_all_default_roles_have_ansible_group_entry():
         name = role["name"]
         if name in exempt:
             continue
-        assert name in ROLE_ANSIBLE_GROUPS, (
-            f"Role {name!r} missing from ROLE_ANSIBLE_GROUPS"
-        )
+        assert name in ROLE_ANSIBLE_GROUPS, f"Role {name!r} missing from ROLE_ANSIBLE_GROUPS"
 
 
 def test_all_default_roles_have_dependency_entry():
@@ -182,18 +184,12 @@ def test_all_default_roles_have_dependency_entry():
         name = role["name"]
         if name in exempt:
             continue
-        assert name in ROLE_DEPENDENCIES, (
-            f"Role {name!r} missing from ROLE_DEPENDENCIES"
-        )
+        assert name in ROLE_DEPENDENCIES, f"Role {name!r} missing from ROLE_DEPENDENCIES"
 
 
 def test_serviceable_roles_include_postgres_and_scheduler():
     """Roles with a systemd_service (surfaced by get_role_definitions) include
     both new roles added in #9853."""
-    defs = {
-        r["name"]
-        for r in DEFAULT_ROLES
-        if r.get("target_path") or r.get("systemd_service")
-    }
+    defs = {r["name"] for r in DEFAULT_ROLES if r.get("target_path") or r.get("systemd_service")}
     assert "postgres" in defs
     assert "scheduler" in defs
