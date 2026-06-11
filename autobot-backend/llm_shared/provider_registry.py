@@ -30,11 +30,11 @@ from autobot_shared.logging_manager import get_logger
 from __future__ import annotations
 
 import asyncio
-import os
 import time
 from contextvars import ContextVar
 from typing import Any, Dict, List, Optional
 
+from autobot_shared.env_utils import env_float
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
 from llm_shared.model_param_registry import apply_model_defaults, apply_prompt_prefix
@@ -53,7 +53,7 @@ _HEALTH_CACHE_TTL = 30.0
 
 # Multiplier applied to baseline single-worker TTFT when evaluating whether
 # cross-worker hop latency makes pipeline dispatch too expensive (MVA-1099).
-_NPU_PIPELINE_MAX_LATENCY_MULTIPLIER: float = float(os.environ.get("NPU_PIPELINE_MAX_LATENCY_MULTIPLIER", "2.0"))
+_NPU_PIPELINE_MAX_LATENCY_MULTIPLIER: float = env_float("NPU_PIPELINE_MAX_LATENCY_MULTIPLIER", 2.0)
 
 # Provider name used for the NPU worker pool.
 _NPU_POOL_PROVIDER_NAME = "npu_pool"
