@@ -3,6 +3,8 @@
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
 
+import { companyStatusColor } from '@/composables/llc/llcStatus'
+
 export interface CompanyNode {
   id: string
   name: string
@@ -26,12 +28,6 @@ const budgetBarColor = (node: CompanyNode) => {
   if (pct >= 70) return 'bg-yellow-400'
   return 'bg-green-500'
 }
-
-const statusColor = (status: string) => {
-  if (status === 'active') return 'bg-green-500'
-  if (status === 'paused') return 'bg-yellow-400'
-  return 'bg-gray-400'
-}
 </script>
 
 <template>
@@ -52,7 +48,7 @@ const statusColor = (status: string) => {
       </button>
       <span v-else class="w-5 flex-shrink-0" />
 
-      <span class="w-2.5 h-2.5 rounded-full flex-shrink-0" :class="statusColor(node.status)" />
+      <span class="w-2.5 h-2.5 rounded-full flex-shrink-0" :class="companyStatusColor(node.status)" />
       <span class="flex-1 font-semibold text-sm text-gray-900 dark:text-gray-100">{{ node.name }}</span>
 
       <div class="flex items-center gap-2 w-32">
