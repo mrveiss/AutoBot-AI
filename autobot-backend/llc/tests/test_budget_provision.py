@@ -199,7 +199,7 @@ async def test_provision_endpoint_creates_row(client, session_factory) -> None: 
     company_id = str(uuid.uuid4())
     agent_id = await _insert_agent(session_factory, company_id)
 
-    resp = await client.post(f"/api/llc/budget/{agent_id}", json={"company_id": company_id})
+    resp = await client.post(f"/api/llc/budget/{agent_id}", json={})
     assert resp.status_code == 201, resp.text
     data = resp.json()
     assert data["agent_id"] == agent_id
@@ -215,20 +215,19 @@ async def test_provision_endpoint_409_on_duplicate(client, session_factory) -> N
     company_id = str(uuid.uuid4())
     agent_id = await _insert_agent(session_factory, company_id)
 
-    first = await client.post(f"/api/llc/budget/{agent_id}", json={"company_id": company_id})
+    first = await client.post(f"/api/llc/budget/{agent_id}", json={})
     assert first.status_code == 201, first.text
 
-    second = await client.post(f"/api/llc/budget/{agent_id}", json={"company_id": company_id})
+    second = await client.post(f"/api/llc/budget/{agent_id}", json={})
     assert second.status_code == 409, second.text
 
 
 @pytest.mark.asyncio
 async def test_provision_endpoint_404_unknown_agent(client) -> None:  # noqa: ANN001
     """POST /budget/{agent_id} returns 404 when the agent does not exist."""
-    company_id = str(uuid.uuid4())
     unknown_agent = str(uuid.uuid4())
 
-    resp = await client.post(f"/api/llc/budget/{unknown_agent}", json={"company_id": company_id})
+    resp = await client.post(f"/api/llc/budget/{unknown_agent}", json={})
     assert resp.status_code == 404, resp.text
 
 
@@ -240,7 +239,7 @@ async def test_provision_endpoint_custom_limit(client, session_factory) -> None:
 
     resp = await client.post(
         f"/api/llc/budget/{agent_id}",
-        json={"company_id": company_id, "budget_limit": "25.00"},
+        json={"budget_limit": "25.00"},
     )
     assert resp.status_code == 201, resp.text
     assert Decimal(resp.json()["budget_limit"]) == Decimal("25.00")
@@ -259,7 +258,7 @@ async def test_ingest_after_provision(client, session_factory) -> None:  # noqa:
     company_id = str(uuid.uuid4())
     agent_id = await _insert_agent(session_factory, company_id)
 
-    prov = await client.post(f"/api/llc/budget/{agent_id}", json={"company_id": company_id})
+    prov = await client.post(f"/api/llc/budget/{agent_id}", json={})
     assert prov.status_code == 201, prov.text
 
     with patch("llc.services.budget.get_async_redis_client", new_callable=AsyncMock) as mock_redis:
@@ -319,3 +318,107 @@ async def test_hire_auto_provisions_budget(session_factory) -> None:  # noqa: AN
         _, created_again = await svc.provision_budget(session, agent_id, company_id)
         await session.commit()
     assert created_again is False
+
+
+# ---------------------------------------------------------------------------
+# L5 — hire endpoint wires provision_budget (AsyncMock probe)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_hire_endpoint_calls_provision_budget(client, session_factory) -> None:  # noqa: ANN001
+    """POST /companies/{id}/agent-hires calls BudgetService.provision_budget (GH#9901 L5).
+
+    The hire endpoint uses a raw-text ``::jsonb`` INSERT that SQLite cannot
+    execute. We stub session.execute so the DB step is bypassed and then confirm
+    provision_budget is called once with the newly generated agent_id.
+    """
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    company_id = str(uuid.uuid4())
+
+    mock_provision = AsyncMock(return_value=(MagicMock(
+        agent_id="stub",
+        company_id=company_id,
+        budget_mode="dollars",
+        budget_spent=Decimal("0"),
+        budget_limit=Decimal("10.00"),
+        token_limit=None,
+        tokens_spent=0,
+        alert_threshold=0.8,
+    ), True))
+
+    # Stub session.execute so the ::jsonb INSERT doesn't hit SQLite.
+    mock_execute = AsyncMock(return_value=MagicMock())
+
+    with patch("llc.api.agent_hires.BudgetService.provision_budget", mock_provision), \
+            patch("sqlalchemy.ext.asyncio.AsyncSession.execute", mock_execute):
+        resp = await client.post(
+            f"/api/llc/companies/{company_id}/agent-hires",
+            json={"agent_name": "TestAgent"},
+        )
+
+    # provision_budget must have been awaited exactly once.
+    assert mock_provision.await_count == 1, (
+        f"provision_budget called {mock_provision.await_count}x — "
+        f"response {resp.status_code}: {resp.text}"
+    )
+    # The company_id passed to provision_budget must match the URL path parameter.
+    call_args = mock_provision.call_args
+    called_company = call_args.args[2] if call_args.args and len(call_args.args) > 2 else \
+        call_args.kwargs.get("company_id")
+    assert called_company == str(company_id)
+
+
+# ---------------------------------------------------------------------------
+# M1 — race-safe provision: IntegrityError path via direct service call
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_provision_budget_race_returns_existing(session_factory) -> None:  # noqa: ANN001
+    """provision_budget returns (existing, False) when IntegrityError is raised (GH#9901 M1).
+
+    Directly invokes the service's except-IntegrityError branch by patching
+    begin_nested to raise synchronously.  The re-select inside the handler
+    finds the row committed by a preceding provision call, confirming the
+    race-safe path returns the existing row with created=False.
+    """
+    from unittest.mock import patch
+
+    from sqlalchemy.exc import IntegrityError
+
+    from llc.services.budget import BudgetService
+
+    company_id = str(uuid.uuid4())
+    agent_id = str(uuid.uuid4())
+    svc = BudgetService()
+
+    # Commit a real row so the retry SELECT inside the except handler finds it.
+    async with session_factory() as session:
+        _, first_created = await svc.provision_budget(session, agent_id, company_id)
+        await session.commit()
+    assert first_created is True
+
+    # Now open a fresh session.  We patch begin_nested to raise IntegrityError
+    # immediately (simulating a concurrent INSERT winning the race).
+    # We also disable autoflush on this session so session.add() does not fire
+    # the INSERT before begin_nested is reached, avoiding a real constraint
+    # violation that would corrupt the session state.
+
+    class _RaisingNestedCtx:
+        async def __aenter__(self):  # noqa: ANN204
+            raise IntegrityError("duplicate key", None, None)
+
+        async def __aexit__(self, exc_type, exc, tb):  # noqa: ANN204
+            return False
+
+    from sqlalchemy.ext.asyncio import AsyncSession as _AS
+
+    with patch.object(_AS, "begin_nested", return_value=_RaisingNestedCtx()):
+        async with session_factory() as session:
+            session.sync_session.autoflush = False
+            row, created = await svc.provision_budget(session, agent_id, company_id)
+
+    assert created is False
+    assert row.agent_id == agent_id

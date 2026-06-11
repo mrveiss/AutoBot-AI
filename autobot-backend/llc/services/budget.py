@@ -18,6 +18,7 @@ from decimal import Decimal
 from typing import Optional, Tuple
 
 from sqlalchemy import select, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.redis_client import get_async_redis_client
@@ -68,6 +69,19 @@ class BudgetService(LLCServiceBase):
             alert_threshold=0.8,
         )
         session.add(row)
+        try:
+            async with session.begin_nested():
+                await session.flush()
+        except IntegrityError:
+            # Concurrent provision won the race — re-select and return existing row.
+            existing = (
+                await session.execute(select(LLCAgentBudget).where(LLCAgentBudget.agent_id == agent_id))
+            ).scalar_one_or_none()
+            logger.debug(
+                "Race on provision_budget for agent %s — returning existing row", agent_id
+            )
+            return existing, False
+
         logger.info("Provisioned budget for agent %s (company=%s limit=%s)", agent_id, company_id, limit)
         return row, True
 

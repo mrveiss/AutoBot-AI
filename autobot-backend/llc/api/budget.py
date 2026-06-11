@@ -8,7 +8,7 @@ from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -72,13 +72,36 @@ class UpdateLimitRequest(BaseModel):
 class ProvisionRequest(BaseModel):
     """Request body for POST /budget/{agent_id} (GH#9901).
 
-    All fields are optional — omitting budget_limit uses the
-    LLC_DEFAULT_BUDGET_LIMIT env-var value (default $10).
-    company_id is required so the row is properly company-scoped.
+    budget_limit is optional — omitting it uses LLC_DEFAULT_BUDGET_LIMIT (default $10).
+    company_id is derived from agent_org_nodes to prevent cross-company row insertion.
     """
 
-    company_id: str
-    budget_limit: Optional[Decimal] = None
+    budget_limit: Optional[Decimal] = Field(None, gt=0, lt=Decimal("1000000000"))
+
+
+def _derive_status(row: LLCAgentBudget) -> tuple:
+    """Compute (remaining, is_over, alert_triggered) from a budget row (GH#8997).
+
+    Centralises the spend/limit/threshold arithmetic used in every read path.
+    Returns a plain tuple so callers can unpack directly.
+    """
+    budget_mode = str(row.budget_mode)
+    spent = Decimal(str(row.budget_spent))
+    limit = Decimal(str(row.budget_limit))
+    threshold = Decimal(str(row.alert_threshold))
+    tokens_spent = int(row.tokens_spent)
+    token_limit = int(row.token_limit) if row.token_limit is not None else None
+
+    if budget_mode == "tokens" and token_limit is not None:
+        remaining = Decimal(str(token_limit - tokens_spent))
+        is_over = tokens_spent > token_limit
+        alert = token_limit > 0 and tokens_spent / token_limit >= threshold
+    else:
+        remaining = limit - spent
+        is_over = spent > limit
+        alert = limit > Decimal("0") and spent / limit >= threshold
+
+    return remaining, is_over, alert
 
 
 def _build_response(row: LLCAgentBudget, remaining: Decimal, is_over: bool, alert: bool) -> BudgetResponse:
@@ -107,29 +130,29 @@ async def provision_budget(
 
     Returns 201 on creation, 409 if a row already exists.
     Returns 404 if the agent does not exist in agent_org_nodes.
+    company_id is derived from agent_org_nodes — callers cannot scope rows
+    to arbitrary companies.
     """
-    # Validate agent exists — 404 prevents silent budget orphans.
-    agent_check = await session.execute(
-        text("SELECT 1 FROM agent_org_nodes WHERE agent_id = :agent_id LIMIT 1"),
+    # Validate agent exists and derive company_id in a single query.
+    agent_row = await session.execute(
+        text("SELECT company_id FROM agent_org_nodes WHERE agent_id = :agent_id LIMIT 1"),
         {"agent_id": agent_id},
     )
-    if agent_check.fetchone() is None:
+    agent_record = agent_row.fetchone()
+    if agent_record is None:
         raise HTTPException(status_code=404, detail=f"Agent {agent_id!r} not found")
 
+    company_id = str(agent_record[0])
+
     svc = BudgetService()
-    row, created = await svc.provision_budget(session, agent_id, body.company_id, body.budget_limit)
+    row, created = await svc.provision_budget(session, agent_id, company_id, body.budget_limit)
     if not created:
         raise HTTPException(
             status_code=409,
             detail=f"Budget row already exists for agent {agent_id}",
         )
 
-    spent = Decimal(str(row.budget_spent))
-    limit = Decimal(str(row.budget_limit))
-    threshold = Decimal(str(row.alert_threshold))
-    remaining = limit - spent
-    is_over = spent > limit
-    alert = limit > Decimal("0") and spent / limit >= threshold
+    remaining, is_over, alert = _derive_status(row)
     return _build_response(row, remaining, is_over, alert)
 
 
@@ -175,13 +198,7 @@ async def get_budget(
     if row is None:
         raise HTTPException(status_code=404, detail=f"No budget row for agent {agent_id}")
 
-    spent = Decimal(str(row.budget_spent))
-    limit = Decimal(str(row.budget_limit))
-    threshold = Decimal(str(row.alert_threshold))
-    remaining = limit - spent
-    is_over = spent > limit
-    alert = limit > Decimal("0") and spent / limit >= threshold
-
+    remaining, is_over, alert = _derive_status(row)
     return _build_response(row, remaining, is_over, alert)
 
 

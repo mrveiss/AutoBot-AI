@@ -10,15 +10,31 @@ Single source of truth for LLC config constants. The legacy flat module
 the flat module deleted (GH#9776).
 """
 
+import logging
 import os
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
+
+_cfg_logger = logging.getLogger(__name__)
+
+
+def _env_decimal(name: str, default: str) -> Decimal:
+    """Read an env var as Decimal; log a warning and return the default on malformed input."""
+    raw = os.environ.get(name, default)
+    try:
+        return Decimal(raw)
+    except InvalidOperation:
+        _cfg_logger.warning(
+            "LLC config: %s=%r is not a valid decimal — using default %s", name, raw, default
+        )
+        return Decimal(default)
+
 
 # Agent API base URL (used for context assembly and heartbeat payloads).
 AGENT_API_BASE_URL = os.environ.get("LLC_AGENT_API_BASE_URL", "http://localhost:8001/api")
 
 # Default dollar budget limit for newly provisioned agent budget rows.
 # Override via LLC_DEFAULT_BUDGET_LIMIT env var (GH#9901).
-DEFAULT_BUDGET_LIMIT: Decimal = Decimal(os.environ.get("LLC_DEFAULT_BUDGET_LIMIT", "10.00"))
+DEFAULT_BUDGET_LIMIT: Decimal = _env_decimal("LLC_DEFAULT_BUDGET_LIMIT", "10.00")
 
 # Default streaming watchdog timeout (seconds of silence before kill).
 # Per-agent override via adapter_config["streaming_watchdog_timeout_seconds"].
