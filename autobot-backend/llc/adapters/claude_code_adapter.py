@@ -39,6 +39,7 @@ from typing import Optional
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 
+from ..models.enums import LLCRunStatus
 from .base import AdapterRunStatus
 from .subprocess_base import DEFAULT_OUTPUT_DIR as _DEFAULT_OUTPUT_DIR
 from .subprocess_base import SIGTERM_GRACE_SECONDS as _SIGTERM_GRACE_SECONDS
@@ -51,7 +52,6 @@ from .subprocess_support import (
     read_output_tail,
     serialize_invoke_context,
 )
-from ..models.enums import LLCRunStatus
 
 logger = get_logger(__name__)
 

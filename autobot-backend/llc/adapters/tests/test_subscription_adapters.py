@@ -146,9 +146,9 @@ class TestClaudeCodeSubscriptionAdapter:
             ):
                 result = await adapter.status(cfg, run_id)
 
-        assert result.status == LLCRunStatus.FAILED, (
-            "Quota exhaustion must return FAILED (no retry), not RATE_LIMITED (backoff loop)."
-        )
+        assert (
+            result.status == LLCRunStatus.FAILED
+        ), "Quota exhaustion must return FAILED (no retry), not RATE_LIMITED (backoff loop)."
         assert result.error is not None
         assert "quota" in result.error.lower()
 

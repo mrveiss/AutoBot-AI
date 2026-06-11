@@ -283,9 +283,9 @@ class TestClaudeCodeAdapterStatusRateLimit:
             with patch("os.kill", side_effect=ProcessLookupError()):
                 result = await adapter._status(cfg, run_id)
 
-        assert result.status == LLCRunStatus.COMPLETED, (
-            "Issue number '429' in a successful transcript must not trigger RATE_LIMITED."
-        )
+        assert (
+            result.status == LLCRunStatus.COMPLETED
+        ), "Issue number '429' in a successful transcript must not trigger RATE_LIMITED."
 
     async def test_no_result_event_with_rate_limit_tail_returns_rate_limited(self):
         """M1(c): NO result event + rate_limit_error in tail → RATE_LIMITED.
@@ -324,9 +324,9 @@ class TestClaudeCodeAdapterStatusRateLimit:
             with patch("os.kill", side_effect=ProcessLookupError()):
                 result = await adapter._status(cfg, run_id)
 
-        assert result.status == LLCRunStatus.RATE_LIMITED, (
-            "Mid-stream kill with rate_limit_error and no result event must be RATE_LIMITED."
-        )
+        assert (
+            result.status == LLCRunStatus.RATE_LIMITED
+        ), "Mid-stream kill with rate_limit_error and no result event must be RATE_LIMITED."
 
 
 # ---------------------------------------------------------------------------
@@ -428,9 +428,7 @@ async def test_run_adapter_applies_backoff_for_registry_rate_limit():
         await scheduler._run_adapter(agent, _RUN_ID, {})
 
     # RATE_LIMITED status must have been written (not FAILED).
-    rl_compiled = str(
-        rl_session_mock.execute.call_args[0][0].compile(compile_kwargs={"literal_binds": True})
-    )
+    rl_compiled = str(rl_session_mock.execute.call_args[0][0].compile(compile_kwargs={"literal_binds": True}))
     assert LLCRunStatus.RATE_LIMITED.value in rl_compiled
     # Agent must have been re-queued in Redis.
     redis.zadd.assert_called_once()
