@@ -20,7 +20,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import select, text
+from sqlalchemy import or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.redis_client import get_async_redis_client
@@ -86,17 +86,21 @@ class BudgetWatchdog:
 
         Evaluates each agent in its active budget mode:
         - DOLLARS: ratio = budget_spent / budget_limit
-        - TOKENS: ratio = tokens_spent / token_limit (only when token_limit > 0)
+        - TOKENS: ratio = tokens_spent / token_limit; a tokens-mode row with no
+          token_limit falls back to dollar enforcement, matching
+          BudgetService.check_budget / _derive_status semantics.
         """
-        result = await session.execute(select(LLCAgentBudget))
+        result = await session.execute(
+            select(LLCAgentBudget).where(
+                or_(LLCAgentBudget.budget_limit > 0, LLCAgentBudget.token_limit > 0)
+            )
+        )
         rows = list(result.scalars().all())
 
         for row in rows:
             budget_mode = str(row.budget_mode)
-            if budget_mode == "tokens":
-                token_limit = int(row.token_limit) if row.token_limit is not None else 0
-                if token_limit <= 0:
-                    continue
+            token_limit = int(row.token_limit) if row.token_limit is not None else 0
+            if budget_mode == "tokens" and token_limit > 0:
                 tokens_spent = int(row.tokens_spent)
                 ratio = Decimal(str(tokens_spent)) / Decimal(str(token_limit))
             else:
