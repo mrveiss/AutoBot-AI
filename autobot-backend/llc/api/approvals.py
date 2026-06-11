@@ -18,6 +18,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.logging_manager import get_logger
+from llc.deps import get_session, service_dep
 
 from ..models.enums import ApprovalStatus, ApprovalType
 from ..services.approval import (
@@ -26,7 +27,6 @@ from ..services.approval import (
     ApprovalService,
     ApprovalStateError,
 )
-from llc.deps import get_session, service_dep
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/approvals", tags=["llc-approvals"])

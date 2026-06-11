@@ -20,11 +20,11 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.logging_manager import get_logger
+from llc.deps import get_session, service_dep
 
 from ..exceptions import WipLimitExceeded
 from ..services.board import BoardService
 from ..services.work_item_service import InvalidTransition
-from llc.deps import get_session, service_dep
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/boards", tags=["llc-boards"])

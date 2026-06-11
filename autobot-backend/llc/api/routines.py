@@ -29,11 +29,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user
 from autobot_shared.redis_client import get_async_redis_client
+from llc.deps import get_session, service_dep
 
 from ..models.enums import RoutineProduces, RoutineStatus
 from ..scheduler.routine_scheduler import _SCHEDULE_KEY
 from ..services.routine_service import RoutineService
-from llc.deps import get_session, service_dep
 
 router = APIRouter(tags=["llc-routines"])
 _service = service_dep(RoutineService)

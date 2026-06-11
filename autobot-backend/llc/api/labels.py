@@ -19,6 +19,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from llc.deps import get_session, service_dep
+
 from ..services.label_service import (
     LabelNameConflict,
     LabelNotFound,
@@ -26,7 +28,6 @@ from ..services.label_service import (
     WorkItemNotFound,
     _label_to_dict,
 )
-from llc.deps import get_session, service_dep
 
 router = APIRouter(prefix="/companies/{company_id}/labels", tags=["llc-labels"])
 _service = service_dep(LLCLabelService)

@@ -19,13 +19,14 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from llc.deps import get_session, service_dep
+
 from ..models.enums import WorkItemType
 from ..services.review_gate import (
     ReviewGatePolicyConflictError,
     ReviewGatePolicyNotFoundError,
     ReviewGatePolicyService,
 )
-from llc.deps import get_session, service_dep
 
 router = APIRouter(tags=["llc-review-gate-policies"])
 _service = service_dep(ReviewGatePolicyService)

@@ -13,10 +13,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from llc.deps import get_session, service_dep
+
 from ..models.enums import WorkItemStatus, WorkItemType
 from ..models.work_item import LLCWorkItem
 from ..services.backlog import BacklogService
-from llc.deps import get_session, service_dep
 
 router = APIRouter(prefix="/backlog", tags=["llc-backlog"])
 _service = service_dep(BacklogService)
