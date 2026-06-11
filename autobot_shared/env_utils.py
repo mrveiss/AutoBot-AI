@@ -9,6 +9,38 @@ import os
 logger = logging.getLogger(__name__)
 
 
+def env_float(name: str, default: float) -> float:
+    """Read a float environment variable, falling back to *default* on absence or bad value.
+
+    Returns *default* silently when the var is absent.
+    Logs a warning and returns *default* when the var is set but not a valid float.
+    """
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    try:
+        return float(raw)
+    except ValueError:
+        logger.warning("Invalid %s=%r; using default %s", name, raw, default)
+        return default
+
+
+def env_int(name: str, default: int) -> int:
+    """Read an integer environment variable, falling back to *default* on absence or bad value.
+
+    Returns *default* silently when the var is absent.
+    Logs a warning and returns *default* when the var is set but not a valid integer.
+    """
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        logger.warning("Invalid %s=%r; using default %d", name, raw, default)
+        return default
+
+
 def env_int_clamped(
     name: str,
     default: int,
