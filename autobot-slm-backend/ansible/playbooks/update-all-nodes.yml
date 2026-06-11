@@ -360,7 +360,7 @@
 
     - name: "[PLAY 1] SLM | Wait for API to be ready"
       uri:
-        url: "https://{{ ansible_host }}/api/health"
+        url: "https://{{ ansible_host }}/slm/api/health"
         validate_certs: false
         status_code: 200
       register: slm_health_check
@@ -372,7 +372,7 @@
 
     - name: "[PLAY 1] SLM | Login to get auth token"
       uri:
-        url: "https://{{ ansible_host }}/api/auth/login"
+        url: "https://{{ ansible_host }}/slm/api/auth/login"
         method: POST
         body_format: json
         body:
@@ -394,7 +394,7 @@
 
     - name: "[PLAY 1] SLM | Mark node as synced in DB"
       uri:
-        url: "https://{{ ansible_host }}/api/code-sync/nodes/00-SLM-Manager/mark-synced"
+        url: "https://{{ ansible_host }}/slm/api/code-sync/nodes/00-SLM-Manager/mark-synced"
         method: POST
         headers:
           Authorization: "Bearer {{ slm_login_play1.json.access_token | default('') }}"
@@ -429,7 +429,7 @@
   pre_tasks:
     - name: "[PLAY 2] Login to SLM API"
       uri:
-        url: "https://{{ slm_host }}/api/auth/login"
+        url: "https://{{ slm_host }}/slm/api/auth/login"
         method: POST
         body_format: json
         body:
@@ -861,7 +861,7 @@
     # ----- Mark synced -----
     - name: "[PLAY 2] Mark node as synced in SLM DB"
       uri:
-        url: "https://{{ slm_host }}/api/code-sync/nodes/{{ inventory_hostname }}/mark-synced"
+        url: "https://{{ slm_host }}/slm/api/code-sync/nodes/{{ inventory_hostname }}/mark-synced"
         method: POST
         headers:
           Authorization: "Bearer {{ slm_token }}"
@@ -893,7 +893,7 @@
 
     - name: Check SLM health
       uri:
-        url: "https://{{ slm_host }}/api/health"
+        url: "https://{{ slm_host }}/slm/api/health"
         validate_certs: false
       register: slm_health
       ignore_errors: true
