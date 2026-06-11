@@ -11,8 +11,9 @@ aliases:
 # ChromaDB 0.5 to 1.x Upgrade — Re-index Requirement
 
 **Introduced by:** PR #9762  
-**Affects:** Bare-metal and long-lived-volume deployments only  
-**Docker Compose (`single_user`):** Holds no persistent volume data — not affected
+**Affects:** Any deployment whose ChromaDB data volume was populated under 0.5.x —
+including Docker Compose, whose named `chroma_data` volume persists across
+`docker compose up` and image upgrades
 
 ---
 
@@ -26,8 +27,13 @@ ChromaDB 1.x introduced two breaking changes relative to 0.5.x:
 | Persist path | `/chroma/chroma` | `/data` |
 | On-disk format | 0.5 SQLite layout | 1.x SQLite layout (incompatible) |
 
-When the server container is replaced with the 1.x image, the old volume data at
-`/chroma/chroma` is not read.  The server starts healthy and the collection API
+In `docker-compose.yml` the named volume mount moved accordingly:
+`chroma_data:/chroma/chroma` (0.5.x) → `chroma_data:/data` (1.x). The volume
+itself is unchanged and survives the upgrade — but the 1.x server does not read
+the 0.5-format data it contains.
+
+When the server container is replaced with the 1.x image, the old volume data
+is not read.  The server starts healthy and the collection API
 responds normally, but all previously indexed vectors are absent.  RAG returns no
 results and the backend logs a startup warning:
 
@@ -62,7 +68,7 @@ the AutoBot database (no data is lost from Redis/Postgres).
 ### Option A — Vectorize all facts (recommended for most deployments)
 
 ```bash
-curl -X POST http://localhost:8001/api/vectorize_facts \
+curl -X POST http://localhost:8001/api/knowledge_base/vectorize_facts \
   -H "Content-Type: application/json" \
   -d '{"batch_size": 100}'
 ```
@@ -70,13 +76,13 @@ curl -X POST http://localhost:8001/api/vectorize_facts \
 Monitor progress:
 
 ```bash
-curl http://localhost:8001/api/vectorize_facts/status
+curl http://localhost:8001/api/knowledge_base/vectorize_facts/status
 ```
 
 ### Option B — Background vectorization (non-blocking)
 
 ```bash
-curl -X POST http://localhost:8001/api/vectorize_facts/background \
+curl -X POST http://localhost:8001/api/knowledge_base/vectorize_facts/background \
   -H "Content-Type: application/json" \
   -d '{}'
 ```
@@ -84,12 +90,12 @@ curl -X POST http://localhost:8001/api/vectorize_facts/background \
 ### Option C — Contextual reindex (requires `CONTEXT_ENABLED=true`)
 
 ```bash
-curl -X POST http://localhost:8001/api/reindex_with_context \
+curl -X POST http://localhost:8001/api/knowledge_base/reindex_with_context \
   -H "Content-Type: application/json" \
   -d '{"batch_size": 50}'
 
 # Check status
-curl http://localhost:8001/api/reindex_with_context/status
+curl http://localhost:8001/api/knowledge_base/reindex_with_context/status
 ```
 
 ---
@@ -98,9 +104,9 @@ curl http://localhost:8001/api/reindex_with_context/status
 
 | Deployment type | Affected? | Action |
 |-----------------|-----------|--------|
-| `docker compose up` (default `single_user` profile) | No — no persistent `chroma_data` volume | None |
-| Bare-metal / systemd with `chroma_data` volume populated under 0.5.x | Yes | Re-index (see above) |
-| Fresh install onto 1.x | No — no prior data | None |
+| `docker compose up` with a `chroma_data` volume populated under 0.5.x | Yes — named volumes survive image upgrades | Re-index (see above) |
+| Bare-metal / systemd with ChromaDB data populated under 0.5.x | Yes | Re-index (see above) |
+| Fresh host, or `chroma_data` removed (`docker volume rm` / prune) before first 1.x start | No — no prior data | None |
 
 ---
 
