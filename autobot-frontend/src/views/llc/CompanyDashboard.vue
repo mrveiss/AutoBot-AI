@@ -8,12 +8,17 @@ import { useApiClient } from '@/plugins/api'
 import { useWebSocket } from '@/composables/useWebSocket'
 import { getBackendUrl } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
-import { useRoute, useRouter } from 'vue-router'
+import { useRouter } from 'vue-router'
 import { useLlcCompanyContext } from '@/composables/llc/useLlcCompanyContext'
+import {
+  agentStatusColor,
+  runStatusToAgentStatus,
+  runStatusToRunDisplayStatus,
+} from '@/composables/llc/llcStatus'
+import type { AgentDisplayStatus, RunDisplayStatus } from '@/composables/llc/llcStatus'
 
 const logger = createLogger('CompanyDashboard')
 const api = useApiClient()
-const route = useRoute()
 const router = useRouter()
 const { resolveCompanyId } = useLlcCompanyContext()
 
@@ -25,7 +30,7 @@ interface AgentStatus {
   id: string
   name: string
   title: string
-  status: 'active' | 'idle' | 'error' | 'paused'
+  status: AgentDisplayStatus
   adapter_type: string
   last_heartbeat: string | null
 }
@@ -48,7 +53,7 @@ interface HeartbeatRun {
   agent_id: string
   agent_name: string
   run_id: string
-  status: 'running' | 'done' | 'failed'
+  status: RunDisplayStatus
   started_at: string
   duration_ms: number | null
 }
@@ -81,11 +86,6 @@ interface RawRunRow {
   finished_at: string | null
 }
 
-function runStatusToAgentStatus(s: string | null): AgentStatus['status'] {
-  if (s === 'running') return 'active'
-  if (s === 'failed' || s === 'timeout' || s === 'interrupted') return 'error'
-  return 'idle'
-}
 function mapAgent(r: RawAgentRow): AgentStatus {
   return {
     id: r.id,
@@ -104,8 +104,6 @@ function mapBudget(r: RawBudgetRow): BudgetInfo {
   }
 }
 function mapRun(r: RawRunRow): HeartbeatRun {
-  const status: HeartbeatRun['status'] =
-    r.status === 'completed' ? 'done' : r.status === 'running' ? 'running' : 'failed'
   const duration =
     r.started_at && r.finished_at
       ? new Date(r.finished_at).getTime() - new Date(r.started_at).getTime()
@@ -114,7 +112,7 @@ function mapRun(r: RawRunRow): HeartbeatRun {
     agent_id: r.agent_id,
     agent_name: r.agent_id,
     run_id: r.id,
-    status,
+    status: runStatusToRunDisplayStatus(r.status),
     started_at: r.started_at ?? '',
     duration_ms: duration,
   }
@@ -144,13 +142,6 @@ function handleWsMessage(raw: string) {
   } catch (err) {
     logger.warn('WS parse error', err)
   }
-}
-
-const statusColor = (status: string) => {
-  if (status === 'active') return 'bg-green-500'
-  if (status === 'idle') return 'bg-yellow-400'
-  if (status === 'error') return 'bg-red-500'
-  return 'bg-gray-400'
 }
 
 const budgetPercent = (b: BudgetInfo) =>
@@ -327,7 +318,7 @@ watch(lastMessage, (msg) => {
               class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3 flex flex-col gap-1"
             >
               <div class="flex items-center gap-2">
-                <span class="w-2.5 h-2.5 rounded-full flex-shrink-0" :class="statusColor(agent.status)" />
+                <span class="w-2.5 h-2.5 rounded-full flex-shrink-0" :class="agentStatusColor(agent.status)" />
                 <span class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{{ agent.name }}</span>
               </div>
               <span class="text-xs text-gray-500 truncate">{{ agent.title }}</span>
