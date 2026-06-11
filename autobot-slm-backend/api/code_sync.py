@@ -2652,11 +2652,7 @@ async def _collect_outdated_node_ids(job: UpdateAllJob, remote_commit: str, db_s
         async with db_service_ref.session() as db:
             nodes_result = await db.execute(
                 select(Node)
-                .where(
-                    Node.code_status.in_(
-                        [CodeStatus.OUTDATED.value, CodeStatus.CODE_CURRENT_SERVICE_FAILED.value]
-                    )
-                )
+                .where(Node.code_status.in_([CodeStatus.OUTDATED.value, CodeStatus.CODE_CURRENT_SERVICE_FAILED.value]))
                 .order_by(Node.hostname)
             )
             outdated_nodes = nodes_result.scalars().all()
@@ -2694,10 +2690,7 @@ async def _run_fleet_stage_or_already_current(
     # C4: already_current when SLM is also at target
     deployed = await _get_slm_deployed_commit()
     slm_stage = _get_stage(job, "slm_self_update")
-    is_already_current = (
-        deployed == remote_commit
-        or slm_stage.status in (_StageStatus.CURRENT, _StageStatus.SKIPPED)
-    )
+    is_already_current = deployed == remote_commit or slm_stage.status in (_StageStatus.CURRENT, _StageStatus.SKIPPED)
     if is_already_current:
         job.status = "already_current"
         _stage_log(stage_fleet, "Everything already current — pipeline complete")
@@ -2791,9 +2784,7 @@ async def _read_and_validate_resume_plan() -> Optional[Dict[str, Any]]:
     return plan
 
 
-async def _resume_verify_slm_stage(
-    job: UpdateAllJob, target_commit: Optional[str]
-) -> bool:
+async def _resume_verify_slm_stage(job: UpdateAllJob, target_commit: Optional[str]) -> bool:
     """C1: Verify deployed commit == target_commit before touching the fleet.
 
     Returns True if verification passes (or no target_commit to check).
@@ -2805,8 +2796,7 @@ async def _resume_verify_slm_stage(
     if deployed_commit == target_commit:
         return True
     err_msg = (
-        f"SLM deployed commit {_short_sha(deployed_commit)} "
-        f"!= target {_short_sha(target_commit)} — stage 3 failed"
+        f"SLM deployed commit {_short_sha(deployed_commit)} " f"!= target {_short_sha(target_commit)} — stage 3 failed"
     )
     logger.error("update-all resume: %s", err_msg)
     stage_slm = _get_stage(job, "slm_self_update")
