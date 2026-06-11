@@ -368,7 +368,9 @@ def _tool_redis_vector_create_index() -> MCPTool:
         name="redis_vector_create_index",
         description=(
             "Create a RediSearch vector index on hash keys using HNSW algorithm. "
-            "Default: idx:agent_memory on autobot:agent:memory:* with 1536 dims."
+            "Default: idx:agent_memory on autobot:agent:memory:* with 1536 dims. "
+            "RediSearch FT.CREATE requires DB 0; use database='memory' (DB 0 alias) "
+            "for agent-memory indexes."
         ),
         input_schema={
             "type": "object",
@@ -414,7 +416,7 @@ def _tool_redis_vector_create_index() -> MCPTool:
                     },
                     "description": "Additional schema fields (TEXT, TAG, NUMERIC)",
                 },
-                "database": {"type": "string", "default": "vectors"},
+                "database": {"type": "string", "default": "memory"},
             },
         },
     )
@@ -454,7 +456,7 @@ def _tool_redis_vector_search() -> MCPTool:
                     "items": {"type": "string"},
                     "description": "Fields to return (default: all)",
                 },
-                "database": {"type": "string", "default": "vectors"},
+                "database": {"type": "string", "default": "memory"},
             },
         },
     )
@@ -492,7 +494,7 @@ def _tool_redis_hybrid_search() -> MCPTool:
                     "type": "array",
                     "items": {"type": "string"},
                 },
-                "database": {"type": "string", "default": "vectors"},
+                "database": {"type": "string", "default": "memory"},
             },
             "required": ["filter_expression"],
         },
@@ -510,7 +512,7 @@ def _tool_redis_vector_index_info() -> MCPTool:
                     "type": "string",
                     "default": "idx:agent_memory",
                 },
-                "database": {"type": "string", "default": "vectors"},
+                "database": {"type": "string", "default": "memory"},
             },
         },
     )

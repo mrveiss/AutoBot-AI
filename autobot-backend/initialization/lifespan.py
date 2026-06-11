@@ -1305,8 +1305,12 @@ async def _ensure_agent_memory_index() -> None:
 
     Idempotent — safe to call on every startup. If the index already exists,
     handle_redis_vector_create_index returns immediately without error.
-    Uses the vectors database (Redis DB 8) with default agent-memory schema:
-    HNSW, FLOAT32, 1536 dimensions, COSINE distance.
+
+    RediSearch FT.CREATE only operates on Redis logical DB 0.  Agent memory
+    data keys (autobot:agent:memory:*) are written to DB 0 ("main") by the
+    MCP data-access layer, so the index must live on the same DB.  The
+    "memory" database alias resolves to DB 0 and documents this constraint
+    explicitly (see autobot_shared/redis_management/types.py _ALIASES).
     """
     logger.info("[ 93%%] Agent Memory Index: Ensuring idx:agent_memory exists...")
     try:
@@ -1318,7 +1322,7 @@ async def _ensure_agent_memory_index() -> None:
             vector_field="embedding",
             dimensions=1536,
             distance_metric="COSINE",
-            database="vectors",
+            database="memory",
         )
         if result.get("message") == "Index already exists":
             logger.info("[ 93%%] Agent Memory Index: idx:agent_memory already exists")
