@@ -224,10 +224,7 @@ class TestBacklogRoute:
         company_id = str(uuid.uuid4())
         items = [_make_item(priority=WorkItemPriority.CRITICAL)]
 
-        with (
-            patch("llc.api.backlog._service") as mock_svc_factory,
-            patch("llc.api.backlog.get_async_session_factory"),
-        ):
+        with patch("llc.api.backlog._service") as mock_svc_factory:
             svc = AsyncMock()
             svc.list_backlog = AsyncMock(return_value=(items, 1))
             mock_svc_factory.return_value = svc
