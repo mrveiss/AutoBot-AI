@@ -177,6 +177,8 @@ class WorkItemUpdate(BaseModel):
 class CheckoutRequest(BaseModel):
     agent_id: str
     run_id: Optional[str] = None
+    # GH#9532: optional free-text intent for the audit trail + similarity check
+    work_intent: Optional[str] = None
 
 
 class ReleaseRequest(BaseModel):
@@ -331,6 +333,7 @@ async def _item_to_dict(item: Any, session: AsyncSession) -> Dict[str, Any]:
         "assignee_display": await _assignee_display(item, session),
         "checkout_run_id": item.checkout_run_id,
         "checkout_locked_at": (item.checkout_locked_at.isoformat() if item.checkout_locked_at else None),
+        "checkout_intent": item.checkout_intent,  # GH#9532
         "version": item.version,
         "created_by_agent_id": (str(item.created_by_agent_id) if item.created_by_agent_id else None),
         "created_by_user_id": (str(item.created_by_user_id) if item.created_by_user_id else None),
@@ -466,6 +469,7 @@ async def checkout_work_item(
             work_item_id=work_item_id,
             agent_id=body.agent_id,
             run_id=body.run_id,
+            work_intent=body.work_intent,  # GH#9532
         )
         await session.commit()
         return await _item_to_dict(item, session)

@@ -22,6 +22,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.logging_manager import get_logger
+from llc.services.budget import BudgetService
 from llc.services.model_tiers import get_model_tier_service
 from user_management.database import get_async_session
 from user_management.services import TenantContext
@@ -409,6 +410,12 @@ async def hire_agent(
             "instructions_file_path": instructions_file_path,
         },
     )
+
+    # Auto-provision a budget row for the newly hired agent (GH#9901).
+    # Idempotent: skips silently if a row already exists (e.g. re-hired agent).
+    budget_svc = BudgetService()
+    await budget_svc.provision_budget(session, agent_id, str(company_id))
+
     await session.commit()
 
     logger.info(
