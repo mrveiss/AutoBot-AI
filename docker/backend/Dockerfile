@@ -42,10 +42,11 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 # Install runtime deps + LLC agent CLIs (GH#9793).
 # gh: official GitHub apt repo (keyring + sources list + apt-get install).
-# claude: native installer writes to ~/.local/bin by default; we redirect the
-#   install prefix to /usr/local so the binary lands in PATH for the autobot
-#   user without shell-profile tricks.  Both CLIs are installed as root before
-#   USER autobot so they reach /usr/local/bin with the correct ownership.
+# claude: the official installer verifies a sha256 manifest but ONLY installs
+#   to $HOME/.local/bin (CLAUDE_INSTALL_DIR is not honored — proven by the
+#   smoke-test build gate). Redirect HOME to a world-readable prefix and
+#   symlink the launcher into /usr/local/bin so the autobot user can run it.
+#   "stable" pins the release channel (GH#9950 hardening).
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && install -m 0755 -d /etc/apt/keyrings \
@@ -55,7 +56,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
        > /etc/apt/sources.list.d/github-cli.list \
     && apt-get update && apt-get install -y --no-install-recommends gh \
-    && CLAUDE_INSTALL_DIR=/usr/local curl -fsSL https://claude.ai/install.sh | bash \
+    && install -m 0755 -d /opt/claude-cli \
+    && curl -fsSL https://claude.ai/install.sh | HOME=/opt/claude-cli bash -s -- stable \
+    && ln -s /opt/claude-cli/.local/bin/claude /usr/local/bin/claude \
+    && chmod -R a+rX /opt/claude-cli \
     # Build-time proof both CLIs resolve on PATH — without this, an installer
     # prefix change would silently break LLC dispatch (gate skips forever).
     && gh --version \
