@@ -93,6 +93,18 @@
             <Icon name="list-alt" class="tab-icon" aria-hidden="true" />
             <span>{{ $t('analytics.views.tabs.operations') }}</span>
           </router-link>
+          <!-- Issue #9891: Error monitoring dashboard -->
+          <router-link
+            to="/analytics/errors"
+            class="nav-tab"
+            :class="{ 'nav-tab-active': isErrorsActive }"
+            role="tab"
+            :aria-selected="isErrorsActive"
+            :aria-label="$t('analytics.views.tabs.errorsAria')"
+          >
+            <Icon name="exclamation-triangle" class="tab-icon" aria-hidden="true" />
+            <span>{{ $t('analytics.views.tabs.errors') }}</span>
+          </router-link>
         </nav>
       </div>
 
@@ -140,6 +152,10 @@ const isUsageActive = computed(() => {
 
 const isOperationsActive = computed(() => {
   return route.path === '/analytics/operations' || route.path.startsWith('/analytics/operations/')
+})
+
+const isErrorsActive = computed(() => {
+  return route.path === '/analytics/errors' || route.path.startsWith('/analytics/errors/')
 })
 </script>
 
