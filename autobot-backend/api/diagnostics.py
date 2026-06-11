@@ -31,8 +31,9 @@ from services.causal_inference_engine import CausalInferenceEngine
 
 logger = get_logger(__name__)
 
-# Create router
-router = APIRouter(prefix="/api/diagnostics", tags=["diagnostics"])
+# Create router — prefix must NOT include "/api"; the app factory prepends it
+# (#9892: the old "/api/diagnostics" prefix produced /api/api/diagnostics/*).
+router = APIRouter(prefix="/diagnostics", tags=["diagnostics"])
 
 # Singleton engine instance
 _engine: CausalInferenceEngine | None = None
