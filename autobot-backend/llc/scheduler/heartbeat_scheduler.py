@@ -47,6 +47,7 @@ from autobot_shared.singleton_factory import lazy_singleton
 from user_management.database import get_async_session_factory
 
 from ..adapters import AutoBotAgentAdapter, get_adapter
+from ..adapters.subprocess_base import is_subprocess_adapter
 from ..config import AGENT_API_BASE_URL
 from ..exceptions import AdapterRunFailed, ProviderRateLimited
 from ..models.enums import HeartbeatInvocationSource, LLCRunStatus
@@ -681,6 +682,17 @@ async def _dispatch_adapter(agent: Dict[str, Any], context: Dict[str, Any]) -> N
             "agent %s: no LLC adapter registered for type %r — skipping dispatch",
             agent["agent_id"],
             adapter_type,
+        )
+        return
+
+    # GH#9793: skip dispatch when the required CLI binary is absent from PATH.
+    # Converts every-heartbeat FAILED runs into a clean degraded state.
+    if is_subprocess_adapter(adapter) and not adapter.is_cli_available():  # type: ignore[union-attr]
+        logger.info(
+            "agent %s: adapter %r requires CLI %r which is not on PATH — skipping dispatch",
+            agent["agent_id"],
+            adapter_type,
+            adapter._required_cli,  # type: ignore[union-attr]
         )
         return
 

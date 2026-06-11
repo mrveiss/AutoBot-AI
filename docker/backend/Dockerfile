@@ -40,9 +40,23 @@ FROM python:3.12-slim-bookworm AS production
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install runtime deps
+# Install runtime deps + LLC agent CLIs (GH#9793).
+# gh: official GitHub apt repo (keyring + sources list + apt-get install).
+# claude: native installer writes to ~/.local/bin by default; we redirect the
+#   install prefix to /usr/local so the binary lands in PATH for the autobot
+#   user without shell-profile tricks.  Both CLIs are installed as root before
+#   USER autobot so they reach /usr/local/bin with the correct ownership.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
+    gnupg \
+    && install -m 0755 -d /etc/apt/keyrings \
+    && curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+       | tee /etc/apt/keyrings/githubcli-archive-keyring.gpg > /dev/null \
+    && chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
+       > /etc/apt/sources.list.d/github-cli.list \
+    && apt-get update && apt-get install -y --no-install-recommends gh \
+    && CLAUDE_INSTALL_DIR=/usr/local curl -fsSL https://claude.ai/install.sh | bash \
     && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user. Pin uid/gid 999 to match the SLM image (#9905) so the

@@ -494,3 +494,77 @@ class TestDispatchAutobotAgent:
         with patch(f"{_HBS}.AutoBotAgentAdapter", return_value=mock_adapter):
             await _dispatch_autobot_agent(agent, {})
         mock_adapter.run_blocking.assert_awaited_once()
+
+
+# ---------------------------------------------------------------------------
+# GH#9793: CLI-availability gate — subprocess adapters skip when CLI absent
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+class TestCliAvailabilityGate:
+    """Heartbeat dispatch skips subprocess adapters whose CLI is not on PATH."""
+
+    async def test_skips_dispatch_when_cli_absent(self):
+        """When is_cli_available() returns False, _dispatch_registry_adapter is
+        never called and the function returns cleanly (no raise, no run recorded).
+        """
+        agent = _make_agent(adapter_type="claude_code")
+        fake_adapter = MagicMock()
+        fake_adapter.is_cli_available = MagicMock(return_value=False)
+        fake_adapter._required_cli = "claude"
+
+        with (
+            patch(f"{_HBS}.get_adapter", return_value=fake_adapter),
+            patch(f"{_HBS}.is_subprocess_adapter", return_value=True),
+            patch(f"{_HBS}._dispatch_registry_adapter", new=AsyncMock()) as mock_reg,
+        ):
+            await _dispatch_adapter(agent, {})
+
+        mock_reg.assert_not_awaited()
+
+    async def test_dispatches_when_cli_present(self):
+        """When is_cli_available() returns True, dispatch proceeds normally."""
+        agent = _make_agent(adapter_type="claude_code")
+        fake_adapter = MagicMock()
+        fake_adapter.is_cli_available = MagicMock(return_value=True)
+        fake_adapter._required_cli = "claude"
+
+        with (
+            patch(f"{_HBS}.get_adapter", return_value=fake_adapter),
+            patch(f"{_HBS}.is_subprocess_adapter", return_value=True),
+            patch(f"{_HBS}._dispatch_registry_adapter", new=AsyncMock()) as mock_reg,
+        ):
+            await _dispatch_adapter(agent, {})
+
+        mock_reg.assert_awaited_once()
+
+    async def test_non_subprocess_adapter_bypasses_cli_gate(self):
+        """Non-subprocess adapters (is_subprocess_adapter=False) are not gated."""
+        agent = _make_agent(adapter_type="http_adapter")
+        fake_adapter = MagicMock()
+
+        with (
+            patch(f"{_HBS}.get_adapter", return_value=fake_adapter),
+            patch(f"{_HBS}.is_subprocess_adapter", return_value=False),
+            patch(f"{_HBS}._dispatch_registry_adapter", new=AsyncMock()) as mock_reg,
+        ):
+            await _dispatch_adapter(agent, {})
+
+        mock_reg.assert_awaited_once()
+
+    async def test_cli_gate_skips_copilot_when_gh_absent(self):
+        """Gate works for copilot_local adapter when gh binary is absent."""
+        agent = _make_agent(adapter_type="copilot_local")
+        fake_adapter = MagicMock()
+        fake_adapter.is_cli_available = MagicMock(return_value=False)
+        fake_adapter._required_cli = "gh"
+
+        with (
+            patch(f"{_HBS}.get_adapter", return_value=fake_adapter),
+            patch(f"{_HBS}.is_subprocess_adapter", return_value=True),
+            patch(f"{_HBS}._dispatch_registry_adapter", new=AsyncMock()) as mock_reg,
+        ):
+            await _dispatch_adapter(agent, {})
+
+        mock_reg.assert_not_awaited()

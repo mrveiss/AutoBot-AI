@@ -26,6 +26,7 @@ import asyncio
 import json
 import os
 import pathlib
+import shutil
 import signal
 import time
 from typing import Callable, Optional
@@ -66,6 +67,22 @@ class SubprocessLifecycleAdapter:
     _LOG_NAME: str = "SubprocessAdapter"
     # staticmethod (output_dir, run_id) -> str; set by each subclass.
     _state_path: Callable[[str, str], str]
+    # Name of the CLI binary required by this adapter (e.g. "claude", "gh").
+    # Subclasses declare this; None means no external CLI required (GH#9793).
+    _required_cli: Optional[str] = None
+
+    # CLI availability gate (GH#9793) ----------------------------------------
+    def is_cli_available(self) -> bool:
+        """Return True if the adapter's required CLI binary is on PATH.
+
+        Called by the heartbeat scheduler before dispatch so that runs are
+        skipped (logged) rather than dispatched and immediately FAILED when the
+        CLI is absent from the container image.  Adapters with no required CLI
+        (``_required_cli is None``) always return True.
+        """
+        if self._required_cli is None:
+            return True
+        return shutil.which(self._required_cli) is not None
 
     # Invoke ----------------------------------------------------------------
     async def invoke(self, agent_config: dict, context: dict) -> str:
@@ -194,4 +211,14 @@ __all__ = [
     "DEFAULT_TIMEOUT_SECONDS",
     "DEFAULT_OUTPUT_DIR",
     "resolve_timeout",
+    "is_subprocess_adapter",
 ]
+
+
+def is_subprocess_adapter(adapter: object) -> bool:
+    """Return True if *adapter* is a :class:`SubprocessLifecycleAdapter` instance.
+
+    Convenience predicate used by the heartbeat scheduler gate (GH#9793) so it
+    can call ``is_cli_available()`` without importing from the adapters package.
+    """
+    return isinstance(adapter, SubprocessLifecycleAdapter)

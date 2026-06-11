@@ -88,6 +88,7 @@ class ClaudeCodeAdapter(SubprocessLifecycleAdapter):
 
     _LOG_NAME = "ClaudeCodeAdapter"
     _state_path = staticmethod(_state_path)
+    _required_cli = "claude"  # GH#9793: CLI-availability gate in heartbeat dispatch
 
     async def _invoke(self, agent_config: dict, context: dict) -> str:
         cli = _resolve_claude_cli()
