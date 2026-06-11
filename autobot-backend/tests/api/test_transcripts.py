@@ -275,14 +275,10 @@ def test_validate_analysis_request_custom_requires_prompt():
     from api.transcripts import _validate_analysis_request
 
     # Non-custom types pass without a prompt
-    _validate_analysis_request(
-        TranscriptAnalyzeRequest(analysis_type=AnalysisType.SUMMARIZE)
-    )
+    _validate_analysis_request(TranscriptAnalyzeRequest(analysis_type=AnalysisType.SUMMARIZE))
     # Custom with a prompt passes
     _validate_analysis_request(
-        TranscriptAnalyzeRequest(
-            analysis_type=AnalysisType.CUSTOM, custom_prompt="Extract action items"
-        )
+        TranscriptAnalyzeRequest(analysis_type=AnalysisType.CUSTOM, custom_prompt="Extract action items")
     )
 
 
@@ -292,9 +288,7 @@ def test_validate_analysis_request_custom_missing_prompt_raises():
     from api.transcripts import _validate_analysis_request
 
     with pytest.raises(ValueError, match="custom_prompt"):
-        _validate_analysis_request(
-            TranscriptAnalyzeRequest(analysis_type=AnalysisType.CUSTOM)
-        )
+        _validate_analysis_request(TranscriptAnalyzeRequest(analysis_type=AnalysisType.CUSTOM))
 
 
 # --- WebSocket endpoint tests (#9863 review) ---
@@ -361,9 +355,7 @@ def test_ws_analyze_unknown_recording_closes_4004():
 
     client = _make_ws_client(_make_db(None), user=MOCK_USER)
 
-    with patch(
-        "api.transcripts.authenticate_websocket", AsyncMock(return_value=MOCK_USER)
-    ):
+    with patch("api.transcripts.authenticate_websocket", AsyncMock(return_value=MOCK_USER)):
         with client.websocket_connect("/api/transcripts/999/analyze") as ws:
             ws.send_json({"analysis_type": "summarize"})
             assert ws.receive_json() == {"error": "Transcript not found"}

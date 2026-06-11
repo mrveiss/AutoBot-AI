@@ -46,17 +46,13 @@ async def kb_push(
 
 
 @router.get("/recordings/{recording_id}/kb/status", response_model=KbPushStatus)
-async def kb_status(
-    recording_id: int, request: Request, db: Database = Depends(get_db)
-):
+async def kb_status(recording_id: int, request: Request, db: Database = Depends(get_db)):
     rec = await db.get_recording(recording_id)
     if not rec or not can_access(rec, _user_id(request)):
         raise HTTPException(404, "Recording not found")
     push = await db.get_latest_kb_push(recording_id)
     if not push:
-        return KbPushStatus(
-            pushed=False, pushed_at=None, kb_collection_id=None, pushed_by=None
-        )
+        return KbPushStatus(pushed=False, pushed_at=None, kb_collection_id=None, pushed_by=None)
     return KbPushStatus(
         pushed=True,
         pushed_at=push["pushed_at"],

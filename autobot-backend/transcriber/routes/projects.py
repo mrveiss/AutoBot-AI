@@ -20,12 +20,8 @@ def _user_id(request: Request) -> str:
 
 
 @router.post("/projects", response_model=ProjectOut, status_code=201)
-async def create_project(
-    body: ProjectCreate, request: Request, db: Database = Depends(get_db)
-):
-    pid = await db.create_project(
-        body.name, body.description, user_id=_user_id(request)
-    )
+async def create_project(body: ProjectCreate, request: Request, db: Database = Depends(get_db)):
+    pid = await db.create_project(body.name, body.description, user_id=_user_id(request))
     project = await db.get_project(pid)
     return ProjectOut(**project)
 
@@ -42,9 +38,7 @@ async def list_projects(
 
 
 @router.get("/projects/{project_id}", response_model=ProjectOut)
-async def get_project(
-    project_id: int, request: Request, db: Database = Depends(get_db)
-):
+async def get_project(project_id: int, request: Request, db: Database = Depends(get_db)):
     project = await db.get_project(project_id)
     if not project or not can_access(project, _user_id(request)):
         raise HTTPException(404, "Project not found")
@@ -69,9 +63,7 @@ async def update_project(
 
 
 @router.delete("/projects/{project_id}", status_code=204)
-async def delete_project(
-    project_id: int, request: Request, db: Database = Depends(get_db)
-):
+async def delete_project(project_id: int, request: Request, db: Database = Depends(get_db)):
     project = await db.get_project(project_id)
     if not project or not can_access(project, _user_id(request)):
         raise HTTPException(404, "Project not found")

@@ -41,9 +41,7 @@ def _user_id(request: Request) -> str:
     return user.id if user else DEFAULT_USER
 
 
-@router.post(
-    "/projects/{project_id}/recordings", response_model=RecordingOut, status_code=202
-)
+@router.post("/projects/{project_id}/recordings", response_model=RecordingOut, status_code=202)
 async def upload_recording(
     project_id: int,
     request: Request,
@@ -61,9 +59,7 @@ async def upload_recording(
     async with aiofiles.open(dest, "wb") as f:
         while chunk := await file.read(65536):
             await f.write(chunk)
-    rid = await db.create_recording(
-        project_id, file.filename or safe_name, str(dest), user_id=_user_id(request)
-    )
+    rid = await db.create_recording(project_id, file.filename or safe_name, str(dest), user_id=_user_id(request))
     logger.info(
         "Recording uploaded: recording_id=%s project_id=%s filename=%s",
         rid,
@@ -90,9 +86,7 @@ async def list_recordings(
 
 
 @router.get("/recordings/{recording_id}", response_model=RecordingOut)
-async def get_recording(
-    recording_id: int, request: Request, db: Database = Depends(get_db)
-):
+async def get_recording(recording_id: int, request: Request, db: Database = Depends(get_db)):
     rec = await db.get_recording(recording_id)
     if not rec or not can_access(rec, _user_id(request)):
         raise HTTPException(404, "Recording not found")
@@ -100,9 +94,7 @@ async def get_recording(
 
 
 @router.delete("/recordings/{recording_id}", status_code=204)
-async def delete_recording(
-    recording_id: int, request: Request, db: Database = Depends(get_db)
-):
+async def delete_recording(recording_id: int, request: Request, db: Database = Depends(get_db)):
     rec = await db.get_recording(recording_id)
     if not rec or not can_access(rec, _user_id(request)):
         raise HTTPException(404, "Recording not found")

@@ -51,15 +51,11 @@ async def export_recording(
     if fmt == "srt":
         from transcriber.export.srt_export import segments_to_srt
 
-        content = segments_to_srt(
-            segments, include_speaker=body.include_speaker_names
-        ).encode("utf-8")
+        content = segments_to_srt(segments, include_speaker=body.include_speaker_names).encode("utf-8")
     elif fmt == "vtt":
         from transcriber.export.vtt_export import segments_to_vtt
 
-        content = segments_to_vtt(
-            segments, include_speaker=body.include_speaker_names
-        ).encode("utf-8")
+        content = segments_to_vtt(segments, include_speaker=body.include_speaker_names).encode("utf-8")
     elif fmt == "docx":
         from transcriber.export.docx_export import build_docx
 
@@ -90,7 +86,5 @@ async def export_recording(
     return Response(
         content=content,
         media_type=_MIME[fmt],
-        headers={
-            "Content-Disposition": f"attachment; filename=\"{filename}\"; filename*=UTF-8''{quoted}"
-        },
+        headers={"Content-Disposition": f"attachment; filename=\"{filename}\"; filename*=UTF-8''{quoted}"},
     )
