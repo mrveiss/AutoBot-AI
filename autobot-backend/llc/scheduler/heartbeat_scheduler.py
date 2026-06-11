@@ -758,7 +758,7 @@ async def _dispatch_registry_adapter(adapter: Any, agent: Dict[str, Any], contex
             agent_id,
             external_run_id,
         )
-        raise ProviderRateLimited(provider="", retry_after_seconds=0)
+        raise ProviderRateLimited(provider=agent.get("adapter_type") or "registry", retry_after_seconds=0)
 
     # GH#9622: surface non-success terminal states so _run_adapter records the
     # run as FAILED (and the liveness monitor can act) instead of COMPLETED.

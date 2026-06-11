@@ -55,9 +55,12 @@ _RL_KEYWORDS: frozenset[str] = frozenset(
 def is_rate_limit_output(text: str | None) -> bool:
     """Return True if *text* contains a provider rate-limit signal.
 
-    Conservative: only matches clear, known markers from ``_RL_KEYWORDS``.
-    Used by subprocess adapters to classify CLI output on process exit so
-    that rate-limited runs trigger backoff recovery instead of plain FAILED.
+    Must only be applied to error text or failure-tail content — never to
+    healthy transcripts.  When C1's ``final_result_event`` gate is in place,
+    this function only sees tails where the final JSONL result event is absent
+    (process killed mid-stream) or has ``is_error`` true / a non-success
+    subtype, so false-positive reclassification of successful runs is
+    structurally impossible.
     """
     if not text:
         return False
@@ -74,18 +77,51 @@ _OUTPUT_SCAN_TAIL_BYTES = 4096
 def read_output_tail(output_file: str) -> str:
     """Return the last ``_OUTPUT_SCAN_TAIL_BYTES`` bytes of *output_file* as str.
 
+    Opens the file in binary mode so that seek-to-offset is byte-accurate
+    (text-mode seek to an arbitrary offset is implementation-dependent on
+    platforms with multi-byte line endings).  Bytes are decoded as UTF-8 with
+    ``errors="replace"`` so that truncated multibyte sequences at the seek
+    boundary do not raise.
+
     Returns an empty string if the file does not exist or cannot be read
     (best-effort; callers treat empty as "no rate-limit detected").
     """
     try:
-        with open(output_file, encoding="utf-8", errors="replace") as fh:
+        with open(output_file, "rb") as fh:
             fh.seek(0, 2)
             size = fh.tell()
             start = max(0, size - _OUTPUT_SCAN_TAIL_BYTES)
             fh.seek(start)
-            return fh.read()
+            return fh.read().decode("utf-8", errors="replace")
     except OSError:
         return ""
+
+
+def final_result_event(tail: str) -> dict | None:
+    """Parse *tail* for the last complete JSONL result event from the Claude CLI.
+
+    Scans each line of *tail* in reverse for a JSON object with
+    ``"type": "result"``.  Returns the parsed dict if found, ``None`` if no
+    result event is present (process died mid-stream).
+
+    The caller uses the presence and content of this event as the gate for
+    rate-limit reclassification:
+
+    * ``None``          → process killed mid-stream (may be rate-limited; scan)
+    * ``is_error`` falsy AND ``subtype == "success"`` → clean success; skip scan
+    * otherwise         → failure result event; scan is appropriate
+    """
+    for line in reversed(tail.splitlines()):
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            obj = json.loads(line)
+        except (json.JSONDecodeError, ValueError):
+            continue
+        if isinstance(obj, dict) and obj.get("type") == "result":
+            return obj
+    return None
 
 
 # Context keys rendered by dedicated prompt sections or consumed as env vars —
@@ -276,6 +312,7 @@ __all__ = [
     "_RL_KEYWORDS",
     "is_rate_limit_output",
     "read_output_tail",
+    "final_result_event",
     "render_context_markdown",
     "serialize_invoke_context",
     "inject_agent_credentials",

@@ -45,6 +45,7 @@ from .subprocess_base import SIGTERM_GRACE_SECONDS as _SIGTERM_GRACE_SECONDS
 from .subprocess_base import SubprocessLifecycleAdapter
 from .subprocess_base import resolve_timeout as _resolve_timeout
 from .subprocess_support import (
+    final_result_event,
     inject_agent_credentials,
     is_rate_limit_output,
     read_output_tail,
@@ -202,13 +203,24 @@ class ClaudeCodeAdapter(SubprocessLifecycleAdapter):
         """Extend base status to detect provider rate-limiting on process exit (GH#9773).
 
         When the process is gone (base returns COMPLETED), read the tail of the
-        output file and reclassify as RATE_LIMITED if clear rate-limit markers
-        are present.  RATE_LIMITED is a terminal state — ``_await_adapter_completion``
-        in the heartbeat scheduler will translate it into a raised ``ProviderRateLimited``
-        so the standard exponential-backoff path applies (GH#8204).
+        output JSONL and gate on the final result event before scanning for
+        rate-limit markers:
+
+        * A ``{"type": "result", "subtype": "success"}`` event with falsy
+          ``is_error`` → clean success; return COMPLETED unconditionally without
+          keyword scanning.  This prevents successful runs whose summary happens
+          to mention "rate limit", issue numbers containing "429", or SHA-like
+          tokens from being wrongly reclassified.
+        * No result event present → process was killed mid-stream (the real
+          rate-limit-kill signature); keyword-scan the tail.
+        * Result event present but ``is_error`` is truthy or subtype is not
+          "success" → explicit failure result; keyword-scan the tail.
 
         Detection is conservative: only the shared ``_RL_KEYWORDS`` set triggers
         reclassification; every other exit is left as COMPLETED.
+        RATE_LIMITED is a terminal state — ``_await_adapter_completion`` in the
+        heartbeat scheduler will translate it into a raised ``ProviderRateLimited``
+        so the standard exponential-backoff path applies (GH#8204).
         """
         base = await super()._status(agent_config, run_id)
 
@@ -223,7 +235,21 @@ class ClaudeCodeAdapter(SubprocessLifecycleAdapter):
             agent_config.get("adapter_config", {}).get("output_dir", _DEFAULT_OUTPUT_DIR),
         )
         output_file: Optional[str] = state.get("output_file") if state else None
-        if output_file and is_rate_limit_output(read_output_tail(output_file)):
+        if not output_file:
+            return base
+
+        tail = read_output_tail(output_file)
+        result_event = final_result_event(tail)
+
+        # Clean success: skip keyword scan entirely to avoid false-positive
+        # reclassification of completed runs whose transcript mentions rate-limit
+        # terms incidentally (e.g. in tool output, issue numbers, SHAs).
+        if result_event is not None and not result_event.get("is_error") and result_event.get("subtype") == "success":
+            return base
+
+        # Either no result event (mid-stream kill) or an error/non-success result:
+        # scan the tail for rate-limit markers.
+        if is_rate_limit_output(tail):
             logger.warning(
                 "ClaudeCodeAdapter: rate-limit markers in output for run %s — signalling RATE_LIMITED",
                 run_id,

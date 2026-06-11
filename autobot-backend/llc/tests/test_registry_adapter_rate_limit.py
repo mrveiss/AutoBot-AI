@@ -202,6 +202,132 @@ class TestClaudeCodeAdapterStatusRateLimit:
 
         assert result.status == LLCRunStatus.RUNNING
 
+    async def test_success_result_event_with_rate_limit_in_summary_returns_completed(self):
+        """M1(a): success result event + 'rate limit' in summary → COMPLETED, not RATE_LIMITED.
+
+        Validates C1's gate: a clean success event prevents false-positive
+        reclassification even when rate-limit keywords appear in the transcript
+        (e.g. in a tool output summary or agent log line).
+        """
+        import time as _time
+
+        from llc.adapters.claude_code_adapter import ClaudeCodeAdapter, _state_path
+
+        adapter = ClaudeCodeAdapter()
+
+        with tempfile.TemporaryDirectory() as td:
+            run_id = "2001/session-fp-rl"
+            output_file = os.path.join(td, f"llc_agent_agent-fp_{run_id.replace('/', '_')}.jsonl")
+
+            with open(output_file, "w", encoding="utf-8") as fh:
+                # Transcript mentions "rate limit" incidentally in a tool summary line,
+                # but the run completed successfully.
+                fh.write('{"type": "assistant", "message": "Checked API — no rate limit hit today."}\n')
+                fh.write('{"type": "result", "subtype": "success", "is_error": false}\n')
+
+            state = {
+                "pid": 2001,
+                "session_id": "session-fp-rl",
+                "agent_id": "agent-fp",
+                "output_file": output_file,
+                "started_at": _time.time(),
+                "timeout_seconds": 3600,
+            }
+            with open(_state_path(td, run_id), "w", encoding="utf-8") as fh:
+                json.dump(state, fh)
+
+            cfg = {"agent_id": "agent-fp", "adapter_config": {"output_dir": td}}
+
+            with patch("os.kill", side_effect=ProcessLookupError()):
+                result = await adapter._status(cfg, run_id)
+
+        assert result.status == LLCRunStatus.COMPLETED, (
+            "A success result event must gate out keyword scanning; "
+            "'rate limit' in a tool summary must not trigger RATE_LIMITED."
+        )
+
+    async def test_success_result_event_with_issue_number_429_returns_completed(self):
+        """M1(b): success result event + 'issue #9429' in content → COMPLETED, not RATE_LIMITED.
+
+        Validates C1's gate prevents '429' substring matches on issue numbers,
+        commit SHAs, or tool IDs in otherwise successful transcripts.
+        """
+        import time as _time
+
+        from llc.adapters.claude_code_adapter import ClaudeCodeAdapter, _state_path
+
+        adapter = ClaudeCodeAdapter()
+
+        with tempfile.TemporaryDirectory() as td:
+            run_id = "2002/session-fp-429"
+            output_file = os.path.join(td, f"llc_agent_agent-fp2_{run_id.replace('/', '_')}.jsonl")
+
+            with open(output_file, "w", encoding="utf-8") as fh:
+                # '429' appears as an issue number in the transcript, not an HTTP status.
+                fh.write('{"type": "assistant", "message": "Fixed issue #9429 and closed PR."}\n')
+                fh.write('{"type": "result", "subtype": "success", "is_error": false}\n')
+
+            state = {
+                "pid": 2002,
+                "session_id": "session-fp-429",
+                "agent_id": "agent-fp2",
+                "output_file": output_file,
+                "started_at": _time.time(),
+                "timeout_seconds": 3600,
+            }
+            with open(_state_path(td, run_id), "w", encoding="utf-8") as fh:
+                json.dump(state, fh)
+
+            cfg = {"agent_id": "agent-fp2", "adapter_config": {"output_dir": td}}
+
+            with patch("os.kill", side_effect=ProcessLookupError()):
+                result = await adapter._status(cfg, run_id)
+
+        assert result.status == LLCRunStatus.COMPLETED, (
+            "Issue number '429' in a successful transcript must not trigger RATE_LIMITED."
+        )
+
+    async def test_no_result_event_with_rate_limit_tail_returns_rate_limited(self):
+        """M1(c): NO result event + rate_limit_error in tail → RATE_LIMITED.
+
+        Validates C1's gate: when the process is killed mid-stream (no result
+        event written), the real rate-limit-kill signature is correctly detected.
+        """
+        import time as _time
+
+        from llc.adapters.claude_code_adapter import ClaudeCodeAdapter, _state_path
+
+        adapter = ClaudeCodeAdapter()
+
+        with tempfile.TemporaryDirectory() as td:
+            run_id = "2003/session-midkill"
+            output_file = os.path.join(td, f"llc_agent_agent-mk_{run_id.replace('/', '_')}.jsonl")
+
+            with open(output_file, "w", encoding="utf-8") as fh:
+                # No result event — process was killed mid-stream by provider.
+                fh.write('{"type": "system", "subtype": "init"}\n')
+                fh.write('{"type": "error", "error": {"type": "rate_limit_error", "message": "Too many tokens"}}\n')
+
+            state = {
+                "pid": 2003,
+                "session_id": "session-midkill",
+                "agent_id": "agent-mk",
+                "output_file": output_file,
+                "started_at": _time.time(),
+                "timeout_seconds": 3600,
+            }
+            with open(_state_path(td, run_id), "w", encoding="utf-8") as fh:
+                json.dump(state, fh)
+
+            cfg = {"agent_id": "agent-mk", "adapter_config": {"output_dir": td}}
+
+            with patch("os.kill", side_effect=ProcessLookupError()):
+                result = await adapter._status(cfg, run_id)
+
+        assert result.status == LLCRunStatus.RATE_LIMITED, (
+            "Mid-stream kill with rate_limit_error and no result event must be RATE_LIMITED."
+        )
+
 
 # ---------------------------------------------------------------------------
 # 5–6. _dispatch_registry_adapter: RATE_LIMITED → ProviderRateLimited
