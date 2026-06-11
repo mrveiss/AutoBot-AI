@@ -120,6 +120,18 @@ _BACKEND_ROLES = [
         "degraded_without": [],
         "ansible_playbook": "deploy-backend.yml",
     },
+    {
+        "name": "scheduler",
+        "display_name": "Celery Beat Scheduler",
+        "sync_type": SyncType.COMPONENT.value,
+        "source_paths": ["autobot-backend/"],
+        "target_path": _BASE_DIR,
+        "systemd_service": "autobot-celery-beat",
+        "auto_restart": True,
+        "required": True,
+        "degraded_without": [],
+        "ansible_playbook": "deploy-backend.yml",
+    },
 ]
 
 # ---------------------------------------------------------------------------
@@ -157,6 +169,25 @@ _DATABASE_ROLES = [
         "required": True,
         "degraded_without": [],
         "ansible_playbook": "setup-redis-stack.yml",
+    },
+    {
+        "name": "postgres",
+        "display_name": "PostgreSQL",
+        "sync_type": None,
+        "source_paths": [],
+        # /var/lib/postgresql is the standard Debian/Ubuntu postgres data dir.
+        # Providing a non-empty target_path lets role_detector.py:76-77 skip its
+        # early-exit guard and activate path-existence + systemd checks, so a
+        # bare-metal postgres node can turn green when the service is running.
+        "target_path": "/var/lib/postgresql",
+        "systemd_service": "postgresql",
+        "auto_restart": True,
+        "required": True,
+        "degraded_without": [],
+        # No AutoBot-owned playbook provisions postgres; deploy-database.yml
+        # provisions Redis Stack only.  api/roles.py:338-341 returns HTTP 422
+        # for None — correct behaviour for an externally managed service.
+        "ansible_playbook": None,
     },
 ]
 
@@ -342,11 +373,13 @@ DEFAULT_ROLES = (
 ROLE_ANSIBLE_GROUPS: Dict[str, str] = {
     "backend": "backend",
     "celery": "backend",
+    "scheduler": "backend",
     "vnc": "backend",
     "frontend": "frontend",
     "ai-stack": "ai_stack",
     "chromadb": "ai_stack",
     "redis": "databases",
+    "postgres": "databases",
     "npu-worker": "npu_worker",
     "browser-service": "browser_automation",
     "autobot-llm-cpu": "llm_nodes",
@@ -374,13 +407,17 @@ ROLE_DEPENDENCIES: Dict[str, List[str]] = {
     # Service roles
     "backend": ["python312", "nginx"],
     "celery": ["python312"],
+    "scheduler": ["python312"],
     "frontend": ["nodejs", "nginx"],
     "redis": [],
+    "postgres": ["postgresql"],
     "ai-stack": ["python312"],
     "chromadb": ["python312"],
     "browser-service": ["nodejs"],
     "npu-worker": ["python312"],
     "tts-worker": ["python312"],
+    "autobot-llm-cpu": [],
+    "autobot-llm-gpu": [],
     "vnc": [],
     "slm-agent": [],
 }
