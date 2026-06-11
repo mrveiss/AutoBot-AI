@@ -93,6 +93,18 @@
             <Icon name="list-alt" class="tab-icon" aria-hidden="true" />
             <span>{{ $t('analytics.views.tabs.operations') }}</span>
           </router-link>
+          <!-- Issue #9892: Failure Analysis / causal-inference engine -->
+          <router-link
+            to="/analytics/diagnostics"
+            class="nav-tab"
+            :class="{ 'nav-tab-active': isDiagnosticsActive }"
+            role="tab"
+            :aria-selected="isDiagnosticsActive"
+            :aria-label="$t('analytics.views.tabs.diagnosticsAria')"
+          >
+            <Icon name="exclamation-triangle" class="tab-icon" aria-hidden="true" />
+            <span>{{ $t('analytics.views.tabs.diagnostics') }}</span>
+          </router-link>
         </nav>
       </div>
 
@@ -140,6 +152,11 @@ const isUsageActive = computed(() => {
 
 const isOperationsActive = computed(() => {
   return route.path === '/analytics/operations' || route.path.startsWith('/analytics/operations/')
+})
+
+// Issue #9892: Diagnostics / failure analysis tab
+const isDiagnosticsActive = computed(() => {
+  return route.path === '/analytics/diagnostics' || route.path.startsWith('/analytics/diagnostics/')
 })
 </script>
 

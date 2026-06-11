@@ -1392,7 +1392,9 @@
         "usage": "Usage",
         "usageAria": "Usage & Costs",
         "operations": "Operations",
-        "operationsAria": "Long-running operations"
+        "operationsAria": "Long-running operations",
+        "diagnostics": "Diagnostics",
+        "diagnosticsAria": "Failure analysis and causal inference"
       }
     },
     "header": {
@@ -2335,6 +2337,38 @@
         "cancel": "Cancel",
         "scanning": "Scanning...",
         "scanFile": "Scan File"
+      }
+    },
+    "failureAnalysis": {
+      "title": "Failure Analysis",
+      "subtitle": "Root-cause analysis powered by the causal inference engine",
+      "empty": "Enter a task ID above to run a failure analysis.",
+      "form": {
+        "title": "Analyze a Failure",
+        "taskId": "Task ID",
+        "taskIdPlaceholder": "e.g. task-abc123",
+        "errorDescription": "Error Description",
+        "errorDescriptionPlaceholder": "Optional: describe the error or paste a stack trace",
+        "analyze": "Analyze",
+        "analyzing": "Analyzing...",
+        "clear": "Clear"
+      },
+      "result": {
+        "taskId": "Task ID",
+        "confidence": "Confidence",
+        "status": "Status",
+        "duration": "Duration",
+        "rootCause": "Root Cause",
+        "causalChain": "Causal Chain",
+        "interventions": "Interventions",
+        "confounders": "Confounders",
+        "recommendations": "Recommendations",
+        "participants": "Participants",
+        "mechanism": "Mechanism",
+        "successRate": "Success Rate",
+        "cost": "Cost",
+        "risk": "Risk",
+        "confoundingStrength": "Confounding Strength"
       }
     }
   },
