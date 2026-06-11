@@ -142,8 +142,9 @@ async def test_kb_push_failure():
         )
 
     assert response.success is False
-    # KB error status surfaces the KB-provided message
-    assert response.message == "KB timeout"
+    # Security: KB-internal reason is logged, client gets a generic message
+    assert response.message == "Failed to add to Knowledge Base"
+    assert "KB timeout" not in response.message
 
 
 @pytest.mark.asyncio
@@ -258,7 +259,7 @@ async def test_load_transcript_content_uses_segments():
         {"text": "Hello world", "speaker_name": "John", "start": 0.0, "notes": []}
     ]
 
-    with patch("api.transcripts._build_segment_list", AsyncMock(return_value=segments)):
+    with patch("api.transcripts.build_segment_list", AsyncMock(return_value=segments)):
         content = await _load_transcript_content(state, "456", "test-user")
 
     assert "Hello world" in content
@@ -278,37 +279,105 @@ async def test_load_transcript_content_incomplete_400():
     assert exc_info.value.status_code == 400
 
 
-def test_analysis_prompt_generation():
-    """Test analysis prompt generation for different types."""
-    from api.transcripts import _get_analysis_prompt
-
-    content = "Sample transcript content"
-
-    # Test SUMMARIZE
-    prompt = _get_analysis_prompt(AnalysisType.SUMMARIZE, content)
-    assert "Summarize" in prompt
-    assert content in prompt
-
-    # Test KEY_FACTS
-    prompt = _get_analysis_prompt(AnalysisType.KEY_FACTS, content)
-    assert "key facts" in prompt.lower()
-    assert content in prompt
-
-    # Test PROTOCOL
-    prompt = _get_analysis_prompt(AnalysisType.PROTOCOL, content)
-    assert "protocol" in prompt.lower()
-    assert content in prompt
-
-    # Test CUSTOM with custom_prompt
-    custom = "Extract action items"
-    prompt = _get_analysis_prompt(AnalysisType.CUSTOM, content, custom)
-    assert custom in prompt
-    assert content in prompt
-
-
-def test_analysis_prompt_custom_requires_prompt():
+def test_validate_analysis_request_custom_requires_prompt():
     """Test CUSTOM analysis type requires custom_prompt."""
-    from api.transcripts import _get_analysis_prompt
+    from api.schemas_transcripts import TranscriptAnalyzeRequest
+    from api.transcripts import _validate_analysis_request
+
+    # Non-custom types pass without a prompt
+    _validate_analysis_request(
+        TranscriptAnalyzeRequest(analysis_type=AnalysisType.SUMMARIZE)
+    )
+    # Custom with a prompt passes
+    _validate_analysis_request(
+        TranscriptAnalyzeRequest(
+            analysis_type=AnalysisType.CUSTOM, custom_prompt="Extract action items"
+        )
+    )
+
+
+def test_validate_analysis_request_custom_missing_prompt_raises():
+    """Test CUSTOM analysis without custom_prompt raises ValueError."""
+    from api.schemas_transcripts import TranscriptAnalyzeRequest
+    from api.transcripts import _validate_analysis_request
 
     with pytest.raises(ValueError, match="custom_prompt"):
-        _get_analysis_prompt(AnalysisType.CUSTOM, "content", None)
+        _validate_analysis_request(
+            TranscriptAnalyzeRequest(analysis_type=AnalysisType.CUSTOM)
+        )
+
+
+# --- WebSocket endpoint tests (#9863 review) ---
+
+
+def _make_ws_client(db, user):
+    """Build a TestClient over a minimal app mounting the transcripts router."""
+    from fastapi import FastAPI
+    from starlette.testclient import TestClient
+
+    from api.transcripts import router
+
+    app = FastAPI()
+    app.include_router(router, prefix="/api")
+    if db is not None:
+        app.state.transcriber_db = db
+    return TestClient(app)
+
+
+def test_ws_analyze_rejects_unauthenticated():
+    """Test WS closes 4001 before accept when authentication fails."""
+    from starlette.websockets import WebSocketDisconnect
+
+    client = _make_ws_client(_make_db(DEFAULT_RECORDING), user=None)
+
+    with patch("api.transcripts.authenticate_websocket", AsyncMock(return_value=None)):
+        with pytest.raises(WebSocketDisconnect) as exc_info:
+            with client.websocket_connect("/api/transcripts/456/analyze"):
+                pass
+
+    assert exc_info.value.code == 4001
+
+
+def test_ws_analyze_streams_and_closes():
+    """Test WS streams analysis chunks for a valid recording, then closes."""
+    from starlette.websockets import WebSocketDisconnect
+
+    async def fake_stream(content, request):
+        yield "analysis-chunk"
+
+    client = _make_ws_client(_make_db(DEFAULT_RECORDING), user=MOCK_USER)
+    segments = [{"text": "Hello", "speaker_name": "John", "start": 0.0, "notes": []}]
+
+    with (
+        patch(
+            "api.transcripts.authenticate_websocket",
+            AsyncMock(return_value=MOCK_USER),
+        ),
+        patch("api.transcripts.build_segment_list", AsyncMock(return_value=segments)),
+        patch("api.transcripts._stream_analysis", fake_stream),
+    ):
+        with client.websocket_connect("/api/transcripts/456/analyze") as ws:
+            ws.send_json({"analysis_type": "summarize"})
+            assert ws.receive_text() == "analysis-chunk"
+            with pytest.raises(WebSocketDisconnect) as exc_info:
+                ws.receive_text()
+
+    assert exc_info.value.code == 1000
+
+
+def test_ws_analyze_unknown_recording_closes_4004():
+    """Test WS sends an error payload and closes 4004 for unknown recordings."""
+    from starlette.websockets import WebSocketDisconnect
+
+    client = _make_ws_client(_make_db(None), user=MOCK_USER)
+
+    with patch(
+        "api.transcripts.authenticate_websocket", AsyncMock(return_value=MOCK_USER)
+    ):
+        with client.websocket_connect("/api/transcripts/999/analyze") as ws:
+            ws.send_json({"analysis_type": "summarize"})
+            assert ws.receive_json() == {"error": "Transcript not found"}
+            with pytest.raises(WebSocketDisconnect) as exc_info:
+                ws.receive_text()
+
+    assert exc_info.value.code == 4004

@@ -9,11 +9,20 @@ import uuid
 from pathlib import Path
 
 import aiofiles
-from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, Response, UploadFile
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    HTTPException,
+    Query,
+    Request,
+    Response,
+    UploadFile,
+)
 
 from autobot_shared.logging_manager import get_logger
 from transcriber.database import Database
-from transcriber.deps import DEFAULT_USER, get_db
+from transcriber.deps import DEFAULT_USER, can_access, get_db
 from transcriber.models import RecordingOut
 
 logger = get_logger(__name__)
@@ -32,7 +41,9 @@ def _user_id(request: Request) -> str:
     return user.id if user else DEFAULT_USER
 
 
-@router.post("/projects/{project_id}/recordings", response_model=RecordingOut, status_code=202)
+@router.post(
+    "/projects/{project_id}/recordings", response_model=RecordingOut, status_code=202
+)
 async def upload_recording(
     project_id: int,
     request: Request,
@@ -40,7 +51,7 @@ async def upload_recording(
     db: Database = Depends(get_db),
 ):
     project = await db.get_project(project_id)
-    if not project or project["user_id"] != _user_id(request):
+    if not project or not can_access(project, _user_id(request)):
         raise HTTPException(404, "Project not found")
     ext = Path(file.filename or "").suffix.lower()
     if ext not in _ALLOWED_EXTENSIONS:
@@ -50,8 +61,15 @@ async def upload_recording(
     async with aiofiles.open(dest, "wb") as f:
         while chunk := await file.read(65536):
             await f.write(chunk)
-    rid = await db.create_recording(project_id, file.filename or safe_name, str(dest), user_id=_user_id(request))
-    logger.info("Recording uploaded: recording_id=%s project_id=%s filename=%s", rid, project_id, file.filename)
+    rid = await db.create_recording(
+        project_id, file.filename or safe_name, str(dest), user_id=_user_id(request)
+    )
+    logger.info(
+        "Recording uploaded: recording_id=%s project_id=%s filename=%s",
+        rid,
+        project_id,
+        file.filename,
+    )
     rec = await db.get_recording(rid)
     return RecordingOut(**rec)
 
@@ -65,24 +83,28 @@ async def list_recordings(
     offset: int = Query(0, ge=0),
 ):
     project = await db.get_project(project_id)
-    if not project or project["user_id"] != _user_id(request):
+    if not project or not can_access(project, _user_id(request)):
         raise HTTPException(404, "Project not found")
     rows = await db.list_recordings(project_id, limit=limit, offset=offset)
     return [RecordingOut(**r) for r in rows]
 
 
 @router.get("/recordings/{recording_id}", response_model=RecordingOut)
-async def get_recording(recording_id: int, request: Request, db: Database = Depends(get_db)):
+async def get_recording(
+    recording_id: int, request: Request, db: Database = Depends(get_db)
+):
     rec = await db.get_recording(recording_id)
-    if not rec or rec["user_id"] != _user_id(request):
+    if not rec or not can_access(rec, _user_id(request)):
         raise HTTPException(404, "Recording not found")
     return RecordingOut(**rec)
 
 
 @router.delete("/recordings/{recording_id}", status_code=204)
-async def delete_recording(recording_id: int, request: Request, db: Database = Depends(get_db)):
+async def delete_recording(
+    recording_id: int, request: Request, db: Database = Depends(get_db)
+):
     rec = await db.get_recording(recording_id)
-    if not rec or rec["user_id"] != _user_id(request):
+    if not rec or not can_access(rec, _user_id(request)):
         raise HTTPException(404, "Recording not found")
     filepath = Path(rec["filepath"])
     if filepath.exists():

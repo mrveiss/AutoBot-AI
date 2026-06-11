@@ -12,23 +12,26 @@ recording id from the transcriber module.
 
 ## WebSocket: streaming AI analysis
 
-```
+```text
 wss://<host>/api/transcripts/{transcript_id}/analyze?token=<jwt>
 ```
 
 1. Connect with a valid JWT (`token` query parameter; single-user mode bypasses auth
    like all other WebSocket endpoints).
 2. Send one JSON request:
+
    ```json
    {"analysis_type": "summarize", "custom_prompt": null, "context": null}
    ```
+
    `analysis_type`: `summarize` | `key_facts` | `protocol` | `custom`
    (`custom` requires `custom_prompt`).
 3. The server streams analysis text chunks built from the recording's stored
    segments and speakers, then closes the connection.
 
 Close codes: `4001` unauthorized · `4004` recording not found / not owned ·
-`1008` recording not yet transcribed or invalid request · `1011` internal error.
+`1008` recording not yet transcribed or invalid request · `1011` internal error
+or transcriber storage unavailable.
 
 ## POST `/api/transcripts/{transcript_id}/kb-push`
 
