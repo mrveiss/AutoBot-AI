@@ -90,7 +90,7 @@ def run_alembic(args: list[str], db_url: str) -> subprocess.CompletedProcess:
     )
 
 
-def run_baseline(db_url: str) -> subprocess.CompletedProcess:
+def run_baseline(db_url: str, extra_args: list[str] | None = None) -> subprocess.CompletedProcess:
     """Run the baseline-adoption entrypoint (``python -m migrations.baseline``).
 
     This is the pre-migration bootstrap step that classifies the database and
@@ -101,7 +101,7 @@ def run_baseline(db_url: str) -> subprocess.CompletedProcess:
     env["AUTOBOT_DATABASE_URL"] = db_url
     env["PYTHONPATH"] = f"{BACKEND_ROOT}{os.pathsep}{REPO_ROOT}"
     return subprocess.run(
-        [sys.executable, "-m", "migrations.baseline"],
+        [sys.executable, "-m", "migrations.baseline", *(extra_args or [])],
         cwd=BACKEND_ROOT,
         env=env,
         capture_output=True,
@@ -179,6 +179,7 @@ def script_head() -> str:
 
     cfg = Config(str(BACKEND_ROOT / "migrations" / "alembic.ini"))
     cfg.set_main_option("script_location", str(BACKEND_ROOT / "migrations"))
+    cfg.set_main_option("version_locations", str(BACKEND_ROOT / "migrations" / "versions"))
     script = ScriptDirectory.from_config(cfg)
     heads = script.get_heads()
     assert len(heads) == 1, f"chain must have exactly one head, got {heads}"
