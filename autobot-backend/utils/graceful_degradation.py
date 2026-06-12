@@ -475,7 +475,7 @@ class GracefulDegradationManager:
         """Simulate occasional failures for testing"""
         import random
 
-        return random.random() < 0.1  # 10% failure rate for simulation
+        return random.random() < 0.1  # nosec B311 - simulated failure rate for testing, not cryptographic
 
     async def _record_success(self):
         """Record a successful request (thread-safe)"""
