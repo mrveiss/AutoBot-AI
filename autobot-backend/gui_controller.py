@@ -49,9 +49,7 @@ class GUIController:
         """Start Xvfb virtual display if not already running."""
         try:
             # Check if Xvfb is installed
-            if (
-                subprocess.run(["which", "Xvfb"], capture_output=True).returncode != 0  # nosec B603 B607 - fixed argv,
-            ):
+            if subprocess.run(["which", "Xvfb"], capture_output=True).returncode != 0:  # nosec B603 B607 - fixed argv,
                 logger.error("Xvfb is not installed. Please install it to use the virtual display.")
                 return
 

@@ -632,9 +632,7 @@ class NPUWorkerManager(AsyncInitializable):
                         logger.debug("Pulse-probe error for worker %s: %s", worker_id, e)
 
                 # Jitter: ±20 % of base_interval
-                jitter = (
-                    base_interval * 0.2 * (random.random() * 2 - 1)  # nosec B311 - interval jitter to prevent
-                )
+                jitter = base_interval * 0.2 * (random.random() * 2 - 1)  # nosec B311 - interval jitter to prevent
                 await asyncio.sleep(max(base_interval + jitter, 60))
 
             except asyncio.CancelledError:

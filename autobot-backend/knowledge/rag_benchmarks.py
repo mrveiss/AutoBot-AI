@@ -56,9 +56,7 @@ class TestRAGQueryBenchmarks:
     def mock_embeddings(self):
         """Generate mock embedding vectors"""
         # Simulate 384-dimensional embeddings (all-MiniLM-L6-v2 style)
-        return [
-            [random.random() for _ in range(384)] for _ in range(100)  # nosec B311 - mock embedding vectors for
-        ]
+        return [[random.random() for _ in range(384)] for _ in range(100)]  # nosec B311 - mock embedding vectors for
 
     @pytest.fixture
     def mock_documents(self):

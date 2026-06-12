@@ -289,9 +289,7 @@ def _normalize_dow_field(field: str) -> str:
         if re.fullmatch(r"\*/\d+", token):
             return token
         # Scalar
-        return (
-            "0" if token == "7" else token  # nosec B105 - 'token' is a cron field token (string segment), not a
-        )
+        return "0" if token == "7" else token  # nosec B105 - 'token' is a cron field token (string segment), not a
 
     # Split on comma, normalize each part, rejoin
     return ",".join(_replace_token(part) for part in field.split(","))
