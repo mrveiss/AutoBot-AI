@@ -581,7 +581,7 @@
     - name: "[PLAY 2] Backend | Read backend user mode (#10001)"
       ansible.builtin.shell: "grep -oP '^AUTOBOT_USER_MODE=\\K.*' /opt/autobot/autobot-backend/.env"
       become: true
-      register: backend_user_mode
+      register: backend_user_mode_probe
       changed_when: false
       failed_when: false  # absent .env/var means single_user (no Postgres)
       when: "'01-Backend' in inventory_hostname"
@@ -590,7 +590,7 @@
     - name: "[PLAY 2] Backend | Database migration sequence (#10001)"
       when:
         - "'01-Backend' in inventory_hostname"
-        - backend_user_mode.stdout | default('') | trim not in ['', 'single_user']
+        - backend_user_mode_probe.stdout | default('') | trim not in ['', 'single_user']
       tags: [backend, migrate]
       block:
         - name: "[PLAY 2] Backend | Check for local PostgreSQL data directory (#10026)"

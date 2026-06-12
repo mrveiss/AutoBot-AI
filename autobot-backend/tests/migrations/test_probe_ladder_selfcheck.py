@@ -17,7 +17,11 @@ No database needed — pure static analysis.
 import ast
 from pathlib import Path
 
-from migrations.baseline import (
+import pytest
+
+pytest.importorskip("alembic", reason="probe-ladder self-checks need alembic")
+
+from migrations.baseline import (  # noqa: E402 — after importorskip by design
     TIMESTAMPTZ_MARKERS,
     Artifacts,
     _script_directory,

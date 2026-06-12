@@ -84,13 +84,13 @@
     # captured alembic output.
     - name: Read backend user mode (#10001)
       ansible.builtin.shell: "grep -oP '^AUTOBOT_USER_MODE=\\K.*' {{ backend_code_dir }}/.env"
-      register: backend_user_mode
+      register: backend_user_mode_probe
       changed_when: false
       failed_when: false  # absent .env/var means single_user (no Postgres)
       tags: [migrations]
 
     - name: Database migration sequence (Postgres-backed modes) (#10001)
-      when: backend_user_mode.stdout | default('') | trim not in ['', 'single_user']
+      when: backend_user_mode_probe.stdout | default('') | trim not in ['', 'single_user']
       tags: [migrations]
       block:
         - name: Check for local PostgreSQL data directory (#10026)
