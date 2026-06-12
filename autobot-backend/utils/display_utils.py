@@ -117,7 +117,9 @@ class DisplayDetector:
     def _try_xrandr(self) -> Tuple[int, int] | None:
         """Try to get resolution using xrandr (X11) (Issue #315 - refactored)."""
         try:
-            result = subprocess.run(["xrandr", "--query"], capture_output=True, text=True, timeout=5)  # nosec B603 B607 - fixed argv, system display tool
+            result = subprocess.run(
+                ["xrandr", "--query"], capture_output=True, text=True, timeout=5
+            )  # nosec B603 B607 - fixed argv, system display tool
             if result.returncode != 0:
                 return None
 
@@ -136,7 +138,9 @@ class DisplayDetector:
     def _try_xdpyinfo(self) -> Tuple[int, int] | None:
         """Try to get resolution using xdpyinfo (X11) (Issue #315 - refactored)."""
         try:
-            result = subprocess.run(["xdpyinfo"], capture_output=True, text=True, timeout=5)  # nosec B603 B607 - fixed argv, system display info tool
+            result = subprocess.run(
+                ["xdpyinfo"], capture_output=True, text=True, timeout=5
+            )  # nosec B603 B607 - fixed argv, system display info tool
             if result.returncode != 0:
                 return None
 
@@ -157,7 +161,9 @@ class DisplayDetector:
         """Try to get resolution on Wayland (Issue #315 - refactored)."""
         try:
             # Try wlr-randr (for wlroots-based compositors)
-            result = subprocess.run(["wlr-randr"], capture_output=True, text=True, timeout=5)  # nosec B603 B607 - fixed argv, Wayland compositor display tool
+            result = subprocess.run(
+                ["wlr-randr"], capture_output=True, text=True, timeout=5
+            )  # nosec B603 B607 - fixed argv, Wayland compositor display tool
             if result.returncode != 0:
                 return None
 
@@ -251,7 +257,9 @@ class DisplayDetector:
                 "Select-Object Width, Height | ConvertTo-Json",
             ]
 
-            result = subprocess.run(powershell_cmd, capture_output=True, text=True, timeout=10)  # nosec B603 - fixed PowerShell script with no user-controlled input
+            result = subprocess.run(
+                powershell_cmd, capture_output=True, text=True, timeout=10
+            )  # nosec B603 - fixed PowerShell script with no user-controlled input
 
             if result.returncode == 0:
                 import json

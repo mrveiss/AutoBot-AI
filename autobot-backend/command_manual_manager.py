@@ -723,7 +723,9 @@ class CommandManualManager:
             return None
 
         try:
-            result = subprocess.run(["man", command_name], capture_output=True, text=True, timeout=10)  # nosec B603 B607 - command_name validated by _VALID_COMMAND_NAME_RE above
+            result = subprocess.run(
+                ["man", command_name], capture_output=True, text=True, timeout=10
+            )  # nosec B603 B607 - command_name validated by _VALID_COMMAND_NAME_RE above
 
             if result.returncode == 0:
                 return result.stdout

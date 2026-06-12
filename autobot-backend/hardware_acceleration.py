@@ -139,7 +139,9 @@ class HardwareAccelerationManager:
     def _check_npu_via_lspci(self) -> bool:
         """Check for NPU hardware via lspci command."""
         try:
-            result = subprocess.run(["lspci"], capture_output=True, text=True, timeout=5)  # nosec B603 B607 - fixed lspci argv, no user input
+            result = subprocess.run(
+                ["lspci"], capture_output=True, text=True, timeout=5
+            )  # nosec B603 B607 - fixed lspci argv, no user input
             if result.returncode == 0:
                 output = result.stdout.lower()
                 if any(keyword in output for keyword in NPU_HARDWARE_KEYWORDS):

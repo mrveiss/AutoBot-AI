@@ -132,14 +132,16 @@ class SimplePTY:
         if self.use_login_shell:
             bash_cmd.append("--login")
             logger.info(f"Starting login shell for session {self.session_id} (loads profile files)")
-        self.process = subprocess.Popen(  # nosec B603 - bash_cmd is ["/bin/bash"] with optional --login; fixed absolute path
-            bash_cmd,
-            stdin=slave_fd,
-            stdout=slave_fd,
-            stderr=slave_fd,
-            env=env,
-            cwd=initial_cwd or str(PATH.PROJECT_ROOT),
-            preexec_fn=os.setsid,
+        self.process = (
+            subprocess.Popen(  # nosec B603 - bash_cmd is ["/bin/bash"] with optional --login; fixed absolute path
+                bash_cmd,
+                stdin=slave_fd,
+                stdout=slave_fd,
+                stderr=slave_fd,
+                env=env,
+                cwd=initial_cwd or str(PATH.PROJECT_ROOT),
+                preexec_fn=os.setsid,
+            )
         )
         os.close(slave_fd)
         os.set_blocking(self.master_fd, False)

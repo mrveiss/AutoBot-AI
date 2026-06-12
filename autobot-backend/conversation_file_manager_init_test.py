@@ -419,7 +419,9 @@ class TestSchemaIntegrityVerification:
         ]
 
         for table in expected_tables:
-            rows = await async_sqlite_query(db_path_str, f"SELECT COUNT(*) FROM {table}")  # nosec B608 - table names from fixed test allowlist above, no user input
+            rows = await async_sqlite_query(
+                db_path_str, f"SELECT COUNT(*) FROM {table}"
+            )  # nosec B608 - table names from fixed test allowlist above, no user input
             count = rows[0][0]
             logger.info(f"✓ Table '{table}' queryable (count: {count})")
 
@@ -431,7 +433,9 @@ class TestSchemaIntegrityVerification:
         ]
 
         for view in expected_views:
-            rows = await async_sqlite_query(db_path_str, f"SELECT COUNT(*) FROM {view}")  # nosec B608 - view names from fixed test allowlist above, no user input
+            rows = await async_sqlite_query(
+                db_path_str, f"SELECT COUNT(*) FROM {view}"
+            )  # nosec B608 - view names from fixed test allowlist above, no user input
             count = rows[0][0]
             logger.info(f"✓ View '{view}' queryable (count: {count})")
 

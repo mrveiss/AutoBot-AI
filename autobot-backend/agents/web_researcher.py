@@ -240,7 +240,9 @@ class BrowserFingerprint:
     def _generate_fingerprint(self) -> Dict[str, Any]:
         """Generate randomized browser fingerprint."""
         return {
-            "user_agent": random.choice(self.USER_AGENTS),  # nosec B311 - browser fingerprint sampling, not cryptographic
+            "user_agent": random.choice(
+                self.USER_AGENTS
+            ),  # nosec B311 - browser fingerprint sampling, not cryptographic
             "viewport": random.choice(self.VIEWPORTS),  # nosec B311 - non-crypto viewport selection
             "timezone": random.choice(  # nosec B311 - non-crypto timezone selection
                 [
@@ -250,9 +252,15 @@ class BrowserFingerprint:
                     "Europe/Berlin",
                 ]
             ),
-            "language": random.choice(["en-US,en", "en-GB,en", "en-CA,en"]),  # nosec B311 - non-crypto language selection
-            "platform": random.choice(["Win32", "MacIntel", "Linux x86_64"]),  # nosec B311 - non-crypto platform selection
-            "webgl_vendor": random.choice(["Intel Inc.", "NVIDIA Corporation", "AMD"]),  # nosec B311 - non-crypto vendor selection
+            "language": random.choice(
+                ["en-US,en", "en-GB,en", "en-CA,en"]
+            ),  # nosec B311 - non-crypto language selection
+            "platform": random.choice(
+                ["Win32", "MacIntel", "Linux x86_64"]
+            ),  # nosec B311 - non-crypto platform selection
+            "webgl_vendor": random.choice(
+                ["Intel Inc.", "NVIDIA Corporation", "AMD"]
+            ),  # nosec B311 - non-crypto vendor selection
             "hardware_concurrency": random.choice([4, 8, 12, 16]),  # nosec B311 - non-crypto concurrency selection
         }
 
@@ -908,7 +916,9 @@ class WebResearcher:
 
     async def _random_delay(self, min_seconds: float, max_seconds: float):
         """Add random delay to mimic human behavior."""
-        await asyncio.sleep(random.uniform(min_seconds, max_seconds))  # nosec B311 - human behavior simulation delay, not cryptographic
+        await asyncio.sleep(
+            random.uniform(min_seconds, max_seconds)
+        )  # nosec B311 - human behavior simulation delay, not cryptographic
 
     # -------------------------------------------------------------------
     # Orchestrated research (from WebResearchIntegration)

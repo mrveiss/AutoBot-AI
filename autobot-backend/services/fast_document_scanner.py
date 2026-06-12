@@ -405,13 +405,15 @@ class FastDocumentScanner:
 
             # Fallback to subprocess (slower but more reliable)
             try:
-                result = subprocess.run(  # nosec B603 B607 - fixed 'man' binary; command comes from parsed man-page path
-                    ["man", command],
-                    capture_output=True,
-                    text=True,
-                    encoding="utf-8",
-                    errors="ignore",
-                    timeout=5,
+                result = (
+                    subprocess.run(  # nosec B603 B607 - fixed 'man' binary; command comes from parsed man-page path
+                        ["man", command],
+                        capture_output=True,
+                        text=True,
+                        encoding="utf-8",
+                        errors="ignore",
+                        timeout=5,
+                    )
                 )
                 if result.returncode == 0 and result.stdout:
                     return result.stdout

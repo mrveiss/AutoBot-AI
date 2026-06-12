@@ -951,13 +951,25 @@ def _create_demo_data_point(current: datetime, start: datetime, base_score: floa
     trend = days_elapsed * 0.1
     return {
         "timestamp": current.isoformat(),
-        "overall_score": min(100, max(0, base_score + trend + random.uniform(-3, 3))),  # nosec B311 - analytics variance noise, not cryptographic
-        "maintainability": min(100, max(0, 75 + trend * 0.8 + random.uniform(-2, 2))),  # nosec B311 - analytics variance noise
-        "testability": min(100, max(0, 65 + trend * 0.5 + random.uniform(-2, 2))),  # nosec B311 - analytics variance noise
-        "documentation": min(100, max(0, 60 + trend * 0.3 + random.uniform(-2, 2))),  # nosec B311 - analytics variance noise
-        "complexity": min(100, max(0, 80 + trend * 0.6 + random.uniform(-2, 2))),  # nosec B311 - analytics variance noise
+        "overall_score": min(
+            100, max(0, base_score + trend + random.uniform(-3, 3))
+        ),  # nosec B311 - analytics variance noise, not cryptographic
+        "maintainability": min(
+            100, max(0, 75 + trend * 0.8 + random.uniform(-2, 2))
+        ),  # nosec B311 - analytics variance noise
+        "testability": min(
+            100, max(0, 65 + trend * 0.5 + random.uniform(-2, 2))
+        ),  # nosec B311 - analytics variance noise
+        "documentation": min(
+            100, max(0, 60 + trend * 0.3 + random.uniform(-2, 2))
+        ),  # nosec B311 - analytics variance noise
+        "complexity": min(
+            100, max(0, 80 + trend * 0.6 + random.uniform(-2, 2))
+        ),  # nosec B311 - analytics variance noise
         "security": min(100, max(0, 78 + trend * 0.4 + random.uniform(-1, 1))),  # nosec B311 - analytics variance noise
-        "performance": min(100, max(0, 72 + trend * 0.7 + random.uniform(-2, 2))),  # nosec B311 - analytics variance noise
+        "performance": min(
+            100, max(0, 72 + trend * 0.7 + random.uniform(-2, 2))
+        ),  # nosec B311 - analytics variance noise
         "total_files": 350 + days_elapsed,
         "total_lines": 65000 + days_elapsed * 100,
     }

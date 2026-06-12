@@ -77,7 +77,9 @@ _TRIGGER_TTL_SECONDS = TTL_90_DAYS
 _KEY_PREFIX = "workflows:trigger:"
 _INDEX_KEY = "workflows:triggers:index"
 _BY_WORKFLOW_PREFIX = "workflows:triggers:by_workflow:"
-_SECRET_PREFIX = "workflows:trigger_secret:"  # nosec B105 - Redis key prefix for webhook secrets, not a hardcoded secret
+_SECRET_PREFIX = (
+    "workflows:trigger_secret:"  # nosec B105 - Redis key prefix for webhook secrets, not a hardcoded secret
+)
 
 
 # ---------------------------------------------------------------------------
@@ -287,7 +289,9 @@ def _normalize_dow_field(field: str) -> str:
         if re.fullmatch(r"\*/\d+", token):
             return token
         # Scalar
-        return "0" if token == "7" else token  # nosec B105 - 'token' is a cron field token (string segment), not a credential
+        return (
+            "0" if token == "7" else token
+        )  # nosec B105 - 'token' is a cron field token (string segment), not a credential
 
     # Split on comma, normalize each part, rejoin
     return ",".join(_replace_token(part) for part in field.split(","))
