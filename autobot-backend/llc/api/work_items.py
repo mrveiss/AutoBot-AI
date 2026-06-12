@@ -38,8 +38,8 @@ from api.user_management.dependencies import get_current_user, require_org_conte
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
+from llc.deps import get_session, service_dep
 from models.agent_org import AgentOrgNode
-from user_management.database import get_async_session_factory
 from user_management.models.user import User
 from user_management.services import TenantContext
 
@@ -103,7 +103,6 @@ class CoworkerRequest(BaseModel):
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/work-items", tags=["llc-work-items"])
-_get_service = lazy_singleton(WorkItemService)
 _get_product_service = lazy_singleton(WorkProductService)
 _get_handoff_service = lazy_singleton(HandoffService)
 _kb_manager = KbCollectionManager()
@@ -113,9 +112,7 @@ _get_comment_wake_service = lazy_singleton(CommentWakeService)
 _get_heartbeat_scheduler = lazy_singleton(HeartbeatScheduler)
 _get_activity_service = lazy_singleton(LLCActivityLogService)
 
-
-def _service() -> WorkItemService:
-    return _get_service()
+_service = service_dep(WorkItemService)
 
 
 def _handoff_service() -> HandoffService:
@@ -128,12 +125,6 @@ def _relation_service() -> WorkItemRelationService:
 
 def _attachment_service() -> AttachmentService:
     return _get_attachment_service()
-
-
-async def get_session() -> AsyncSession:
-    factory = get_async_session_factory()
-    async with factory() as session:
-        yield session
 
 
 # ------------------------------------------------------------------
