@@ -32,6 +32,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+
 from user_management.services import TenantContext
 
 _FIXED_USER_ID = uuid.UUID("33333333-3333-3333-3333-333333333333")

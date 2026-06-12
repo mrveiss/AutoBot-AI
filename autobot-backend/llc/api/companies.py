@@ -651,14 +651,13 @@ async def get_org_chart(
         .where(
             LLCWorkItem.company_id == company_id,
             LLCWorkItem.assignee_agent_id.isnot(None),
-            LLCWorkItem.status.notin_([WorkItemStatus.DONE, WorkItemStatus.CANCELLED]),  # noqa: E501 — see GH#9980 (enum NAME-vs-value drift)
+            LLCWorkItem.status.notin_(
+                [WorkItemStatus.DONE, WorkItemStatus.CANCELLED]
+            ),  # noqa: E501 — see GH#9980 (enum NAME-vs-value drift)
         )
         .group_by(AgentOrgNode.agent_id)
     )
-    assigned_counts: Dict[str, int] = {
-        row.agent_id: row.cnt
-        for row in (await session.execute(assign_q)).all()
-    }
+    assigned_counts: Dict[str, int] = {row.agent_id: row.cnt for row in (await session.execute(assign_q)).all()}
 
     # Compose flat nodes.
     flat: Dict[str, OrgChartNode] = {}

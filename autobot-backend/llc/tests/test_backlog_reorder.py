@@ -9,13 +9,12 @@ import pytest
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-# Import harness before any model imports to register SQLite compile shims.
-from llc.tests import _e2e_harness as harness  # noqa: F401
-
 from llc.models.enums import WorkItemPriority, WorkItemStatus, WorkItemType
 from llc.models.work_item import LLCWorkItem
 from llc.services.backlog import BacklogService
 
+# Import harness before any model imports to register SQLite compile shims.
+from llc.tests import _e2e_harness as harness  # noqa: F401
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -389,6 +388,4 @@ async def test_reorder_then_list_reflects_new_order(backlog_session_factory):  #
 
     assert total == 3
     item_ids = [str(i.id) for i in items]
-    assert item_ids == [str(id_c), str(id_a), str(id_b)], (
-        f"Expected [c, a, b] but got {item_ids}"
-    )
+    assert item_ids == [str(id_c), str(id_a), str(id_b)], f"Expected [c, a, b] but got {item_ids}"

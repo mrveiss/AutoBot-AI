@@ -21,11 +21,11 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from llc.models.budget import LLCAgentBudget
 from llc.models.enums import WorkItemPriority, WorkItemStatus, WorkItemType
+from llc.models.work_item import LLCWorkItem
 
 # Importing the harness registers the SQLite compile shims (must happen before
 # any model-level code runs, including the work_item import below).
 from llc.tests import _e2e_harness as harness
-from llc.models.work_item import LLCWorkItem
 from models.agent_org import AgentOrgNode, OrgRole
 
 _FIXED_USER_ID = uuid.UUID("22222222-2222-2222-2222-222222222222")
