@@ -9,25 +9,46 @@ Triage of the **122 open issues** (was 124; #9914/#9915 closed-with-evidence bel
 into **13 umbrella epics**. Triage/organize only — no code was fixed.
 0 open PRs at triage time, so umbrellas reflect real remaining work, not in-flight PRs.
 
-| Umbrella | Issue | Theme | Members |
-|---|---|---|---:|
-| U1 | **#9919** | deployment-install | 14 |
-| U2 | **#9920** | data-layer (schema/migrations) | 2 |
-| U3 | **#9921** | code-intelligence / verify-leg | 7 |
-| U4 | **#9922** | api-contract | 7 |
-| U5 | **#9923** | llc-module | 18 |
-| U6 | **#9924** | test-infra / CI | 11 |
-| U7 | **#9925** | transcriber | 11 |
-| U8 | **#9926** | docs-positioning | 10 |
-| U9 | **#9927** | governance | 6 |
-| U10 | **#9928** | integrations-plugins | 10 |
-| U11 | **#9929** | product-features | 18 |
-| U12 | **#9930** | enterprise-auth (SSO) | 7 |
-| U13 | **#9931** | codebase-recovery | 3 |
+| Umbrella | Issue | Theme | Members | +Δ 06-12 | Total |
+|---|---|---|---:|---:|---:|
+| U1 | **#9919** | deployment-install | 14 | +17 | 31 |
+| U2 | **#9920** | data-layer (schema/migrations) | 2 | +4 | 6 |
+| U3 | **#9921** | code-intelligence / verify-leg | 7 | +1 | 8 |
+| U4 | **#9922** | api-contract | 7 | +9 | 16 |
+| U5 | **#9923** | llc-module | 18 | +5 | 23 |
+| U6 | **#9924** | test-infra / CI | 11 | +3 | 14 |
+| U7 | **#9925** | transcriber | 11 | +1 | 12 |
+| U8 | **#9926** | docs-positioning | 10 | — | 10 |
+| U9 | **#9927** | governance | 6 | +1 | 7 |
+| U10 | **#9928** | integrations-plugins | 10 | — | 10 |
+| U11 | **#9929** | product-features | 18 | +6 | 24 |
+| U12 | **#9930** | enterprise-auth (SSO) | 7 | — | 7 |
+| U13 | **#9931** | codebase-recovery | 3 | — | 3 |
+
+> **2026-06-12 triage delta:** 42 issues filed 2026-06-11 (wave-review follow-ups +
+> live-console findings) were placed; member counts above include closed members.
+> U4's +9 and U6's +3 include #10025 and #10019/#10022/#10023, which wave sessions
+> had already appended; U9's +1 is #10024. The other 37 were appended 2026-06-12
+> (`### Triage delta` sections in each umbrella body). #10016 (SLM lifecycle
+> completeness) is tracked as a **sub-epic inside U1**, not a 14th umbrella.
 
 > Taxonomy extension: U1–U9 are the dispatch-prompt umbrellas. U10–U13 were added
 > because the product-feature / integration / recovery backlog (≈38 issues) fits
 > none of U1–U9 — the prompt authorizes extension when an issue "genuinely fits nowhere."
+
+## Umbrella lifecycle
+
+**Umbrella epics close only by explicit human decision** — never by PR closing
+keywords, never by an agent on task-list completion, never automatically.
+
+- Reference umbrellas with **"part of #N"** in comments, PR bodies, and commit
+  messages — NEVER `fixes`/`closes`/`resolves #N` (a merge would re-close the epic).
+- Task-list completion is a signal to *ask the human*, not to close: follow-up
+  discoveries routinely land after the last member merges (proven 2026-06-11:
+  #9919/#9920 were agent-closed "complete" and accrued 21 new theme issues within
+  hours; both reopened 2026-06-12).
+- New members are **appended** to the umbrella task list (dated `### Triage delta`
+  sections) — existing lists are never rewritten.
 
 ---
 
@@ -121,6 +142,29 @@ everything else fans out. U2 is two issues but is the keystone — **dispatch it
 > Parallelism budget: Waves 0+1 run **six umbrellas concurrently**. Honor the repo
 > PR-queue limit (≥5 open PRs → defer) and the single self-hosted runner — stagger
 > PR opens so smoke-test doesn't starve.
+
+### Dispatch-order delta — 2026-06-12
+
+Waves 0–3 largely executed 2026-06-11 (U1/U2 original members closed; U5 11/19
+landed). The follow-up queue reorders as:
+
+1. **U1 #10026 → U2 #10001** (strict order): the legacy-DB upgrade-path gate must
+   land **before** the ansible alembic-invocation fix and before any tagged
+   release — #10001's fix would start running the repaired chain against
+   never-migrated populated DBs. #10027 (U2, shared guard helpers) is a
+   prerequisite if #10026 chooses guards over stamp-baseline, and is the natural
+   home for #9980's enum registry.
+2. **U4 live-console contract cluster** (#10011/#10012/#10013 + #9958/#9959/#9983
+   /#9985/#9986) — high-visibility user-facing breakage, mostly `S`/`M`, plus the
+   already-listed #10025 lint guard.
+3. **U1 deploy-surface cluster** (#9956/#9965/#9982/#9996/#10020 + co-located
+   #9966/#9967) — the surface that produced all three June-10 regressions; pairs
+   with U6's #10023 co-located smoke gate.
+4. **U11 rebuild track**: #9984 (nav gating) is the prerequisite gate → then PRDs
+   #10017/#10018 (human-approved, see issue bodies).
+5. U5 delta (#9951/#9978/#9987/#9992/#9995) folds into the remaining U5 feature
+   queue; U3 #10008 and U7 #9968 (security, `priority: high`) dispatch standalone —
+   #9968 should jump the queue (IDOR).
 
 ---
 
