@@ -27,7 +27,8 @@ logger = get_logger(__name__)
 
 # Regex for validating command names passed to subprocess (Issue #1733).
 # Man page command names contain only alphanumeric, hyphen, underscore, dot, plus.
-_VALID_COMMAND_RE = re.compile(r"^[a-zA-Z0-9_.+-]+$")
+# First char must not be '-' so a name can never be parsed as an option.
+_VALID_COMMAND_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_.+-]*$")
 # Man page sections are single digits, optionally followed by a letter.
 _VALID_SECTION_RE = re.compile(r"^[0-9][a-zA-Z]?$")
 
@@ -417,7 +418,7 @@ class ManPageParser:
         """Helper for parse_man_page_with_subprocess. Ref: #1088."""
         _validate_man_args(command, section)
         cmd = ["man", section, command]
-        return subprocess.run(
+        return subprocess.run(  # nosec B603 - args validated by _validate_man_args above; cmd is fixed 'man' binary
             cmd,
             capture_output=True,
             text=True,
@@ -501,7 +502,7 @@ class ManPageParser:
                 logger.warning("Invalid command name for summary: %s", command)
                 return ""
             cmd = ["man", "-k", f"^{command}$"]
-            proc = subprocess.run(
+            proc = subprocess.run(  # nosec B603 - command validated by _VALID_COMMAND_RE above; 'man' is fixed binary
                 cmd,
                 capture_output=True,
                 text=True,

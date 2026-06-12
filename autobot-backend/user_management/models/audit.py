@@ -123,9 +123,9 @@ class AuditAction:
     LOGIN_SUCCESS = "login_success"
     LOGIN_FAILED = "login_failed"
     LOGOUT = "logout"
-    PASSWORD_CHANGED = "password_changed"
-    PASSWORD_RESET_REQUESTED = "password_reset_requested"
-    PASSWORD_RESET_COMPLETED = "password_reset_completed"
+    PASSWORD_CHANGED = "password_changed"  # nosec B105 - audit event type enum value, not a password
+    PASSWORD_RESET_REQUESTED = "password_reset_requested"  # nosec B105 - audit event type enum value, not a password
+    PASSWORD_RESET_COMPLETED = "password_reset_completed"  # nosec B105 - audit event type enum value, not a password
 
     # MFA
     MFA_ENABLED = "mfa_enabled"

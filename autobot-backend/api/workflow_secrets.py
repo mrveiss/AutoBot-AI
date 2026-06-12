@@ -194,7 +194,7 @@ async def update_workflow_secret(
     return WorkflowSecretMetadata(
         id="",
         name=name,
-        secret_type="",
+        secret_type="",  # nosec B106 - empty string for unset secret_type field, not a credential value
         scope="workflow",
     )
 
