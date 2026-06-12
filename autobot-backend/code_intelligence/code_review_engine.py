@@ -872,7 +872,7 @@ class CodeReviewEngine(_BaseClass):
                     logger.warning("Rejected invalid git diff argument: %s", arg)
                     return ""
             cmd = ["git", "diff"] + split_args
-            result = subprocess.run(
+            result = subprocess.run(  # nosec B603 - argv validated by _VALID_GIT_DIFF_ARG_RE above
                 cmd,
                 capture_output=True,
                 text=True,

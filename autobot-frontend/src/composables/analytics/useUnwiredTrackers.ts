@@ -12,7 +12,7 @@
  * Issue #6871: Surface 'Modules with zero production callers' metric
  * in the Code Quality Dashboard.
  *
- * Endpoint: GET /api/codebase/problems?type=code_smell_unwired_tracker
+ * Endpoint: GET /api/analytics/codebase/problems?type=code_smell_unwired_tracker
  * Problems are stored with type "code_smell_unwired_tracker" by the
  * cross-file analysis hook in cross_file_analysis.py.
  */
@@ -74,7 +74,7 @@ export function useUnwiredTrackers(withSourceId: (url: string) => string) {
   // Issue #6871: fetch problems of type code_smell_unwired_tracker
   const endpoint = useFetchEndpoint<ProblemsApiResponse, UnwiredTrackersData>(
     {
-      path: '/api/codebase/problems',
+      path: '/api/analytics/codebase/problems',
       scopeToSource: true,
       pickData: (raw) => {
         if (!raw || raw.status === 'no_data') {

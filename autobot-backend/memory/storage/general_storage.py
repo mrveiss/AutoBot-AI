@@ -125,7 +125,7 @@ class GeneralStorage:
             WHERE {' AND '.join(where_clauses)}
             ORDER BY timestamp DESC
             LIMIT ?
-        """
+        """  # nosec B608 - clause strings are hardcoded literals; only values are parameterized
         values.append(limit)
 
         try:

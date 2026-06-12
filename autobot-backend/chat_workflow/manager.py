@@ -1687,27 +1687,27 @@ class ChatWorkflowManager(
             "[Issue #2310] Injecting available-tools reminder after %d consecutive invalid tool calls",
             consecutive_invalid_tool_calls,
         )
-        return f"""
-**[SYSTEM] TOOL NAME CORRECTION REQUIRED:**
-Your last {consecutive_invalid_tool_calls} tool call(s) used invalid tool names. \
-You MUST use ONLY the following tool names:
-- execute_command: Run shell commands
-- web_search: Search the web for information
-- navigate: Browse to a URL
-- click: Click an element on a web page
-- fill: Fill a form field on a web page
-- select: Select an option on a web page
-- hover: Hover over an element
-- screenshot: Capture the current page
-- evaluate: Evaluate JavaScript on a web page
-- get_text: Get text from an element
-- get_attribute: Get an attribute from an element
-- wait_for_selector: Wait for an element to appear
-- delegate: Delegate a subtask to a subordinate agent
-- respond: Signal task completion with a final message
-Do NOT invent new tool names. Use ONLY the names listed above.
-
-"""
+        _reminder = (
+            f"\n**[SYSTEM] TOOL NAME CORRECTION REQUIRED:**\n"  # nosec B608 - prompt template, not SQL
+            f"Your last {consecutive_invalid_tool_calls} tool call(s) used invalid tool names. "
+            "You MUST use ONLY the following tool names:\n"
+            "- execute_command: Run shell commands\n"
+            "- web_search: Search the web for information\n"
+            "- navigate: Browse to a URL\n"
+            "- click: Click an element on a web page\n"
+            "- fill: Fill a form field on a web page\n"
+            "- select: Select an option on a web page\n"
+            "- hover: Hover over an element\n"
+            "- screenshot: Capture the current page\n"
+            "- evaluate: Evaluate JavaScript on a web page\n"
+            "- get_text: Get text from an element\n"
+            "- get_attribute: Get an attribute from an element\n"
+            "- wait_for_selector: Wait for an element to appear\n"
+            "- delegate: Delegate a subtask to a subordinate agent\n"
+            "- respond: Signal task completion with a final message\n"
+            "Do NOT invent new tool names. Use ONLY the names listed above.\n\n"
+        )  # nosec B608 - prompt template, not SQL; consecutive_invalid_tool_calls is an int counter
+        return _reminder
 
     def _get_continuation_instructions(
         self,
