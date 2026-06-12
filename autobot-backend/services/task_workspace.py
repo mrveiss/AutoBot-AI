@@ -163,7 +163,7 @@ def release(
     # keep_on_failure is True the directory can still be evicted later.
     (workspace_dir / _ACTIVE_LOCK_FILENAME).unlink(missing_ok=True)
     try:
-        subprocess.run(
+        subprocess.run(  # nosec B603 B607 - fixed git argv; workspace_dir is a validated Path object
             ["git", "worktree", "remove", "--force", str(workspace_dir)],
             cwd=str(root),
             check=True,
@@ -171,7 +171,7 @@ def release(
             text=True,
         )
         # Best-effort branch deletion — ignore failures (e.g. branch pushed / not found)
-        subprocess.run(
+        subprocess.run(  # nosec B603 B607 - fixed git argv; branch name constructed from task_id
             ["git", "branch", "-D", branch],
             cwd=str(root),
             check=False,
@@ -289,7 +289,7 @@ async def release_for_task(
 def _git_add_worktree(root: Path, workspace_dir: Path, branch: str) -> None:
     """Run git worktree add, handling pre-existing branch/directory gracefully."""
     try:
-        subprocess.run(
+        subprocess.run(  # nosec B603 B607 - fixed git argv; branch and workspace_dir are validated Path/str values
             ["git", "worktree", "add", "-b", branch, str(workspace_dir)],
             cwd=str(root),
             check=True,
@@ -301,7 +301,7 @@ def _git_add_worktree(root: Path, workspace_dir: Path, branch: str) -> None:
         # Branch already exists from a previous partial allocation — reuse it
         if "already exists" in stderr:
             try:
-                subprocess.run(
+                subprocess.run(  # nosec B603 B607 - fixed git argv; branch and workspace_dir are validated Path/str
                     ["git", "worktree", "add", str(workspace_dir), branch],
                     cwd=str(root),
                     check=True,

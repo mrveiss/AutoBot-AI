@@ -30,8 +30,10 @@ def humanize_click_position(x: int, y: int, radius: int = 5) -> Tuple[int, int]:
     Returns:
         Tuple of (humanized_x, humanized_y) with random offset applied
     """
-    offset_x = random.randint(-radius, radius)
-    offset_y = random.randint(-radius, radius)
+    offset_x = random.randint(
+        -radius, radius
+    )  # nosec B311 - mouse position jitter for UI humanization, not cryptographic
+    offset_y = random.randint(-radius, radius)  # nosec B311 - mouse position jitter for UI humanization
     return (max(0, x + offset_x), max(0, y + offset_y))
 
 
@@ -42,7 +44,7 @@ def humanize_typing_speed() -> float:
     Returns:
         Random delay between 0.05s and 0.15s (typical human typing speed)
     """
-    return random.uniform(0.05, 0.15)
+    return random.uniform(0.05, 0.15)  # nosec B311 - keystroke timing simulation, not cryptographic
 
 
 def humanize_action_delay() -> float:
@@ -52,7 +54,7 @@ def humanize_action_delay() -> float:
     Returns:
         Random delay between 0.1s and 0.3s (human reaction time)
     """
-    return random.uniform(0.1, 0.3)
+    return random.uniform(0.1, 0.3)  # nosec B311 - human reaction time simulation, not cryptographic
 
 
 def humanize_mouse_movement_delay() -> float:
@@ -62,7 +64,7 @@ def humanize_mouse_movement_delay() -> float:
     Returns:
         Random delay between 0.01s and 0.03s for smooth movement
     """
-    return random.uniform(0.01, 0.03)
+    return random.uniform(0.01, 0.03)  # nosec B311 - mouse movement delay simulation, not cryptographic
 
 
 def simulate_mouse_curve(x1: int, y1: int, x2: int, y2: int, steps: int = 10) -> list[Tuple[int, int]]:
@@ -107,7 +109,9 @@ def simulate_mouse_curve(x1: int, y1: int, x2: int, y2: int, steps: int = 10) ->
                 perp_y = dx / length
 
                 # Sine wave for smooth curve
-                curve_amount = math.sin(t * math.pi) * random.uniform(2, 8)
+                curve_amount = math.sin(t * math.pi) * random.uniform(
+                    2, 8
+                )  # nosec B311 - mouse path curve simulation, not cryptographic
 
                 x += int(perp_x * curve_amount)
                 y += int(perp_y * curve_amount)
@@ -126,8 +130,8 @@ def humanize_key_press_timing() -> Tuple[float, float]:
         - press_duration: How long the key is held down (0.05-0.12s)
         - release_delay: Delay before next action (0.03-0.08s)
     """
-    press_duration = random.uniform(0.05, 0.12)
-    release_delay = random.uniform(0.03, 0.08)
+    press_duration = random.uniform(0.05, 0.12)  # nosec B311 - key press timing simulation, not cryptographic
+    release_delay = random.uniform(0.03, 0.08)  # nosec B311 - key release timing simulation, not cryptographic
     return (press_duration, release_delay)
 
 
@@ -140,7 +144,7 @@ def should_add_human_pause() -> bool:
     Returns:
         True if a pause should be added (20% chance), False otherwise
     """
-    return random.random() < 0.2
+    return random.random() < 0.2  # nosec B311 - stochastic pause decision for UI humanization, not cryptographic
 
 
 def humanize_pause_duration() -> float:
@@ -150,4 +154,4 @@ def humanize_pause_duration() -> float:
     Returns:
         Random pause between 0.5s and 2.0s
     """
-    return random.uniform(0.5, 2.0)
+    return random.uniform(0.5, 2.0)  # nosec B311 - human thinking pause duration, not cryptographic

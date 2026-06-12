@@ -55,7 +55,7 @@ def execute_code(code: str, timeout_seconds: int = 30) -> Dict[str, Any]:
             tmp.write(code)
             tmp_path = tmp.name
 
-        result = subprocess.run(
+        result = subprocess.run(  # nosec B603 - uses sys.executable; tmp_path is a controlled temp file written by this process
             [sys.executable, tmp_path],
             capture_output=True,
             timeout=timeout_seconds,

@@ -248,7 +248,7 @@ def _should_enforce_by_circuit_breaker() -> bool:
         return True
     if pct <= 0:
         return False
-    return random.randint(1, 100) <= pct
+    return random.randint(1, 100) <= pct  # nosec B311 - percentage-based sampling gate, not cryptographic
 
 
 def _is_rate_limited(ip: str) -> bool:

@@ -45,7 +45,7 @@ def create_device_jwt(
         "user_id": str(user_id),
         "scope": scope,
         "platform": platform,
-        "token_type": "device",
+        "token_type": "device",  # nosec B105 - JWT claim type value, not a credential
         "iat": datetime.datetime.now(tz=timezone.utc).isoformat(),
     }
 
