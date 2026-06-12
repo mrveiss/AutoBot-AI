@@ -14,7 +14,7 @@ from tools.lint.canonical.diagnostic import Diagnostic
 RULE_ID = "sh-echo-debug-smoke"
 ISSUE = "#7458"
 SEVERITY = "warn"
-TARGETS = ["scripts", "tests/lint/canonical/fixtures"]
+TARGETS = ["scripts", "repo_tests/lint/canonical/fixtures"]
 DESCRIPTION = "echo DEBUG: in shell scripts — pipeline smoke-test rule"
 FIX_HINT = "Use a structured logger or remove debug echoes before shipping."
 
