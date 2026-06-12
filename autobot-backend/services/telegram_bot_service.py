@@ -26,7 +26,7 @@ logger = get_logger(__name__)
 TELEGRAM_BOT_TOKEN_KEY = (
     "autobot:settings:telegram_bot_token"  # nosec B105 - Redis key name for storing the token, not the token itself
 )
-TELEGRAM_WEBHOOK_SECRET_KEY = "autobot:settings:telegram_webhook_secret"  # nosec B105 - Redis key name for storing the secret, not the secret itself
+TELEGRAM_WEBHOOK_SECRET_KEY = "autobot:settings:telegram_webhook_secret"  # nosec B105 - Redis key name for storing the
 
 # Sentinel prefix for encrypted values (backward compatibility)
 _ENCRYPTED_PREFIX = "enc:"

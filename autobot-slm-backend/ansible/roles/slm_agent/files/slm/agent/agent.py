@@ -354,8 +354,8 @@ class SLMAgent:
                     ids = [e[0] for e in events]
                     placeholders = ",".join("?" * len(ids))
                     query = (
-                        "UPDATE event_buffer SET synced = 1 " f"WHERE id IN ({placeholders})"
-                    )  # nosec B608 - only dynamic part is count of ? placeholders; ids are bound params
+                        "UPDATE event_buffer SET synced = 1 " f"WHERE id IN ({placeholders})"  # nosec B608 - only
+                    )
                     conn.execute(query, ids)
                     conn.commit()
                     logger.info("Synced %d events", len(events))

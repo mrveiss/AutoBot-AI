@@ -11,6 +11,11 @@ exclude_dirs:
   - reports
   - archive
   - tests
+  # Co-located test files (repo convention: foo_test.py beside foo.py).
+  # Test fixtures legitimately contain dummy passwords/SQL — production
+  # code keeps full per-call-site scanning (#9709).
+  - "*_test.py"
+  - "*/test_*.py"
 
 skips:
   - B101  # assert_used - common in tests

@@ -1617,7 +1617,7 @@ async def _prepare_node_extra_data(node_data: NodeCreate) -> dict | None:
         try:
             return {
                 "ssh_password": encrypt_data(node_data.ssh_password),
-                "ssh_password_encrypted": True,  # nosec B105 - boolean flag, not a password; actual password value is encrypted above
+                "ssh_password_encrypted": True,  # nosec B105 - boolean flag, not a password; actual password value is
             }
         except Exception as e:
             logger.error("Failed to encrypt SSH password: %s", e)

@@ -242,18 +242,18 @@ class LLMProviderMetricsRecorder(BaseMetricsRecorder):
         output_tokens: int,
     ) -> None:
         """Record token usage for a request."""
-        self.tokens_total.labels(provider=provider, model=model, token_type="input").inc(
+        self.tokens_total.labels(provider=provider, model=model, token_type="input").inc(  # nosec B106 - Prometheus
             input_tokens
-        )  # nosec B106 - Prometheus label value for LLM token direction, not a credential
-        self.tokens_total.labels(provider=provider, model=model, token_type="output").inc(
+        )
+        self.tokens_total.labels(provider=provider, model=model, token_type="output").inc(  # nosec B106 - Prometheus
             output_tokens
-        )  # nosec B106 - Prometheus label value for LLM token direction, not a credential
-        self.tokens_per_request.labels(provider=provider, model=model, token_type="input").observe(
-            input_tokens
-        )  # nosec B106 - Prometheus label value, not a credential
-        self.tokens_per_request.labels(provider=provider, model=model, token_type="output").observe(
-            output_tokens
-        )  # nosec B106 - Prometheus label value, not a credential
+        )
+        self.tokens_per_request.labels(  # nosec B106 - Prometheus label value, not a credential
+            provider=provider, model=model, token_type="input"
+        ).observe(input_tokens)
+        self.tokens_per_request.labels(  # nosec B106 - Prometheus label value, not a credential
+            provider=provider, model=model, token_type="output"
+        ).observe(output_tokens)
 
     def set_context_window_usage(self, provider: str, model: str, usage_percent: float) -> None:
         """Set context window usage percentage."""

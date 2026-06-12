@@ -236,7 +236,7 @@ class SecretUsage(BaseModel):
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
-                "secret_id": "660e8400-e29b-41d4-a716-446655440001",  # nosec B105 - UUID example value in JSON schema, not a real secret
+                "secret_id": "660e8400-e29b-41d4-a716-446655440001",  # nosec B105 - UUID example value in JSON schema,
                 "user_id": "550e8400-e29b-41d4-a716-446655440000",
                 "activity_type": "terminal",
                 "activity_id": "770e8400-e29b-41d4-a716-446655440002",

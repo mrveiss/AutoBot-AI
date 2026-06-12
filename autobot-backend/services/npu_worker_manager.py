@@ -633,8 +633,8 @@ class NPUWorkerManager(AsyncInitializable):
 
                 # Jitter: ±20 % of base_interval
                 jitter = (
-                    base_interval * 0.2 * (random.random() * 2 - 1)
-                )  # nosec B311 - interval jitter to prevent thundering herd, not cryptographic
+                    base_interval * 0.2 * (random.random() * 2 - 1)  # nosec B311 - interval jitter to prevent
+                )
                 await asyncio.sleep(max(base_interval + jitter, 60))
 
             except asyncio.CancelledError:

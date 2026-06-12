@@ -130,8 +130,8 @@ class RetryMechanism:
             delay = self.config.base_delay * (self.config.backoff_multiplier ** (attempt - 1))
             # Add random jitter ±20%
             jitter_factor = (
-                1.0 + (random.random() - 0.5) * 0.4
-            )  # nosec B311 - backoff jitter to prevent thundering herd, not cryptographic
+                1.0 + (random.random() - 0.5) * 0.4  # nosec B311 - backoff jitter to prevent thundering herd, not
+            )
             delay *= jitter_factor
         else:
             delay = self.config.base_delay
@@ -139,8 +139,8 @@ class RetryMechanism:
         # Apply jitter if enabled and not using jittered backoff
         if self.config.jitter and self.config.strategy != RetryStrategy.JITTERED_BACKOFF:
             jitter_factor = (
-                1.0 + (random.random() - 0.5) * 0.2
-            )  # nosec B311 - delay jitter to prevent thundering herd, not cryptographic
+                1.0 + (random.random() - 0.5) * 0.2  # nosec B311 - delay jitter to prevent thundering herd, not
+            )
             delay *= jitter_factor
 
         # Ensure delay doesn't exceed maximum

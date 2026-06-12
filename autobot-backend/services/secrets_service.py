@@ -465,7 +465,7 @@ class SecretsService:
         params.append(now_utc().isoformat())
         params.append(secret_id)
 
-        query = f"UPDATE secrets SET {', '.join(updates)} WHERE id = ? AND is_active = 1"  # nosec B608 - column names from _build_update_params are hardcoded string literals
+        query = f"UPDATE secrets SET {', '.join(updates)} WHERE id = ? AND is_active = 1"  # nosec B608 - column names
 
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()

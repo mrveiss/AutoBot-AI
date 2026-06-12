@@ -917,8 +917,8 @@ class WebResearcher:
     async def _random_delay(self, min_seconds: float, max_seconds: float):
         """Add random delay to mimic human behavior."""
         await asyncio.sleep(
-            random.uniform(min_seconds, max_seconds)
-        )  # nosec B311 - human behavior simulation delay, not cryptographic
+            random.uniform(min_seconds, max_seconds)  # nosec B311 - human behavior simulation delay, not cryptographic
+        )
 
     # -------------------------------------------------------------------
     # Orchestrated research (from WebResearchIntegration)

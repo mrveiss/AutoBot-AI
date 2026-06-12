@@ -57,8 +57,8 @@ class TestRAGQueryBenchmarks:
         """Generate mock embedding vectors"""
         # Simulate 384-dimensional embeddings (all-MiniLM-L6-v2 style)
         return [
-            [random.random() for _ in range(384)] for _ in range(100)
-        ]  # nosec B311 - mock embedding vectors for benchmarks, not cryptographic
+            [random.random() for _ in range(384)] for _ in range(100)  # nosec B311 - mock embedding vectors for
+        ]
 
     @pytest.fixture
     def mock_documents(self):
@@ -69,8 +69,8 @@ class TestRAGQueryBenchmarks:
                 "content": f"This is test document {i} with some content for testing RAG retrieval performance.",
                 "metadata": {"source": "test", "page": i},
                 "embedding": [
-                    random.random() for _ in range(384)
-                ],  # nosec B311 - mock embedding for benchmark, not cryptographic
+                    random.random() for _ in range(384)  # nosec B311 - mock embedding for benchmark, not cryptographic
+                ],
             }
             for i in range(1000)
         ]
@@ -80,8 +80,8 @@ class TestRAGQueryBenchmarks:
         import numpy as np
 
         query_vector = np.array(
-            [random.random() for _ in range(384)]
-        )  # nosec B311 - mock query vector for benchmark, not cryptographic
+            [random.random() for _ in range(384)]  # nosec B311 - mock query vector for benchmark, not cryptographic
+        )
         doc_vectors = np.array(mock_embeddings[:50])
 
         def compute_similarity():
@@ -114,8 +114,8 @@ class TestRAGQueryBenchmarks:
         import random
 
         query_vector = [
-            random.random() for _ in range(384)
-        ]  # nosec B311 - mock query vector for benchmark, not cryptographic
+            random.random() for _ in range(384)  # nosec B311 - mock query vector for benchmark, not cryptographic
+        ]
         documents = mock_documents
 
         def retrieve_top_k(k=5):

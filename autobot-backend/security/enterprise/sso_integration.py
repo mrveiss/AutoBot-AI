@@ -202,7 +202,7 @@ class SSOIntegrationFramework:
             # OAuth2/OpenID Connect configuration
             "oauth2": {
                 "default_scope": ["openid", "profile", "email"],
-                "token_endpoint_auth_method": "client_secret_post",  # nosec B105 - OAuth2 protocol parameter name, not a secret
+                "token_endpoint_auth_method": "client_secret_post",  # nosec B105 - OAuth2 protocol parameter name, not
                 "response_type": "code",
                 "grant_type": "authorization_code",
             },

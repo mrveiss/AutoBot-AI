@@ -168,7 +168,7 @@ class TaskStorage:
         if not set_clauses:
             return False
 
-        query = f"UPDATE task_execution_history SET {', '.join(set_clauses)} WHERE task_id = ?"  # nosec B608 - column names from static allowlist (_DIRECT_FIELDS/_ENUM_FIELDS/_JSON_FIELDS)
+        query = f"UPDATE task_execution_history SET {', '.join(set_clauses)} WHERE task_id = ?"  # nosec B608 - column
         values.append(task_id)
 
         try:

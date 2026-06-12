@@ -301,7 +301,7 @@ def _git_add_worktree(root: Path, workspace_dir: Path, branch: str) -> None:
         # Branch already exists from a previous partial allocation — reuse it
         if "already exists" in stderr:
             try:
-                subprocess.run(  # nosec B603 B607 - fixed git argv; branch and workspace_dir are validated Path/str values
+                subprocess.run(  # nosec B603 B607 - fixed git argv; branch and workspace_dir are validated Path/str
                     ["git", "worktree", "add", str(workspace_dir), branch],
                     cwd=str(root),
                     check=True,
