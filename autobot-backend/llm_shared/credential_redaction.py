@@ -66,6 +66,9 @@ def redact_string(text: str) -> str:
 def redact_dict(data: Dict[str, Any]) -> Dict[str, Any]:
     """Redact sensitive values from a dictionary.
 
+    Recursively handles nested dicts and lists (M6 fix — lists were previously
+    left untraversed, leaking credentials embedded in list elements).
+
     Args:
         data: Dictionary that may contain sensitive keys.
 
@@ -84,12 +87,30 @@ def redact_dict(data: Dict[str, Any]) -> Dict[str, Any]:
         elif isinstance(value, dict):
             # Recursively redact nested dicts
             redacted[key] = redact_dict(value)
+        elif isinstance(value, list):
+            # Recurse into list elements (M6: previously unhandled)
+            redacted[key] = _redact_list(value)
         elif isinstance(value, str):
             # Redact any API keys in string values
             redacted[key] = redact_string(value)
         else:
             redacted[key] = value
     return redacted
+
+
+def _redact_list(items: list) -> list:
+    """Recursively redact list elements that are dicts or strings."""
+    result = []
+    for item in items:
+        if isinstance(item, dict):
+            result.append(redact_dict(item))
+        elif isinstance(item, list):
+            result.append(_redact_list(item))
+        elif isinstance(item, str):
+            result.append(redact_string(item))
+        else:
+            result.append(item)
+    return result
 
 
 def safe_repr(obj: Any, max_depth: int = 3) -> str:
@@ -152,6 +173,7 @@ __all__ = [
     "redact_api_key",
     "redact_string",
     "redact_dict",
+    "_redact_list",
     "safe_repr",
     "CredentialRedactionFilter",
 ]

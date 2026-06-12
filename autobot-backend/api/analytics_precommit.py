@@ -102,7 +102,7 @@ _config_lock = threading.Lock()
 def get_staged_files() -> list[str]:
     """Get list of staged files from git."""
     try:
-        result = subprocess.run(  # nosec B607
+        result = subprocess.run(  # nosec B603 B607 - fixed argv, no user input
             ["git", "diff", "--cached", "--name-only", "--diff-filter=ACMR"],
             capture_output=True,
             text=True,
@@ -120,7 +120,7 @@ def get_file_content(filepath: str) -> str | None:
     """Get content of a file."""
     try:
         # Try to get staged content first
-        result = subprocess.run(  # nosec B607
+        result = subprocess.run(  # nosec B603 B607 - fixed argv, no user input
             ["git", "show", f":{filepath}"],
             capture_output=True,
             text=True,
@@ -659,7 +659,7 @@ async def get_summary(
     if total_checks == 0:
         return {
             "total_runs": 0,
-            "pass_rate": 0,
+            "pass_rate": 0,  # nosec B105 - dict key 'pass_rate' with numeric value, not a password
             "average_duration_ms": 0,
             "common_issues": [],
         }

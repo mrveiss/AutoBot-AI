@@ -168,7 +168,7 @@ class TaskStorage:
         if not set_clauses:
             return False
 
-        query = f"UPDATE task_execution_history SET {', '.join(set_clauses)} WHERE task_id = ?"
+        query = f"UPDATE task_execution_history SET {', '.join(set_clauses)} WHERE task_id = ?"  # nosec B608 - column
         values.append(task_id)
 
         try:
@@ -231,7 +231,7 @@ class TaskStorage:
             {where_clause}
             ORDER BY created_at DESC
             LIMIT ?
-        """
+        """  # nosec B608 - where_clause built from hardcoded literal strings; only values parameterized
         values.append(limit)
 
         try:

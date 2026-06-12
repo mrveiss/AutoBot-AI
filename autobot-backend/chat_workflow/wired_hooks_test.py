@@ -42,8 +42,8 @@ from chat_workflow.session_handler import (
     _emit_session_create,
     _emit_session_destroy,
 )
-from extensions.base import Extension, HookContext
-from extensions.manager import get_extension_manager, reset_extension_manager
+from middleware.base import Extension, HookContext
+from middleware.manager import get_extension_manager, reset_extension_manager
 
 
 class _TrackingExtension(Extension):

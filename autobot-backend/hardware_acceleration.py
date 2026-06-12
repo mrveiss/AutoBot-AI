@@ -139,7 +139,9 @@ class HardwareAccelerationManager:
     def _check_npu_via_lspci(self) -> bool:
         """Check for NPU hardware via lspci command."""
         try:
-            result = subprocess.run(["lspci"], capture_output=True, text=True, timeout=5)  # nosec B607 - lspci is safe
+            result = subprocess.run(
+                ["lspci"], capture_output=True, text=True, timeout=5
+            )  # nosec B603 B607 - fixed lspci argv, no user input
             if result.returncode == 0:
                 output = result.stdout.lower()
                 if any(keyword in output for keyword in NPU_HARDWARE_KEYWORDS):
@@ -168,7 +170,7 @@ class HardwareAccelerationManager:
     def _check_nvidia_gpu(self) -> bool:
         """Check for NVIDIA GPU via nvidia-smi. Issue #620."""
         try:
-            result = subprocess.run(  # nosec B607 - nvidia-smi is safe
+            result = subprocess.run(  # nosec B603 B607 - fixed nvidia-smi argv, no user input
                 ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
                 capture_output=True,
                 text=True,
@@ -184,7 +186,7 @@ class HardwareAccelerationManager:
     def _check_amd_gpu(self) -> bool:
         """Check for AMD GPU via rocm-smi. Issue #620."""
         try:
-            result = subprocess.run(  # nosec B607 - rocm-smi is safe
+            result = subprocess.run(  # nosec B603 B607 - fixed rocm-smi argv, no user input
                 ["rocm-smi", "--showproductname"],
                 capture_output=True,
                 text=True,
@@ -200,7 +202,7 @@ class HardwareAccelerationManager:
     def _check_intel_gpu(self) -> bool:
         """Check for Intel GPU via intel_gpu_top. Issue #620."""
         try:
-            result = subprocess.run(  # nosec B607 - intel_gpu_top is safe
+            result = subprocess.run(  # nosec B603 B607 - fixed intel_gpu_top argv, no user input
                 ["intel_gpu_top", "-l"], capture_output=True, text=True, timeout=3
             )
             if result.returncode == 0:
@@ -213,7 +215,7 @@ class HardwareAccelerationManager:
     def _check_gpu_via_lspci(self) -> bool:
         """Check for GPU hardware via lspci command. Issue #620."""
         try:
-            result = subprocess.run(  # nosec B607 - lspci is safe
+            result = subprocess.run(  # nosec B603 B607 - fixed lspci argv, no user input
                 ["lspci", "-nn"], capture_output=True, text=True, timeout=5
             )
             if result.returncode == 0:
@@ -291,7 +293,7 @@ class HardwareAccelerationManager:
         }
 
         try:
-            result = subprocess.run(  # nosec B607 - nvidia-smi is safe
+            result = subprocess.run(  # nosec B603 B607 - fixed nvidia-smi argv, no user input
                 [
                     "nvidia-smi",
                     "--query-gpu=name,memory.total",
@@ -647,7 +649,7 @@ class HardwareAccelerationManager:
         # Add GPU status if available (Issue #315: uses helper for parsing)
         if self.gpu_available:
             try:
-                result = subprocess.run(  # nosec B607 - nvidia-smi is safe
+                result = subprocess.run(  # nosec B603 B607 - fixed nvidia-smi argv, no user input
                     [
                         "nvidia-smi",
                         "--query-gpu=utilization.gpu,memory.used,memory.total",

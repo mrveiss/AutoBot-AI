@@ -26,8 +26,9 @@ _RELATED_COMMAND_RE = re.compile(r"\b(\w+)\(\d+\)")
 _OPTION_LINE_RE = re.compile(r"^\s*(-\w|--\w+)")
 _OPTION_EXTRACT_RE = re.compile(r"^\s*((?:-\w|--\w+)(?:\s*,\s*(?:-\w|--\w+))*)")
 _SECTION_NUMBER_RE = re.compile(r"\((\d+)\)")
-# Allowlist pattern for command names passed to subprocess (Issue #1733)
-_VALID_COMMAND_NAME_RE = re.compile(r"^[a-zA-Z0-9_.+-]+$")
+# Allowlist pattern for command names passed to subprocess (Issue #1733).
+# First char must not be '-' so a name can never be parsed as an option.
+_VALID_COMMAND_NAME_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_.+-]*$")
 
 
 @dataclass
@@ -722,7 +723,9 @@ class CommandManualManager:
             return None
 
         try:
-            result = subprocess.run(["man", command_name], capture_output=True, text=True, timeout=10)
+            result = subprocess.run(
+                ["man", command_name], capture_output=True, text=True, timeout=10
+            )  # nosec B603 B607 - command_name validated by _VALID_COMMAND_NAME_RE above
 
             if result.returncode == 0:
                 return result.stdout

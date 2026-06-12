@@ -373,7 +373,7 @@ class PrecommitAnalyzer:
     def get_staged_files(self) -> List[str]:
         """Get list of files staged for commit."""
         try:
-            result = subprocess.run(  # nosec B607 - git command is safe
+            result = subprocess.run(  # nosec B603 B607 - fixed git argv, no user input
                 ["git", "diff", "--cached", "--name-only", "--diff-filter=ACMR"],
                 capture_output=True,
                 text=True,
@@ -391,7 +391,7 @@ class PrecommitAnalyzer:
         """Get content of a staged file."""
         try:
             # Try to get staged content first (what will be committed)
-            result = subprocess.run(  # nosec B607 - git command is safe
+            result = subprocess.run(  # nosec B603 B607 - fixed git argv, no user input
                 ["git", "show", f":{filepath}"],
                 capture_output=True,
                 text=True,

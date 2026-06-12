@@ -17,14 +17,14 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from extensions.base import Extension, HookContext
-from extensions.hook_invoker import (
+from middleware.base import Extension, HookContext
+from middleware.hook_invoker import (
     HookInvocationConfig,
     HookInvoker,
     InvocationMode,
 )
-from extensions.hooks import HookPoint
-from extensions.manager import ExtensionManager, reset_extension_manager
+from middleware.hooks import HookPoint
+from middleware.manager import ExtensionManager, reset_extension_manager
 
 
 class TestHookInvocationConfig:

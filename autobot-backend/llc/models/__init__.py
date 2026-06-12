@@ -42,6 +42,7 @@ from .enums import (
 from .goal import GoalLevel, GoalStatus, LLCGoal
 from .heartbeat_run import LLCHeartbeatRun
 from .membership import LLCCompanyMembership
+from .replay_log import LLCRunReplayLog
 from .review_gate import LLCReviewGatePolicy
 from .secret import LLCSecret
 from .sprint import LLCPortfolio, LLCProgram, LLCProject, LLCSprint
@@ -71,6 +72,7 @@ __all__ = [
     "LLCAgentStatus",
     "HeartbeatInvocationSource",
     "LLCHeartbeatRun",
+    "LLCRunReplayLog",
     "LLCApproval",
     "LLCBase",
     "LLCBoard",

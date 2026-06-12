@@ -775,8 +775,8 @@ def _extract_class_info(node: ast.ClassDef) -> Dict:
 DEFAULT_HARDCODE_SEVERITY: Dict[str, str] = {
     "ip": "high",
     "api_key": "high",
-    "password": "high",
-    "secret": "high",
+    "password": "high",  # nosec B105 - dict mapping security field names to severity labels, not a password
+    "secret": "high",  # nosec B105 - dict mapping security field names to severity labels, not a secret
     "port": "medium",
     "url": "medium",
     "api_path": "low",

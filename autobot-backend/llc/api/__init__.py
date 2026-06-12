@@ -25,6 +25,7 @@ from .goals import router as goals_router
 from .health import router as health_router
 from .labels import router as labels_router
 from .portability import router as portability_router
+from .replay import router as replay_router
 from .review_gate_policies import router as review_gate_router
 from .routines import router as routines_router
 from .runs import heartbeat_runs_router
@@ -55,6 +56,7 @@ router.include_router(agents_router)
 router.include_router(agent_wiki_router)
 router.include_router(runs_router)
 router.include_router(heartbeat_runs_router)
+router.include_router(replay_router)
 router.include_router(ceo_chat_router)
 router.include_router(decisions_router)
 router.include_router(routines_router)

@@ -126,8 +126,8 @@ class RLRouter(AsyncRedisClientMixin):
 
         import random
 
-        if random.random() < epsilon:
-            agent_id = random.choice(available_agents)
+        if random.random() < epsilon:  # nosec B311 - RL epsilon-greedy exploration, not cryptographic
+            agent_id = random.choice(available_agents)  # nosec B311 - non-crypto random selection for RL
             logger.debug("RL explore: state=%s agent=%s eps=%.3f", state_key, agent_id, epsilon)
         else:
             agent_id = await self._greedy_select(state_key, available_agents)
@@ -247,7 +247,7 @@ class RLRouter(AsyncRedisClientMixin):
                 best_agents = [agent]
             elif q == best_q:
                 best_agents.append(agent)
-        return random.choice(best_agents)
+        return random.choice(best_agents)  # nosec B311 - RL tie-breaking selection, not cryptographic
 
     async def _agent_confidence(self, state_key: str, agent_id: str) -> float:
         """Map Q-value to confidence in [0.6, 1.0]."""
