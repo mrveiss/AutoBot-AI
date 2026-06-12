@@ -34,8 +34,10 @@ Usage::
 from __future__ import annotations
 
 import functools
-from typing import AsyncGenerator, Callable, Type, TypeVar
+import uuid
+from typing import AsyncGenerator, Callable, Set, Type, TypeVar
 
+from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.singleton_factory import lazy_singleton
@@ -88,4 +90,35 @@ def service_dep(service_cls: Type[_T]) -> Callable[[], _T]:
     return _dep
 
 
-__all__ = ["get_session", "service_dep"]
+async def require_board_role(
+    company_id: uuid.UUID,
+    current_user: dict,
+    session: AsyncSession,
+    allowed_roles: Set[str],
+    membership_svc: object,
+    detail: str = "Insufficient board role for this operation",
+) -> str:
+    """Raise 403 unless caller holds one of *allowed_roles* in *company_id*.
+
+    Canonical implementation shared by controls.py and replay.py (M7).
+    Returns the actor user_id string for activity log use.
+    """
+    user_id = current_user.get("id") or current_user.get("user_id")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    try:
+        members = await membership_svc.list_members(session, str(company_id))  # type: ignore[attr-defined]
+        role = next(
+            (m.role for m in members if str(m.user_id) == str(user_id)),
+            None,
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Membership lookup failed: {exc}") from exc
+
+    if role not in allowed_roles:
+        raise HTTPException(status_code=403, detail=detail)
+    return str(user_id)
+
+
+__all__ = ["get_session", "require_board_role", "service_dep"]

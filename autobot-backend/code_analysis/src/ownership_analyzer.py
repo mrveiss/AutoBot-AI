@@ -350,7 +350,7 @@ class OwnershipAnalyzer:
         try:
             relative_path = str(file_path.relative_to(root))
 
-            result = subprocess.run(
+            result = subprocess.run(  # nosec B603 B607 - fixed git argv; file_path is a Path object, no shell
                 ["git", "blame", "--line-porcelain", str(file_path)],
                 capture_output=True,
                 text=True,

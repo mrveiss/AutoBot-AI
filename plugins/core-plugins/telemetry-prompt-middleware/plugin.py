@@ -27,7 +27,7 @@ from typing import Dict, Optional
 
 import aiohttp
 
-from extensions.base import Extension, HookContext
+from middleware.base import Extension, HookContext
 
 logger = logging.getLogger(__name__)
 

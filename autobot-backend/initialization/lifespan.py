@@ -162,11 +162,20 @@ async def _init_cache_coordinator() -> None:
 
 
 async def _init_skills_tables() -> None:
-    """Create skills system tables if they don't exist."""
+    """Create skills system tables if they don't exist.
+
+    The skills database is a local SQLite data file (skills/db.py), which the
+    app owns — Alembic does not manage it. The guard keeps this call from
+    ever building schema on a migration-managed database (#10001 Phase C):
+    if the skills engine moves off SQLite, schema must come from migrations
+    or an explicit AUTOBOT_DB_CREATE_ALL=true development opt-in.
+    """
+    from migrations.schema_bootstrap import ensure_create_all_allowed
     from skills.db import get_skills_engine
     from skills.models import SkillsBase
 
     engine = get_skills_engine()
+    ensure_create_all_allowed(engine.dialect.name)
     async with engine.begin() as conn:
         await conn.run_sync(SkillsBase.metadata.create_all)
     logger.info("Skills tables initialized")

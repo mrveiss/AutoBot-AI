@@ -196,7 +196,7 @@ jobs:
         # See docs/developer/plugin-boundaries.md and
         #     security/semgrep/extension-import-boundaries.yaml
         # Scans only tracked source directories — no user-supplied input.
-        find autobot-backend/extensions/builtin \
+        find autobot-backend/middleware/builtin \
              autobot-backend/skills/builtin \
              plugins/core-plugins \
              -name "*.py" -print0 \

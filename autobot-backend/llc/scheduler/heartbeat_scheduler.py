@@ -53,6 +53,7 @@ from ..exceptions import AdapterRunFailed, ProviderRateLimited
 from ..models.enums import HeartbeatInvocationSource, LLCRunStatus
 from ..models.heartbeat_run import LLCHeartbeatRun
 from ..services.api_key import ApiKeyService
+from ..services.replay_service import RunReplayService, parse_jsonl_events
 
 logger = logging.getLogger(__name__)
 
@@ -484,9 +485,10 @@ class HeartbeatScheduler:
         error_msg: Optional[str] = None
         final_status = LLCRunStatus.COMPLETED.value
         rate_limited_exc: Optional[ProviderRateLimited] = None
+        external_run_id: Optional[str] = None
 
         try:
-            await _dispatch_adapter(agent, context)
+            external_run_id = await _dispatch_adapter(agent, context)
         except ProviderRateLimited as exc:
             rate_limited_exc = exc
         except Exception as exc:
@@ -517,6 +519,15 @@ class HeartbeatScheduler:
                 await session.commit()
         except Exception:
             logger.exception("Could not write final status for run %s", run_id)
+
+        # GH#9034: fire-and-forget replay recording — must never affect run status.
+        # Pass external_run_id so the recording locates the exact output file (H1).
+        _record_task = asyncio.create_task(
+            _record_run_for_replay(agent, run_id, context, final_status, external_run_id=external_run_id),
+            name=f"replay-record-{run_id}",
+        )
+        self._tasks.add(_record_task)
+        _record_task.add_done_callback(self._tasks.discard)
 
     async def _handle_rate_limited(
         self,
@@ -632,6 +643,72 @@ def get_heartbeat_scheduler() -> HeartbeatScheduler:
 # ------------------------------------------------------------------
 
 
+async def _record_run_for_replay(
+    agent: Dict[str, Any],
+    run_id: uuid.UUID,
+    context: Dict[str, Any],
+    final_status: str,
+    *,
+    external_run_id: Optional[str] = None,
+) -> None:
+    """Best-effort replay recording fired after a run reaches terminal status (GH#9034).
+
+    For subprocess adapters the JSONL output file is resolved via the adapter's
+    ``_output_path`` helper using the exact ``external_run_id`` returned by
+    ``adapter.invoke`` — no mtime glob, no concurrent-run collision (H1 fix).
+    For in-process agents there is no file; recorded_events is stored as None.
+    Any exception is swallowed so the scheduler is never blocked.
+    """
+    import asyncio as _asyncio
+    import os as _os
+
+    try:
+        output_text: Optional[str] = None
+        recorded_events = None
+
+        adapter_type = agent.get("adapter_type") or "autobot_agent"
+        if adapter_type != "autobot_agent" and external_run_id is not None:
+            # Resolve the exact output file via the adapter's own path helper.
+            cfg = agent.get("adapter_config") or {}
+            output_dir: str = cfg.get("output_dir", "/tmp")  # nosec B108
+            agent_id_str = str(agent.get("agent_id", ""))
+            output_file: Optional[str] = None
+            try:
+                from ..adapters.claude_code_adapter import _output_path as _cc_output_path
+
+                output_file = _cc_output_path(output_dir, agent_id_str, external_run_id)
+            except ImportError:
+                pass
+
+            if output_file and _os.path.exists(output_file):
+                try:
+                    raw: str = await _asyncio.to_thread(_read_file_text, output_file)
+                    from ..services.replay_service import _REPLAY_OUTPUT_CAP
+
+                    output_text = raw[-_REPLAY_OUTPUT_CAP:] if len(raw) > _REPLAY_OUTPUT_CAP else raw
+                    recorded_events = parse_jsonl_events(raw)
+                except OSError:
+                    pass
+
+        svc = RunReplayService()
+        await svc.record_run(
+            run_id=run_id,
+            agent=agent,
+            context=context,
+            final_status=final_status,
+            output_text=output_text,
+            recorded_events=recorded_events,
+        )
+    except Exception:
+        logger.exception("_record_run_for_replay: unexpected error for run %s", run_id)
+
+
+def _read_file_text(path: str) -> str:
+    """Read a file as text — runs in a thread via asyncio.to_thread (M4)."""
+    with open(path, encoding="utf-8", errors="replace") as fh:
+        return fh.read()
+
+
 def _next_fire(cron_expr: str, base_ts: float) -> float:
     """Return the next scheduled epoch (float) after *base_ts*."""
     if _croniter_cls is None:
@@ -641,8 +718,11 @@ def _next_fire(cron_expr: str, base_ts: float) -> float:
     return itr.get_next(float)
 
 
-async def _dispatch_adapter(agent: Dict[str, Any], context: Dict[str, Any]) -> None:
+async def _dispatch_adapter(agent: Dict[str, Any], context: Dict[str, Any]) -> Optional[str]:
     """Route the heartbeat to the adapter configured for this agent.
+
+    Returns the external_run_id produced by the adapter (for subprocess adapters),
+    or None for in-process / skipped dispatches.
 
     ``autobot_agent`` agents run in-process via :class:`AutoBotAgentAdapter`
     (GH#8490).  Every other ``adapter_type`` resolves through the adapter
@@ -661,7 +741,7 @@ async def _dispatch_adapter(agent: Dict[str, Any], context: Dict[str, Any]) -> N
 
     if adapter_type == "autobot_agent":
         await _dispatch_autobot_agent(agent, context)
-        return
+        return None
 
     try:
         adapter = get_adapter(adapter_type)
@@ -671,7 +751,7 @@ async def _dispatch_adapter(agent: Dict[str, Any], context: Dict[str, Any]) -> N
             agent["agent_id"],
             adapter_type,
         )
-        return
+        return None
 
     # GH#9793: skip dispatch when the required CLI binary is absent from PATH.
     # Converts every-heartbeat FAILED runs into a clean degraded state.
@@ -682,9 +762,9 @@ async def _dispatch_adapter(agent: Dict[str, Any], context: Dict[str, Any]) -> N
             adapter_type,
             adapter._required_cli,  # type: ignore[union-attr]
         )
-        return
+        return None
 
-    await _dispatch_registry_adapter(adapter, agent, context)
+    return await _dispatch_registry_adapter(adapter, agent, context)
 
 
 async def _dispatch_autobot_agent(agent: Dict[str, Any], context: Dict[str, Any]) -> None:
@@ -705,8 +785,11 @@ async def _dispatch_autobot_agent(agent: Dict[str, Any], context: Dict[str, Any]
     await adapter.run_blocking(dict(context, agent_id=agent["agent_id"]))
 
 
-async def _dispatch_registry_adapter(adapter: Any, agent: Dict[str, Any], context: Dict[str, Any]) -> None:
+async def _dispatch_registry_adapter(adapter: Any, agent: Dict[str, Any], context: Dict[str, Any]) -> Optional[str]:
     """Invoke a registry adapter, manage its run-scoped key, await completion.
+
+    Returns the external_run_id string produced by ``adapter.invoke`` so callers
+    can resolve the exact output file (H1 fix — no mtime glob needed).
 
     Issues an ephemeral LLC API key scoped to this agent (GH#9623), injects it
     plus the API base URL into the context so the adapter forwards them to the
@@ -764,6 +847,8 @@ async def _dispatch_registry_adapter(adapter: Any, agent: Dict[str, Any], contex
     # run as FAILED (and the liveness monitor can act) instead of COMPLETED.
     if final_status != LLCRunStatus.COMPLETED:
         raise AdapterRunFailed(agent.get("adapter_type") or "", str(external_run_id), final_status)
+
+    return external_run_id
 
 
 async def _safe_cancel(adapter: Any, agent_config: Dict[str, Any], run_id: str) -> None:
