@@ -26,7 +26,7 @@ logger = get_logger(__name__)
 # Canonical singleton; avoids routing through config/__init__ lazy alias (Issue #3829)
 config_manager = _get_config_manager()
 
-_INSERT_SECRET_SQL = (
+_INSERT_SECRET_SQL = (  # nosec B105 - parameterized SQL constant for INSERT; all values bound via ? placeholders
     "INSERT INTO secrets ("
     "id, name, description, secret_type, encrypted_value, "
     "scope, chat_id, created_at, updated_at, expires_at, created_by, metadata"
@@ -465,7 +465,7 @@ class SecretsService:
         params.append(now_utc().isoformat())
         params.append(secret_id)
 
-        query = f"UPDATE secrets SET {', '.join(updates)} WHERE id = ? AND is_active = 1"
+        query = f"UPDATE secrets SET {', '.join(updates)} WHERE id = ? AND is_active = 1"  # nosec B608 - column names
 
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()

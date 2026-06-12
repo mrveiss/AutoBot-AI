@@ -50,7 +50,7 @@ class PIIAction(str, Enum):
     BLOCK = "block"  # Reject the entire outbound send
     REDACT = "redact"  # Replace with [REDACTED:type]
     HASH = "hash"  # Replace with SHA-256 prefix (non-reversible)
-    PASS = "pass"  # Allow through unchanged (opt-out)
+    PASS = "pass"  # nosec B105 - enum value for PII handling policy, not a password
 
 
 class PIIType(str, Enum):
@@ -66,7 +66,7 @@ class PIIType(str, Enum):
     INTERNAL_HOSTNAME = "INTERNAL_HOSTNAME"
     CUSTOMER_ID = "CUSTOMER_ID"
     HIGH_ENTROPY_STRING = "HIGH_ENTROPY_STRING"
-    BEARER_TOKEN = "BEARER_TOKEN"
+    BEARER_TOKEN = "BEARER_TOKEN"  # nosec B105 - enum value for PII type, not a credential
     PRIVATE_IP = "PRIVATE_IP"
 
 
