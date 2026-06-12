@@ -27,7 +27,8 @@ logger = get_logger(__name__)
 
 # Regex for validating command names passed to subprocess (Issue #1733).
 # Man page command names contain only alphanumeric, hyphen, underscore, dot, plus.
-_VALID_COMMAND_RE = re.compile(r"^[a-zA-Z0-9_.+-]+$")
+# First char must not be '-' so a name can never be parsed as an option.
+_VALID_COMMAND_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_.+-]*$")
 # Man page sections are single digits, optionally followed by a letter.
 _VALID_SECTION_RE = re.compile(r"^[0-9][a-zA-Z]?$")
 

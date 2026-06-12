@@ -385,7 +385,13 @@ class FastDocumentScanner:
                     ],
                 )
             )
+        except ValueError as validation_error:
+            # Path validation failure must abort — never degrade to the
+            # subprocess fallback with an unvalidated input
+            logger.warning("Path validation failed for %s: %s", file_path, validation_error)
+            return None
 
+        try:
             # Try reading file directly (handles .gz)
             if safe_path.endswith(".gz"):
                 with gzip.open(safe_path, "rt", encoding="utf-8", errors="ignore") as f:  # codeql[py/path-injection]
