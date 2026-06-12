@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.4.1] - 2026-06-13
+
+### Added
+
+- **Release & Changelog Workflow** ([docs/developer/RELEASE_WORKFLOW.md](../developer/RELEASE_WORKFLOW.md))
+  - Documents how root `CHANGELOG.md` is generated (git-cliff via `release.yml`), where fragments live, and the #9870 root cause that left it stale for ~3 months.
+
+### Fixed
+
+- Root `CHANGELOG.md` `[Unreleased]` staleness ([1.4.0] known gap) audited and resolved (#9870): `release.yml` read an always-empty action output for `--bumped-version`, silently skipping every release; workflow fixed, stale block replaced with an honest note pending next regeneration.
+
+---
+
 ## [1.4.0] - 2026-05-10
 
 ### Added

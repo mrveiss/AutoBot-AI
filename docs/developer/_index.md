@@ -93,6 +93,7 @@ aliases:
 | Document | Description |
 | --- | --- |
 | [INFRASTRUCTURE_DEPLOYMENT](INFRASTRUCTURE_DEPLOYMENT.md) | Deployment guide |
+| [RELEASE_WORKFLOW](RELEASE_WORKFLOW.md) | Release tagging + changelog generation (git-cliff, fragments, release.yml) |
 | [SERVICE_MANAGEMENT](SERVICE_MANAGEMENT.md) | Service management |
 | [ANSIBLE_CREDENTIAL_SECURITY](ANSIBLE_CREDENTIAL_SECURITY.md) | Ansible credential security |
 | [OPENVINO_SETUP](OPENVINO_SETUP.md) | OpenVINO setup |
