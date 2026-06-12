@@ -14,6 +14,7 @@ aliases:
 | --- | --- |
 | [TESTING_FRAMEWORK_SUMMARY](TESTING_FRAMEWORK_SUMMARY.md) | Testing framework summary |
 | [TEST_UTILITIES_MIGRATION_GUIDE](TEST_UTILITIES_MIGRATION_GUIDE.md) | Test utilities migration |
+| [ASYNC_REDIS_FIXTURES](ASYNC_REDIS_FIXTURES.md) | Canonical `make_async_redis()` / `patch_async_redis()` fixtures for mocking async Redis |
 | [PREFERENCES_TESTING_GUIDE](PREFERENCES_TESTING_GUIDE.md) | Preferences testing guide |
 | [TESTING_MESSAGE_TOGGLES](TESTING_MESSAGE_TOGGLES.md) | Message toggles testing |
 
