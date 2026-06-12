@@ -6,8 +6,8 @@
 
 import pytest
 
-from extensions.base import HookContext
-from extensions.builtin.permission_enforcement import (  # nosemgrep: extension-no-sibling-import
+from middleware.base import HookContext
+from middleware.builtin.permission_enforcement import (  # nosemgrep: extension-no-sibling-import — test file importing the unit under test; not a production cross-extension coupling
     PermissionEnforcementExtension,
     _role_satisfies,
 )
