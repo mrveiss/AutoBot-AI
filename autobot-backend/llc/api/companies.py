@@ -27,11 +27,12 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
 from autobot_shared.logging_manager import get_logger
+from llc.deps import get_session, service_dep
 from llc.kb.collections import KbCollectionManager
 from llc.models.company import (
     CompanyAncestor,
@@ -40,8 +41,9 @@ from llc.models.company import (
     CompanyTreeNode,
     CompanyUpdate,
 )
-from llc.models.enums import ExternalPMType, LLCCompanyStatus, MembershipRole
+from llc.models.enums import ExternalPMType, LLCCompanyStatus, MembershipRole, WorkItemStatus
 from llc.models.membership import LLCCompanyMembership
+from llc.services.backlog import BacklogService
 from llc.services.company import (
     CompanyBudgetError,
     CompanyCycleError,
@@ -61,6 +63,8 @@ from user_management.models.organization import Organization
 from user_management.services import TenantContext
 
 logger = get_logger(__name__)
+
+_backlog_svc = service_dep(BacklogService)
 
 router = APIRouter(prefix="/companies", tags=["llc-companies"])
 
@@ -468,6 +472,65 @@ class AgentSearchResult(BaseModel):
 
 
 # ------------------------------------------------------------------
+# Backlog reorder (GH#9861)
+# ------------------------------------------------------------------
+
+
+class BacklogReorderRequest(BaseModel):
+    """Bulk-reorder request — ordered list of work item UUIDs.
+
+    Positions are assigned 0..n-1 (deduplicated, preserving first occurrence)
+    in the order items appear in the list.  Items belonging to a different
+    company are silently skipped (tenant isolation: callers should only submit
+    ids they already fetched from this company's backlog).
+
+    ``work_item_ids`` is typed as ``List[uuid.UUID]`` so Pydantic validates
+    each entry and returns a 422 for any malformed id — no manual parsing
+    needed in the service.
+    """
+
+    work_item_ids: List[uuid.UUID] = Field(..., min_length=1, max_length=500)
+
+
+class BacklogReorderResponse(BaseModel):
+    updated: int
+    unknown_count: int
+
+
+@router.post(
+    "/{company_id}/backlog/reorder",
+    response_model=BacklogReorderResponse,
+    status_code=200,
+)
+async def reorder_backlog(
+    company_id: uuid.UUID,
+    body: BacklogReorderRequest,
+    session: AsyncSession = Depends(get_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
+) -> BacklogReorderResponse:
+    """Assign ``backlog_position`` 0..n-1 to the supplied ordered work item ids.
+
+    Tenant access is enforced the same way as ``get_org_chart``: the caller's
+    org must match *company_id* unless they are a platform admin.  Unknown or
+    cross-tenant ids within the payload are counted in ``unknown_count`` and
+    silently skipped (not an error, so that a stale UI with a partially-loaded
+    backlog can still submit a reorder without receiving a 400).  A 400 is only
+    raised when the entire list is empty (caught by pydantic min_length=1).
+    """
+    cid = str(company_id)
+    if str(ctx.org_id) != cid and not ctx.is_platform_admin:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
+    result = await _backlog_svc().bulk_reorder(
+        session,
+        company_id=cid,
+        ordered_ids=[str(i) for i in body.work_item_ids],
+    )
+    await session.commit()
+    return BacklogReorderResponse(**result)
+
+
+# ------------------------------------------------------------------
 # Org chart (GH#9861) — read-only composition of existing models
 # ------------------------------------------------------------------
 
@@ -527,6 +590,7 @@ async def get_org_chart(
 
     from llc.models.budget import LLCAgentBudget
     from llc.models.heartbeat_run import LLCHeartbeatRun
+    from llc.models.work_item import LLCWorkItem
     from models.agent_org import AgentOrgNode
 
     cid = str(company_id)
@@ -568,11 +632,47 @@ async def get_org_chart(
     )
     runs = {r.agent_id: r for r in latest_runs}
 
+    # 4. Assigned work-item counts per agent — single grouped query, no N+1.
+    #    "Assigned" means the item has an assignee_agent_id matching the
+    #    AgentOrgNode.id (UUID PK) AND the item is not yet in a terminal state.
+    #    We join through AgentOrgNode so the result is keyed by AgentOrgNode.agent_id
+    #    (the logical string slug used everywhere else), not the UUID PK.  This
+    #    correctly handles hire-generated slug agent_ids that differ from the PK.
+    #    GH#9980: Use enum members directly so PG serialises to lowercase values
+    #    (sa.cast to String was a workaround for the test harness's _rebind_enums
+    #    helper — fixing production code to use enum members and letting the
+    #    harness handle the rebind is the correct approach; see #9980).
+    assign_q = (
+        select(
+            AgentOrgNode.agent_id,
+            func.count(LLCWorkItem.id).label("cnt"),
+        )
+        .join(AgentOrgNode, AgentOrgNode.id == LLCWorkItem.assignee_agent_id)
+        .where(
+            LLCWorkItem.company_id == company_id,
+            LLCWorkItem.assignee_agent_id.isnot(None),
+            LLCWorkItem.status.notin_(
+                [WorkItemStatus.DONE, WorkItemStatus.CANCELLED]
+            ),  # noqa: E501 — see GH#9980 (enum NAME-vs-value drift)
+        )
+        .group_by(AgentOrgNode.agent_id)
+    )
+    assigned_counts: Dict[str, int] = {row.agent_id: row.cnt for row in (await session.execute(assign_q)).all()}
+
     # Compose flat nodes.
     flat: Dict[str, OrgChartNode] = {}
     for row in org_rows:
         budget = budgets.get(row.agent_id)
         run = runs.get(row.agent_id)
+        # Budget enrichment: expose token numbers for token-mode agents when
+        # the field is populated, otherwise fall back to dollar amounts.
+        b_mode = budget.budget_mode if budget else "dollars"
+        if b_mode == "tokens" and budget and budget.token_limit is not None:
+            b_spent = float(budget.tokens_spent)
+            b_total = float(budget.token_limit)
+        else:
+            b_spent = float(budget.budget_spent) if budget else 0.0
+            b_total = float(budget.budget_limit) if budget else 0.0
         flat[row.agent_id] = OrgChartNode(
             id=row.agent_id,
             name=row.name,
@@ -585,9 +685,9 @@ async def get_org_chart(
             last_heartbeat=(
                 (run.started_at or run.created_at).isoformat() if run and (run.started_at or run.created_at) else None
             ),
-            budget_spent=float(budget.budget_spent) if budget else 0.0,
-            budget_total=float(budget.budget_limit) if budget else 0.0,
-            assigned_item_count=0,
+            budget_spent=b_spent,
+            budget_total=b_total,
+            assigned_item_count=assigned_counts.get(row.agent_id, 0),
             parent_id=row.reports_to,
             children=[],
         )

@@ -49,12 +49,12 @@ class GUIController:
         """Start Xvfb virtual display if not already running."""
         try:
             # Check if Xvfb is installed
-            if subprocess.run(["which", "Xvfb"], capture_output=True).returncode != 0:
+            if subprocess.run(["which", "Xvfb"], capture_output=True).returncode != 0:  # nosec B603 B607 - fixed argv,
                 logger.error("Xvfb is not installed. Please install it to use the virtual display.")
                 return
 
             # Start Xvfb
-            self.xvfb_process = subprocess.Popen(
+            self.xvfb_process = subprocess.Popen(  # nosec B603 B607 - fixed argv for Xvfb virtual display
                 ["Xvfb", ":99", "-screen", "0", "1280x1024x24"],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
@@ -130,7 +130,9 @@ class GUIController:
             try:
                 import subprocess
 
-                result = subprocess.run(["which", "kex"], capture_output=True, text=True)
+                result = subprocess.run(
+                    ["which", "kex"], capture_output=True, text=True
+                )  # nosec B603 B607 - fixed argv, probing kex availability
                 if result.stdout.strip():
                     logger.info("Kex is available. If GUI fails, consider starting " "a Kex session.")
                     return True

@@ -189,7 +189,7 @@ def run_command_utf8(cmd: str | List[str], **kwargs) -> subprocess.CompletedProc
     kwargs["text"] = True
     kwargs["errors"] = kwargs.get("errors", "replace")
 
-    return subprocess.run(cmd, **kwargs)
+    return subprocess.run(cmd, **kwargs)  # nosec B603 - encoding wrapper; callers own argv safety
 
 
 def strip_ansi_codes(text: str) -> str:

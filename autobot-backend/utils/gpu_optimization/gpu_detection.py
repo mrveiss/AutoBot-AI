@@ -53,7 +53,7 @@ def _check_nvidia_gpu() -> str | None:
     spawning a second nvidia-smi subprocess.
     """
     try:
-        result = subprocess.run(
+        result = subprocess.run(  # nosec B603 B607 - fixed nvidia-smi argv for GPU detection
             ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
             capture_output=True,
             text=True,
@@ -73,7 +73,7 @@ def _check_nvidia_gpu() -> str | None:
 def _check_amd_gpu() -> bool:
     """Check if an AMD GPU is available via rocm-smi or sysfs."""
     try:
-        result = subprocess.run(
+        result = subprocess.run(  # nosec B603 B607 - fixed rocm-smi argv for AMD GPU detection
             ["rocm-smi", "--showid"],
             capture_output=True,
             text=True,
@@ -104,7 +104,7 @@ def _check_apple_gpu() -> Dict[str, Any] | None:
     if platform.system() != "Darwin":
         return None
     try:
-        result = subprocess.run(
+        result = subprocess.run(  # nosec B603 B607 - fixed system_profiler argv for macOS GPU detection
             ["system_profiler", "SPDisplaysDataType", "-json"],
             capture_output=True,
             text=True,
@@ -231,7 +231,7 @@ def _detect_nvidia_capabilities(
     capabilities.vendor = "nvidia"
     gpu_name = _nvidia_gpu_name
     try:
-        result = subprocess.run(
+        result = subprocess.run(  # nosec B603 B607 - fixed nvidia-smi argv for NVIDIA capability detection
             [
                 "nvidia-smi",
                 "--query-gpu=memory.total,cuda_version",
@@ -265,7 +265,7 @@ def _detect_amd_capabilities(
 ) -> GPUCapabilities:
     """Detect AMD GPU capabilities via rocm-smi."""
     try:
-        result = subprocess.run(
+        result = subprocess.run(  # nosec B603 B607 - fixed rocm-smi argv for AMD GPU name detection
             ["rocm-smi", "--showproductname"],
             capture_output=True,
             text=True,
@@ -277,7 +277,7 @@ def _detect_amd_capabilities(
                     capabilities.name = line.strip()
                     break
 
-        mem_result = subprocess.run(
+        mem_result = subprocess.run(  # nosec B603 B607 - fixed rocm-smi argv for AMD VRAM detection
             ["rocm-smi", "--showmeminfo", "vram"],
             capture_output=True,
             text=True,
@@ -357,7 +357,7 @@ def _get_macos_system_memory_gb() -> float:
     Issue #2014: Apple Silicon shares system RAM with GPU.
     """
     try:
-        result = subprocess.run(
+        result = subprocess.run(  # nosec B603 B607 - fixed sysctl argv for macOS memory size
             ["sysctl", "-n", "hw.memsize"],
             capture_output=True,
             text=True,

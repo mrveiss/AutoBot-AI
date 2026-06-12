@@ -76,13 +76,13 @@ class SSOService(BaseService):
             },
             SSOProviderType.GOOGLE_WORKSPACE.value: {
                 "authorize_url": "https://accounts.google.com/o/oauth2/v2/auth",
-                "token_url": "https://oauth2.googleapis.com/token",
+                "token_url": "https://oauth2.googleapis.com/token",  # nosec B105 - OAuth2 public token endpoint URL,
                 "userinfo_url": "https://openidconnect.googleapis.com/v1/userinfo",
                 "scope": "openid email profile",
             },
             SSOProviderType.GITHUB.value: {
                 "authorize_url": "https://github.com/login/oauth/authorize",
-                "token_url": "https://github.com/login/oauth/access_token",
+                "token_url": "https://github.com/login/oauth/access_token",  # nosec B105 - OAuth2 public token endpoint
                 "userinfo_url": "https://api.github.com/user",
                 "scope": "user:email read:user",
             },

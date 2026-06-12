@@ -114,7 +114,7 @@ class HealthCollector:
     def check_service(self, service_name: str) -> Dict:
         """Check systemd service status."""
         try:
-            result = subprocess.run(  # nosec B607 - systemctl is a trusted system binary
+            result = subprocess.run(  # nosec B603 B607 - fixed systemctl argv; service_name is validated by caller
                 ["systemctl", "is-active", service_name],
                 capture_output=True,
                 text=True,
@@ -186,7 +186,7 @@ class HealthCollector:
 
     def _run_systemctl_list_units(self) -> str | None:
         """Run systemctl list-units command. Issue #620."""
-        result = subprocess.run(  # nosec B607 - systemctl is trusted
+        result = subprocess.run(  # nosec B603 B607 - fixed systemctl argv for service enumeration
             [
                 "systemctl",
                 "list-units",
@@ -249,7 +249,7 @@ class HealthCollector:
         details = {}
         try:
             # Get service properties
-            result = subprocess.run(  # nosec B607 - systemctl is a trusted system binary
+            result = subprocess.run(  # nosec B603 B607 - fixed systemctl argv; service_name is a discovered unit name
                 [
                     "systemctl",
                     "show",
@@ -288,7 +288,7 @@ class HealthCollector:
         can display why a service failed without requiring SSH.
         """
         try:
-            result = subprocess.run(  # nosec B607 - journalctl is trusted
+            result = subprocess.run(  # nosec B603 B607 - fixed journalctl argv; service_name is a discovered unit name
                 [
                     "journalctl",
                     "-u",
