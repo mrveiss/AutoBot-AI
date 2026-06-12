@@ -416,6 +416,93 @@ class TestWsConnectAndListenJwtMinting:
 
 
 # ---------------------------------------------------------------------------
+# WebSocket URL prefix selection (GH#9967)
+# ---------------------------------------------------------------------------
+
+
+class TestWsUrlPrefixSelection:
+    """Tests that _ws_connect_and_listen uses /slm/api/ws/events for nginx
+    paths and /api/ws/events for direct-port (loopback) connections (#9967).
+
+    Nginx on co-located bare-metal routes /api/ws/* to the user backend;
+    /slm/api/ws/* always routes to the SLM regardless of nginx mode (#3268).
+    Direct-port loopback (127.0.0.1:8000) bypasses nginx entirely.
+    """
+
+    def _make_mock_ws(self) -> MagicMock:
+        mock_ws_ctx = MagicMock()
+        mock_ws_ctx.__aenter__ = AsyncMock(side_effect=Exception("stop-after-connect"))
+        mock_ws_ctx.__aexit__ = AsyncMock(return_value=False)
+        return mock_ws_ctx
+
+    @pytest.mark.asyncio
+    async def test_nginx_host_uses_slm_prefix(self) -> None:
+        """Non-loopback SLM URL (nginx) uses /slm/api/ws/events (#9967)."""
+        client = SLMClient(slm_url="https://autobot-host.example.com")
+
+        with (
+            patch("services.slm_client._get_slm_signing_secret", return_value=_TEST_SECRET),
+            patch("websockets.connect", side_effect=lambda url, **kw: self._make_mock_ws()) as mock_connect,
+        ):
+            await client._ws_connect_and_listen()
+
+        call_url = mock_connect.call_args[0][0]
+        assert "/slm/api/ws/events" in call_url, (
+            f"nginx path must use /slm/api/ws/events, got: {call_url}"
+        )
+        assert call_url.startswith("wss://")
+
+    @pytest.mark.asyncio
+    async def test_loopback_host_uses_api_prefix(self) -> None:
+        """Loopback SLM URL (direct port, no nginx) uses /api/ws/events (#9967)."""
+        client = SLMClient(slm_url="http://127.0.0.1:8000")
+
+        with (
+            patch("services.slm_client._get_slm_signing_secret", return_value=_TEST_SECRET),
+            patch("websockets.connect", side_effect=lambda url, **kw: self._make_mock_ws()) as mock_connect,
+        ):
+            await client._ws_connect_and_listen()
+
+        call_url = mock_connect.call_args[0][0]
+        assert "/api/ws/events" in call_url, (
+            f"direct-port loopback must use /api/ws/events, got: {call_url}"
+        )
+        assert "/slm/api/ws/events" not in call_url, (
+            f"loopback must NOT prepend /slm prefix, got: {call_url}"
+        )
+        assert call_url.startswith("ws://")
+
+    @pytest.mark.asyncio
+    async def test_localhost_name_uses_api_prefix(self) -> None:
+        """'localhost' hostname (loopback) also uses /api/ws/events, not /slm prefix."""
+        client = SLMClient(slm_url="http://localhost:8000")
+
+        with (
+            patch("services.slm_client._get_slm_signing_secret", return_value=_TEST_SECRET),
+            patch("websockets.connect", side_effect=lambda url, **kw: self._make_mock_ws()) as mock_connect,
+        ):
+            await client._ws_connect_and_listen()
+
+        call_url = mock_connect.call_args[0][0]
+        assert "/api/ws/events" in call_url
+        assert "/slm/api/ws/events" not in call_url
+
+    @pytest.mark.asyncio
+    async def test_ip_address_non_loopback_uses_slm_prefix(self) -> None:
+        """Non-loopback IP address (bare-metal nginx) uses /slm/api/ws/events."""
+        client = SLMClient(slm_url="https://10.0.0.5")
+
+        with (
+            patch("services.slm_client._get_slm_signing_secret", return_value=_TEST_SECRET),
+            patch("websockets.connect", side_effect=lambda url, **kw: self._make_mock_ws()) as mock_connect,
+        ):
+            await client._ws_connect_and_listen()
+
+        call_url = mock_connect.call_args[0][0]
+        assert "/slm/api/ws/events" in call_url
+
+
+# ---------------------------------------------------------------------------
 # Compose wiring contract (GH#9852)
 # ---------------------------------------------------------------------------
 
