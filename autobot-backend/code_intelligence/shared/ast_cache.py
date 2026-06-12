@@ -228,19 +228,20 @@ class ASTCache:
         with open(file_path, "r", encoding="utf-8") as f:
             content = f.read()
 
-        # Cache content
-        with self._cache_lock:
-            if len(self._content_cache) >= self._content_cache_size:
-                # Evict oldest entry
-                oldest_key = next(iter(self._content_cache))
-                del self._content_cache[oldest_key]
+        # Cache content (skip if cache capacity is zero)
+        if self._content_cache_size > 0:
+            with self._cache_lock:
+                if len(self._content_cache) >= self._content_cache_size and self._content_cache:
+                    # Evict oldest entry
+                    oldest_key = next(iter(self._content_cache))
+                    del self._content_cache[oldest_key]
 
-            self._content_cache[file_path] = ContentCacheEntry(
-                content=content,
-                mtime=mtime,
-                file_size=len(content),
-            )
-            self._content_cache.move_to_end(file_path)
+                self._content_cache[file_path] = ContentCacheEntry(
+                    content=content,
+                    mtime=mtime,
+                    file_size=len(content),
+                )
+                self._content_cache.move_to_end(file_path)
 
         return content
 
@@ -297,9 +298,13 @@ class ASTCache:
 
         Issue #620.
         """
+        if self._max_size <= 0:
+            logger.debug("ASTCache: max_size=0, skipping store for %s", path_str)
+            return
+
         with self._cache_lock:
             # Evict if needed
-            while len(self._ast_cache) >= self._max_size:
+            while len(self._ast_cache) >= self._max_size and self._ast_cache:
                 self._evict_lru()
 
             self._ast_cache[path_str] = ASTCacheEntry(
