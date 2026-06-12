@@ -161,9 +161,7 @@ async def fetch_version_rows(db_url: str) -> list[str]:
     engine = create_async_engine(db_url)
     try:
         async with engine.connect() as conn:
-            present = await conn.execute(
-                text("SELECT to_regclass('public.alembic_version')")
-            )
+            present = await conn.execute(text("SELECT to_regclass('public.alembic_version')"))
             if present.scalar() is None:
                 return []
             rows = await conn.execute(text("SELECT version_num FROM alembic_version"))

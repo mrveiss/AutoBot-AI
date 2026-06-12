@@ -26,9 +26,7 @@ import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SETUP_PLAYBOOK = REPO_ROOT / "autobot-slm-backend" / "ansible" / "setup-user-backend.yml"
-UPDATE_PLAYBOOK = (
-    REPO_ROOT / "autobot-slm-backend" / "ansible" / "playbooks" / "update-all-nodes.yml"
-)
+UPDATE_PLAYBOOK = REPO_ROOT / "autobot-slm-backend" / "ansible" / "playbooks" / "update-all-nodes.yml"
 
 
 def _flatten_tasks(items):
@@ -85,17 +83,16 @@ def _check_playbook_contract(path: Path):
             f"guaranteed 'No config file' failure (#10001): {task.get('name')}"
         )
         assert task.get("failed_when") is not False, (
-            f"{path.name}: migration task swallows failures with "
-            f"failed_when: false (#10001): {task.get('name')}"
+            f"{path.name}: migration task swallows failures with " f"failed_when: false (#10001): {task.get('name')}"
         )
 
     assert baseline_idx, (
         f"{path.name}: missing the baseline-adoption step "
         "(python -m migrations.baseline) before upgrade head (#10026 case 3)"
     )
-    assert upgrade_idx and baseline_idx[0] < upgrade_idx[0], (
-        f"{path.name}: baseline adoption must run BEFORE alembic upgrade head"
-    )
+    assert (
+        upgrade_idx and baseline_idx[0] < upgrade_idx[0]
+    ), f"{path.name}: baseline adoption must run BEFORE alembic upgrade head"
     return tasks
 
 
@@ -115,9 +112,9 @@ def test_setup_playbook_contract():
 
 
 def test_setup_playbook_backs_up_before_upgrade():
-    assert _has_backup_before_upgrade(SETUP_PLAYBOOK), (
-        "setup-user-backend.yml: no pg_dump backup before alembic upgrade"
-    )
+    assert _has_backup_before_upgrade(
+        SETUP_PLAYBOOK
+    ), "setup-user-backend.yml: no pg_dump backup before alembic upgrade"
 
 
 def test_update_playbook_contract():
@@ -125,9 +122,7 @@ def test_update_playbook_contract():
 
 
 def test_update_playbook_backs_up_before_upgrade():
-    assert _has_backup_before_upgrade(UPDATE_PLAYBOOK), (
-        "update-all-nodes.yml: no pg_dump backup before alembic upgrade"
-    )
+    assert _has_backup_before_upgrade(UPDATE_PLAYBOOK), "update-all-nodes.yml: no pg_dump backup before alembic upgrade"
 
 
 def test_update_playbook_migrate_play_is_fatal():

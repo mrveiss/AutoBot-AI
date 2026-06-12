@@ -235,16 +235,16 @@ def autogenerate_diff_empty(url: str) -> bool:
     as drift, never as a match.
     """
     try:
+        from alembic.autogenerate import compare_metadata
+        from alembic.migration import MigrationContext
+        from sqlalchemy import MetaData
+
         import canvas.models  # noqa: F401 — registers canvas tables on Base
         import models.process_run  # noqa: F401 — registers process_runs et al.
         import user_management.models  # noqa: F401 — registers all UM models
-        from alembic.autogenerate import compare_metadata
-        from alembic.migration import MigrationContext
         from llc.models.activity import LLCBase
         from models.push_subscription import PushSubscription  # noqa: F401
         from user_management.models.base import Base
-
-        from sqlalchemy import MetaData
 
         # Merge both declarative metadatas into one so cross-metadata foreign
         # keys (LLC tables referencing organizations) resolve during compare.

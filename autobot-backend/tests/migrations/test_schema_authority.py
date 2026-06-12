@@ -108,15 +108,13 @@ def test_lifespan_skills_init_is_guarded():
     source = (BACKEND_ROOT / "initialization" / "lifespan.py").read_text(encoding="utf-8")
     tree = ast.parse(source)
     skills_fn = next(
-        n
-        for n in ast.walk(tree)
-        if isinstance(n, ast.AsyncFunctionDef) and n.name == "_init_skills_tables"
+        n for n in ast.walk(tree) if isinstance(n, ast.AsyncFunctionDef) and n.name == "_init_skills_tables"
     )
     calls = {
         node.func.attr if isinstance(node.func, ast.Attribute) else getattr(node.func, "id", "")
         for node in ast.walk(skills_fn)
         if isinstance(node, ast.Call)
     }
-    assert "ensure_create_all_allowed" in calls, (
-        "_init_skills_tables must call ensure_create_all_allowed before create_all"
-    )
+    assert (
+        "ensure_create_all_allowed" in calls
+    ), "_init_skills_tables must call ensure_create_all_allowed before create_all"

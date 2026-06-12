@@ -60,8 +60,7 @@ async def test_raw_upgrade_on_unstamped_schema_fails(fresh_db_url):
     )
     combined = (result.stdout + result.stderr).lower()
     assert "already exists" in combined or "duplicatetable" in combined, (
-        "expected a relation-already-exists failure, got:\n"
-        f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"
+        "expected a relation-already-exists failure, got:\n" f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"
     )
     # The failed run must not have stamped anything — the DB stays adoptable.
     assert await fetch_version_rows(fresh_db_url) == []
@@ -88,8 +87,7 @@ async def test_bootstrap_adopts_unstamped_schema_and_reaches_head(fresh_db_url):
 
     upgrade = run_alembic(["upgrade", "head"], fresh_db_url)
     assert upgrade.returncode == 0, (
-        f"upgrade head failed after baseline adoption:\n"
-        f"stdout:\n{upgrade.stdout}\nstderr:\n{upgrade.stderr}"
+        f"upgrade head failed after baseline adoption:\n" f"stdout:\n{upgrade.stdout}\nstderr:\n{upgrade.stderr}"
     )
 
     assert await fetch_version_rows(fresh_db_url) == [script_head()]

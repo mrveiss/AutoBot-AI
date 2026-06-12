@@ -11,10 +11,9 @@ States (see migrations/baseline.py):
 4. STAMPED unknown  → refuse (4) unless in the compatibility table
 """
 
+import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
-
-import pytest
 
 from tests.migrations.conftest import (
     create_all_schema,
@@ -108,8 +107,7 @@ async def test_old_schema_bracketed_by_probe_ladder(fresh_db_url):
     result = run_baseline(fresh_db_url)
     assert result.returncode == 0, result.stderr
     assert await fetch_version_rows(fresh_db_url) == [OLD_REV], (
-        "probe ladder must bracket a 010-era schema at exactly 20260315_010\n"
-        f"stderr:\n{result.stderr}"
+        "probe ladder must bracket a 010-era schema at exactly 20260315_010\n" f"stderr:\n{result.stderr}"
     )
 
     upgrade = run_alembic(["upgrade", "head"], fresh_db_url)
@@ -138,8 +136,7 @@ async def test_mixed_schema_refuses_loudly(fresh_db_url):
 
     result = run_baseline(fresh_db_url)
     assert result.returncode == 3, (
-        f"expected ambiguous-refusal exit 3, got {result.returncode}\n"
-        f"stderr:\n{result.stderr}"
+        f"expected ambiguous-refusal exit 3, got {result.returncode}\n" f"stderr:\n{result.stderr}"
     )
     output = result.stderr + result.stdout
     assert "REFUSING" in output
@@ -158,8 +155,7 @@ async def test_interleaved_create_all_refuses(fresh_db_url):
 
     result = run_baseline(fresh_db_url)
     assert result.returncode == 3, (
-        f"expected ambiguous-refusal exit 3, got {result.returncode}\n"
-        f"stderr:\n{result.stderr}"
+        f"expected ambiguous-refusal exit 3, got {result.returncode}\n" f"stderr:\n{result.stderr}"
     )
     assert await fetch_version_rows(fresh_db_url) == []
 
@@ -177,12 +173,9 @@ async def test_unknown_revision_refuses(fresh_db_url):
 
     result = run_baseline(fresh_db_url)
     assert result.returncode == 4, (
-        f"expected foreign-revision exit 4, got {result.returncode}\n"
-        f"stderr:\n{result.stderr}"
+        f"expected foreign-revision exit 4, got {result.returncode}\n" f"stderr:\n{result.stderr}"
     )
     output = result.stderr + result.stdout
     assert "deadbeef0001" in output
     assert "docs/operations/migration-recovery.md" in output
-    assert await fetch_version_rows(fresh_db_url) == ["deadbeef0001"], (
-        "refusal must leave the foreign stamp untouched"
-    )
+    assert await fetch_version_rows(fresh_db_url) == ["deadbeef0001"], "refusal must leave the foreign stamp untouched"

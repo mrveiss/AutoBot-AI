@@ -34,9 +34,7 @@ def _count_calls(path: Path, attr: str) -> int:
     return sum(
         1
         for node in iter_upgrade_nodes(tree)
-        if isinstance(node, ast.Call)
-        and isinstance(node.func, ast.Attribute)
-        and node.func.attr == attr
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == attr
     )
 
 
@@ -100,9 +98,7 @@ def test_observability_coverage():
     script = _script_directory()
     artifacts = extract_artifacts(script)
     unobservable = {
-        rev
-        for rev, art in artifacts.items()
-        if not art.tables and not art.columns and rev not in TIMESTAMPTZ_MARKERS
+        rev for rev, art in artifacts.items() if not art.tables and not art.columns and rev not in TIMESTAMPTZ_MARKERS
     }
     allowed = {
         "20260525_043",  # guarded enum-value add — idempotent re-run

@@ -25,13 +25,9 @@ async def test_downgrade_one_and_back_to_head(fresh_db_url):
     assert run_alembic(["upgrade", "head"], fresh_db_url).returncode == 0
 
     down = run_alembic(["downgrade", "-1"], fresh_db_url)
-    assert down.returncode == 0, (
-        f"downgrade -1 from head failed:\nstdout:\n{down.stdout}\nstderr:\n{down.stderr}"
-    )
+    assert down.returncode == 0, f"downgrade -1 from head failed:\nstdout:\n{down.stdout}\nstderr:\n{down.stderr}"
     assert await fetch_version_rows(fresh_db_url) != [script_head()]
 
     up = run_alembic(["upgrade", "head"], fresh_db_url)
-    assert up.returncode == 0, (
-        f"re-upgrade after downgrade failed:\nstdout:\n{up.stdout}\nstderr:\n{up.stderr}"
-    )
+    assert up.returncode == 0, f"re-upgrade after downgrade failed:\nstdout:\n{up.stdout}\nstderr:\n{up.stderr}"
     assert await fetch_version_rows(fresh_db_url) == [script_head()]
