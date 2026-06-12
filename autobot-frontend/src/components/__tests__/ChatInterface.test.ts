@@ -234,7 +234,7 @@ describe('ChatInterface', () => {
 
   describe('Rendering', () => {
     it('renders the main chat interface', async () => {
-      renderComponent(ChatInterface, { pinia: true })
+      renderComponent(ChatInterface, { pinia: true, router: true })
 
       // i18n keys render as-is since test i18n has empty messages
       await waitFor(() => {
@@ -250,7 +250,7 @@ describe('ChatInterface', () => {
     })
 
     it('renders with collapsed sidebar when toggle is clicked', async () => {
-      renderComponent(ChatInterface, { pinia: true })
+      renderComponent(ChatInterface, { pinia: true, router: true })
 
       await waitFor(() => {
         // #5456: ChatSidebar's mobile header no longer duplicates the
@@ -277,7 +277,7 @@ describe('ChatInterface', () => {
         settings: { data: {} },
       })
 
-      renderComponent(ChatInterface, { pinia: true })
+      renderComponent(ChatInterface, { pinia: true, router: true })
 
       // The sessions are synced to the Pinia store via syncSessionsWithBackend
       // With createTestingPinia, the store actions are spied on
@@ -292,7 +292,7 @@ describe('ChatInterface', () => {
         () => new Promise(resolve => setTimeout(resolve, 5000))
       )
 
-      renderComponent(ChatInterface, { pinia: true })
+      renderComponent(ChatInterface, { pinia: true, router: true })
 
       // Sidebar should still render with refresh button available
       expect(screen.getByLabelText('chat.sidebar.refreshList')).toBeInTheDocument()
@@ -301,7 +301,7 @@ describe('ChatInterface', () => {
 
   describe('Chat Management', () => {
     it('creates a new chat session', async () => {
-      renderComponent(ChatInterface, { pinia: true })
+      renderComponent(ChatInterface, { pinia: true, router: true })
 
       await waitFor(() => {
         expect(screen.getByLabelText('chat.sidebar.createNew')).toBeInTheDocument()
@@ -323,7 +323,7 @@ describe('ChatInterface', () => {
         settings: { data: {} },
       })
 
-      renderComponent(ChatInterface, { pinia: true })
+      renderComponent(ChatInterface, { pinia: true, router: true })
 
       // Verify initialization was called with session data
       await waitFor(() => {
@@ -338,7 +338,7 @@ describe('ChatInterface', () => {
         settings: { data: {} },
       })
 
-      renderComponent(ChatInterface, { pinia: true })
+      renderComponent(ChatInterface, { pinia: true, router: true })
 
       await waitFor(() => {
         expect(mockInitializeChatInterface).toHaveBeenCalled()
@@ -350,7 +350,7 @@ describe('ChatInterface', () => {
     })
 
     it('resets current chat session button is disabled without active session', async () => {
-      renderComponent(ChatInterface, { pinia: true })
+      renderComponent(ChatInterface, { pinia: true, router: true })
 
       await waitFor(() => {
         expect(screen.getByLabelText('chat.sidebar.resetChat')).toBeInTheDocument()
@@ -362,7 +362,7 @@ describe('ChatInterface', () => {
     })
 
     it('refreshes chat list', async () => {
-      renderComponent(ChatInterface, { pinia: true })
+      renderComponent(ChatInterface, { pinia: true, router: true })
 
       await waitFor(() => {
         expect(screen.getByLabelText('chat.sidebar.refreshList')).toBeInTheDocument()
@@ -380,7 +380,7 @@ describe('ChatInterface', () => {
 
   describe('Message Handling', () => {
     it('renders the message input area', async () => {
-      renderComponent(ChatInterface, { pinia: true })
+      renderComponent(ChatInterface, { pinia: true, router: true })
 
       await waitFor(() => {
         // ChatInput placeholder renders as i18n key
@@ -390,7 +390,7 @@ describe('ChatInterface', () => {
     })
 
     it('sends a message to the chat', async () => {
-      renderComponent(ChatInterface, { pinia: true })
+      renderComponent(ChatInterface, { pinia: true, router: true })
 
       await waitFor(() => {
         expect(screen.getByPlaceholderText('chat.input.typeMessage')).toBeInTheDocument()
@@ -415,7 +415,7 @@ describe('ChatInterface', () => {
     })
 
     it('handles message input with keyboard shortcuts', async () => {
-      renderComponent(ChatInterface, { pinia: true })
+      renderComponent(ChatInterface, { pinia: true, router: true })
 
       await waitFor(() => {
         expect(screen.getByPlaceholderText('chat.input.typeMessage')).toBeInTheDocument()
@@ -436,7 +436,7 @@ describe('ChatInterface', () => {
     })
 
     it('prevents sending empty messages', async () => {
-      renderComponent(ChatInterface, { pinia: true })
+      renderComponent(ChatInterface, { pinia: true, router: true })
 
       await waitFor(() => {
         expect(screen.getByPlaceholderText('chat.input.typeMessage')).toBeInTheDocument()
@@ -451,7 +451,7 @@ describe('ChatInterface', () => {
     })
 
     it('displays chat messages area', async () => {
-      renderComponent(ChatInterface, { pinia: true })
+      renderComponent(ChatInterface, { pinia: true, router: true })
 
       // The chat interface should render the content area
       await waitFor(() => {
@@ -462,7 +462,7 @@ describe('ChatInterface', () => {
 
   describe('WebSocket Integration', () => {
     it('handles incoming WebSocket messages', async () => {
-      renderComponent(ChatInterface, { pinia: true })
+      renderComponent(ChatInterface, { pinia: true, router: true })
 
       // Simulate WebSocket connection
       const ws = webSocketTestUtil.connect(ServiceURLs.WEBSOCKET_LOCAL)
@@ -476,7 +476,7 @@ describe('ChatInterface', () => {
     })
 
     it('handles WebSocket connection errors', async () => {
-      renderComponent(ChatInterface, { pinia: true })
+      renderComponent(ChatInterface, { pinia: true, router: true })
 
       const ws = webSocketTestUtil.connect(ServiceURLs.WEBSOCKET_LOCAL)
       webSocketTestUtil.simulateError('Connection failed')
@@ -486,7 +486,7 @@ describe('ChatInterface', () => {
     })
 
     it('handles workflow notifications via WebSocket', async () => {
-      renderComponent(ChatInterface, { pinia: true })
+      renderComponent(ChatInterface, { pinia: true, router: true })
 
       webSocketTestUtil.connect(ServiceURLs.WEBSOCKET_LOCAL)
       webSocketTestUtil.simulateWorkflowUpdate('workflow-123', 'running', 2)
@@ -498,7 +498,7 @@ describe('ChatInterface', () => {
 
   describe('Knowledge Persistence Dialog', () => {
     it('opens knowledge persistence dialog when triggered', async () => {
-      const { container } = renderComponent(ChatInterface, { pinia: true })
+      const { container } = renderComponent(ChatInterface, { pinia: true, router: true })
 
       // Verify the component renders without errors
       expect(container).toBeInTheDocument()
@@ -510,7 +510,7 @@ describe('ChatInterface', () => {
       // Make initialization fail
       mockInitializeChatInterface.mockRejectedValue(new Error('Network error'))
 
-      const { container } = renderComponent(ChatInterface, { pinia: true })
+      const { container } = renderComponent(ChatInterface, { pinia: true, router: true })
 
       // Component should render despite error
       await waitFor(() => {
@@ -525,7 +525,7 @@ describe('ChatInterface', () => {
         settings: { data: {} },
       })
 
-      renderComponent(ChatInterface, { pinia: true })
+      renderComponent(ChatInterface, { pinia: true, router: true })
 
       await waitFor(() => {
         // Should handle empty state - sidebar title still renders
@@ -539,7 +539,7 @@ describe('ChatInterface', () => {
 
   describe('Accessibility', () => {
     it('has proper ARIA labels', async () => {
-      renderComponent(ChatInterface, { pinia: true })
+      renderComponent(ChatInterface, { pinia: true, router: true })
 
       await waitFor(() => {
         expect(screen.getByLabelText('chat.sidebar.createNew')).toBeInTheDocument()
@@ -558,7 +558,7 @@ describe('ChatInterface', () => {
         settings: { data: {} },
       })
 
-      renderComponent(ChatInterface, { pinia: true })
+      renderComponent(ChatInterface, { pinia: true, router: true })
 
       await waitFor(() => {
         expect(mockInitializeChatInterface).toHaveBeenCalledTimes(1)
@@ -584,7 +584,7 @@ describe('ChatInterface', () => {
         settings: { data: {} },
       })
 
-      const { container } = renderComponent(ChatInterface, { pinia: true })
+      const { container } = renderComponent(ChatInterface, { pinia: true, router: true })
 
       // Component should render without performance issues
       expect(container).toBeInTheDocument()
