@@ -91,9 +91,7 @@ class RunReplayService:
             agent_id: str = str(agent.get("agent_id", ""))
 
             async with factory() as session:
-                row = await session.execute(
-                    select(LLCHeartbeatRun.company_id).where(LLCHeartbeatRun.id == run_id)
-                )
+                row = await session.execute(select(LLCHeartbeatRun.company_id).where(LLCHeartbeatRun.id == run_id))
                 company_id = row.scalar_one_or_none()
 
             if company_id is None:
@@ -318,6 +316,7 @@ def _redact_sensitive(obj: Any) -> Any:
     if not isinstance(obj, dict):
         return obj
     from llm_shared.credential_redaction import redact_dict  # deferred — avoids top-level import chain issues
+
     return redact_dict(obj)
 
 
@@ -333,8 +332,11 @@ def _redact_log_dict(data: Dict[str, Any]) -> Dict[str, Any]:
             out[k] = redact_string(v)
         elif isinstance(v, list):
             out[k] = [
-                redact_dict(item) if isinstance(item, dict)
-                else (redact_string(item) if isinstance(item, str) else item)
+                (
+                    redact_dict(item)
+                    if isinstance(item, dict)
+                    else (redact_string(item) if isinstance(item, str) else item)
+                )
                 for item in v
             ]
         else:

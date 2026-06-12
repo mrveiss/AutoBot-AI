@@ -67,15 +67,9 @@ def upgrade() -> None:
         "llc_run_replay_logs",
         ["replay_of_run_id"],
     )
-    op.create_index(
-        "ix_llc_run_replay_logs_company_id", "llc_run_replay_logs", ["company_id"]
-    )
-    op.create_index(
-        "ix_llc_run_replay_logs_agent_id", "llc_run_replay_logs", ["agent_id"]
-    )
-    op.create_index(
-        "ix_llc_run_replay_logs_created_at", "llc_run_replay_logs", ["created_at"]
-    )
+    op.create_index("ix_llc_run_replay_logs_company_id", "llc_run_replay_logs", ["company_id"])
+    op.create_index("ix_llc_run_replay_logs_agent_id", "llc_run_replay_logs", ["agent_id"])
+    op.create_index("ix_llc_run_replay_logs_created_at", "llc_run_replay_logs", ["created_at"])
 
 
 def downgrade() -> None:
@@ -85,8 +79,6 @@ def downgrade() -> None:
     op.drop_index("ix_llc_run_replay_logs_created_at", "llc_run_replay_logs")
     op.drop_index("ix_llc_run_replay_logs_agent_id", "llc_run_replay_logs")
     op.drop_index("ix_llc_run_replay_logs_company_id", "llc_run_replay_logs")
-    op.drop_index(
-        "ix_llc_run_replay_logs_replay_of_run_id", "llc_run_replay_logs"
-    )
+    op.drop_index("ix_llc_run_replay_logs_replay_of_run_id", "llc_run_replay_logs")
     op.drop_index("ix_llc_run_replay_logs_run_id", "llc_run_replay_logs")
     op.drop_table("llc_run_replay_logs")

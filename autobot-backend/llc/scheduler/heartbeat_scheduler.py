@@ -675,6 +675,7 @@ async def _record_run_for_replay(
             output_file: Optional[str] = None
             try:
                 from ..adapters.claude_code_adapter import _output_path as _cc_output_path
+
                 output_file = _cc_output_path(output_dir, agent_id_str, external_run_id)
             except ImportError:
                 pass
@@ -683,6 +684,7 @@ async def _record_run_for_replay(
                 try:
                     raw: str = await _asyncio.to_thread(_read_file_text, output_file)
                     from ..services.replay_service import _REPLAY_OUTPUT_CAP
+
                     output_text = raw[-_REPLAY_OUTPUT_CAP:] if len(raw) > _REPLAY_OUTPUT_CAP else raw
                     recorded_events = parse_jsonl_events(raw)
                 except OSError:

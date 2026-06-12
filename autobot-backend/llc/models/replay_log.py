@@ -53,9 +53,7 @@ class LLCRunReplayLog(Base):
         index=True,
     )
 
-    company_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), nullable=False, index=True
-    )
+    company_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
     agent_id: Mapped[str] = mapped_column(sa.String(255), nullable=False, index=True)
 
     # Full context dict passed to _dispatch_adapter (prompt, work-item, etc.).

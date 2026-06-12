@@ -25,9 +25,9 @@ from .goals import router as goals_router
 from .health import router as health_router
 from .labels import router as labels_router
 from .portability import router as portability_router
+from .replay import router as replay_router
 from .review_gate_policies import router as review_gate_router
 from .routines import router as routines_router
-from .replay import router as replay_router
 from .runs import heartbeat_runs_router
 from .runs import router as runs_router
 from .secrets import router as secrets_router

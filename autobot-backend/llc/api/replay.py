@@ -29,6 +29,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
+from autobot_shared.singleton_factory import lazy_singleton
 from user_management.database import get_async_session
 from user_management.services import TenantContext
 
@@ -39,7 +40,6 @@ from ..scheduler.heartbeat_scheduler import get_heartbeat_scheduler
 from ..services.budget import BudgetService
 from ..services.membership_service import MembershipService
 from ..services.replay_service import ReplayLogNotFoundError, RunReplayService
-from autobot_shared.singleton_factory import lazy_singleton
 
 router = APIRouter(prefix="/agents", tags=["llc-replay"])
 
@@ -127,10 +127,12 @@ async def _validate_budget(session: AsyncSession, agent_id: str) -> None:
 async def _validate_no_active_run(session: AsyncSession, agent_id: str) -> None:
     """Reject replay when a RUNNING or QUEUED run already exists (H3a)."""
     result = await session.execute(
-        select(LLCHeartbeatRun).where(
+        select(LLCHeartbeatRun)
+        .where(
             LLCHeartbeatRun.agent_id == agent_id,
             LLCHeartbeatRun.status.in_([LLCRunStatus.RUNNING.value, LLCRunStatus.QUEUED.value]),
-        ).limit(1)
+        )
+        .limit(1)
     )
     existing = result.scalar_one_or_none()
     if existing is not None:

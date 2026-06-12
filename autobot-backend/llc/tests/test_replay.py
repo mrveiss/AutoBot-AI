@@ -91,9 +91,7 @@ class TestLogToDict:
         assert d["replay_of_run_id"] is None
 
     def test_redact_pii_strips_sensitive_key(self):
-        log = _make_log(
-            inputs_snapshot={"title": "task", "agent_api_key": "sk-secret1234567890abcdef"}
-        )
+        log = _make_log(inputs_snapshot={"title": "task", "agent_api_key": "sk-secret1234567890abcdef"})
         # Provide a minimal redact_dict / redact_string stub so the test does
         # not require llm_shared (which pulls in PyTorch at import time).
         import sys
@@ -101,8 +99,7 @@ class TestLogToDict:
 
         fake_cred = types.ModuleType("llm_shared.credential_redaction")
         fake_cred.redact_dict = lambda d: {  # type: ignore[attr-defined]
-            k: ("***" if "key" in k.lower() or "token" in k.lower() else v)
-            for k, v in d.items()
+            k: ("***" if "key" in k.lower() or "token" in k.lower() else v) for k, v in d.items()
         }
         fake_cred.redact_string = lambda s: s  # type: ignore[attr-defined]
 
@@ -132,11 +129,13 @@ class TestLogToDict:
 
 class TestParseJsonlEvents:
     def test_parses_valid_lines(self):
-        content = '\n'.join([
-            json.dumps({"type": "message", "text": "hello"}),
-            "not json",
-            json.dumps({"type": "result", "is_error": False}),
-        ])
+        content = "\n".join(
+            [
+                json.dumps({"type": "message", "text": "hello"}),
+                "not json",
+                json.dumps({"type": "result", "is_error": False}),
+            ]
+        )
         events = parse_jsonl_events(content)
         assert len(events) == 2
         assert events[0]["type"] == "message"
