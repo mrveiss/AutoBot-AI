@@ -38,19 +38,19 @@ You never call hook methods directly. You register extensions; the runtime calls
 
 | Class | File | Purpose |
 |---|---|---|
-| `HookPoint` | `extensions/hooks.py` | Enum of all 25 lifecycle points |
-| `HookContext` | `extensions/base.py` | Shared data bag passed to every hook call |
-| `Extension` | `extensions/base.py` | Base class for all extensions |
-| `ExtensionManager` | `extensions/manager.py` | Registry and invocation coordinator (singleton) |
-| `HookInvoker` | `extensions/hook_invoker.py` | Declarative invocation strategies (Issue #4202) |
-| `InvocationMode` | `extensions/hook_invoker.py` | Enum of invocation strategies |
+| `HookPoint` | `middleware/hooks.py` | Enum of all 25 lifecycle points |
+| `HookContext` | `middleware/base.py` | Shared data bag passed to every hook call |
+| `Extension` | `middleware/base.py` | Base class for all extensions |
+| `ExtensionManager` | `middleware/manager.py` | Registry and invocation coordinator (singleton) |
+| `HookInvoker` | `middleware/hook_invoker.py` | Declarative invocation strategies (Issue #4202) |
+| `InvocationMode` | `middleware/hook_invoker.py` | Enum of invocation strategies |
 
 ### HookContext
 
 `HookContext` is a dataclass passed to every hook invocation. Extensions read input from it and write results back into it.
 
 ```python
-from extensions.base import HookContext
+from middleware.base import HookContext
 
 ctx = HookContext(
     session_id="sess-abc123",   # always set by the caller
@@ -83,7 +83,7 @@ The `data` dict is the primary channel. Keys are documented per-hook in the refe
 The global singleton is accessed via `get_extension_manager()`. Extensions are kept in a list sorted by `priority` (lower number = runs first).
 
 ```python
-from extensions.manager import get_extension_manager
+from middleware.manager import get_extension_manager
 
 manager = get_extension_manager()
 manager.register(MyExtension())
@@ -118,9 +118,9 @@ Issue #4202 introduced `HookInvoker` to eliminate per-hook `_emit_*` wrapper boi
 Using `HookInvoker`:
 
 ```python
-from extensions import HookInvoker, HookInvocationConfig, InvocationMode, get_extension_manager
-from extensions.base import HookContext
-from extensions.hooks import HookPoint
+from middleware import HookInvoker, HookInvocationConfig, InvocationMode, get_extension_manager
+from middleware.base import HookContext
+from middleware.hooks import HookPoint
 
 manager = get_extension_manager()
 invoker = HookInvoker(manager)
@@ -232,11 +232,11 @@ The default configs registered in `HookInvoker._register_default_configs()` are 
 ### Step 1 — Subclass Extension
 
 ```python
-# autobot-backend/extensions/builtin/my_extension.py
+# autobot-backend/middleware/builtin/my_extension.py
 
 import logging
 from typing import Optional
-from extensions.base import Extension, HookContext
+from middleware.base import Extension, HookContext
 
 logger = logging.getLogger(__name__)
 
@@ -296,8 +296,8 @@ Key contracts:
 Register at application startup, after the `ExtensionManager` singleton is initialised.
 
 ```python
-from extensions.manager import get_extension_manager
-from extensions.builtin.my_extension import RateLimitExtension
+from middleware.manager import get_extension_manager
+from middleware.builtin.my_extension import RateLimitExtension
 
 manager = get_extension_manager()
 manager.register(RateLimitExtension(max_calls_per_minute=20))
@@ -306,22 +306,22 @@ manager.register(RateLimitExtension(max_calls_per_minute=20))
 To load built-in extensions in bulk:
 
 ```python
-from extensions.builtin.logging_extension import LoggingExtension
-from extensions.builtin.secret_masking import SecretMaskingExtension
+from middleware.builtin.logging_extension import LoggingExtension
+from middleware.builtin.secret_masking import SecretMaskingExtension
 
 manager.load_extensions([LoggingExtension, SecretMaskingExtension])
 ```
 
 ### Complete working example — secret masking built-in
 
-The `SecretMaskingExtension` at `extensions/builtin/secret_masking.py` is the canonical example. It:
+The `SecretMaskingExtension` at `middleware/builtin/secret_masking.py` is the canonical example. It:
 
 - Sets `priority = 90` to run near the end (after most transforms are done).
 - Implements `on_before_response_send` with TRANSFORM semantics: reads `ctx.data["response"]`, applies regex masking, returns the masked string.
 - Provides `add_pattern()` for consumers to register additional patterns without subclassing.
 - Tracks `total_masks_applied` via `get_statistics()`.
 
-The `LoggingExtension` at `extensions/builtin/logging_extension.py` shows:
+The `LoggingExtension` at `middleware/builtin/logging_extension.py` shows:
 
 - `priority = 1` to capture the earliest view of every event.
 - Stateful timing: stores `_session_start_times[session_id]` on `BEFORE_MESSAGE_PROCESS`, reads it on `LOOP_COMPLETE`.
@@ -335,9 +335,9 @@ Follow this pattern when wiring a hook invocation into new backend code. Use the
 ### Import
 
 ```python
-from extensions.base import HookContext
-from extensions.hooks import HookPoint
-from extensions.manager import get_extension_manager
+from middleware.base import HookContext
+from middleware.hooks import HookPoint
+from middleware.manager import get_extension_manager
 ```
 
 ### COLLECT invocation (observation, no result needed)
@@ -414,7 +414,7 @@ async def _emit_transform_my_value(value: str, session_id: str) -> str:
 
 ### Adding a new HookPoint
 
-1. Add the enum value to `HookPoint` in `extensions/hooks.py`:
+1. Add the enum value to `HookPoint` in `middleware/hooks.py`:
 
 ```python
 class HookPoint(Enum):
@@ -432,7 +432,7 @@ HookPoint.MY_NEW_HOOK: {
 },
 ```
 
-3. Add the no-op stub to `Extension` in `extensions/base.py`:
+3. Add the no-op stub to `Extension` in `middleware/base.py`:
 
 ```python
 async def on_my_new_hook(self, ctx: HookContext) -> Optional[str]:
@@ -447,7 +447,7 @@ async def on_my_new_hook(self, ctx: HookContext) -> Optional[str]:
     """
 ```
 
-4. Register the default invocation config in `HookInvoker._register_default_configs()` in `extensions/hook_invoker.py`:
+4. Register the default invocation config in `HookInvoker._register_default_configs()` in `middleware/hook_invoker.py`:
 
 ```python
 self._configs[HookPoint.MY_NEW_HOOK] = HookInvocationConfig(
@@ -565,7 +565,7 @@ Approval path (inserted before BEFORE_TOOL_EXECUTE when tool needs approval):
 
 Both `Extension.on_hook()` and `ExtensionManager.invoke_hook()` catch all exceptions from extension methods and log them without re-raising. This is intentional: a misbehaving extension must never crash a user's session.
 
-From `extensions/base.py`:
+From `middleware/base.py`:
 
 ```python
 try:
@@ -580,7 +580,7 @@ except Exception as e:
     return None  # Not re-raised
 ```
 
-From `extensions/manager.py` (`invoke_hook`):
+From `middleware/manager.py` (`invoke_hook`):
 
 ```python
 except Exception as e:
@@ -620,7 +620,7 @@ async def on_critical_error(self, ctx: HookContext) -> None:
 `reset_extension_manager()` wipes the global singleton. Call it in `setup_method` or a fixture:
 
 ```python
-from extensions.manager import reset_extension_manager
+from middleware.manager import reset_extension_manager
 
 class TestMyExtension:
     def setup_method(self):
@@ -631,14 +631,14 @@ class TestMyExtension:
 
 ```python
 import pytest
-from extensions.base import Extension, HookContext
-from extensions.hooks import HookPoint
-from extensions.manager import ExtensionManager
+from middleware.base import Extension, HookContext
+from middleware.hooks import HookPoint
+from middleware.manager import ExtensionManager
 
 class TestRateLimitExtension:
     @pytest.mark.asyncio
     async def test_cancels_when_budget_exceeded(self):
-        from extensions.builtin.my_extension import RateLimitExtension
+        from middleware.builtin.my_extension import RateLimitExtension
 
         manager = ExtensionManager()
         ext = RateLimitExtension(max_calls_per_minute=2)
@@ -709,10 +709,10 @@ async def test_failing_extension_does_not_crash(self):
 
 ### Test file locations
 
-Unit tests for the extension system live in the `extensions/` directory alongside the modules they test:
+Unit tests for the extension system live in the `middleware/` directory alongside the modules they test:
 
-- `autobot-backend/extensions/extension_hooks_test.py` — HookPoint, HookContext, Extension, ExtensionManager, built-in extensions
-- `autobot-backend/extensions/hook_invoker_test.py` — HookInvoker, InvocationMode, HookInvocationConfig
+- `autobot-backend/middleware/extension_hooks_test.py` — HookPoint, HookContext, Extension, ExtensionManager, built-in extensions
+- `autobot-backend/middleware/hook_invoker_test.py` — HookInvoker, InvocationMode, HookInvocationConfig
 
 Follow the co-location rule: tests for a new extension go in the same directory as the extension file.
 

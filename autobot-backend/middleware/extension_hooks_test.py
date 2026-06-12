@@ -15,10 +15,10 @@ Tests verify:
 
 import pytest
 
-from extensions.base import Extension, HookContext
-from extensions.builtin import LoggingExtension, SecretMaskingExtension
-from extensions.hooks import HookPoint, get_hook_metadata
-from extensions.manager import (
+from middleware.base import Extension, HookContext
+from middleware.builtin import LoggingExtension, SecretMaskingExtension
+from middleware.hooks import HookPoint, get_hook_metadata
+from middleware.manager import (
     ExtensionManager,
     get_extension_manager,
     reset_extension_manager,
