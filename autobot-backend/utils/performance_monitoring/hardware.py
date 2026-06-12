@@ -24,7 +24,7 @@ class HardwareDetector:
     def check_gpu_availability() -> bool:
         """Check if NVIDIA GPU is available and accessible."""
         try:
-            result = subprocess.run(
+            result = subprocess.run(  # nosec B603 B607 - fixed nvidia-smi argv for GPU availability check
                 ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
                 capture_output=True,
                 text=True,

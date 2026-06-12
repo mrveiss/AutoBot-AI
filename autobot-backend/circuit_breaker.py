@@ -648,7 +648,7 @@ if __name__ == "__main__":
             """Example flaky service that fails 60% of the time."""
             import random
 
-            if random.random() < 0.6:  # 60% chance of failure
+            if random.random() < 0.6:  # nosec B311 - simulated failure rate for demo/testing purposes
                 raise ConnectionError("Service unavailable")
             return "Service response"
 

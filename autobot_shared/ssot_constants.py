@@ -58,7 +58,7 @@ ERR_TEMPLATE_NOT_FOUND = "Template not found"
 ERR_WORKFLOW_NOT_FOUND = "Workflow not found"
 ERR_EXPERIMENT_NOT_FOUND = "Experiment not found"
 ERR_INVALID_CREDENTIALS = "Invalid username or password"
-ERR_INVALID_TOKEN = "Invalid token"
+ERR_INVALID_TOKEN = "Invalid token"  # nosec B105 - user-facing error message string, not a credential
 
 
 # ============================================================================

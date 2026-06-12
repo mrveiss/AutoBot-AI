@@ -165,7 +165,7 @@ class WorkerNode:
         """Get detailed GPU information using nvidia-smi."""
         try:
             nvidia_smi_output = (
-                subprocess.check_output(  # nosec B607 - nvidia-smi is safe
+                subprocess.check_output(  # nosec B603 B607 - fixed nvidia-smi argv, no user input
                     [
                         "nvidia-smi",
                         "--query-gpu=name,memory.total,memory.used,memory.free," "utilization.gpu,utilization.memory",
