@@ -96,6 +96,7 @@ async def require_board_role(
     session: AsyncSession,
     allowed_roles: Set[str],
     membership_svc: object,
+    detail: str = "Insufficient board role for this operation",
 ) -> str:
     """Raise 403 unless caller holds one of *allowed_roles* in *company_id*.
 
@@ -116,10 +117,7 @@ async def require_board_role(
         raise HTTPException(status_code=500, detail=f"Membership lookup failed: {exc}") from exc
 
     if role not in allowed_roles:
-        raise HTTPException(
-            status_code=403,
-            detail="Insufficient board role for this operation",
-        )
+        raise HTTPException(status_code=403, detail=detail)
     return str(user_id)
 
 
