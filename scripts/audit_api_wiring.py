@@ -72,6 +72,10 @@ def norm_path(p: str) -> str:
 
 def dump_openapi(out_path: str) -> int:
     """Import the app and dump app.openapi() — authoritative route table."""
+    # Resolve BEFORE chdir: a relative out_path must land where the caller
+    # expects, not inside autobot-backend/ (#9864 — this stranded openapi.json
+    # in CI and the audit step crashed with FileNotFoundError every run).
+    out = Path(out_path).resolve()
     sys.path.insert(0, str(BACKEND))
     os.chdir(BACKEND)
     try:
@@ -88,10 +92,10 @@ def dump_openapi(out_path: str) -> int:
     except Exception as e:  # noqa: BLE001
         print(f"[dump-openapi] FAILED to build app: {e}", file=sys.stderr)
         return 1
-    Path(out_path).write_text(json.dumps(spec, indent=1))
+    out.write_text(json.dumps(spec, indent=1))
     print(
         f"[dump-openapi] wrote {len(spec.get('paths', {}))} paths "
-        f"(+{len(spec.get('x-websocket-paths', []))} websocket) to {out_path}"
+        f"(+{len(spec.get('x-websocket-paths', []))} websocket) to {out}"
     )
     return 0
 
@@ -218,13 +222,18 @@ def frontend_calls() -> dict[str, set[str]]:
             if "node_modules" in sp or any(x in sp for x in FE_EXCLUDE_PATTERNS):
                 continue
             txt = f.read_text(encoding="utf-8", errors="ignore")
-            for m in FE_API_RE.findall(txt):
-                p = norm_path(m)
-                # Unbalanced braces = extraction artifact (brace-expansion
-                # notation inside comments, e.g. `/api/x/{a,b}/y`), not a call.
-                if p.count("{") != p.count("}"):
+            for line in txt.splitlines():
+                # Comment lines hold doc EXAMPLES (`* apiClient.get('/api/users')`),
+                # not real calls — skip them.
+                if line.lstrip()[:2] in ("* ", "//", "/*") or line.strip() == "*":
                     continue
-                calls[p].add(str(f.relative_to(REPO_ROOT)))
+                for m in FE_API_RE.findall(line):
+                    p = norm_path(m)
+                    # Unbalanced braces = extraction artifact (brace-expansion
+                    # notation inside comments, e.g. `/api/x/{a,b}/y`), not a call.
+                    if p.count("{") != p.count("}"):
+                        continue
+                    calls[p].add(str(f.relative_to(REPO_ROOT)))
     return calls
 
 
