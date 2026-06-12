@@ -6,7 +6,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 RUNNER = REPO_ROOT / "tools" / "lint" / "canonical_check_infra.py"
-FIXTURES = REPO_ROOT / "tests" / "lint" / "canonical" / "fixtures" / "sh_echo_debug_smoke"
+FIXTURES = REPO_ROOT / "repo_tests" / "lint" / "canonical" / "fixtures" / "sh_echo_debug_smoke"
 
 
 def _run(*args: str) -> subprocess.CompletedProcess:
