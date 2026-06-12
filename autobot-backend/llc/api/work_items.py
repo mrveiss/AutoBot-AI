@@ -43,6 +43,7 @@ from models.agent_org import AgentOrgNode
 from user_management.models.user import User
 from user_management.services import TenantContext
 
+from ..kb.ac_suggester import AcSuggester
 from ..kb.collections import KbCollectionManager
 from ..models.enums import (
     WorkItemPriority,
@@ -111,6 +112,7 @@ _get_attachment_service = lazy_singleton(AttachmentService)
 _get_comment_wake_service = lazy_singleton(CommentWakeService)
 _get_heartbeat_scheduler = lazy_singleton(HeartbeatScheduler)
 _get_activity_service = lazy_singleton(LLCActivityLogService)
+_get_ac_suggester = lazy_singleton(AcSuggester)
 
 _service = service_dep(WorkItemService)
 
@@ -415,9 +417,11 @@ async def list_work_items(
 async def get_work_item(
     work_item_id: str,
     session: AsyncSession = Depends(get_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
     item = await _service().get(session, work_item_id)
-    if item is None:
+    if item is None or str(item.company_id) != str(ctx.org_id):
         raise HTTPException(status_code=404, detail="Work item not found")
     return await _item_to_dict(item, session)
 
@@ -427,7 +431,13 @@ async def update_work_item(
     work_item_id: str,
     body: WorkItemUpdate,
     session: AsyncSession = Depends(get_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
+    # IDOR guard: verify item belongs to caller's org before mutating (GH#9861).
+    existing = await _service().get(session, work_item_id)
+    if existing is None or str(existing.company_id) != str(ctx.org_id):
+        raise HTTPException(status_code=404, detail="Work item not found")
     fields = {k: v for k, v in body.model_dump(exclude_none=True).items()}
     item = await _service().update(session, work_item_id, **fields)
     if item is None:
@@ -440,9 +450,11 @@ async def update_work_item(
 async def delete_work_item(
     work_item_id: str,
     session: AsyncSession = Depends(get_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> None:
     item = await _service().get(session, work_item_id)
-    if item is None:
+    if item is None or str(item.company_id) != str(ctx.org_id):
         raise HTTPException(status_code=404, detail="Work item not found")
     await session.delete(item)
     await session.commit()
@@ -776,7 +788,13 @@ async def review_request_changes(
 async def get_handoff_brief(
     work_item_id: str,
     session: AsyncSession = Depends(get_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
+    # IDOR guard (GH#9861): reject cross-tenant access before touching handoff KB.
+    item = await _service().get(session, work_item_id)
+    if item is None or str(item.company_id) != str(ctx.org_id):
+        raise HTTPException(status_code=404, detail="Work item not found")
     try:
         brief = await _handoff_service().get_brief(session, work_item_id)
         return {"work_item_id": work_item_id, "brief": brief}
@@ -839,8 +857,13 @@ async def list_work_products(
     limit: int = Query(100, ge=1, le=200),
     offset: int = Query(0, ge=0),
     session: AsyncSession = Depends(get_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
     """List all work products for a work item (GH#8242)."""
+    item = await _service().get(session, work_item_id)
+    if item is None or str(item.company_id) != str(ctx.org_id):
+        raise HTTPException(status_code=404, detail="Work item not found")
     products = await _get_product_service().list_by_work_item(
         session,
         work_item_id=work_item_id,
@@ -976,6 +999,66 @@ async def remove_relation(
     except ValueError as exc:
         logger.error("Exception in API handler: %s", exc, exc_info=True)
         raise HTTPException(status_code=404, detail="Internal server error")
+
+
+# ---------------------------------------------------------------------------
+# Acceptance-criteria suggestion (GH#9861)
+# ---------------------------------------------------------------------------
+
+
+class SuggestAcRequest(BaseModel):
+    company_id: str
+    work_item_id: Optional[str] = None
+    title: Optional[str] = None
+    description: Optional[str] = None
+    project_id: Optional[str] = None
+
+
+class SuggestAcResponse(BaseModel):
+    suggestions: List[str]
+    sources: List[str]
+
+
+@router.post("/suggest-ac", response_model=SuggestAcResponse)
+async def suggest_acceptance_criteria(
+    body: SuggestAcRequest,
+    session: AsyncSession = Depends(get_session),
+) -> SuggestAcResponse:
+    """Suggest acceptance criteria for a work item using the RAG-backed AcSuggester.
+
+    Provide ``work_item_id`` to resolve title/description from the DB (with tenant
+    check), or supply ``title`` directly.  Returns an empty list on LLM failure so
+    the caller can degrade gracefully without surfacing a 500 error.
+    """
+    title = body.title
+    description = body.description or ""
+    project_id = body.project_id or ""
+
+    if not title and body.work_item_id:
+        item = await _service().get(session, body.work_item_id)
+        if item is None or str(item.company_id) != str(body.company_id):
+            raise HTTPException(status_code=404, detail="Work item not found")
+        title = item.title
+        description = item.description or ""
+        if not project_id and item.project_id:
+            project_id = str(item.project_id)
+
+    if not title:
+        raise HTTPException(
+            status_code=422,
+            detail="Provide work_item_id or title to generate suggestions",
+        )
+
+    result = await _get_ac_suggester().suggest(
+        company_id=body.company_id,
+        project_id=project_id,
+        item_title=title,
+        item_description=description,
+    )
+    return SuggestAcResponse(
+        suggestions=result.get("suggestions", []),
+        sources=result.get("sources", []),
+    )
 
 
 # ---------------------------------------------------------------------------

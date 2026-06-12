@@ -27,11 +27,12 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
 from autobot_shared.logging_manager import get_logger
+from llc.deps import get_session, service_dep
 from llc.kb.collections import KbCollectionManager
 from llc.models.company import (
     CompanyAncestor,
@@ -42,6 +43,7 @@ from llc.models.company import (
 )
 from llc.models.enums import ExternalPMType, LLCCompanyStatus, MembershipRole
 from llc.models.membership import LLCCompanyMembership
+from llc.services.backlog import BacklogService
 from llc.services.company import (
     CompanyBudgetError,
     CompanyCycleError,
@@ -61,6 +63,8 @@ from user_management.models.organization import Organization
 from user_management.services import TenantContext
 
 logger = get_logger(__name__)
+
+_backlog_svc = service_dep(BacklogService)
 
 router = APIRouter(prefix="/companies", tags=["llc-companies"])
 
@@ -468,6 +472,55 @@ class AgentSearchResult(BaseModel):
 
 
 # ------------------------------------------------------------------
+# Backlog reorder (GH#9861)
+# ------------------------------------------------------------------
+
+
+class BacklogReorderRequest(BaseModel):
+    """Bulk-reorder request — ordered list of work item UUIDs.
+
+    Positions are assigned 0..n-1 in the order items appear in the list.
+    Items belonging to a different company are silently skipped (tenant
+    isolation: callers should only submit ids they already fetched from
+    this company's backlog).
+    """
+
+    work_item_ids: List[str] = Field(..., min_length=1, max_length=500)
+
+
+class BacklogReorderResponse(BaseModel):
+    updated: int
+    unknown_count: int
+
+
+@router.post(
+    "/{company_id}/backlog/reorder",
+    response_model=BacklogReorderResponse,
+    status_code=200,
+)
+async def reorder_backlog(
+    company_id: uuid.UUID,
+    body: BacklogReorderRequest,
+    session: AsyncSession = Depends(get_session),
+) -> BacklogReorderResponse:
+    """Assign ``backlog_position`` 0..n-1 to the supplied ordered work item ids.
+
+    All ids must belong to *company_id* — unknown or cross-tenant ids are
+    counted in ``unknown_count`` and silently skipped (not an error, so that
+    a stale UI with a partially-loaded backlog can still submit a reorder
+    without receiving a 400).  A 400 is only raised when the entire list is
+    empty (caught by pydantic min_length=1).
+    """
+    result = await _backlog_svc().bulk_reorder(
+        session,
+        company_id=str(company_id),
+        ordered_ids=body.work_item_ids,
+    )
+    await session.commit()
+    return BacklogReorderResponse(**result)
+
+
+# ------------------------------------------------------------------
 # Org chart (GH#9861) — read-only composition of existing models
 # ------------------------------------------------------------------
 
@@ -523,10 +576,12 @@ async def get_org_chart(
     from the self-referencing ``reports_to`` edges. Tenant access is enforced
     via :func:`require_org_context`.
     """
+    import sqlalchemy as sa
     from sqlalchemy import func, select
 
     from llc.models.budget import LLCAgentBudget
     from llc.models.heartbeat_run import LLCHeartbeatRun
+    from llc.models.work_item import LLCWorkItem
     from models.agent_org import AgentOrgNode
 
     cid = str(company_id)
@@ -568,11 +623,44 @@ async def get_org_chart(
     )
     runs = {r.agent_id: r for r in latest_runs}
 
+    # 4. Assigned work-item counts per agent — single grouped query, no N+1.
+    #    "Assigned" means the item has an assignee_agent_id pointing to this
+    #    agent AND the item is not yet in a terminal state (done/cancelled).
+    #    sa.cast(status, String).notin_() ensures the comparison works as plain
+    #    string literals regardless of whether the column type has been rebound
+    #    (e.g. by the test harness's _rebind_enums_by_value).
+    _terminal_statuses = ("done", "cancelled")
+    assign_q = (
+        select(
+            LLCWorkItem.assignee_agent_id,
+            func.count(LLCWorkItem.id).label("cnt"),
+        )
+        .where(
+            LLCWorkItem.company_id == company_id,
+            LLCWorkItem.assignee_agent_id.isnot(None),
+            sa.cast(LLCWorkItem.status, sa.String).notin_(_terminal_statuses),
+        )
+        .group_by(LLCWorkItem.assignee_agent_id)
+    )
+    assigned_counts: Dict[str, int] = {
+        str(row.assignee_agent_id): row.cnt
+        for row in (await session.execute(assign_q)).all()
+    }
+
     # Compose flat nodes.
     flat: Dict[str, OrgChartNode] = {}
     for row in org_rows:
         budget = budgets.get(row.agent_id)
         run = runs.get(row.agent_id)
+        # Budget enrichment: expose token numbers for token-mode agents when
+        # the field is populated, otherwise fall back to dollar amounts.
+        b_mode = budget.budget_mode if budget else "dollars"
+        if b_mode == "tokens" and budget and budget.token_limit is not None:
+            b_spent = float(budget.tokens_spent)
+            b_total = float(budget.token_limit)
+        else:
+            b_spent = float(budget.budget_spent) if budget else 0.0
+            b_total = float(budget.budget_limit) if budget else 0.0
         flat[row.agent_id] = OrgChartNode(
             id=row.agent_id,
             name=row.name,
@@ -585,9 +673,9 @@ async def get_org_chart(
             last_heartbeat=(
                 (run.started_at or run.created_at).isoformat() if run and (run.started_at or run.created_at) else None
             ),
-            budget_spent=float(budget.budget_spent) if budget else 0.0,
-            budget_total=float(budget.budget_limit) if budget else 0.0,
-            assigned_item_count=0,
+            budget_spent=b_spent,
+            budget_total=b_total,
+            assigned_item_count=assigned_counts.get(row.agent_id, 0),
             parent_id=row.reports_to,
             children=[],
         )
