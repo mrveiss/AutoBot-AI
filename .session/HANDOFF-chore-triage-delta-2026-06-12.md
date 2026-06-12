@@ -1,6 +1,6 @@
 # Handoff: chore/triage-delta-2026-06-12
 status: complete
-pr: (see PR opened from this branch — title "chore(triage): 2026-06-12 umbrella restore + delta triage")
+pr: #10033
 base_at_push: 791ae16f7
 gates: n/a — triage/organize only; only UMBRELLA_PLAN.md + TRIAGE_DELTA_REPORT.md + this handoff changed
 needs_rebase_before_merge: no
