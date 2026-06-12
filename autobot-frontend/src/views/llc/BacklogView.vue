@@ -353,9 +353,9 @@ async function onDrop(target: WorkItem) {
   items.value = reordered
   draggedItem.value = null
 
-  // Persistence awaits a backend route (#9861): when implemented, POST the
-  // new ordering to companies/{companyId}/backlog/reorder { ordered_ids }.
-  // Until then this branch is unreachable (backlogReorderEnabled === false).
+  // Persistence: POST the new ordering to
+  // companies/{companyId}/backlog/reorder { work_item_ids: [...] }.
+  // Currently unreachable (backlogReorderEnabled === false).
   await persistBacklogOrder(reordered)
 }
 

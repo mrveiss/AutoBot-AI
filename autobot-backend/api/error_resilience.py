@@ -30,7 +30,9 @@ from services.resilience.fallback_manager import get_fallback_manager
 
 logger = get_logger(__name__)
 
-router = APIRouter(prefix="/api/resilience", tags=["resilience"])
+# Prefix must NOT include "/api" — the app factory prepends it (#9864:
+# the old "/api/resilience" prefix served /api/api/resilience/*).
+router = APIRouter(prefix="/resilience", tags=["resilience"])
 
 
 @register_health_probe(KnownProbes.ERROR_RESILIENCE)
