@@ -69,16 +69,82 @@
               <span class="status-dot" :class="`status-${run.status}`" />
               <span class="run-status" :class="`status-${run.status}`">{{ run.status }}</span>
               <span class="run-date">{{ formatDate(run.started_at) }}</span>
-              <span v-if="run.completed_at" class="run-duration">
-                {{ computeDuration(run.started_at, run.completed_at) }}
+              <span v-if="run.finished_at" class="run-duration">
+                {{ computeDuration(run.started_at, run.finished_at) }}
               </span>
             </div>
-            <div class="run-toggle">
+            <div class="run-actions">
               <button class="toggle-payload" @click="toggleRun(run.id)">
                 {{ expandedRuns.has(run.id) ? 'Hide' : 'Show' }} Context
               </button>
+              <button
+                class="btn-replay"
+                :disabled="replayingRuns.has(run.id)"
+                @click="triggerReplay(run)"
+              >
+                {{ replayingRuns.has(run.id) ? 'Replaying...' : 'Replay' }}
+              </button>
+              <button class="btn-replay-log" @click="openReplayPanel(run)">
+                Step-Browse
+              </button>
+              <a
+                v-if="selectedAgent"
+                class="btn-fixture"
+                :href="`/api/llc/agents/${selectedAgent.id}/runs/${run.id}/fixture`"
+                target="_blank"
+                rel="noopener"
+              >Export Fixture</a>
             </div>
             <pre v-if="expandedRuns.has(run.id)" class="run-context">{{ formatJson(run.context_snapshot) }}</pre>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Replay step-browser panel -->
+    <div v-if="replayPanelRun && selectedAgent" class="drawer-overlay" @click.self="replayPanelRun = null">
+      <div class="history-drawer replay-panel">
+        <div class="drawer-header">
+          <h3>Replay Log – {{ replayPanelRun.id.slice(0, 8) }}</h3>
+          <div class="header-actions">
+            <label class="redact-label">
+              <input v-model="redactPii" type="checkbox" />
+              Redact PII
+            </label>
+            <button class="btn-close" @click="replayPanelRun = null">✕</button>
+          </div>
+        </div>
+        <div v-if="replayLogLoading" class="state-msg">Loading replay log...</div>
+        <div v-else-if="!replayLog" class="state-msg">No replay log recorded for this run yet.</div>
+        <div v-else class="replay-body">
+          <div class="replay-meta">
+            <span class="meta-item">Status: <strong>{{ replayLog.final_status ?? '—' }}</strong></span>
+            <span class="meta-item">Events: <strong>{{ (replayLog.recorded_events ?? []).length }}</strong></span>
+            <span v-if="replayLog.replay_of_run_id" class="meta-item">
+              Replay of: <code>{{ replayLog.replay_of_run_id.slice(0, 8) }}</code>
+            </span>
+          </div>
+
+          <!-- Event timeline step-browser -->
+          <div v-if="(replayLog.recorded_events ?? []).length > 0" class="event-browser">
+            <div class="event-nav">
+              <button :disabled="eventIdx === 0" @click="eventIdx = Math.max(0, eventIdx - 1)">Prev</button>
+              <span>{{ eventIdx + 1 }} / {{ replayLog.recorded_events!.length }}</span>
+              <button :disabled="eventIdx >= (replayLog.recorded_events!.length - 1)" @click="eventIdx = Math.min(replayLog.recorded_events!.length - 1, eventIdx + 1)">Next</button>
+            </div>
+            <pre class="event-detail">{{ formatJson(replayLog.recorded_events![eventIdx]) }}</pre>
+          </div>
+
+          <!-- Output diff section (shown when a replay run exists) -->
+          <div v-if="replayDiff" class="diff-section">
+            <h4 class="diff-title">Output Diff (original vs replay)</h4>
+            <pre class="diff-content" :class="{ 'diff-identical': replayDiff.identical }">{{ replayDiff.identical ? '(outputs are identical)' : replayDiff.diff }}</pre>
+          </div>
+
+          <!-- Output text -->
+          <div v-if="replayLog.output_text" class="output-section">
+            <h4 class="output-title">Captured Output</h4>
+            <pre class="run-context">{{ replayLog.output_text }}</pre>
           </div>
         </div>
       </div>
@@ -111,8 +177,29 @@ interface AgentRun {
   id: string
   status: string
   started_at: string
+  finished_at?: string
   completed_at?: string
   context_snapshot?: Record<string, unknown>
+}
+
+interface ReplayLog {
+  id: string
+  run_id: string | null
+  replay_of_run_id: string | null
+  agent_id: string
+  inputs_snapshot: Record<string, unknown> | null
+  agent_snapshot: Record<string, unknown> | null
+  recorded_events: Record<string, unknown>[] | null
+  output_text: string | null
+  final_status: string | null
+  created_at: string | null
+}
+
+interface RunDiff {
+  run_id_a: string
+  run_id_b: string
+  diff: string
+  identical: boolean
 }
 
 const agents = ref<Agent[]>([])
@@ -122,6 +209,15 @@ const selectedAgent = ref<Agent | null>(null)
 const runHistory = ref<AgentRun[]>([])
 const historyLoading = ref(false)
 const expandedRuns = ref<Set<string>>(new Set())
+
+// Replay state
+const replayingRuns = ref<Set<string>>(new Set())
+const replayPanelRun = ref<AgentRun | null>(null)
+const replayLog = ref<ReplayLog | null>(null)
+const replayLogLoading = ref(false)
+const replayDiff = ref<RunDiff | null>(null)
+const redactPii = ref(false)
+const eventIdx = ref(0)
 
 const heartbeatAgents = computed(() => agents.value.filter(a => a.heartbeat_enabled))
 
@@ -160,6 +256,45 @@ function toggleRun(id: string) {
   if (next.has(id)) next.delete(id)
   else next.add(id)
   expandedRuns.value = next
+}
+
+async function triggerReplay(run: AgentRun) {
+  if (!selectedAgent.value) return
+  const next = new Set(replayingRuns.value)
+  next.add(run.id)
+  replayingRuns.value = next
+  try {
+    const result = await api.post<{ new_run_id: string; status: string }>(
+      `/api/llc/agents/${selectedAgent.value.id}/runs/${run.id}/replay`,
+      {},
+    )
+    logger.info('Replay triggered, new run:', result.new_run_id)
+    await openHistory(selectedAgent.value)
+  } catch (err) {
+    logger.error('Replay trigger failed', err)
+  } finally {
+    const s = new Set(replayingRuns.value)
+    s.delete(run.id)
+    replayingRuns.value = s
+  }
+}
+
+async function openReplayPanel(run: AgentRun) {
+  if (!selectedAgent.value) return
+  replayPanelRun.value = run
+  replayLog.value = null
+  replayDiff.value = null
+  eventIdx.value = 0
+  replayLogLoading.value = true
+  try {
+    const url = `/api/llc/agents/${selectedAgent.value.id}/runs/${run.id}/replay-log${redactPii.value ? '?redact_pii=true' : ''}`
+    replayLog.value = await api.get<ReplayLog>(url)
+  } catch (err) {
+    logger.error('Failed to load replay log', err)
+    replayLog.value = null
+  } finally {
+    replayLogLoading.value = false
+  }
 }
 
 async function fetchAgents() {
@@ -431,5 +566,152 @@ onUnmounted(() => {
   margin: 0;
   white-space: pre-wrap;
   word-break: break-all;
+}
+
+.run-actions {
+  display: flex;
+  gap: 0.375rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.btn-replay,
+.btn-replay-log {
+  padding: 0.2rem 0.5rem;
+  border: 1px solid var(--color-border, #d1d5db);
+  border-radius: 0.25rem;
+  background: var(--color-surface-elevated, #f9fafb);
+  cursor: pointer;
+  font-size: 0.8rem;
+}
+
+.btn-replay:hover,
+.btn-replay-log:hover {
+  background: var(--color-surface-hover, #f3f4f6);
+}
+
+.btn-replay:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-fixture {
+  padding: 0.2rem 0.5rem;
+  border: 1px solid var(--color-border, #d1d5db);
+  border-radius: 0.25rem;
+  background: var(--color-surface-elevated, #f9fafb);
+  font-size: 0.8rem;
+  text-decoration: none;
+  color: var(--color-text, #374151);
+}
+
+.replay-panel {
+  width: 560px;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.redact-label {
+  font-size: 0.8rem;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  cursor: pointer;
+}
+
+.replay-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.replay-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  font-size: 0.875rem;
+}
+
+.meta-item {
+  color: var(--color-text-secondary, #6b7280);
+}
+
+.event-browser {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.event-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+}
+
+.event-nav button {
+  padding: 0.2rem 0.5rem;
+  border: 1px solid var(--color-border, #d1d5db);
+  border-radius: 0.25rem;
+  background: var(--color-surface-elevated, #f9fafb);
+  cursor: pointer;
+  font-size: 0.8rem;
+}
+
+.event-nav button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.event-detail {
+  background: var(--color-surface-elevated, #f9fafb);
+  border: 1px solid var(--color-border, #e5e7eb);
+  border-radius: 0.375rem;
+  padding: 0.75rem;
+  font-size: 0.8rem;
+  overflow-x: auto;
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.diff-section,
+.output-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.diff-title,
+.output-title {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.diff-content {
+  background: var(--color-surface-elevated, #f9fafb);
+  border: 1px solid var(--color-border, #e5e7eb);
+  border-radius: 0.375rem;
+  padding: 0.75rem;
+  font-size: 0.75rem;
+  overflow-x: auto;
+  margin: 0;
+  white-space: pre;
+  max-height: 250px;
+  overflow-y: auto;
+}
+
+.diff-identical {
+  color: var(--color-text-secondary, #6b7280);
 }
 </style>

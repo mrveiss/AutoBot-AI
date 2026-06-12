@@ -53,6 +53,7 @@ from ..exceptions import AdapterRunFailed, ProviderRateLimited
 from ..models.enums import HeartbeatInvocationSource, LLCRunStatus
 from ..models.heartbeat_run import LLCHeartbeatRun
 from ..services.api_key import ApiKeyService
+from ..services.replay_service import RunReplayService, parse_jsonl_events
 
 logger = logging.getLogger(__name__)
 
@@ -518,6 +519,14 @@ class HeartbeatScheduler:
         except Exception:
             logger.exception("Could not write final status for run %s", run_id)
 
+        # GH#9034: fire-and-forget replay recording — must never affect run status.
+        _record_task = asyncio.create_task(
+            _record_run_for_replay(agent, run_id, context, final_status),
+            name=f"replay-record-{run_id}",
+        )
+        self._tasks.add(_record_task)
+        _record_task.add_done_callback(self._tasks.discard)
+
     async def _handle_rate_limited(
         self,
         agent: Dict[str, Any],
@@ -630,6 +639,57 @@ def get_heartbeat_scheduler() -> HeartbeatScheduler:
 # ------------------------------------------------------------------
 # Module-level helpers
 # ------------------------------------------------------------------
+
+
+async def _record_run_for_replay(
+    agent: Dict[str, Any],
+    run_id: uuid.UUID,
+    context: Dict[str, Any],
+    final_status: str,
+) -> None:
+    """Best-effort replay recording fired after a run reaches terminal status (GH#9034).
+
+    For subprocess adapters the JSONL output file is read (if present) to
+    populate recorded_events.  For in-process agents the context is sufficient.
+    Any exception is swallowed so the scheduler is never blocked.
+    """
+    try:
+        output_text: Optional[str] = None
+        recorded_events = None
+
+        # Attempt to read subprocess output file when the agent carries an output_dir.
+        adapter_type = agent.get("adapter_type") or "autobot_agent"
+        if adapter_type != "autobot_agent":
+            cfg = agent.get("adapter_config") or {}
+            output_dir = cfg.get("output_dir", "/tmp")  # nosec B108
+            agent_id_str = str(agent.get("agent_id", ""))
+            # The output file path mirrors ClaudeCodeAdapter._output_path / others.
+            # We read it best-effort; it may be absent (Copilot, remote CLI, etc.).
+            import glob
+            import os
+
+            pattern = os.path.join(output_dir, f"llc_agent_{agent_id_str}_*.jsonl")
+            candidates = sorted(glob.glob(pattern), key=os.path.getmtime, reverse=True)
+            if candidates:
+                try:
+                    with open(candidates[0], encoding="utf-8", errors="replace") as fh:
+                        raw = fh.read()
+                    output_text = raw[-131072:] if len(raw) > 131072 else raw
+                    recorded_events = parse_jsonl_events(raw)
+                except OSError:
+                    pass
+
+        svc = RunReplayService()
+        await svc.record_run(
+            run_id=run_id,
+            agent=agent,
+            context=context,
+            final_status=final_status,
+            output_text=output_text,
+            recorded_events=recorded_events,
+        )
+    except Exception:
+        logger.exception("_record_run_for_replay: unexpected error for run %s", run_id)
 
 
 def _next_fire(cron_expr: str, base_ts: float) -> float:
