@@ -31,6 +31,7 @@ aliases:
 | Document | Description |
 | --- | --- |
 | [01-architecture](01-architecture.md) | System architecture overview |
+| [CODEGEN_MANIFEST](CODEGEN_MANIFEST.md) | Codegen MANIFEST — canonical enum/dataclass → TS generation |
 | [02-process-flow](02-process-flow.md) | Request handling flow |
 | [03-api-reference](03-api-reference.md) | API documentation |
 | [04-configuration](04-configuration.md) | Configuration options |
