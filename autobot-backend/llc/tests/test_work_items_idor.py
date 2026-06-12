@@ -98,6 +98,7 @@ def _make_idor_app(
         mock_item.priority = "medium"
         mock_item.story_points = None
         mock_item.labels = []
+        mock_item.linked_pr_urls = []  # GH#9625
         mock_item.parent_id = None
         mock_item.project_id = None
         mock_item.sprint_id = None

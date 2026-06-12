@@ -146,6 +146,7 @@ interface WorkItem {
   labels: string[]
   acceptance_criteria: string[]
   description: string
+  linked_pr_urls?: string[]
 }
 
 interface BoardColumn {
@@ -263,6 +264,9 @@ const KanbanCard = defineComponent({
       h('div', { class: 'card-header-row' }, [
         h('span', { class: 'card-id' }, props.item.identifier),
         h('span', { class: `card-type type-${props.item.type}` }, props.item.type),
+        props.item.linked_pr_urls?.length
+          ? h('span', { class: 'pr-badge', title: `${props.item.linked_pr_urls.length} PR(s) linked` }, '🔗')
+          : null,
       ]),
       h('p', { class: 'card-title' }, props.item.title),
       h('div', { class: 'card-footer-row' }, [
@@ -461,6 +465,17 @@ onUnmounted(() => ws?.close())
   border-radius: 9999px;
   font-weight: 500;
   text-transform: capitalize;
+}
+
+.pr-badge {
+  font-size: 0.7rem;
+  cursor: help;
+  opacity: 0.8;
+  transition: opacity 0.15s;
+}
+
+.pr-badge:hover {
+  opacity: 1;
 }
 
 .type-epic { background: #ddd6fe; color: #5b21b6; }
