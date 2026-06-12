@@ -367,7 +367,7 @@ class ReplicationService:
         source_result = await db.execute(select(Node).where(Node.node_id == replication.source_node_id))
         source_node = source_result.scalar_one_or_none()
 
-        redis_password = ""
+        redis_password = ""  # nosec B105 - empty initial value; real password fetched via _get_redis_password() below
         if source_node:
             redis_password = await self._get_redis_password(
                 source_node.ip_address,

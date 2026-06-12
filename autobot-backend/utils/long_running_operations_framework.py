@@ -236,7 +236,7 @@ async def _execute_single_test(
     )
 
     await asyncio.sleep(TimingConstants.SHORT_DELAY)  # Simulate test execution
-    test_passed = random.random() > 0.1  # 90% pass rate
+    test_passed = random.random() > 0.1  # nosec B311 - simulated test pass rate for demo, not cryptographic
 
     test_result = _create_test_result(test_file, test_passed, 0.5)
     return test_result, test_passed

@@ -115,7 +115,10 @@ class ClaudeCodeAdapter(SubprocessLifecycleAdapter):
         os.makedirs(output_dir, exist_ok=True)
 
         prompt = self._build_prompt(context)
-        resume_session_id = await self._get_resumable_session(agent_id)
+        # H3: replay-mode runs must never resume an existing session so they
+        # execute from scratch against the stored inputs.
+        replay_mode: bool = bool(context.get("replay"))
+        resume_session_id = None if replay_mode else await self._get_resumable_session(agent_id)
 
         cmd: list[str] = [cli, "--output-format", "stream-json", "--print"]
 

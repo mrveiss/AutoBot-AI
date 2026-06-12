@@ -509,6 +509,7 @@ sys.modules["code_intelligence.merge_conflict_resolver"] = _ci_merge_stub
 for _ci_sub in [
     "code_intelligence.performance_analyzer",
     "code_intelligence.redis_optimizer",
+    "code_intelligence.security",  # real package loaded by code_intelligence/conftest.py (#9856)
     "code_intelligence.security_analyzer",
     "code_intelligence.code_evolution_miner",
     "code_intelligence.bug_predictor",

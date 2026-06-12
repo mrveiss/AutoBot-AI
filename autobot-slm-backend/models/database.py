@@ -622,7 +622,7 @@ class SecretCategory(str, enum.Enum):
     """System secret category enumeration (#1417)."""
 
     SYSTEM = "system"
-    API_TOKEN = "api_token"
+    API_TOKEN = "api_token"  # nosec B105 - enum value for secret category type, not a credential
     SERVICE = "service"
 
 
