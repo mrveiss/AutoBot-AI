@@ -147,17 +147,20 @@ def backend_paths_static() -> tuple[set[str], dict[str, list[str]]]:
 
 
 def _module_served_by_openapi(txt: str, backend: set[str]) -> bool:
-    """Authoritative suppression: a module whose declared routes appear in the
-    real route table is mounted, whatever the static registry scan thinks."""
+    """Authoritative suppression: a module is mounted when ALL of its declared
+    routes appear in the real route table (any-route matching would let one
+    coincidental suffix like /status suppress a whole unmounted module)."""
     own = ROUTER_PREFIX_RE.search(txt)
     prefix = own.group(1).rstrip("/") if own else ""
+    checked = 0
     for _m, route in ROUTE_DECORATOR_RE.findall(txt):
         full = norm_path(prefix + (route if route.startswith("/") or not route else "/" + route))
         if full == "/":
             continue
-        if any(b.endswith(full) for b in backend):
-            return True
-    return False
+        checked += 1
+        if not any(b.endswith(full) for b in backend):
+            return False
+    return checked > 0
 
 
 def find_unmounted_routers(backend: set[str] | None = None) -> list[str]:
@@ -190,14 +193,19 @@ def find_unmounted_routers(backend: set[str] | None = None) -> list[str]:
 
         # Transitive vouching: registry-mounted modules vouch for siblings
         # they sub-include via `<name>.router`, to a fixpoint (GH#9864 —
-        # e.g. api/analytics.py sub-includes analytics_engagement).
+        # e.g. api/analytics.py sub-includes analytics_engagement). Word
+        # boundary required: bare substring matching would let
+        # `gpu_monitoring.router` vouch an unmounted `monitoring` module.
         mounted = {n for n in module_txt if n in registry_txt or n in init_txt}
         changed = True
         while changed:
             changed = False
             for parent in list(mounted):
                 for child in module_txt:
-                    if child not in mounted and f"{child}.router" in module_txt[parent]:
+                    if child not in mounted and re.search(
+                        rf"(?<![A-Za-z0-9_.]){re.escape(child)}\.router",
+                        module_txt[parent],
+                    ):
                         mounted.add(child)
                         changed = True
 
@@ -251,7 +259,9 @@ def _segments_match(fe: str, b: str) -> bool:
 def matches(fe: str, backend: set[str]) -> bool:
     """fe like /api/devices/paired vs backend paths possibly without /api."""
     candidates = {fe}
-    if fe.startswith("/api/"):
+    # /api-stripped variant (static-mode tables lack the /api prefix) — but
+    # not when the next segment is a wildcard: /{p}/x would re-match /api/x.
+    if fe.startswith("/api/") and not fe.startswith("/api/{p}"):
         candidates.add(fe[len("/api"):])
     # `…x${qs}` template tails are usually query strings appended to the path
     # (norm turns them into a glued `x{p}`) — also try the stripped path.
@@ -264,7 +274,10 @@ def matches(fe: str, backend: set[str]) -> bool:
         if any(_segments_match(c, b) for b in backend):
             return True
         # Bare base-URL string (`/api/transcriber` + path concatenation):
-        # treat as wired when real routes exist beneath it.
+        # treat as wired when real routes exist beneath it. Known trade-off:
+        # this also masks a missing collection-root endpoint (GET /api/x when
+        # only /api/x/{id} exists) — static extraction cannot tell a base
+        # constant from a full call.
         if any(b.startswith(c + "/") for b in backend):
             return True
     return False
