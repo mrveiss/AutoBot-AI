@@ -19,7 +19,7 @@ into **13 umbrella epics**. Triage/organize only — no code was fixed.
 | U6 | **#9924** | test-infra / CI | 11 | +3 | 14 |
 | U7 | **#9925** | transcriber | 11 | +1 | 12 |
 | U8 | **#9926** | docs-positioning | 10 | — | 10 |
-| U9 | **#9927** | governance | 6 | +1 | 7 |
+| U9 | **#9927** | governance | 6 | +2 | 8 |
 | U10 | **#9928** | integrations-plugins | 10 | — | 10 |
 | U11 | **#9929** | product-features | 18 | +6 | 24 |
 | U12 | **#9930** | enterprise-auth (SSO) | 7 | — | 7 |
@@ -28,7 +28,8 @@ into **13 umbrella epics**. Triage/organize only — no code was fixed.
 > **2026-06-12 triage delta:** 42 issues filed 2026-06-11 (wave-review follow-ups +
 > live-console findings) were placed; member counts above include closed members.
 > U4's +9 and U6's +3 include #10025 and #10019/#10022/#10023, which wave sessions
-> had already appended; U9's +1 is #10024. The other 37 were appended 2026-06-12
+> had already appended; U9's +2 is #10024 (pre-appended) + #10035 (filed during
+> this session — branch-pruning automation race). The other 37 were appended 2026-06-12
 > (`### Triage delta` sections in each umbrella body). #10016 (SLM lifecycle
 > completeness) is tracked as a **sub-epic inside U1**, not a 14th umbrella.
 

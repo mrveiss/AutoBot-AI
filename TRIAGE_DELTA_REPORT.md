@@ -78,6 +78,17 @@ Labels applied: `agents` → #9951/#9978/#9987/#9995; `infrastructure` →
 #9966/#9967/#10010/#10021; `needs-human-decision` → #9983 (reimplement-or-retire
 is a product call). `bug` was already present on every defect-shaped issue.
 
+## Filed during this session
+
+- **#10035** (→ U9 #9927) — this session's freshly-pushed unmerged remote branch
+  was deleted within ~2 minutes of push (before the PR could be created); the
+  scheduled `branch-cleanup.yml` is exonerated (last run 06:22 UTC, pre-push).
+  Suspect: parallel-session merged-branch remote pruning misclassifying the
+  branch. Issue includes the guard spec for #9917's implementation. The session's
+  first **local** worktree was also swept by a parallel session's start-protocol
+  (commit-less branch == "merged" — by-design; mitigation: anchor-commit
+  immediately after worktree creation).
+
 ## Regression cluster
 
 **Co-located / deploy-update surface** — 9 of 42 new issues trace to it:
