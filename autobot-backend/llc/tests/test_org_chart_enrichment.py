@@ -122,23 +122,23 @@ async def _seed_org_node(
     *,
     name: str,
     reports_to: Optional[str] = None,
-) -> str:
-    """Seed an AgentOrgNode and return its ``agent_id`` (logical slug).
+) -> tuple[str, str]:
+    """Seed an AgentOrgNode and return ``(node_pk, agent_slug)``.
 
-    The node's UUID primary key (``AgentOrgNode.id``) is stored back into
-    the string ``agent_id`` field so that work-item assignments seeded via
-    ``_seed_work_item(assignee_agent_id=agent_id)`` point at the node's PK —
-    matching the real-world shape where ``assignee_agent_id`` holds the row's
-    UUID primary key (M3 fix: the join is ``AgentOrgNode.id ==
-    LLCWorkItem.assignee_agent_id``).
+    The slug is deliberately a non-UUID string (hire-flow shape,
+    ``assistant-...-{hex8}``) and DISTINCT from the PK, so a join that
+    mistakenly matches ``assignee_agent_id`` against the slug column
+    returns zero rows and fails the test (GH#10032 dual-keyspace trap).
+    Work-item assignments must use the PK; budget rows, ``reports_to``
+    and org-chart node ids use the slug.
     """
     node_id = uuid.uuid4()
-    agent_id = str(node_id)  # slug == stringified PK → assignee_agent_id FK works
+    agent_slug = f"assistant-test-{node_id.hex[:8]}"
     async with session_factory() as session:
         session.add(
             AgentOrgNode(
                 id=node_id,
-                agent_id=agent_id,
+                agent_id=agent_slug,
                 name=name,
                 org_role=OrgRole.WORKER.value,
                 title=None,
@@ -147,7 +147,7 @@ async def _seed_org_node(
             )
         )
         await session.commit()
-    return agent_id
+    return str(node_id), agent_slug
 
 
 _item_counter = 0
@@ -233,13 +233,13 @@ async def test_assigned_item_count_reflects_active_assignments(app, client, sess
     app.state.tenant["org_id"] = str(company_id)
     app.state.tenant["is_platform_admin"] = False
 
-    agent_id = await _seed_org_node(session_factory, company_id, name="Worker")
+    node_pk, agent_id = await _seed_org_node(session_factory, company_id, name="Worker")
 
     # Two active items assigned to the agent.
-    await _seed_work_item(session_factory, company_id, assignee_agent_id=agent_id, status="in_progress")
-    await _seed_work_item(session_factory, company_id, assignee_agent_id=agent_id, status="ready")
+    await _seed_work_item(session_factory, company_id, assignee_agent_id=node_pk, status="in_progress")
+    await _seed_work_item(session_factory, company_id, assignee_agent_id=node_pk, status="ready")
     # One terminal item — must NOT count.
-    await _seed_work_item(session_factory, company_id, assignee_agent_id=agent_id, status="done")
+    await _seed_work_item(session_factory, company_id, assignee_agent_id=node_pk, status="done")
 
     resp = await client.get(f"/api/llc/companies/{company_id}/org-chart")
     assert resp.status_code == 200, resp.text
@@ -255,7 +255,7 @@ async def test_assigned_item_count_zero_for_unassigned_agent(app, client, sessio
     app.state.tenant["org_id"] = str(company_id)
     app.state.tenant["is_platform_admin"] = False
 
-    agent_id = await _seed_org_node(session_factory, company_id, name="Idle Worker")
+    _node_pk, agent_id = await _seed_org_node(session_factory, company_id, name="Idle Worker")
 
     resp = await client.get(f"/api/llc/companies/{company_id}/org-chart")
     assert resp.status_code == 200, resp.text
@@ -271,12 +271,12 @@ async def test_assigned_item_count_no_cross_agent_contamination(app, client, ses
     app.state.tenant["org_id"] = str(company_id)
     app.state.tenant["is_platform_admin"] = False
 
-    agent_a = await _seed_org_node(session_factory, company_id, name="Agent A")
-    agent_b = await _seed_org_node(session_factory, company_id, name="Agent B")
+    pk_a, agent_a = await _seed_org_node(session_factory, company_id, name="Agent A")
+    _pk_b, agent_b = await _seed_org_node(session_factory, company_id, name="Agent B")
 
     # Three items for A, zero for B.
     for _ in range(3):
-        await _seed_work_item(session_factory, company_id, assignee_agent_id=agent_a, status="in_progress")
+        await _seed_work_item(session_factory, company_id, assignee_agent_id=pk_a, status="in_progress")
 
     resp = await client.get(f"/api/llc/companies/{company_id}/org-chart")
     assert resp.status_code == 200, resp.text
@@ -293,7 +293,7 @@ async def test_token_mode_budget_exposes_token_numbers(app, client, session_fact
     app.state.tenant["org_id"] = str(company_id)
     app.state.tenant["is_platform_admin"] = False
 
-    agent_id = await _seed_org_node(session_factory, company_id, name="Token Agent")
+    _node_pk, agent_id = await _seed_org_node(session_factory, company_id, name="Token Agent")
     await _seed_budget(
         session_factory,
         company_id,
@@ -321,7 +321,7 @@ async def test_dollar_mode_budget_preserves_dollar_amounts(app, client, session_
     app.state.tenant["org_id"] = str(company_id)
     app.state.tenant["is_platform_admin"] = False
 
-    agent_id = await _seed_org_node(session_factory, company_id, name="Dollar Agent")
+    _node_pk, agent_id = await _seed_org_node(session_factory, company_id, name="Dollar Agent")
     await _seed_budget(
         session_factory,
         company_id,
