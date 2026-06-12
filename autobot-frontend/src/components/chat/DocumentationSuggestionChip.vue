@@ -41,6 +41,7 @@
  * Issue #704: Migrated to design tokens for SSOT theming
  */
 
+import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -76,7 +77,7 @@ const props = withDefaults(defineProps<Props>(), {
 const emit = defineEmits<Emits>()
 
 // Category icon mapping
-const categoryIcons: Record<string, string> = {
+const categoryIcons: Record<string, IconName> = {
   architecture: 'project-diagram',
   developer: 'code',
   api: 'plug',

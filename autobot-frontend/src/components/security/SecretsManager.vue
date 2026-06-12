@@ -783,6 +783,7 @@
 </template>
 
 <script setup lang="ts">
+import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, reactive, computed, onMounted, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
@@ -803,27 +804,46 @@ const logger = createLogger('SecretsManager');
 const { fetchInfraHosts, fetchSecretsUsage, deleteInfraHost } = useSecretsAuditApi();
 
 // Credential type categories with icons and colors (using design tokens)
-const credentialCategories = computed(() => [
+interface CredentialCategory {
+  type: string
+  label: string
+  icon: IconName
+  color: string
+}
+
+const credentialCategories = computed<CredentialCategory[]>(() => [
   { type: 'api_key', label: 'API Keys', icon: 'key', color: getCssVar('--color-primary', '#6366f1') },
-  { type: 'token', label: 'Tokens', icon: 'ticket-alt', color: getCssVar('--chart-purple', '#8b5cf6') },
+  // #9724: 'ticket-alt'/'certificate' are not SVG IconNames (rendered empty)
+  { type: 'token', label: 'Tokens', icon: 'tag', color: getCssVar('--chart-purple', '#8b5cf6') },
   { type: 'password', label: 'Passwords', icon: 'lock', color: getCssVar('--chart-pink', '#ec4899') },
   { type: 'ssh_key', label: 'SSH Keys', icon: 'terminal', color: getCssVar('--chart-teal', '#14b8a6') },
   { type: 'infrastructure_host', label: 'Infrastructure Hosts', icon: 'server', color: getCssVar('--chart-blue', '#3b82f6') },
   { type: 'database_url', label: 'Database', icon: 'database', color: getCssVar('--color-warning', '#f59e0b') },
-  { type: 'certificate', label: 'Certificates', icon: 'certificate', color: getCssVar('--color-success', '#10b981') },
+  { type: 'certificate', label: 'Certificates', icon: 'shield-check', color: getCssVar('--color-success', '#10b981') },
   { type: 'other', label: 'Other', icon: 'ellipsis-h', color: getCssVar('--text-tertiary', '#6b7280') },
 ]);
 
 // Quick-add templates for common services (using design tokens)
-const credentialTemplates = computed(() => [
+interface CredentialTemplate {
+  id: string
+  name: string
+  description: string
+  icon: IconName
+  color: string
+  type: string
+}
+
+// #9724: 'aws'/'github'/'slack' brand icons are not SVG IconNames (rendered
+// empty) — mapped to the closest registry icons.
+const credentialTemplates = computed<CredentialTemplate[]>(() => [
   { id: 'openai', name: 'OpenAI', description: 'GPT API access', icon: 'brain', color: getCssVar('--color-success', '#10a37f'), type: 'api_key' },
   { id: 'anthropic', name: 'Anthropic', description: 'Claude API access', icon: 'robot', color: getCssVar('--color-warning-hover', '#d97706'), type: 'api_key' },
-  { id: 'aws', name: 'AWS', description: 'Amazon Web Services', icon: 'aws', color: getCssVar('--chart-orange', '#ff9900'), type: 'api_key' },
-  { id: 'github', name: 'GitHub', description: 'GitHub personal token', icon: 'github', color: getCssVar('--bg-tertiary', '#333'), type: 'token' },
+  { id: 'aws', name: 'AWS', description: 'Amazon Web Services', icon: 'cloud', color: getCssVar('--chart-orange', '#ff9900'), type: 'api_key' },
+  { id: 'github', name: 'GitHub', description: 'GitHub personal token', icon: 'code-branch', color: getCssVar('--bg-tertiary', '#333'), type: 'token' },
   { id: 'postgres', name: 'PostgreSQL', description: 'Database connection', icon: 'database', color: getCssVar('--color-info', '#336791'), type: 'database_url' },
   { id: 'redis', name: 'Redis', description: 'Redis connection', icon: 'layer-group', color: getCssVar('--chart-red', '#dc382d'), type: 'database_url' },
   { id: 'ssh', name: 'SSH Key', description: 'Server access', icon: 'terminal', color: getCssVar('--bg-primary', '#000'), type: 'ssh_key' },
-  { id: 'slack', name: 'Slack', description: 'Slack bot token', icon: 'slack', color: getCssVar('--chart-purple', '#4a154b'), type: 'token' },
+  { id: 'slack', name: 'Slack', description: 'Slack bot token', icon: 'comments', color: getCssVar('--chart-purple', '#4a154b'), type: 'token' },
   { id: 'server', name: 'Server Host', description: 'SSH/VNC server access', icon: 'server', color: getCssVar('--chart-blue', '#3b82f6'), type: 'infrastructure_host' },
 ]);
 
@@ -1565,13 +1585,14 @@ const formatVisibility = (secret: any): string => {
   return labels[visibility] || visibility.charAt(0).toUpperCase() + visibility.slice(1);
 };
 
-const getVisibilityIcon = (secret: any): string => {
+// #9724: 'user-friends'/'building' are not SVG IconNames (rendered empty)
+const getVisibilityIcon = (secret: Secret): IconName => {
   const visibility = getVisibility(secret);
-  const icons: Record<string, string> = {
+  const icons: Record<string, IconName> = {
     'private': 'lock',
-    'shared': 'user-friends',
+    'shared': 'users',
     'group': 'users',
-    'organization': 'building',
+    'organization': 'briefcase',
     'system': 'globe'
   };
   return icons[visibility || ''] || 'eye';

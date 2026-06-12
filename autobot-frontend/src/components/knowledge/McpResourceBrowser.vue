@@ -68,7 +68,7 @@
       v-if="viewingResource"
       :show="!!viewingResource"
       @close="viewingResource = null"
-      size="xl"
+      size="lg"
     >
       <template #header>
         <h3>{{ viewingResource.name }}</h3>
@@ -102,6 +102,7 @@
 </template>
 
 <script setup lang="ts">
+import type { IconName } from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted } from 'vue'
 import { useApiClient } from '@/plugins/api'
 import BaseButton from '@/components/base/BaseButton.vue'
@@ -207,8 +208,8 @@ function getBridgeFromUri(uri: string): Bridge {
   return 'filesystem'
 }
 
-function getBridgeIcon(bridge: Bridge): string {
-  const icons: Record<Bridge, string> = {
+function getBridgeIcon(bridge: Bridge): IconName {
+  const icons: Record<Bridge, IconName> = {
     git: 'code-branch',
     filesystem: 'folder',
     knowledge: 'brain'
@@ -216,7 +217,7 @@ function getBridgeIcon(bridge: Bridge): string {
   return icons[bridge]
 }
 
-function getMimeTypeIcon(mimeType?: string): string {
+function getMimeTypeIcon(mimeType?: string): IconName {
   if (!mimeType) return 'file'
   if (mimeType.startsWith('text/')) return 'file-alt'
   if (mimeType.includes('json')) return 'brackets-curly'

@@ -53,13 +53,14 @@
  * Issue #184: Split oversized Vue components
  */
 
+import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 
 interface CategoryOption {
   value: string | null
   label: string
-  icon: string
+  icon: IconName
   count: number
 }
 

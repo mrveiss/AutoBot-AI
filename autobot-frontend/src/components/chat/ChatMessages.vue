@@ -548,6 +548,7 @@
 </template>
 
 <script setup lang="ts">
+import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, nextTick, watch, onMounted } from 'vue'
 import { useExpansion } from '@/composables/useExpansion'
@@ -1047,7 +1048,7 @@ const deleteMessage = (message: ChatMessage) => {
   }
 }
 
-const getAttachmentIcon = (type: string): string => {
+const getAttachmentIcon = (type: string): IconName => {
   if (type.startsWith('image/')) return 'image'
   if (type.startsWith('video/')) return 'video'
   if (type.startsWith('audio/')) return 'music'

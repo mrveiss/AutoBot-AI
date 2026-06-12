@@ -7,6 +7,8 @@
  * Integrates with ConversationFileManager backend for per-session file operations.
  */
 
+import { getFileIconNameByMimeType } from '@/utils/iconMappings'
+import type { IconName } from '@/components/ui/Icon.vue'
 import { ref, computed } from 'vue'
 import { useApiClient } from '@/plugins/api'
 import { useBatchSelection } from './useBatchSelection'
@@ -303,18 +305,10 @@ export function useConversationFiles(sessionId: string) {
     return previewableTypes.some(type => mimeType.startsWith(type))
   }
 
-  const getFileIcon = (mimeType: string): string => {
-    if (mimeType.startsWith('image/')) return 'fas fa-image'
-    if (mimeType.startsWith('video/')) return 'fas fa-video'
-    if (mimeType.startsWith('audio/')) return 'fas fa-music'
-    if (mimeType.includes('pdf')) return 'fas fa-file-pdf'
-    if (mimeType.includes('word') || mimeType.includes('document')) return 'fas fa-file-word'
-    if (mimeType.includes('excel') || mimeType.includes('spreadsheet')) return 'fas fa-file-excel'
-    if (mimeType.includes('powerpoint') || mimeType.includes('presentation')) return 'fas fa-file-powerpoint'
-    if (mimeType.includes('zip') || mimeType.includes('archive')) return 'fas fa-file-archive'
-    if (mimeType.startsWith('text/')) return 'fas fa-file-alt'
-    if (mimeType.includes('json')) return 'fas fa-file-code'
-    return 'fas fa-file'
+  // #9724: consumed by <Icon :name="..."> (ChatFilePanel) — must return an
+  // SVG IconName; the previous FA class strings rendered empty SVGs.
+  const getFileIcon = (mimeType: string): IconName => {
+    return getFileIconNameByMimeType(mimeType)
   }
 
   const formatFileSize = (bytes: number): string => {

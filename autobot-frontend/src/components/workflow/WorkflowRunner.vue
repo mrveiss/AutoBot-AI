@@ -150,6 +150,7 @@
 </template>
 
 <script setup lang="ts">
+import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed } from 'vue';
 import type { ActiveWorkflow } from '@/composables/useWorkflowBuilder';
@@ -187,7 +188,7 @@ function getStatusClass(wf: ActiveWorkflow): string {
   return 'running';
 }
 
-function getStatusIcon(wf: ActiveWorkflow): string {
+function getStatusIcon(wf: ActiveWorkflow): IconName {
   if (wf.is_cancelled) return 'times';
   if (wf.is_paused) return 'pause';
   if (wf.completed_at) return 'check';

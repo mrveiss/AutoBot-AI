@@ -15,6 +15,7 @@
  * - Copy to clipboard
  */
 
+import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted, watch } from 'vue'
 import { useExpansion } from '@/composables/useExpansion'
@@ -245,8 +246,8 @@ async function exportAllDocs(format: 'json' | 'markdown'): Promise<void> {
   }
 }
 
-function getDocIcon(type: string): string {
-  const icons: Record<string, string> = {
+function getDocIcon(type: string): IconName {
+  const icons: Record<string, IconName> = {
     'markdown': 'file-alt',
     'api': 'code',
     'guide': 'book',

@@ -168,6 +168,7 @@
  * Issue #165: Chat Documentation UI Integration
  */
 
+import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -234,7 +235,7 @@ const quickSearches = [
 ]
 
 // Category icons
-const categoryIcons: Record<string, string> = {
+const categoryIcons: Record<string, IconName> = {
   architecture: 'project-diagram',
   developer: 'code',
   api: 'plug',
@@ -250,7 +251,7 @@ const categoryIcons: Record<string, string> = {
   general: 'file-alt'
 }
 
-const getCategoryIcon = (category: string): string => {
+const getCategoryIcon = (category: string): IconName => {
   return categoryIcons[category] || categoryIcons.general
 }
 

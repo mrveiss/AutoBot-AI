@@ -138,6 +138,7 @@
 </template>
 
 <script setup lang="ts">
+import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -242,7 +243,7 @@ async function retryLoad(): Promise<void> {
 
 // ── Display helpers ────────────────────────────────────────────────────────
 
-const PHASE_ICONS: Record<string, string> = {
+const PHASE_ICONS: Record<string, IconName> = {
   'Phase 1': 'server',
   'Phase 2': 'database',
   'Phase 3': 'brain',
@@ -255,7 +256,7 @@ const PHASE_ICONS: Record<string, string> = {
   'Phase 10': 'cloud',
 }
 
-function getPhaseIcon(name: string): string {
+function getPhaseIcon(name: string): IconName {
   for (const [key, icon] of Object.entries(PHASE_ICONS)) {
     if (name.startsWith(key)) return icon
   }
