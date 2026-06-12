@@ -298,7 +298,7 @@ def run_security_analysis(self, path: str) -> dict:
 
     async def _work():
         from api.code_intelligence import _calculate_grade_from_score, _get_security_status_message
-        from code_intelligence.security_analyzer import SecurityAnalyzer
+        from code_intelligence.security import SecurityAnalyzer
 
         analyzer = SecurityAnalyzer(project_root=path)
         _progress(self, "Scanning for vulnerabilities", 30.0, started)

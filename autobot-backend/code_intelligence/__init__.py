@@ -283,7 +283,7 @@ from .redis_optimizer import (
     RedisOptimizer,
     analyze_redis_usage,
 )
-from .security_analyzer import (
+from .security import (
     SecurityAnalyzer,
     SecurityFinding,
     SecuritySeverity,
