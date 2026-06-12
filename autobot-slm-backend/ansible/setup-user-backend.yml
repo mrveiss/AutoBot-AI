@@ -76,21 +76,77 @@
       when: enable_vnc | default(true)
 
   post_tasks:
-    - name: Run database migrations
-      command:
-        cmd: "{{ backend_code_dir }}/venv/bin/python -m alembic upgrade head"
-        chdir: "{{ backend_code_dir }}"
-      become_user: "{{ backend_user }}"
-      environment:
-        PYTHONPATH: "{{ backend_code_dir }}"
+    # Strict migration sequence (#10001/#10026): the old task invoked alembic
+    # without -c migrations/alembic.ini (guaranteed "No config file" failure)
+    # and swallowed it with failed_when: false — native deployments never
+    # migrated. Now: gate on Postgres-backed mode -> backup -> baseline
+    # adoption -> strict upgrade head. Any failure aborts the deploy with the
+    # captured alembic output.
+    - name: Read backend user mode (#10001)
+      ansible.builtin.shell: "grep -oP '^AUTOBOT_USER_MODE=\\K.*' {{ backend_code_dir }}/.env"
+      register: backend_user_mode
+      changed_when: false
+      failed_when: false  # absent .env/var means single_user (no Postgres)
       tags: [migrations]
-      register: migration_result
-      failed_when: false
 
-    - name: Display migration result
-      debug:
-        msg: "Migrations: {{ migration_result.stdout if migration_result.rc == 0 else 'Skipped or failed' }}"
+    - name: Database migration sequence (Postgres-backed modes) (#10001)
+      when: backend_user_mode.stdout | default('') | trim not in ['', 'single_user']
       tags: [migrations]
+      block:
+        - name: Check for local PostgreSQL data directory (#10026)
+          ansible.builtin.stat:
+            path: /var/lib/postgresql
+          register: backend_pg_dir
+
+        - name: Back up PostgreSQL before migrations (#10026)
+          ansible.builtin.shell: |
+            set -o pipefail
+            install -d -m 0750 /opt/autobot/backups/pre-migration
+            su - postgres -c "pg_dumpall --clean --if-exists" \
+              | gzip > /opt/autobot/backups/pre-migration/backend-$(date +%s).sql.gz
+          args:
+            executable: /bin/bash
+          when: backend_pg_dir.stat.exists
+
+        - name: Warn when no local PostgreSQL to back up (#10026)
+          ansible.builtin.debug:
+            msg: >-
+              WARNING: no local PostgreSQL data directory — pre-migration
+              backup skipped. Back up the remote database before relying on
+              this deploy.
+          when: not backend_pg_dir.stat.exists
+
+        - name: Run database baseline adoption (#10001)
+          ansible.builtin.shell: |
+            set -a
+            [ -f .env ] && . ./.env
+            set +a
+            exec venv/bin/python -m migrations.baseline
+          args:
+            chdir: "{{ backend_code_dir }}"
+            executable: /bin/bash
+          become_user: "{{ backend_user }}"
+          environment:
+            PYTHONPATH: "{{ backend_code_dir }}"
+          register: baseline_result
+
+        - name: Run Alembic migrations (#10001)
+          ansible.builtin.shell: |
+            set -a
+            [ -f .env ] && . ./.env
+            set +a
+            exec venv/bin/python -m alembic -c migrations/alembic.ini upgrade head
+          args:
+            chdir: "{{ backend_code_dir }}"
+            executable: /bin/bash
+          become_user: "{{ backend_user }}"
+          environment:
+            PYTHONPATH: "{{ backend_code_dir }}"
+          register: migration_result
+
+        - name: Display migration result (#10001)
+          ansible.builtin.debug:
+            msg: "Migrations applied: {{ migration_result.stdout_lines | default([]) | last | default('up to date') }}"
 
     - name: Verify backend service
       systemd:
