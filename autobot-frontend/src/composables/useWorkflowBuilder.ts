@@ -131,6 +131,13 @@ export interface PlanApprovalRequest {
   created_at?: string;
 }
 
+/** Template-side step shape — runtime timestamps are optional (#9724). */
+export type WorkflowTemplateStep = Omit<
+  WorkflowStep,
+  'step_id' | 'status' | 'started_at' | 'completed_at'
+> &
+  Partial<Pick<WorkflowStep, 'started_at' | 'completed_at'>>;
+
 /** Workflow template */
 export interface WorkflowTemplate {
   id: string;
@@ -139,8 +146,7 @@ export interface WorkflowTemplate {
   category: string;
   icon: string;
   // #9724: started_at/completed_at are runtime-only — optional on templates
-  steps: (Omit<WorkflowStep, 'step_id' | 'status' | 'started_at' | 'completed_at'> &
-    Partial<Pick<WorkflowStep, 'started_at' | 'completed_at'>>)[];
+  steps: WorkflowTemplateStep[];
   // Optional fields present on API WorkflowTemplateSummary (#920)
   estimated_duration_minutes?: number;
   agents_involved?: string[];
@@ -397,7 +403,7 @@ class WorkflowBuilderApiClient {
   async createWorkflow(
     name: string,
     description: string,
-    steps: Omit<WorkflowStep, 'step_id' | 'status'>[],
+    steps: WorkflowTemplateStep[],
     sessionId: string,
     automationMode: AutomationMode = 'semi_automatic'
   ): Promise<ApiResponse<{ success: boolean; workflow_id: string; message: string }>> {

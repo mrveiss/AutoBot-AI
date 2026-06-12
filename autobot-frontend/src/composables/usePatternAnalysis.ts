@@ -177,10 +177,26 @@ export function usePatternAnalysis() {
   const duplicatePatterns = ref<DuplicatePattern[]>([])
   const regexOpportunities = ref<RegexOpportunity[]>([])
   const complexityHotspots = ref<ComplexityHotspot[]>([])
-  // #9724: while an analysis is running, partial_results stream
-  // GenericPattern rows into this list; the final payload replaces them
-  // with fully-typed RefactoringSuggestion entries.
-  const refactoringSuggestions = ref<(RefactoringSuggestion | GenericPattern)[]>([])
+  const refactoringSuggestions = ref<RefactoringSuggestion[]>([])
+
+  /** Normalize a streamed GenericPattern into the rendered suggestion shape (#9724). */
+  function genericPatternToSuggestion(p: GenericPattern): RefactoringSuggestion {
+    return {
+      title: p.description,
+      description: p.suggestion ?? p.description,
+      pattern_type: p.pattern_type,
+      severity: p.severity,
+      affected_locations: p.locations ?? [],
+      refactoring_type: p.pattern_type,
+      suggested_name: '',
+      code_template: '',
+      estimated_loc_reduction: 0,
+      estimated_complexity_reduction: 0,
+      estimated_effort: 'unknown',
+      confidence: p.confidence ?? 0,
+      benefits: [],
+    }
+  }
   const storageStats = ref<PatternStorageStats | null>(null)
 
   // AbortControllers — replaced (aborting previous) before each new fetch
@@ -414,10 +430,14 @@ export function usePatternAnalysis() {
               if (pr.regex?.length) regexOpportunities.value = pr.regex
               if (pr.complexity?.length) complexityHotspots.value = pr.complexity
               if (pr.modularization?.length || pr.other_patterns?.length) {
+                // #9724: partial results stream loose GenericPattern rows;
+                // normalize them to the RefactoringSuggestion shape the UI
+                // renders (PatternAnalysis.vue called .toLowerCase() on a
+                // missing estimated_effort and crashed mid-stream).
                 refactoringSuggestions.value = [
                   ...(pr.modularization || []),
                   ...(pr.other_patterns || []),
-                ]
+                ].map(genericPatternToSuggestion)
               }
               const partialTotal =
                 (pr.regex?.length || 0) +

@@ -123,7 +123,7 @@ const tabs = computed(() => [
   {
     route: '/knowledge/graph/summaries',
     label: t('knowledge.graphView.summariesTab'),
-    icon: 'layer-group',
+    icon: 'layer-group' as const,
     description: t('knowledge.graphView.summariesDescription'),
   },
 ])

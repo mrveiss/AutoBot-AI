@@ -352,8 +352,8 @@
                 class="comment-textarea"
                 :placeholder="$t('chat.approval.commentPlaceholder')"
                 rows="2"
-                @keydown.ctrl.enter="submitApprovalWithComment(message.metadata.terminal_session_id, pendingApprovalDecision)"
-                @keydown.meta.enter="submitApprovalWithComment(message.metadata.terminal_session_id, pendingApprovalDecision)"
+                @keydown.ctrl.enter="submitApprovalWithComment(message.metadata.terminal_session_id as string, pendingApprovalDecision)"
+                @keydown.meta.enter="submitApprovalWithComment(message.metadata.terminal_session_id as string, pendingApprovalDecision)"
               ></textarea>
               <div class="comment-actions">
                 <BaseButton
@@ -369,7 +369,7 @@
                 <BaseButton
                   variant="primary"
                   size="sm"
-                  @click="submitApprovalWithComment(message.metadata.terminal_session_id, pendingApprovalDecision)"
+                  @click="submitApprovalWithComment(message.metadata.terminal_session_id as string, pendingApprovalDecision)"
                   :disabled="!approvalComment.trim()"
                   class="submit-comment-btn"
                   :aria-label="$t('chat.approval.submitWithComment', { action: pendingApprovalDecision ? $t('chat.approval.approval') : $t('chat.approval.denial') })"

@@ -188,6 +188,7 @@
 
 <script setup lang="ts">
 import Icon from '@/components/ui/Icon.vue'
+import type { IconName } from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useExpansion } from '@/composables/useExpansion'
 import { useRouter } from 'vue-router'
@@ -256,11 +257,12 @@ const props = withDefaults(defineProps<Props>(), {
   preselectedCategory: null
 })
 
-// Category interface
+// Category interface — icon must be a registry IconName (rendered by
+// KnowledgeBrowserHeader through <Icon :name>)
 interface CategoryOption {
   value: string | null
   label: string
-  icon: string
+  icon: IconName
   count: number
 }
 
