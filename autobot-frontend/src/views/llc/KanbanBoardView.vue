@@ -131,23 +131,7 @@ const route = useRoute()
 const companyId = computed(() => route.params.companyId as string)
 const boardId = computed(() => route.params.boardId as string)
 
-interface WorkItem {
-  id: string
-  identifier: string
-  type: string
-  title: string
-  priority: string
-  story_points: number | null
-  assignee_name: string | null
-  assignee_type: 'human' | 'agent' | null
-  sprint_id: string | null
-  column_id: string
-  status: string
-  labels: string[]
-  acceptance_criteria: string[]
-  description: string
-  linked_pr_urls?: string[]
-}
+import type { WorkItem } from './workItemTypes'
 
 interface BoardColumn {
   id: string

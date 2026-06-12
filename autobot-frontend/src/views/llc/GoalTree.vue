@@ -36,7 +36,7 @@ function toGoalNode(g: FlatGoal): Goal {
     linked_item_count: 0,
     children: [],
     expanded: false,
-  } as Goal
+  }
 }
 
 async function fetchGoals() {

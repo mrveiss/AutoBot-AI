@@ -177,7 +177,10 @@ export function usePatternAnalysis() {
   const duplicatePatterns = ref<DuplicatePattern[]>([])
   const regexOpportunities = ref<RegexOpportunity[]>([])
   const complexityHotspots = ref<ComplexityHotspot[]>([])
-  const refactoringSuggestions = ref<RefactoringSuggestion[]>([])
+  // #9724: while an analysis is running, partial_results stream
+  // GenericPattern rows into this list; the final payload replaces them
+  // with fully-typed RefactoringSuggestion entries.
+  const refactoringSuggestions = ref<(RefactoringSuggestion | GenericPattern)[]>([])
   const storageStats = ref<PatternStorageStats | null>(null)
 
   // AbortControllers — replaced (aborting previous) before each new fetch

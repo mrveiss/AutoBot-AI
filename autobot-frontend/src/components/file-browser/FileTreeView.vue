@@ -25,7 +25,7 @@
         <div
           class="tree-node-content"
           @click="$emit('toggle-node', item)"
-          :style="{ paddingLeft: (item.level * 20) + 'px' }"
+          :style="{ paddingLeft: ((item.level ?? 0) * 20) + 'px' }"
         >
           <Icon
             v-if="item.is_dir"
@@ -51,12 +51,15 @@ import Icon from '@/components/ui/Icon.vue'
 import { getFileIcon as getFileIconUtil } from '@/utils/iconMappings'
 import EmptyState from '@/components/ui/EmptyState.vue'
 
+// #9724: aligned with FileBrowserTreeNode (useFileBrowser) — is_dir/level
+// are optional in the backend payload and nodes carry nested children.
 interface TreeItem {
   name: string
   path: string
-  is_dir: boolean
-  level: number
+  is_dir?: boolean
+  level?: number
   expanded?: boolean
+  children?: TreeItem[]
 }
 
 interface Props {

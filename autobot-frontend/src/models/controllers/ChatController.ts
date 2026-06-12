@@ -647,7 +647,17 @@ export class ChatController {
       // Update store with loaded sessions
       if (Array.isArray(sessions)) {
         sessions.forEach(session => {
-          this.chatStore.importSession(session)
+          // #9724: normalize the repository session (snake_case ISO strings)
+          // to the store shape — pushing it raw left createdAt/updatedAt/
+          // isActive undefined on every imported session.
+          this.chatStore.importSession({
+            id: session.id,
+            title: session.title ?? '',
+            messages: session.messages,
+            createdAt: new Date(session.created_at),
+            updatedAt: new Date(session.updated_at),
+            isActive: false,
+          })
         })
         logger.debug(`Loaded ${sessions.length} chat sessions`)
       } else {

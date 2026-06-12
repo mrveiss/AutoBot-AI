@@ -113,10 +113,12 @@ import { getFileIconName } from '@/utils/iconMappings'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 
+// #9724: aligned with FileBrowserItem (useFileBrowser) — is_dir is optional
+// in the backend payload.
 interface FileItem {
   name: string
   path: string
-  is_dir: boolean
+  is_dir?: boolean
   size?: number
   last_modified?: string
   id?: string

@@ -66,7 +66,9 @@
     <!-- Resource Viewer Modal -->
     <BaseModal
       v-if="viewingResource"
-      :show="!!viewingResource"
+      :model-value="!!viewingResource"
+      :title="viewingResource.name"
+      @update:model-value="viewingResource = null"
       @close="viewingResource = null"
       size="lg"
     >

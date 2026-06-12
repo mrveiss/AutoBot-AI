@@ -138,7 +138,9 @@ export interface WorkflowTemplate {
   description: string;
   category: string;
   icon: string;
-  steps: Omit<WorkflowStep, 'step_id' | 'status'>[];
+  // #9724: started_at/completed_at are runtime-only — optional on templates
+  steps: (Omit<WorkflowStep, 'step_id' | 'status' | 'started_at' | 'completed_at'> &
+    Partial<Pick<WorkflowStep, 'started_at' | 'completed_at'>>)[];
   // Optional fields present on API WorkflowTemplateSummary (#920)
   estimated_duration_minutes?: number;
   agents_involved?: string[];
@@ -613,7 +615,8 @@ export function useWorkflowBuilder() {
     autoConnect: false,
     autoReconnect: false,
     parseJSON: false,
-    onMessage: (data: string) => {
+    onMessage: (data: unknown) => {
+      if (typeof data !== 'string') return;
       try {
         handleWebSocketMessage(JSON.parse(data));
       } catch (e) {

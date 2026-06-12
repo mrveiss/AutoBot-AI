@@ -848,7 +848,7 @@ export default {
       // Use adaptive interval based on system state
       const cleanupInterval = getAdaptiveInterval('NOTIFICATION_CLEANUP', 'healthy', false);
 
-      notificationCleanup = setInterval(() => {
+      notificationCleanup = window.setInterval(() => {
         if (appStore && appStore.systemNotifications && appStore.systemNotifications.length > 5) {
           logger.debug('Cleaning up excessive notifications:', appStore.systemNotifications.length);
           // Keep only the last 5 notifications

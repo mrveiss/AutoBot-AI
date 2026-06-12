@@ -143,8 +143,8 @@ const userStore = useUserStore()
 // Computed properties
 const sortedFiles = computed(() => {
   const sorted = [...files.value].sort((a, b) => {
-    let aVal = a[sortField.value]
-    let bVal = b[sortField.value]
+    let aVal: string | number | Date = a.name
+    let bVal: string | number | Date = b.name
 
     // Handle different sort fields
     if (sortField.value === 'size') {

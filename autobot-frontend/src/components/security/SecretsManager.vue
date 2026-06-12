@@ -1586,7 +1586,7 @@ const formatVisibility = (secret: any): string => {
 };
 
 // #9724: 'user-friends'/'building' are not SVG IconNames (rendered empty)
-const getVisibilityIcon = (secret: Secret): IconName => {
+const getVisibilityIcon = (secret: Record<string, unknown>): IconName => {
   const visibility = getVisibility(secret);
   const icons: Record<string, IconName> = {
     'private': 'lock',

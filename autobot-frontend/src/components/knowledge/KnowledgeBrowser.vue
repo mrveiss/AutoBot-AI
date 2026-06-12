@@ -654,17 +654,18 @@ const loadKnowledgeTreeFn = async () => {
 
   if (data && data.categories) {
     // Build tree structure from categories
-    const categories = Object.keys(data.categories)
+    const categoriesByName = data.categories as Record<string, Record<string, unknown>[]>
+    const categories = Object.keys(categoriesByName)
 
     // Update category counts
     const counts: Record<string, number> = {}
     categories.forEach(cat => {
-      counts[cat] = data.categories[cat].length
+      counts[cat] = categoriesByName[cat].length
     })
     categoryCounts.value = counts
 
     treeData.value = categories.map((category: string, idx: number) => {
-      const facts = data.categories[category] || []
+      const facts = categoriesByName[category] || []
 
       // Build nested folder structure based on file paths
       const children = buildNestedTree(facts, category)

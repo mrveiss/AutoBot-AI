@@ -396,8 +396,11 @@ export class KnowledgeRepository extends ApiRepository {
     return {
       status: data?.status ?? 'unknown',
       basic_stats: data?.basic_stats ?? {
+        total_documents: 0,
+        total_chunks: 0,
         total_facts: 0,
         total_vectors: 0,
+        db_size: 0,
         categories: [],
         status: 'unknown'
       },

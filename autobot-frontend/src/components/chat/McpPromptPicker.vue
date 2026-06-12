@@ -13,7 +13,9 @@
 
     <BaseModal
       v-if="showModal"
-      :show="showModal"
+      :model-value="showModal"
+      title="Prompt Templates"
+      @update:model-value="showModal = $event"
       @close="showModal = false"
       size="lg"
     >
