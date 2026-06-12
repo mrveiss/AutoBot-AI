@@ -41,7 +41,7 @@ from llc.models.company import (
     CompanyTreeNode,
     CompanyUpdate,
 )
-from llc.models.enums import ExternalPMType, LLCCompanyStatus, MembershipRole
+from llc.models.enums import ExternalPMType, LLCCompanyStatus, MembershipRole, WorkItemStatus
 from llc.models.membership import LLCCompanyMembership
 from llc.services.backlog import BacklogService
 from llc.services.company import (
@@ -479,13 +479,17 @@ class AgentSearchResult(BaseModel):
 class BacklogReorderRequest(BaseModel):
     """Bulk-reorder request — ordered list of work item UUIDs.
 
-    Positions are assigned 0..n-1 in the order items appear in the list.
-    Items belonging to a different company are silently skipped (tenant
-    isolation: callers should only submit ids they already fetched from
-    this company's backlog).
+    Positions are assigned 0..n-1 (deduplicated, preserving first occurrence)
+    in the order items appear in the list.  Items belonging to a different
+    company are silently skipped (tenant isolation: callers should only submit
+    ids they already fetched from this company's backlog).
+
+    ``work_item_ids`` is typed as ``List[uuid.UUID]`` so Pydantic validates
+    each entry and returns a 422 for any malformed id — no manual parsing
+    needed in the service.
     """
 
-    work_item_ids: List[str] = Field(..., min_length=1, max_length=500)
+    work_item_ids: List[uuid.UUID] = Field(..., min_length=1, max_length=500)
 
 
 class BacklogReorderResponse(BaseModel):
@@ -502,19 +506,25 @@ async def reorder_backlog(
     company_id: uuid.UUID,
     body: BacklogReorderRequest,
     session: AsyncSession = Depends(get_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> BacklogReorderResponse:
     """Assign ``backlog_position`` 0..n-1 to the supplied ordered work item ids.
 
-    All ids must belong to *company_id* — unknown or cross-tenant ids are
-    counted in ``unknown_count`` and silently skipped (not an error, so that
-    a stale UI with a partially-loaded backlog can still submit a reorder
-    without receiving a 400).  A 400 is only raised when the entire list is
-    empty (caught by pydantic min_length=1).
+    Tenant access is enforced the same way as ``get_org_chart``: the caller's
+    org must match *company_id* unless they are a platform admin.  Unknown or
+    cross-tenant ids within the payload are counted in ``unknown_count`` and
+    silently skipped (not an error, so that a stale UI with a partially-loaded
+    backlog can still submit a reorder without receiving a 400).  A 400 is only
+    raised when the entire list is empty (caught by pydantic min_length=1).
     """
+    cid = str(company_id)
+    if str(ctx.org_id) != cid and not ctx.is_platform_admin:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
     result = await _backlog_svc().bulk_reorder(
         session,
-        company_id=str(company_id),
-        ordered_ids=body.work_item_ids,
+        company_id=cid,
+        ordered_ids=[str(i) for i in body.work_item_ids],
     )
     await session.commit()
     return BacklogReorderResponse(**result)
@@ -576,7 +586,6 @@ async def get_org_chart(
     from the self-referencing ``reports_to`` edges. Tenant access is enforced
     via :func:`require_org_context`.
     """
-    import sqlalchemy as sa
     from sqlalchemy import func, select
 
     from llc.models.budget import LLCAgentBudget
@@ -624,26 +633,30 @@ async def get_org_chart(
     runs = {r.agent_id: r for r in latest_runs}
 
     # 4. Assigned work-item counts per agent — single grouped query, no N+1.
-    #    "Assigned" means the item has an assignee_agent_id pointing to this
-    #    agent AND the item is not yet in a terminal state (done/cancelled).
-    #    sa.cast(status, String).notin_() ensures the comparison works as plain
-    #    string literals regardless of whether the column type has been rebound
-    #    (e.g. by the test harness's _rebind_enums_by_value).
-    _terminal_statuses = ("done", "cancelled")
+    #    "Assigned" means the item has an assignee_agent_id matching the
+    #    AgentOrgNode.id (UUID PK) AND the item is not yet in a terminal state.
+    #    We join through AgentOrgNode so the result is keyed by AgentOrgNode.agent_id
+    #    (the logical string slug used everywhere else), not the UUID PK.  This
+    #    correctly handles hire-generated slug agent_ids that differ from the PK.
+    #    GH#9980: Use enum members directly so PG serialises to lowercase values
+    #    (sa.cast to String was a workaround for the test harness's _rebind_enums
+    #    helper — fixing production code to use enum members and letting the
+    #    harness handle the rebind is the correct approach; see #9980).
     assign_q = (
         select(
-            LLCWorkItem.assignee_agent_id,
+            AgentOrgNode.agent_id,
             func.count(LLCWorkItem.id).label("cnt"),
         )
+        .join(AgentOrgNode, AgentOrgNode.id == LLCWorkItem.assignee_agent_id)
         .where(
             LLCWorkItem.company_id == company_id,
             LLCWorkItem.assignee_agent_id.isnot(None),
-            sa.cast(LLCWorkItem.status, sa.String).notin_(_terminal_statuses),
+            LLCWorkItem.status.notin_([WorkItemStatus.DONE, WorkItemStatus.CANCELLED]),  # noqa: E501 — see GH#9980 (enum NAME-vs-value drift)
         )
-        .group_by(LLCWorkItem.assignee_agent_id)
+        .group_by(AgentOrgNode.agent_id)
     )
     assigned_counts: Dict[str, int] = {
-        str(row.assignee_agent_id): row.cnt
+        row.agent_id: row.cnt
         for row in (await session.execute(assign_q)).all()
     }
 

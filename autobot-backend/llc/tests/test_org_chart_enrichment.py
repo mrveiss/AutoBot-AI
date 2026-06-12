@@ -123,11 +123,21 @@ async def _seed_org_node(
     name: str,
     reports_to: Optional[str] = None,
 ) -> str:
-    agent_id = str(uuid.uuid4())
+    """Seed an AgentOrgNode and return its ``agent_id`` (logical slug).
+
+    The node's UUID primary key (``AgentOrgNode.id``) is stored back into
+    the string ``agent_id`` field so that work-item assignments seeded via
+    ``_seed_work_item(assignee_agent_id=agent_id)`` point at the node's PK —
+    matching the real-world shape where ``assignee_agent_id`` holds the row's
+    UUID primary key (M3 fix: the join is ``AgentOrgNode.id ==
+    LLCWorkItem.assignee_agent_id``).
+    """
+    node_id = uuid.uuid4()
+    agent_id = str(node_id)  # slug == stringified PK → assignee_agent_id FK works
     async with session_factory() as session:
         session.add(
             AgentOrgNode(
-                id=uuid.uuid4(),
+                id=node_id,
                 agent_id=agent_id,
                 name=name,
                 org_role=OrgRole.WORKER.value,

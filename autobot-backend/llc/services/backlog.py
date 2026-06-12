@@ -15,7 +15,7 @@ import logging
 import uuid
 from typing import Dict, List, Optional, Sequence, Tuple
 
-from sqlalchemy import case, func, select, update
+from sqlalchemy import case, func, nulls_last, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models.enums import WorkItemPriority, WorkItemStatus, WorkItemType
@@ -67,7 +67,19 @@ class BacklogService(LLCServiceBase):
         count_q = select(func.count()).select_from(q.subquery())
         total = (await session.execute(count_q)).scalar_one()
 
-        q = q.order_by(_PRIORITY_RANK, LLCWorkItem.created_at.asc()).limit(limit).offset(offset)
+        # Order by explicit backlog_position first (NULLS LAST — items that have
+        # never been reordered keep their natural priority/age ordering), then
+        # fall back to priority rank, then creation date.  This makes
+        # bulk_reorder's writes immediately observable in list responses (H3).
+        q = (
+            q.order_by(
+                nulls_last(LLCWorkItem.backlog_position.asc()),
+                _PRIORITY_RANK,
+                LLCWorkItem.created_at.asc(),
+            )
+            .limit(limit)
+            .offset(offset)
+        )
         rows = (await session.execute(q)).scalars().all()
         return rows, total
 
@@ -129,26 +141,35 @@ class BacklogService(LLCServiceBase):
         if not ordered_ids:
             return {"updated": 0, "unknown_count": 0}
 
-        parsed_ids = [uuid.UUID(wid) for wid in ordered_ids]
+        # Deduplicate preserving first occurrence so positions 0..n-1 are
+        # contiguous and unknown_count / updated accounting is correct.
+        seen: set = set()
+        deduped_ids: List[uuid.UUID] = []
+        for wid in ordered_ids:
+            uid = uuid.UUID(wid)
+            if uid not in seen:
+                seen.add(uid)
+                deduped_ids.append(uid)
 
         # Fetch all matching items for this company in one query to validate.
         ownership_q = select(LLCWorkItem.id).where(
-            LLCWorkItem.id.in_(parsed_ids),
+            LLCWorkItem.id.in_(deduped_ids),
             LLCWorkItem.company_id == uuid.UUID(company_id),
         )
         owned_ids = {row[0] for row in (await session.execute(ownership_q)).all()}
-        unknown_count = len(parsed_ids) - len(owned_ids)
+        unknown_count = len(deduped_ids) - len(owned_ids)
         if unknown_count:
             logger.warning(
                 "bulk_reorder: %d/%d ids unknown or cross-tenant for company %s",
                 unknown_count,
-                len(parsed_ids),
+                len(deduped_ids),
                 company_id,
             )
 
-        # Assign positions only to owned items, preserving caller-supplied order.
+        # Assign positions 0..n-1 only to owned items, preserving caller-supplied
+        # order.  Cross-tenant / unknown ids are counted but not written.
         updated = 0
-        for position, item_id in enumerate(parsed_ids):
+        for position, item_id in enumerate(deduped_ids):
             if item_id not in owned_ids:
                 continue
             stmt = (
