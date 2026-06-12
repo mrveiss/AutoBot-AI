@@ -15,11 +15,17 @@ Covers:
   8. Replay API 404 — run not found.
   9. Replay API success — adapter invoked with stored inputs.
  10. redact_pii query param — credentials stripped from replay-log response.
+ 11. H2 tenant gate — 403 when agent belongs to different org.
+ 12. H2 status gate — 409 when agent is inactive.
+ 13. H2 budget gate — 402 when agent is over budget.
+ 14. H3 active-run gate — 409 when RUNNING/QUEUED run exists.
+ 15. M6 redact_dict list recursion.
 """
 
 import json
 import uuid
 from datetime import datetime, timezone
+from decimal import Decimal
 from typing import Any, Dict
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -342,7 +348,7 @@ class TestReplayAPI:
     async def test_admin_gate_403_for_non_admin(self):
         from fastapi import HTTPException
 
-        from llc.api.replay import _require_admin
+        from llc.api.replay import _check_admin
         from llc.models.enums import MembershipRole
         from llc.services.membership_service import MembershipService
 
@@ -355,7 +361,7 @@ class TestReplayAPI:
 
         with patch("llc.api.replay._get_membership", return_value=mock_svc):
             with pytest.raises(HTTPException) as exc_info:
-                await _require_admin(
+                await _check_admin(
                     self._make_mock_ctx(),
                     self._make_current_user(),
                     AsyncMock(),
@@ -364,7 +370,7 @@ class TestReplayAPI:
 
     @pytest.mark.asyncio
     async def test_admin_gate_passes_for_owner(self):
-        from llc.api.replay import _require_admin
+        from llc.api.replay import _check_admin
         from llc.models.enums import MembershipRole
         from llc.services.membership_service import MembershipService
 
@@ -377,8 +383,224 @@ class TestReplayAPI:
 
         with patch("llc.api.replay._get_membership", return_value=mock_svc):
             # Should not raise.
-            await _require_admin(
+            await _check_admin(
                 self._make_mock_ctx(),
                 self._make_current_user(),
                 AsyncMock(),
             )
+
+
+# ---------------------------------------------------------------------------
+# 11. H2 — tenant scope gate
+# ---------------------------------------------------------------------------
+
+
+class TestTenantGate:
+    @pytest.mark.asyncio
+    async def test_agent_wrong_tenant_raises_403(self):
+        """_validate_agent_tenant raises 403 when agent.company_id != org_id."""
+        from fastapi import HTTPException
+
+        from llc.api.replay import _validate_agent_tenant
+
+        wrong_company = uuid.UUID("ffffffff-ffff-ffff-ffff-ffffffffffff")
+        mock_session = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.mappings.return_value.first.return_value = {
+            "agent_id": "agent-abc",
+            "company_id": wrong_company,
+            "status": "available",
+            "heartbeat_enabled": True,
+            "name": "Test",
+            "heartbeat_cron": None,
+            "adapter_type": "autobot_agent",
+            "adapter_config": None,
+            "context_mode": "slim",
+        }
+        mock_session.execute = AsyncMock(return_value=mock_result)
+
+        with pytest.raises(HTTPException) as exc_info:
+            await _validate_agent_tenant(mock_session, "agent-abc", _COMPANY_UUID)
+        assert exc_info.value.status_code == 403
+
+    @pytest.mark.asyncio
+    async def test_agent_correct_tenant_returns_config(self):
+        from llc.api.replay import _validate_agent_tenant
+
+        mock_session = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.mappings.return_value.first.return_value = {
+            "agent_id": "agent-abc",
+            "company_id": _COMPANY_UUID,
+            "status": "available",
+            "heartbeat_enabled": True,
+            "name": "Test",
+            "heartbeat_cron": "*/5 * * * *",
+            "adapter_type": "autobot_agent",
+            "adapter_config": None,
+            "context_mode": "slim",
+        }
+        mock_session.execute = AsyncMock(return_value=mock_result)
+
+        cfg = await _validate_agent_tenant(mock_session, "agent-abc", _COMPANY_UUID)
+        assert cfg["agent_id"] == "agent-abc"
+
+
+# ---------------------------------------------------------------------------
+# 12. H2 — agent status gate
+# ---------------------------------------------------------------------------
+
+
+class TestAgentStatusGate:
+    def test_inactive_raises_409(self):
+        from fastapi import HTTPException
+
+        from llc.api.replay import _validate_agent_status
+
+        with pytest.raises(HTTPException) as exc_info:
+            _validate_agent_status({"status": "inactive"})
+        assert exc_info.value.status_code == 409
+
+    def test_terminated_raises_409(self):
+        from fastapi import HTTPException
+
+        from llc.api.replay import _validate_agent_status
+
+        with pytest.raises(HTTPException) as exc_info:
+            _validate_agent_status({"status": "terminated"})
+        assert exc_info.value.status_code == 409
+
+    def test_active_passes(self):
+        from llc.api.replay import _validate_agent_status
+
+        # Should not raise.
+        _validate_agent_status({"status": "available"})
+
+
+# ---------------------------------------------------------------------------
+# 13. H2 — budget gate
+# ---------------------------------------------------------------------------
+
+
+class TestBudgetGate:
+    @pytest.mark.asyncio
+    async def test_over_budget_raises_402(self):
+        from fastapi import HTTPException
+
+        from llc.api.replay import _validate_budget
+
+        mock_svc = MagicMock()
+        mock_svc.check_budget = AsyncMock(return_value=(Decimal("-10"), True, True))
+
+        with patch("llc.api.replay._get_budget_svc", return_value=mock_svc):
+            with pytest.raises(HTTPException) as exc_info:
+                await _validate_budget(AsyncMock(), "agent-abc")
+        assert exc_info.value.status_code == 402
+
+    @pytest.mark.asyncio
+    async def test_within_budget_passes(self):
+        from llc.api.replay import _validate_budget
+
+        mock_svc = MagicMock()
+        mock_svc.check_budget = AsyncMock(return_value=(Decimal("50"), False, False))
+
+        with patch("llc.api.replay._get_budget_svc", return_value=mock_svc):
+            # Should not raise.
+            await _validate_budget(AsyncMock(), "agent-abc")
+
+
+# ---------------------------------------------------------------------------
+# 14. H3 — active run gate
+# ---------------------------------------------------------------------------
+
+
+class TestActiveRunGate:
+    @pytest.mark.asyncio
+    async def test_running_run_raises_409(self):
+        """409 when a RUNNING or QUEUED run already exists for the agent."""
+        from fastapi import HTTPException
+
+        from llc.api.replay import _validate_no_active_run
+
+        mock_run = MagicMock()
+        mock_run.id = uuid.uuid4()
+        mock_run.status = "running"
+
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none = MagicMock(return_value=mock_run)
+        mock_session = AsyncMock()
+        mock_session.execute = AsyncMock(return_value=mock_result)
+
+        with pytest.raises(HTTPException) as exc_info:
+            await _validate_no_active_run(mock_session, "agent-abc")
+        assert exc_info.value.status_code == 409
+
+    @pytest.mark.asyncio
+    async def test_no_active_run_passes(self):
+        from llc.api.replay import _validate_no_active_run
+
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none = MagicMock(return_value=None)
+        mock_session = AsyncMock()
+        mock_session.execute = AsyncMock(return_value=mock_result)
+
+        # Should not raise.
+        await _validate_no_active_run(mock_session, "agent-abc")
+
+
+# ---------------------------------------------------------------------------
+# 15. M6 — redact_dict list recursion
+# ---------------------------------------------------------------------------
+
+
+def _load_redact_dict():
+    """Load redact_dict directly from the source file to avoid llm_shared __init__
+    heavyweight chain (pulls in adapters / autobot_shared at import time)."""
+    import importlib.util
+    import os
+
+    src = os.path.join(
+        os.path.dirname(__file__),
+        "..",
+        "..",
+        "llm_shared",
+        "credential_redaction.py",
+    )
+    spec = importlib.util.spec_from_file_location("_cred_redaction", os.path.abspath(src))
+    mod = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
+    spec.loader.exec_module(mod)  # type: ignore[union-attr]
+    return mod.redact_dict
+
+
+class TestRedactDictListRecursion:
+    def test_list_values_recursed(self):
+        """redact_dict must recurse into list elements (M6)."""
+        redact_dict = _load_redact_dict()
+        data = {
+            "messages": [
+                {"role": "user", "api_key": "sk-secret12345678901234567890abcdef"},
+                {"role": "assistant", "content": "hello"},
+            ]
+        }
+        result = redact_dict(data)
+        msgs = result["messages"]
+        assert isinstance(msgs, list)
+        # api_key inside a list dict must be redacted
+        assert msgs[0]["api_key"] != "sk-secret12345678901234567890abcdef"
+        # Safe field untouched
+        assert msgs[1]["content"] == "hello"
+
+    def test_nested_list_in_list(self):
+        """redact_dict recurses into lists-of-lists."""
+        redact_dict = _load_redact_dict()
+        data = {"matrix": [[{"token": "Bearer abc123def456789012345678901234"}]]}
+        result = redact_dict(data)
+        inner = result["matrix"][0][0]
+        assert inner["token"] != "Bearer abc123def456789012345678901234"
+
+    def test_non_sensitive_list_unchanged(self):
+        """Plain list values that are not dicts/strings are not altered."""
+        redact_dict = _load_redact_dict()
+        data = {"counts": [1, 2, 3]}
+        result = redact_dict(data)
+        assert result["counts"] == [1, 2, 3]

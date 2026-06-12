@@ -87,13 +87,12 @@
               <button class="btn-replay-log" @click="openReplayPanel(run)">
                 Step-Browse
               </button>
-              <a
+              <button
                 v-if="selectedAgent"
                 class="btn-fixture"
-                :href="`/api/llc/agents/${selectedAgent.id}/runs/${run.id}/fixture`"
-                target="_blank"
-                rel="noopener"
-              >Export Fixture</a>
+                :disabled="downloadingFixture.has(run.id)"
+                @click="downloadFixture(run)"
+              >{{ downloadingFixture.has(run.id) ? 'Exporting...' : 'Export Fixture' }}</button>
             </div>
             <pre v-if="expandedRuns.has(run.id)" class="run-context">{{ formatJson(run.context_snapshot) }}</pre>
           </div>
@@ -155,6 +154,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useApiClient } from '@/plugins/api'
+import { fetchWithAuth } from '@/utils/fetchWithAuth'
+import { getApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 
 const props = defineProps<{ companyId?: string }>()
@@ -218,6 +219,7 @@ const replayLogLoading = ref(false)
 const replayDiff = ref<RunDiff | null>(null)
 const redactPii = ref(false)
 const eventIdx = ref(0)
+const downloadingFixture = ref<Set<string>>(new Set())
 
 const heartbeatAgents = computed(() => agents.value.filter(a => a.heartbeat_enabled))
 
@@ -279,21 +281,76 @@ async function triggerReplay(run: AgentRun) {
   }
 }
 
-async function openReplayPanel(run: AgentRun) {
-  if (!selectedAgent.value) return
-  replayPanelRun.value = run
-  replayLog.value = null
-  replayDiff.value = null
-  eventIdx.value = 0
+async function fetchReplayLog(agentId: string, run: AgentRun): Promise<void> {
   replayLogLoading.value = true
   try {
-    const url = `/api/llc/agents/${selectedAgent.value.id}/runs/${run.id}/replay-log${redactPii.value ? '?redact_pii=true' : ''}`
+    const url = `/api/llc/agents/${agentId}/runs/${run.id}/replay-log${redactPii.value ? '?redact_pii=true' : ''}`
     replayLog.value = await api.get<ReplayLog>(url)
   } catch (err) {
     logger.error('Failed to load replay log', err)
     replayLog.value = null
   } finally {
     replayLogLoading.value = false
+  }
+}
+
+async function fetchReplayDiff(agentId: string, run: AgentRun): Promise<void> {
+  const replayOfId = (replayLog.value as ReplayLog | null)?.replay_of_run_id
+  if (!replayOfId) return
+  try {
+    const url = `/api/llc/agents/${agentId}/runs/${replayOfId}/diff/${run.id}`
+    replayDiff.value = await api.get<RunDiff>(url)
+  } catch (err) {
+    logger.error('Failed to load replay diff', err)
+    replayDiff.value = null
+  }
+}
+
+async function openReplayPanel(run: AgentRun) {
+  if (!selectedAgent.value) return
+  replayPanelRun.value = run
+  replayLog.value = null
+  replayDiff.value = null
+  eventIdx.value = 0
+  const agentId = selectedAgent.value.id
+  await fetchReplayLog(agentId, run)
+  // M2: fetch diff when this run is itself a replay (has replay_of_run_id).
+  const currentLog = replayLog.value as ReplayLog | null
+  if (currentLog?.replay_of_run_id) {
+    await fetchReplayDiff(agentId, run)
+  }
+}
+
+// L4: re-fetch replay log when redactPii toggles while panel is open.
+watch(redactPii, async () => {
+  if (replayPanelRun.value && selectedAgent.value) {
+    await fetchReplayLog(selectedAgent.value.id, replayPanelRun.value)
+  }
+})
+
+// M1: download fixture via authenticated fetch → blob (no bare <a href> 401).
+async function downloadFixture(run: AgentRun) {
+  if (!selectedAgent.value) return
+  const next = new Set(downloadingFixture.value)
+  next.add(run.id)
+  downloadingFixture.value = next
+  try {
+    const url = `${getApiBase()}/llc/agents/${selectedAgent.value.id}/runs/${run.id}/fixture`
+    const res = await fetchWithAuth(url)
+    if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
+    const blob = await res.blob()
+    const objectUrl = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = objectUrl
+    a.download = `fixture_${run.id.slice(0, 8)}.json`
+    a.click()
+    URL.revokeObjectURL(objectUrl)
+  } catch (err) {
+    logger.error('Fixture export failed', err)
+  } finally {
+    const s = new Set(downloadingFixture.value)
+    s.delete(run.id)
+    downloadingFixture.value = s
   }
 }
 

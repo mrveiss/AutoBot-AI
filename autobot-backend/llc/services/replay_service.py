@@ -52,6 +52,9 @@ _REPLAY_EVENT_CAP: int = env_int("LLC_REPLAY_EVENT_CAP", 2000)
 # Maximum bytes stored for output_text.
 _REPLAY_OUTPUT_CAP: int = env_int("LLC_REPLAY_OUTPUT_CAP", 131072)  # 128 KiB
 
+# Maximum bytes for output_text_excerpt in fixture export (L1).
+_REPLAY_FIXTURE_EXCERPT_CAP: int = env_int("LLC_REPLAY_FIXTURE_EXCERPT_CAP", 2048)
+
 
 # ---------------------------------------------------------------------------
 # Public API
@@ -76,6 +79,10 @@ class RunReplayService:
         own status update is never affected.  Callers must NOT await this from
         within an open session that has not been committed (use background task
         pattern).
+
+        For subprocess adapters (claude_code etc.) ``output_text`` and
+        ``recorded_events`` carry the JSONL transcript.  For in-process
+        (autobot_agent) runs there is no output file so both fields are None.
         """
         factory = get_async_session_factory()
         try:
@@ -96,9 +103,14 @@ class RunReplayService:
                 )
                 return
 
-            # Sanitise: redact agent_api_key from stored inputs.
-            clean_context = _redact_sensitive(context)
-            clean_agent = _redact_sensitive(agent)
+            # M6: store RAW context so replay can re-dispatch with the original
+            # values (redacted values would re-inject "***" as inputs).
+            # The fixture export endpoint always applies PII redaction on read;
+            # the replay-log endpoint applies it when ?redact_pii=true.
+            # We strip only agent_api_key (ephemeral run-scoped token) because
+            # that value is not needed for faithful replay and is sensitive.
+            raw_context = {k: v for k, v in context.items() if k != "agent_api_key"}
+            raw_agent = {k: v for k, v in (agent or {}).items() if k != "agent_api_key"}
 
             # Cap events and output.
             capped_events = recorded_events[:_REPLAY_EVENT_CAP] if recorded_events else None
@@ -110,8 +122,8 @@ class RunReplayService:
                 replay_of_run_id=None,
                 company_id=company_id,
                 agent_id=agent_id,
-                inputs_snapshot=clean_context,
-                agent_snapshot=clean_agent,
+                inputs_snapshot=raw_context,
+                agent_snapshot=raw_agent,
                 recorded_events=capped_events,
                 output_text=capped_output,
                 final_status=final_status,
@@ -235,7 +247,12 @@ class RunReplayService:
         run_id: uuid.UUID,
         company_id: uuid.UUID,
     ) -> Dict[str, Any]:
-        """Export run as a JSON test fixture (inputs + expected output shape)."""
+        """Export run as a JSON test fixture (inputs + expected output shape).
+
+        Always applies PII redaction.  For in-process (autobot_agent) runs
+        ``output_text`` and ``recorded_events`` will be None — only inputs are
+        recorded for those runs since there is no subprocess output file.
+        """
         log = await self.get_replay_log(session, run_id, company_id, redact_pii=True)
         if log is None:
             raise ReplayLogNotFoundError(f"No replay log found for run {run_id}")
@@ -257,7 +274,7 @@ class RunReplayService:
             "agent_config": log.get("agent_snapshot") or {},
             "expected_output": {
                 "final_status": run.status if run else log.get("final_status"),
-                "output_text_excerpt": _cap_text(log.get("output_text"), 2048),
+                "output_text_excerpt": _cap_text(log.get("output_text"), _REPLAY_FIXTURE_EXCERPT_CAP),
             },
             "recorded_event_count": len(log.get("recorded_events") or []),
         }
