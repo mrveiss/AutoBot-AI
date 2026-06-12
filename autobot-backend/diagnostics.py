@@ -106,7 +106,7 @@ class PerformanceOptimizedDiagnostics:
     def _get_gpu_info(self) -> Dict[str, Any]:
         """Get GPU information for performance monitoring"""
         try:
-            result = subprocess.run(  # nosec B607 - nvidia-smi is safe
+            result = subprocess.run(  # nosec B603 B607 - fixed nvidia-smi argv, no user input
                 [
                     "nvidia-smi",
                     "--query-gpu=name,memory.total,memory.used,utilization.gpu",

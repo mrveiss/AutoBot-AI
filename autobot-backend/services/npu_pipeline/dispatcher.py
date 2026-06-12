@@ -29,8 +29,8 @@ from services.npu_pipeline.shard_planner import ShardAssignment
 logger = get_logger(__name__)
 
 WORKER_TIMEOUT_S = 30
-FORWARD_PASS_PATH = "/forward"
-TOKEN_STREAM_PATH = "/generate"
+FORWARD_PASS_PATH = "/forward"  # nosec B105 - HTTP API path constant, not a password
+TOKEN_STREAM_PATH = "/generate"  # nosec B105 - HTTP API path constant for LLM token streaming, not a credential
 
 
 class WorkerDropError(Exception):

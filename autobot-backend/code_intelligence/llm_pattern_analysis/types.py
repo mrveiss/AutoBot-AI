@@ -90,7 +90,7 @@ class OptimizationCategory(Enum):
     PROMPT_ENGINEERING = "prompt_engineering"
     CACHING = "caching"
     BATCHING = "batching"
-    TOKEN_OPTIMIZATION = "token_optimization"
+    TOKEN_OPTIMIZATION = "token_optimization"  # nosec B105 - enum value for LLM optimization strategy, not a credential
     MODEL_SELECTION = "model_selection"
     RETRY_STRATEGY = "retry_strategy"
     PARALLEL_PROCESSING = "parallel_processing"

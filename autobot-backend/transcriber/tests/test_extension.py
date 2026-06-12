@@ -3,7 +3,7 @@
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
 
-from extensions.builtin.transcriber_extension import TranscriberExtension, get_transcriber_router
+from middleware.builtin.transcriber_extension import TranscriberExtension, get_transcriber_router
 
 
 def test_transcriber_extension_name():

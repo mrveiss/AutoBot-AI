@@ -218,7 +218,7 @@ class Phase9PerformanceMonitor:
     def _check_gpu_availability(self) -> bool:
         """Check if NVIDIA GPU is available and accessible"""
         try:
-            result = subprocess.run(  # nosec B607 - nvidia-smi is a trusted system tool
+            result = subprocess.run(  # nosec B603 B607 - fixed nvidia-smi argv, no user input
                 ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
                 capture_output=True,
                 text=True,
@@ -303,7 +303,7 @@ class Phase9PerformanceMonitor:
 
         try:
             # Extended nvidia-smi query for comprehensive metrics
-            result = subprocess.run(  # nosec B607 - nvidia-smi is trusted
+            result = subprocess.run(  # nosec B603 B607 - fixed nvidia-smi argv, no user input
                 [
                     "nvidia-smi",
                     "--query-gpu=name,memory.used,memory.total,utilization.gpu,"
