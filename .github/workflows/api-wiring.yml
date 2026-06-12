@@ -8,12 +8,12 @@
 # Authoritative mode builds the app and dumps app.openapi(); if the build fails
 # in CI it falls back to static (regex) mode so the job still reports.
 #
-# NOTE: the audit step is currently non-blocking (continue-on-error: true)
-# because known false positives remain — template-literal paths the normalizer
-# can't resolve (/api/{server}/mcp/*, /api/llc/agents/{id}/{sub}), bare base-URL
-# strings, websockets (absent from OpenAPI), and a handful of LLC views pending a
-# company-context redesign (tracked in #9851). Once those are cleared, DELETE the
-# `continue-on-error: true` line below to make this a blocking gate.
+# BLOCKING gate since #9864: the audit's false-positive classes were fixed
+# (segment-wise template matching, base-URL strings, websocket routes via
+# x-websocket-paths, include_router aggregation chains, comment-line doc
+# examples) and the two real drift bugs they masked were fixed with them.
+# If this gate goes red, the diff genuinely broke the frontend/backend
+# contract — fix the wiring, do not re-add continue-on-error.
 
 name: API Wiring Audit
 
@@ -60,8 +60,6 @@ jobs:
           python -m pip install -r requirements-ci.txt --prefer-binary || true
 
       - name: Run API wiring audit
-        # Non-blocking until known false positives are cleared (see header).
-        continue-on-error: true
         run: |
           set -o pipefail
           export PYTHONPATH="$PWD:$PWD/autobot-backend:${PYTHONPATH:-}"
