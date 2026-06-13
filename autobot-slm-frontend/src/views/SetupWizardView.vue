@@ -304,7 +304,7 @@
 
           <!-- SLM services: shown as locked on manager node only (#1455, #2900) -->
           <div
-            v-if="node.node_id === '00-SLM-Manager' && node.detected_roles.some(r => SLM_ROLES.includes(r))"
+            v-if="node.detected_roles.some(r => SLM_ROLES.includes(r))"
             class="infra-roles-row"
           >
             <span class="infra-label">{{ $t('setupWizardView.sLMServices') }}</span>

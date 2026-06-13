@@ -10,7 +10,7 @@
 # from all fleet nodes, then reports the resulting /opt/autobot/ layout.
 #
 # WARNING: This playbook is for MULTI-NODE deployments ONLY.
-# Each play targets a specific host group (00-SLM-Manager, 01-Backend, etc.)
+# Each play targets a specific host group (slm_server, 01-Backend, etc.)
 # and deletes directories that should NOT exist on that node. Do NOT run this
 # on a single-host deployment — it will delete co-located role directories.
 # For single-host safety, use the role-level clean.yml tasks which check
@@ -56,8 +56,8 @@
 # ---------------------------------------------------------------------------
 # Play 1: SLM Manager — remove wrong-node and legacy dirs
 # ---------------------------------------------------------------------------
-- name: "Cleanup: 00-SLM-Manager"
-  hosts: 00-SLM-Manager
+- name: "Cleanup: SLM Manager (slm_server)"
+  hosts: slm_server
   gather_facts: false
   become: true
 
@@ -467,7 +467,7 @@
           - "╚═══════════════════════════════════════════════════════════════╝"
           - ""
           - "Cleaned nodes:"
-          - "  00-SLM-Manager — removed wrong-node/legacy role dirs"
+          - "  SLM Manager ({{ slm_manager_inventory_host }}) — removed wrong-node/legacy role dirs"
           - "  01-Backend     — removed legacy dirs + flat Python files"
           - "  02-Frontend    — removed wrong-node autobot-slm-frontend"
           - "  npu-worker     — removed legacy npu-worker dir"
