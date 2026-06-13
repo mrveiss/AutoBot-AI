@@ -145,7 +145,12 @@ test.describe('Thinking Mode E2E', () => {
     // The badge should exist if the backend supports it
     // (may be 0 in test environment without real Anthropic API)
     const count = await thinkingBadges.count();
-    console.log(`Found ${count} thinking badges`);
+    // Surface the observed badge count in the report instead of console noise
+    test.info().annotations.push({
+      type: 'info',
+      description: `Found ${count} thinking badges`,
+    });
+    expect(count).toBeGreaterThanOrEqual(0);
   });
 
   test('TC6: should toggle OFF and not send thinking params', async ({ page }) => {

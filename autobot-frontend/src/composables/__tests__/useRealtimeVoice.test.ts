@@ -75,7 +75,13 @@ vi.stubGlobal('window', { isSecureContext: true })
 // ─── Helpers ─────────────────────────────────────────────
 
 function makeJsonResponse(body: unknown, ok = true): Response {
-  return { ok, status: ok ? 200 : 500, json: async () => body } as unknown as Response
+  return {
+    ok,
+    status: ok ? 200 : 500,
+    json: async () => body,
+    // #7421: connect() reads X-Realtime-Session-Id from response headers
+    headers: { get: (_name: string) => null },
+  } as unknown as Response
 }
 
 function setFetchMock(overrides: Record<string, unknown> = {}) {

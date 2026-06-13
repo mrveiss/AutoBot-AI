@@ -24,12 +24,15 @@ describe('BulkEditModal with Scope Support', () => {
     expect(modes).toContain('scope')
   })
 
+  // Dynamically compiles the real SFC; under full-suite load (last of 100+
+  // files) the on-demand Vue compile can exceed the 10s default, so give the
+  // import-resolution a realistic bound. The assertion itself is instant.
   it('should have KnowledgeScopeSelector imported in BulkEditModal', async () => {
     // This test verifies the component import is correct
     // The import statement in BulkEditModal should reference KnowledgeScopeSelector
     const content = await import('../BulkEditModal.vue')
     expect(content).toBeDefined()
-  })
+  }, 30000)
 
   it('should initialize scope state correctly', () => {
     // Scope state initialization check
