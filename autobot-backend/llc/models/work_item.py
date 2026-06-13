@@ -27,7 +27,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from user_management.models.base import Base
 
-from .enums import WorkItemPriority, WorkItemRelationType, WorkItemStatus, WorkItemType
+from .enums import WorkItemPriority, WorkItemRelationType, WorkItemStatus, WorkItemType, pg_enum_values
 
 
 class LLCWorkItem(Base):
@@ -58,7 +58,7 @@ class LLCWorkItem(Base):
 
     # Hierarchy discriminator
     type: Mapped[str] = mapped_column(
-        sa.Enum(WorkItemType, name="workitemtype", create_type=False),
+        sa.Enum(WorkItemType, name="workitemtype", create_type=False, values_callable=pg_enum_values),
         nullable=False,
     )
 
@@ -79,13 +79,13 @@ class LLCWorkItem(Base):
 
     # Status / priority
     status: Mapped[str] = mapped_column(
-        sa.Enum(WorkItemStatus, name="workitemstatus", create_type=False),
+        sa.Enum(WorkItemStatus, name="workitemstatus", create_type=False, values_callable=pg_enum_values),
         nullable=False,
         server_default=WorkItemStatus.BACKLOG.value,
         index=True,
     )
     priority: Mapped[str] = mapped_column(
-        sa.Enum(WorkItemPriority, name="workitempriority", create_type=False),
+        sa.Enum(WorkItemPriority, name="workitempriority", create_type=False, values_callable=pg_enum_values),
         nullable=False,
         server_default=WorkItemPriority.MEDIUM.value,
         index=True,
@@ -223,7 +223,7 @@ class LLCWorkItemRelation(Base):
         index=True,
     )
     relation_type: Mapped[str] = mapped_column(
-        sa.Enum(WorkItemRelationType, name="workitemrelationtype", create_type=False),
+        sa.Enum(WorkItemRelationType, name="workitemrelationtype", create_type=False, values_callable=pg_enum_values),
         nullable=False,
     )
     created_by_agent_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
