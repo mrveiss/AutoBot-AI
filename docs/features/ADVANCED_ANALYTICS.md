@@ -8,6 +8,8 @@
 
 AutoBot's Advanced Analytics & Business Intelligence module provides comprehensive analytics capabilities for tracking user behavior, agent performance, system costs, and predictive maintenance recommendations.
 
+Analytics endpoints that accept an optional date-range filter expose it as `start_date` / `end_date` query parameters bound through the shared [`DateRangeParams` dependency](../developer/03-api-reference.md#date-range-query-parameters-daterangeparams) — not open-coded `Query(...)` params. See the API reference for the parameter shape, default range, and a worked example for new endpoints.
+
 ## Features
 
 ### 1. User Behavior Analytics
@@ -338,3 +340,4 @@ curl -X POST http://localhost:8001/api/analytics/cost/budget-alert \
 - [API Documentation](../api/COMPREHENSIVE_API_DOCUMENTATION.md)
 - [System State](../system-state.md)
 - [Redis Client Usage](../developer/REDIS_CLIENT_USAGE.md)
+- [Date-Range Query Parameters (DateRangeParams)](../developer/03-api-reference.md#date-range-query-parameters-daterangeparams)
