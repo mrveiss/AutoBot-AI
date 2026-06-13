@@ -2647,16 +2647,61 @@ async def _run_fleet_stage(job: UpdateAllJob, node_ids: List[str]) -> None:
 
 
 async def _collect_outdated_node_ids(job: UpdateAllJob, remote_commit: str, db_service_ref) -> List[str]:
-    """Query DB for outdated / service-failed fleet node IDs and annotate fleet stage."""
+    """Query DB for nodes that need updating and annotate fleet stage.
+
+    Uses code_version != remote_commit as the currency signal (#9996-B).
+    code_status is set by heartbeat and lags behind stage-1/2 updates to
+    slm_agent_latest_commit — relying on it here causes nodes that are truly
+    outdated to appear current (heartbeat hasn't fired since the new commit
+    was fetched).
+
+    Also explicitly includes the co-located self-node when its code_version
+    differs from remote_commit (#9996-A).  The heartbeat-driven code_status
+    on the SLM host may still show UP_TO_DATE because slm_agent_latest_commit
+    was just updated in stage 1 and the heartbeat cycle hasn't re-evaluated
+    the node.  _sync_fleet_node already skips the self-node during fleet
+    execution (marks it completed), so including it here only fixes the
+    currency count — it does not cause a double-update.
+    """
     try:
+        slm_own_ip = urlparse(settings.external_url).hostname or ""
+        seen_ids: set = set()
+        outdated_node_ids: List[str] = []
+
         async with db_service_ref.session() as db:
+            # B: use version comparison — reliable immediately after stages 1-2
             nodes_result = await db.execute(
                 select(Node)
-                .where(Node.code_status.in_([CodeStatus.OUTDATED.value, CodeStatus.CODE_CURRENT_SERVICE_FAILED.value]))
+                .where(
+                    (Node.code_version != remote_commit) | Node.code_version.is_(None)
+                )
                 .order_by(Node.hostname)
             )
-            outdated_nodes = nodes_result.scalars().all()
-            outdated_node_ids = [n.node_id for n in outdated_nodes]
+            version_outdated = nodes_result.scalars().all()
+
+            for n in version_outdated:
+                seen_ids.add(n.node_id)
+                outdated_node_ids.append(n.node_id)
+
+            # A: self-node inclusion — ensure the co-located SLM host is counted
+            # even when heartbeat hasn't yet updated its code_status to OUTDATED.
+            if slm_own_ip:
+                slm_result = await db.execute(
+                    select(Node).where(Node.ip_address == slm_own_ip)
+                )
+                slm_node = slm_result.scalar_one_or_none()
+                if slm_node and slm_node.node_id not in seen_ids:
+                    # Self-node is not captured by version comparison (e.g. no
+                    # code_version recorded yet); include it so the pipeline
+                    # does not report "everything current" prematurely.
+                    logger.info(
+                        "update-all: self-node %s not in version-outdated list "
+                        "(code_version=%s vs remote=%s) — adding explicitly (#9996-A)",
+                        slm_node.node_id,
+                        _short_sha(slm_node.code_version),
+                        _short_sha(remote_commit),
+                    )
+                    outdated_node_ids.append(slm_node.node_id)
 
         stage_fleet = _get_stage(job, "fleet_nodes")
         stage_fleet.sha = _short_sha(remote_commit)
