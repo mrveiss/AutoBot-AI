@@ -677,7 +677,7 @@
 
     - name: "Mark-synced | Login to SLM API"
       ansible.builtin.uri:
-        url: "https://{{ hostvars['00-SLM-Manager']['ansible_host'] | default('127.0.0.1') }}/slm/api/auth/login"
+        url: "https://{{ hostvars[slm_manager_inventory_host]['ansible_host'] | default('127.0.0.1') }}/slm/api/auth/login"
         method: POST
         body_format: json
         body:
@@ -705,7 +705,7 @@
 
     - name: "Mark-synced | POST to /api/code-sync/nodes/{{ inventory_hostname }}/mark-synced"
       ansible.builtin.uri:
-        url: "https://{{ hostvars['00-SLM-Manager']['ansible_host'] | default('127.0.0.1') }}/slm/api/code-sync/nodes/{{ inventory_hostname }}/mark-synced"
+        url: "https://{{ hostvars[slm_manager_inventory_host]['ansible_host'] | default('127.0.0.1') }}/slm/api/code-sync/nodes/{{ inventory_hostname }}/mark-synced"
         method: POST
         headers:
           Authorization: "Bearer {{ _slm_login.json.access_token | default('') }}"
