@@ -14,7 +14,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from user_management.models.base import Base
 
-from .enums import WorkProductType
+from .enums import WorkProductType, pg_enum_values
 
 
 class LLCWorkProduct(Base):
@@ -44,7 +44,7 @@ class LLCWorkProduct(Base):
         nullable=True,
     )
     type: Mapped[str] = mapped_column(
-        sa.Enum(WorkProductType, name="workproducttype", create_type=False),
+        sa.Enum(WorkProductType, name="workproducttype", create_type=False, values_callable=pg_enum_values),
         nullable=False,
     )
     title: Mapped[str] = mapped_column(sa.String(512), nullable=False)

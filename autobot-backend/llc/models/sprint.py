@@ -25,7 +25,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from user_management.models.base import Base
 
-from .enums import SprintStatus
+from .enums import SprintStatus, pg_enum_values
 
 
 class LLCPortfolio(Base):
@@ -174,7 +174,7 @@ class LLCSprint(Base):
     start_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     end_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True, index=True)
     status: Mapped[str] = mapped_column(
-        sa.Enum(SprintStatus, name="sprintstatus", create_type=False),
+        sa.Enum(SprintStatus, name="sprintstatus", create_type=False, values_callable=pg_enum_values),
         nullable=False,
         server_default=SprintStatus.PLANNING.value,
         index=True,
