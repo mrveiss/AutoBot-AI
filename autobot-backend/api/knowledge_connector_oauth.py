@@ -125,9 +125,7 @@ async def start_oauth(
         path=_OAUTH_CALLBACK_PATH,
     )
 
-    authorize_url = oauth_flow.build_authorize_url(
-        prov, client_id, request.redirect_uri, state, challenge, scopes
-    )
+    authorize_url = oauth_flow.build_authorize_url(prov, client_id, request.redirect_uri, state, challenge, scopes)
     return AuthorizeResponse(authorize_url=authorize_url, state=state, connector_id=connector_id)
 
 

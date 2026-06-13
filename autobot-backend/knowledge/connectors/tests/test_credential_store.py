@@ -285,9 +285,14 @@ async def test_get_access_token_returns_unexpired_without_refresh(monkeypatch):
     svc, store = _make_svc()
     cs = ConnectorCredentialStore(svc)
     secret_id = await cs.store_oauth(
-        "c1", "u1", "google",
+        "c1",
+        "u1",
+        "google",
         {"access_token": "still-good", "refresh_token": "rt", "expires_in": 3600},
-        "cid", "csec", "https://token", ["s"],
+        "cid",
+        "csec",
+        "https://token",
+        ["s"],
     )
 
     # refresh_access_token must NOT be called for a valid token.
@@ -307,9 +312,14 @@ async def test_get_access_token_refreshes_when_expired(monkeypatch):
     cs = ConnectorCredentialStore(svc)
     # expires_in=0 → immediately within the skew window → expired.
     secret_id = await cs.store_oauth(
-        "c2", "u1", "gitlab",
+        "c2",
+        "u1",
+        "gitlab",
         {"access_token": "old", "refresh_token": "rt-old", "expires_in": 0},
-        "cid", "csec", "https://token", ["s"],
+        "cid",
+        "csec",
+        "https://token",
+        ["s"],
     )
 
     from knowledge.connectors import oauth_flow
@@ -333,9 +343,14 @@ async def test_get_access_token_owner_mismatch_raises():
     svc, store = _make_svc()
     cs = ConnectorCredentialStore(svc)
     secret_id = await cs.store_oauth(
-        "c3", "owner-a", "google",
+        "c3",
+        "owner-a",
+        "google",
         {"access_token": "at", "refresh_token": "rt", "expires_in": 3600},
-        "cid", "csec", "https://token", ["s"],
+        "cid",
+        "csec",
+        "https://token",
+        ["s"],
     )
     with pytest.raises(PermissionError):
         await cs.get_access_token(secret_id, "intruder")
@@ -354,9 +369,14 @@ async def test_get_access_token_expired_without_refresh_token_raises(monkeypatch
     svc, store = _make_svc()
     cs = ConnectorCredentialStore(svc)
     secret_id = await cs.store_oauth(
-        "c4", "u1", "google",
+        "c4",
+        "u1",
+        "google",
         {"access_token": "old", "expires_in": 0},  # no refresh_token
-        "cid", "csec", "https://token", ["s"],
+        "cid",
+        "csec",
+        "https://token",
+        ["s"],
     )
     with pytest.raises(LookupError, match="re-auth required"):
         await cs.get_access_token(secret_id, "u1")

@@ -12,7 +12,6 @@ import pytest
 
 from knowledge.connectors import oauth_flow
 
-
 # ---------------------------------------------------------------------------
 # Provider registry
 # ---------------------------------------------------------------------------
@@ -144,9 +143,7 @@ async def test_refresh_access_token_posts_expected_payload(monkeypatch):
         return {"access_token": "fresh", "expires_in": 3600}
 
     monkeypatch.setattr(oauth_flow, "_post_token", _fake_post)
-    result = await oauth_flow.refresh_access_token(
-        "https://token", "cid", "csec", refresh_token="rt"
-    )
+    result = await oauth_flow.refresh_access_token("https://token", "cid", "csec", refresh_token="rt")
     assert result["access_token"] == "fresh"
     assert captured["payload"]["grant_type"] == "refresh_token"
     assert captured["payload"]["refresh_token"] == "rt"

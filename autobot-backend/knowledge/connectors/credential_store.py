@@ -208,7 +208,9 @@ class ConnectorCredentialStore:
 
         refresh_token = creds.get("refresh_token")
         if not refresh_token:
-            raise LookupError(f"OAuth secret {secret_id!r} access token expired and no refresh token — re-auth required")
+            raise LookupError(
+                f"OAuth secret {secret_id!r} access token expired and no refresh token — re-auth required"
+            )
 
         from knowledge.connectors import oauth_flow
 
