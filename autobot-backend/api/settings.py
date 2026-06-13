@@ -16,7 +16,7 @@ import json
 import os
 import tempfile
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 import aiofiles
 from celery.result import AsyncResult
@@ -39,7 +39,7 @@ from api.schemas_system import (
     UpdateStatusResponse,
     WorkerStatusResponse,
 )
-from api.user_management.dependencies import get_db_session
+from api.user_management.dependencies import get_db_session, get_optional_db_session
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
@@ -989,7 +989,7 @@ async def get_telemetry_settings(
 )
 async def update_telemetry_settings(
     request: TelemetrySettingsRequest,
-    session: AsyncSession = Depends(get_db_session),
+    session: Optional[AsyncSession] = Depends(get_optional_db_session),
     current_user: dict = Depends(get_current_user),
     _: None = Depends(check_admin_permission),
 ):
@@ -999,7 +999,10 @@ async def update_telemetry_settings(
     is disabled, the AnalyticsMiddleware and VoiceRealtimeTelemetry
     services skip data collection.
 
-    Requires admin permission.
+    Requires admin permission.  Works in single_user mode (no Postgres
+    required): the consent state is persisted to settings.json via
+    ConfigService; the DB audit trail is skipped when Postgres is
+    unavailable (Issue #10000).
 
     Args:
         request: New telemetry settings
@@ -1027,14 +1030,19 @@ async def update_telemetry_settings(
 
     changed = _compute_flat_diff(before_config, merged_config)
 
-    await ConfigRevisionService(session).create_revision(
-        entity_type="system",
-        entity_id="telemetry_settings",
-        before_config=before_config,
-        after_config=merged_config,
-        source="api",
-        created_by=current_user.get("id", "unknown"),
-    )
+    # Audit trail requires Postgres — skip gracefully in single_user mode
+    # (Issue #10000: telemetry consent must save without user management).
+    if session is not None:
+        await ConfigRevisionService(session).create_revision(
+            entity_type="system",
+            entity_id="telemetry_settings",
+            before_config=before_config,
+            after_config=merged_config,
+            source="api",
+            created_by=current_user.get("id", "unknown"),
+        )
+    else:
+        logger.debug("Telemetry audit trail skipped: Postgres unavailable in current deployment mode")
 
     logger.info(
         "Telemetry settings updated: enabled=%s, anonymous_usage_stats=%s (changed keys: %d)",
