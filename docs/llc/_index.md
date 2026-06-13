@@ -65,6 +65,7 @@ and leans on the platform for memory, inference, and governance.
 |----------|-------------|
 | [LLC Module PRD](../planning/PRD_AutoBot_LLC_Module.md) | Full product requirements: hierarchy, features, data model, API, phases |
 | [Budget token mode](budget-token-mode.md) | Token-based budget accounting for LLC agents |
+| [GitHub PR integration](github-pr-integration.md) | PR ↔ work-item linking, branch naming convention, webhook setup |
 
 ## Related
 
