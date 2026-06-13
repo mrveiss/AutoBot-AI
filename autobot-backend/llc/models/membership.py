@@ -18,7 +18,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from user_management.models.base import Base
 
-from .enums import MembershipRole
+from .enums import MembershipRole, pg_enum_values
 
 
 class LLCCompanyMembership(Base):
@@ -34,7 +34,7 @@ class LLCCompanyMembership(Base):
     company_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
     user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
     role: Mapped[str] = mapped_column(
-        sa.Enum(MembershipRole, name="membershiprole", create_type=False),
+        sa.Enum(MembershipRole, name="membershiprole", create_type=False, values_callable=pg_enum_values),
         nullable=False,
         server_default=MembershipRole.MEMBER.value,
     )
