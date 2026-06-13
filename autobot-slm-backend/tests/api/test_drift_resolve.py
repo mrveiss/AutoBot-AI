@@ -179,7 +179,9 @@ def test_happy_path_includes_post_steps(stub_user):
     )
     post_patch = patch(
         "api.code_sync._run_post_sync_steps",
-        side_effect=lambda comp, src, dep: _async_return((True, ["pip: install succeeded", "restart autobot-slm-backend: ok"])),
+        side_effect=lambda comp, src, dep: _async_return(
+            (True, ["pip: install succeeded", "restart autobot-slm-backend: ok"])
+        ),
     )
     with src_patch, dep_patch, rsync_patch, post_patch:
         req = DriftResolveRequest(component="autobot-slm-backend")
