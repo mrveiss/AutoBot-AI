@@ -55,11 +55,26 @@
     mode: '0640'
   notify: restart backend services
 
+# #10005: Render the backend role's unit template — the single source of truth
+# for autobot-backend.service (carries the #9934 LimitNOFILE directive). This
+# role previously referenced a bare `autobot-backend.service.j2` that resolved
+# nowhere (the role has no templates/ dir); the drifted near-copy at
+# ansible/templates/systemd/ was unreferenced and is deleted. Vars map the
+# canonical template onto this role's install layout.
 - name: Create systemd service files
   template:
-    src: autobot-backend.service.j2
+    src: ../../backend/templates/autobot-backend.service.j2
     dest: /etc/systemd/system/autobot-backend.service
     mode: '0644'
+  vars:
+    backend_user: autobot
+    backend_group: autobot
+    backend_install_dir: /opt/autobot/app
+    backend_code_dir: /opt/autobot/app
+    backend_log_dir: /opt/autobot/logs
+    backend_host: "0.0.0.0"
+    backend_port: 8001
+    backend_workers: 4
   notify:
     - reload systemd
     - restart backend services
