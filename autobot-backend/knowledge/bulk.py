@@ -14,6 +14,7 @@ Issue #358: Fixed file I/O to use proper context managers with asyncio.to_thread
 import asyncio
 import csv
 import json
+import os
 from datetime import datetime, timezone
 from io import StringIO
 from typing import TYPE_CHECKING, Any, Dict, List
@@ -1323,8 +1324,6 @@ class BulkOperationsMixin:
         description: str = "",
     ) -> Dict[str, Any]:
         """Create a full backup of the knowledge base (Issue #398: refactored)."""
-        import os
-
         try:
             backup_dir = self._get_backup_dir(backup_dir)
             os.makedirs(backup_dir, exist_ok=True)
@@ -1374,14 +1373,36 @@ class BulkOperationsMixin:
         project_root = Path(__file__).parent.parent.parent
         return str(project_root / "backups" / "knowledge")
 
+    def _resolve_backup_path(self, backup_file: str) -> str | None:
+        """Resolve and contain *backup_file* to the default backup directory.
+
+        Uses ``os.path.realpath`` to expand symlinks before comparing, so a
+        symlink inside the backup dir that points outside is correctly rejected.
+
+        Issue #9670: containment check — dotdot-stripping alone is insufficient
+        because the API accepts full filesystem paths; without this check any
+        readable path can be supplied.
+
+        Args:
+            backup_file: Raw path supplied by the API caller.
+
+        Returns:
+            The realpath-resolved path string when it is inside (or equal to)
+            the default backup directory; ``None`` otherwise.
+        """
+        allowed_root = os.path.realpath(self._get_backup_dir(None))
+        resolved = os.path.realpath(backup_file)
+        # Accept the root itself or any path strictly under it.
+        if resolved == allowed_root or resolved.startswith(allowed_root + os.sep):
+            return resolved
+        return None
+
     def _generate_backup_path(self, backup_dir: str, compression: bool) -> tuple:
         """
         Generate backup filename and path.
 
         Issue #398: Extracted from create_backup.
         """
-        import os
-
         timestamp = datetime.now(tz=timezone.utc).strftime("%Y%m%d_%H%M%S")
         backup_name = f"kb_backup_{timestamp}"
         ext = ".jsongz" if compression else ".json"
@@ -1472,10 +1493,19 @@ class BulkOperationsMixin:
 
         Issue #419: Backup and restore functionality.
         Issue #398: Refactored using extracted helpers.
+        Issue #9670: Directory containment — path is resolved to the default
+            backup directory; any path outside is rejected.
         """
-        import os
-
         try:
+            resolved = self._resolve_backup_path(backup_file)
+            if resolved is None:
+                return {
+                    "status": "error",
+                    "message": "backup_file must be inside the knowledge backups directory",
+                }
+
+            backup_file = resolved
+
             if not os.path.exists(backup_file):
                 return {
                     "status": "error",
@@ -1760,8 +1790,6 @@ class BulkOperationsMixin:
 
     def _scan_backup_files(self, backup_dir: str) -> List[Dict[str, Any]]:
         """Scan directory for backup files (Issue #398: extracted)."""
-        import os
-
         backups = []
         for filename in os.listdir(backup_dir):
             if self._is_valid_backup_file(filename):
@@ -1780,8 +1808,6 @@ class BulkOperationsMixin:
 
     async def list_backups(self, backup_dir: str | None = None, limit: int = 50) -> Dict[str, Any]:
         """List available backups (Issue #398: refactored)."""
-        import os
-
         try:
             backup_dir = self._get_backup_dir(backup_dir)
 
@@ -1815,6 +1841,8 @@ class BulkOperationsMixin:
         Delete a backup file.
 
         Issue #419: Backup and restore functionality.
+        Issue #9670: Directory containment — path is resolved to the default
+            backup directory; any path outside is rejected before os.remove.
 
         Args:
             backup_file: Path to backup file to delete
@@ -1822,16 +1850,23 @@ class BulkOperationsMixin:
         Returns:
             Dict with deletion status
         """
-        import os
-
         try:
+            resolved = self._resolve_backup_path(backup_file)
+            if resolved is None:
+                return {
+                    "status": "error",
+                    "message": "backup_file must be inside the knowledge backups directory",
+                }
+
+            backup_file = resolved
+
             if not os.path.exists(backup_file):
                 return {
                     "status": "error",
                     "message": f"Backup file not found: {backup_file}",
                 }
 
-            # Validate it's a backup file
+            # Validate it's a backup file (basename check retained alongside containment)
             filename = os.path.basename(backup_file)
             if not filename.startswith("kb_backup_"):
                 return {"status": "error", "message": "Not a valid backup file"}
