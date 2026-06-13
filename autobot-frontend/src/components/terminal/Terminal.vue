@@ -161,7 +161,7 @@ const { isConnected, isConnecting, send: wsSend, connect: wsConnect, disconnect:
         handleTerminalMessage(data)
       } catch (error) {
         // Handle plain text messages
-        addTerminalLine('', data, 'output')
+        addTerminalLine('', String(data), 'output')
       }
     },
     onError: (error) => {

@@ -209,20 +209,7 @@ import { createLogger } from '@/utils/debugUtils'
 const logger = createLogger('WorkItemDetail')
 const api = useApiClient()
 
-interface WorkItem {
-  id: string
-  identifier: string
-  type: string
-  title: string
-  description: string
-  priority: string
-  story_points: number | null
-  assignee_name: string | null
-  sprint_id: string | null
-  status: string
-  labels: string[]
-  acceptance_criteria: string[]
-}
+import type { WorkItem } from './workItemTypes'
 
 interface Comment {
   id: string

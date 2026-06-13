@@ -104,6 +104,7 @@
 </template>
 
 <script setup lang="ts">
+import type { IconName } from '@/components/ui/Icon.vue'
 import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Icon from '@/components/ui/Icon.vue'
@@ -156,10 +157,12 @@ function closePairingInstructions() {
   showPairingInstructions.value = false
 }
 
-function getPlatformIcon(platform: string): string {
-  const icons: Record<string, string> = {
-    ios: 'apple',
-    android: 'android',
+// #9724: 'apple'/'android' are not SVG IconNames — they rendered empty
+// SVGs through <Icon :name>. Use device-shaped registry icons instead.
+function getPlatformIcon(platform: string): IconName {
+  const icons: Record<string, IconName> = {
+    ios: 'mobile-alt',
+    android: 'mobile',
     pwa: 'globe'
   }
   return icons[platform] || 'smartphone'

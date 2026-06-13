@@ -16,6 +16,7 @@
  * `useKnowledgeBase` BC shim and non-reactive consumers.
  */
 
+import type { IconName } from '@/components/ui/Icon.vue'
 import { ref, readonly, type Ref } from 'vue'
 import apiClient from '@/utils/ApiClient'
 import { formatCategoryName as formatCategoryHelper } from '@/utils/formatHelpers'
@@ -36,35 +37,38 @@ const logger = createLogger('useKnowledgeCategories')
  * Get icon for category (re-exported so consumers + category-option builder
  * share the same mapping without depending on useKnowledgeBase.ts).
  */
-export function getCategoryIcon(category: string): string {
+// #9724: consumed by <Icon :name="..."> (KnowledgeBrowserHeader categories)
+// — must return SVG IconNames; the previous FA class strings rendered empty
+// SVGs.
+export function getCategoryIcon(category: string): IconName {
   const categoryLower = category.toLowerCase()
 
   if (categoryLower.includes('architecture') || categoryLower.includes('design')) {
-    return 'fas fa-drafting-compass'
+    return 'sitemap'
   }
   if (categoryLower.includes('implementation') || categoryLower.includes('code')) {
-    return 'fas fa-code'
+    return 'code'
   }
   if (categoryLower.includes('security')) {
-    return 'fas fa-shield-alt'
+    return 'shield-alt'
   }
   if (categoryLower.includes('operations') || categoryLower.includes('devops')) {
-    return 'fas fa-cogs'
+    return 'cogs'
   }
   if (categoryLower.includes('research') || categoryLower.includes('analysis')) {
-    return 'fas fa-flask'
+    return 'vial'
   }
   if (categoryLower.includes('reports') || categoryLower.includes('documentation')) {
-    return 'fas fa-file-alt'
+    return 'file-alt'
   }
   if (categoryLower.includes('archives') || categoryLower.includes('history')) {
-    return 'fas fa-archive'
+    return 'file-archive'
   }
   if (categoryLower.includes('project') || categoryLower.includes('planning')) {
-    return 'fas fa-project-diagram'
+    return 'project-diagram'
   }
 
-  return 'fas fa-folder'
+  return 'folder'
 }
 
 // ==================== Bare imperative API ====================

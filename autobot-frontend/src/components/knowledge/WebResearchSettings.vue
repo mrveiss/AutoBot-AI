@@ -469,7 +469,7 @@ async function fetchStatus(): Promise<void> {
       enabled: Boolean(data.enabled),
       preferred_method: String(data.preferred_method ?? store.status.preferred_method),
       cache_stats: (data.cache_stats as typeof store.status.cache_stats) ?? null,
-      circuit_breakers: data.circuit_breakers ?? null
+      circuit_breakers: (data.circuit_breakers as Record<string, unknown> | null) ?? null
     })
     store.updateSettings({ enabled: Boolean(data.enabled) })
   } catch (err: unknown) {

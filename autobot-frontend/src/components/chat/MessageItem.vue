@@ -175,6 +175,7 @@
  * Issue #184: Split oversized Vue components
  */
 
+import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -255,7 +256,7 @@ const messageWrapperClass = computed(() => {
 const avatarClass = computed(() => `message-avatar ${props.message.sender}`)
 
 const senderIcon = computed(() => {
-  const icons: Record<string, string> = {
+  const icons: Record<string, IconName> = {
     user: 'user',
     assistant: 'robot',
     system: 'cog',

@@ -63,7 +63,7 @@
         v-if="vncUrl"
         class="control-btn"
         :title="$t('desktop.interface.openInNewWindow')"
-        @click="window.open(vncUrl, '_blank', 'noopener')"
+        @click="openInNewWindow"
       >
         {{ $t('desktop.interface.openInNewWindow') }}
       </button>
@@ -234,7 +234,7 @@ const isFullscreen = ref(false)
 const connectionStatus = ref('Connecting...')
 
 const connectionStatusDisplay = computed(() => {
-  const statusMap = {
+  const statusMap: Record<string, string> = {
     'Connecting...': t('desktop.interface.statusConnecting'),
     'Connected': t('desktop.interface.statusConnected'),
     'Disconnected': t('desktop.interface.statusDisconnected'),
@@ -245,6 +245,10 @@ const connectionStatusDisplay = computed(() => {
   }
   return statusMap[connectionStatus.value] || connectionStatus.value
 })
+
+const openInNewWindow = (): void => {
+  window.open(vncUrl.value, '_blank', 'noopener')
+}
 
 // VNC connection URL - will be loaded asynchronously from AppConfig or derived from host prop
 const vncUrl = ref('') // Will be loaded on mount
@@ -409,7 +413,11 @@ const handleDesktopError = (err: Error | unknown) => {
   logger.error('Desktop connection error:', err)
   loading.value = false
   connectionStatus.value = 'Error'
-  error.value = t('desktop.interface.errorVncConnection', { error: error.value?.message || error })
+  // #9724: previously interpolated the error REF (always null here) instead
+  // of the caught error — the dialog never showed the actual VNC error.
+  error.value = t('desktop.interface.errorVncConnection', {
+    error: err instanceof Error ? err.message : String(err),
+  })
 }
 
 const handleDesktopTimeout = () => {
@@ -428,11 +436,13 @@ onMounted(async () => {
   // Load dynamic VNC URL first - wrapped in try-catch for safety
   try {
     await loadVncUrl()
-  } catch (error) {
-    logger.error('Critical error in loadVncUrl:', error)
+  } catch (err) {
+    logger.error('Critical error in loadVncUrl:', err)
     // Fallback to default state
     loading.value = false
     connectionStatus.value = 'Configuration Error'
+    // #9724: the catch param previously shadowed the `error` ref, so this
+    // assignment wrote onto the caught exception and the UI never showed it.
     error.value = t('desktop.interface.errorInitFailed')
   }
 

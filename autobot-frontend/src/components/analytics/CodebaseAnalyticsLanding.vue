@@ -174,6 +174,7 @@
  * Issue #1458
  */
 
+import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
@@ -291,18 +292,19 @@ function formatRelativeTime(isoString: string): string {
   return t('common.timeAgo.days', { n: Math.floor(diffHours / 24) })
 }
 
-function getStatusIcon(status: string): string {
-  const icons: Record<string, string> = {
+function getStatusIcon(status: string): IconName {
+  const icons: Record<string, IconName> = {
     configured: 'cog',
-    syncing: 'fas fa-spinner fa-spin',
+    // #9724: was an FA class string, which <Icon> rendered as an empty SVG
+    syncing: 'spinner',
     ready: 'check-circle',
     error: 'exclamation-circle'
   }
   return icons[status] ?? 'question-circle'
 }
 
-function getAccessIcon(access: string): string {
-  const icons: Record<string, string> = {
+function getAccessIcon(access: string): IconName {
+  const icons: Record<string, IconName> = {
     private: 'lock',
     shared: 'users',
     public: 'globe'

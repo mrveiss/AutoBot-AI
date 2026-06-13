@@ -189,6 +189,7 @@ Allows users to pair mobile devices for push notifications and offline sync
 </template>
 
 <script setup lang="ts">
+import type { IconName } from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted, watch } from 'vue'
 import Icon from '@/components/ui/Icon.vue'
 import { useNotificationBus } from '@/composables/useNotificationBus'
@@ -217,7 +218,7 @@ const revokingDeviceId = ref<string | null>(null)
 const pairingError = ref('')
 const pairingTimeoutWarning = ref('')
 const confirmationTimeout = ref('')
-const pairingStatus = ref<{ type: string; message: string; icon: string } | null>(null)
+const pairingStatus = ref<{ type: string; message: string; icon: IconName } | null>(null)
 
 const qrCanvas = ref<HTMLCanvasElement | null>(null)
 

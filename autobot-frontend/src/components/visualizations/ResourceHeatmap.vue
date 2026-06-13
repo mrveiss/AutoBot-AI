@@ -90,7 +90,7 @@ import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import VueApexCharts from 'vue3-apexcharts'
-import type { ApexOptions } from 'apexcharts'
+import type { ApexOptions, ApexChartEventOpts } from 'apexcharts'
 import { useResourceMetrics } from '@/composables/visualizations/useResourceMetrics'
 import { usePollingJob } from '@/composables/usePollingJob'
 import { getCssVar } from '@/composables/useCssVars'
@@ -178,7 +178,8 @@ const chartOptions = computed<ApexOptions>(() => ({
       }
     },
     events: {
-      dataPointSelection: (_event: MouseEvent, _chartContext: unknown, config: { seriesIndex: number; dataPointIndex: number }) => {
+      dataPointSelection: (_event: MouseEvent, _chartContext?: unknown, config?: ApexChartEventOpts) => {
+        if (!config) return
         const series = heatmapData.value[config.seriesIndex]
         const point = series.data[config.dataPointIndex]
         emit('cell-click', {

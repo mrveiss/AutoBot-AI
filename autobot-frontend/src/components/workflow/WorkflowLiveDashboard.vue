@@ -154,6 +154,7 @@
 </template>
 
 <script setup lang="ts">
+import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { computed, ref, onMounted, onUnmounted } from 'vue';
 import { useI18n } from 'vue-i18n';
@@ -257,7 +258,7 @@ function getStatusBadgeClass(wf: ActiveWorkflow): string {
   return 'badge-pending';
 }
 
-function getStatusIcon(wf: ActiveWorkflow): string {
+function getStatusIcon(wf: ActiveWorkflow): IconName {
   if (wf.is_cancelled) return 'ban';
   if (wf.is_paused) return 'pause';
   if (wf.completed_at) return 'check';

@@ -21,7 +21,7 @@
  */
 
 import { computed } from 'vue'
-import { useHostSelection, type InfrastructureHost } from '@/composables/useHostSelection'
+import { useHostSelection } from '@/composables/useHostSelection'
 
 export interface SelectorHost {
   id: string
@@ -48,14 +48,15 @@ export function useHostSelector(options: UseHostSelectorOptions = {}) {
 
   // Map InfrastructureHost → SelectorHost; apply client-side capability filter when set
   const hosts = computed<SelectorHost[]>(() => {
-    let list: SelectorHost[] = infraHosts.value.map((h: InfrastructureHost) => ({
+    let list: SelectorHost[] = infraHosts.value.map((h) => ({
       id: h.id,
       name: h.name,
       host: h.host,
       ssh_port: h.ssh_port,
       username: h.username,
       os: h.os,
-      capabilities: h.capabilities,
+      // copy: source array is readonly (deep-readonly store state)
+      capabilities: h.capabilities ? [...h.capabilities] : undefined,
       description: h.purpose,
     }))
     if (options.requiredCapability) {

@@ -22,7 +22,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseChart from './BaseChart.vue'
-import type { ApexOptions } from 'apexcharts'
+import type { ApexOptions, ApexFormatterOpts } from 'apexcharts'
 import { getCssVar } from '@/composables/useCssVars'
 
 const { t } = useI18n()
@@ -100,8 +100,8 @@ const chartOptions = computed<ApexOptions>(() => ({
       fontSize: '12px',
       fontWeight: 600
     },
-    formatter: (text: string, op: { value: number }) => {
-      return `${text}\n${op.value} ${t('charts.dependencyTreemap.uses')}`
+    formatter: (text: string | number | (string | number)[], op?: ApexFormatterOpts) => {
+      return `${text}\n${op?.value ?? ''} ${t('charts.dependencyTreemap.uses')}`
     },
     offsetY: -4
   },

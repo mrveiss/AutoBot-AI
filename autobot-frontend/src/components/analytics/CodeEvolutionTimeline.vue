@@ -208,6 +208,7 @@
 </template>
 
 <script setup lang="ts">
+import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -421,7 +422,7 @@ function getTrendClass(direction: string): string {
   }
 }
 
-function getTrendIcon(direction: string): string {
+function getTrendIcon(direction: string): IconName {
   switch (direction) {
     case 'improving': return 'arrow-up'
     case 'declining': return 'arrow-down'
@@ -443,7 +444,7 @@ function getPatternTrend(data: PatternPoint[]): string {
   return ''
 }
 
-function getPatternTrendIcon(data: PatternPoint[]): string {
+function getPatternTrendIcon(data: PatternPoint[]): IconName {
   const trend = getPatternTrend(data)
   if (trend === 'declining') return 'arrow-down'
   if (trend === 'increasing') return 'arrow-up'

@@ -63,7 +63,7 @@ export const WithHostProp: Story = {
     host: {
       host: 'desktop-vm.local',
       vnc_port: 6080,
-      label: 'Frontend VM',
+      name: 'Frontend VM',
     } satisfies Partial<SelectorHost>,
   },
   render: (args: any) => ({
@@ -106,7 +106,7 @@ export const CustomVmHost: Story = {
     host: {
       host: 'worker-vm.local',
       vnc_port: 6081,
-      label: 'Worker VM',
+      name: 'Worker VM',
     } satisfies Partial<SelectorHost>,
   },
   render: (args: any) => ({

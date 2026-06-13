@@ -185,8 +185,8 @@ const steps = [
 ]
 
 const availableRoles = [
-  { id: 'tts-worker', name: 'TTS Worker', description: 'Text-to-speech with Pocket TTS', icon: 'microphone' },
-  { id: 'ai-stack', name: 'AI Stack', description: 'Cloud LLM providers (OpenAI, Anthropic)', icon: 'brain' },
+  { id: 'tts-worker', name: 'TTS Worker', description: 'Text-to-speech with Pocket TTS', icon: 'microphone' as const },
+  { id: 'ai-stack', name: 'AI Stack', description: 'Cloud LLM providers (OpenAI, Anthropic)', icon: 'brain' as const },
 ]
 
 const roleKeyMapping: Record<string, Omit<KeyEntry, 'configured' | 'value' | 'visible'>[]> = {

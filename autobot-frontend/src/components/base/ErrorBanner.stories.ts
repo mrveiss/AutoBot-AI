@@ -21,7 +21,7 @@ const meta = {
       control: 'boolean',
       description: 'Whether the banner can be dismissed'
     },
-    dismiss: {
+    onDismiss: {
       action: 'dismissed'
     }
   }
