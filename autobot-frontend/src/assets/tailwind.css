@@ -1,8 +1,7 @@
 /* Copyright 2025-2026 mrveiss
    SPDX-License-Identifier: Apache-2.0 */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap')
-layer(base);
-
+/* Inter font is self-hosted via @fontsource/inter (imported in src/main.ts) —
+   no external font CDN, so the co-located strict CSP (#9966) passes. */
 @import 'tailwindcss';
 
 @plugin '@tailwindcss/forms';
