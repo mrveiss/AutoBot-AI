@@ -130,6 +130,7 @@
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
 
+import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, reactive, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -143,7 +144,7 @@ interface StageTask {
 interface Stage {
   id: string
   name: string
-  icon: string
+  icon: IconName
   description: string
   enabled: boolean
   tasks: StageTask[]

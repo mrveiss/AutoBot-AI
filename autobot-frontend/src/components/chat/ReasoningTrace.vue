@@ -64,6 +64,7 @@
 </template>
 
 <script setup lang="ts">
+import type { IconName } from '@/components/ui/Icon.vue'
 import { ref } from 'vue'
 import type { TraceEntry, TraceEntryKind } from '@/composables/useReasoningTrace'
 
@@ -90,8 +91,8 @@ const expanded = ref(true)
 // Helpers
 // ---------------------------------------------------------------------------
 
-function iconForKind(kind: TraceEntryKind): string {
-  const map: Record<TraceEntryKind, string> = {
+function iconForKind(kind: TraceEntryKind): IconName {
+  const map: Record<TraceEntryKind, IconName> = {
     step_start: 'play-circle',
     step_complete: 'check-circle',
     tool_call: 'wrench',

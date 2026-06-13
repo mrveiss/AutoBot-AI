@@ -179,6 +179,7 @@
  * Issue #1133: Code Source Registry for codebase analytics.
  */
 
+import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, watch, toRef } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -355,18 +356,19 @@ async function cancelQueueItem(sourceId: string | undefined) {
 
 // ---- Display Helpers ------------------------------------------------------
 
-function getStatusIcon(status: string): string {
-  const icons: Record<string, string> = {
+function getStatusIcon(status: string): IconName {
+  const icons: Record<string, IconName> = {
     configured: 'cog',
-    syncing: 'fas fa-spinner fa-spin',
+    // #9724: was an FA class string, which <Icon> rendered as an empty SVG
+    syncing: 'spinner',
     ready: 'check-circle',
     error: 'exclamation-circle'
   }
   return icons[status] ?? 'question-circle'
 }
 
-function getAccessIcon(access: string): string {
-  const icons: Record<string, string> = {
+function getAccessIcon(access: string): IconName {
+  const icons: Record<string, IconName> = {
     private: 'lock',
     shared: 'users',
     public: 'globe'

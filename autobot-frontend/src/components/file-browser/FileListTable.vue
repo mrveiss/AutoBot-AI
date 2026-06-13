@@ -105,17 +105,20 @@
 </template>
 
 <script setup lang="ts">
+import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, nextTick } from 'vue'
 import { formatDateTime } from '@/utils/formatHelpers'
-import { getFileIcon as getFileIconUtil } from '@/utils/iconMappings'
+import { getFileIconName } from '@/utils/iconMappings'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 
+// #9724: aligned with FileBrowserItem (useFileBrowser) — is_dir is optional
+// in the backend payload.
 interface FileItem {
   name: string
   path: string
-  is_dir: boolean
+  is_dir?: boolean
   size?: number
   last_modified?: string
   id?: string
@@ -209,63 +212,16 @@ const handleRowKeydown = (event: KeyboardEvent, file: FileItem, index: number) =
 }
 
 // Methods
-const getSortIcon = (field: string): string => {
+const getSortIcon = (field: string): IconName => {
   if (props.sortField !== field) return 'sort'
   return props.sortOrder === 'asc' ? 'sort-up' : 'sort-down'
 }
 
 // Icon mapping centralized in @/utils/iconMappings
-// Color classes added for visual distinction
-const getFileIcon = (file: FileItem): string => {
-  const icon = getFileIconUtil(file.name, file.is_dir)
-
-  // Add color classes based on file type
-  if (file.is_dir) return `${icon} text-blue-500`
-
-  const extension = file.name.split('.').pop()?.toLowerCase()
-
-  // Map extensions to color classes for visual distinction
-  const colorMap: Record<string, string> = {
-    // Text files
-    'txt': 'text-autobot-text-muted',
-    'md': 'text-autobot-text-muted',
-    'readme': 'text-autobot-text-muted',
-    // Code files
-    'js': 'text-green-500',
-    'ts': 'text-green-500',
-    'jsx': 'text-green-500',
-    'tsx': 'text-green-500',
-    'html': 'text-green-500',
-    'css': 'text-green-500',
-    'vue': 'text-green-500',
-    'json': 'text-green-500',
-    'py': 'text-green-500',
-    // Images
-    'jpg': 'text-purple-500',
-    'jpeg': 'text-purple-500',
-    'png': 'text-purple-500',
-    'gif': 'text-purple-500',
-    'svg': 'text-purple-500',
-    'webp': 'text-purple-500',
-    // Documents
-    'pdf': 'text-red-500',
-    // Archives
-    'zip': 'text-orange-500',
-    'tar': 'text-orange-500',
-    'gz': 'text-orange-500',
-    'rar': 'text-orange-500',
-    // Media
-    'mp4': 'text-pink-500',
-    'avi': 'text-pink-500',
-    'mov': 'text-pink-500',
-    'webm': 'text-pink-500',
-    'mp3': 'text-indigo-500',
-    'wav': 'text-indigo-500',
-    'ogg': 'text-indigo-500'
-  }
-
-  const color = colorMap[extension || ''] || 'text-autobot-text-muted'
-  return `${icon} ${color}`
+// #9724: consumed by <Icon :name="..."> — must return an SVG IconName. The
+// previous "<fa-class> <color-class>" strings rendered an empty SVG.
+const getFileIcon = (file: FileItem): IconName => {
+  return getFileIconName(file.name, file.is_dir)
 }
 
 const getFileType = (filename: string): string => {

@@ -90,7 +90,7 @@
                 </label>
                 <input
                   :id="`arg-${arg.name}`"
-                  v-model="templateArgs[arg.name as string]"
+                  v-model="templateArgs[arg.name]"
                   type="text"
                   class="form-input"
                   :placeholder="arg.description as string || `Enter ${arg.name}`"
@@ -128,7 +128,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, computed, type Ref } from 'vue'
-import Icon from '@/components/common/Icon.vue'
+import Icon from '@/components/ui/Icon.vue'
 import { useMCPResources, type MCPPromptTemplate } from '@/composables/useMCPResources'
 import { createLogger } from '@/utils/debugUtils'
 

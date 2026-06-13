@@ -13,6 +13,7 @@
  * - Change history and statistics
  */
 
+import type { IconName } from '@/components/ui/Icon.vue'
 import { ref, computed, onScopeDispose, getCurrentScope } from 'vue'
 import { useI18n } from 'vue-i18n'
 import ApiClient from '@/utils/ApiClient'
@@ -229,16 +230,18 @@ export function useDocumentChanges() {
   /**
    * Get change icon based on change type
    */
-  const getChangeIcon = (changeType: string): string => {
+  // #9724: consumed by <Icon :name="..."> (DocumentChangeFeed) — must return
+  // an SVG IconName; the previous FA class strings rendered empty SVGs.
+  const getChangeIcon = (changeType: string): IconName => {
     switch (changeType) {
       case 'added':
-        return 'fas fa-plus-circle text-green-500'
+        return 'plus-circle'
       case 'updated':
-        return 'fas fa-sync-alt text-blue-500'
+        return 'sync-alt'
       case 'removed':
-        return 'fas fa-minus-circle text-red-500'
+        return 'minus-circle'
       default:
-        return 'fas fa-info-circle text-gray-500'
+        return 'info-circle'
     }
   }
 

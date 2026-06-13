@@ -320,6 +320,7 @@
 </template>
 
 <script setup lang="ts">
+import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -358,10 +359,10 @@ const usageHeatmap = ref<any>(null)
 
 // Tabs configuration
 const tabs = computed(() => [
-  { id: 'cost', label: t('analytics.advanced.tabs.cost'), icon: 'dollar-sign' },
-  { id: 'agents', label: t('analytics.advanced.tabs.agents'), icon: 'robot' },
-  { id: 'behavior', label: t('analytics.advanced.tabs.behavior'), icon: 'users' },
-  { id: 'export', label: t('analytics.advanced.tabs.export'), icon: 'download' }
+  { id: 'cost', label: t('analytics.advanced.tabs.cost'), icon: 'dollar-sign' as const },
+  { id: 'agents', label: t('analytics.advanced.tabs.agents'), icon: 'robot' as const },
+  { id: 'behavior', label: t('analytics.advanced.tabs.behavior'), icon: 'users' as const },
+  { id: 'export', label: t('analytics.advanced.tabs.export'), icon: 'download' as const }
 ])
 
 // Computed
@@ -403,7 +404,7 @@ const getErrorClass = (rate: number): string => {
   return 'error'
 }
 
-const getSeverityIcon = (severity: string): string => {
+const getSeverityIcon = (severity: string): IconName => {
   if (severity === 'high') return 'exclamation-circle'
   if (severity === 'medium') return 'exclamation-triangle'
   return 'info-circle'

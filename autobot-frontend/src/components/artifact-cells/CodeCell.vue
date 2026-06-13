@@ -49,6 +49,7 @@
 </template>
 
 <script setup lang="ts">
+import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -120,12 +121,9 @@ const copyButtonText = computed(() => {
   return t('code.copy', 'Copy')
 })
 
-const copyButtonIcon = computed(() => {
-  if (copyStatus.value) {
-    return ['fas', 'fa-check']
-  }
-  return ['fas', 'fa-copy']
-})
+// #9724: <Icon :name> needs an IconName — the previous FA class tuples
+// rendered an empty SVG.
+const copyButtonIcon = computed<IconName>(() => (copyStatus.value ? 'check' : 'copy'))
 
 const copyAriaLabel = computed(() => {
   return t('code.copyCodeAriaLabel', 'Copy code to clipboard')

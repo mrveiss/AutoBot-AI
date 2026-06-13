@@ -8,6 +8,7 @@
  */
 
 import { createLogger } from '@/utils/debugUtils'
+import { ICONS } from '@/components/ui/Icon.vue'
 import type { IconName } from '@/components/ui/Icon.vue'
 
 // ============================================================================
@@ -170,6 +171,116 @@ export function getFileIcon(filename: string, isFolder: boolean = false): string
   if (!ext) return fileTypeIcons.file
 
   return fileTypeIcons[ext as keyof typeof fileTypeIcons] || fileTypeIcons.file
+}
+
+// ============================================================================
+// SVG ICON-NAME VARIANTS (#9724)
+// ============================================================================
+// IconName-returning equivalents of the Font Awesome helpers above, for
+// callers that render through <Icon :name="...">. Passing an FA class string
+// to <Icon> silently renders an empty SVG, so Icon consumers MUST use these.
+
+const fileExtensionIconNames: Record<string, IconName> = {
+  pdf: 'file-pdf',
+  doc: 'file-word',
+  docx: 'file-word',
+  txt: 'file-alt',
+  md: 'file-alt',
+  xls: 'file-excel',
+  xlsx: 'file-excel',
+  csv: 'file-csv',
+  js: 'file-code',
+  ts: 'file-code',
+  jsx: 'file-code',
+  tsx: 'file-code',
+  vue: 'file-code',
+  py: 'file-code',
+  rb: 'file-code',
+  go: 'file-code',
+  java: 'file-code',
+  c: 'file-code',
+  cpp: 'file-code',
+  h: 'file-code',
+  html: 'file-code',
+  css: 'file-code',
+  json: 'file-code',
+  yaml: 'file-code',
+  yml: 'file-code',
+  toml: 'file-code',
+  png: 'file-image',
+  jpg: 'file-image',
+  jpeg: 'file-image',
+  gif: 'file-image',
+  svg: 'file-image',
+  webp: 'file-image',
+  zip: 'file-archive',
+  tar: 'file-archive',
+  gz: 'file-archive',
+  rar: 'file-archive',
+  '7z': 'file-archive',
+  mp4: 'file-video',
+  avi: 'file-video',
+  mov: 'file-video',
+  webm: 'file-video',
+  mp3: 'file-audio',
+  wav: 'file-audio',
+  ogg: 'file-audio',
+}
+
+/**
+ * Get an <Icon> name for a file based on its extension.
+ */
+export function getFileIconName(filename: string, isFolder: boolean = false): IconName {
+  if (isFolder) return 'folder'
+  if (typeof filename !== 'string' || filename.length === 0) {
+    if (typeof filename !== 'string') _warnNonStringFilenameOnce(filename)
+    return 'file'
+  }
+  const ext = filename.split('.').pop()?.toLowerCase()
+  if (!ext) return 'file'
+  return fileExtensionIconNames[ext] ?? 'file'
+}
+
+/**
+ * Get an <Icon> name for a file based on its MIME type.
+ */
+export function getFileIconNameByMimeType(mimeType: string): IconName {
+  if (typeof mimeType !== 'string' || mimeType.length === 0) return 'file'
+  const type = mimeType.toLowerCase()
+  if (type.startsWith('image/')) return 'image'
+  if (type.startsWith('video/')) return 'video'
+  if (type.startsWith('audio/')) return 'music'
+  if (type.includes('pdf')) return 'file-pdf'
+  if (type.includes('word') || type.includes('msword') || type.includes('document')) return 'file-word'
+  if (type.includes('excel') || type.includes('spreadsheet')) return 'file-excel'
+  if (type.includes('zip') || type.includes('compressed') || type.includes('archive')) return 'file-archive'
+  if (type.includes('json')) return 'file-code'
+  if (type.includes('text')) return 'file-alt'
+  return 'file'
+}
+
+/**
+ * Validate a dynamic (e.g. backend-provided) icon name at runtime.
+ * Returns the name when it exists in the ICONS registry, else the fallback.
+ */
+export function asIconName(name: string | undefined | null, fallback: IconName): IconName {
+  return name && name in ICONS ? (name as IconName) : fallback
+}
+
+const documentTypeIconNames: Record<string, IconName> = {
+  document: 'file-alt',
+  webpage: 'globe',
+  api: 'code',
+  upload: 'upload',
+  file: 'file',
+}
+
+/**
+ * Get an <Icon> name for a knowledge-base document type.
+ */
+export function getDocumentTypeIconName(type: string): IconName {
+  const normalizedType = typeof type === 'string' ? type.toLowerCase() : ''
+  return documentTypeIconNames[normalizedType] ?? 'file'
 }
 
 /**

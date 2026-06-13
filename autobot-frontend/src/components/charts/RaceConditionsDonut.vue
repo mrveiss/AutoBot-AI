@@ -22,7 +22,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseChart from './BaseChart.vue'
-import type { ApexOptions } from 'apexcharts'
+import type { ApexOptions, ApexFormatterOpts } from 'apexcharts'
 import { getCssVar } from '@/composables/useCssVars'
 
 const { t } = useI18n()
@@ -75,8 +75,8 @@ const chartOptions = computed<ApexOptions>(() => ({
   },
   dataLabels: {
     enabled: true,
-    formatter: (val: number, opts: { seriesIndex: number }) => {
-      const item = props.data[opts.seriesIndex]
+    formatter: (_val: string | number | (string | number)[], opts?: ApexFormatterOpts) => {
+      const item = opts ? props.data[opts.seriesIndex] : undefined
       const count = item?.count ?? item?.value ?? 0
       if (count === 0) return ''
       return count.toString()

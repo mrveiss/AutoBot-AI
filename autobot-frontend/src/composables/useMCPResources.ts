@@ -27,10 +27,17 @@ export interface MCPResourceContent {
   size_bytes: number
 }
 
+export interface MCPPromptTemplateArgument {
+  name: string
+  description?: string
+  required?: boolean
+  [key: string]: unknown
+}
+
 export interface MCPPromptTemplate {
   name: string
   description?: string
-  arguments: Array<Record<string, unknown>>
+  arguments: Array<MCPPromptTemplateArgument>
 }
 
 export interface MCPPromptsResponse {

@@ -105,25 +105,25 @@ const tabs = computed(() => [
   {
     route: '/knowledge/graph/pipeline',
     label: t('knowledge.graphView.pipeline'),
-    icon: 'play-circle',
+    icon: 'play-circle' as const,
     description: t('knowledge.graphView.pipelineDescription'),
   },
   {
     route: '/knowledge/graph/entities',
     label: t('knowledge.graphView.entitiesTab'),
-    icon: 'project-diagram',
+    icon: 'project-diagram' as const,
     description: t('knowledge.graphView.entitiesDescription'),
   },
   {
     route: '/knowledge/graph/timeline',
     label: t('knowledge.graphView.timeline'),
-    icon: 'stream',
+    icon: 'stream' as const,
     description: t('knowledge.graphView.timelineDescription'),
   },
   {
     route: '/knowledge/graph/summaries',
     label: t('knowledge.graphView.summariesTab'),
-    icon: 'layer-group',
+    icon: 'layer-group' as const,
     description: t('knowledge.graphView.summariesDescription'),
   },
 ])

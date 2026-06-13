@@ -77,7 +77,8 @@ const { send: wsSend, connect: wsConnect, disconnect: wsDisconnect, isConnected:
     connectionState.value = 'connected'
     emit('connected')
   },
-  onMessage: (data: string) => {
+  onMessage: (data: unknown) => {
+    if (typeof data !== 'string') return
     try {
       handleMessage(JSON.parse(data))
     } catch (e) {
@@ -276,7 +277,7 @@ watch(() => props.hostId, (newHostId, oldHostId) => {
 onMounted(() => {
   initTerminal()
   connect()
-  startHeartbeat()
+  startHeartbeat('')
   window.addEventListener('resize', handleResize)
 })
 

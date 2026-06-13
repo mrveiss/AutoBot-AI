@@ -36,4 +36,7 @@ export interface AgentAbstainedPayload {
   abstention_reason: string
   iterations: number
   think_count: number
+  // #9724: payloads arrive as plain JSON event records — extra fields pass
+  // through, and the index signature keeps Record<string, unknown> casts valid.
+  [key: string]: unknown
 }

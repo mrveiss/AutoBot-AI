@@ -185,7 +185,7 @@ onMounted(() => {
   document.addEventListener('click', handleDocumentClick)
 
   // Periodic focus check for automation scenarios
-  const focusInterval = setInterval(() => {
+  const focusInterval = window.setInterval(() => {
     if (props.canInput && terminalInput.value &&
         document.activeElement !== terminalInput.value &&
         document.querySelector('.terminal-window-standalone')) {

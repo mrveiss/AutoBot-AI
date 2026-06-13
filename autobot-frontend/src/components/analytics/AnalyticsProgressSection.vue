@@ -145,6 +145,7 @@
  * Issue #1579: Extracted from CodebaseAnalytics.vue
  */
 
+import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import type { ScanRunnerReturn } from '@/composables/useAnalyticsScanRunner'
 
@@ -189,7 +190,7 @@ defineEmits<{
 }>()
 
 /** Get icon class for a job phase based on its status. */
-function getPhaseIcon(status: string): string {
+function getPhaseIcon(status: string): IconName {
   switch (status) {
     case 'completed':
       return 'check-circle'

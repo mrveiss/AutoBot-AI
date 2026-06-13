@@ -10,6 +10,8 @@
  * to eliminate duplication (H2 in #1077).
  */
 
+import type { IconName } from '@/components/ui/Icon.vue'
+
 export const entityTypeColorMap: Record<string, string> = {
   person: 'rgba(59, 130, 246, 0.8)',
   organization: 'rgba(168, 85, 247, 0.8)',
@@ -37,14 +39,16 @@ export function getEventTypeColor(type: string): string {
   return eventTypeColorMap[type.toLowerCase()] ?? eventTypeColorMap.occurrence
 }
 
-export const eventTypeIconMap: Record<string, string> = {
-  action: 'fas fa-bolt',
-  decision: 'fas fa-gavel',
-  change: 'fas fa-exchange-alt',
-  milestone: 'fas fa-flag',
-  occurrence: 'fas fa-circle',
+// #9724: consumed by <Icon :name="..."> (EventTimeline) — must be SVG
+// IconNames; the previous FA class strings rendered empty SVGs.
+export const eventTypeIconMap: Record<string, IconName> = {
+  action: 'bolt',
+  decision: 'check-square',
+  change: 'exchange-alt',
+  milestone: 'flag',
+  occurrence: 'circle',
 }
 
-export function getEventTypeIcon(type: string): string {
+export function getEventTypeIcon(type: string): IconName {
   return eventTypeIconMap[type.toLowerCase()] ?? eventTypeIconMap.occurrence
 }

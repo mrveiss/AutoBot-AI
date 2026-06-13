@@ -116,6 +116,7 @@
 </template>
 
 <script setup lang="ts">
+import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -131,7 +132,7 @@ const logger = createLogger('SessionOrphanManager')
 interface StatusMessage {
   type: 'success' | 'error' | 'warning' | 'info'
   text: string
-  icon: string
+  icon: IconName
 }
 
 // Composable
@@ -142,7 +143,7 @@ const statusMessage = ref<StatusMessage | null>(null)
 
 // Methods
 const showStatus = (type: StatusMessage['type'], text: string) => {
-  const icons = {
+  const icons: Record<StatusMessage['type'], IconName> = {
     success: 'check-circle',
     error: 'exclamation-circle',
     warning: 'exclamation-triangle',

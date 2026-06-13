@@ -352,8 +352,8 @@
                 class="comment-textarea"
                 :placeholder="$t('chat.approval.commentPlaceholder')"
                 rows="2"
-                @keydown.ctrl.enter="submitApprovalWithComment(message.metadata.terminal_session_id, pendingApprovalDecision)"
-                @keydown.meta.enter="submitApprovalWithComment(message.metadata.terminal_session_id, pendingApprovalDecision)"
+                @keydown.ctrl.enter="submitApprovalWithComment(message.metadata.terminal_session_id as string, pendingApprovalDecision)"
+                @keydown.meta.enter="submitApprovalWithComment(message.metadata.terminal_session_id as string, pendingApprovalDecision)"
               ></textarea>
               <div class="comment-actions">
                 <BaseButton
@@ -369,7 +369,7 @@
                 <BaseButton
                   variant="primary"
                   size="sm"
-                  @click="submitApprovalWithComment(message.metadata.terminal_session_id, pendingApprovalDecision)"
+                  @click="submitApprovalWithComment(message.metadata.terminal_session_id as string, pendingApprovalDecision)"
                   :disabled="!approvalComment.trim()"
                   class="submit-comment-btn"
                   :aria-label="$t('chat.approval.submitWithComment', { action: pendingApprovalDecision ? $t('chat.approval.approval') : $t('chat.approval.denial') })"
@@ -548,6 +548,7 @@
 </template>
 
 <script setup lang="ts">
+import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, nextTick, watch, onMounted } from 'vue'
 import { useExpansion } from '@/composables/useExpansion'
@@ -1047,7 +1048,7 @@ const deleteMessage = (message: ChatMessage) => {
   }
 }
 
-const getAttachmentIcon = (type: string): string => {
+const getAttachmentIcon = (type: string): IconName => {
   if (type.startsWith('image/')) return 'image'
   if (type.startsWith('video/')) return 'video'
   if (type.startsWith('audio/')) return 'music'
