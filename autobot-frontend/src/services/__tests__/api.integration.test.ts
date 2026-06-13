@@ -1,7 +1,6 @@
 // Copyright 2025-2026 mrveiss
 // SPDX-License-Identifier: Apache-2.0
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
-import { setupServer } from 'msw/node'
+import { describe, it, expect } from 'vitest'
 import { http, HttpResponse } from 'msw'
 import { apiService } from '../api.js'
 import {
@@ -12,8 +11,9 @@ import {
   createMockSettings,
 } from '../../test/utils/test-utils'
 
-// Setup MSW server for integration tests
-const server = setupServer()
+// #9693: reuse the shared MSW server from integration-setup.ts — a second
+// setupServer() stacks interceptors and every request is handled twice.
+import { server } from '../../test/integration-setup'
 
 // ApiClient in test env (jsdom) uses proxy mode (empty baseUrl).
 // The vitest-setup.ts fetch wrapper prepends relative URLs with the jsdom origin.
@@ -21,17 +21,8 @@ const server = setupServer()
 const API_BASE = 'http://localhost:3000'
 
 describe('API Service Integration Tests', () => {
-  beforeAll(() => {
-    server.listen({ onUnhandledRequest: 'warn' })
-  })
-
-  afterAll(() => {
-    server.close()
-  })
-
-  beforeEach(() => {
-    server.resetHandlers()
-  })
+  // Server lifecycle (listen/resetHandlers/close) is managed globally by
+  // src/test/integration-setup.ts.
 
   describe('Chat API Integration', () => {
     it('sends message and receives response', async () => {

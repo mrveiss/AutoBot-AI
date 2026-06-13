@@ -35,13 +35,10 @@ describe('isFeatureAvailable', () => {
 })
 
 describe('useNetworkStatus - browser events', () => {
-  let _originalNavigator: Navigator
   const onlineHandlers: EventListener[] = []
   const offlineHandlers: EventListener[] = []
 
   beforeEach(() => {
-    originalNavigator = window.navigator
-
     vi.spyOn(window, 'addEventListener').mockImplementation(
       (type: string, handler: EventListenerOrEventListenerObject) => {
         if (type === 'online') onlineHandlers.push(handler as EventListener)
