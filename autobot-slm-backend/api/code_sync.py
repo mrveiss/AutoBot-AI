@@ -2672,9 +2672,7 @@ async def _collect_outdated_node_ids(job: UpdateAllJob, remote_commit: str, db_s
             # B: use version comparison — reliable immediately after stages 1-2
             nodes_result = await db.execute(
                 select(Node)
-                .where(
-                    (Node.code_version != remote_commit) | Node.code_version.is_(None)
-                )
+                .where((Node.code_version != remote_commit) | Node.code_version.is_(None))
                 .order_by(Node.hostname)
             )
             version_outdated = nodes_result.scalars().all()
@@ -2686,9 +2684,7 @@ async def _collect_outdated_node_ids(job: UpdateAllJob, remote_commit: str, db_s
             # A: self-node inclusion — ensure the co-located SLM host is counted
             # even when heartbeat hasn't yet updated its code_status to OUTDATED.
             if slm_own_ip:
-                slm_result = await db.execute(
-                    select(Node).where(Node.ip_address == slm_own_ip)
-                )
+                slm_result = await db.execute(select(Node).where(Node.ip_address == slm_own_ip))
                 slm_node = slm_result.scalar_one_or_none()
                 if slm_node and slm_node.node_id not in seen_ids:
                     # Self-node is not captured by version comparison (e.g. no

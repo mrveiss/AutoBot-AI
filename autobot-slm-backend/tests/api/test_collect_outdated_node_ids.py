@@ -121,8 +121,9 @@ async def test_b_includes_node_with_old_version_but_up_to_date_status():
     stale_node = _node("worker-1", OTHER_IP, "oldsha123", CodeStatus.UP_TO_DATE.value)
 
     job = _job()
-    with patch("api.code_sync.settings") as mock_settings, patch(
-        "api.code_sync._compute_deps_changed", new=AsyncMock(return_value=False)
+    with (
+        patch("api.code_sync.settings") as mock_settings,
+        patch("api.code_sync._compute_deps_changed", new=AsyncMock(return_value=False)),
     ):
         mock_settings.external_url = f"http://{SLM_IP}"
         db_svc = _db_service_mock(query_results=[stale_node], slm_node=None)
@@ -141,8 +142,9 @@ async def test_b_excludes_node_already_at_remote_commit():
     # worker-2 is at remote_commit — the DB query (code_version != remote) excludes it
     # We pass an empty query_results to simulate that
     job = _job()
-    with patch("api.code_sync.settings") as mock_settings, patch(
-        "api.code_sync._compute_deps_changed", new=AsyncMock(return_value=False)
+    with (
+        patch("api.code_sync.settings") as mock_settings,
+        patch("api.code_sync._compute_deps_changed", new=AsyncMock(return_value=False)),
     ):
         mock_settings.external_url = f"http://{SLM_IP}"
         db_svc = _db_service_mock(query_results=[], slm_node=None)
@@ -169,8 +171,9 @@ async def test_a_self_node_included_when_not_in_version_query():
     self_node = _node("slm-node", SLM_IP, "oldsha456", CodeStatus.UP_TO_DATE.value)
 
     job = _job()
-    with patch("api.code_sync.settings") as mock_settings, patch(
-        "api.code_sync._compute_deps_changed", new=AsyncMock(return_value=False)
+    with (
+        patch("api.code_sync.settings") as mock_settings,
+        patch("api.code_sync._compute_deps_changed", new=AsyncMock(return_value=False)),
     ):
         mock_settings.external_url = f"http://{SLM_IP}"
         # Version query returns self_node (old version); slm_node lookup also returns it
@@ -192,8 +195,9 @@ async def test_a_self_node_added_when_code_version_is_none():
     self_node = _node("slm-node-fresh", SLM_IP, None, CodeStatus.UNKNOWN.value)
 
     job = _job()
-    with patch("api.code_sync.settings") as mock_settings, patch(
-        "api.code_sync._compute_deps_changed", new=AsyncMock(return_value=False)
+    with (
+        patch("api.code_sync.settings") as mock_settings,
+        patch("api.code_sync._compute_deps_changed", new=AsyncMock(return_value=False)),
     ):
         mock_settings.external_url = f"http://{SLM_IP}"
         # Version query includes self_node (NULL version); slm_node lookup same
@@ -209,8 +213,9 @@ async def test_a_self_node_not_duplicated_when_already_in_version_list():
     self_node = _node("slm-node", SLM_IP, "oldsha789", CodeStatus.OUTDATED.value)
 
     job = _job()
-    with patch("api.code_sync.settings") as mock_settings, patch(
-        "api.code_sync._compute_deps_changed", new=AsyncMock(return_value=False)
+    with (
+        patch("api.code_sync.settings") as mock_settings,
+        patch("api.code_sync._compute_deps_changed", new=AsyncMock(return_value=False)),
     ):
         mock_settings.external_url = f"http://{SLM_IP}"
         db_svc = _db_service_mock(query_results=[self_node], slm_node=self_node)
@@ -227,8 +232,9 @@ async def test_a_and_b_mixed_fleet():
     # current_worker at remote_commit is NOT returned by the version query
 
     job = _job()
-    with patch("api.code_sync.settings") as mock_settings, patch(
-        "api.code_sync._compute_deps_changed", new=AsyncMock(return_value=False)
+    with (
+        patch("api.code_sync.settings") as mock_settings,
+        patch("api.code_sync._compute_deps_changed", new=AsyncMock(return_value=False)),
     ):
         mock_settings.external_url = f"http://{SLM_IP}"
         # Version query returns both stale nodes; self-node lookup returns self_node
