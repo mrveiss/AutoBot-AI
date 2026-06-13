@@ -17,7 +17,7 @@ circular import when a router is loaded in isolation via importlib (e.g. tests).
 
 Usage::
 
-    from llc.deps import get_session, service_dep
+    from llc.deps import get_session, postgres_required, service_dep
     from llc.services.my_service import MyService
 
     router = APIRouter(...)
@@ -37,7 +37,7 @@ import functools
 import uuid
 from typing import AsyncGenerator, Callable, Set, Type, TypeVar
 
-from fastapi import HTTPException
+from fastapi import Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.singleton_factory import lazy_singleton
@@ -45,8 +45,50 @@ from user_management.database import get_async_session_factory
 
 _T = TypeVar("_T")
 
+_POSTGRES_UNAVAILABLE_DETAIL = (
+    "This feature requires PostgreSQL (single_company or multi_company mode). "
+    "The current deployment runs in single_user mode where the LLC data layer "
+    "is unavailable."
+)
 
-async def get_session() -> AsyncGenerator[AsyncSession, None]:
+
+def postgres_required() -> None:
+    """FastAPI dependency: raise 503 when Postgres is disabled (single_user mode).
+
+    Apply as a router-level dependency or per-handler dependency on any LLC
+    endpoint that requires a Postgres-backed session (#10010).  This produces
+    a clean 503 Service Unavailable instead of an unhandled RuntimeError from
+    ``get_async_session_factory()``.
+
+    Usage (router-level — covers all routes on the router)::
+
+        from llc.deps import postgres_required
+        router = APIRouter(dependencies=[Depends(postgres_required)])
+
+    Usage (per-handler)::
+
+        @router.get("/")
+        async def handler(_: None = Depends(postgres_required)):
+            ...
+    """
+    try:
+        from user_management.config import get_deployment_config
+
+        if not get_deployment_config().postgres_enabled:
+            raise HTTPException(
+                status_code=503,
+                detail=_POSTGRES_UNAVAILABLE_DETAIL,
+            )
+    except HTTPException:
+        raise
+    except Exception:
+        # Config unavailable — let the session factory decide; don't mask errors.
+        pass
+
+
+async def get_session(
+    _gate: None = Depends(postgres_required),
+) -> AsyncGenerator[AsyncSession, None]:
     """Bare async DB session — no auto-commit or auto-rollback.
 
     Callers are responsible for explicit transaction management
@@ -57,6 +99,9 @@ async def get_session() -> AsyncGenerator[AsyncSession, None]:
     Because every LLC router shares this single function object, a test's
     ``app.dependency_overrides[get_session]`` overrides the session for ALL
     migrated llc routers mounted on that app, not just one module.
+
+    Raises HTTP 503 in single_user mode before touching the session factory
+    (#10010) via the ``postgres_required`` gate dependency.
     """
     factory = get_async_session_factory()
     async with factory() as session:
@@ -121,4 +166,4 @@ async def require_board_role(
     return str(user_id)
 
 
-__all__ = ["get_session", "require_board_role", "service_dep"]
+__all__ = ["get_session", "postgres_required", "require_board_role", "service_dep"]

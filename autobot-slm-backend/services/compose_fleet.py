@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 
 # Nodes the SLM hosts itself and must heartbeat locally (no external agent).
-_SELF_MANAGED_NODE_IDS: set[str] = {"00-SLM-Manager"}
+_SELF_MANAGED_NODE_IDS: set[str] = {settings.slm_node_id}
 
 
 async def _heartbeat_self_managed_nodes() -> None:
@@ -172,7 +172,7 @@ async def _node_reachable(node_id: str) -> bool:
     with a known port are TCP-probed; port-less ones (celery worker/beat) can't be
     probed and are assumed up while the stack runs.
     """
-    if node_id == "00-SLM-Manager":
+    if node_id == settings.slm_node_id:
         return True
     spec = next((s for s in _COMPOSE_NODE_SPECS if s["id"] == node_id), None)
     if not spec or not spec["port"]:

@@ -180,7 +180,7 @@
         method: POST
         body_format: json
         body:
-          node_id: "00-SLM-Manager"
+          node_id: "{{ slm_manager_node_id }}"
           commit: "{{ deploy_commit_full.stdout }}"
           branch: "{{ deploy_ref }}"
           message: "{{ deploy_commit_subject.stdout }}"
@@ -394,7 +394,7 @@
 
     - name: "[PLAY 1] SLM | Mark node as synced in DB"
       uri:
-        url: "https://{{ ansible_host }}/slm/api/code-sync/nodes/00-SLM-Manager/mark-synced"
+        url: "https://{{ ansible_host }}/slm/api/code-sync/nodes/{{ slm_node_id | default(inventory_hostname) }}/mark-synced"
         method: POST
         headers:
           Authorization: "Bearer {{ slm_login_play1.json.access_token | default('') }}"
