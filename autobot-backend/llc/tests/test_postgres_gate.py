@@ -19,7 +19,6 @@ import pytest
 import llc.deps as deps_mod
 from llc.deps import postgres_required
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -89,9 +88,7 @@ def test_get_session_has_postgres_required_dependency():
     """get_session() must declare postgres_required as a Depends() parameter
     so the gate runs before the session factory is touched (#10010)."""
     sig = inspect.signature(deps_mod.get_session)
-    dep_params = [
-        p for p in sig.parameters.values() if hasattr(p.default, "dependency")
-    ]
+    dep_params = [p for p in sig.parameters.values() if hasattr(p.default, "dependency")]
     assert any(
         p.default.dependency is postgres_required for p in dep_params
     ), "postgres_required must be a Depends() on get_session"
