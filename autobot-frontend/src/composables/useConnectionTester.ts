@@ -323,17 +323,26 @@ export function useConnectionTester(
     } catch (error) {
       clearTimeout(timeoutId)
 
-      // Handle different error types
+      // Handle different error types.
+      // #9693: fetch abort raises a DOMException, which does not inherit
+      // Error on every platform (jsdom, older browsers) — check it explicitly.
       let errorMessage: string
 
-      if (error instanceof Error && error.name === 'AbortError') {
+      const isAbortError =
+        (error instanceof DOMException || error instanceof Error) &&
+        error.name === 'AbortError'
+
+      if (isAbortError) {
         errorMessage = `Connection timeout (>${timeout}ms)`
         await updateStatus('disconnected', errorMessage)
       } else if (error instanceof TypeError) {
         errorMessage = `Network error: ${error.message}`
         await updateStatus('error', errorMessage)
       } else {
-        errorMessage = error instanceof Error ? error.message : 'Unknown connection error'
+        errorMessage =
+          error instanceof DOMException || error instanceof Error
+            ? error.message
+            : 'Unknown connection error'
         await updateStatus('error', errorMessage)
       }
 

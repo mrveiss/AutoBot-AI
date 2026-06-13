@@ -141,7 +141,7 @@
               <button @click="clearSearch" class="clear-btn">Clear</button>
             </div>
             <div
-              v-for="(result, idx) in searchResults"
+              v-for="result in searchResults"
               :key="result.id"
               class="search-result-item"
             >

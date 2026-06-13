@@ -4,36 +4,53 @@
  * useKnowledgeIcons Composable Tests
  *
  * Split from useKnowledgeBase.test.ts (#5122).
+ *
+ * #9724: the icon helpers were migrated to return canonical SVG IconName
+ * values (e.g. "file-pdf") instead of Font Awesome class strings
+ * (e.g. "fas fa-file-pdf"), because consumers render via <Icon :name="...">.
+ * Expectations below assert the IconName the helper actually returns.
  */
 
 import { describe, it, expect, vi } from 'vitest'
 import { useKnowledgeIcons } from '../knowledge/useKnowledgeIcons'
 
+// getFileIcon delegates to getFileIconName (#9724 IconName migration).
+// Both are stubbed so the test exercises the helper, not the real mapping.
 vi.mock('@/utils/iconMappings', () => ({
   getFileIcon: () => 'fas fa-file',
+  getFileIconName: (name: string, isDir = false): string => {
+    if (isDir) return 'folder'
+    const ext = name.split('.').pop()?.toLowerCase()
+    const map: Record<string, string> = {
+      js: 'file-code',
+      py: 'file-code',
+      pdf: 'file-pdf',
+    }
+    return (ext && map[ext]) || 'file'
+  },
 }))
 
 describe('useKnowledgeIcons', () => {
   describe('getTypeIcon', () => {
     it('should return PDF icon for PDF documents', () => {
       const { getTypeIcon } = useKnowledgeIcons()
-      expect(getTypeIcon('pdf')).toBe('fas fa-file-pdf')
+      expect(getTypeIcon('pdf')).toBe('file-pdf')
     })
 
     it('should return code icon for JSON types', () => {
       const { getTypeIcon } = useKnowledgeIcons()
-      expect(getTypeIcon('json')).toBe('fas fa-file-code')
+      expect(getTypeIcon('json')).toBe('file-code')
     })
 
     it('should return image icon for image types', () => {
       const { getTypeIcon } = useKnowledgeIcons()
-      expect(getTypeIcon('png')).toBe('fas fa-file-image')
-      expect(getTypeIcon('jpg')).toBe('fas fa-file-image')
+      expect(getTypeIcon('png')).toBe('file-image')
+      expect(getTypeIcon('jpg')).toBe('file-image')
     })
 
     it('should return default file icon for unknown type', () => {
       const { getTypeIcon } = useKnowledgeIcons()
-      expect(getTypeIcon('unknown')).toBe('fas fa-file')
+      expect(getTypeIcon('unknown')).toBe('file')
     })
   })
 
@@ -41,23 +58,23 @@ describe('useKnowledgeIcons', () => {
     it('should return folder icon for directories', () => {
       const { getFileIcon } = useKnowledgeIcons()
       const icon = getFileIcon('mydir', true)
-      expect(icon).toContain('fas fa-folder')
+      expect(icon).toBe('folder')
     })
 
-    it('should return styled icon for file with color class', () => {
+    it('should return a file-code icon name for a script file', () => {
       const { getFileIcon } = useKnowledgeIcons()
       const icon = getFileIcon('script.js', false)
-      expect(icon).toContain('text-')
+      expect(icon).toBe('file-code')
     })
 
-    it('should apply different colors for different file types', () => {
+    it('should map distinct extensions to their IconName', () => {
       const { getFileIcon } = useKnowledgeIcons()
       const jsIcon = getFileIcon('app.js', false)
-      const pyIcon = getFileIcon('script.py', false)
       const pdfIcon = getFileIcon('document.pdf', false)
 
-      expect(jsIcon).not.toEqual(pyIcon)
-      expect(pyIcon).not.toEqual(pdfIcon)
+      expect(jsIcon).toBe('file-code')
+      expect(pdfIcon).toBe('file-pdf')
+      expect(jsIcon).not.toEqual(pdfIcon)
     })
   })
 
@@ -86,36 +103,27 @@ describe('useKnowledgeIcons', () => {
   describe('getMessageIcon', () => {
     it('should return info icon for info type', () => {
       const { getMessageIcon } = useKnowledgeIcons()
-      const icon = getMessageIcon('info')
-      expect(icon).toContain('fas fa-info-circle')
-      expect(icon).toContain('text-blue-500')
+      expect(getMessageIcon('info')).toBe('info-circle')
     })
 
     it('should return success icon for success type', () => {
       const { getMessageIcon } = useKnowledgeIcons()
-      const icon = getMessageIcon('success')
-      expect(icon).toContain('fas fa-check-circle')
-      expect(icon).toContain('text-green-500')
+      expect(getMessageIcon('success')).toBe('check-circle')
     })
 
     it('should return warning icon for warning type', () => {
       const { getMessageIcon } = useKnowledgeIcons()
-      const icon = getMessageIcon('warning')
-      expect(icon).toContain('fas fa-exclamation-triangle')
-      expect(icon).toContain('text-yellow-500')
+      expect(getMessageIcon('warning')).toBe('exclamation-triangle')
     })
 
     it('should return error icon for error type', () => {
       const { getMessageIcon } = useKnowledgeIcons()
-      const icon = getMessageIcon('error')
-      expect(icon).toContain('fas fa-times-circle')
-      expect(icon).toContain('text-red-500')
+      expect(getMessageIcon('error')).toBe('times-circle')
     })
 
     it('should default to info icon for unknown type', () => {
       const { getMessageIcon } = useKnowledgeIcons()
-      const icon = getMessageIcon('unknown')
-      expect(icon).toContain('fas fa-info-circle')
+      expect(getMessageIcon('unknown')).toBe('info-circle')
     })
   })
 
