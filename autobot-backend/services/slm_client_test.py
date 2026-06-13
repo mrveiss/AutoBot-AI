@@ -447,9 +447,7 @@ class TestWsUrlPrefixSelection:
             await client._ws_connect_and_listen()
 
         call_url = mock_connect.call_args[0][0]
-        assert "/slm/api/ws/events" in call_url, (
-            f"nginx path must use /slm/api/ws/events, got: {call_url}"
-        )
+        assert "/slm/api/ws/events" in call_url, f"nginx path must use /slm/api/ws/events, got: {call_url}"
         assert call_url.startswith("wss://")
 
     @pytest.mark.asyncio
@@ -464,12 +462,8 @@ class TestWsUrlPrefixSelection:
             await client._ws_connect_and_listen()
 
         call_url = mock_connect.call_args[0][0]
-        assert "/api/ws/events" in call_url, (
-            f"direct-port loopback must use /api/ws/events, got: {call_url}"
-        )
-        assert "/slm/api/ws/events" not in call_url, (
-            f"loopback must NOT prepend /slm prefix, got: {call_url}"
-        )
+        assert "/api/ws/events" in call_url, f"direct-port loopback must use /api/ws/events, got: {call_url}"
+        assert "/slm/api/ws/events" not in call_url, f"loopback must NOT prepend /slm prefix, got: {call_url}"
         assert call_url.startswith("ws://")
 
     @pytest.mark.asyncio
