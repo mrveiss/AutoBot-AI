@@ -51,6 +51,7 @@ from ..models.enums import (
     WorkItemStatus,
     WorkItemType,
 )
+from ..models.work_item import LLCWorkItemComment
 from ..scheduler.heartbeat_scheduler import HeartbeatScheduler
 from ..services.activity_log import ActivityLogQuery, LLCActivityLogService
 from ..services.attachment_service import (
@@ -73,7 +74,6 @@ from ..services.work_item_service import (
     WorkItemService,
     resolve_actor_role,
 )
-from ..models.work_item import LLCWorkItemComment
 from ..services.work_product_service import WorkProductService
 from .activity import ActivityLogEntry, ActivityLogResponse
 from .github_webhooks import validate_github_pr_url
