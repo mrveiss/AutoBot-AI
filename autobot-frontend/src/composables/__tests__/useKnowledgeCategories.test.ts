@@ -214,28 +214,28 @@ describe('useKnowledgeCategories', () => {
   describe('getCategoryIcon', () => {
     it('should return correct icon for security category', () => {
       const { getCategoryIcon } = useKnowledgeCategories()
-      expect(getCategoryIcon('security')).toBe('fas fa-shield-alt')
+      expect(getCategoryIcon('security')).toBe('shield-alt')
     })
 
     it('should return correct icon for architecture category', () => {
       const { getCategoryIcon } = useKnowledgeCategories()
-      expect(getCategoryIcon('architecture')).toBe('fas fa-drafting-compass')
+      expect(getCategoryIcon('architecture')).toBe('sitemap')
     })
 
     it('should return correct icon for devops category', () => {
       const { getCategoryIcon } = useKnowledgeCategories()
-      expect(getCategoryIcon('devops')).toBe('fas fa-cogs')
+      expect(getCategoryIcon('devops')).toBe('cogs')
     })
 
     it('should return default folder icon for unknown category', () => {
       const { getCategoryIcon } = useKnowledgeCategories()
-      expect(getCategoryIcon('unknown')).toBe('fas fa-folder')
+      expect(getCategoryIcon('unknown')).toBe('folder')
     })
 
     it('should handle case-insensitive matching', () => {
       const { getCategoryIcon } = useKnowledgeCategories()
-      expect(getCategoryIcon('SECURITY')).toBe('fas fa-shield-alt')
-      expect(getCategoryIcon('SeCuRiTy')).toBe('fas fa-shield-alt')
+      expect(getCategoryIcon('SECURITY')).toBe('shield-alt')
+      expect(getCategoryIcon('SeCuRiTy')).toBe('shield-alt')
     })
   })
 

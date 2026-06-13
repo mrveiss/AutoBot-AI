@@ -77,7 +77,9 @@ describe('useFetchEndpoint (rehomed)', () => {
       onSuccess,
     })
     await load()
-    expect(onSuccess).toHaveBeenCalledWith(7, rawEnvelope)
+    // Third arg is the optional request context (undefined when load() is
+    // called without one) — see onSuccess?: (data, raw, context) in the API.
+    expect(onSuccess).toHaveBeenCalledWith(7, rawEnvelope, undefined)
   })
 
   it('DELETE method routes correctly and supports a body', async () => {

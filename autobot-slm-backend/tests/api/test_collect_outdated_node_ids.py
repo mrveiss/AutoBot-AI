@@ -35,12 +35,44 @@ _mp_stub.multipart = types.ModuleType("multipart.multipart")  # type: ignore[att
 sys.modules.setdefault("multipart", _mp_stub)
 sys.modules.setdefault("multipart.multipart", _mp_stub.multipart)  # type: ignore[attr-defined]
 
+# When conftest.py stubs `models.schemas` as a MagicMock, FastAPI cannot build
+# response models from MagicMock schema types at router-decoration time
+# (`Invalid args for response field`) and api.code_sync fails to import. Swap a
+# benign `dict` in for every schema name api/code_sync.py references as a
+# response_model, before importing it. No-op when models.schemas is the real
+# module (#10023).
+_SCHEMA_NAMES = (
+    "CodeSyncRefreshResponse",
+    "CodeSyncStatusResponse",
+    "CodeVersionNotification",
+    "CodeVersionNotificationResponse",
+    "DriftResolveRequest",
+    "DriftResolveResponse",
+    "FileDriftReport",
+    "FleetSyncJobStatus",
+    "FleetSyncNodeStatus",
+    "FleetSyncRequest",
+    "FleetSyncResponse",
+    "NodeSyncRequest",
+    "NodeSyncResponse",
+    "PendingNodeResponse",
+    "PendingNodesResponse",
+    "ScheduleCreate",
+    "ScheduleResponse",
+    "ScheduleRunResponse",
+    "ScheduleUpdate",
+)
+_schemas_stub = sys.modules.get("models.schemas")
+if isinstance(_schemas_stub, MagicMock):
+    for _name in _SCHEMA_NAMES:
+        setattr(_schemas_stub, _name, dict)
+
 from api.code_sync import (  # noqa: E402
     UpdateAllJob,
     UpdateAllStage,
     _collect_outdated_node_ids,
 )
-from models.database import CodeStatus, Node  # noqa: E402
+from models.database import CodeStatus  # noqa: E402
 
 REMOTE_COMMIT = "deadbeef1234deadbeef1234"
 SLM_IP = "10.0.1.10"
@@ -61,17 +93,21 @@ def _job() -> UpdateAllJob:
     )
 
 
-def _node(node_id: str, ip: str, code_version: str | None, code_status: str) -> Node:
-    n = Node.__new__(Node)
-    n.node_id = node_id
-    n.hostname = f"host-{node_id}"
-    n.ip_address = ip
-    n.code_version = code_version
-    n.code_status = code_status
-    return n
+def _node(node_id: str, ip: str, code_version: str | None, code_status: str) -> Any:
+    # SimpleNamespace, not models.database.Node: the real ORM model needs
+    # autobot_shared on the path, which the conftest-stubbed unit env lacks.
+    # The impl (#9996-B) keys off code_version, so code_status is documentation
+    # only and never compared.
+    return types.SimpleNamespace(
+        node_id=node_id,
+        hostname=f"host-{node_id}",
+        ip_address=ip,
+        code_version=code_version,
+        code_status=code_status,
+    )
 
 
-def _db_service_mock(query_results: List[Node], slm_node: Node | None = None) -> Any:
+def _db_service_mock(query_results: List[Any], slm_node: Any | None = None) -> Any:
     """Build a db_service mock that returns query_results for the version query
     and slm_node for the self-node lookup."""
     db_service_ref = MagicMock()
@@ -205,6 +241,35 @@ async def test_a_self_node_added_when_code_version_is_none():
         result = await _collect_outdated_node_ids(job, REMOTE_COMMIT, db_svc)
 
     assert "slm-node-fresh" in result
+
+
+@pytest.mark.asyncio
+async def test_a_self_node_added_only_via_ip_match():
+    """#9996-A regression guard: the self-node ABSENT from the version query is
+    still added by the IP-match branch — the branch that actually fixed #9996.
+
+    The other facet-A tests place the self-node in the version-query results
+    too, so they pass even if the IP-append branch is removed; this one isolates
+    that branch (version query returns only the worker).
+    """
+    worker = _node("worker-1", OTHER_IP, "oldsha", CodeStatus.UP_TO_DATE.value)
+    self_node = _node("slm-node", SLM_IP, None, CodeStatus.UNKNOWN.value)
+
+    job = _job()
+    with (
+        patch("api.code_sync.settings") as mock_settings,
+        patch("api.code_sync._compute_deps_changed", new=AsyncMock(return_value=False)),
+    ):
+        mock_settings.external_url = f"http://{SLM_IP}"
+        # Version query returns ONLY the worker; the self-node is reachable only
+        # through the IP lookup.
+        db_svc = _db_service_mock(query_results=[worker], slm_node=self_node)
+        result = await _collect_outdated_node_ids(job, REMOTE_COMMIT, db_svc)
+
+    assert "slm-node" in result, (
+        "co-located self-node missing — #9996-A regression: self-node invisible "
+        "to _collect_outdated_node_ids when not in the version-comparison set"
+    )
 
 
 @pytest.mark.asyncio

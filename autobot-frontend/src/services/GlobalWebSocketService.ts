@@ -18,6 +18,7 @@ import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
 import { buildAuthenticatedWsUrl } from '@/utils/buildAuthenticatedWsUrl'
 import { useUserStore } from '@/stores/useUserStore'
+import { whenPiniaReady } from '@/utils/whenPiniaReady'
 
 // ---------------------------------------------------------------------------
 // Types & Interfaces
@@ -754,7 +755,10 @@ if (typeof window !== 'undefined') {
       }
     }
 
-    setTimeout(() => {
+    // #9693: whenPiniaReady guards against the timer firing before
+    // app.use(pinia) (slow mount) or after Pinia is gone (test teardown),
+    // where useUserStore() would throw an uncaught "no active Pinia" error.
+    whenPiniaReady(() => {
       const userStore = useUserStore()
       tryConnect()
       // #6692: react to login (token appears) and logout (token cleared) so a
