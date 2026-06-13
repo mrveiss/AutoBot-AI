@@ -1042,9 +1042,7 @@ async def update_telemetry_settings(
             created_by=current_user.get("id", "unknown"),
         )
     else:
-        logger.debug(
-            "Telemetry audit trail skipped: Postgres unavailable in current deployment mode"
-        )
+        logger.debug("Telemetry audit trail skipped: Postgres unavailable in current deployment mode")
 
     logger.info(
         "Telemetry settings updated: enabled=%s, anonymous_usage_stats=%s (changed keys: %d)",

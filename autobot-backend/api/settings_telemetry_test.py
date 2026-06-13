@@ -98,9 +98,7 @@ def _make_app(*, with_session: bool = True) -> FastAPI:
     """Minimal FastAPI app that mounts only the settings router."""
     app = FastAPI()
     app.include_router(router, prefix="/api/settings")
-    app.dependency_overrides[get_optional_db_session] = (
-        _session_present if with_session else _session_absent
-    )
+    app.dependency_overrides[get_optional_db_session] = _session_present if with_session else _session_absent
     # Override the auth deps using the exact objects captured at registration time.
     if "current_user" in _POST_DEPS:
         app.dependency_overrides[_POST_DEPS["current_user"]] = _admin_user
