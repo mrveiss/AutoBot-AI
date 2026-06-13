@@ -312,6 +312,76 @@ await store.rotate(cfg.secret_id, {"refresh_token": "tok_new"}, user_id)
 await store.revoke(cfg.secret_id, user_id)
 ```
 
+## OAuth Authorization-Code Flow and Auto-Refresh (GH#9019 extension)
+
+The original ADR covered credential *storage*. The connector group also needs a
+generic way to *obtain* OAuth tokens (so users click "Connect", not paste a
+token) and to *keep them valid* (refresh short-lived access tokens). These are
+provider-agnostic and live at the gate, not in each connector.
+
+### 9. Authorization-code + PKCE flow
+
+`knowledge/connectors/oauth_flow.py` holds a small provider registry
+(`google`, `microsoft`, `gitlab`) plus pure helpers: PKCE (S256) generation,
+authorize-URL construction, code→token exchange, and refresh-token→access-token
+refresh. OAuth *application* credentials (`client_id`/`client_secret`) are
+operator-registered via `config.auth.{provider}_oauth_client_*`; a provider's
+flow is disabled until its credentials are set.
+
+Two endpoints (`api/knowledge_connector_oauth.py`):
+
+| Endpoint | Auth | Behaviour |
+|----------|------|-----------|
+| `POST /knowledge_base/connectors/oauth/{provider}/authorize` | user session | Mints CSRF `state` + PKCE verifier, stores them in the knowledge Redis (`connector:oauth:state:{state}`, 600 s TTL), returns the provider authorization URL. |
+| `GET /knowledge_base/connectors/oauth/callback` | single-use `state` | Reached by the provider's browser redirect. Validates+consumes `state` (GETDEL), exchanges the code for tokens, stores them via `store_oauth()`, returns an HTML page that `postMessage`s the `secret_id` back to the opener and self-closes. |
+
+`redirect_uri` hosts are validated against the existing
+`AUTOBOT_SSO_CALLBACK_HOSTS` allowlist (HTTPS enforced when
+`AUTOBOT_ENFORCE_HTTPS_CALLBACKS`).
+
+Security properties of the callback:
+
+- **CSRF / token-attachment defense** — `authorize` sets an HttpOnly,
+  SameSite=Lax, path-scoped cookie holding the `state`; the callback requires
+  that cookie to match the `state` query param *before* consuming it. This
+  binds the browser that completes the flow to the one that started it, so an
+  attacker cannot graft their own authorization onto a victim's session.
+- **Single-use** — the state is consumed with Redis `GETDEL`; the cookie is
+  cleared on every result.
+- **XSS-safe result page** — the only attacker-influenced value (`error` from
+  the provider) is HTML-escaped, and the embedded JSON is JS-escaped
+  (`<`, `>`, `&`, U+2028/U+2029) so nothing can break out of the `<script>`.
+- The callback is authorized by the cookie-bound `state`, not a bearer session
+  — correct for a top-level provider redirect that carries no `Authorization`
+  header.
+
+### 10. Auto-refresh resolver
+
+`ConnectorCredentialStore` gains two methods:
+
+- `store_oauth(...)` — persist a self-contained bundle (access + refresh token,
+  client app creds, token endpoint, `access_token_expires_at`) as a
+  `connector_oauth_token` secret. The **secret's** `expires_at` stays `None`
+  (long-lived refresh token); access-token expiry lives inside the bundle so an
+  expired access token never makes the secret vanish.
+- `get_access_token(secret_id, owner_id)` — return a valid access token,
+  refreshing + rotating the secret in place when it is within
+  `ACCESS_TOKEN_REFRESH_SKEW_SECONDS` of expiry. Honors refresh-token rotation
+  (e.g. GitLab). Raises `LookupError` when re-auth is required (no refresh
+  token), `PermissionError` on owner mismatch.
+
+Connectors call `get_access_token()` to obtain a bearer token at sync time;
+none of them handle refresh themselves.
+
+### 11. Frontend "Connect" building block
+
+`autobot-frontend/.../ConnectorOAuthButton.vue` is a reusable launcher:
+`KnowledgeRepository.startConnectorOAuth()` → open the authorize URL in a popup
+→ receive the callback's `postMessage` (origin-checked) → emit `connected` with
+the `secret_id`. Each connector issue (#9003/#9004/#9011) drops this button into
+its provider-specific config step; the gate does not surface connector types in
+the create wizard.
+
 ## Related ADRs
 
 - [ADR-002](002-redis-database-separation.md) — Redis database separation
