@@ -40,28 +40,48 @@ FROM python:3.12-slim-bookworm AS production
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install runtime deps + LLC agent CLIs (GH#9793).
-# gh: official GitHub apt repo (keyring + sources list + apt-get install).
-# claude: the official installer verifies a sha256 manifest but ONLY installs
-#   to $HOME/.local/bin (CLAUDE_INSTALL_DIR is not honored — proven by the
-#   smoke-test build gate). Redirect HOME to a world-readable prefix and
-#   symlink the launcher into /usr/local/bin so the autobot user can run it.
-#   "stable" pins the release channel (GH#9950 hardening).
+# --- claude CLI install (GH#9950) ---
+# Replaces the prior unpinned `curl | bash` supply-chain risk with Anthropic's
+# official SIGNED apt repository — the same keyring + sources-list + apt-get
+# pattern used for `gh` below. apt verifies every package against the Claude Code
+# release signing key on every install, so there is no manual sha256 to supply
+# and no self-updating-installer hash to chase. The signing key (fingerprint
+# 31DD DE24 DDFA B679 F42D 7BD2 BAA9 29FF 1A7E CACE) is the stable trust anchor;
+# new releases are just newer signed packages, so the build never fails-closed on
+# an upstream installer refresh. apt installs do not auto-update (correct for an
+# immutable image — the native curl|bash installer auto-updates in the background).
+#
+# CLAUDE_CLI_VERSION pins an exact package version for reproducible builds
+# (e.g. 2.1.89); leave empty to take the current build from the stable channel.
+ARG CLAUDE_CLI_VERSION=""
+
+# Install runtime deps + LLC agent CLIs (GH#9793) from signed apt repos — no
+# pipe-to-bash for either CLI. `claude` lands on the system PATH (no HOME
+# redirect / symlink needed); the build-time `--version` checks prove both
+# resolve, so an install regression fails the build instead of silently
+# breaking LLC dispatch.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl \
+    curl ca-certificates \
     && install -m 0755 -d /etc/apt/keyrings \
+    # gh — official GitHub signed apt repo
     && curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
        | tee /etc/apt/keyrings/githubcli-archive-keyring.gpg > /dev/null \
     && chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg \
     && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
        > /etc/apt/sources.list.d/github-cli.list \
-    && apt-get update && apt-get install -y --no-install-recommends gh \
-    && install -m 0755 -d /opt/claude-cli \
-    && curl -fsSL https://claude.ai/install.sh | HOME=/opt/claude-cli bash -s -- stable \
-    && ln -s /opt/claude-cli/.local/bin/claude /usr/local/bin/claude \
-    && chmod -R a+rX /opt/claude-cli \
-    # Build-time proof both CLIs resolve on PATH — without this, an installer
-    # prefix change would silently break LLC dispatch (gate skips forever).
+    # claude-code — official Anthropic signed apt repo (stable channel)
+    && curl -fsSL https://downloads.claude.ai/keys/claude-code.asc \
+       -o /etc/apt/keyrings/claude-code.asc \
+    && chmod go+r /etc/apt/keyrings/claude-code.asc \
+    && echo "deb [signed-by=/etc/apt/keyrings/claude-code.asc] https://downloads.claude.ai/claude-code/apt/stable stable main" \
+       > /etc/apt/sources.list.d/claude-code.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends gh \
+    && if [ -n "$CLAUDE_CLI_VERSION" ]; then \
+         apt-get install -y --no-install-recommends "claude-code=${CLAUDE_CLI_VERSION}"; \
+       else \
+         apt-get install -y --no-install-recommends claude-code; \
+       fi \
     && gh --version \
     && claude --version \
     && rm -rf /var/lib/apt/lists/*
