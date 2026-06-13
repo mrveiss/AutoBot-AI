@@ -627,8 +627,11 @@ EOF
     # When install.sh runs ansible as root during bootstrap, these dirs get
     # created as root-owned. Later ansible runs (and become operations) need
     # write access as the autobot user, causing permission denied errors.
-    mkdir -p /tmp/ansible_fact_cache /tmp/ansible-retry /tmp/.ansible-cp /tmp/ansible_local_tmp
-    chown autobot:autobot /tmp/ansible_fact_cache /tmp/ansible-retry /tmp/.ansible-cp /tmp/ansible_local_tmp
+    # NOTE (#10006): local_tmp is per-user (~/.ansible/tmp) and no longer
+    # pre-created here — a fixed /tmp/ansible_local_tmp locked out every
+    # user except whoever created it first.
+    mkdir -p /tmp/ansible_fact_cache /tmp/ansible-retry /tmp/.ansible-cp
+    chown autobot:autobot /tmp/ansible_fact_cache /tmp/ansible-retry /tmp/.ansible-cp
 
     info "Running Ansible deployment (this may take several minutes)..."
     # #6600: keep `provision` so backend role applies to 00-SLM-Manager in

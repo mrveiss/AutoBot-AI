@@ -51,6 +51,7 @@ from ..models.enums import (
     WorkItemStatus,
     WorkItemType,
 )
+from ..models.work_item import LLCWorkItemComment
 from ..scheduler.heartbeat_scheduler import HeartbeatScheduler
 from ..services.activity_log import ActivityLogQuery, LLCActivityLogService
 from ..services.attachment_service import (
@@ -75,6 +76,7 @@ from ..services.work_item_service import (
 )
 from ..services.work_product_service import WorkProductService
 from .activity import ActivityLogEntry, ActivityLogResponse
+from .github_webhooks import validate_github_pr_url
 
 
 class HumanClaimRequest(BaseModel):
@@ -187,6 +189,14 @@ class CommentCreate(BaseModel):
     body: str
     author_agent_id: Optional[str] = None
     author_user_id: Optional[str] = None
+
+
+class LinkPrRequest(BaseModel):
+    """Link a GitHub PR to a work item (GH#9625)."""
+
+    pr_url: str
+    pr_number: Optional[int] = None
+    repo: Optional[str] = None
 
 
 class HandoffAttachmentRequest(BaseModel):
@@ -316,6 +326,7 @@ async def _item_to_dict(item: Any, session: AsyncSession) -> Dict[str, Any]:
         "priority": item.priority,
         "story_points": item.story_points,
         "labels": item.labels,
+        "linked_pr_urls": item.linked_pr_urls or [],  # GH#9625
         "parent_id": str(item.parent_id) if item.parent_id else None,
         "project_id": str(item.project_id) if item.project_id else None,
         "sprint_id": str(item.sprint_id) if item.sprint_id else None,
@@ -538,6 +549,43 @@ async def transition_work_item(
     except ValueError as exc:
         logger.error("Exception in API handler: %s", exc, exc_info=True)
         raise HTTPException(status_code=404, detail="Internal server error")
+
+
+@router.post("/{work_item_id}/link-pr")
+async def link_pr(
+    work_item_id: str,
+    body: LinkPrRequest,
+    session: AsyncSession = Depends(get_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
+) -> Dict[str, Any]:
+    """Link a GitHub PR URL to a work item (GH#9625).
+
+    Called by LLC adapters/agents after opening a PR for the work item.
+    """
+    # IDOR guard: verify item belongs to caller's org before mutating.
+    item = await _service().get(session, work_item_id)
+    if item is None or str(item.company_id) != str(ctx.org_id):
+        raise HTTPException(status_code=404, detail="Work item not found")
+
+    if not validate_github_pr_url(body.pr_url, body.repo):
+        raise HTTPException(status_code=422, detail="Invalid GitHub PR URL")
+
+    current_urls = item.linked_pr_urls or []
+    if body.pr_url not in current_urls:
+        item.linked_pr_urls = current_urls + [body.pr_url]
+        pr_label = f"#{body.pr_number}" if body.pr_number else body.pr_url
+        session.add(
+            LLCWorkItemComment(
+                company_id=item.company_id,
+                work_item_id=item.id,
+                body=f"🔗 GitHub PR {pr_label} linked: {body.pr_url}",
+                author_agent_id=None,
+                author_user_id=None,
+            )
+        )
+    await session.commit()
+    return await _item_to_dict(item, session)
 
 
 @router.post("/{work_item_id}/claim")

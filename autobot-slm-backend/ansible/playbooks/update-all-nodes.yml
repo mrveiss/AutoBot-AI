@@ -972,6 +972,6 @@
           - "  SLM:     {{ slm_health.json.status | default('Check manually') }}"
           - "  Nodes:   {{ slm_health.json.nodes_online | default('?') }}/{{ slm_health.json.nodes_total | default('9') }}"
           - ""
-          - "  SLM Admin:     https://{{ slm_host }}/"
-          - "  User Frontend: https://{{ frontend_host }}/"
+          - "  SLM Admin:     https://{{ slm_host | default('(not-deployed)') }}/"
+          - "  User Frontend: https://{{ frontend_host | default('(not-deployed)') }}/"
           - ""
