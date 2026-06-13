@@ -116,10 +116,10 @@ describe('useKnowledgeBase (BC shim)', () => {
   it('should keep behavior for key icon helpers', () => {
     const { getCategoryIcon, getOSBadgeClass, getMessageIcon } = useKnowledgeBase()
 
-    expect(getCategoryIcon('security')).toBe('fas fa-shield-alt')
-    expect(getCategoryIcon('unknown')).toBe('fas fa-folder')
+    expect(getCategoryIcon('security')).toBe('shield-alt')
+    expect(getCategoryIcon('unknown')).toBe('folder')
     expect(getOSBadgeClass('linux')).toBe('badge-success')
     expect(getOSBadgeClass('macos')).toBe('badge-warning')
-    expect(getMessageIcon('error')).toContain('fas fa-times-circle')
+    expect(getMessageIcon('error')).toBe('times-circle')
   })
 })

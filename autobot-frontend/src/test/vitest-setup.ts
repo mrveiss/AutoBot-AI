@@ -38,19 +38,24 @@ class MockResizeObserver {
 }
 global.ResizeObserver = MockResizeObserver as unknown as typeof ResizeObserver
 
-// Mock window.matchMedia (not available in jsdom)
-Object.defineProperty(window, 'matchMedia', {
-  writable: true,
-  value: vi.fn().mockImplementation((query: string) => ({
+// Mock window.matchMedia (not available in jsdom).
+// #9693: MUST be a plain function, not vi.fn() — `mockReset: true` in
+// vitest.config.ts wipes vi.fn() implementations after the first test,
+// making matchMedia() return undefined for every subsequent mount.
+const createMatchMediaStub = (query: string): MediaQueryList =>
+  ({
     matches: false,
     media: query,
     onchange: null,
-    addListener: vi.fn(),
-    removeListener: vi.fn(),
-    addEventListener: vi.fn(),
-    removeEventListener: vi.fn(),
-    dispatchEvent: vi.fn(),
-  })),
+    addListener: () => {},
+    removeListener: () => {},
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    dispatchEvent: () => false,
+  }) as unknown as MediaQueryList
+Object.defineProperty(window, 'matchMedia', {
+  writable: true,
+  value: createMatchMediaStub,
 })
 
 // Mock WebSocket

@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { screen, waitFor } from '@testing-library/vue'
-import userEvent from '@testing-library/user-event'
 import SettingsPanel from '../settings/SettingsPanel.vue'
 import { renderComponent } from '../../test/utils/test-utils'
 import axios from 'axios'
@@ -119,10 +118,7 @@ function setupAxiosMocks() {
 }
 
 describe('SettingsPanel', () => {
-  let _user: ReturnType<typeof userEvent.setup>
-
   beforeEach(() => {
-    user = userEvent.setup()
     // Re-configure axios mocks after global vi.clearAllMocks() wipes them
     setupAxiosMocks()
   })

@@ -36,7 +36,7 @@
     "check:i18n": "node scripts/check-i18n-keys.mjs",
     "check:locales": "python3 scripts/check-locale-completeness.py",
     "check-ts-delta": "bash scripts/check-ts-delta.sh",
-    "lint:oxlint": "oxlint . --fix -D correctness --ignore-path .gitignore",
+    "lint:oxlint": "oxlint . --fix -D correctness --ignore-path .gitignore --ignore-pattern 'src/types/_generated/**'",
     "lint:eslint": "eslint . --fix",
     "lint": "run-s lint:*",
     "format": "prettier --write src/",

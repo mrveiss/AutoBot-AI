@@ -326,11 +326,8 @@ describe('useTimeout Composable', () => {
     })
 
     it('should preserve function context', async () => {
-      let capturedThis: any = null
-      const callback = function (this: any) {
-        // eslint-disable-next-line @typescript-eslint/no-this-alias -- Test: capturing 'this' to verify context preservation
-        capturedThis = this
-      }
+      // vi.fn records invocation contexts — no manual `this` capture needed
+      const callback = vi.fn(function (this: any) {})
 
       const context = { value: 'test-context' }
       const TestComponent = defineComponent({
@@ -347,7 +344,8 @@ describe('useTimeout Composable', () => {
       debounced.call(ctx)
       vi.advanceTimersByTime(500)
 
-      expect(capturedThis).toBeDefined()
+      expect(callback).toHaveBeenCalledOnce()
+      expect(callback.mock.contexts[0]).toBeDefined()
     })
   })
 
