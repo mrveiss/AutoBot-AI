@@ -58,7 +58,7 @@ OAUTH_PROVIDERS: dict = {
     "google": OAuthProvider(
         name="google",
         authorize_url="https://accounts.google.com/o/oauth2/v2/auth",
-        token_url="https://oauth2.googleapis.com/token",
+        token_url="https://oauth2.googleapis.com/token",  # nosec B106 - OAuth token endpoint URL, not a credential
         client_id_setting="google_oauth_client_id",
         client_secret_setting="google_oauth_client_secret",
         default_scopes=("https://www.googleapis.com/auth/drive.readonly",),
@@ -68,7 +68,7 @@ OAUTH_PROVIDERS: dict = {
     "microsoft": OAuthProvider(
         name="microsoft",
         authorize_url="https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
-        token_url="https://login.microsoftonline.com/common/oauth2/v2.0/token",
+        token_url="https://login.microsoftonline.com/common/oauth2/v2.0/token",  # nosec B106 - token endpoint URL
         client_id_setting="microsoft_oauth_client_id",
         client_secret_setting="microsoft_oauth_client_secret",
         # offline_access is required for Microsoft to issue a refresh token.
@@ -77,7 +77,7 @@ OAUTH_PROVIDERS: dict = {
     "gitlab": OAuthProvider(
         name="gitlab",
         authorize_url="https://gitlab.com/oauth/authorize",
-        token_url="https://gitlab.com/oauth/token",
+        token_url="https://gitlab.com/oauth/token",  # nosec B106 - OAuth token endpoint URL, not a credential
         client_id_setting="gitlab_oauth_client_id",
         client_secret_setting="gitlab_oauth_client_secret",
         default_scopes=("read_api", "read_repository"),
