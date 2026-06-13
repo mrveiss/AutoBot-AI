@@ -101,7 +101,11 @@ const chartOptions = computed<ApexOptions>(() => ({
       fontWeight: 600
     },
     formatter: (text: string | number | (string | number)[], op?: ApexFormatterOpts) => {
-      return `${text}\n${op?.value ?? ''} ${t('charts.dependencyTreemap.uses')}`
+      // apexcharts 5.14 dropped the `[key: string]: any` index signature from
+      // ApexFormatterOpts; the treemap data-point `value` is still provided at
+      // runtime, so narrow the type to read it (#10091).
+      const value = (op as (ApexFormatterOpts & { value?: number }) | undefined)?.value
+      return `${text}\n${value ?? ''} ${t('charts.dependencyTreemap.uses')}`
     },
     offsetY: -4
   },
