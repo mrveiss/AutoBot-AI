@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import base64
 import os
+from collections.abc import Mapping
 from dataclasses import dataclass
 
 ROOT_KEY_ENV = "AUTOBOT_SECRETS_ROOT_KEY"
@@ -54,7 +55,7 @@ class UnsupportedFormatError(Exception):
     """Raised when a serialized blob carries a crypto-format version we can't read."""
 
 
-def _check_version(data: dict[str, object]) -> None:
+def _check_version(data: Mapping[str, object]) -> None:
     version = data.get("v")
     if version != FORMAT_VERSION:
         raise UnsupportedFormatError(f"unsupported secrets crypto format v={version!r} (expected {FORMAT_VERSION})")
