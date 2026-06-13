@@ -9,6 +9,7 @@ FastAPI dependencies for user management endpoints.
 """
 
 import uuid
+from typing import AsyncGenerator, Optional
 
 from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -38,6 +39,26 @@ async def get_db_session() -> AsyncSession:
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=f"User management is not available in {config.mode.value} mode",
         )
+
+    async for session in get_async_session():
+        yield session
+
+
+async def get_optional_db_session() -> AsyncGenerator[Optional[AsyncSession], None]:
+    """Get database session when Postgres is available, or None in single_user mode.
+
+    Use this dependency for endpoints whose primary operation is independent of
+    the database (e.g. config-file writes) but that record an optional audit
+    trail when Postgres is available.  The caller must guard any DB operation
+    with ``if session is not None``.
+
+    Issue #10000: telemetry consent save must work in single_user mode.
+    """
+    config = get_deployment_config()
+
+    if not config.postgres_enabled:
+        yield None
+        return
 
     async for session in get_async_session():
         yield session
