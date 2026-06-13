@@ -382,3 +382,35 @@ class TestEnsureIndexes:
 
         calls = [str(c) for c in redis_mock.execute_command.call_args_list]
         assert not any("FT.CREATE" in c for c in calls)
+
+
+class TestCoreCreateSearchIndexes:
+    """Regression guard for #9943: the production init path must actually
+    create the FT indexes (it was a no-op stub, so search stayed on SCAN)."""
+
+    @pytest.mark.asyncio
+    async def test_create_search_indexes_delegates_to_ensure_indexes(
+        self, monkeypatch
+    ) -> None:
+        from autobot_memory_graph.core import AutoBotMemoryGraphCore
+
+        # Bypass the heavy __init__ (Config/Redis) — only the redis_client
+        # attribute matters for this wiring check.
+        inst = AutoBotMemoryGraphCore.__new__(AutoBotMemoryGraphCore)
+        fake_client = MagicMock()
+        inst.redis_client = fake_client
+
+        captured: Dict[str, Any] = {}
+
+        async def fake_ensure(client: Any) -> None:
+            captured["client"] = client
+
+        monkeypatch.setattr(
+            "autobot_memory_graph.semantic_search.ensure_indexes", fake_ensure
+        )
+
+        await inst._create_search_indexes()
+
+        # The stub used to create nothing; it must now pass the live client
+        # through to ensure_indexes so FT.CREATE actually runs.
+        assert captured.get("client") is fake_client
