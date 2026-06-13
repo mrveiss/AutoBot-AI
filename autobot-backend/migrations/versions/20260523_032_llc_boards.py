@@ -16,22 +16,20 @@ from typing import Sequence, Union
 
 import sqlalchemy as sa
 from alembic import op
-from sqlalchemy.dialects.postgresql import ENUM, JSONB, UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
+
+from migrations.guards import drop_pg_enum, ensure_pg_enum, pg_enum
 
 revision: str = "20260523_032"
 down_revision: Union[str, None] = "20260523_031"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
-# postgresql.ENUM with create_type=False: created explicitly in upgrade() with
-# checkfirst=True. Generic sa.Enum silently IGNORES create_type, so
-# op.create_table re-emitted CREATE TYPE and aborted on fresh databases (#9759).
-_boardtype = ENUM("kanban", "sprint", name="boardtype", create_type=False)
+_boardtype = pg_enum("boardtype", "kanban", "sprint")
 
 
 def upgrade() -> None:
-    bind = op.get_bind()
-    _boardtype.create(bind, checkfirst=True)
+    ensure_pg_enum(_boardtype)
 
     op.create_table(
         "llc_boards",
@@ -118,5 +116,4 @@ def downgrade() -> None:
     op.drop_index("ix_llc_boards_project_id", table_name="llc_boards")
     op.drop_index("ix_llc_boards_company_id", table_name="llc_boards")
     op.drop_table("llc_boards")
-    bind = op.get_bind()
-    _boardtype.drop(bind, checkfirst=True)
+    drop_pg_enum(_boardtype)
