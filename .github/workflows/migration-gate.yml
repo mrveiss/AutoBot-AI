@@ -1,0 +1,97 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+#
+# Migration Gate (#10001 / #10026 / #10002)
+# Runs the backend Alembic migration matrix against a disposable Postgres 16:
+#   (a) empty DB            -> upgrade head
+#   (b) stamped-intermediate -> upgrade head
+#   (c) schema-without-stamp -> baseline adoption -> upgrade head
+#   (d) head -> downgrade -1 -> upgrade head
+# plus the baseline state machine (refusals incl.), the probe-ladder
+# self-checks, the schema-authority sweep (no runtime create_all), and the
+# Ansible migration-invocation contract.
+#
+# None of the five #9759 failure classes was CI-detectable before this gate.
+
+name: Migration Gate
+
+on:
+  push:
+    branches: [ main, Dev_new_gui ]
+    paths: &paths
+      - 'autobot-backend/migrations/**'
+      - 'autobot-backend/tests/migrations/**'
+      - 'autobot-backend/user_management/models/**'
+      - 'autobot-backend/llc/models/**'
+      - 'autobot-backend/canvas/models.py'
+      - 'autobot-backend/models/**'
+      - 'autobot-backend/initialization/lifespan.py'
+      - 'autobot-slm-backend/ansible/setup-user-backend.yml'
+      - 'autobot-slm-backend/ansible/playbooks/update-all-nodes.yml'
+      - '.github/workflows/migration-gate.yml'
+  pull_request:
+    branches: [ main, Dev_new_gui ]
+    paths: *paths
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  migration-matrix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: migtest
+          POSTGRES_PASSWORD: migtest
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U migtest"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: .github/workflows/migration-gate.yml
+
+      - name: Install migration-test dependencies
+        # Deliberately minimal — exactly what migrations/env.py and the
+        # baseline entrypoint import. Keeping this lean keeps the gate fast
+        # and proves migrations don't silently grow heavyweight deps.
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install \
+            "alembic>=1.13" "sqlalchemy[asyncio]>=2.0" asyncpg aiosqlite \
+            pydantic pydantic-settings \
+            bcrypt pyjwt redis httpx aiofiles python-dotenv pyyaml \
+            pytest pytest-asyncio
+
+      - name: Run migration matrix
+        env:
+          AUTOBOT_MIGRATION_TEST_ADMIN_URL: postgresql+asyncpg://migtest:migtest@127.0.0.1:5432/postgres
+        run: |
+          python -m pytest autobot-backend/tests/migrations/ \
+            -m migration_gate -v --tb=short -p no:cacheprovider
+
+      - name: Run static gates (no database)
+        run: |
+          python -m pytest \
+            autobot-backend/tests/migrations/test_probe_ladder_selfcheck.py \
+            autobot-backend/tests/migrations/test_schema_authority.py \
+            autobot-backend/tests/migrations/test_ansible_migration_contract.py \
+            -v --tb=short -p no:cacheprovider
