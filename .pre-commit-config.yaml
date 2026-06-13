@@ -616,7 +616,7 @@ repos:
         entry: python tools/lint/canonical_check.py --files
         language: python
         files: \.py$
-        exclude: ^(\.worktrees/|tests/lint/canonical/fixtures/)
+        exclude: ^(\.worktrees/|repo_tests/lint/canonical/fixtures/)
         stages: [pre-commit]
         description: "Pluggable canonical-pattern checks for Python files (#7458)"
 
@@ -634,7 +634,7 @@ repos:
         entry: python tools/lint/canonical_check_infra.py --files
         language: python
         files: \.(sh|yml|yaml)$
-        exclude: ^(\.worktrees/|node_modules/|tests/lint/canonical/fixtures/)
+        exclude: ^(\.worktrees/|node_modules/|repo_tests/lint/canonical/fixtures/)
         stages: [pre-commit]
         description: "Pluggable canonical-pattern checks for shell/YAML files (#7458)"
 

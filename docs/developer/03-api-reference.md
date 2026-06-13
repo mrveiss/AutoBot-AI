@@ -913,6 +913,90 @@ The backend API is organized into the following routers:
 
 ---
 
+## Date-Range Query Parameters (DateRangeParams)
+
+`DateRangeParams` (defined in `autobot-backend/api/schemas_analytics.py`) is the standard FastAPI `Depends()` helper for endpoints that accept an optional date-range filter. Use it instead of open-coding the recurring `start_date` / `end_date` `Query(...)` pair (introduced in Issue #7110 via PR #7254, follow-up to #6624).
+
+### Shape
+
+| Query Parameter | Type | Required | Description |
+|---|---|---|---|
+| `start_date` | `string \| null` | No | Start date (`YYYY-MM-DD`) |
+| `end_date` | `string \| null` | No | End date (`YYYY-MM-DD`) |
+
+Both fields default to `None`. Adopting the helper is a pure Python-signature refactor: the two query params are unchanged at the HTTP boundary, and the OpenAPI schema still lists `start_date` / `end_date` as optional query parameters (`in: query`).
+
+**Implementation notes** (from the class docstring):
+- It is intentionally a plain Python class, **not** a Pydantic `BaseModel` — FastAPI only treats class fields as query parameters when the dependency class has a plain `__init__`; a Pydantic model would be treated as a request body.
+- Fields are declared as `Annotated[str | None, Query(...)]` (rather than `Query(None)` as a default value), so direct instantiation — `DateRangeParams()` — yields real `None` defaults instead of `Query` placeholder objects. This keeps the class usable from unit tests and non-HTTP callers.
+
+### Validation rules and guarantees
+
+- The dependency itself performs **no parsing or validation** — both values arrive as raw optional strings. Date parsing is the endpoint handler's responsibility (e.g. via `parse_utc_iso()`).
+- **Default range**: the canonical consumer (`GET /api/analytics/evolution/timeline`) defaults a missing `start_date` to **now − 30 days** and a missing `end_date` to **now** (UTC) in its `_parse_date_range()` helper. New endpoints should apply the same defaults unless they have a documented reason not to.
+- **No max-window cap**: neither the helper nor `_parse_date_range()` enforces a maximum window size. If an endpoint needs one, enforce it in the handler.
+- Either field may be supplied independently (open-ended ranges are valid).
+
+### Adding it to a new endpoint
+
+```python
+from datetime import datetime, timedelta, timezone
+
+from fastapi import APIRouter, Depends
+
+from api.schemas_analytics import DateRangeParams
+
+router = APIRouter()
+
+
+def _resolve_range(date_range: DateRangeParams) -> tuple[float, float]:
+    """Resolve optional date strings to UTC timestamps (default: last 30 days)."""
+    start_ts = (
+        parse_utc_iso(date_range.start_date).timestamp()
+        if date_range.start_date
+        else (datetime.now(tz=timezone.utc) - timedelta(days=30)).timestamp()
+    )
+    end_ts = (
+        parse_utc_iso(date_range.end_date).timestamp()
+        if date_range.end_date
+        else datetime.now(tz=timezone.utc).timestamp()
+    )
+    return start_ts, end_ts
+
+
+@router.get("/reports/activity")
+async def get_activity_report(
+    date_range: DateRangeParams = Depends(),
+):
+    """Return activity records filtered by an optional date range."""
+    start_ts, end_ts = _resolve_range(date_range)
+    records = await fetch_activity(start_ts, end_ts)
+    return {
+        "records": records,
+        "date_range": {"start": date_range.start_date, "end": date_range.end_date},
+    }
+```
+
+Request examples:
+```bash
+# Explicit range
+curl "http://localhost:8001/api/reports/activity?start_date=2026-01-01&end_date=2026-01-31"
+
+# Open-ended — handler applies defaults (canonical default: last 30 days)
+curl "http://localhost:8001/api/reports/activity"
+
+# Partial range — only one bound supplied
+curl "http://localhost:8001/api/reports/activity?start_date=2026-06-01"
+```
+
+### Reference implementation
+
+- Definition: `autobot-backend/api/schemas_analytics.py` — `class DateRangeParams`
+- Canonical consumer: `GET /api/analytics/evolution/timeline` in `autobot-backend/api/analytics_evolution.py` (migrated in PR #7254)
+- Tests: `autobot-backend/api/schemas_analytics_date_range_test.py` — direct instantiation, FastAPI query binding, and OpenAPI schema coverage
+
+---
+
 ## Configuration Notes
 
 - All endpoints support configurable base URLs through `config/config.yaml`
