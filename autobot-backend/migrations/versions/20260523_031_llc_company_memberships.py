@@ -16,16 +16,22 @@ Create Date: 2026-05-23
 
 import sqlalchemy as sa
 from alembic import op
-from sqlalchemy.dialects.postgresql import ENUM, UUID
+from sqlalchemy.dialects.postgresql import UUID
+
+from migrations.guards import drop_pg_enum, ensure_pg_enum, pg_enum
 
 revision = "20260523_031"
 down_revision = "20260523_030"
 branch_labels = None
 depends_on = None
 
+_membershiprole = pg_enum("membershiprole", "owner", "admin", "member", "guest")
+
 
 def upgrade() -> None:
-    op.execute("CREATE TYPE membershiprole AS ENUM ('owner', 'admin', 'member', 'guest')")
+    # Historically an unguarded ``op.execute("CREATE TYPE ...")``; the guard
+    # only skips creation when the type already exists (#10027).
+    ensure_pg_enum(_membershiprole)
 
     op.create_table(
         "llc_company_memberships",
@@ -39,17 +45,7 @@ def upgrade() -> None:
         sa.Column("user_id", UUID(as_uuid=True), nullable=False),
         sa.Column(
             "role",
-            # postgresql.ENUM: generic sa.Enum silently IGNORES create_type,
-            # re-emitting CREATE TYPE after the op.execute above and aborting
-            # fresh-database upgrades (#9759).
-            ENUM(
-                "owner",
-                "admin",
-                "member",
-                "guest",
-                name="membershiprole",
-                create_type=False,
-            ),
+            _membershiprole,
             nullable=False,
             server_default="member",
         ),
@@ -84,4 +80,4 @@ def downgrade() -> None:
     op.drop_index("ix_llc_company_memberships_user_id", table_name="llc_company_memberships")
     op.drop_index("ix_llc_company_memberships_company_id", table_name="llc_company_memberships")
     op.drop_table("llc_company_memberships")
-    op.execute("DROP TYPE IF EXISTS membershiprole")
+    drop_pg_enum(_membershiprole)
