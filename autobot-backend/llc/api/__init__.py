@@ -21,6 +21,7 @@ from .context import router as context_router
 from .controls import router as controls_router
 from .costs import router as costs_router
 from .decisions import router as decisions_router
+from .github_webhooks import router as github_webhooks_router
 from .goals import router as goals_router
 from .health import router as health_router
 from .labels import router as labels_router
@@ -50,6 +51,7 @@ router.include_router(health_router)
 router.include_router(secrets_router)
 router.include_router(sprints_router)
 router.include_router(work_items_router)
+router.include_router(github_webhooks_router)
 router.include_router(api_keys_router)
 router.include_router(agent_router)
 router.include_router(agents_router)

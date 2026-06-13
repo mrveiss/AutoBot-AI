@@ -69,6 +69,14 @@ class LLCWorkItem(Base):
     acceptance_criteria: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
     labels: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=sa.text("'[]'::jsonb"))
 
+    # GitHub PR linking (GH#9625)
+    linked_pr_urls: Mapped[list] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=list,
+        server_default=sa.text("'[]'::jsonb"),
+    )
+
     # Status / priority
     status: Mapped[str] = mapped_column(
         sa.Enum(WorkItemStatus, name="workitemstatus", create_type=False),

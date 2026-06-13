@@ -217,8 +217,9 @@ if [ "$ACTION" = "deploy" ]; then
     fi
 
     # Build ansible command (run from ansible/ dir so ansible.cfg is picked up)
-    # Set ANSIBLE_LOCAL_TEMP to avoid ProtectHome=read-only issues on delegate_to: localhost tasks
-    export ANSIBLE_LOCAL_TEMP=/tmp/ansible_local_tmp
+    # Per-user local tmp (#10006): a fixed shared /tmp path is created mode
+    # 0700 by whichever user runs ansible first, locking out every other user.
+    export ANSIBLE_LOCAL_TEMP="${HOME}/.ansible/tmp"
 
     ANSIBLE_CMD=(
         ansible-playbook
