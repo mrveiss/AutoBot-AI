@@ -31,7 +31,7 @@
 #   ansible-playbook ... -e "controller_repo_root=/home/martins/AutoBot-Ai/AutoBot-AI"
 ---
 - name: Deploy SLM Manager
-  hosts: 00-SLM-Manager
+  hosts: slm_server
   become: true
   gather_facts: true
 

@@ -300,7 +300,7 @@ async def _ensure_local_node() -> None:
 
     from models.database import Node, NodeRole, NodeStatus
 
-    _SLM_NODE_ID = "00-SLM-Manager"
+    _SLM_NODE_ID = settings.slm_node_id  # #9956: env-driven, not hardcoded
     _SLM_ROLES = ["slm-backend", "slm-frontend", "slm-database", "slm-monitoring"]
 
     # Derive IP from SLM_EXTERNAL_URL (written by install.sh) or fall back to probe.
