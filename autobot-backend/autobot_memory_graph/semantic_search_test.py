@@ -389,9 +389,7 @@ class TestCoreCreateSearchIndexes:
     create the FT indexes (it was a no-op stub, so search stayed on SCAN)."""
 
     @pytest.mark.asyncio
-    async def test_create_search_indexes_delegates_to_ensure_indexes(
-        self, monkeypatch
-    ) -> None:
+    async def test_create_search_indexes_delegates_to_ensure_indexes(self, monkeypatch) -> None:
         from autobot_memory_graph.core import AutoBotMemoryGraphCore
 
         # Bypass the heavy __init__ (Config/Redis) — only the redis_client
@@ -405,9 +403,7 @@ class TestCoreCreateSearchIndexes:
         async def fake_ensure(client: Any) -> None:
             captured["client"] = client
 
-        monkeypatch.setattr(
-            "autobot_memory_graph.semantic_search.ensure_indexes", fake_ensure
-        )
+        monkeypatch.setattr("autobot_memory_graph.semantic_search.ensure_indexes", fake_ensure)
 
         await inst._create_search_indexes()
 
