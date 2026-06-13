@@ -40,15 +40,36 @@ FROM python:3.12-slim-bookworm AS production
 
 ENV DEBIAN_FRONTEND=noninteractive
 
+# --- claude CLI pinning + integrity (GH#9950) ---
+# Hardening of the prior unpinned `curl | bash` supply-chain risk:
+#   1. CLAUDE_CLI_VERSION pins an exact published release (not a moving channel).
+#   2. CLAUDE_INSTALLER_SHA256 pins the sha256 of the installer bootstrap script.
+#      The installer is downloaded to a file, its checksum verified, and ONLY
+#      THEN executed — no piping of an unverified stream into bash.
+#   3. The installer itself then fetches the version-pinned binary and verifies
+#      it against its own signed sha256 manifest (second integrity layer).
+#
+# To update the pin:
+#   curl -fsSLO https://claude.ai/install.sh
+#   sha256sum install.sh        # -> paste into CLAUDE_INSTALLER_SHA256 below
+#   # pick the target version from https://github.com/anthropics/claude-code/releases
+# Build override (CI / release pipeline supplies the verified values):
+#   docker build --build-arg CLAUDE_CLI_VERSION=1.2.3 \
+#                --build-arg CLAUDE_INSTALLER_SHA256=<64-hex> ...
+ARG CLAUDE_CLI_VERSION=stable
+# REQUIRED: no default — the build MUST fail unless a real, human-verified
+# sha256 is supplied. A placeholder/empty value makes the verification step
+# (and therefore the build) fail loudly rather than silently piping to bash.
+ARG CLAUDE_INSTALLER_SHA256=""
+
 # Install runtime deps + LLC agent CLIs (GH#9793).
-# gh: official GitHub apt repo (keyring + sources list + apt-get install).
-# claude: the official installer verifies a sha256 manifest but ONLY installs
-#   to $HOME/.local/bin (CLAUDE_INSTALL_DIR is not honored — proven by the
-#   smoke-test build gate). Redirect HOME to a world-readable prefix and
-#   symlink the launcher into /usr/local/bin so the autobot user can run it.
-#   "stable" pins the release channel (GH#9950 hardening).
+# gh: official GitHub apt repo (keyring + sources list + apt-get install) — signed apt, no pipe-to-bash.
+# claude: download-then-verify-then-run (GH#9950). The official installer ONLY
+#   installs to $HOME/.local/bin (CLAUDE_INSTALL_DIR is not honored — proven by
+#   the smoke-test build gate), so HOME is redirected to a world-readable prefix
+#   and the launcher symlinked into /usr/local/bin for the autobot user.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl \
+    curl ca-certificates \
     && install -m 0755 -d /etc/apt/keyrings \
     && curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
        | tee /etc/apt/keyrings/githubcli-archive-keyring.gpg > /dev/null \
@@ -57,7 +78,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
        > /etc/apt/sources.list.d/github-cli.list \
     && apt-get update && apt-get install -y --no-install-recommends gh \
     && install -m 0755 -d /opt/claude-cli \
-    && curl -fsSL https://claude.ai/install.sh | HOME=/opt/claude-cli bash -s -- stable \
+    # Fail early if the integrity pin was not supplied (no blind pipe-to-bash).
+    && if [ -z "$CLAUDE_INSTALLER_SHA256" ]; then \
+         echo "ERROR: CLAUDE_INSTALLER_SHA256 build-arg is required (GH#9950). See Dockerfile comment for how to compute it." >&2; \
+         exit 1; \
+       fi \
+    # 1) download the installer to a file (do NOT execute the stream)
+    && curl -fsSL https://claude.ai/install.sh -o /tmp/claude-install.sh \
+    # 2) verify its sha256 against the pinned, human-verified value
+    && echo "${CLAUDE_INSTALLER_SHA256}  /tmp/claude-install.sh" | sha256sum -c - \
+    # 3) only now execute it, pinned to an exact version, HOME-redirected
+    && HOME=/opt/claude-cli bash /tmp/claude-install.sh "${CLAUDE_CLI_VERSION}" \
+    && rm -f /tmp/claude-install.sh \
     && ln -s /opt/claude-cli/.local/bin/claude /usr/local/bin/claude \
     && chmod -R a+rX /opt/claude-cli \
     # Build-time proof both CLIs resolve on PATH — without this, an installer

@@ -184,6 +184,12 @@ services:
     build:
       context: .
       dockerfile: docker/backend/Dockerfile
+      # claude CLI integrity pin (GH#9950): supplied via env so the image
+      # is built against a human-verified version + installer sha256.
+      # Empty default keeps the Dockerfile's required-arg guard active.
+      args:
+        CLAUDE_CLI_VERSION: "${CLAUDE_CLI_VERSION:-stable}"
+        CLAUDE_INSTALLER_SHA256: "${CLAUDE_INSTALLER_SHA256:-}"
     image: autobot/backend:latest
     container_name: autobot-backend
     restart: unless-stopped
@@ -301,6 +307,12 @@ services:
     build:
       context: .
       dockerfile: docker/backend/Dockerfile
+      # claude CLI integrity pin (GH#9950): supplied via env so the image
+      # is built against a human-verified version + installer sha256.
+      # Empty default keeps the Dockerfile's required-arg guard active.
+      args:
+        CLAUDE_CLI_VERSION: "${CLAUDE_CLI_VERSION:-stable}"
+        CLAUDE_INSTALLER_SHA256: "${CLAUDE_INSTALLER_SHA256:-}"
     image: autobot/backend:latest
     container_name: autobot-worker
     restart: unless-stopped
