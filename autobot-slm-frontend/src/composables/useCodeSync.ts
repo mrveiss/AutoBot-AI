@@ -23,6 +23,11 @@ const API_BASE = getSlmApiBase()
 // Type Definitions
 // =============================================================================
 
+// #9956: SLM-component role names — a node carrying any of these IS the SLM
+// manager, regardless of its (user-editable) display name. Mirrors the
+// backend SLM_ROLES set used for self-identification.
+const SLM_ROLE_NAMES = ['slm-backend', 'slm-frontend', 'slm-database', 'slm-monitoring']
+
 export interface CodeSyncStatus {
   latest_version: string | null
   local_version: string | null
@@ -393,8 +398,14 @@ export function useCodeSync() {
     } catch (e) {
       // Special handling for SLM Manager self-restart (502 errors expected)
       if (axios.isAxiosError(e) && e.response?.status === 502) {
-        // Check if this is the SLM server itself
-        const isSLMServer = nodeId === '00-SLM-Manager' || nodeId.includes('SLM')
+        // #9956: Identify the SLM server by its detected SLM roles, not by a
+        // hardcoded/substring node name — operators may rename the node.
+        const nodeRoles = await rolesComposable
+          .getNodeRoles(nodeId)
+          .catch(() => null)
+        const isSLMServer = (nodeRoles?.detected_roles ?? []).some((r) =>
+          SLM_ROLE_NAMES.includes(r)
+        )
 
         if (isSLMServer && (options.restart ?? true)) {
           // 502 is expected when SLM restarts itself - treat as success

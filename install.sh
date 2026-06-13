@@ -27,6 +27,11 @@ readonly LOG_FILE="${LOG_DIR}/install-$(date +%Y%m%d-%H%M%S).log"
 readonly AUTOBOT_BASE="/opt/autobot"
 readonly CODE_SOURCE="${AUTOBOT_BASE}/code_source"
 readonly SECRETS_FILE="/etc/autobot/slm-secrets.env"
+# #9956: Default SLM manager node_id. Must match the host/slm_node_id written
+# into the generated localhost inventory (generate_inventory) — that inventory
+# is the canonical definition; this constant mirrors it for the API
+# registration calls so the value is not duplicated as scattered literals.
+readonly SLM_NODE_ID="00-SLM-Manager"
 readonly DEFAULT_REPO="https://github.com/mrveiss/AutoBot-AI.git"
 readonly DEFAULT_BRANCH="Dev_new_gui"
 readonly REQUIRED_DISK_MB=5120
@@ -631,7 +636,7 @@ EOF
     chown autobot:autobot /tmp/ansible_fact_cache /tmp/ansible-retry /tmp/.ansible-cp /tmp/ansible_local_tmp
 
     info "Running Ansible deployment (this may take several minutes)..."
-    # #6600: keep `provision` so backend role applies to 00-SLM-Manager in
+    # #6600: keep `provision` so backend role applies to the SLM manager node in
     # single-host mode. Skip only `seed` — fleet seeding requires SLM DB
     # rows that don't exist yet on a fresh install.
     log "  Playbook: deploy-slm-manager.yml --skip-tags seed"
@@ -775,7 +780,7 @@ register_local_node() {
         -d "{
             \"hostname\": \"${hostname_val}\",
             \"ip_address\": \"${local_ip}\",
-            \"node_id\": \"00-SLM-Manager\",
+            \"node_id\": \"${SLM_NODE_ID}\",
             \"roles\": [
                 \"slm-backend\",
                 \"slm-frontend\",
@@ -804,7 +809,7 @@ register_local_node() {
         -H "Content-Type: application/json" \
         -H "Authorization: Bearer ${token}" \
         -d "{
-            \"node_id\": \"00-SLM-Manager\",
+            \"node_id\": \"${SLM_NODE_ID}\",
             \"repo_path\": \"${CODE_SOURCE}\",
             \"branch\": \"${GIT_BRANCH}\"
         }" 2>/dev/null)
