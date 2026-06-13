@@ -211,6 +211,7 @@ class ServiceDiscoveryCache:
 # #6702: SSL context creation moved to autobot_shared/tls.py — single canonical
 # implementation shared across slm_client, dag_executor, celery_app, and
 # notification_service. Re-exported here for one-cycle backward compatibility.
+from autobot_shared.tls import _is_loopback_target
 from autobot_shared.tls import get_internal_tls_context as _create_permissive_ssl_context
 
 
@@ -577,9 +578,17 @@ class SLMClient:
         pinned to ``_max_reconnect_delay`` to avoid a warn-flood.  This covers
         bare-metal deployments where ``SLM_SECRET_KEY`` is not aligned with
         ``AUTOBOT_JWT_SECRET``.
+
+        Path selection (GH#9967):
+          - Direct-port (loopback): ``/api/ws/events`` — nginx is not involved.
+          - Through nginx (non-loopback): ``/slm/api/ws/events`` — nginx routes
+            ``/slm/api/ws/`` to the SLM in both co-located and standalone modes
+            (#3268); ``/api/ws/events`` on co-located nginx lands on the user
+            backend instead.
         """
         ws_url = self.slm_url.replace("http://", "ws://").replace("https://", "wss://")
-        ws_url = f"{ws_url}/api/ws/events"
+        ws_path = "/api/ws/events" if _is_loopback_target(self.slm_url) else "/slm/api/ws/events"
+        ws_url = f"{ws_url}{ws_path}"
 
         # Resolve the auth token for this connection attempt.
         # Operator-provided static token takes precedence; when absent, mint a
