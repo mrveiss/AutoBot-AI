@@ -132,8 +132,11 @@ describe('KnowledgeRepository stats endpoints (#5215)', () => {
 
       expect(result.status).toBe('unknown')
       expect(result.basic_stats).toEqual({
+        total_documents: 0,
+        total_chunks: 0,
         total_facts: 0,
         total_vectors: 0,
+        db_size: 0,
         categories: [],
         status: 'unknown'
       })
