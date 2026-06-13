@@ -82,7 +82,7 @@ class Config:
     def __init__(self):
         self.redis_host = _ssot_config.vm.redis  # (#1148)
         self.redis_port = 6379
-        self.redis_db = DATABASE_MAPPING["knowledge"]  # (#2670)
+        self.redis_db = DATABASE_MAPPING["memory"]  # DB 0 — required for RediSearch FT.* (#9943)
         self.index_prefix = "autobot:entities"
         self.relations_prefix = "autobot:relations"
         self.embedding_model = "nomic-embed-text"
@@ -150,7 +150,13 @@ class AutoBotMemoryGraphCore:
 
             try:
                 # Initialize Redis client
-                self.redis_client = get_redis_client(async_client=True, database="knowledge")
+                # RediSearch FT.CREATE only operates on Redis logical DB 0.
+                # Both the FT indexes (memory_entity_idx, memory_fulltext_idx) and
+                # the data keys (memory:entity:*, memory:relations:*) must live on
+                # the same DB.  The "memory" alias maps to DB 0 for exactly this
+                # purpose — see autobot_shared/redis_management/types.py _ALIASES.
+                # Fixed by #9943 (same root cause as #9904).
+                self.redis_client = get_redis_client(async_client=True, database="memory")
 
                 # Create search indexes if they don't exist
                 await self._create_search_indexes()
