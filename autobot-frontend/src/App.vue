@@ -217,7 +217,7 @@
           class="lg:hidden absolute top-full left-0 right-0 bg-autobot-bg-secondary border-b border-autobot-border shadow-lg z-20"
         >
           <div class="px-4 py-3 space-y-2">
-            <template v-for="item in navItems" :key="item.to">
+            <template v-for="item in filteredNavItems" :key="item.to">
             <router-link
               :to="item.to"
               @click="closeMobileNav"
@@ -974,7 +974,7 @@ export default {
     // Nav overflow: ref for container, filtered/visible/overflow computed slices
     const navContainerRef = ref<HTMLElement | null>(null)
 
-    const filteredNavItems = computed(() => navItems)
+    const filteredNavItems = computed(() => filterByFeatureFlag(navItems))
 
     const filteredProfileMenuItems = computed(() =>
       filterByFeatureFlag(profileMenuItems)
@@ -1022,6 +1022,7 @@ export default {
       showAuthChrome,
       hideFooter,
       navItems,
+      filteredNavItems,
       profileMenuItems,
       filteredProfileMenuItems,
       adminMenuItems,
