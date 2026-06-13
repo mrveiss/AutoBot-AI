@@ -75,9 +75,9 @@ def test_enum_column_emits_values_not_names(table, column, col_type) -> None:
         f"expected member VALUES {expected_values}. Missing values_callable=pg_enum_values? (#9980)"
     )
     # Every LLC enum is lowercase-valued; an UPPERCASE label means NAMES leaked through.
-    assert all(label == label.lower() for label in col_type.enums), (
-        f"{table}.{column} has a non-lowercase enum label: {list(col_type.enums)}"
-    )
+    assert all(
+        label == label.lower() for label in col_type.enums
+    ), f"{table}.{column} has a non-lowercase enum label: {list(col_type.enums)}"
 
 
 def test_pg_enum_values_returns_value_list() -> None:
