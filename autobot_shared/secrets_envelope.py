@@ -36,6 +36,11 @@ from dataclasses import dataclass
 
 ROOT_KEY_ENV = "AUTOBOT_SECRETS_ROOT_KEY"
 
+# On-disk crypto format. Every persisted blob carries this so the algorithm can
+# change later without guessing: a future v2 (different AEAD/KDF) is detected by
+# the tag, not by trial decryption. Bump only when the wire format changes.
+FORMAT_VERSION = 1
+
 _KEY_LEN = 32  # AES-256
 _NONCE_LEN = 12  # AES-GCM standard nonce
 _HKDF_INFO_PREFIX = b"autobot-secrets-vault:"
@@ -43,6 +48,16 @@ _HKDF_INFO_PREFIX = b"autobot-secrets-vault:"
 
 class DecryptionError(Exception):
     """Raised when an AEAD open fails — wrong key, wrong grantee, or tampering."""
+
+
+class UnsupportedFormatError(Exception):
+    """Raised when a serialized blob carries a crypto-format version we can't read."""
+
+
+def _check_version(data: dict[str, object]) -> None:
+    version = data.get("v")
+    if version != FORMAT_VERSION:
+        raise UnsupportedFormatError(f"unsupported secrets crypto format v={version!r} (expected {FORMAT_VERSION})")
 
 
 def _b64e(raw: bytes) -> str:
@@ -107,12 +122,13 @@ class SealedSecret:
     nonce: bytes
     ciphertext: bytes
 
-    def to_dict(self) -> dict[str, str]:
-        return {"nonce": _b64e(self.nonce), "ciphertext": _b64e(self.ciphertext)}
+    def to_dict(self) -> dict[str, str | int]:
+        return {"v": FORMAT_VERSION, "nonce": _b64e(self.nonce), "ciphertext": _b64e(self.ciphertext)}
 
     @classmethod
-    def from_dict(cls, data: dict[str, str]) -> SealedSecret:
-        return cls(nonce=_b64d(data["nonce"]), ciphertext=_b64d(data["ciphertext"]))
+    def from_dict(cls, data: dict[str, str | int]) -> SealedSecret:
+        _check_version(data)
+        return cls(nonce=_b64d(str(data["nonce"])), ciphertext=_b64d(str(data["ciphertext"])))
 
 
 @dataclass(frozen=True)
@@ -123,19 +139,21 @@ class WrappedDek:
     nonce: bytes
     ciphertext: bytes
 
-    def to_dict(self) -> dict[str, str]:
+    def to_dict(self) -> dict[str, str | int]:
         return {
+            "v": FORMAT_VERSION,
             "grantee": self.grantee,
             "nonce": _b64e(self.nonce),
             "ciphertext": _b64e(self.ciphertext),
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, str]) -> WrappedDek:
+    def from_dict(cls, data: dict[str, str | int]) -> WrappedDek:
+        _check_version(data)
         return cls(
-            grantee=data["grantee"],
-            nonce=_b64d(data["nonce"]),
-            ciphertext=_b64d(data["ciphertext"]),
+            grantee=str(data["grantee"]),
+            nonce=_b64d(str(data["nonce"])),
+            ciphertext=_b64d(str(data["ciphertext"])),
         )
 
 

@@ -186,3 +186,24 @@ class TestSerialization:
         assert restored == sealed
         grant = env.wrap_dek(dek, kek, "company:A")
         assert env.open_secret(restored, grant, kek) == b"persist-me"
+
+    def test_dicts_carry_format_version(self) -> None:
+        sealed, dek = env.seal(b"x")
+        assert sealed.to_dict()["v"] == env.FORMAT_VERSION
+        wrapped = env.wrap_dek(dek, bytes(32), "user:alice")
+        assert wrapped.to_dict()["v"] == env.FORMAT_VERSION
+
+    def test_unknown_version_rejected(self) -> None:
+        sealed, dek = env.seal(b"x")
+        bad = {**sealed.to_dict(), "v": 999}
+        with pytest.raises(env.UnsupportedFormatError):
+            env.SealedSecret.from_dict(bad)
+        bad_wrap = {**env.wrap_dek(dek, bytes(32), "u").to_dict(), "v": 999}
+        with pytest.raises(env.UnsupportedFormatError):
+            env.WrappedDek.from_dict(bad_wrap)
+
+    def test_missing_version_rejected(self) -> None:
+        sealed, _ = env.seal(b"x")
+        legacy = {k: v for k, v in sealed.to_dict().items() if k != "v"}
+        with pytest.raises(env.UnsupportedFormatError):
+            env.SealedSecret.from_dict(legacy)
