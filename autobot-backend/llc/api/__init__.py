@@ -2,7 +2,9 @@
 # SPDX-License-Identifier: Apache-2.0
 """LLC API router (GH#8251)."""
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+
+from llc.deps import postgres_required
 
 from .activity import router as activity_router
 from .agent_api import router as agent_router
@@ -36,7 +38,10 @@ from .sprints import router as sprints_router
 from .templates import router as templates_router
 from .work_items import router as work_items_router
 
-router = APIRouter(prefix="/llc", tags=["llc"])
+# GH#10010: All LLC routes require Postgres.  In single_user mode the session
+# factory hard-raises; the postgres_required dependency converts that to a
+# clean 503 Service Unavailable before any handler or sub-dependency runs.
+router = APIRouter(prefix="/llc", tags=["llc"], dependencies=[Depends(postgres_required)])
 router.include_router(activity_router)
 router.include_router(boards_router)
 router.include_router(approvals_router)
