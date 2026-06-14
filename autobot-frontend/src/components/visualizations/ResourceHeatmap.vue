@@ -90,7 +90,7 @@ import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import VueApexCharts from 'vue3-apexcharts'
-import type { ApexOptions, ApexChartEventOpts } from 'apexcharts'
+import type { ApexOptions, ApexChartEventOpts, ApexTooltipCustomOpts } from 'apexcharts'
 import { useResourceMetrics } from '@/composables/visualizations/useResourceMetrics'
 import { usePollingJob } from '@/composables/usePollingJob'
 import { getCssVar } from '@/composables/useCssVars'
@@ -240,12 +240,11 @@ const chartOptions = computed<ApexOptions>(() => ({
   tooltip: {
     enabled: true,
     theme: 'dark',
-    custom: ({ seriesIndex, dataPointIndex, w }: {
-      seriesIndex: number
-      dataPointIndex: number
-      w: { config: { series: Array<{ name: string; data: Array<{ x: string; y: number }> }> } }
-    }) => {
-      const series = w.config.series[seriesIndex]
+    custom: ({ seriesIndex, dataPointIndex, w }: ApexTooltipCustomOpts) => {
+      // w.config.series is the loosely-typed ApexOptions union; cast to the
+      // heatmap row shape this chart actually builds (apexcharts 5.14 typing).
+      const heatmapSeries = w.config.series as Array<{ name: string; data: Array<{ x: string; y: number }> }>
+      const series = heatmapSeries[seriesIndex]
       const point = series.data[dataPointIndex]
       return `
         <div class="heatmap-tooltip">

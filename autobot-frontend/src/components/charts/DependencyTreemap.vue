@@ -101,7 +101,10 @@ const chartOptions = computed<ApexOptions>(() => ({
       fontWeight: 600
     },
     formatter: (text: string | number | (string | number)[], op?: ApexFormatterOpts) => {
-      return `${text}\n${op?.value ?? ''} ${t('charts.dependencyTreemap.uses')}`
+      // apexcharts 5.14 dropped `.value` from ApexFormatterOpts; read the cell
+      // value from the chart globals (typed `any`) instead.
+      const value = op ? op.w?.globals?.series?.[op.seriesIndex]?.[op.dataPointIndex] : undefined
+      return `${text}\n${value ?? ''} ${t('charts.dependencyTreemap.uses')}`
     },
     offsetY: -4
   },
