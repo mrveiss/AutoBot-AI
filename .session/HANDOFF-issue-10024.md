@@ -1,11 +1,10 @@
 # Handoff: issue-10024
 status: complete
-pr: HELD — committed locally, NOT pushed (PR queue was at limit 5; push when it drains <5)
+pr: #10125
 base_at_push: cc39d07216293f300c1b07ce69f8bb7bfbd974f9
 gates: n/a — workflow YAML valid + reference-matching logic unit-checked; no app code
 needs_rebase_before_merge: no
 remaining:
-  - PUSH: git -C .worktrees/issue-10024 push -u origin issue-10024 && open PR (base Dev_new_gui).
   - OWNER: gh label create blocks-merge --color B60205 ...; add "PR Blocking Findings" as a
     required check on Dev_new_gui/main; enable required_conversation_resolution.
 done:
