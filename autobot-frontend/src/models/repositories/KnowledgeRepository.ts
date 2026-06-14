@@ -684,6 +684,30 @@ export class KnowledgeRepository extends ApiRepository {
   }
 
   /**
+   * Begin an OAuth "Connect <provider>" flow (ADR-007 / #9019).
+   *
+   * Asks the backend for a provider authorization URL. The caller opens that
+   * URL (typically in a popup); the backend callback stores the resulting
+   * tokens via the secrets API and hands a `secret_id` back to the opener via
+   * `postMessage`. `redirectUri` MUST be the host-allowlisted callback URL.
+   */
+  async startConnectorOAuth(
+    provider: string,
+    redirectUri: string,
+    scopes?: string[]
+  ): Promise<{ authorize_url: string; state: string; connector_id: string }> {
+    const response = await this.post<{
+      authorize_url: string
+      state: string
+      connector_id: string
+    }>(
+      `${getApiBase()}/knowledge_base/connectors/oauth/${encodeURIComponent(provider)}/authorize`,
+      { redirect_uri: redirectUri, scopes: scopes ?? null }
+    )
+    return response.data
+  }
+
+  /**
    * Get a single connector with its status
    */
   async getConnector(
