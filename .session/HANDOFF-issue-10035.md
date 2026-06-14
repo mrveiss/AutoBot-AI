@@ -2,7 +2,7 @@
 status: complete
 pr: #10112
 base_at_push: 8ae42e2bd96c7d80739204384d2b5bc12b3b8844
-gates: tests=PASS (branch-guards_test.sh 14/14) · shell-syntax=PASS · workflow-yaml=PASS · shellcheck/actionlint=deferred-to-CI
+gates: tests=PASS (branch-guards_test.sh 15/15) · shell-syntax=PASS · workflow-yaml=PASS · shellcheck/actionlint=deferred-to-CI
 needs_rebase_before_merge: no
 remaining:
 blocked_on:
