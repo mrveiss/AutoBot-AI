@@ -48,6 +48,7 @@ git() {
         "log -1 --format=%ct fresh")  echo "$NOW" ;;
         "log -1 --format=%ct old")    echo "$((NOW - 50 * 3600))" ;;  # 50h ago
         "log -1 --format=%ct gone")   return 1 ;;                      # unknown ref
+        "log -1 --format=%ct empty")  return 0 ;;                      # exit 0, prints nothing
         *) command git "$@" ;;
     esac
 }
@@ -57,6 +58,8 @@ branch_recently_pushed old && r=yes || r=no
 check "old branch is not recent"    "no"  "$r"
 branch_recently_pushed gone && r=yes || r=no
 check "missing ref is not recent"   "no"  "$r"
+branch_recently_pushed empty && r=yes || r=no
+check "empty timestamp is not recent" "no" "$r"
 # Threshold is configurable.
 BRANCH_MIN_AGE_HOURS=72
 branch_recently_pushed old && r=yes || r=no

@@ -93,7 +93,13 @@ jobs:
             while IFS= read -r branch; do
               [ -z "$branch" ] && continue
 
-              # Never delete a branch that still has an open PR (#10035).
+              # Never delete a freshly-pushed branch or one with an open PR
+              # (#10035) -- symmetric with the closed-issue step below.
+              if branch_recently_pushed "origin/$branch"; then
+                echo "  SKIP (pushed <${BRANCH_MIN_AGE_HOURS}h ago): origin/$branch"
+                skipped_count=$((skipped_count + 1))
+                continue
+              fi
               if branch_has_open_pr "$branch"; then
                 echo "  SKIP (open PR): origin/$branch"
                 skipped_count=$((skipped_count + 1))

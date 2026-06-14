@@ -46,6 +46,10 @@ branch_recently_pushed() {
     local ref="$1"
     local last_ts now_ts age_h
     last_ts=$(git log -1 --format=%ct "$ref" 2>/dev/null || echo 0)
+    # git may exit 0 yet print nothing for an edge/ambiguous ref -- treat an
+    # empty or non-numeric timestamp as "not recent" (do not let it bypass the
+    # numeric comparison, which would abort with rc=2 under set -e callers).
+    [[ "$last_ts" =~ ^[0-9]+$ ]] || return 1
     [ "$last_ts" -eq 0 ] && return 1
     now_ts=$(date +%s)
     age_h=$(( (now_ts - last_ts) / 3600 ))
