@@ -15,15 +15,15 @@ import pytest
 
 from services.inventory_builder import (
     REQUIRED_GROUPS,
+    _role_tokens_to_groups,
     build_registry_inventory,
     validate_inventory,
-    _role_tokens_to_groups,
 )
-
 
 # ---------------------------------------------------------------------------
 # Node stub — duck-types the Node ORM; no SQLAlchemy required in tests
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class _Node:
@@ -41,6 +41,7 @@ class _Node:
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _local(ip: str) -> bool:
     """Stub: only loopback is local."""
     return ip in {"127.0.0.1", "::1", "localhost"}
@@ -54,6 +55,7 @@ def _build(nodes, local_ip_check=_local):
 # host name == node_id  (#10109)
 # ---------------------------------------------------------------------------
 
+
 def test_host_name_equals_node_id():
     """Host name in inventory MUST equal node.node_id so --limit <node_id> works."""
     node = _Node(node_id="01-Backend", ip_address="10.0.0.2", roles=["backend"])
@@ -65,8 +67,7 @@ def test_host_name_equals_node_id():
 
 def test_host_name_is_node_id_not_ansible_name():
     """ansible_name field must NOT become the inventory host name."""
-    node = _Node(node_id="mynode-42", ip_address="10.0.0.5", roles=["backend"],
-                 ansible_name="some-alias")
+    node = _Node(node_id="mynode-42", ip_address="10.0.0.5", roles=["backend"], ansible_name="some-alias")
     inv = _build([node])
     hosts = inv["all"]["hosts"]
     assert "mynode-42" in hosts
@@ -76,6 +77,7 @@ def test_host_name_is_node_id_not_ansible_name():
 # ---------------------------------------------------------------------------
 # self-node (local IP) → ansible_connection: local  (#10095)
 # ---------------------------------------------------------------------------
+
 
 def test_local_ip_gets_local_connection():
     """Self-node (loopback IP) must receive ansible_connection: local."""
@@ -104,10 +106,10 @@ def test_custom_local_check_injectable():
 # hostvars completeness
 # ---------------------------------------------------------------------------
 
+
 def test_hostvars_defaults():
     """ssh_user and ssh_port default to 'autobot' and 22 when None."""
-    node = _Node(node_id="02-Frontend", ip_address="10.0.0.3", roles=["frontend"],
-                 ssh_user=None, ssh_port=None)
+    node = _Node(node_id="02-Frontend", ip_address="10.0.0.3", roles=["frontend"], ssh_user=None, ssh_port=None)
     inv = _build([node])
     h = inv["all"]["hosts"]["02-Frontend"]
     assert h["ansible_user"] == "autobot"
@@ -117,8 +119,9 @@ def test_hostvars_defaults():
 
 def test_hostvars_explicit_values():
     """Node-specific ssh_user and ssh_port are used when set."""
-    node = _Node(node_id="05-LLM-CPU", ip_address="10.0.0.9", roles=["autobot-llm-cpu"],
-                 ssh_user="ubuntu", ssh_port=2222)
+    node = _Node(
+        node_id="05-LLM-CPU", ip_address="10.0.0.9", roles=["autobot-llm-cpu"], ssh_user="ubuntu", ssh_port=2222
+    )
     inv = _build([node])
     h = inv["all"]["hosts"]["05-LLM-CPU"]
     assert h["ansible_user"] == "ubuntu"
@@ -128,6 +131,7 @@ def test_hostvars_explicit_values():
 # ---------------------------------------------------------------------------
 # role → group mapping
 # ---------------------------------------------------------------------------
+
 
 def test_slm_node_groups():
     """slm-backend role → slm, slm_server, slm_nodes; NOT in infrastructure."""
@@ -252,6 +256,7 @@ def test_production_vms_alias_present():
 # global all.vars reproduced
 # ---------------------------------------------------------------------------
 
+
 def test_all_vars_present():
     """Generated inventory must include every global var from slm-nodes.yml."""
     inv = _build([])
@@ -267,6 +272,7 @@ def test_all_vars_present():
 # ---------------------------------------------------------------------------
 # validate_inventory
 # ---------------------------------------------------------------------------
+
 
 def test_validate_passes_when_all_required_groups_present():
     """validate_inventory does not raise when all required groups are present."""
@@ -314,6 +320,7 @@ def test_validate_custom_required_set():
 # 2-node fixture: SLM self-node + remote backend (sample inventory dump)
 # ---------------------------------------------------------------------------
 
+
 def test_two_node_fixture_structure():
     """2-node fixture: SLM self-node gets local conn; backend gets SSH; all groups valid."""
     slm_node = _Node(
@@ -357,6 +364,7 @@ def test_two_node_fixture_structure():
 # _role_tokens_to_groups unit tests
 # ---------------------------------------------------------------------------
 
+
 def test_role_tokens_prefix_match():
     """'slm-backend' matches 'slm-' prefix key."""
     g = _role_tokens_to_groups(["slm-backend"])
@@ -398,17 +406,28 @@ def test_role_tokens_autobot_llm_prefix():
 # REQUIRED_GROUPS covers known playbook group references
 # ---------------------------------------------------------------------------
 
+
 def test_required_groups_covers_known_playbook_references():
     """Spot-check known groups from playbook grep against REQUIRED_GROUPS."""
     known = {
-        "slm_server", "slm", "slm_nodes",
-        "backend", "main", "frontend",
-        "npu", "npu_workers",
-        "ai_stack", "aiml", "ai",
-        "database", "redis",
-        "browser", "browser_worker",
+        "slm_server",
+        "slm",
+        "slm_nodes",
+        "backend",
+        "main",
+        "frontend",
+        "npu",
+        "npu_workers",
+        "ai_stack",
+        "aiml",
+        "ai",
+        "database",
+        "redis",
+        "browser",
+        "browser_worker",
         "infrastructure",
-        "autobot", "autobot_cluster",
+        "autobot",
+        "autobot_cluster",
         "monitoring_vm",
         "llm_nodes",
         "production_vms",

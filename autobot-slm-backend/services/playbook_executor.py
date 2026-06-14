@@ -455,10 +455,9 @@ class PlaybookExecutor:
         Raises:
             ValueError: when validate_inventory detects missing required groups.
         """
+        from autobot_shared.network_utils import is_local_ip
         from models.database import Node
         from services.database import db_service
-
-        from autobot_shared.network_utils import is_local_ip
 
         async with db_service.session() as db:
             from sqlalchemy import select
@@ -527,8 +526,7 @@ class PlaybookExecutor:
                 effective_inventory = dynamic_inv_path
             except Exception as exc:
                 logger.warning(
-                    "execute_playbook: dynamic inventory failed (%s); "
-                    "falling back to static slm-nodes.yml",
+                    "execute_playbook: dynamic inventory failed (%s); " "falling back to static slm-nodes.yml",
                     exc,
                 )
                 effective_inventory = self.inventory_path

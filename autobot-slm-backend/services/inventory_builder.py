@@ -146,7 +146,7 @@ _ALL_VARS: dict[str, str] = {
     "ansible_python_interpreter": "/usr/bin/python3",
     "slm_host": (
         "{{ lookup('env', 'SLM_HOST') | default(lookup('pipe',"
-        " 'grep -oP \"SLM_HOST=\\\\K.*\" /etc/autobot/slm-secrets.env"
+        ' \'grep -oP "SLM_HOST=\\\\K.*" /etc/autobot/slm-secrets.env'
         " 2>/dev/null || echo 127.0.0.1'), true) }}"
     ),
     "network_subnet": (
