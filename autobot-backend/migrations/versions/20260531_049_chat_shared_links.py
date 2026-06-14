@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """Add chat_shared_links table for public link sharing with optional password (GH#8996).
 
 Revision ID: 20260531_049

@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """Tests for the py-print-smoke rule (Wave 0 smoke-test rule)."""
 
 import ast

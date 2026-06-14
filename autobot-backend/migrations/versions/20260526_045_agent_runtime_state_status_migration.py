@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """Backfill AgentRuntimeState.status from heartbeat_enabled and drop the column (GH#6476).
 
 Existing rows where heartbeat_enabled=false get status='disabled'.

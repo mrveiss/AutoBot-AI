@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """
 Example usage of the retry mechanism in AutoBot
 Demonstrates integration with various AutoBot components and common patterns

@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """Add approval gates tables for agent workflows
 
 Revision ID: 20260307_006

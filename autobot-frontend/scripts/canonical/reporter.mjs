@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 export function toPretty(diagnostics) {
   if (diagnostics.length === 0) return "canonical-check: 0 violations\n";
   const counts = { block: 0, warn: 0, audit: 0 };

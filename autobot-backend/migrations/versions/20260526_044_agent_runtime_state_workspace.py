@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """Add workspace fields to agent_runtime_state (GH#6471).
 
 Revision ID: 20260526_044

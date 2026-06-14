@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """Add desktop_mobile_devices table for mobile device pairing (GH#4463).
 
 Revision ID: 20260529_047

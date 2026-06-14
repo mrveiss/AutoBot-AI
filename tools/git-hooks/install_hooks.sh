@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
 # Author: mrveiss
 #
 # install_hooks.sh — symlink each tools/git-hooks/<name> into .git/hooks/<name>

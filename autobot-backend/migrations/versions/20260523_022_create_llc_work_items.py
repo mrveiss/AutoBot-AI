@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """Create llc_work_items and llc_work_item_comments tables.
 
 Revision ID: 20260523_022

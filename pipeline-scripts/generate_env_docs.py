@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """Generate the AUTOBOT_* env-var reference table in docs/developer/CLAUDE_RULES.md.
 
 Reads the registry from autobot_shared/env_registry.py, builds a sorted
