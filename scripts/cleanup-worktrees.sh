@@ -54,6 +54,10 @@ if ! command -v gh &>/dev/null; then
     exit 1
 fi
 
+# Shared safe-pruning guards (issue-number extraction, recency, open-PR).
+# shellcheck source=scripts/lib/branch-guards.sh
+source "${REPO_ROOT}/scripts/lib/branch-guards.sh"
+
 wt_removed=0
 wt_skipped=0
 br_local_removed=0
@@ -110,9 +114,16 @@ if ! $BRANCHES_ONLY; then
                         if [ -n "$branch_name" ]; then
                             git -C "$REPO_ROOT" branch -D "$branch_name" 2>/dev/null && \
                                 echo "    Deleted local branch: ${branch_name}" || true
-                            # Delete remote branch if it exists
-                            git -C "$REPO_ROOT" push origin --delete "$branch_name" 2>/dev/null && \
-                                echo "    Deleted remote branch: ${branch_name}" || true
+                            # Delete remote branch only when it is safe to do so
+                            # (#10035): not pushed in the last day and no open PR.
+                            if branch_recently_pushed "origin/${branch_name}"; then
+                                echo "    SKIP remote ${branch_name} -- pushed <${BRANCH_MIN_AGE_HOURS}h ago"
+                            elif branch_has_open_pr "$branch_name"; then
+                                echo "    SKIP remote ${branch_name} -- has an open PR"
+                            else
+                                git -C "$REPO_ROOT" push origin --delete "$branch_name" 2>/dev/null && \
+                                    echo "    Deleted remote branch: ${branch_name}" || true
+                            fi
                         fi
                     else
                         echo "    WARNING: git worktree remove failed; attempting manual cleanup"
@@ -175,8 +186,13 @@ local_branches=$(git -C "$REPO_ROOT" branch | sed 's/^[* +]*//' | grep -v "${BAS
 if [ -n "$local_branches" ]; then
     while IFS= read -r branch; do
         [ -z "$branch" ] && continue
-        issue_number=$(echo "$branch" | grep -oP '\d{4,}' | head -1) || true
+        issue_number=$(extract_issue_number "$branch")
         [ -z "$issue_number" ] && continue
+        # Never delete a branch whose work may still be in flight (#10035).
+        if branch_recently_pushed "$branch"; then
+            echo "  SKIP  ${branch}  (committed <${BRANCH_MIN_AGE_HOURS}h ago)"
+            continue
+        fi
 
         issue_state=$(gh issue view "$issue_number" --json state --jq '.state' 2>/dev/null) || true
         if [ "$issue_state" = "CLOSED" ]; then
@@ -205,8 +221,17 @@ remote_branches=$(git -C "$REPO_ROOT" branch -r | sed 's|^ *origin/||' \
 if [ -n "$remote_branches" ]; then
     while IFS= read -r branch; do
         [ -z "$branch" ] && continue
-        issue_number=$(echo "$branch" | grep -oP '\d{4,}' | head -1) || true
+        issue_number=$(extract_issue_number "$branch")
         [ -z "$issue_number" ] && continue
+        # Never delete a freshly-pushed branch or one with an open PR (#10035).
+        if branch_recently_pushed "origin/${branch}"; then
+            echo "  SKIP  origin/${branch}  (pushed <${BRANCH_MIN_AGE_HOURS}h ago)"
+            continue
+        fi
+        if branch_has_open_pr "$branch"; then
+            echo "  SKIP  origin/${branch}  (has an open PR)"
+            continue
+        fi
 
         issue_state=$(gh issue view "$issue_number" --json state --jq '.state' 2>/dev/null) || true
         if [ "$issue_state" = "CLOSED" ]; then

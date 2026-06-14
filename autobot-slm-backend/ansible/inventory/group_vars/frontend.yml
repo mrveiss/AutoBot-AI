@@ -178,7 +178,10 @@ systemd_services:
     exec_start: "/usr/bin/npm run preview -- --host 0.0.0.0 --port {{ frontend.vue.port }}"
     restart: "always"
     restart_sec: 10
-    environment_file: "/etc/autobot/frontend.env"
+    # #10084: must match the file the frontend role actually deploys
+    # (roles/frontend/tasks/main.yml writes /etc/autobot/autobot-frontend.env;
+    # the old "frontend.env" name was never created).
+    environment_file: "/etc/autobot/autobot-frontend.env"
     wants:
       - "network-online.target"
     after:
