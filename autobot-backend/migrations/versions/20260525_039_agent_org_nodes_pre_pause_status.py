@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """Add pre_pause_status to agent_org_nodes (GH#8256 CR fix).
 
 Revision ID: 20260525_039

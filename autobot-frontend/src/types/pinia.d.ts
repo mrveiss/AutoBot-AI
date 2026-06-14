@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 /**
  * Type augmentation for pinia-plugin-persistedstate
  * This allows the 'persist' option in defineStore without TypeScript errors

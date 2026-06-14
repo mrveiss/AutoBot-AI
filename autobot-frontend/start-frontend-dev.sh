@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot Frontend Development Server Startup
 # This script ensures the Vue.js development server starts properly with correct configuration
 

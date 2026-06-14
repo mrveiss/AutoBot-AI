@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """sh-echo-debug-smoke — infra-runner smoke-test rule.
 
 Detects `echo "DEBUG: ..."` in shell scripts. Exists only to prove the infra

@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """Add heartbeat system tables for scheduled agent wakeups
 
 Revision ID: 20260309_007

@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 /// <reference types="cypress" />
 // ***********************************************
 // This example commands.ts shows you how to

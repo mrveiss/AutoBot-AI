@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 /**
  * TypeScript declarations for defaults.js
  * Issue #172: Added to support network.ts consolidation

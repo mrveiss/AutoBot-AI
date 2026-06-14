@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """Add agent org hierarchy: agent_org_nodes table with reporting lines
 
 Revision ID: 20260315_009

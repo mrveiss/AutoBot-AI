@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """Tests for the Diagnostic dataclass — the shared violation record."""
 
 from pathlib import Path

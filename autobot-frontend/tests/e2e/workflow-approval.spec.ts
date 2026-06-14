@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 import { test, expect } from '@playwright/test';
 import { TEST_CONFIG } from './config';
 

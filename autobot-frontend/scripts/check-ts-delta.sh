@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # check-ts-delta.sh — Fail if TypeScript errors exceed the baseline.
 #
 # Usage: bash autobot-frontend/scripts/check-ts-delta.sh

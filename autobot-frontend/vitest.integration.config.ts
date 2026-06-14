@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 import { mergeConfig, defineConfig, configDefaults, type UserConfig } from 'vitest/config'
 import viteConfig from './vite.config'
 

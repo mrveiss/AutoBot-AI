@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot Frontend Cache Clearing Script
 # Comprehensive cache clearing to prevent API configuration issues
 
