@@ -4199,6 +4199,7 @@
       "switch": "Switch",
       "switchDefaultHint": "Switch default hint",
       "switchLabel": "switch",
+      "loopLabel": "Loop",
       "switchOnPlaceholder": "Enter switch on..."
     },
     "editStep": {
