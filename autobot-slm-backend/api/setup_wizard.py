@@ -26,6 +26,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from api.websocket import ws_manager
+from config import settings
 from services.ansible_secrets import fetch_deploy_secrets
 from services.ansible_utils import _extract_failure_summary
 from services.auth import get_current_user
@@ -292,7 +293,7 @@ def _apply_colocation_vars(
     sets frontend_backend_port=8001 and frontend_backend_protocol=http so
     templates proxy directly to uvicorn, eliminating the double-proxy.
 
-    Also propagates slm_colocated_frontend=True to the 00-SLM-Manager host
+    Also propagates slm_colocated_frontend=True to the SLM manager host
     entry so Phase 4c in provision-fleet-roles.yml can rebuild the SLM
     frontend with VITE_API_URL=/slm (#3426).
     """
@@ -306,7 +307,7 @@ def _apply_colocation_vars(
         roles = set(hosts[inv_name].get("node_roles", []))
         # Match by IP or by the fixed SLM manager node_id (#3227): the registered
         # IP may be stale (e.g. SLM_EXTERNAL_URL not updated after reinstall).
-        is_local = node.ip_address in local_ips or node.node_id == "00-SLM-Manager"
+        is_local = node.ip_address in local_ips or node.node_id == settings.slm_node_id
         if is_local and roles & _frontend_roles:
             hosts[inv_name]["slm_colocated_frontend"] = True
             colocated_frontend_detected = True
@@ -315,11 +316,11 @@ def _apply_colocation_vars(
                 hosts[inv_name]["frontend_backend_port"] = 8001
                 hosts[inv_name]["frontend_backend_protocol"] = "http"
 
-    # Propagate to 00-SLM-Manager so Phase 4c can rebuild the SLM frontend
+    # Propagate to the SLM manager so Phase 4c can rebuild the SLM frontend
     # with VITE_API_URL=/slm after the user frontend has been deployed (#3426).
     if colocated_frontend_detected:
         for node in db_nodes:
-            if node.node_id == "00-SLM-Manager" and node.ansible_target in hosts:
+            if node.node_id == settings.slm_node_id and node.ansible_target in hosts:
                 hosts[node.ansible_target]["slm_colocated_frontend"] = True
                 break
 

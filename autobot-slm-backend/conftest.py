@@ -63,7 +63,11 @@ def _stub(name: str) -> MagicMock:
     a stubbed submodule on an older conftest.
     """
     if name not in sys.modules:
-        mod = MagicMock()
+        # unsafe=True: module stubs must expose arbitrary names, including
+        # ones starting with `assert` (e.g. services.fleet_sync_guard.
+        # assert_no_running_sync) which safe mocks block as typo-protection
+        # and turn into collection-time ImportError (#10023).
+        mod = MagicMock(unsafe=True)
         mod.__name__ = name
         mod.__package__ = name.split(".")[0]
         mod.__spec__ = None
@@ -130,6 +134,8 @@ for _m in [
 # being installed in the dev environment.  Issue: #3525
 _pm_mod = types.ModuleType("python_multipart")
 _pm_mod.__version__ = "9.9.99"  # type: ignore[attr-defined]  # high sentinel — immune to future FastAPI threshold bumps
+# Legacy `multipart` shim re-exports `from python_multipart import __all__` (#10023).
+_pm_mod.__all__ = []  # type: ignore[attr-defined]
 sys.modules.setdefault("python_multipart", _pm_mod)
 
 # ── user_management ───────────────────────────────────────────────────────────

@@ -224,6 +224,7 @@
 </template>
 
 <script setup lang="ts">
+import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, watch, toRef } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -255,7 +256,7 @@ const emit = defineEmits<{
 
 type TabKey = 'general' | 'appearance' | 'language' | 'security' | 'devices'
 
-const tabs = computed<{ key: TabKey; label: string; icon: string }[]>(() => [
+const tabs = computed<{ key: TabKey; label: string; icon: IconName }[]>(() => [
   { key: 'general', label: t('profile.tabGeneral'), icon: 'user' },
   { key: 'appearance', label: t('profile.tabAppearance'), icon: 'palette' },
   { key: 'language', label: t('profile.tabLanguage'), icon: 'globe' },

@@ -202,7 +202,15 @@ function _handleDataChannelMessage(raw: string): void {
     // Issue #7421: forward response.done usage to backend telemetry
     case 'response.done': {
       if (_sessionId) {
-        const usage = (event as { response?: { usage?: Record<string, number> } }).response?.usage
+        const usage = (event as {
+          response?: {
+            usage?: {
+              input_tokens?: number
+              output_tokens?: number
+              input_token_details?: { cached_tokens?: number }
+            }
+          }
+        }).response?.usage
         if (usage) {
           void fetchWithAuth(`${getApiBase()}/voice/realtime/session/${_sessionId}/response_done`, {
             method: 'POST',

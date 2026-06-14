@@ -18,10 +18,10 @@ pip install -e /app/autobot_shared --quiet 2>/dev/null || true
 
 echo "[dev-entrypoint] Running SLM database migrations..."
 cd /app/autobot-slm-backend
-python3.12 -m migrations.runner || {
+python3 -m migrations.runner || {
     echo "ERROR: Migration failed -- retrying in 5s..."
     sleep 5
-    python3.12 -m migrations.runner || {
+    python3 -m migrations.runner || {
         echo "FATAL: Migration failed after retry. Aborting."
         exit 1
     }

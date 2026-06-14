@@ -20,18 +20,17 @@ from typing import Sequence, Union
 
 import sqlalchemy as sa
 from alembic import op
-from sqlalchemy.dialects.postgresql import ENUM, JSONB, UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
+
+from migrations.guards import drop_pg_enum, ensure_pg_enum, pg_enum
 
 revision: str = "20260523_022"
 down_revision: Union[str, None] = "20260522_021"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
-# postgresql.ENUM with create_type=False: the enums are created explicitly in
-# upgrade() with checkfirst=True. Generic sa.Enum silently IGNORES
-# create_type, so op.create_table re-emitted an unconditional CREATE TYPE for
-# each enum column and aborted on fresh databases (#9759).
-_workitemtype = ENUM(
+_workitemtype = pg_enum(
+    "workitemtype",
     "epic",
     "feature",
     "pbi",
@@ -40,10 +39,9 @@ _workitemtype = ENUM(
     "subtask",
     "spike",
     "risk",
-    name="workitemtype",
-    create_type=False,
 )
-_workitemstatus = ENUM(
+_workitemstatus = pg_enum(
+    "workitemstatus",
     "backlog",
     "ready",
     "in_progress",
@@ -51,26 +49,23 @@ _workitemstatus = ENUM(
     "done",
     "cancelled",
     "blocked",
-    name="workitemstatus",
-    create_type=False,
 )
-_workitempriority = ENUM(
+_workitempriority = pg_enum(
+    "workitempriority",
     "critical",
     "high",
     "medium",
     "low",
-    name="workitempriority",
-    create_type=False,
 )
 
 
 def upgrade() -> None:
     bind = op.get_bind()
-    _workitemtype.create(bind, checkfirst=True)
-    _workitemstatus.create(bind, checkfirst=True)
+    ensure_pg_enum(_workitemtype)
+    ensure_pg_enum(_workitemstatus)
     # Ensure 'ready' exists even when workitemstatus was pre-created without it.
     bind.execute(sa.text("ALTER TYPE workitemstatus ADD VALUE IF NOT EXISTS 'ready'"))
-    _workitempriority.create(bind, checkfirst=True)
+    ensure_pg_enum(_workitempriority)
 
     op.create_table(
         "llc_work_items",
@@ -201,6 +196,6 @@ def upgrade() -> None:
 def downgrade() -> None:
     op.drop_table("llc_work_item_comments")
     op.drop_table("llc_work_items")
-    _workitempriority.drop(op.get_bind(), checkfirst=True)
-    _workitemstatus.drop(op.get_bind(), checkfirst=True)
-    _workitemtype.drop(op.get_bind(), checkfirst=True)
+    drop_pg_enum(_workitempriority)
+    drop_pg_enum(_workitemstatus)
+    drop_pg_enum(_workitemtype)

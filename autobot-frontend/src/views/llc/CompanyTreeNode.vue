@@ -11,7 +11,8 @@ export interface CompanyNode {
   status: 'active' | 'paused' | 'inactive'
   budget_spent: number
   budget_total: number
-  agent_count: number
+  // #9724: optional — the company-tree endpoint does not expose it (#9861)
+  agent_count?: number
   children: CompanyNode[]
   expanded?: boolean
 }

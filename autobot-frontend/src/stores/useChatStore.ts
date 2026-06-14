@@ -91,6 +91,10 @@ export const useChatStore = defineStore('chat', () => {
   // Issue #671: Track initialization state for loading indicators
   const isInitializing = ref(false)
   const initializationError = ref<string | null>(null)
+  // #9724: agent type selected from the command palette (personality display).
+  // CommandPalette.startAgent() called setCurrentAgentType() which did not
+  // exist on this store — a guaranteed runtime TypeError.
+  const currentAgentType = ref<string | null>(null)
   const settings = ref<ChatSettings>({
     model: 'gpt-4',
     temperature: 0.7,
@@ -864,6 +868,10 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
+  function setCurrentAgentType(type: string): void {
+    currentAgentType.value = type
+  }
+
   return {
     // State
     sessions,
@@ -876,6 +884,7 @@ export const useChatStore = defineStore('chat', () => {
     // Issue #671: Initialization state for loading indicators
     isInitializing,
     initializationError,
+    currentAgentType,
 
     // Computed
     currentSession,
@@ -898,6 +907,7 @@ export const useChatStore = defineStore('chat', () => {
     updateSettings,
     toggleSidebar,
     setTyping,
+    setCurrentAgentType,
     setStreamingPreview,  // Issue #691: Streaming preview text management
     setPendingApproval,  // Issue #680: Pending approval state management
     // Issue #671: Initialization state management

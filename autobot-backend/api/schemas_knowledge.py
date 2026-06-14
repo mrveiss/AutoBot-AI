@@ -16,7 +16,7 @@ from pydantic import BaseModel, Field, field_validator
 from constants.threshold_constants import CategoryDefaults, QueryDefaults
 from knowledge.ownership import AccessLevel, VisibilityLevel
 from type_defs.common import Metadata
-from utils.path_validation import contains_path_traversal
+from utils.path_validation import contains_dotdot_traversal, contains_path_traversal
 
 # ---------------------------------------------------------------------------
 # Knowledge schemas
@@ -2991,9 +2991,14 @@ class RestoreRequest(BaseModel):
     @field_validator("backup_file")
     @classmethod
     def validate_backup_file(cls, v):
-        """Validate backup file path (Issue #419)."""
-        # Prevent path traversal attempts
-        if contains_path_traversal(v):
+        """Validate backup file path (Issue #419).
+
+        Uses contains_dotdot_traversal (not contains_path_traversal) because
+        backup_file is a full filesystem path — absolute paths legitimately
+        contain forward-slashes.  Only dotdot sequences and null bytes are
+        genuine traversal attacks here.  (#9670)
+        """
+        if contains_dotdot_traversal(v):
             raise ValueError("Path traversal not allowed in backup_file")
         # Validate it looks like a backup file
         if not v.endswith((".json", ".jsongz", ".json.gz")):
@@ -3014,8 +3019,14 @@ class DeleteBackupRequest(BaseModel):
     @field_validator("backup_file")
     @classmethod
     def validate_backup_file(cls, v):
-        """Validate backup file path (Issue #419)."""
-        if contains_path_traversal(v):
+        """Validate backup file path (Issue #419).
+
+        Uses contains_dotdot_traversal (not contains_path_traversal) because
+        backup_file is a full filesystem path — absolute paths legitimately
+        contain forward-slashes.  Only dotdot sequences and null bytes are
+        genuine traversal attacks here.  (#9670)
+        """
+        if contains_dotdot_traversal(v):
             raise ValueError("Path traversal not allowed in backup_file")
         return v
 

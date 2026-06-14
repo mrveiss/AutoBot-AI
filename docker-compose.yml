@@ -184,6 +184,11 @@ services:
     build:
       context: .
       dockerfile: docker/backend/Dockerfile
+      # claude CLI version pin (GH#9950): optional exact package version for a
+      # reproducible build (e.g. 2.1.89). Empty default = current stable-channel
+      # build from Anthropic's signed apt repo (integrity verified by apt).
+      args:
+        CLAUDE_CLI_VERSION: "${CLAUDE_CLI_VERSION:-}"
     image: autobot/backend:latest
     container_name: autobot-backend
     restart: unless-stopped
@@ -301,6 +306,11 @@ services:
     build:
       context: .
       dockerfile: docker/backend/Dockerfile
+      # claude CLI version pin (GH#9950): optional exact package version for a
+      # reproducible build (e.g. 2.1.89). Empty default = current stable-channel
+      # build from Anthropic's signed apt repo (integrity verified by apt).
+      args:
+        CLAUDE_CLI_VERSION: "${CLAUDE_CLI_VERSION:-}"
     image: autobot/backend:latest
     container_name: autobot-worker
     restart: unless-stopped

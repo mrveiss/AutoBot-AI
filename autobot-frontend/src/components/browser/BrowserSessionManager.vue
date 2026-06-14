@@ -227,6 +227,7 @@
 </template>
 
 <script lang="ts">
+import type { IconName } from '@/components/ui/Icon.vue'
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useBrowserAutomation } from '@/composables/useBrowserAutomation'
@@ -369,7 +370,7 @@ export default {
       }
     }
 
-    const getSessionIcon = (status: SessionStatus): string => {
+    const getSessionIcon = (status: SessionStatus): IconName => {
       switch (status) {
         case 'active': return 'check-circle'
         case 'idle': return 'pause-circle'

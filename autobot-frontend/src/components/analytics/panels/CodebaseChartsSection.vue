@@ -225,6 +225,7 @@
 </template>
 
 <script setup lang="ts">
+import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { computed } from 'vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
@@ -302,8 +303,8 @@ const filteredChartData = computed((): ChartData | null => {
   return filtered
 })
 
-function getCategoryIcon(categoryId: string): string {
-  const iconMap: Record<string, string> = {
+function getCategoryIcon(categoryId: string): IconName {
+  const iconMap: Record<string, IconName> = {
     race_conditions: 'random',
     debug_code: 'bug',
     complexity: 'project-diagram',

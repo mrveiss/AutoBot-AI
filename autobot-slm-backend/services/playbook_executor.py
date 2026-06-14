@@ -22,6 +22,14 @@ from services.provision_progress import TaskProgressTracker
 
 logger = logging.getLogger(__name__)
 
+# Per-user Ansible local tmp (#10006): a fixed shared path
+# (/tmp/ansible_local_tmp) is created mode 0700 by whichever user runs
+# ansible first, locking out every other user (operator debugging as
+# themselves vs the SLM's autobot-user playbook executor). Under systemd
+# PrivateTmp=true /tmp is namespaced anyway; the uid suffix protects runs
+# outside systemd (dev mode, manual uvicorn).
+ANSIBLE_LOCAL_TMP = f"/tmp/ansible_local_tmp_{os.getuid()}"  # nosec B108
+
 
 class PlaybookExecutor:
     """Execute Ansible playbooks programmatically."""
@@ -307,12 +315,14 @@ class PlaybookExecutor:
         """Ensure Ansible temp directories exist with correct ownership (#2829).
 
         When another user (e.g. a developer running ansible manually) creates
-        /tmp/ansible_local_tmp or /tmp/ansible_fact_cache first, the autobot
-        service user gets a permission denied error and Ansible exits with a
-        misleading code 4.  Pre-creating the dirs avoids this.
+        the local tmp or /tmp/ansible_fact_cache first, the autobot service
+        user gets a permission denied error and Ansible exits with a
+        misleading code 4.  Pre-creating the dirs avoids this; the local tmp
+        path is additionally uid-scoped (#10006) so it can never collide
+        across users.
         """
         for tmp_dir in (
-            "/tmp/ansible_local_tmp",
+            ANSIBLE_LOCAL_TMP,
             "/tmp/ansible_fact_cache",
         ):  # nosec B108
             Path(tmp_dir).mkdir(mode=0o700, exist_ok=True)
@@ -401,7 +411,7 @@ class PlaybookExecutor:
             "ANSIBLE_NOCOLOR": "1",
             "ANSIBLE_HOST_KEY_CHECKING": "False",
             "ANSIBLE_SSH_RETRIES": "3",
-            "ANSIBLE_LOCAL_TEMP": "/tmp/ansible_local_tmp",  # nosec B108
+            "ANSIBLE_LOCAL_TEMP": ANSIBLE_LOCAL_TMP,
         }
 
     async def _run_subprocess(

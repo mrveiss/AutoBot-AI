@@ -161,6 +161,9 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
 import { getBackendUrl } from '@/config/ssot-config'
+import { createLogger } from '@/utils/debugUtils'
+
+const logger = createLogger('LLMProvidersView')
 
 interface FallbackChain {
   primary_model: string
@@ -201,7 +204,7 @@ const fetchFallbackStatus = async () => {
     activeFallbacks.value = data.active_fallbacks || []
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to fetch fallback status'
-    console.error('Error fetching fallback status:', err)
+    logger.error('Error fetching fallback status:', err)
   } finally {
     loading.value = false
   }

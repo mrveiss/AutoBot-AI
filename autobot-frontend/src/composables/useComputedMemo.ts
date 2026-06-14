@@ -160,7 +160,7 @@ export function useAggregationMemo<T extends number | Record<string, unknown>>(
  * @param options Memoization options
  * @returns Computed ref with memoization
  */
-export function useGroupingMemo<T extends Record<string, unknown>>(
+export function useGroupingMemo<T>(
   computeFn: () => T,
   dependencies: () => unknown[],
   options: MemoOptions = {}

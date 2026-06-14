@@ -184,7 +184,8 @@ export type FactsByCategoryResponse = components['schemas']['FactsByCategoryResp
 export type FactByKeyResponse = components['schemas']['FactByKeyResponse']
 
 /** `DELETE /clear_all` response. */
-export type ClearAllResponse = components['schemas']['ClearAllResponse']
+// #9724: schema is now namespaced in the generated contract
+export type ClearAllResponse = components['schemas']['knowledge__schemas__ingestion__ClearAllResponse']
 
 /** `POST /query_knowledge` response. */
 export type QueryKnowledgeResponse = components['schemas']['QueryKnowledgeResponse']
@@ -226,8 +227,12 @@ export type DocsWatcherControlResponse = components['schemas']['DocsWatcherContr
 /** `GET /knowledge_base/stats` response. */
 export type KnowledgeStatsResponse = components['schemas']['KnowledgeStatsResponse']
 
-/** `GET /knowledge_base/health` response. */
-export type KnowledgeHealthResponse = components['schemas']['KnowledgeHealthResponse']
+/**
+ * `GET /knowledge_base/health/enhanced` response.
+ * #9724: the legacy flat `KnowledgeHealthResponse` schema no longer exists in
+ * the generated contract — the health surface moved to the enhanced endpoint.
+ */
+export type KnowledgeHealthResponse = components['schemas']['DataResponse_AIStackEnhancedHealthData_']
 
 /** Machine profile capabilities sub-object. */
 export type MachineProfileCapabilities = components['schemas']['MachineProfileCapabilities']

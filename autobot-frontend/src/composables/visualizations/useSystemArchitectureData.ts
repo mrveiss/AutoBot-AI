@@ -27,6 +27,8 @@ export interface ServiceHealthMap {
 
 interface HealthApiResponse {
   services?: ServiceHealthMap
+  /** Some monitoring builds wrap the payload in a `data` envelope. */
+  data?: { services?: ServiceHealthMap }
 }
 
 export function useSystemArchitectureData() {

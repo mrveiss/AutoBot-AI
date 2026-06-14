@@ -15,6 +15,7 @@
  * - Unsaved changes warning
  */
 
+import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -104,7 +105,7 @@ const detectedVariables = computed(() => {
 
 const characterCount = computed(() => editedContent.value.length)
 
-const categoryIcons: Record<string, string> = {
+const categoryIcons: Record<string, IconName> = {
   system: 'cog',
   agents: 'robot',
   templates: 'file-code'
@@ -204,7 +205,7 @@ async function revertToVersion(version: PromptVersion): Promise<void> {
   }
 }
 
-function getCategoryIcon(category: string): string {
+function getCategoryIcon(category: string): IconName {
   return categoryIcons[category] || 'file'
 }
 

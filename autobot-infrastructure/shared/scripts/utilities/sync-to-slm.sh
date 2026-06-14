@@ -20,6 +20,9 @@ source "${SCRIPT_DIR}/../lib/ssot-config.sh" 2>/dev/null || true
 # Configuration (from SSOT)
 REMOTE_HOST="${AUTOBOT_SLM_HOST:-localhost}"
 REMOTE_USER="${AUTOBOT_SSH_USER:-autobot}"
+# #9956: SLM manager DB node_id is overridable — deployments may rename the
+# node. Defaults to the inventory default (slm_server host in slm-nodes.yml).
+SLM_NODE_ID="${AUTOBOT_SLM_NODE_ID:-00-SLM-Manager}"
 SSH_KEY="${AUTOBOT_SSH_KEY:-$HOME/.ssh/autobot_key}"
 SSH_OPTS="-o StrictHostKeyChecking=accept-new -o ConnectTimeout=10"
 
@@ -172,7 +175,7 @@ CURRENT_COMMIT=$(git -C "$PROJECT_ROOT" log --oneline -1 --format='%h' 2>/dev/nu
 if [ "$CURRENT_COMMIT" != "unknown" ]; then
     # Update database with current commit hash
     # Note: Sources /etc/autobot/db-credentials.env on remote for postgres credentials
-    UPDATE_SQL="UPDATE nodes SET code_version = '$CURRENT_COMMIT', code_status = 'UP_TO_DATE', updated_at = NOW() WHERE node_id = '00-SLM-Manager';"
+    UPDATE_SQL="UPDATE nodes SET code_version = '$CURRENT_COMMIT', code_status = 'UP_TO_DATE', updated_at = NOW() WHERE node_id = '$SLM_NODE_ID';"
 
     ssh ${SSH_KEY:+-i "$SSH_KEY"} $SSH_OPTS "$REMOTE_USER@$REMOTE_HOST" \
         "source /etc/autobot/db-credentials.env 2>/dev/null && \
@@ -180,7 +183,7 @@ if [ "$CURRENT_COMMIT" != "unknown" ]; then
         > /dev/null 2>&1
 
     if [ $? -eq 0 ]; then
-        log_info "Database updated: 00-SLM-Manager → $CURRENT_COMMIT"
+        log_info "Database updated: $SLM_NODE_ID → $CURRENT_COMMIT"
     else
         log_warn "Could not update database (non-critical, code is deployed)"
     fi
@@ -214,8 +217,9 @@ if [ "$ACTION" = "deploy" ]; then
     fi
 
     # Build ansible command (run from ansible/ dir so ansible.cfg is picked up)
-    # Set ANSIBLE_LOCAL_TEMP to avoid ProtectHome=read-only issues on delegate_to: localhost tasks
-    export ANSIBLE_LOCAL_TEMP=/tmp/ansible_local_tmp
+    # Per-user local tmp (#10006): a fixed shared /tmp path is created mode
+    # 0700 by whichever user runs ansible first, locking out every other user.
+    export ANSIBLE_LOCAL_TEMP="${HOME}/.ansible/tmp"
 
     ANSIBLE_CMD=(
         ansible-playbook
