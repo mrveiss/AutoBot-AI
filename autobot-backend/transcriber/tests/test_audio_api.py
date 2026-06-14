@@ -19,7 +19,8 @@ from httpx import ASGITransport, AsyncClient
 from transcriber.database import Database
 from transcriber.deps import get_db
 from transcriber.routes.projects import router as projects_router
-from transcriber.routes.recordings import _generate_waveform, router as recordings_router
+from transcriber.routes.recordings import _generate_waveform
+from transcriber.routes.recordings import router as recordings_router
 
 USER_HEADER = "x-test-user"
 
