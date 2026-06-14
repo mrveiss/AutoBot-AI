@@ -114,6 +114,8 @@ def _make_idor_app(
         mock_item.created_by_user_id = None
         mock_item.reviewer_user_id = None
         mock_item.reviewer_agent_id = None
+        mock_item.scheduled_start = None  # GH#9020
+        mock_item.scheduled_end = None  # GH#9020
         mock_item.started_at = None
         mock_item.completed_at = None
         mock_item.cancelled_at = None
