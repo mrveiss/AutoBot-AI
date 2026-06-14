@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """Create llc_goals table for 4-level goal hierarchy (GH#8212).
 
 Revision ID: 20260523_024

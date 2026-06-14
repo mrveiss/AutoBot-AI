@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """Shared violation record for the canonical-check workflow.
 
 Every rule in every runner emits Diagnostic instances. Reporter formatters

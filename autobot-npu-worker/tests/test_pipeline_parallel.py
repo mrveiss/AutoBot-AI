@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """
 Tests for cross-host pipeline parallelism (GH#6737 / MVA-1400).
 

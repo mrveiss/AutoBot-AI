@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """Tests for the sh-echo-debug-smoke rule (Wave 0 infra smoke-test rule)."""
 
 from pathlib import Path

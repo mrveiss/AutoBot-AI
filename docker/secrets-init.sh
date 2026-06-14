@@ -1,6 +1,7 @@
 #!/bin/sh
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
 # Author: mrveiss
 #
 # Compose secrets-init (GH#9905): auto-provision per-deployment signing secrets

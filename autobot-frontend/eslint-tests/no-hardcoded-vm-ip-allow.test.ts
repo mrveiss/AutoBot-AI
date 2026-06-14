@@ -1,5 +1,6 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 // AutoBot - AI-Powered Automation Platform
-// Copyright (c) 2025 mrveiss
 // Author: mrveiss
 //
 // ESLint test fixture for the #6784 `no-restricted-syntax` rule.

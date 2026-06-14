@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """Base verifier interface for claims-audit system."""
 
 from abc import ABC, abstractmethod

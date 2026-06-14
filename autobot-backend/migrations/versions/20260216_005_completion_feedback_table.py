@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """Add completion_feedback table for learning loop
 
 Revision ID: 20260216_005

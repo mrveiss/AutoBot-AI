@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """Add error status support to AgentRuntimeState (MVA-1411, GH#6476).
 
 Adds error_detail (Text), error_at (DateTime), error_code (String 64) columns

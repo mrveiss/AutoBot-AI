@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """Add push_subscriptions table for web push notification delivery (GH#4459).
 
 Revision ID: 20260530_048

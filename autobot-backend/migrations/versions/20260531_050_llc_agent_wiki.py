@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """Add llc_agent_wiki_entries table for per-agent knowledge vault (GH#9021).
 
 Revision ID: 20260531_050

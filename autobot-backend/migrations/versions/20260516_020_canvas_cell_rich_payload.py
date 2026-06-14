@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """Add rich_payload JSONB column to canvas_cell for Phase 2 chart/code cells.
 
 Revision ID: 20260516_020

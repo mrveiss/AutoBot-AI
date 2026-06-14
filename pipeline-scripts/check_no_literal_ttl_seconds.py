@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """Pre-commit hook: ban literal integer seconds in Redis TTL positions.
 
 Checks Python AST for calls to setex, expire, pexpire (and Cache.set ttl=N)

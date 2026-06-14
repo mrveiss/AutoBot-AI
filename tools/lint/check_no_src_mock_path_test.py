@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2026 mrveiss
 # Author: mrveiss
 """Unit tests for tools/lint/check_no_src_mock_path.py (#7165 / #6987 AC3)."""
 

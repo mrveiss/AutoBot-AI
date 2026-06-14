@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """Create llc_activity_log table.
 
 Revision ID: 20260523_026

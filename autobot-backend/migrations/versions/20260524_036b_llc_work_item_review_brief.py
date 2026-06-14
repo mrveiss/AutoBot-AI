@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """Add review_brief JSONB column to llc_work_items.
 
 Renamed from 20260524_036 → 20260524_036b to resolve duplicate revision ID
