@@ -13,7 +13,7 @@ import uuid
 from datetime import datetime
 from enum import Enum
 
-from sqlalchemy import Boolean, DateTime, String, Text
+from sqlalchemy import Boolean, DateTime, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.types import Uuid
@@ -147,11 +147,35 @@ class Secret(Base):
         comment="Array of user IDs for shared secrets",
     )
 
-    # Encrypted storage (Issue #870)
-    encrypted_value: Mapped[str] = mapped_column(
+    # Encrypted storage (Issue #870). Legacy Fernet path — nullable since the
+    # unified envelope store (#10088) holds the value in ``sealed_value``
+    # instead. A row is envelope-backed iff ``sealed_value IS NOT NULL``.
+    encrypted_value: Mapped[str | None] = mapped_column(
         Text,
+        nullable=True,
+        comment="Fernet-encrypted secret value (legacy path; NULL for envelope rows)",
+    )
+
+    # Unified envelope store (umbrella #10088). The value is sealed once under a
+    # per-secret DEK; the DEK is wrapped per grantee vault in ``secret_grants``.
+    owner_vault: Mapped[str | None] = mapped_column(
+        String(512),
+        nullable=True,
+        index=True,
+        comment="VaultRef.to_str() of the owning vault (envelope store). NULL for legacy rows.",
+    )
+
+    sealed_value: Mapped[dict | None] = mapped_column(
+        JSONB,
+        nullable=True,
+        comment="SealedSecret.to_dict() — envelope-sealed value (#10088); NULL for legacy rows.",
+    )
+
+    version: Mapped[int] = mapped_column(
+        Integer,
         nullable=False,
-        comment="Fernet-encrypted secret value",
+        server_default="1",
+        comment="Envelope DEK/rotation generation (#10088).",
     )
 
     # Metadata
