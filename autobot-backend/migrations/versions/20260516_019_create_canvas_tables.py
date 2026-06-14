@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """Create canvas, canvas_cell, canvas_undo_event tables.
 
 Revision ID: 20260516_019

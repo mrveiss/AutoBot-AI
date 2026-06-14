@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """py-print-smoke — pipeline smoke-test rule.
 
 Detects bare `print()` calls in production Python code. Aliases the existing

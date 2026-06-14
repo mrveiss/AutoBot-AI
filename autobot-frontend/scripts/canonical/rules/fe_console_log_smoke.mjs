@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 import { readFile } from "node:fs/promises";
 
 import { makeDiagnostic } from "../diagnostic.mjs";

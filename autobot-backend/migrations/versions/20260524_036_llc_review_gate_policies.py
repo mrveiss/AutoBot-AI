@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """Create llc_review_gate_policies table.
 
 Revision ID: 20260524_036

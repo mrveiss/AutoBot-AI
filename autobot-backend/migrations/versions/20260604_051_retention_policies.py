@@ -1,5 +1,6 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """Add retention_policies table for data retention policy configuration (MVA-3145, GH#8995).
 

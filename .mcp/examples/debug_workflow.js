@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 /**
  * AutoBot MCP Debug Workflow Example
  * Demonstrates integrated usage of all MCP servers for debugging

@@ -85,6 +85,16 @@ jobs:
             exit 0
           }
 
+      - name: Enforce SPDX/Apache-2.0 license header (#9840)
+        run: |
+          # BLOCKING: every first-party .py/.ts/.tsx/.js/.mjs/.sh/.css file must
+          # carry the Apache-2.0 SPDX header. Scan mode (no --fix) fails CI when
+          # a header-less file lands, so coverage from the #9826 relicense sweep
+          # can no longer drift. Run check_spdx_header.py over all tracked files;
+          # in_scope()/EXCLUDE_RE in the script skip vendored/generated/.vue/
+          # workflow/infrastructure paths (same scope as the original sweep).
+          git ls-files -z | xargs -0 python3 tools/lint/check_spdx_header.py
+
   check-instructions:
     runs-on: ubuntu-latest
     steps:

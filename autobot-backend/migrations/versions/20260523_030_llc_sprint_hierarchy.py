@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """LLC sprint hierarchy — portfolios, programs, projects, sprints (GH#8219).
 
 Revision ID: 20260523_030

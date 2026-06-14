@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """LLC agent_org_nodes heartbeat scheduler fields.
 
 Revision ID: 20260523_036
