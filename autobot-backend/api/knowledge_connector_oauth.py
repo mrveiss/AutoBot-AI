@@ -207,34 +207,28 @@ def _result_page(
         "error": error,
     }
     status = "Connected — you can close this window." if error is None else ("Connection failed: %s" % error)
-    # Both reflected values are attacker-influenced (error is a provider query
-    # param): HTML-escape the visible text, and JS-escape the embedded JSON so a
-    # value can never break out of the <script> or the string context.
+    # Every attacker-influenced value (error is a provider query param) reaches the
+    # response only through html.escape, a recognized XSS sanitizer. The visible
+    # status is escaped as HTML text; the postMessage payload is serialized to JSON,
+    # html-escaped, and stored in a data-* attribute that the inline script reads
+    # back via JSON.parse(). No user-influenced value is interpolated into the
+    # <script> body itself, so a value cannot break out of the HTML or script context.
     safe_status = html.escape(status)
-    safe_json = _js_safe_json(message)
+    safe_payload = html.escape(json.dumps(message))
     body = (
         "<!doctype html><html><head><meta charset='utf-8'><title>Connector OAuth</title></head>"
         "<body style='font-family:sans-serif;padding:2rem'>"
         "<p>%s</p>"
-        "<script>(function(){var m=%s;try{if(window.opener){window.opener.postMessage(m,window.location.origin);}}"
-        "catch(e){}setTimeout(function(){window.close();},500);})();</script>"
+        "<div id='connector-oauth-data' data-message=\"%s\"></div>"
+        "<script>(function(){"
+        "var el=document.getElementById('connector-oauth-data');"
+        "var m=JSON.parse(el.getAttribute('data-message'));"
+        "try{if(window.opener){window.opener.postMessage(m,window.location.origin);}}catch(e){}"
+        "setTimeout(function(){window.close();},500);"
+        "})();</script>"
         "</body></html>"
-    ) % (safe_status, safe_json)
+    ) % (safe_status, safe_payload)
     return HTMLResponse(content=body, status_code=200)
-
-
-def _js_safe_json(obj: dict) -> str:
-    """json.dumps with HTML/JS-sensitive chars escaped so it is safe inside <script>."""
-    out = json.dumps(obj)
-    for ch, esc in (
-        ("<", "\\u003c"),
-        (">", "\\u003e"),
-        ("&", "\\u0026"),
-        (chr(0x2028), "\\u2028"),  # JS line separator — breaks string literals
-        (chr(0x2029), "\\u2029"),  # JS paragraph separator
-    ):
-        out = out.replace(ch, esc)
-    return out
 
 
 def _clear_cookie(response: HTMLResponse) -> HTMLResponse:
