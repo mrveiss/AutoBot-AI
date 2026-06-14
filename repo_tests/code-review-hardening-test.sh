@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # Test script for code-review hardening (MVA-2619 / GH#9605)
 # Verifies that the updated skill enforces diff-grounded findings
 

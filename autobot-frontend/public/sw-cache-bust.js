@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 // AutoBot Service Worker for Cache Management
 // Aggressive cache invalidation to prevent API configuration issues
 

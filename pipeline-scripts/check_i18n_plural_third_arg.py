@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """Pre-commit hook: flag t(plural-key, {count}) calls missing the 3rd positional arg.
 
 vue-i18n's plural form requires three positional arguments for keys whose value

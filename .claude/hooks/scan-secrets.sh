@@ -1,10 +1,11 @@
 #!/bin/bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # Scans file content for accidental secrets before writing.
 # PreToolUse hook for Edit|Write operations.
 # Exit 2 = block (with "ask" decision so user can override). Exit 0 = allow.
 #
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
 # Author: mrveiss
 # Issue: #3022
 

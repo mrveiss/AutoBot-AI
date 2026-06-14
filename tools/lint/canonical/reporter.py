@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """Output formatters: pretty (terminal), markdown (audit), JSON (artifact)."""
 
 from __future__ import annotations

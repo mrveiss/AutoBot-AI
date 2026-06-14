@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # Test suite for block-dangerous-commands.sh
 # Run via: bash .claude/hooks/block-dangerous-commands_test.sh
 # Must run via bash (not the interactive shell alias) to match hook runtime.

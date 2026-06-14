@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """Namespace-extending package init for `tools`.
 
 The repo has two `tools/` directories:

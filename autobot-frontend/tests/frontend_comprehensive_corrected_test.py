@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """
 AutoBot Frontend Comprehensive Testing Suite - Corrected Version
 Tests all major frontend components. Set AUTOBOT_BACKEND_HOST / AUTOBOT_FRONTEND_HOST env vars.

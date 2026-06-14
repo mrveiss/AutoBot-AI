@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """Shared parsing context — AST cache + target file iteration."""
 
 from __future__ import annotations

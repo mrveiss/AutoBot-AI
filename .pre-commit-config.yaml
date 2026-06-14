@@ -16,6 +16,28 @@ repos:
         stages: [pre-commit]
         description: "Records current branch to detect silent branch switches from stash/pop"
 
+  # AutoBot custom: SPDX/Apache-2.0 license-header enforcement + backfill (#9840).
+  # The Apache-2.0 relicense (#9826, PR #9830) applied the two-line header
+  #   Copyright 2025-2026 mrveiss
+  #   SPDX-License-Identifier: Apache-2.0
+  # as a point-in-time sweep; files merged in during the PR catch-up never
+  # got it and there was no hook to stop new header-less files from landing.
+  # This hook inserts the header idempotently on staged first-party
+  # .py/.ts/.tsx/.js/.mjs/.sh/.css files (correct comment style per language,
+  # after any shebang / coding line), de-dupes the legacy "Copyright (c)"
+  # line, and skips vendored/generated/.vue/workflow/infrastructure paths
+  # (scope identical to the original sweep — see EXCLUDE_RE in the script).
+  - repo: local
+    hooks:
+      - id: insert-license
+        name: Insert SPDX/Apache-2.0 license header (#9840)
+        entry: python3 tools/lint/check_spdx_header.py --fix
+        language: python
+        files: \.(py|ts|tsx|js|mjs|sh|css)$
+        exclude: ^(node_modules/|\.venv/|venv/|.*/__pycache__/|.*/dist/|.*(_generated|generated)/|.*/fixtures/|autobot-infrastructure/|\.github/workflows/|data/file_manager_root/|.*\.min\.(js|css)$)
+        stages: [pre-commit]
+        description: "Ensures the Apache-2.0 SPDX header is present on first-party source files (#9840)"
+
   # Python code formatting with Black
   - repo: https://github.com/psf/black
     rev: 26.3.1

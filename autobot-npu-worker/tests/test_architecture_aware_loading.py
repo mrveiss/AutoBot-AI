@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """
 End-to-end tests for architecture-aware model loading (GH#7352, MVA-1383).
 
