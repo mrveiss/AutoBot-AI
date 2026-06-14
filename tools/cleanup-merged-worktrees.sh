@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
 # Author: mrveiss
 #
 # Wrapper script for worktree cleanup (Issue #7104, Phase 2)

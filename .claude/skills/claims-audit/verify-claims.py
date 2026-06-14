@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """Verify claims from claims-audit extraction phase.
 
 This script processes claims inventory JSON and verifies each claim

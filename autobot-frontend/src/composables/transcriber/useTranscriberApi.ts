@@ -12,12 +12,14 @@ export interface Project {
   user_id: string
 }
 
+export type RecordingStatus = 'pending' | 'processing' | 'complete' | 'error'
+
 export interface Recording {
   id: number
   project_id: number
   filename: string
   duration: number | null
-  status: 'pending' | 'processing' | 'complete' | 'error'
+  status: RecordingStatus
   speaker_count: number
   process_seconds: number | null
   engine_used: string | null

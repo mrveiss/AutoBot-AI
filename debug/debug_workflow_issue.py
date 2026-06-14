@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """
 Debug the specific issue where plan_workflow_steps works in isolation
 but fails when called through the API workflow

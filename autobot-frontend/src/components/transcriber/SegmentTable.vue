@@ -1,40 +1,27 @@
 <!-- AutoBot - AI-Powered Automation Platform -->
 <!-- Copyright (c) 2025 mrveiss -->
 <script setup lang="ts">
-import { ref } from 'vue'
 import type { Segment, Speaker } from '@/composables/transcriber/useTranscriberApi'
 import { useTranscriberApi } from '@/composables/transcriber/useTranscriberApi'
+import { useInlineEdit } from '@/composables/useInlineEdit'
 import { useTranscriberStore } from '@/stores/transcriber/useTranscriberStore'
-import { createLogger } from '@/utils/debugUtils'
 
-const logger = createLogger('SegmentTable')
 const props = defineProps<{ segments: Segment[]; speakers: Speaker[]; currentTime?: number }>()
 const emit = defineEmits<{ (e: 'seek', seconds: number): void }>()
 
 const api = useTranscriberApi()
 const store = useTranscriberStore()
-const editingId = ref<number | null>(null)
-const editText = ref('')
+const { editingId, editText, startEdit, saveEdit } = useInlineEdit<Segment>(
+  (seg) => seg.text,
+  async (seg, value) => {
+    await api.updateSegment(seg.id, value)
+    store.updateSegmentText(seg.id, value)
+  }
+)
 
 function fmt(s: number) {
   const m = Math.floor(s / 60), sec = Math.floor(s % 60)
   return `${m}:${sec.toString().padStart(2, '0')}`
-}
-
-function startEdit(seg: Segment) {
-  editingId.value = seg.id
-  editText.value = seg.text
-}
-
-async function saveEdit(seg: Segment) {
-  if (editText.value === seg.text) { editingId.value = null; return }
-  try {
-    await api.updateSegment(seg.id, editText.value)
-    store.updateSegmentText(seg.id, editText.value)
-  } catch (err) {
-    logger.error('Failed to save segment', err)
-  }
-  editingId.value = null
 }
 
 function speakerName(speakerId: number | null) {

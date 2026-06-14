@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot Frontend Sync Script
 # Builds Vue.js frontend and deploys to native VM
 
