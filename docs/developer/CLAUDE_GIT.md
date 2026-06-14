@@ -75,6 +75,24 @@ Must be 27/27. Add test cases for new rules. Use `bash` (GNU grep 3.7), not inte
 
 ---
 
+## Automated Branch Pruning (#9917 / #10035)
+
+Stale branches are pruned automatically — do not sweep by hand:
+
+- **GitHub setting** *Automatically delete head branches* removes a PR's head branch on merge (repo owner toggles this; it is not code).
+- **`branch-cleanup.yml`** (daily) deletes remote branches that are either merged-ancestor of `Dev_new_gui` and 7+ days old, or tied to a closed issue with a merged PR.
+- **`scripts/cleanup-worktrees.sh`** prunes stale worktrees and local/remote branches for closed issues; also used for one-time backfills (#9911) — always `--dry-run` first.
+
+**Safety guards (shared in `scripts/lib/branch-guards.sh`, tested by `branch-guards_test.sh`):** automated pruning must never delete a branch that is
+
+1. **freshly pushed** — tip commit younger than `BRANCH_MIN_AGE_HOURS` (default 24h), closing the push→PR-creation gap (#10035);
+2. **still open as a PR** — `gh pr list --head <branch> --state open`;
+3. **mis-identified** — only `issue-NNNN` / `hotfix-NNNN` branches map to a GitHub issue. Date tokens (`...-2026-06-12`) and Paperclip `MVA-NNNN` work-items must never be read as issue numbers (use `extract_issue_number`, never a bare `\d{4,}`).
+
+Merged-detection is **ancestor-based** (`git branch --merged`), never patch-equivalence — a rebased/squashed but unmerged branch is not treated as merged. Any new branch-deleting automation MUST source `branch-guards.sh` and apply these guards.
+
+---
+
 ## Git Push Recovery
 
 Before pushing, check for diverged remote:

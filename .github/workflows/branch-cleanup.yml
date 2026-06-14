@@ -66,10 +66,13 @@ jobs:
       - name: Delete merged branches (7+ days old)
         id: merged
         env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           DRY_RUN: ${{ steps.env.outputs.dry_run }}
         shell: bash
         run: |
           set -euo pipefail
+          # Shared safe-pruning guards (recency, open-PR) -- see #10035.
+          source scripts/lib/branch-guards.sh
           BASE_BRANCH="Dev_new_gui"
           DAYS_OLD=7
           CUTOFF_DATE=$(date -d "$DAYS_OLD days ago" +%s)
@@ -78,7 +81,8 @@ jobs:
 
           echo "Looking for merged branches older than $DAYS_OLD days..."
 
-          # Get all branches merged into Dev_new_gui
+          # Get all branches merged into Dev_new_gui (ancestor-based, never
+          # patch-equivalence -- #10035).
           merged_branches=$(git branch -r --merged "origin/$BASE_BRANCH" \
             | grep -v "HEAD\|$BASE_BRANCH\|main\|master" \
             | sed 's|^ *origin/||' || true)
@@ -88,6 +92,19 @@ jobs:
           else
             while IFS= read -r branch; do
               [ -z "$branch" ] && continue
+
+              # Never delete a freshly-pushed branch or one with an open PR
+              # (#10035) -- symmetric with the closed-issue step below.
+              if branch_recently_pushed "origin/$branch"; then
+                echo "  SKIP (pushed <${BRANCH_MIN_AGE_HOURS}h ago): origin/$branch"
+                skipped_count=$((skipped_count + 1))
+                continue
+              fi
+              if branch_has_open_pr "$branch"; then
+                echo "  SKIP (open PR): origin/$branch"
+                skipped_count=$((skipped_count + 1))
+                continue
+              fi
 
               # Get last commit timestamp
               last_commit_ts=$(git log -1 --format=%ct "origin/$branch" 2>/dev/null || echo "0")
@@ -123,6 +140,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # Shared safe-pruning guards -- see #10035.
+          source scripts/lib/branch-guards.sh
           deleted_count=0
           skipped_count=0
           errors=0
@@ -140,9 +159,22 @@ jobs:
             while IFS= read -r branch; do
               [ -z "$branch" ] && continue
 
-              # Extract issue number (4+ digits)
-              issue_number=$(echo "$branch" | grep -oP '\d{4,}' | head -1 || true)
+              # Extract the issue number from issue-/hotfix- branches only.
+              # Date tokens and MVA work-items must never match (#10035).
+              issue_number=$(extract_issue_number "$branch")
               [ -z "$issue_number" ] && continue
+
+              # Never delete freshly-pushed work or a branch with an open PR.
+              if branch_recently_pushed "origin/$branch"; then
+                echo "  SKIP (pushed <${BRANCH_MIN_AGE_HOURS}h ago): origin/$branch"
+                skipped_count=$((skipped_count + 1))
+                continue
+              fi
+              if branch_has_open_pr "$branch"; then
+                echo "  SKIP (open PR): origin/$branch"
+                skipped_count=$((skipped_count + 1))
+                continue
+              fi
 
               # Check issue state
               issue_state=$(gh issue view "$issue_number" --json state --jq '.state' 2>/dev/null || echo "")
