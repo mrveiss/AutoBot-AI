@@ -453,3 +453,7 @@ It's suitable for:
 ---
 
 **Made with ❤️ by the AutoBot community**
+
+<!-- always-report gate verification (#10022): this README-only PR touches none of the
+     code-quality / startup-import-smoke / frontend filters, so those three checks must
+     skip-to-success rather than deadlock. Verification artifact; safe to revert. -->
