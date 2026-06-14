@@ -235,4 +235,46 @@ describe('KnowledgeRepository connector endpoints (#5200)', () => {
       )
     })
   })
+
+  describe('startConnectorOAuth — #9019 OAuth flow', () => {
+    it('POSTs to the provider authorize endpoint and returns the URL', async () => {
+      postSpy.mockResolvedValue({
+        data: {
+          authorize_url: 'https://accounts.google.com/o/oauth2/v2/auth?x=1',
+          state: 'st8',
+          connector_id: 'conn-uuid'
+        }
+      })
+
+      const result = await repo.startConnectorOAuth(
+        'google',
+        'https://localhost/api/knowledge_base/connectors/oauth/callback',
+        ['drive.readonly']
+      )
+
+      expect(result.authorize_url).toContain('accounts.google.com')
+      expect(result.connector_id).toBe('conn-uuid')
+      expect(postSpy).toHaveBeenCalledWith(
+        '/api/knowledge_base/connectors/oauth/google/authorize',
+        {
+          redirect_uri:
+            'https://localhost/api/knowledge_base/connectors/oauth/callback',
+          scopes: ['drive.readonly']
+        }
+      )
+    })
+
+    it('sends scopes:null when none supplied and url-encodes the provider', async () => {
+      postSpy.mockResolvedValue({
+        data: { authorize_url: 'https://x', state: 's', connector_id: 'c' }
+      })
+
+      await repo.startConnectorOAuth('git lab', 'https://localhost/cb')
+
+      expect(postSpy).toHaveBeenCalledWith(
+        '/api/knowledge_base/connectors/oauth/git%20lab/authorize',
+        { redirect_uri: 'https://localhost/cb', scopes: null }
+      )
+    })
+  })
 })
