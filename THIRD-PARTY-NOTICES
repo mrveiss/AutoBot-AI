@@ -41,3 +41,28 @@ Note: components fetched at build/deploy time as package dependencies (npm /
 pip) are not vendored in this repository and are therefore not enumerated here;
 their licenses are distributed with those packages. Only third-party code that
 ships inside this repository is listed above.
+
+Provisioning of github-mcp-server
+----------------------------------
+The github-mcp-server binary itself is intentionally NOT tracked in git (it is
+a ~13 MB third-party binary and is excluded by .gitignore). The repository ships
+only its MIT LICENSE and README under .mcp/. A fresh clone therefore does not
+contain the executable.
+
+There is currently no automated provisioning step in this repository (no Ansible
+task, install script, Makefile target, or package.json hook) that downloads or
+builds .mcp/github-mcp-server. The runtime expects it at the path referenced by
+.mcp/config.json (`${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/.mcp/
+github-mcp-server`) and the integration test invokes `./github-mcp-server stdio`
+(autobot-infrastructure/shared/scripts/test_mcp_integration.sh), but neither
+fetches it.
+
+Until an automated fetch is added, the binary must be obtained out-of-band from
+the upstream project — download the appropriate release asset, or build from
+source — and placed at .mcp/github-mcp-server:
+
+  Releases: https://github.com/github/github-mcp-server/releases
+  Source:   https://github.com/github/github-mcp-server
+
+(Adding an automated, checksum-verified provisioning step is tracked as a
+follow-up; see the repository issue tracker.)
