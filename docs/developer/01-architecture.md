@@ -282,6 +282,10 @@ graph LR
 - **Trailing whitespace**: File cleanup
 - **YAML validation**: Configuration file validation
 
+**Type Codegen**:
+
+Frontend TypeScript types for canonical workflow shapes and enums are generated from the Python sources via a curated `MANIFEST` (`autobot-infrastructure/shared/scripts/gen_frontend_types.py`); the `frontend-codegen-drift` CI job fails on any drift between the Python definitions and the committed TS. See [CODEGEN_MANIFEST.md](CODEGEN_MANIFEST.md).
+
 ## Deployment Architecture
 
 ### Production Deployment
