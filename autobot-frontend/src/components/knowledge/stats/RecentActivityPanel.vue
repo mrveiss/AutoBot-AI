@@ -32,6 +32,7 @@
  *
  * Issue #184: Split oversized Vue components
  */
+import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 
 import BasePanel from '@/components/base/BasePanel.vue'
@@ -51,8 +52,8 @@ interface Props {
 
 defineProps<Props>()
 
-const getActivityIcon = (type: string): string => {
-  const icons: Record<string, string> = {
+const getActivityIcon = (type: string): IconName => {
+  const icons: Record<string, IconName> = {
     created: 'plus-circle',
     updated: 'edit',
     deleted: 'trash',

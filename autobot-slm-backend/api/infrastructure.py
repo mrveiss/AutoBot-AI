@@ -139,7 +139,7 @@ AVAILABLE_PLAYBOOKS: list[PlaybookInfo] = [
         description="Deploy Prometheus, Grafana, and Alertmanager for " "comprehensive fleet monitoring and alerting.",
         category=PlaybookCategory.MONITORING,
         playbook_file="deploy-slm-manager.yml",
-        target_hosts=["00-SLM-Manager"],
+        target_hosts=["slm_server"],
         variables={
             "prometheus_port": 9090,
             "grafana_port": 3000,
@@ -154,7 +154,7 @@ AVAILABLE_PLAYBOOKS: list[PlaybookInfo] = [
         description="Deploy PostgreSQL 16 database server for SLM " "backend data persistence.",
         category=PlaybookCategory.DATABASE,
         playbook_file="deploy-slm-manager.yml",
-        target_hosts=["00-SLM-Manager"],
+        target_hosts=["slm_server"],
         variables={
             "postgresql_version": "16",
             "postgresql_port": 5432,
@@ -213,7 +213,7 @@ AVAILABLE_PLAYBOOKS: list[PlaybookInfo] = [
         "auto-provision all fleet roles.",
         category=PlaybookCategory.NETWORKING,
         playbook_file="deploy-slm-manager.yml",
-        target_hosts=["00-SLM-Manager", "slm_nodes"],
+        target_hosts=["slm_server", "slm_nodes"],
         variables={},
         estimated_duration="30-45 minutes",
         requires_confirmation=True,

@@ -6,9 +6,10 @@
 export interface Goal {
   id: string
   title: string
-  level: 'company' | 'team' | 'agent'
+  // #9724: optional — the flat rows from GET /api/llc/goals carry neither
+  level?: 'company' | 'team' | 'agent'
   status: 'active' | 'paused' | 'done' | 'cancelled'
-  owner: string | null
+  owner?: string | null
   linked_item_count: number
   children: Goal[]
   expanded?: boolean
@@ -19,7 +20,7 @@ export interface Goal {
 defineProps<{ goal: Goal; depth?: number; selectedId: string | null }>()
 const emit = defineEmits<{ toggle: [goal: Goal]; select: [goal: Goal] }>()
 
-const levelBadgeClass = (level: string) => {
+const levelBadgeClass = (level?: string) => {
   if (level === 'company') return 'bg-purple-100 text-purple-700'
   if (level === 'team') return 'bg-blue-100 text-blue-700'
   return 'bg-gray-100 text-gray-600'

@@ -1,19 +1,16 @@
 # #7227: vue-tsc regression guard.
 #
 # Runs `vue-tsc --noEmit -p tsconfig.app.json` on every PR that touches
-# the frontend. Fails if the error count exceeds the documented baseline
-# of 249 (real type-debt as of 2026-06-04; see #7227 for the breakdown).
+# the frontend. Fails if the error count exceeds the BASELINE below.
 #
-# This is a *count-based* gate rather than a strict "0 errors required"
-# gate because the existing 249 errors are a known long-tail of unknown
-# / type-incompatibility issues that need per-cluster cleanup PRs (see
-# top-files breakdown in #7227 issue body). Each cleanup PR can reduce
-# the baseline; this gate ensures no PR introduces new ones.
+# BASELINE is 0 as of #10093: #9724/#10073 cleared the historical type-debt
+# (was 249 on 2026-06-04, see #7227) and the frontend-test gate (#10019)
+# now enforces 0 via `npm run type-check`. This guard is the lightweight
+# path-filtered companion — keep BASELINE at 0 so any new TS error fails.
 #
-# When fixing a cluster:
-#   1. Reduce errors → re-run gate locally, count drops below 249
-#   2. Update the BASELINE constant below to the new count
-#   3. Commit the workflow update with the cleanup PR
+# If a future change must temporarily raise the baseline, also reconcile
+# the frontend-test type-check step (which has no tolerance), and lower it
+# back to 0 as soon as the cluster is cleaned up.
 #
 # Security: this workflow does NOT interpolate any untrusted GitHub
 # event data into run: commands. All inputs are static repo paths.
@@ -59,7 +56,10 @@ jobs:
       - name: Run vue-tsc and check error count
         working-directory: autobot-frontend
         env:
-          BASELINE: 249
+          # 0 since #9724/#10073 cleared the type-debt; the frontend-test gate
+          # (#10019) now also enforces 0 via `npm run type-check`. Keep at 0 so
+          # this guard actually blocks any new TS error (#10093).
+          BASELINE: 0
         run: |
           set +e
           # Use a pipeline-safe pattern so vue-tsc's exit code doesn't break the count

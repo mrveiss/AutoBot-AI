@@ -18,7 +18,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from user_management.models.base import Base
 
-from .enums import WorkItemType
+from .enums import WorkItemType, pg_enum_values
 
 
 class LLCReviewGatePolicy(Base):
@@ -34,7 +34,7 @@ class LLCReviewGatePolicy(Base):
     )
     company_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
     item_type: Mapped[str] = mapped_column(
-        sa.Enum(WorkItemType, name="workitemtype", create_type=False),
+        sa.Enum(WorkItemType, name="workitemtype", create_type=False, values_callable=pg_enum_values),
         nullable=False,
     )
     requires_human_review: Mapped[bool] = mapped_column(sa.Boolean, nullable=False, server_default="false")

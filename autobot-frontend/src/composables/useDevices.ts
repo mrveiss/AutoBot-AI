@@ -23,6 +23,10 @@ export interface Device {
   created_at: string
 }
 
+export interface DeviceListResponse {
+  devices: Device[]
+}
+
 // Module-level singleton state
 const devices = ref<Device[]>([])
 const { isLoading: loading, wrap } = useLoadingState()
@@ -96,7 +100,7 @@ export function useDevices() {
     return wrap(async () => {
       try {
         error.value = null
-        const response = await api.post('/devices/pair', payload)
+        const response = await api.post<{ device_id?: string }>('/devices/pair', payload)
         // Refresh the device list after successful pairing
         await fetchDevices()
         logger.info('Device paired:', response.device_id)

@@ -32,21 +32,24 @@
     # #9953: /slm prefix is the UNIVERSAL SLM API path — served in both
     # co-located and dedicated nginx modes (#3268). The bare /api/ path routes
     # to the USER backend on co-located hosts, so SLM auth there returns 401.
-    slm_api_url: "https://{{ hostvars['00-SLM-Manager']['ansible_host'] | default('127.0.0.1') }}/slm"
+    slm_api_url: "https://{{ hostvars[slm_manager_inventory_host]['ansible_host'] | default('127.0.0.1') }}/slm"
     slm_admin_user: "admin"
     # Password comes from hostvars (set by slm_manager role) or override
     slm_admin_password: >-
-      {{ hostvars['00-SLM-Manager']['slm_admin_password']
+      {{ hostvars[slm_manager_inventory_host]['slm_admin_password']
          | default(lookup('env', 'SLM_ADMIN_PASSWORD'))
          | default('admin') }}
+
+    # #9956: SLM manager roles are looked up by `slm_server` group membership
+    # (see register-loop below), so its entry is NOT keyed by display name.
+    slm_manager_roles:
+      - autobot-slm-agent
+      - autobot-slm-database
+      - autobot-monitoring
 
     # Map inventory hostnames to SLM deployment roles.
     # Role names must match AVAILABLE_ROLES in api/deployments.py.
     node_role_map:
-      00-SLM-Manager:
-        - autobot-slm-agent
-        - autobot-slm-database
-        - autobot-monitoring
       01-Backend:
         - autobot-slm-agent
         - autobot-backend
@@ -101,7 +104,10 @@
           hostname: "{{ item }}"
           ip_address: "{{ hostvars[item].ansible_host }}"
           node_id: "{{ hostvars[item].slm_node_id }}"
-          roles: "{{ node_role_map[item] | default(['slm-agent']) }}"
+          roles: >-
+            {{ slm_manager_roles
+               if item in (groups.get('slm_server', []) | default([]))
+               else (node_role_map[item] | default(['slm-agent'])) }}
           ssh_user: "{{ hostvars[item].ansible_user | default('autobot') }}"
           ssh_port: 22
           auth_method: "key"

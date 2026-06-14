@@ -101,6 +101,7 @@
  * Issue #1186: Always-Visible Source Attribution — extended for type/reliability/web
  */
 
+import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -169,7 +170,7 @@ const formatSourcePath = (sourcePath: string): string => {
   return parts[parts.length - 1] || sourcePath
 }
 
-const sourceIcon = (citation: Citation): string => {
+const sourceIcon = (citation: Citation): IconName => {
   switch (citation.type) {
     case 'knowledge_base': return 'book'
     case 'llm_training':   return 'robot'

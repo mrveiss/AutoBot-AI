@@ -255,20 +255,7 @@ const PRIORITIES = [
   { value: 'low', label: 'Low' },
 ]
 
-interface WorkItem {
-  id: string
-  identifier: string
-  type: string
-  title: string
-  description: string
-  priority: string
-  story_points: number | null
-  assignee_name: string | null
-  sprint_id: string | null
-  status: string
-  labels: string[]
-  acceptance_criteria: string[]
-}
+import type { WorkItem } from './workItemTypes'
 
 const items = ref<WorkItem[]>([])
 const isLoading = ref(false)

@@ -126,21 +126,7 @@ const boardId = computed(() => route.params.boardId as string)
 const CHART_W = 200
 const CHART_H = 100
 
-interface WorkItem {
-  id: string
-  identifier: string
-  type: string
-  title: string
-  priority: string
-  story_points: number | null
-  assignee_name: string | null
-  column_id: string
-  status: string
-  sprint_id: string | null
-  labels: string[]
-  acceptance_criteria: string[]
-  description: string
-}
+import type { WorkItem } from './workItemTypes'
 
 interface BoardColumn {
   id: string

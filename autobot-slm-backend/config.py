@@ -164,6 +164,12 @@ class Settings(BaseSettings):
     port: int = 8000
     debug: bool = False
 
+    # SLM self-identity (#9956)
+    # The SLM manager's own DB node_id. Deployments may rename the node, so this
+    # is read from the environment instead of being hardcoded. The default
+    # matches the inventory default (slm_server host in slm-nodes.yml).
+    slm_node_id: str = os.getenv("SLM_NODE_ID", "00-SLM-Manager")
+
     # Authentication
     secret_key: str = os.getenv("SLM_SECRET_KEY", "")
     algorithm: str = "HS256"

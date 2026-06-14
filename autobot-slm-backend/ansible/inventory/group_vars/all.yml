@@ -321,8 +321,7 @@ role_browser_active: >-
      (inventory_hostname in (groups.get('browser_worker', []) | default([]))) }}
 
 role_slm_active: >-
-  {{ (inventory_hostname == '00-SLM-Manager') or
-     (inventory_hostname in (groups.get('slm_server', []) | default([]))) or
+  {{ (inventory_hostname in (groups.get('slm_server', []) | default([]))) or
      (inventory_hostname in (groups.get('slm', []) | default([]))) }}
 
 # #7051: facts for the remaining provision gates so provision-fleet-roles.yml
@@ -352,3 +351,28 @@ role_llm_active: >-
 role_tts_worker_active: >-
   {{ ('tts-worker' in (node_roles | default([]))) or
      ('autobot-tts-worker' in (node_roles | default([]))) }}
+
+# ==========================================
+# SLM MANAGER IDENTITY (#9956)
+# ==========================================
+# The SLM manager node is identified by the `slm_server` inventory group,
+# NOT by a hardcoded display name. Renaming the node (operators may use a
+# different name) must not break provisioning, CA setup, code-sync or auth.
+#
+# `slm_manager_inventory_host` resolves the inventory hostname of the SLM
+# manager once, from group membership. Playbooks use it for hostvars
+# lookups and delegate_to instead of the literal '00-SLM-Manager'.
+#
+# The DEFAULT node display-name/id is defined exactly once, in the inventory
+# (slm-nodes.yml `slm_server` host + its `slm_node_id`). This fact only
+# derives it; it does not redefine it.
+slm_manager_inventory_host: >-
+  {{ (groups.get('slm_server', []) | default([]))[0]
+     | default((groups.get('slm', []) | default([]))[0] | default('00-SLM-Manager')) }}
+
+# Resolved node_id of the SLM manager (its inventory slm_node_id, falling
+# back to the inventory hostname). Used by playbooks that write/read the SLM
+# manager's DB node_id so the literal display name is never assumed.
+slm_manager_node_id: >-
+  {{ hostvars[slm_manager_inventory_host]['slm_node_id']
+     | default(slm_manager_inventory_host) }}

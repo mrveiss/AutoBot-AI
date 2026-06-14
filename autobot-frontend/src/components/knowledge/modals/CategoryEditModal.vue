@@ -14,6 +14,8 @@
  */
 
 import Icon from '@/components/ui/Icon.vue'
+import type { IconName } from '@/components/ui/Icon.vue'
+import { asIconName } from '@/utils/iconMappings'
 import { ref, computed, watch } from 'vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
@@ -93,7 +95,7 @@ const colorOptions = [
 ]
 
 // Predefined icon options
-const iconOptions = computed(() => [
+const iconOptions = computed<{ value: IconName; label: string }[]>(() => [
   { value: 'folder', label: t('knowledge.modals.categoryEdit.iconFolder') },
   { value: 'book', label: t('knowledge.modals.categoryEdit.iconBook') },
   { value: 'code', label: t('knowledge.modals.categoryEdit.iconCode') },
@@ -385,7 +387,7 @@ function selectIcon(icon: string): void {
               class="preview-icon"
               :style="{ backgroundColor: formData.color }"
             >
-              <Icon :name="formData.icon" />
+              <Icon :name="asIconName(formData.icon, 'folder')" />
             </div>
             <span class="preview-name">{{ formData.name || $t('knowledge.modals.categoryEdit.namePlaceholder') }}</span>
           </div>

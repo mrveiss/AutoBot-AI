@@ -208,6 +208,7 @@
 </template>
 
 <script setup lang="ts">
+import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue';
 import BaseAlert from '@/components/ui/BaseAlert.vue';
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
@@ -334,8 +335,8 @@ const getElementColor = (elementType: string): string => {
   return colors[elementType.toLowerCase()] || '#7f8c8d';
 };
 
-const getElementIcon = (elementType: string): string => {
-  const icons: Record<string, string> = {
+const getElementIcon = (elementType: string): IconName => {
+  const icons: Record<string, IconName> = {
     button: 'square',
     input: 'i-cursor',
     text: 'font',
@@ -344,7 +345,8 @@ const getElementIcon = (elementType: string): string => {
     checkbox: 'check-square',
     dropdown: 'caret-down',
     menu: 'bars',
-    icon: 'icons',
+    // #9724: 'icons' is not an SVG IconName (rendered empty)
+    icon: 'th-large',
     window: 'window-maximize',
   };
   return icons[elementType.toLowerCase()] || 'cube';

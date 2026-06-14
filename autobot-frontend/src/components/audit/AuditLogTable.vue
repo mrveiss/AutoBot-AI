@@ -240,6 +240,7 @@
 </template>
 
 <script setup lang="ts">
+import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -315,7 +316,7 @@ function formatOperationName(operation: string): string {
     .replace(/\b\w/g, (char) => char.toUpperCase())
 }
 
-function resultIcon(result: string): string {
+function resultIcon(result: string): IconName {
   const config = AUDIT_RESULT_CONFIG[result as keyof typeof AUDIT_RESULT_CONFIG]
   return config?.icon || 'question-circle'
 }

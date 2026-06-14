@@ -27,21 +27,41 @@ export interface NavItem {
   iconPaths?: string[];
   iconRule?: SvgFillRule;
   iconStroke?: boolean;
-  /** VITE_FEATURE_<featureFlag.toUpperCase()> must equal 'true' to show this item. */
+  /**
+   * Gate this item behind `VITE_FEATURE_<featureFlag.toUpperCase()>`.
+   * The flag is a UX visibility toggle only — never a security boundary
+   * (route/API access is enforced server-side via RBAC). Explicit
+   * `'true'` shows, explicit `'false'` hides; when the env var is unset the
+   * item falls back to `featureDefaultVisible` (see below).
+   */
   featureFlag?: string;
+  /**
+   * Visibility when the feature flag's env var is UNSET (fail-safe default).
+   * Shipped features should set `true` (fail-open — stay visible even if the
+   * flag never reaches the build); experimental/preview features omit it so
+   * they fail closed (hidden until explicitly enabled). Default: `false`.
+   */
+  featureDefaultVisible?: boolean;
 }
 
 /**
- * Returns items whose featureFlag (if any) is enabled in the given env object.
- * Pass `import.meta.env` in production; pass a plain object in tests.
+ * Returns items whose featureFlag (if any) resolves to visible in the given
+ * env object. Resolution per item: no flag → always visible; flag `'true'` →
+ * visible; flag `'false'` → hidden; flag unset → `featureDefaultVisible`
+ * (fail-safe, default hidden). Pass `import.meta.env` in production; pass a
+ * plain object in tests.
  */
 export function filterByFeatureFlag(
   items: NavItem[],
   env: Record<string, string | boolean | undefined> = import.meta.env,
 ): NavItem[] {
-  return items.filter(
-    (item) => !item.featureFlag || env[`VITE_FEATURE_${item.featureFlag.toUpperCase()}`] === 'true',
-  );
+  return items.filter((item) => {
+    if (!item.featureFlag) return true;
+    const value = env[`VITE_FEATURE_${item.featureFlag.toUpperCase()}`];
+    if (value === 'true') return true;
+    if (value === 'false') return false;
+    return item.featureDefaultVisible ?? false;
+  });
 }
 
 // ─── Primary nav (≤7 items for non-admin users at 1440 px) ───────────────────
@@ -60,24 +80,29 @@ export const navItems: NavItem[] = [
   // GH#9627: entry point is the company selector; LLC sub-views are reached
   // via the contextual LLC sidebar once a company is selected.
   { to: '/llc/select-company', labelKey: 'nav.companyOs', icon: 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4', iconStroke: true },
-  // Issue #9044: Transcriber — audio/video transcription module
+  // Issue #9044: Transcriber — audio/video transcription module.
+  // Shipped feature: fails OPEN (stays visible if VITE_FEATURE_TRANSCRIBER is
+  // unset); set the env var to 'false' to hide it.
   {
     to: '/transcriber',
     labelKey: 'nav.transcriber',
     icon: 'M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z',
     iconStroke: true,
     featureFlag: 'transcriber',
+    featureDefaultVisible: true,
   },
   // Issue #9890: Vision Automation is reachable via Workflow Builder sidebar + direct route.
-  // It is NOT in the primary nav rail — the featureFlag mechanism is dead (App.vue:977,
-  // #8820 stopped filtering), so a flag-gated entry would never hide the item.
+  // It is NOT in the primary nav rail. To gate a future entry, add a `featureFlag`
+  // (and `featureDefaultVisible: true` only if it should ship visible by default).
+  // #9984 re-wired filterByFeatureFlag into both desktop and mobile nav in App.vue.
 ];
 
 // ─── Profile/settings menu items (GH#8748) ───────────────────────────────────
 // Shown in the profile dropdown — not in the primary nav rail.
 // Routes must carry hideInNav: true in router/index.ts.
 export const profileMenuItems: NavItem[] = [
-  // MVA-360: Live Canvas — gated by VITE_FEATURE_CANVAS (GH#8758)
+  // MVA-360: Live Canvas — experimental, gated by VITE_FEATURE_CANVAS (GH#8758).
+  // Fails CLOSED (hidden) unless the env var is explicitly 'true'.
   { to: '/canvas', labelKey: 'nav.canvas', icon: 'M3 3h7v7H3V3zm0 11h7v7H3v-7zm11-11h7v7h-7V3zm0 11h7v7h-7v-7z', iconStroke: true, featureFlag: 'canvas' },
   // Issue #929: Plugin Manager
   { to: '/plugins', labelKey: 'nav.plugins', icon: 'M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z', iconStroke: true },

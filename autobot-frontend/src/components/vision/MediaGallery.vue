@@ -174,6 +174,7 @@
 </template>
 
 <script setup lang="ts">
+import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onUnmounted } from 'vue';
 import { useI18n } from 'vue-i18n';
@@ -215,8 +216,8 @@ const selectItem = (item: GalleryItem) => {
   showRawJson.value = false;
 };
 
-const getTypeIcon = (type: string): string => {
-  const icons: Record<string, string> = {
+const getTypeIcon = (type: string): IconName => {
+  const icons: Record<string, IconName> = {
     image: 'image',
     video: 'video',
     screen: 'desktop',

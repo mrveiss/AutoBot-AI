@@ -90,6 +90,7 @@
  * Issue #165: Chat Documentation UI Integration
  */
 
+import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -130,7 +131,7 @@ const isExpanded = ref(false)
 const isCopied = ref(false)
 
 // Category configuration
-const categoryIconMap: Record<string, string> = {
+const categoryIconMap: Record<string, IconName> = {
   architecture: 'project-diagram',
   developer: 'code',
   api: 'plug',

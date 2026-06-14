@@ -14,40 +14,37 @@ from typing import Sequence, Union
 
 import sqlalchemy as sa
 from alembic import op
-from sqlalchemy.dialects.postgresql import ENUM, JSONB, UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
+
+from migrations.guards import drop_pg_enum, ensure_pg_enum, pg_enum
 
 revision: str = "20260523_027"
 down_revision: Union[str, None] = "20260523_026"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
-# postgresql.ENUM with create_type=False: created explicitly in upgrade() with
-# checkfirst=True. Generic sa.Enum silently IGNORES create_type, so
-# op.create_table re-emitted CREATE TYPE and aborted on fresh databases (#9759).
-_approvaltype = ENUM(
+_approvaltype = pg_enum(
+    "approvaltype",
     "hire",
     "strategy",
     "budget_override",
     "sprint_close",
-    name="approvaltype",
-    create_type=False,
 )
 
-_approvalstatus = ENUM(
+_approvalstatus = pg_enum(
+    "approvalstatus",
     "pending",
     "approved",
     "rejected",
     "withdrawn",
     "expired",
-    name="approvalstatus",
-    create_type=False,
 )
 
 
 def upgrade() -> None:
     # Create enum types independently so they survive partial rollbacks.
-    _approvaltype.create(op.get_bind(), checkfirst=True)
-    _approvalstatus.create(op.get_bind(), checkfirst=True)
+    ensure_pg_enum(_approvaltype)
+    ensure_pg_enum(_approvalstatus)
 
     op.create_table(
         "llc_approvals",
@@ -114,5 +111,5 @@ def downgrade() -> None:
     op.drop_index("ix_llc_approvals_type", table_name="llc_approvals")
     op.drop_index("ix_llc_approvals_company_id", table_name="llc_approvals")
     op.drop_table("llc_approvals")
-    _approvalstatus.drop(op.get_bind(), checkfirst=True)
-    _approvaltype.drop(op.get_bind(), checkfirst=True)
+    drop_pg_enum(_approvalstatus)
+    drop_pg_enum(_approvaltype)
