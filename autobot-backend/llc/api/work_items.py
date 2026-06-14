@@ -26,6 +26,7 @@ Routes:
   DELETE /api/llc/work-items/{work_item_id}/attachments/{attachment_id}          (GH#8253)
 """
 
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
@@ -167,6 +168,9 @@ class WorkItemUpdate(BaseModel):
     goal_id: Optional[str] = None
     assignee_agent_id: Optional[str] = None
     assignee_user_id: Optional[str] = None
+    # GH#9020: planned schedule for the Gantt/timeline view.
+    scheduled_start: Optional[datetime] = None
+    scheduled_end: Optional[datetime] = None
 
 
 class CheckoutRequest(BaseModel):
@@ -343,6 +347,8 @@ async def _item_to_dict(item: Any, session: AsyncSession) -> Dict[str, Any]:
         "created_by_user_id": (str(item.created_by_user_id) if item.created_by_user_id else None),
         "reviewer_user_id": (str(item.reviewer_user_id) if item.reviewer_user_id else None),
         "reviewer_agent_id": (str(item.reviewer_agent_id) if item.reviewer_agent_id else None),
+        "scheduled_start": (item.scheduled_start.isoformat() if item.scheduled_start else None),  # GH#9020
+        "scheduled_end": (item.scheduled_end.isoformat() if item.scheduled_end else None),  # GH#9020
         "started_at": item.started_at.isoformat() if item.started_at else None,
         "completed_at": item.completed_at.isoformat() if item.completed_at else None,
         "cancelled_at": item.cancelled_at.isoformat() if item.cancelled_at else None,

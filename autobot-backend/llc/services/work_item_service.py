@@ -306,6 +306,8 @@ class WorkItemService(LLCServiceBase):
             "assignee_agent_id",
             "assignee_user_id",
             "assignee_type",
+            "scheduled_start",
+            "scheduled_end",
         }
         for key, val in fields.items():
             if key not in allowed:
