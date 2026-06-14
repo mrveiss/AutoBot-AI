@@ -869,6 +869,46 @@ class AuthConfig(BaseSettings):
         ),
     )
 
+    # ------------------------------------------------------------------
+    # Connector OAuth application credentials (ADR-007 / GH#9019)
+    #
+    # Per-provider OAuth *application* client_id/client_secret registered by the
+    # operator. Empty by default — a provider's "Connect" flow is disabled until
+    # its credentials are configured. These identify AutoBot's OAuth app; the
+    # resulting user refresh/access tokens are stored via SecretsService.
+    # ------------------------------------------------------------------
+
+    google_oauth_client_id: str = Field(
+        default="",
+        alias="AUTOBOT_GOOGLE_OAUTH_CLIENT_ID",
+        description="OAuth client_id for Google connectors (Drive). Empty disables the Google Connect flow.",
+    )
+    google_oauth_client_secret: str = Field(
+        default="",
+        alias="AUTOBOT_GOOGLE_OAUTH_CLIENT_SECRET",
+        description="OAuth client_secret for Google connectors (Drive).",
+    )
+    microsoft_oauth_client_id: str = Field(
+        default="",
+        alias="AUTOBOT_MICROSOFT_OAUTH_CLIENT_ID",
+        description="OAuth client_id for Microsoft connectors (OneDrive/SharePoint). Empty disables the flow.",
+    )
+    microsoft_oauth_client_secret: str = Field(
+        default="",
+        alias="AUTOBOT_MICROSOFT_OAUTH_CLIENT_SECRET",
+        description="OAuth client_secret for Microsoft connectors (OneDrive/SharePoint).",
+    )
+    gitlab_oauth_client_id: str = Field(
+        default="",
+        alias="AUTOBOT_GITLAB_OAUTH_CLIENT_ID",
+        description="OAuth client_id for GitLab connectors. Empty disables the GitLab Connect flow.",
+    )
+    gitlab_oauth_client_secret: str = Field(
+        default="",
+        alias="AUTOBOT_GITLAB_OAUTH_CLIENT_SECRET",
+        description="OAuth client_secret for GitLab connectors.",
+    )
+
 
 class PermissionMode(str, Enum):
     """

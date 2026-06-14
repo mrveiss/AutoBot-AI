@@ -51,6 +51,7 @@ from api.knowledge_chroma import router as knowledge_chroma_router  # MVA-2046
 from api.knowledge_cognition import router as knowledge_cognition_router
 from api.knowledge_collaboration import router as knowledge_collaboration_router
 from api.knowledge_collections import router as knowledge_collections_router
+from api.knowledge_connector_oauth import router as knowledge_connector_oauth_router
 from api.knowledge_connectors import router as knowledge_connectors_router
 from api.knowledge_debug import router as knowledge_debug_router
 from api.knowledge_grounding import router as knowledge_grounding_router
@@ -260,6 +261,12 @@ def _get_knowledge_organization_routers() -> list:
             "",
             ["knowledge-connectors"],
             "knowledge_connectors",
+        ),
+        (
+            knowledge_connector_oauth_router,
+            "",
+            ["knowledge-connectors-oauth"],
+            "knowledge_connector_oauth",
         ),
         (
             knowledge_population_router,
