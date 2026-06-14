@@ -434,8 +434,8 @@ Issue #3850: useWebResearchStore exists but has no view
  *
  * Settings panel for useWebResearchStore. Fetches live status from the backend
  * on mount, exposes all WebResearchSettings fields, and POSTs changes via
- * PUT /web-research/settings. Toggle enable/disable uses the dedicated
- * /web-research/enable|disable endpoints.
+ * PUT /web-research-settings/web-research/settings. Toggle enable/disable uses
+ * the dedicated /web-research-settings/web-research/enable|disable endpoints.
  */
 import { ref, computed, onMounted } from 'vue'
 import { useWebResearchStore } from '@/stores/useWebResearchStore'
@@ -464,7 +464,7 @@ async function fetchStatus(): Promise<void> {
   store.setLoading(true)
   store.clearError()
   try {
-    const data = await ApiClient.get<any>(`${getApiBase()}/web-research/status`) as Record<string, unknown>
+    const data = await ApiClient.get<any>(`${getApiBase()}/web-research-settings/web-research/status`) as Record<string, unknown>
     store.updateStatus({
       enabled: Boolean(data.enabled),
       preferred_method: String(data.preferred_method ?? store.status.preferred_method),
@@ -484,7 +484,7 @@ async function fetchStatus(): Promise<void> {
 async function handleToggle(): Promise<void> {
   isToggling.value = true
   store.clearError()
-  const endpoint = store.settings.enabled ? '/web-research/disable' : '/web-research/enable'
+  const endpoint = store.settings.enabled ? '/web-research-settings/web-research/disable' : '/web-research-settings/web-research/enable'
   try {
     await ApiClient.post<any>(`${getApiBase()}${endpoint}`, {})
     store.toggleWebResearch()
@@ -504,7 +504,7 @@ async function saveSettings(): Promise<void> {
   saveSuccess.value = false
   store.clearError()
   try {
-    await ApiClient.put<any>(`${getApiBase()}/web-research/settings`, {
+    await ApiClient.put<any>(`${getApiBase()}/web-research-settings/web-research/settings`, {
       enabled: store.settings.enabled,
       require_user_confirmation: store.settings.require_user_confirmation,
       preferred_method: store.settings.preferred_method,
@@ -533,7 +533,7 @@ async function clearCache(): Promise<void> {
   isClearingCache.value = true
   store.clearError()
   try {
-    await ApiClient.post<any>(`${getApiBase()}/web-research/clear-cache`, {})
+    await ApiClient.post<any>(`${getApiBase()}/web-research-settings/web-research/clear-cache`, {})
     store.updateStatus({ cache_stats: { cache_size: 0, rate_limiter: store.status.cache_stats?.rate_limiter } })
     logger.info('Web research cache cleared')
   } catch (err: unknown) {
@@ -549,7 +549,7 @@ async function resetCircuitBreakers(): Promise<void> {
   isResettingBreakers.value = true
   store.clearError()
   try {
-    await ApiClient.post<any>(`${getApiBase()}/web-research/reset-circuit-breakers`, {})
+    await ApiClient.post<any>(`${getApiBase()}/web-research-settings/web-research/reset-circuit-breakers`, {})
     store.updateStatus({ circuit_breakers: null })
     logger.info('Web research circuit breakers reset')
   } catch (err: unknown) {
