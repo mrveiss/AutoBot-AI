@@ -1,5 +1,6 @@
 // Copyright 2025-2026 mrveiss
 // SPDX-License-Identifier: Apache-2.0
+import { ref } from 'vue'
 import type { Meta, StoryObj } from '@storybook/vue3';
 import EnforcementModeSelector from './EnforcementModeSelector.vue';
 
@@ -55,17 +56,17 @@ export const Updating: Story = {
 export const Interactive: Story = {
   render: () => ({
     components: { EnforcementModeSelector },
-    data() {
-      return { mode: 'disabled' as 'disabled' | 'log_only' | 'enforced', busy: false };
-    },
-    methods: {
-      onUpdate(newMode: 'disabled' | 'log_only' | 'enforced') {
-        this.busy = true;
+    setup() {
+      const mode = ref<'disabled' | 'log_only' | 'enforced'>('disabled');
+      const busy = ref(false);
+      const onUpdate = (newMode: 'disabled' | 'log_only' | 'enforced') => {
+        busy.value = true;
         setTimeout(() => {
-          this.mode = newMode;
-          this.busy = false;
+          mode.value = newMode;
+          busy.value = false;
         }, 800);
-      },
+      };
+      return { mode, busy, onUpdate };
     },
     template: `
       <EnforcementModeSelector

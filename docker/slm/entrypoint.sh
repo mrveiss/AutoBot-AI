@@ -10,10 +10,10 @@ set -e
 cd /app/autobot-slm-backend
 
 echo "Running SLM database migrations..."
-python3.12 -m migrations.runner || {
+python3 -m migrations.runner || {
     echo "ERROR: Migration failed — retrying in 5s..."
     sleep 5
-    python3.12 -m migrations.runner || {
+    python3 -m migrations.runner || {
         echo "FATAL: Migration failed after retry. Aborting."
         exit 1
     }

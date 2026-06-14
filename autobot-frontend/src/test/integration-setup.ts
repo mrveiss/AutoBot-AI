@@ -4,8 +4,12 @@ import { beforeAll, afterAll } from 'vitest'
 import { setupServer } from 'msw/node'
 import { handlers } from './mocks/api-handlers'
 
-// Setup MSW server for integration tests
-const server = setupServer(...handlers)
+// Setup MSW server for integration tests.
+// #9693: exported so test files can register per-test handlers via
+// server.use(). Creating a SECOND setupServer() in a test file stacks two
+// fetch interceptors, so every request hits matching handlers twice —
+// which silently doubles stateful handler counters.
+export const server = setupServer(...handlers)
 
 beforeAll(() => {
   // Start the server before running integration tests

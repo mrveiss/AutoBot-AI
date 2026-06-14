@@ -24,6 +24,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
+from migrations.guards import existing_columns, has_table
+
 # revision identifiers, used by Alembic.
 revision: str = "002"
 down_revision: str | None = "001"
@@ -93,17 +95,15 @@ def _create_secrets_table() -> None:
 
 def upgrade() -> None:
     """Ensure secrets table exists, then add org_id/team_ids for hierarchical access."""
-    inspector = sa.inspect(op.get_bind())
-
-    if not inspector.has_table("secrets"):
+    if not has_table("secrets"):
         _create_secrets_table()
-        existing_columns: set[str] = set()
+        present_columns: set[str] = set()
     else:
         # Table predates migration control (created via create_all) — it may
         # already carry any of the columns this revision adds.
-        existing_columns = {c["name"] for c in inspector.get_columns("secrets")}
+        present_columns = existing_columns("secrets")
 
-    if "org_id" not in existing_columns:
+    if "org_id" not in present_columns:
         op.add_column(
             "secrets",
             sa.Column(
@@ -119,7 +119,7 @@ def upgrade() -> None:
             ["org_id"],
         )
 
-    if "team_ids" not in existing_columns:
+    if "team_ids" not in present_columns:
         op.add_column(
             "secrets",
             sa.Column(

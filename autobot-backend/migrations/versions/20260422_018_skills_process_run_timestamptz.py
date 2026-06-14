@@ -23,6 +23,8 @@ from typing import Sequence
 import sqlalchemy as sa
 from alembic import op
 
+from migrations.guards import has_table
+
 revision: str = "20260422_018"
 down_revision: str | None = "20260324_017"
 branch_labels: str | Sequence[str] | None = None
@@ -42,9 +44,8 @@ _COLUMNS = [
 
 def upgrade() -> None:
     """Convert naive TIMESTAMP columns to TIMESTAMPTZ. Issue #5538."""
-    inspector = sa.inspect(op.get_bind())
     for table, column in _COLUMNS:
-        if not inspector.has_table(table):
+        if not has_table(table):
             continue
         op.alter_column(
             table,
@@ -56,9 +57,8 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     """Revert TIMESTAMPTZ columns back to naive TIMESTAMP. Issue #5538."""
-    inspector = sa.inspect(op.get_bind())
     for table, column in _COLUMNS:
-        if not inspector.has_table(table):
+        if not has_table(table):
             continue
         op.alter_column(
             table,

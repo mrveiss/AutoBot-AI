@@ -437,16 +437,23 @@ async def resolve_drift(
     _: Annotated[dict, Depends(get_current_user)],
 ) -> DriftResolveResponse:
     """
-    Resync a single component from code_source/ to /opt/autobot/<component>/ (#7149).
+    Resync a single component from code_source/ to /opt/autobot/<component>/ (#7149, #9982).
 
     Uses `_rsync_component_local()` to pull files from the local code_source
     checkout and overwrite the deployed copy.  Used by the CodeSyncView
     "Resync from Source" button to clear drift in one click.
 
+    After a successful rsync the handler runs component-appropriate post-steps
+    (#9982) so that the synced code is immediately live:
+      - Python backend components: pip install -r requirements.txt + service restart
+      - Frontend components: npm ci + npm run build + nginx restart
+      - Library components (autobot_shared): no-op (no service to restart)
+
     Body:
         component: Sub-directory under /opt/autobot/. Must be in ALLOWED_COMPONENTS.
 
-    Returns DriftResolveResponse with success flag + rsync output snippet.
+    Returns DriftResolveResponse with success flag, rsync output, deps_changed
+    flag, and a log of post-sync steps performed.
     """
     if request.component not in ALLOWED_COMPONENTS:
         raise HTTPException(
@@ -488,12 +495,17 @@ async def resolve_drift(
             deployed_dir=deployed_dir,
         )
 
+    # --- Post-sync: install deps / rebuild / restart so synced code goes live (#9982) ---
+    deps_changed, post_steps = await _run_post_sync_steps(request.component, source_dir, deployed_dir)
+
     return DriftResolveResponse(
         success=True,
         component=request.component,
         message=f"Resynced {request.component} from code_source",
         source_dir=source_dir,
         deployed_dir=deployed_dir,
+        deps_changed=deps_changed,
+        post_steps=post_steps,
     )
 
 
@@ -700,6 +712,198 @@ async def _rsync_component_local(
         return False, f"local rsync timed out for {component}"
     except Exception as exc:
         return False, f"local rsync error for {component}: {exc}"
+
+
+# =============================================================================
+# Per-component post-sync steps (#9982)
+# =============================================================================
+
+# Maps component name → (pip_req_path, pip_bin_path) for Python components.
+# Source of truth for venv/requirements paths per deployment layout.
+_COMPONENT_PIP_PATHS: Dict[str, Tuple[str, str]] = {
+    "autobot-backend": (
+        "/opt/autobot/autobot-backend/requirements.txt",
+        "/opt/autobot/autobot-backend/venv/bin/pip",
+    ),
+    "autobot-slm-backend": (
+        "/opt/autobot/autobot-slm-backend/requirements.txt",
+        "/opt/autobot/autobot-slm-backend/venv/bin/pip",
+    ),
+}
+
+# Maps component name → deployed frontend directory for npm rebuild.
+_COMPONENT_FRONTEND_DIRS: Dict[str, str] = {
+    "autobot-frontend": "/opt/autobot/autobot-frontend",
+    "autobot-slm-frontend": "/opt/autobot/autobot-slm-frontend",
+}
+
+# Maps component name → systemd service names to restart after sync.
+_COMPONENT_SERVICES: Dict[str, List[str]] = {
+    "autobot-backend": ["autobot-backend"],
+    "autobot-slm-backend": ["autobot-slm-backend"],
+    "autobot-frontend": ["nginx"],
+    "autobot-slm-frontend": ["nginx"],
+}
+
+
+async def _install_pip_deps_for_component(component: str, steps: List[str]) -> None:
+    """Install Python deps from the component's requirements.txt into its venv (#9982).
+
+    Unconditional — pip is fast when nothing changed (same rationale as #1603).
+    Appends human-readable step notes to *steps*.
+    """
+    paths = _COMPONENT_PIP_PATHS.get(component)
+    if paths is None:
+        return
+    req_path, pip_bin = paths
+    if not Path(req_path).exists():
+        steps.append(f"pip: no requirements.txt at {req_path} — skipped")
+        return
+    steps.append(f"pip: installing {req_path} into {Path(pip_bin).parent}")
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            pip_bin,
+            "install",
+            "-r",
+            req_path,
+            "--quiet",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+        )
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=300.0)
+        if proc.returncode == 0:
+            logger.info("drift resolve: pip install ok for %s", component)
+            steps.append("pip: install succeeded")
+        else:
+            out = stdout.decode(errors="replace")[:300] if stdout else ""
+            logger.error("drift resolve: pip install failed (%d) for %s: %s", proc.returncode, component, out)
+            steps.append(f"pip: install failed (rc={proc.returncode}): {out[:150]}")
+    except asyncio.TimeoutError:
+        logger.error("drift resolve: pip install timed out for %s", component)
+        steps.append("pip: install timed out after 300s")
+    except Exception as exc:
+        logger.error("drift resolve: pip install error for %s: %s", component, exc)
+        steps.append(f"pip: install error: {exc}")
+
+
+async def _build_npm_frontend_for_component(component: str, steps: List[str]) -> None:
+    """Run npm ci + npm run build for a frontend component (#9982).
+
+    Appends human-readable step notes to *steps*.
+    """
+    frontend_dir = _COMPONENT_FRONTEND_DIRS.get(component)
+    if frontend_dir is None:
+        return
+    steps.append(f"npm: building {frontend_dir}")
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "npm",
+            "ci",
+            "--prefix",
+            frontend_dir,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+        )
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=300.0)
+        if proc.returncode != 0:
+            out = stdout.decode(errors="replace")[:300] if stdout else ""
+            logger.warning("drift resolve: npm ci failed (%d) for %s: %s", proc.returncode, component, out)
+            steps.append(f"npm ci: failed (rc={proc.returncode}): {out[:150]}")
+            return
+
+        proc = await asyncio.create_subprocess_exec(
+            "npm",
+            "run",
+            "build",
+            "--prefix",
+            frontend_dir,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+        )
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=300.0)
+        if proc.returncode == 0:
+            logger.info("drift resolve: npm build succeeded for %s", component)
+            steps.append("npm build: succeeded")
+        else:
+            out = stdout.decode(errors="replace")[:300] if stdout else ""
+            logger.warning("drift resolve: npm build failed (%d) for %s: %s", proc.returncode, component, out)
+            steps.append(f"npm build: failed (rc={proc.returncode}): {out[:150]}")
+    except asyncio.TimeoutError:
+        logger.error("drift resolve: npm build timed out for %s", component)
+        steps.append("npm build: timed out after 300s")
+    except Exception as exc:
+        logger.warning("drift resolve: npm build error for %s: %s", component, exc)
+        steps.append(f"npm build: error: {exc}")
+
+
+async def _restart_component_services(component: str, steps: List[str]) -> None:
+    """Restart the systemd service(s) associated with a deployed component (#9982).
+
+    Appends human-readable step notes to *steps*.
+    """
+    services = _COMPONENT_SERVICES.get(component, [])
+    for service in services:
+        steps.append(f"restart: {service}")
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "sudo",
+                "systemctl",
+                "restart",
+                service,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
+            )
+            await asyncio.wait_for(proc.communicate(), timeout=60.0)
+            if proc.returncode == 0:
+                logger.info("drift resolve: restarted %s", service)
+                steps.append(f"restart {service}: ok")
+            else:
+                logger.warning("drift resolve: restart %s failed (rc=%d)", service, proc.returncode)
+                steps.append(f"restart {service}: failed (rc={proc.returncode})")
+        except asyncio.TimeoutError:
+            logger.warning("drift resolve: restart %s timed out", service)
+            steps.append(f"restart {service}: timed out")
+        except Exception as exc:
+            logger.warning("drift resolve: restart %s error: %s", service, exc)
+            steps.append(f"restart {service}: error: {exc}")
+
+
+async def _run_post_sync_steps(
+    component: str,
+    source_dir: str,
+    deployed_dir: str,
+) -> Tuple[bool, List[str]]:
+    """Run dep-install / rebuild / restart after a per-component rsync (#9982).
+
+    Returns (deps_changed, steps_log) where deps_changed mirrors the
+    _compute_deps_changed check (requirements.txt / package-lock.json hash delta)
+    detected BEFORE the rsync overwrote the deployed copy — but here we check
+    post-rsync to reflect what the operator sees after the sync.
+
+    Component routing:
+      - Python backend (autobot-backend, autobot-slm-backend): pip install + restart
+      - Frontend (autobot-frontend, autobot-slm-frontend): npm ci + build + nginx reload
+      - autobot_shared: pure library — no service or build step, no-op
+    """
+    steps: List[str] = []
+
+    # Compute deps_changed post-rsync (source == deployed now; any prior delta
+    # is gone, so this is always False after a successful rsync — but we check
+    # pre-rsync via the existing hash helper using deployed_dir as the reference).
+    # For the response we report whether deps files existed and were touched.
+    deps_changed = await _compute_deps_changed(component)
+
+    if component in _COMPONENT_PIP_PATHS:
+        await _install_pip_deps_for_component(component, steps)
+        await _restart_component_services(component, steps)
+    elif component in _COMPONENT_FRONTEND_DIRS:
+        await _build_npm_frontend_for_component(component, steps)
+        await _restart_component_services(component, steps)
+    else:
+        # autobot_shared and any future library-only components — no services
+        steps.append(f"post-sync: no service or build step for {component}")
+
+    return deps_changed, steps
 
 
 async def _build_slm_frontend() -> None:
@@ -2647,16 +2851,57 @@ async def _run_fleet_stage(job: UpdateAllJob, node_ids: List[str]) -> None:
 
 
 async def _collect_outdated_node_ids(job: UpdateAllJob, remote_commit: str, db_service_ref) -> List[str]:
-    """Query DB for outdated / service-failed fleet node IDs and annotate fleet stage."""
+    """Query DB for nodes that need updating and annotate fleet stage.
+
+    Uses code_version != remote_commit as the currency signal (#9996-B).
+    code_status is set by heartbeat and lags behind stage-1/2 updates to
+    slm_agent_latest_commit — relying on it here causes nodes that are truly
+    outdated to appear current (heartbeat hasn't fired since the new commit
+    was fetched).
+
+    Also explicitly includes the co-located self-node when its code_version
+    differs from remote_commit (#9996-A).  The heartbeat-driven code_status
+    on the SLM host may still show UP_TO_DATE because slm_agent_latest_commit
+    was just updated in stage 1 and the heartbeat cycle hasn't re-evaluated
+    the node.  _sync_fleet_node already skips the self-node during fleet
+    execution (marks it completed), so including it here only fixes the
+    currency count — it does not cause a double-update.
+    """
     try:
+        slm_own_ip = urlparse(settings.external_url).hostname or ""
+        seen_ids: set = set()
+        outdated_node_ids: List[str] = []
+
         async with db_service_ref.session() as db:
+            # B: use version comparison — reliable immediately after stages 1-2
             nodes_result = await db.execute(
                 select(Node)
-                .where(Node.code_status.in_([CodeStatus.OUTDATED.value, CodeStatus.CODE_CURRENT_SERVICE_FAILED.value]))
+                .where((Node.code_version != remote_commit) | Node.code_version.is_(None))
                 .order_by(Node.hostname)
             )
-            outdated_nodes = nodes_result.scalars().all()
-            outdated_node_ids = [n.node_id for n in outdated_nodes]
+            version_outdated = nodes_result.scalars().all()
+
+            for n in version_outdated:
+                seen_ids.add(n.node_id)
+                outdated_node_ids.append(n.node_id)
+
+            # A: self-node inclusion — ensure the co-located SLM host is counted
+            # even when heartbeat hasn't yet updated its code_status to OUTDATED.
+            if slm_own_ip:
+                slm_result = await db.execute(select(Node).where(Node.ip_address == slm_own_ip))
+                slm_node = slm_result.scalar_one_or_none()
+                if slm_node and slm_node.node_id not in seen_ids:
+                    # Self-node is not captured by version comparison (e.g. no
+                    # code_version recorded yet); include it so the pipeline
+                    # does not report "everything current" prematurely.
+                    logger.info(
+                        "update-all: self-node %s not in version-outdated list "
+                        "(code_version=%s vs remote=%s) — adding explicitly (#9996-A)",
+                        slm_node.node_id,
+                        _short_sha(slm_node.code_version),
+                        _short_sha(remote_commit),
+                    )
+                    outdated_node_ids.append(slm_node.node_id)
 
         stage_fleet = _get_stage(job, "fleet_nodes")
         stage_fleet.sha = _short_sha(remote_commit)

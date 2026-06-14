@@ -70,7 +70,7 @@
           class="action-btn"
           @click.stop="downloadImage(img.url, index)"
           :title="$t('imageCell.download', 'Download image')"
-          :aria-label="$t('imageCell.downloadLabel', 'Download image {n}', { n: (index as number) + 1 })"
+          :aria-label="$t('imageCell.downloadLabel', { n: (index as number) + 1 })"
         >
           <Icon name="download" />
           <span v-if="images.length > 1">{{ (index as number) + 1 }}</span>

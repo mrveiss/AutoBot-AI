@@ -153,6 +153,7 @@
 </template>
 
 <script setup lang="ts">
+import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, reactive } from 'vue';
 import { useI18n } from 'vue-i18n';
@@ -190,19 +191,19 @@ const modeOptions = computed(() => [
   {
     value: 'disabled' as EnforcementMode,
     label: t('featureFlags.enforcement.modeDisabled'),
-    icon: 'ban',
+    icon: 'ban' as const,
     shortDesc: t('featureFlags.enforcement.modeDisabledDesc'),
   },
   {
     value: 'log_only' as EnforcementMode,
     label: t('featureFlags.enforcement.modeLogOnly'),
-    icon: 'clipboard-list',
+    icon: 'clipboard-list' as const,
     shortDesc: t('featureFlags.enforcement.modeLogOnlyDesc'),
   },
   {
     value: 'enforced' as EnforcementMode,
     label: t('featureFlags.enforcement.modeEnforced'),
-    icon: 'shield-alt',
+    icon: 'shield-alt' as const,
     shortDesc: t('featureFlags.enforcement.modeEnforcedDesc'),
   },
 ]);
@@ -224,8 +225,8 @@ const getModeLabel = (mode: EnforcementMode) => {
   return labels[mode] || mode;
 };
 
-const getModeIcon = (mode: EnforcementMode) => {
-  const icons: Record<EnforcementMode, string> = {
+const getModeIcon = (mode: EnforcementMode): IconName => {
+  const icons: Record<EnforcementMode, IconName> = {
     disabled: 'ban',
     log_only: 'clipboard-list',
     enforced: 'shield-alt',

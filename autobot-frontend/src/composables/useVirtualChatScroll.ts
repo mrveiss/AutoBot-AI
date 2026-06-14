@@ -56,7 +56,7 @@ export function useVirtualChatScroll(opts: UseVirtualChatScrollOptions) {
     if (msg.type === 'overseer_plan') return 300
     if (msg.type === 'overseer_step') return 180
     if (msg.content && /```[\s\S]{200,}/.test(msg.content)) return 350
-    if ((msg.metadata?.citations?.length ?? 0) > 0) return 250
+    if (((msg.metadata?.citations as unknown[] | undefined)?.length ?? 0) > 0) return 250
     if ((msg.attachments?.length ?? 0) > 0) return 200
     if (msg.sender === 'user' && (msg.content?.length ?? 0) < 100)
       return 80

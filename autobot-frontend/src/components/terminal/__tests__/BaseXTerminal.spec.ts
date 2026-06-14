@@ -9,25 +9,28 @@ import BaseXTerminal from '../BaseXTerminal.vue'
 let lastTerminalInstance: Record<string, any> | null = null
 
 // Factory that creates a fresh Terminal mock instance.
-// Must be a regular function (not arrow) so it can be used as a constructor with `new`.
-function createTerminalMock(this: Record<string, any>) {
-  this.loadAddon = vi.fn()
-  this.open = vi.fn()
-  this.onData = vi.fn()
-  this.onResize = vi.fn()
-  this.dispose = vi.fn()
-  this.write = vi.fn()
-  this.writeln = vi.fn()
-  this.clear = vi.fn()
-  this.reset = vi.fn()
-  this.focus = vi.fn()
-  this.blur = vi.fn()
-  this.cols = 80
-  this.rows = 24
-  this.options = {}
-
-  // eslint-disable-next-line @typescript-eslint/no-this-alias -- Mock: capturing instance for test assertions
-  lastTerminalInstance = this
+// Returning an object from the constructor makes `new` yield it directly,
+// so no `this` mutation/aliasing is needed.
+function createTerminalMock(): Record<string, any> {
+  const instance: Record<string, any> = {
+    loadAddon: vi.fn(),
+    open: vi.fn(),
+    onData: vi.fn(),
+    onResize: vi.fn(),
+    dispose: vi.fn(),
+    write: vi.fn(),
+    writeln: vi.fn(),
+    clear: vi.fn(),
+    reset: vi.fn(),
+    focus: vi.fn(),
+    blur: vi.fn(),
+    cols: 80,
+    rows: 24,
+    options: {},
+  }
+  // Capture instance for test assertions
+  lastTerminalInstance = instance
+  return instance
 }
 
 // Import the mocked Terminal constructor so we can re-apply the implementation

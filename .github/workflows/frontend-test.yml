@@ -10,7 +10,10 @@ on:
       - 'autobot-frontend/**'
       - '.github/workflows/frontend-test.yml'
   pull_request:
-    branches: [main, develop]
+    # 'Dev_*' covers the Dev_new_gui integration branch — every frontend PR
+    # merges here, so the suite must run pre-merge, not only post-merge on the
+    # push trigger (#10019). main/develop kept for promotion PRs.
+    branches: [main, develop, 'Dev_*']
     paths:
       - 'autobot-frontend/**'
       - '.github/workflows/frontend-test.yml'

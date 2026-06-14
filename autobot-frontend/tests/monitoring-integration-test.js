@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 /**
  * Integration Test for Optimized Monitoring System
  * Tests the performance and functionality of the new monitoring architecture

@@ -121,10 +121,8 @@ class CaptchaHumanLoop:
         """
         self.timeout_seconds = timeout_seconds
         self.auto_skip_on_timeout = auto_skip_on_timeout
-        # Use environment variable or NetworkConstants for VNC URL
-        vnc_host = config.vnc_host
-        vnc_port = config.port.vnc
-        self.vnc_url = vnc_url or f"http://{vnc_host}:{vnc_port}/vnc.html"
+        # Use canonical config property to avoid empty-host URL when AUTOBOT_VNC_HOST is unset
+        self.vnc_url = vnc_url or config.vnc_url
         self.enable_auto_solve = enable_auto_solve
         self._auto_solver = None
 

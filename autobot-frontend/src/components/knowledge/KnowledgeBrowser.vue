@@ -188,6 +188,7 @@
 
 <script setup lang="ts">
 import Icon from '@/components/ui/Icon.vue'
+import type { IconName } from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useExpansion } from '@/composables/useExpansion'
 import { useRouter } from 'vue-router'
@@ -256,11 +257,12 @@ const props = withDefaults(defineProps<Props>(), {
   preselectedCategory: null
 })
 
-// Category interface
+// Category interface — icon must be a registry IconName (rendered by
+// KnowledgeBrowserHeader through <Icon :name>)
 interface CategoryOption {
   value: string | null
   label: string
-  icon: string
+  icon: IconName
   count: number
 }
 
@@ -654,17 +656,18 @@ const loadKnowledgeTreeFn = async () => {
 
   if (data && data.categories) {
     // Build tree structure from categories
-    const categories = Object.keys(data.categories)
+    const categoriesByName = data.categories as Record<string, Record<string, unknown>[]>
+    const categories = Object.keys(categoriesByName)
 
     // Update category counts
     const counts: Record<string, number> = {}
     categories.forEach(cat => {
-      counts[cat] = data.categories[cat].length
+      counts[cat] = categoriesByName[cat].length
     })
     categoryCounts.value = counts
 
     treeData.value = categories.map((category: string, idx: number) => {
-      const facts = data.categories[category] || []
+      const facts = categoriesByName[category] || []
 
       // Build nested folder structure based on file paths
       const children = buildNestedTree(facts, category)
