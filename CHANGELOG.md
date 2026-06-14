@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+> **Note — this file is auto-generated, not hand-maintained.**
+> It is produced by [git-cliff](https://git-cliff.org/) from conventional-commit
+> history via `.github/workflows/release.yml` on each release cut from `main`.
+> The generator was broken from 2026-03-01 to 2026-06-13 (issue #9870: the
+> workflow read an action output that is always empty for `--bumped-version`
+> args, so every release step was skipped on every push to `main`), which is
+> why no entries newer than PR #1296 appear below. Changes merged in that
+> window (~PR #1300–#10050) are intentionally **not** listed here — the file is
+> regenerated wholesale by the next successful release, which rolls them into
+> proper version sections.
+>
+> Until then, consult:
+>
+> - [GitHub commit history](https://github.com/mrveiss/AutoBot-AI/commits/main) / `git log`
+> - [changelog/_index.md](changelog/_index.md) — per-version release notes compiled from fragments
+> - [docs/developer/RELEASE_WORKFLOW.md](docs/developer/RELEASE_WORKFLOW.md) — how releases and this file are generated
+
+## Historical entries — generated 2026-03-01 (v0.1.0 era, PRs up to #1296)
+
 ### Bug Fixes
 
 - *(release)* Use v-prefixed initial_tag to match tag_pattern (#1296)
