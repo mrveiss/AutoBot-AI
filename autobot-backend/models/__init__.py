@@ -42,6 +42,7 @@ from models.ml_model import MLModel
 # Process adapter models (#1406)
 from models.process_run import AgentSession, ProcessRun, TaskDecomposition
 from models.secret import Secret
+from models.secret_grant import SecretGrant
 from models.session_collaboration import SessionCollaboration
 
 # Task delegation model (#1753)
@@ -63,6 +64,7 @@ __all__ = [
     "CompletionFeedback",
     "MLModel",
     "Secret",
+    "SecretGrant",
     "SessionCollaboration",
     # Central agent registry (#1754)
     "Agent",
