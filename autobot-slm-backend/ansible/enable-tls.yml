@@ -76,22 +76,38 @@
         - reload systemd
         - restart frontend
 
-    - name: Update frontend environment for HTTPS backend
+    # #10084: VITE_* is baked into the SPA bundle at BUILD time, so the HTTPS
+    # backend URL must land in the build dir's env (was the wrong dir
+    # /opt/autobot/autobot-vue) and the frontend must be REBUILT (a restart
+    # alone cannot change the already-built bundle). .env.production.local is
+    # Vite's highest-precedence production layer, overriding .env.production.
+    - name: Update frontend build env for HTTPS backend (#10084)
       ansible.builtin.lineinfile:
-        path: /opt/autobot/autobot-vue/.env.local
+        path: /opt/autobot/autobot-frontend/.env.production.local
         regexp: '^VITE_API_BASE_URL='
         line: "VITE_API_BASE_URL=https://{{ backend_host }}:{{ backend_tls_port }}"
         create: true
-        mode: "0644"
+        mode: "0640"
         owner: autobot
         group: autobot
       when: backend_tls_enabled | default(false)
-      notify: restart frontend
+      notify:
+        - rebuild frontend
+        - restart frontend
 
   handlers:
     - name: reload systemd
       ansible.builtin.systemd:
         daemon_reload: true
+
+    # #10084: rebuild the SPA so the new VITE_API_BASE_URL is baked into dist/.
+    # Defined before "restart frontend" so both fire in order when notified.
+    - name: rebuild frontend
+      ansible.builtin.command:
+        cmd: npx vite build
+        chdir: /opt/autobot/autobot-frontend
+      become: true
+      become_user: autobot
 
     - name: restart frontend
       ansible.builtin.systemd:

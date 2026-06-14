@@ -156,6 +156,23 @@
   changed_when: true
   tags: ['frontend', 'npm']
 
+# #10084: Vite bakes VITE_* into the bundle at BUILD time from .env* files in
+# the project root (vite.config.js → loadEnv(mode, cwd)). The /etc/autobot copy
+# above is not on that path, so without this the bundle ships with NO VITE_*
+# values — the app only survives on vite.config's `|| '127.0.0.1'` fallbacks and
+# any flag without a fallback (e.g. VITE_FEATURE_*) is silently absent. Deploy
+# the same template to the build root as .env.production (loaded by `vite build`,
+# which runs in production mode) immediately before the build.
+- name: "Frontend | Deploy build-time .env.production for Vite (#10084)"
+  ansible.builtin.template:
+    src: frontend.env.j2
+    dest: "{{ frontend_install_dir }}/autobot-frontend/.env.production"
+    mode: "0640"
+    owner: "{{ frontend_user }}"
+    group: "{{ frontend_group }}"
+  when: package_json_path.stat.exists
+  tags: ['frontend', 'build', 'config']
+
 - name: "Frontend | Build production frontend"
   command: npx vite build
   args:
