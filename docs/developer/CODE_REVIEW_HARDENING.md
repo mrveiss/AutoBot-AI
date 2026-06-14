@@ -113,10 +113,10 @@ Downgrade non-exploitable findings from `critical` to `high`.
 
 ## Verification
 
-Test script: `tests/code-review-hardening-test.sh`
+Test script: `repo_tests/code-review-hardening-test.sh`
 
 ```bash
-bash tests/code-review-hardening-test.sh
+bash repo_tests/code-review-hardening-test.sh
 ```
 
 **Test coverage**:

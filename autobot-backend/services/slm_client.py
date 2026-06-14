@@ -32,11 +32,82 @@ import aiohttp
 import websockets
 from websockets.exceptions import ConnectionClosed, WebSocketException
 
+from autobot_shared.auth.jwt_core import encode_jwt
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
 from constants.ttl_constants import TTL_5_MINUTES
 
 logger = get_logger(__name__)
+
+# TTL for minted service JWTs — short enough to limit exposure, long enough to
+# survive a container restart followed by SLM reconnect backoff (max 60 s).
+_SERVICE_JWT_TTL_HOURS: float = 1.0
+
+
+def _get_slm_signing_secret() -> str | None:
+    """Return the HS256 secret used to sign service JWTs for the SLM.
+
+    The backend signs with ``AUTOBOT_JWT_SECRET`` (``config.jwt_secret``),
+    and ``docker/with-secrets.sh`` propagates that same generated value as
+    ``SLM_SECRET_KEY`` so the SLM's ``auth_service.decode_token`` can verify
+    the token (GH#9852 signing-secret alignment).
+
+    Priority:
+    1. AUTOBOT_JWT_SECRET  (config.jwt_secret)
+    2. SECRET_KEY          (config.secret_key) — bare-metal fallback
+
+    Bare-metal note: when ``SLM_SECRET_KEY`` on the SLM host is not kept in
+    sync with the secret returned here, the WS connection will receive close
+    code 4001.  The caller logs one clear warning after
+    ``_WS_AUTH_FAIL_THRESHOLD`` consecutive failures (see
+    ``_ws_connect_and_listen``).
+
+    Returns None when neither var is set.
+    """
+    secret = config.jwt_secret or config.secret_key
+    return secret if secret else None
+
+
+def _mint_service_jwt(secret: str) -> str:
+    """Mint a short-lived HS256 service JWT accepted by the SLM's auth_service.
+
+    The SLM's ``auth_service.decode_token`` calls ``decode_jwt_or_none(token,
+    settings.secret_key)`` where ``settings.secret_key`` is populated from
+    ``SLM_SECRET_KEY``.  ``docker/with-secrets.sh`` sets
+    ``SLM_SECRET_KEY:=${_GEN_JWT:-}`` so the SLM and backend share the same
+    generated secret (GH#9852 signing-secret alignment, GH#9905).
+
+    Claims are minimal (least-privilege): ``sub``, ``service``, and ``exp``.
+    ``admin`` and ``role`` are deliberately omitted — the SLM WS handler only
+    checks token validity (websocket.py:61-62); a leaked token would default
+    to ``Role.USER`` rather than full admin in REST paths.
+
+    Transport: the caller passes the token via the ``Sec-WebSocket-Protocol``
+    subprotocol header (``['bearer', token]``), which is the SLM's preferred
+    path (websocket.py:32-36).  The token is never placed in the URL.
+
+    Args:
+        secret: Shared HS256 signing secret (``AUTOBOT_JWT_SECRET`` /
+            ``SLM_SECRET_KEY``).
+
+    Returns:
+        Signed JWT string, valid for ``_SERVICE_JWT_TTL_HOURS`` hours.
+    """
+    return encode_jwt(
+        {
+            "sub": "service:backend",
+            "service": True,
+        },
+        secret=secret,
+        expiry_hours=_SERVICE_JWT_TTL_HOURS,
+    )
+
+
+# Number of consecutive 4001 WS auth failures before emitting a single
+# secret-pair warning and backing off to the maximum reconnect interval.
+# This prevents a warn-flood on bare-metal deployments where SLM_SECRET_KEY
+# is not aligned with AUTOBOT_JWT_SECRET.
+_WS_AUTH_FAIL_THRESHOLD: int = 3
 
 # SLM server URL from environment.  On co-located deployments (backend and SLM
 # share the same host) the env var is often not set, so default to localhost.
@@ -140,6 +211,7 @@ class ServiceDiscoveryCache:
 # #6702: SSL context creation moved to autobot_shared/tls.py — single canonical
 # implementation shared across slm_client, dag_executor, celery_app, and
 # notification_service. Re-exported here for one-cycle backward compatibility.
+from autobot_shared.tls import _is_loopback_target
 from autobot_shared.tls import get_internal_tls_context as _create_permissive_ssl_context
 
 
@@ -280,6 +352,11 @@ class SLMClient:
         self._max_reconnect_delay = 60.0  # Max 60 seconds
         self._callbacks: list[Callable] = []
         self._shutdown = False
+        # Consecutive WS auth-failure counter (close code 4001).
+        # After _WS_AUTH_FAIL_THRESHOLD failures a single clear warning is
+        # logged naming the secret-pair requirement, and the reconnect delay
+        # is pinned to _max_reconnect_delay to avoid a warn-flood.
+        self._ws_auth_fail_count: int = 0
 
         # HTTP session
         self._http_session: aiohttp.ClientSession | None = None
@@ -485,26 +562,67 @@ class SLMClient:
                 logger.info("Reconnecting to WebSocket in %.1fs", self._reconnect_delay)
 
     async def _ws_connect_and_listen(self) -> None:
-        """Connect to WebSocket and listen for events."""
-        ws_url = self.slm_url.replace("http://", "ws://").replace("https://", "wss://")
-        ws_url = f"{ws_url}/api/ws/events"
-        # SLM backend authenticates via ?token= query param, not Authorization header (#6839)
-        if self.auth_token:
-            ws_url = f"{ws_url}?token={self.auth_token}"
-        else:
-            logger.debug("No auth token configured; skipping WebSocket connection to SLM")
-            return
+        """Connect to WebSocket and listen for events.
 
-        logger.info("Connecting to WebSocket at %s", ws_url.split("?")[0])  # don't log token
+        The JWT is sent via the ``Sec-WebSocket-Protocol`` subprotocol header
+        (``['bearer', token]``) so it never appears in the URL or server access
+        logs.  The SLM's ``_extract_ws_token`` already prefers this path
+        (websocket.py:32-36).
+
+        A fresh token is minted on every reconnect so an expired token never
+        causes a permanent authentication failure.
+
+        Auth-failure guard: if the SLM closes the socket with code 4001
+        on ``_WS_AUTH_FAIL_THRESHOLD`` consecutive attempts, one clear warning
+        is logged naming the secret-pair requirement and the reconnect delay is
+        pinned to ``_max_reconnect_delay`` to avoid a warn-flood.  This covers
+        bare-metal deployments where ``SLM_SECRET_KEY`` is not aligned with
+        ``AUTOBOT_JWT_SECRET``.
+
+        Path selection (GH#9967):
+          - Direct-port (loopback): ``/api/ws/events`` — nginx is not involved.
+          - Through nginx (non-loopback): ``/slm/api/ws/events`` — nginx routes
+            ``/slm/api/ws/`` to the SLM in both co-located and standalone modes
+            (#3268); ``/api/ws/events`` on co-located nginx lands on the user
+            backend instead.
+        """
+        ws_url = self.slm_url.replace("http://", "ws://").replace("https://", "wss://")
+        ws_path = "/api/ws/events" if _is_loopback_target(self.slm_url) else "/slm/api/ws/events"
+        ws_url = f"{ws_url}{ws_path}"
+
+        # Resolve the auth token for this connection attempt.
+        # Operator-provided static token takes precedence; when absent, mint a
+        # short-lived service JWT from the shared HS256 secret so the SLM's
+        # auth_service.decode_token can verify it (GH#9852).
+        token = self.auth_token
+        if not token:
+            secret = _get_slm_signing_secret()
+            if secret:
+                token = _mint_service_jwt(secret)
+                logger.debug("Minted service JWT for SLM WebSocket connection")
+            else:
+                logger.warning(
+                    "No SLM auth token and no signing secret available "
+                    "(AUTOBOT_JWT_SECRET / SECRET_KEY unset); "
+                    "skipping WebSocket connection to SLM"
+                )
+                return
+
+        logger.info("Connecting to WebSocket at %s", ws_url)
 
         try:
             # Accept self-signed certs for wss:// connections (#1048, #6654)
             ws_ssl = _create_permissive_ssl_context(ws_url) if ws_url.startswith("wss://") else None
+            # Token is passed via Sec-WebSocket-Protocol subprotocol header so
+            # it never appears in the URL or server access logs (project rule:
+            # WebSocket JWT must NOT go in URL).
             async with websockets.connect(
                 ws_url,
+                subprotocols=["bearer", token],
                 ssl=ws_ssl,
             ) as websocket:
                 self._ws_connected = True
+                self._ws_auth_fail_count = 0  # reset on successful handshake
                 self._reconnect_delay = 1.0  # Reset backoff on successful connect
                 logger.info("WebSocket connected")
 
@@ -520,9 +638,24 @@ class SLMClient:
                     except Exception as e:
                         logger.error("Error handling WebSocket message: %s", e)
 
-        except ConnectionClosed:
-            logger.warning("WebSocket connection closed")
+        except ConnectionClosed as exc:
             self._ws_connected = False
+            # Detect auth failure (SLM closes with code 4001 on bad/missing token)
+            if exc.rcvd is not None and exc.rcvd.code == 4001:
+                self._ws_auth_fail_count += 1
+                if self._ws_auth_fail_count >= _WS_AUTH_FAIL_THRESHOLD:
+                    logger.warning(
+                        "SLM WebSocket authentication failed %d consecutive times "
+                        "(close code 4001). Check that AUTOBOT_JWT_SECRET on the backend "
+                        "matches SLM_SECRET_KEY on the SLM host. "
+                        "Backing off to maximum reconnect interval.",
+                        self._ws_auth_fail_count,
+                    )
+                    self._reconnect_delay = self._max_reconnect_delay
+                else:
+                    logger.warning("WebSocket connection rejected by SLM (code 4001): %s", exc)
+            else:
+                logger.warning("WebSocket connection closed: %s", exc)
         except WebSocketException as e:
             logger.error("WebSocket error: %s", e)
             self._ws_connected = False

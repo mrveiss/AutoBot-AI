@@ -61,7 +61,7 @@ from services.audit.unified_audit import AuditAction, audit_record
 
 logger = get_logger(__name__)
 
-_ENV_SECRET = "DEVICE_JWT_SECRET"
+_ENV_SECRET = "DEVICE_JWT_SECRET"  # nosec B105 - environment variable name constant, not a hardcoded secret
 _ENV_TTL_DAYS = "DEVICE_JWT_TTL_DAYS"
 _ENV_CACHE_TTL = "DEVICE_JWT_CACHE_TTL"
 _ENV_AUDIENCE = "DEVICE_JWT_AUDIENCE"

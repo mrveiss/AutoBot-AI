@@ -58,7 +58,7 @@ full_prompt = await _emit_full_prompt_ready(
 
 ## `HookContext` reference
 
-`HookContext` is a dataclass defined in `autobot-backend/extensions/base.py`.
+`HookContext` is a dataclass defined in `autobot-backend/middleware/base.py`.
 
 ```python
 @dataclass
@@ -100,11 +100,11 @@ ctx.data = {
 
 ## Writing a middleware extension
 
-Subclass `Extension` from `autobot-backend/extensions/base.py`.  The hook method name is derived from the `HookPoint` enum name: `SYSTEM_PROMPT_READY` → `on_system_prompt_ready`, `FULL_PROMPT_READY` → `on_full_prompt_ready`.
+Subclass `Extension` from `autobot-backend/middleware/base.py`.  The hook method name is derived from the `HookPoint` enum name: `SYSTEM_PROMPT_READY` → `on_system_prompt_ready`, `FULL_PROMPT_READY` → `on_full_prompt_ready`.
 
 ```python
 from typing import Optional
-from extensions.base import Extension, HookContext
+from middleware.base import Extension, HookContext
 
 
 class MyPromptMiddleware(Extension):
@@ -141,7 +141,7 @@ class MyPromptMiddleware(Extension):
 import httpx
 import os
 from typing import Optional
-from extensions.base import Extension, HookContext
+from middleware.base import Extension, HookContext
 
 PROMETHEUS_URL    = os.getenv("PROMETHEUS_URL", "http://localhost:9090")
 CPU_THRESHOLD_PCT = float(os.getenv("PROMPT_CPU_THRESHOLD_PCT", "80"))
@@ -203,12 +203,12 @@ class TelemetryPromptMiddleware(Extension):
 
 ## `ExtensionManager` dispatch internals
 
-The manager lives in `autobot-backend/extensions/manager.py`.  A global thread-safe singleton is returned by `get_extension_manager()`.
+The manager lives in `autobot-backend/middleware/manager.py`.  A global thread-safe singleton is returned by `get_extension_manager()`.
 
 ### How `invoke_with_transform` works (used by both prompt hooks)
 
 ```python
-# Simplified from extensions/manager.py
+# Simplified from middleware/manager.py
 async def invoke_with_transform(self, hook, ctx, key):
     for extension in self.extensions:           # sorted ascending by priority
         if not extension.enabled:
@@ -224,7 +224,7 @@ Each extension that returns a non-`None` string **replaces the prompt in the con
 ### How `on_hook` routes to your method
 
 ```python
-# Simplified from extensions/base.py Extension.on_hook()
+# Simplified from middleware/base.py Extension.on_hook()
 method_name = f"on_{hook.name.lower()}"
 # SYSTEM_PROMPT_READY  →  "on_system_prompt_ready"
 # FULL_PROMPT_READY    →  "on_full_prompt_ready"
@@ -281,7 +281,7 @@ Create `plugins/my-middleware/plugin.json`:
 ### Programmatically at startup
 
 ```python
-from extensions.manager import get_extension_manager
+from middleware.manager import get_extension_manager
 from plugins.my_middleware.plugin import MyPromptMiddleware
 
 get_extension_manager().register(MyPromptMiddleware())
@@ -305,7 +305,7 @@ mgr.get_statistics()                     # total/enabled counts + per-extension 
 import pytest
 from unittest.mock import AsyncMock, patch
 
-from extensions.manager import get_extension_manager, reset_extension_manager
+from middleware.manager import get_extension_manager, reset_extension_manager
 from chat_workflow.llm_handler import _emit_full_prompt_ready, _emit_system_prompt_ready
 
 
@@ -347,7 +347,7 @@ async def test_no_modification_when_cpu_low():
 @pytest.mark.asyncio
 async def test_multiple_extensions_chain_in_priority_order():
     """Prompt modifications must chain through extensions sorted by priority."""
-    from extensions.base import Extension
+    from middleware.base import Extension
 
     class AddA(Extension):
         name     = "add-a"
@@ -372,7 +372,7 @@ async def test_multiple_extensions_chain_in_priority_order():
 @pytest.mark.asyncio
 async def test_extension_error_is_isolated():
     """An exception in one extension must not prevent subsequent extensions from running."""
-    from extensions.base import Extension
+    from middleware.base import Extension
 
     class Crasher(Extension):
         name     = "crasher"
@@ -397,7 +397,7 @@ async def test_extension_error_is_isolated():
 @pytest.mark.asyncio
 async def test_system_prompt_hook_receives_session():
     """The session object must be available in on_system_prompt_ready."""
-    from extensions.base import Extension
+    from middleware.base import Extension
 
     received = {}
 
@@ -450,9 +450,9 @@ async def test_system_prompt_hook_receives_session():
 
 | File | Purpose |
 |------|---------|
-| `autobot-backend/extensions/hooks.py` | `HookPoint` enum (24 values) + `HOOK_METADATA` |
-| `autobot-backend/extensions/base.py` | `HookContext` dataclass + `Extension` base class with all 24 stub methods |
-| `autobot-backend/extensions/manager.py` | `ExtensionManager` singleton + `invoke_with_transform`, `invoke_hook`, `invoke_until_handled`, `invoke_cancellable` |
+| `autobot-backend/middleware/hooks.py` | `HookPoint` enum (24 values) + `HOOK_METADATA` |
+| `autobot-backend/middleware/base.py` | `HookContext` dataclass + `Extension` base class with all 24 stub methods |
+| `autobot-backend/middleware/manager.py` | `ExtensionManager` singleton + `invoke_with_transform`, `invoke_hook`, `invoke_until_handled`, `invoke_cancellable` |
 | `autobot-backend/chat_workflow/llm_handler.py` | `_emit_system_prompt_ready()` and `_emit_full_prompt_ready()` call sites |
 | `autobot-backend/chat_workflow/prompt_hooks_test.py` | Unit tests for both prompt hooks |
 | `plugins/core-plugins/telemetry-prompt-middleware/plugin.py` | Reference implementation using Prometheus telemetry |

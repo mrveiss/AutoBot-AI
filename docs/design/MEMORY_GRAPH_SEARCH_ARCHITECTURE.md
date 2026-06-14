@@ -636,4 +636,4 @@ Circuit Breaker Pattern:
 
 **End of Architecture Document**
 
-For implementation details, see: [`MEMORY_GRAPH_SEMANTIC_SEARCH.md`](./MEMORY_GRAPH_SEMANTIC_SEARCH.md)
+For implementation details, see: [`MEMORY_GRAPH_SEMANTIC_SEARCH.md`](../features/MEMORY_GRAPH_SEMANTIC_SEARCH.md)

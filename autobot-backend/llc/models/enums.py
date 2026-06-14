@@ -15,6 +15,21 @@ AgentStatus values. Cross-reference: GH#7504.
 from enum import Enum
 
 
+def pg_enum_values(enum_cls: type[Enum]) -> list[str]:
+    """``values_callable`` for ``sa.Enum`` so a create_all-built Postgres enum
+    uses each member's ``.value`` (lowercase) — not its NAME (#9980).
+
+    Every enum here is ``UPPERCASE = "lowercase"``. Generic ``sa.Enum(EnumCls)``
+    defaults to member NAMES as the Postgres enum labels, so a create_all
+    bootstrap built ``approvalstatus`` as ``{PENDING, …}`` while the Alembic
+    migrations build it as ``{pending, …}``. The ORM then binds members by
+    name and ``server_default=ApprovalStatus.PENDING.value`` ('pending') is
+    invalid against the create_all-built type. Passing this callable makes the
+    model-built type and the ORM bind values match the migration-built ones.
+    """
+    return [member.value for member in enum_cls]
+
+
 class WorkItemType(str, Enum):
     """Type of LLC work item (GH#8213).
 

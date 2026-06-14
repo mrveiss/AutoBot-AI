@@ -38,8 +38,14 @@ async def _text_to_embedding(text: str) -> List[float]:
     return await _generate_embedding_with_npu_fallback(text)
 
 
-async def _get_client(database: str = "vectors"):
-    """Get an async Redis client for vector operations."""
+async def _get_client(database: str = "memory"):
+    """Get an async Redis client for vector operations.
+
+    Defaults to the "memory" database (DB 0) — RediSearch FT.* commands only
+    operate on logical DB 0, and agent-memory data keys are written to DB 0
+    by the MCP data-access layer.  Callers may pass a different database name
+    for indexes that live on other DBs.
+    """
     return await get_async_redis_client(database=database)
 
 
@@ -88,9 +94,15 @@ async def handle_redis_vector_create_index(
     dimensions: int = 1536,
     distance_metric: str = "COSINE",
     extra_fields: List[Dict[str, str]] | None = None,
-    database: str = "vectors",
+    database: str = "memory",
 ) -> Metadata:
-    """Create a RediSearch vector index using HNSW."""
+    """Create a RediSearch vector index using HNSW.
+
+    The ``database`` parameter must resolve to Redis logical DB 0 because
+    RediSearch FT.CREATE is only supported on DB 0.  The "memory" alias
+    (DB 0) is the correct value for the agent-memory index; the legacy
+    default of "vectors" (DB 8) caused the startup warning fixed by #9904.
+    """
     client = await _get_client(database)
     schema_args = _build_index_schema(vector_field, dimensions, distance_metric, extra_fields)
     try:
@@ -181,7 +193,7 @@ async def handle_redis_vector_search(
     index_name: str = "idx:agent_memory",
     top_k: int = 10,
     return_fields: List[str] | None = None,
-    database: str = "vectors",
+    database: str = "memory",
 ) -> Metadata:
     """Similarity search by embedding vector or text (Issue #2623)."""
     top_k = min(max(1, top_k), _MAX_TOP_K)
@@ -204,7 +216,7 @@ async def handle_redis_hybrid_search(
     index_name: str = "idx:agent_memory",
     top_k: int = 10,
     return_fields: List[str] | None = None,
-    database: str = "vectors",
+    database: str = "memory",
 ) -> Metadata:
     """Vector + filter combined query (Issue #2623: accepts query_text)."""
     if filter_expression and not _SAFE_FILTER_PATTERN.match(filter_expression):
@@ -230,7 +242,7 @@ async def handle_redis_hybrid_search(
 
 async def handle_redis_vector_index_info(
     index_name: str = "idx:agent_memory",
-    database: str = "vectors",
+    database: str = "memory",
 ) -> Metadata:
     """Get index schema and stats."""
     client = await _get_client(database)

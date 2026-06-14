@@ -19,8 +19,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from autobot_shared.singleton_factory import lazy_singleton
-from user_management.database import get_async_session_factory
+from llc.deps import get_session, service_dep
 
 from ..models.enums import WorkItemType
 from ..services.review_gate import (
@@ -30,17 +29,7 @@ from ..services.review_gate import (
 )
 
 router = APIRouter(tags=["llc-review-gate-policies"])
-_get_service = lazy_singleton(ReviewGatePolicyService)
-
-
-def _service() -> ReviewGatePolicyService:
-    return _get_service()
-
-
-async def get_session() -> AsyncSession:
-    factory = get_async_session_factory()
-    async with factory() as session:
-        yield session
+_service = service_dep(ReviewGatePolicyService)
 
 
 # ------------------------------------------------------------------

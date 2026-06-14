@@ -42,7 +42,7 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import VueApexCharts from 'vue3-apexcharts'
-import type { ApexOptions } from 'apexcharts'
+import type { ApexOptions, ApexAxisChartSeries, ApexNonAxisChartSeries } from 'apexcharts'
 import { getCssVar } from '@/composables/useCssVars'
 import Icon from '@/components/ui/Icon.vue'
 

@@ -16,6 +16,7 @@
  * - Slide animation
  */
 
+import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, watch, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
@@ -148,8 +149,8 @@ function stopResize(): void {
   document.removeEventListener('mouseup', stopResize)
 }
 
-function getTypeIcon(type?: string): string {
-  const icons: Record<string, string> = {
+function getTypeIcon(type?: string): IconName {
+  const icons: Record<string, IconName> = {
     'markdown': 'file-alt',
     'document': 'file-alt',
     'api': 'code',

@@ -9,6 +9,8 @@ Covers:
   4. handle_due_agent creates a run record and advances the sorted-set score.
   5. trigger_manual creates a QUEUED run and returns it.
   6. Removed/disabled agent is dropped from the sorted set on next tick.
+  7. H1 — _record_run_for_replay uses exact file path via _output_path.
+  8. H3 — replay=True context flag suppresses session resume in ClaudeCodeAdapter.
 """
 
 import uuid
@@ -494,3 +496,229 @@ class TestDispatchAutobotAgent:
         with patch(f"{_HBS}.AutoBotAgentAdapter", return_value=mock_adapter):
             await _dispatch_autobot_agent(agent, {})
         mock_adapter.run_blocking.assert_awaited_once()
+
+
+# ---------------------------------------------------------------------------
+# GH#9793: CLI-availability gate — subprocess adapters skip when CLI absent
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+class TestCliAvailabilityGate:
+    """Heartbeat dispatch skips subprocess adapters whose CLI is not on PATH."""
+
+    async def test_skips_dispatch_when_cli_absent(self):
+        """When is_cli_available() returns False, _dispatch_registry_adapter is
+        never called and the function returns cleanly (no raise, no run recorded).
+        """
+        agent = _make_agent(adapter_type="claude_code")
+        fake_adapter = MagicMock()
+        fake_adapter.is_cli_available = MagicMock(return_value=False)
+        fake_adapter._required_cli = "claude"
+
+        with (
+            patch(f"{_HBS}.get_adapter", return_value=fake_adapter),
+            patch(f"{_HBS}.is_subprocess_adapter", return_value=True),
+            patch(f"{_HBS}._dispatch_registry_adapter", new=AsyncMock()) as mock_reg,
+        ):
+            await _dispatch_adapter(agent, {})
+
+        mock_reg.assert_not_awaited()
+
+    async def test_dispatches_when_cli_present(self):
+        """When is_cli_available() returns True, dispatch proceeds normally."""
+        agent = _make_agent(adapter_type="claude_code")
+        fake_adapter = MagicMock()
+        fake_adapter.is_cli_available = MagicMock(return_value=True)
+        fake_adapter._required_cli = "claude"
+
+        with (
+            patch(f"{_HBS}.get_adapter", return_value=fake_adapter),
+            patch(f"{_HBS}.is_subprocess_adapter", return_value=True),
+            patch(f"{_HBS}._dispatch_registry_adapter", new=AsyncMock()) as mock_reg,
+        ):
+            await _dispatch_adapter(agent, {})
+
+        mock_reg.assert_awaited_once()
+
+    async def test_non_subprocess_adapter_bypasses_cli_gate(self):
+        """Non-subprocess adapters (is_subprocess_adapter=False) are not gated."""
+        agent = _make_agent(adapter_type="http_adapter")
+        fake_adapter = MagicMock()
+
+        with (
+            patch(f"{_HBS}.get_adapter", return_value=fake_adapter),
+            patch(f"{_HBS}.is_subprocess_adapter", return_value=False),
+            patch(f"{_HBS}._dispatch_registry_adapter", new=AsyncMock()) as mock_reg,
+        ):
+            await _dispatch_adapter(agent, {})
+
+        mock_reg.assert_awaited_once()
+
+    async def test_cli_gate_skips_copilot_when_gh_absent(self):
+        """Gate works for copilot_local adapter when gh binary is absent."""
+        agent = _make_agent(adapter_type="copilot_local")
+        fake_adapter = MagicMock()
+        fake_adapter.is_cli_available = MagicMock(return_value=False)
+        fake_adapter._required_cli = "gh"
+
+        with (
+            patch(f"{_HBS}.get_adapter", return_value=fake_adapter),
+            patch(f"{_HBS}.is_subprocess_adapter", return_value=True),
+            patch(f"{_HBS}._dispatch_registry_adapter", new=AsyncMock()) as mock_reg,
+        ):
+            await _dispatch_adapter(agent, {})
+
+
+# ---------------------------------------------------------------------------
+# H1 — _record_run_for_replay uses exact file path, not mtime glob
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+class TestRecordRunForReplayH1:
+    async def test_uses_exact_output_path_from_external_run_id(self):
+        """_record_run_for_replay resolves the exact file via _output_path(external_run_id).
+
+        No glob, no mtime ordering — the external_run_id returned by adapter.invoke
+        uniquely determines the file.
+        """
+        import os
+        import tempfile
+        import time
+
+        from llc.scheduler.heartbeat_scheduler import _record_run_for_replay
+
+        agent = _make_agent(adapter_type="claude_code", adapter_config={"output_dir": "/tmp/dummy"})
+        agent_id = agent["agent_id"]
+        external_run_id = "12345/session-abc"
+        expected_filename = f"llc_agent_{agent_id}_12345_session-abc.jsonl"
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            agent["adapter_config"]["output_dir"] = tmpdir
+            exact_path = os.path.join(tmpdir, expected_filename)
+            with open(exact_path, "w", encoding="utf-8") as fh:
+                fh.write('{"type": "result", "is_error": false}\n')
+
+            # Decoy file with later mtime — mtime-glob would pick this first.
+            time.sleep(0.01)
+            decoy_path = os.path.join(tmpdir, f"llc_agent_{agent_id}_99999_decoy.jsonl")
+            with open(decoy_path, "w", encoding="utf-8") as fh:
+                fh.write('{"type": "decoy"}\n')
+
+            captured: dict = {}
+            mock_svc = MagicMock()
+            mock_svc.record_run = AsyncMock(side_effect=lambda **kw: captured.update(kw))
+
+            with patch(f"{_HBS}.RunReplayService", return_value=mock_svc):
+                await _record_run_for_replay(
+                    agent,
+                    uuid.uuid4(),
+                    {},
+                    "completed",
+                    external_run_id=external_run_id,
+                )
+
+        output_text = captured.get("output_text") or ""
+        assert "result" in output_text, "Expected content from exact file, not decoy"
+        assert "decoy" not in output_text, "Decoy file content should not be present"
+
+    async def test_no_external_run_id_stores_no_events(self):
+        """When external_run_id is None, recorded_events is None."""
+        from llc.scheduler.heartbeat_scheduler import _record_run_for_replay
+
+        agent = _make_agent(adapter_type="claude_code", adapter_config={"output_dir": "/tmp"})
+        captured: dict = {}
+        mock_svc = MagicMock()
+        mock_svc.record_run = AsyncMock(side_effect=lambda **kw: captured.update(kw))
+
+        with patch(f"{_HBS}.RunReplayService", return_value=mock_svc):
+            await _record_run_for_replay(agent, uuid.uuid4(), {}, "completed", external_run_id=None)
+
+        assert captured.get("recorded_events") is None
+        assert captured.get("output_text") is None
+
+
+# ---------------------------------------------------------------------------
+# H3 — ClaudeCodeAdapter skips session resume when context["replay"] is True
+# ---------------------------------------------------------------------------
+
+
+class TestClaudeCodeAdapterNoResume:
+    @pytest.mark.asyncio
+    async def test_replay_flag_skips_get_resumable_session(self):
+        """When context["replay"]=True, _get_resumable_session is never called."""
+        from llc.adapters.claude_code_adapter import ClaudeCodeAdapter
+
+        adapter = ClaudeCodeAdapter()
+        resume_called = []
+
+        async def fake_get_resumable(agent_id: str):
+            resume_called.append(agent_id)
+            return "session-old"
+
+        adapter._get_resumable_session = fake_get_resumable  # type: ignore[method-assign]
+
+        agent_config = {
+            "agent_id": "agent-abc",
+            "adapter_config": {"output_dir": "/tmp", "timeout_seconds": 60},
+        }
+        context = {"replay": True, "title": "test task"}
+
+        with (
+            patch("llc.adapters.claude_code_adapter._resolve_claude_cli", return_value="/usr/bin/claude"),
+            patch("llc.adapters.claude_code_adapter.asyncio.create_subprocess_exec") as mock_exec,
+            patch("builtins.open", create=True),
+            patch("llc.adapters.claude_code_adapter.os.makedirs"),
+            patch.object(adapter, "_build_prompt", return_value="prompt text"),
+            patch.object(adapter, "_store_session", new=AsyncMock()),
+            patch("llc.adapters.claude_code_adapter.json.dump"),
+        ):
+            mock_proc = MagicMock()
+            mock_proc.pid = 999
+            mock_exec.return_value = mock_proc
+            try:
+                await adapter._invoke(agent_config, context)
+            except Exception:
+                pass
+
+        assert resume_called == [], "resume should NOT be called for replay runs"
+
+    @pytest.mark.asyncio
+    async def test_normal_run_calls_get_resumable_session(self):
+        """Without replay flag, _get_resumable_session IS called."""
+        from llc.adapters.claude_code_adapter import ClaudeCodeAdapter
+
+        adapter = ClaudeCodeAdapter()
+        resume_called = []
+
+        async def fake_get_resumable(agent_id: str):
+            resume_called.append(agent_id)
+            return None
+
+        adapter._get_resumable_session = fake_get_resumable  # type: ignore[method-assign]
+
+        agent_config = {
+            "agent_id": "agent-abc",
+            "adapter_config": {"output_dir": "/tmp", "timeout_seconds": 60},
+        }
+        context = {"title": "normal run"}
+
+        with (
+            patch("llc.adapters.claude_code_adapter._resolve_claude_cli", return_value="/usr/bin/claude"),
+            patch("llc.adapters.claude_code_adapter.asyncio.create_subprocess_exec") as mock_exec,
+            patch("builtins.open", create=True),
+            patch("llc.adapters.claude_code_adapter.os.makedirs"),
+            patch.object(adapter, "_build_prompt", return_value="prompt text"),
+            patch.object(adapter, "_store_session", new=AsyncMock()),
+            patch("llc.adapters.claude_code_adapter.json.dump"),
+        ):
+            mock_proc = MagicMock()
+            mock_proc.pid = 999
+            mock_exec.return_value = mock_proc
+            try:
+                await adapter._invoke(agent_config, context)
+            except Exception:
+                pass
+
+        assert len(resume_called) == 1, "resume SHOULD be called for normal runs"

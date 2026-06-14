@@ -22,12 +22,15 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 
+from migrations.guards import drop_pg_enum, ensure_pg_enum, pg_enum
+
 revision: str = "20260523_022"
 down_revision: Union[str, None] = "20260522_021"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
-_workitemtype = sa.Enum(
+_workitemtype = pg_enum(
+    "workitemtype",
     "epic",
     "feature",
     "pbi",
@@ -36,9 +39,9 @@ _workitemtype = sa.Enum(
     "subtask",
     "spike",
     "risk",
-    name="workitemtype",
 )
-_workitemstatus = sa.Enum(
+_workitemstatus = pg_enum(
+    "workitemstatus",
     "backlog",
     "ready",
     "in_progress",
@@ -46,24 +49,23 @@ _workitemstatus = sa.Enum(
     "done",
     "cancelled",
     "blocked",
-    name="workitemstatus",
 )
-_workitempriority = sa.Enum(
+_workitempriority = pg_enum(
+    "workitempriority",
     "critical",
     "high",
     "medium",
     "low",
-    name="workitempriority",
 )
 
 
 def upgrade() -> None:
     bind = op.get_bind()
-    _workitemtype.create(bind, checkfirst=True)
-    _workitemstatus.create(bind, checkfirst=True)
+    ensure_pg_enum(_workitemtype)
+    ensure_pg_enum(_workitemstatus)
     # Ensure 'ready' exists even when workitemstatus was pre-created without it.
     bind.execute(sa.text("ALTER TYPE workitemstatus ADD VALUE IF NOT EXISTS 'ready'"))
-    _workitempriority.create(bind, checkfirst=True)
+    ensure_pg_enum(_workitempriority)
 
     op.create_table(
         "llc_work_items",
@@ -194,6 +196,6 @@ def upgrade() -> None:
 def downgrade() -> None:
     op.drop_table("llc_work_item_comments")
     op.drop_table("llc_work_items")
-    _workitempriority.drop(op.get_bind(), checkfirst=True)
-    _workitemstatus.drop(op.get_bind(), checkfirst=True)
-    _workitemtype.drop(op.get_bind(), checkfirst=True)
+    drop_pg_enum(_workitempriority)
+    drop_pg_enum(_workitemstatus)
+    drop_pg_enum(_workitemtype)

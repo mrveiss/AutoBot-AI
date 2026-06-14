@@ -24,31 +24,40 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 
+from migrations.guards import drop_pg_enum, ensure_pg_enum, pg_enum
+
 revision: str = "20260523_030"
 down_revision: Union[str, None] = "20260523_029"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
-_portfolio_status = sa.Enum("active", "paused", "archived", name="portfoliostatus")
-_program_status = sa.Enum("active", "paused", "archived", name="programstatus")
-_project_status = sa.Enum("backlog", "planned", "in_progress", "completed", "cancelled", name="projectstatus")
-_sprint_status = sa.Enum(
+_portfolio_status = pg_enum("portfoliostatus", "active", "paused", "archived")
+_program_status = pg_enum("programstatus", "active", "paused", "archived")
+_project_status = pg_enum(
+    "projectstatus",
+    "backlog",
+    "planned",
+    "in_progress",
+    "completed",
+    "cancelled",
+)
+_sprint_status = pg_enum(
+    "sprintstatus",
     "planning",
     "active",
     "review",
     "retrospective",
     "closed",
     "cancelled",
-    name="sprintstatus",
 )
 
 
 def upgrade() -> None:
     # -- Create ENUMs --
-    _portfolio_status.create(op.get_bind(), checkfirst=True)
-    _program_status.create(op.get_bind(), checkfirst=True)
-    _project_status.create(op.get_bind(), checkfirst=True)
-    _sprint_status.create(op.get_bind(), checkfirst=True)
+    ensure_pg_enum(_portfolio_status)
+    ensure_pg_enum(_program_status)
+    ensure_pg_enum(_project_status)
+    ensure_pg_enum(_sprint_status)
 
     # -- llc_portfolios --
     op.create_table(
@@ -200,7 +209,7 @@ def downgrade() -> None:
     op.drop_column("llc_work_items", "needs_triage")
     op.drop_column("llc_work_items", "backlog_position")
 
-    _sprint_status.drop(op.get_bind(), checkfirst=True)
-    _project_status.drop(op.get_bind(), checkfirst=True)
-    _program_status.drop(op.get_bind(), checkfirst=True)
-    _portfolio_status.drop(op.get_bind(), checkfirst=True)
+    drop_pg_enum(_sprint_status)
+    drop_pg_enum(_project_status)
+    drop_pg_enum(_program_status)
+    drop_pg_enum(_portfolio_status)

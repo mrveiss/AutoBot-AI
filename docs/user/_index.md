@@ -12,6 +12,7 @@ aliases:
 | --- | --- |
 | [README](README.md) | User docs overview |
 | [getting-started](getting-started.md) | Getting started |
+| [TELEMETRY_PRIVACY](TELEMETRY_PRIVACY.md) | Telemetry & privacy (local-only) |
 | [quick-start-chat](quick-start-chat.md) | Quick start — chat |
 | [quick-start-knowledge](quick-start-knowledge.md) | Quick start — knowledge base |
 

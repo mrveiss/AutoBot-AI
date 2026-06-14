@@ -7,8 +7,8 @@
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel, Field
 from sqlalchemy import select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -69,6 +69,41 @@ class UpdateLimitRequest(BaseModel):
     alert_threshold: Optional[float] = None
 
 
+class ProvisionRequest(BaseModel):
+    """Request body for POST /budget/{agent_id} (GH#9901).
+
+    budget_limit is optional — omitting it uses LLC_DEFAULT_BUDGET_LIMIT (default $10).
+    company_id is derived from agent_org_nodes to prevent cross-company row insertion.
+    """
+
+    budget_limit: Optional[Decimal] = Field(None, gt=0, lt=Decimal("1000000000"))
+
+
+def _derive_status(row: LLCAgentBudget) -> tuple:
+    """Compute (remaining, is_over, alert_triggered) from a budget row (GH#8997).
+
+    Centralises the spend/limit/threshold arithmetic used in every read path.
+    Returns a plain tuple so callers can unpack directly.
+    """
+    budget_mode = str(row.budget_mode)
+    spent = Decimal(str(row.budget_spent))
+    limit = Decimal(str(row.budget_limit))
+    threshold = Decimal(str(row.alert_threshold))
+    tokens_spent = int(row.tokens_spent)
+    token_limit = int(row.token_limit) if row.token_limit is not None else None
+
+    if budget_mode == "tokens" and token_limit is not None:
+        remaining = Decimal(str(token_limit - tokens_spent))
+        is_over = tokens_spent > token_limit
+        alert = token_limit > 0 and tokens_spent / token_limit >= threshold
+    else:
+        remaining = limit - spent
+        is_over = spent > limit
+        alert = limit > Decimal("0") and spent / limit >= threshold
+
+    return remaining, is_over, alert
+
+
 def _build_response(row: LLCAgentBudget, remaining: Decimal, is_over: bool, alert: bool) -> BudgetResponse:
     """Build BudgetResponse with token support (GH#8997)."""
     return BudgetResponse(
@@ -83,6 +118,42 @@ def _build_response(row: LLCAgentBudget, remaining: Decimal, is_over: bool, aler
         is_over_limit=is_over,
         alert_triggered=alert,
     )
+
+
+@router.post("/{agent_id}", response_model=BudgetResponse, status_code=status.HTTP_201_CREATED)
+async def provision_budget(
+    agent_id: str,
+    body: ProvisionRequest,
+    session: AsyncSession = Depends(get_async_session),
+) -> BudgetResponse:
+    """Provision a default budget row for an agent (GH#9901).
+
+    Returns 201 on creation, 409 if a row already exists.
+    Returns 404 if the agent does not exist in agent_org_nodes.
+    company_id is derived from agent_org_nodes — callers cannot scope rows
+    to arbitrary companies.
+    """
+    # Validate agent exists and derive company_id in a single query.
+    agent_row = await session.execute(
+        text("SELECT company_id FROM agent_org_nodes WHERE agent_id = :agent_id LIMIT 1"),
+        {"agent_id": agent_id},
+    )
+    agent_record = agent_row.fetchone()
+    if agent_record is None:
+        raise HTTPException(status_code=404, detail=f"Agent {agent_id!r} not found")
+
+    company_id = str(agent_record[0])
+
+    svc = BudgetService()
+    row, created = await svc.provision_budget(session, agent_id, company_id, body.budget_limit)
+    if not created:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Budget row already exists for agent {agent_id}",
+        )
+
+    remaining, is_over, alert = _derive_status(row)
+    return _build_response(row, remaining, is_over, alert)
 
 
 @router.get("", response_model=List[Dict[str, Any]])
@@ -127,13 +198,7 @@ async def get_budget(
     if row is None:
         raise HTTPException(status_code=404, detail=f"No budget row for agent {agent_id}")
 
-    spent = Decimal(str(row.budget_spent))
-    limit = Decimal(str(row.budget_limit))
-    threshold = Decimal(str(row.alert_threshold))
-    remaining = limit - spent
-    is_over = spent > limit
-    alert = limit > Decimal("0") and spent / limit >= threshold
-
+    remaining, is_over, alert = _derive_status(row)
     return _build_response(row, remaining, is_over, alert)
 
 
@@ -167,10 +232,28 @@ async def update_limit(
     # GH#8462: pass Decimal directly — Pydantic already validates it as Decimal,
     # no str() conversion needed (which would silently coerce to TEXT in the ORM).
     # GH#8997: support budget_mode and token_limit updates.
+    # Validate mode-appropriate fields (GH#8997 "not both"):
+    # - Setting token_limit while explicitly targeting dollars mode is rejected.
+    # - Setting budget_limit while explicitly targeting tokens mode is rejected.
+    effective_mode = body.budget_mode if body.budget_mode is not None else str(row.budget_mode)
+    if body.budget_mode is not None and body.budget_mode not in ("dollars", "tokens"):
+        raise HTTPException(status_code=400, detail="budget_mode must be 'dollars' or 'tokens'")
+    if effective_mode == "dollars" and body.token_limit is not None:
+        raise HTTPException(
+            status_code=400,
+            detail="token_limit cannot be set when budget_mode is 'dollars'",
+        )
+    # Asymmetry is deliberate: budget_limit on a row ALREADY in tokens mode is
+    # allowed — it adjusts the dollar fallback used when token_limit is unset
+    # (see watchdog/check_budget fallback semantics). Only the explicit switch
+    # to tokens mode rejects a simultaneous budget_limit.
+    if effective_mode == "tokens" and body.budget_limit is not None and body.budget_mode == "tokens":
+        raise HTTPException(
+            status_code=400,
+            detail="budget_limit cannot be set when switching to budget_mode 'tokens'; set token_limit instead",
+        )
     values: dict = {}
     if body.budget_mode is not None:
-        if body.budget_mode not in ("dollars", "tokens"):
-            raise HTTPException(status_code=400, detail="budget_mode must be 'dollars' or 'tokens'")
         values["budget_mode"] = body.budget_mode
     if body.budget_limit is not None:
         values["budget_limit"] = body.budget_limit
@@ -185,8 +268,11 @@ async def update_limit(
     await session.execute(update(LLCAgentBudget).where(LLCAgentBudget.agent_id == agent_id).values(**values))
     await session.refresh(row)
 
-    svc = BudgetService()
-    remaining, is_over, alert = await svc.check_budget(session, agent_id)
+    # Drop the tracker cache so readers (watchdog, check_budget) see the new
+    # mode/limit immediately instead of the pre-PATCH state for up to its TTL,
+    # and derive the response from the freshly refreshed row.
+    await BudgetService.invalidate_cache(agent_id)
+    remaining, is_over, alert = _derive_status(row)
     return _build_response(row, remaining, is_over, alert)
 
 

@@ -106,7 +106,7 @@ def get_listening_ports() -> List[PortInfo]:
 
     try:
         # ss -tlnp: TCP, listening, numeric, show process
-        result = subprocess.run(  # nosec B607 - fixed command for port scanning
+        result = subprocess.run(  # nosec B603 B607 - fixed ss argv for port scanning, no user input
             ["ss", "-tlnp"],
             capture_output=True,
             text=True,
@@ -145,7 +145,7 @@ def _get_ports_netstat() -> List[PortInfo]:
     ports = []
 
     try:
-        result = subprocess.run(  # nosec B607 - fixed command for port scanning
+        result = subprocess.run(  # nosec B603 B607 - fixed netstat argv for port scanning, no user input
             ["netstat", "-tlnp"],
             capture_output=True,
             text=True,

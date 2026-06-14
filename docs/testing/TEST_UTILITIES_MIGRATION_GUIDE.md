@@ -3,6 +3,8 @@
 > **Addresses**: 20 duplicate `setup_method` implementations across test files
 >
 > **Impact**: Reduces test setup code by 70%, improves test reliability and maintenance
+>
+> **Related**: [ASYNC_REDIS_FIXTURES](ASYNC_REDIS_FIXTURES.md) — canonical `make_async_redis()` / `patch_async_redis()` fixtures for mocking async Redis
 
 ## 🎯 Overview
 

@@ -1186,6 +1186,7 @@ class MiscConfig(BaseSettings):
     autoresearch_staged_eval_fraction: str = Field(default="", alias="AUTOBOT_AUTORESEARCH_STAGED_EVAL_FRACTION")
     autoresearch_staged_eval_threshold: float = Field(default=0.0, alias="AUTOBOT_AUTORESEARCH_STAGED_EVAL_THRESHOLD")
     autoresearch_timeout: int = Field(default=0, alias="AUTOBOT_AUTORESEARCH_TIMEOUT")
+    ai_stack_enabled: bool = Field(default=True, alias="AUTOBOT_AI_STACK_ENABLED")
     cache_enabled: bool = Field(default=False, alias="AUTOBOT_CACHE_ENABLED")
     cache_size: int = Field(default=0, alias="AUTOBOT_CACHE_SIZE")
     cache_l1_size: int = Field(
@@ -1354,7 +1355,7 @@ class MiscConfig(BaseSettings):
     celery_result_backend: str = Field(default="", alias="CELERY_RESULT_BACKEND")
     ci: str = Field(default="", alias="CI")
     codebase_index_batch_size: int = Field(default=0, alias="CODEBASE_INDEX_BATCH_SIZE")
-    codebase_index_embedding_mode: int = Field(default=0, alias="CODEBASE_INDEX_EMBEDDING_MODE")
+    codebase_index_embedding_mode: str = Field(default="precompute", alias="CODEBASE_INDEX_EMBEDDING_MODE")
     codebase_index_embed_batch_size: int = Field(default=0, alias="CODEBASE_INDEX_EMBED_BATCH_SIZE")
     codebase_index_incremental: str = Field(default="", alias="CODEBASE_INDEX_INCREMENTAL")
     codebase_index_parallel_batches: str = Field(default="", alias="CODEBASE_INDEX_PARALLEL_BATCHES")
@@ -1773,7 +1774,15 @@ class AutoBotConfig(BaseSettings):
 
     @property
     def slm_url(self) -> str:
-        """Get the SLM Admin server URL (Issue #768)."""
+        """Get the SLM Admin server URL (Issue #768).
+
+        Honor an explicit ``SLM_URL`` when set, otherwise build it from
+        ``AUTOBOT_SLM_HOST``/``AUTOBOT_SLM_PORT`` so the alias is not a silent
+        no-op (#9768).
+        """
+        explicit = self.misc.slm_url
+        if explicit:
+            return explicit
         if self.tls.slm_tls_enabled:
             return f"https://{self.vm.slm}:{self.tls.slm_tls_port}"
         return f"http://{self.vm.slm}:{self.port.slm}"

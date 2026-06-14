@@ -2,13 +2,18 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Tests for CopilotLocalAdapter (GH#9008)."""
+"""Tests for CopilotLocalAdapter (GH#9008).
+
+Shared lifecycle tests (status / timeout-config / graceful-timeout) live in
+test_subprocess_base.py — see GH#9844 for the consolidation rationale.
+This file retains only CopilotLocalAdapter-specific assertions: command assembly,
+env injection (GITHUB_TOKEN / GH_TOKEN / GH_COPILOT_MODEL), workspace-dir CWD
+passing, FD management, and workspace-dir retry logic.
+"""
 
 import json
 import os
-import signal
 import tempfile
-import time
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -18,27 +23,12 @@ from llc.adapters.copilot_local_adapter import (
     CopilotLocalAdapter,
     _state_path,
 )
-from llc.models.enums import LLCRunStatus
+
+from .conftest import agent_cfg as _agent_cfg
+from .conftest import make_fake_proc as _make_fake_proc
 
 # A dummy auth value that won't match secret-scanner patterns.
 _AUTH_STUB = "dummy-auth-fixture-xyz"
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
-def _agent_cfg(agent_id: str = "agent-1", output_dir: str | None = None, **kwargs) -> dict:
-    cfg: dict = {"agent_id": agent_id, "adapter_config": {**kwargs}}
-    if output_dir:
-        cfg["adapter_config"]["output_dir"] = output_dir
-    return cfg
-
-
-def _make_fake_proc(pid: int = 12345) -> MagicMock:
-    proc = MagicMock()
-    proc.pid = pid
-    return proc
 
 
 # ---------------------------------------------------------------------------
@@ -129,6 +119,7 @@ class TestInvoke:
             assert "session_id" in state
 
     async def test_invoke_sets_github_auth_env_vars(self) -> None:
+        """CopilotLocalAdapter-specific: GITHUB_TOKEN and GH_TOKEN are forwarded."""
         adapter = CopilotLocalAdapter()
         fake_proc = _make_fake_proc(44)
         captured_envs: list[dict] = []
@@ -176,6 +167,7 @@ class TestInvoke:
         assert "<injected-at-runtime>" in env.get("LLC_INVOKE_CONTEXT", "")
 
     async def test_invoke_sets_copilot_model_env_var(self) -> None:
+        """CopilotLocalAdapter-specific: GH_COPILOT_MODEL env var is forwarded."""
         adapter = CopilotLocalAdapter()
         fake_proc = _make_fake_proc(55)
         captured_envs: list[dict] = []
@@ -196,6 +188,7 @@ class TestInvoke:
         assert captured_envs[0].get("GH_COPILOT_MODEL") == "copilot-4o"
 
     async def test_invoke_default_model_is_copilot_4o(self) -> None:
+        """CopilotLocalAdapter-specific: default model is copilot-4o."""
         adapter = CopilotLocalAdapter()
         fake_proc = _make_fake_proc(56)
         captured_envs: list[dict] = []
@@ -216,6 +209,7 @@ class TestInvoke:
         assert captured_envs[0].get("GH_COPILOT_MODEL") == "copilot-4o"
 
     async def test_invoke_passes_workspace_dir_as_cwd(self) -> None:
+        """CopilotLocalAdapter-specific: workspace_dir is passed as cwd to subprocess."""
         adapter = CopilotLocalAdapter()
         fake_proc = _make_fake_proc(66)
         captured_kwargs: list[dict] = []
@@ -301,73 +295,7 @@ class TestInvoke:
 
 
 # ---------------------------------------------------------------------------
-# status
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.asyncio
-class TestStatus:
-    async def test_running_pid_returns_running(self) -> None:
-        adapter = CopilotLocalAdapter()
-        with patch("os.kill", return_value=None):
-            result = await adapter.status(_agent_cfg(), "1234/session-abc")
-        assert result.status == LLCRunStatus.RUNNING
-
-    async def test_dead_pid_returns_completed(self) -> None:
-        adapter = CopilotLocalAdapter()
-
-        def fake_kill(pid, sig):
-            raise ProcessLookupError
-
-        with patch("os.kill", side_effect=fake_kill):
-            result = await adapter.status(_agent_cfg(), "9999/session-abc")
-        assert result.status == LLCRunStatus.COMPLETED
-
-    async def test_timeout_triggers_cancel_and_returns_timeout(self) -> None:
-        adapter = CopilotLocalAdapter()
-
-        with tempfile.TemporaryDirectory() as td:
-            run_id = "1111/session-xyz"
-            state_file = _state_path(td, run_id)
-            state = {
-                "pid": 1111,
-                "session_id": "session-xyz",
-                "agent_id": "a1",
-                "started_at": time.time() - 9999,
-                "timeout_seconds": 10,
-            }
-            with open(state_file, "w") as fh:
-                json.dump(state, fh)
-
-            cancel_called = []
-
-            async def fake_cancel(agent_config, run_id):
-                cancel_called.append(run_id)
-
-            adapter.cancel = fake_cancel  # type: ignore[assignment]
-            result = await adapter.status(_agent_cfg(output_dir=td), run_id)
-
-        assert result.status == LLCRunStatus.TIMEOUT
-        assert run_id in cancel_called
-
-    async def test_unparseable_run_id_returns_failed(self) -> None:
-        adapter = CopilotLocalAdapter()
-        result = await adapter.status(_agent_cfg(), "not-a-valid-run-id")
-        assert result.status == LLCRunStatus.FAILED
-
-    async def test_exception_in_probe_returns_failed(self) -> None:
-        adapter = CopilotLocalAdapter()
-
-        def bad_kill(pid, sig):
-            raise OSError("unexpected")
-
-        with patch("os.kill", side_effect=bad_kill):
-            result = await adapter.status(_agent_cfg(), "1234/session-abc")
-        assert result.status == LLCRunStatus.FAILED
-
-
-# ---------------------------------------------------------------------------
-# cancel
+# cancel — CopilotLocalAdapter-specific: state file removal
 # ---------------------------------------------------------------------------
 
 
@@ -406,6 +334,7 @@ class TestCancel:
         await adapter.cancel(_agent_cfg(), "bad-run-id")
 
     async def test_cancel_removes_state_file(self) -> None:
+        """CopilotLocalAdapter: cancel() removes the state file (base _cancel behaviour)."""
         adapter = CopilotLocalAdapter()
 
         with tempfile.TemporaryDirectory() as td:
@@ -418,98 +347,6 @@ class TestCancel:
                 await adapter.cancel(_agent_cfg(output_dir=td), run_id)
 
             assert not os.path.exists(state_file)
-
-
-# ---------------------------------------------------------------------------
-# Timeout Configuration (3-tier hierarchy)
-# ---------------------------------------------------------------------------
-
-
-class TestTimeoutConfiguration:
-    """Test 3-tier timeout configuration per MVA-2940 ADR."""
-
-    def test_per_agent_override_highest_priority(self, monkeypatch) -> None:
-        """Tier 1: per-agent timeout_seconds overrides everything."""
-        from llc.adapters.copilot_local_adapter import _resolve_timeout
-
-        monkeypatch.setenv("LLC_DEFAULT_ADAPTER_TIMEOUT_SECONDS", "250")
-        cfg = {"timeout_seconds": 500}
-        assert _resolve_timeout(cfg) == 500
-
-    def test_global_env_var_when_no_agent_override(self, monkeypatch) -> None:
-        """Tier 2/3: global env var used when per-agent override absent."""
-        from llc.adapters.copilot_local_adapter import _resolve_timeout
-
-        monkeypatch.setenv("LLC_DEFAULT_ADAPTER_TIMEOUT_SECONDS", "180")
-        cfg = {}  # no per-agent override
-        assert _resolve_timeout(cfg) == 180
-
-    def test_adapter_default_when_no_env_var(self, monkeypatch) -> None:
-        """Fallback: per-adapter default (3600) when env var unset."""
-        from llc.adapters.copilot_local_adapter import _resolve_timeout
-
-        monkeypatch.delenv("LLC_DEFAULT_ADAPTER_TIMEOUT_SECONDS", raising=False)
-        cfg = {}
-        assert _resolve_timeout(cfg) == 3600  # _ADAPTER_TIMEOUT_SECONDS
-
-    def test_precedence_order_all_three_tiers(self, monkeypatch) -> None:
-        """Verify precedence: per-agent > global env > adapter default."""
-        from llc.adapters.copilot_local_adapter import _resolve_timeout
-
-        # Set global env var
-        monkeypatch.setenv("LLC_DEFAULT_ADAPTER_TIMEOUT_SECONDS", "200")
-
-        # Tier 1: per-agent wins
-        assert _resolve_timeout({"timeout_seconds": 100}) == 100
-
-        # Tier 2: global env var when no per-agent
-        assert _resolve_timeout({}) == 200
-
-        # Tier 3: adapter default when env var cleared
-        monkeypatch.delenv("LLC_DEFAULT_ADAPTER_TIMEOUT_SECONDS")
-        assert _resolve_timeout({}) == 3600
-
-
-@pytest.mark.asyncio
-class TestGracefulTimeout:
-    """Test graceful SIGTERM + SIGKILL with 10s grace period."""
-
-    async def test_grace_period_is_10_seconds(self) -> None:
-        """Verify _SIGTERM_GRACE_SECONDS is 10 (per MVA-2940 ADR)."""
-        from llc.adapters.copilot_local_adapter import _SIGTERM_GRACE_SECONDS
-
-        assert _SIGTERM_GRACE_SECONDS == 10
-
-    async def test_cancel_sends_sigterm_then_sigkill_after_grace(self) -> None:
-        """cancel() sends SIGTERM, waits 10s, then SIGKILL."""
-        from llc.adapters.copilot_local_adapter import _SIGTERM_GRACE_SECONDS, CopilotLocalAdapter
-
-        adapter = CopilotLocalAdapter()
-        kill_signals = []
-
-        def fake_kill(pid, sig):
-            kill_signals.append((pid, sig))
-            if sig == signal.SIGKILL:
-                raise ProcessLookupError()  # process dies
-
-        with tempfile.TemporaryDirectory() as td:
-            state_file = _state_path(td, "123/session-x")
-            os.makedirs(os.path.dirname(state_file), exist_ok=True)
-            with open(state_file, "w") as f:
-                json.dump({"pid": 123, "session_id": "session-x"}, f)
-
-            with (
-                patch("os.kill", side_effect=fake_kill),
-                patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
-            ):
-                await adapter.cancel(_agent_cfg(output_dir=td), "123/session-x")
-
-        # Verify SIGTERM sent first
-        assert kill_signals[0] == (123, signal.SIGTERM)
-        # Verify grace period wait (10s in 0.1s increments = 100 iterations)
-        assert mock_sleep.await_count == _SIGTERM_GRACE_SECONDS * 10
-        # Verify SIGKILL sent after grace period
-        assert (123, signal.SIGKILL) in kill_signals
 
 
 # ---------------------------------------------------------------------------

@@ -1,0 +1,227 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+#
+# Co-located Deployment Smoke Gate (GH#10023, umbrella #9924)
+#
+# The 2026-06-11 bug-wave triage traced every true regression of the
+# post-June-10 wave to the co-located / deployment surface, which had zero
+# automated pre-merge coverage. This ADVISORY (not branch-protection-required)
+# gate asserts one test per regression class:
+#
+#   (a) nginx /slm prefix routing — HTTP + WS handshake reach the SLM behind
+#       the co-located nginx (#9967 / #9852 class)        -> colocated-stack
+#   (b) user frontend conforms to the strict co-located CSP (#9966 class)
+#       — static scan of the BUILT dist against the policy in
+#       autobot-security-headers-strict.conf.j2           -> colocated-stack
+#   (c) one-click update fleet selection sees the co-located self-node
+#       (#9996 class)                                     -> authz-and-selection
+#   (d) second user cannot read first user's transcriber rows
+#       (#9968 IDOR class)                                -> authz-and-selection
+#
+# KNOWN-RED while #9966 is open: the user frontend still ships an inline
+# script (index.html) and a Google Fonts @import (tailwind.css), so the CSP
+# step fails until #9966 lands. That red IS the gate catching the #9966
+# class — do not loosen the check; fix the frontend.
+#
+# Promote to required via the always-report pattern (#10022) once stable.
+
+name: Co-located Smoke
+
+on:
+  pull_request:
+    branches:
+      - Dev_new_gui
+    paths:
+      # nginx — compose flavor (live-tested here)
+      - 'docker/**'
+      - 'docker-compose*.yml'
+      # nginx — bare-metal co-located templates (same routing contract)
+      - 'autobot-slm-backend/ansible/roles/slm_manager/templates/autobot-slm.conf.j2'
+      - 'autobot-slm-backend/ansible/roles/slm_manager/templates/autobot-security-headers-strict.conf.j2'
+      - 'autobot-slm-backend/ansible/roles/slm_manager/templates/nginx-override.conf.j2'
+      - 'autobot-slm-backend/ansible/roles/frontend/templates/nginx-frontend.conf.j2'
+      # co-located client / update-selection logic
+      - 'autobot-backend/services/slm_client.py'
+      - 'autobot-slm-backend/api/code_sync.py'
+      - 'autobot-slm-backend/api/websocket.py'
+      # transcriber multi-user authz surface
+      - 'autobot-backend/transcriber/**'
+      # user-frontend CSP surface
+      - 'autobot-frontend/index.html'
+      - 'autobot-frontend/src/assets/**'
+      # the gate itself
+      - '.github/workflows/co-located-smoke.yml'
+      - 'scripts/check_colocated_csp.py'
+      - 'autobot-slm-backend/tests/api/test_collect_outdated_node_ids.py'
+      - 'autobot-backend/transcriber/tests/test_multiuser_authz.py'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # Classes (c) + (d): pytest-shaped regression pins. Fast, no containers.
+  authz-and-selection:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: |
+            requirements*.txt
+            autobot-backend/requirements*.txt
+
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install -r requirements-ci.txt --prefer-binary || true
+          # Hermetic essentials for both test files (no Postgres/Redis needed).
+          python -m pip install aiosqlite aiofiles pytest pytest-asyncio httpx python-multipart --prefer-binary
+
+      - name: (d) transcriber multi-user authz — #9968 IDOR class
+        run: |
+          python -m pytest autobot-backend/transcriber/tests/test_multiuser_authz.py -v --tb=short
+
+      - name: (c) one-click update self-node selection — #9996 class
+        # Separate pytest process: autobot-slm-backend/conftest.py stubs
+        # sys.modules globally and must not bleed into the transcriber run.
+        run: |
+          python -m pytest autobot-slm-backend/tests/api/test_collect_outdated_node_ids.py -v --tb=short
+
+  # Classes (a) + (b): live co-located compose stack (frontend at /, SLM at
+  # /slm — the same single-host topology as bare-metal co-located installs).
+  colocated-stack:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Free disk space
+        uses: ./.github/actions/free-disk-space
+        with:
+          min-free-gb: '15'
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5  # v4
+
+      - name: Cache Docker layers
+        # Shares the docker-smoke-test cache prefix so layers stay warm.
+        uses: actions/cache@v5
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ github.sha }}-colocated
+          restore-keys: |
+            ${{ runner.os }}-buildx-
+
+      - name: Create .env from .env.example
+        run: cp .env.example .env
+
+      - name: Ensure cache directory exists
+        run: mkdir -p /tmp/.buildx-cache
+
+      - name: Build images with layer cache
+        run: |
+          for component in backend slm frontend; do
+            echo "=== Building ${component} image ==="
+            docker buildx build \
+              --cache-from type=local,src=/tmp/.buildx-cache \
+              --cache-to   type=local,dest=/tmp/.buildx-cache-new,mode=min \
+              --file "docker/${component}/Dockerfile" \
+              --tag "autobot/${component}:latest" \
+              --load \
+              .
+            df -h / | grep -v Filesystem
+          done
+          rm -rf /tmp/.buildx-cache
+          mv /tmp/.buildx-cache-new /tmp/.buildx-cache
+
+      - name: Start co-located stack
+        run: docker compose --env-file docker/.env.docker up -d
+
+      - name: Wait for services to be healthy
+        run: |
+          echo "Waiting for frontend, backend, and SLM..."
+          for attempt in $(seq 1 90); do
+            frontend_ok=false; backend_ok=false; slm_ok=false
+            curl -s -f http://localhost > /dev/null 2>&1 && frontend_ok=true
+            curl -s -f http://localhost/api/system/health > /dev/null 2>&1 && backend_ok=true
+            curl -s -f http://localhost/slm/api/health > /dev/null 2>&1 && slm_ok=true
+            if $frontend_ok && $backend_ok && $slm_ok; then
+              echo "All services healthy after ${attempt} attempt(s)"
+              exit 0
+            fi
+            echo "attempt ${attempt}/90: frontend=$frontend_ok backend=$backend_ok slm=$slm_ok"
+            sleep 10
+          done
+          echo "Services failed to become healthy within 15 minutes"
+          docker compose --env-file docker/.env.docker logs
+          exit 1
+
+      - name: (a) nginx /slm prefix routing — HTTP (#9967/#9852 class)
+        run: |
+          set -euo pipefail
+          # Must be JSON from the SLM backend. If the /slm/api/ location is
+          # lost, the /slm/ SPA catch-all answers 200 text/html instead —
+          # so a bare 200 check would false-green; assert content-type too.
+          ctype=$(curl -fsS -o /tmp/slm-health.json -w '%{content_type}' http://localhost/slm/api/health)
+          echo "GET /slm/api/health -> ${ctype}: $(cat /tmp/slm-health.json)"
+          case "$ctype" in
+            application/json*) echo "OK: SLM API reachable under /slm" ;;
+            *) echo "FAIL: /slm/api/health did not reach the SLM (got ${ctype})"; exit 1 ;;
+          esac
+
+      - name: (a) nginx /slm prefix routing — WebSocket handshake (#9967 class)
+        run: |
+          set -uo pipefail
+          # slm_client connects to {SLM_URL}/api/ws/events; behind co-located
+          # nginx that is /slm/api/ws/events. The SLM accepts the WS before
+          # auth-closing (4001), so a correctly routed handshake returns 101.
+          # A missing /slm/api/ws/ location falls through to the plain /slm/api/
+          # proxy (no Upgrade headers -> 404) or the SPA catch-all (200).
+          code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 \
+            -H 'Connection: Upgrade' -H 'Upgrade: websocket' \
+            -H 'Sec-WebSocket-Version: 13' \
+            -H "Sec-WebSocket-Key: $(openssl rand -base64 16)" \
+            http://localhost/slm/api/ws/events || true)
+          echo "WS handshake /slm/api/ws/events -> HTTP ${code}"
+          if [ "$code" != "101" ]; then
+            echo "FAIL: SLM WebSocket not reachable under /slm (#9967 regression class)"
+            exit 1
+          fi
+          echo "OK: SLM WebSocket upgrades under /slm"
+
+      - name: (b) user frontend under strict co-located CSP (#9966 class)
+        run: |
+          set -euo pipefail
+          # Scan the BUILT user frontend (as served by nginx) against the CSP
+          # actually deployed on co-located installs (strict headers template).
+          docker compose --env-file docker/.env.docker cp \
+            autobot-frontend:/usr/share/nginx/html /tmp/colocated-html
+          python3 scripts/check_colocated_csp.py \
+            --csp-template autobot-slm-backend/ansible/roles/slm_manager/templates/autobot-security-headers-strict.conf.j2 \
+            --dist /tmp/colocated-html
+
+      - name: Collect logs on failure
+        if: failure()
+        run: docker compose --env-file docker/.env.docker logs > colocated-failure-logs.txt
+
+      - name: Upload failure logs
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: colocated-smoke-logs
+          path: colocated-failure-logs.txt
+
+      - name: Clean up
+        if: always()
+        run: docker compose --env-file docker/.env.docker down

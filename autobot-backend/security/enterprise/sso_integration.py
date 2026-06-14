@@ -202,7 +202,7 @@ class SSOIntegrationFramework:
             # OAuth2/OpenID Connect configuration
             "oauth2": {
                 "default_scope": ["openid", "profile", "email"],
-                "token_endpoint_auth_method": "client_secret_post",
+                "token_endpoint_auth_method": "client_secret_post",  # nosec B105 - OAuth2 protocol parameter name, not
                 "response_type": "code",
                 "grant_type": "authorization_code",
             },
@@ -220,7 +220,7 @@ class SSOIntegrationFramework:
                 "sign_assertions": True,
                 "require_encryption": True,
                 "max_clock_skew_seconds": 300,
-                "token_lifetime_minutes": 60,
+                "token_lifetime_minutes": 60,  # nosec B105 - config key for token TTL in minutes, not a credential
             },
         }
 

@@ -28,8 +28,8 @@ from autobot_shared.async_compat import run_or_schedule
 from llc.models.activity import (  # noqa: F401 — registers LLC tables with metadata
     LLCBase,
 )
+from migrations.db_url import as_async_url, get_url
 from models.push_subscription import PushSubscription  # noqa: F401 — GH#4459
-from user_management.config import get_deployment_config
 from user_management.models import Base
 
 # this is the Alembic Config object
@@ -41,25 +41,6 @@ if config.config_file_name is not None:
 
 # add your model's MetaData object here for 'autogenerate' support
 target_metadata = [Base.metadata, LLCBase.metadata]
-
-
-def get_url() -> str:
-    """Get database URL from deployment config or environment."""
-    # Try environment variable first. NOTE: `config` here is the Alembic Config
-    # object, which has no `database_url`/`db_host` attributes — reading them
-    # raised AttributeError and broke migrations entirely. Read the env directly.
-    url = os.environ.get("AUTOBOT_DATABASE_URL", "")
-    if url:
-        return url
-
-    # Fall back to deployment config (Postgres-backed user modes)
-    try:
-        deployment_config = get_deployment_config()
-        return deployment_config.postgres_sync_url
-    except Exception:
-        # Default fallback for development
-        db_host = os.environ.get("AUTOBOT_POSTGRES_HOST", "autobot-postgres")
-        return f"postgresql://autobot:autobot@{db_host}:5432/autobot"
 
 
 def run_migrations_offline() -> None:
@@ -107,7 +88,7 @@ async def run_async_migrations() -> None:
     and associate a connection with the context.
     """
     configuration = config.get_section(config.config_ini_section) or {}
-    configuration["sqlalchemy.url"] = get_url()
+    configuration["sqlalchemy.url"] = as_async_url(get_url())
 
     connectable = async_engine_from_config(
         configuration,

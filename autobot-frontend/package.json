@@ -36,7 +36,7 @@
     "check:i18n": "node scripts/check-i18n-keys.mjs",
     "check:locales": "python3 scripts/check-locale-completeness.py",
     "check-ts-delta": "bash scripts/check-ts-delta.sh",
-    "lint:oxlint": "oxlint . --fix -D correctness --ignore-path .gitignore",
+    "lint:oxlint": "oxlint . --fix -D correctness --ignore-path .gitignore --ignore-pattern 'src/types/_generated/**'",
     "lint:eslint": "eslint . --fix",
     "lint": "run-s lint:*",
     "format": "prettier --write src/",
@@ -83,6 +83,7 @@
     "minimatch": ">=9.0.7",
     "uuid": "^14.0.0",
     "qs": ">=6.15.2",
+    "shell-quote": ">=1.8.4",
     "openapi-typescript": {
       "typescript": "$typescript"
     },

@@ -61,11 +61,11 @@ async def fetch_external_data(url: str) -> Dict[str, Any]:
     import random
 
     # Simulate network errors
-    if random.random() < 0.3:
+    if random.random() < 0.3:  # nosec B311 - simulated failure rate for error boundary example, not cryptographic
         raise ConnectionError(f"Failed to connect to {url}")
 
     # Simulate timeout
-    if random.random() < 0.2:
+    if random.random() < 0.2:  # nosec B311 - simulated failure rate for error boundary example, not cryptographic
         raise TimeoutError(f"Timeout connecting to {url}")
 
     # Return mock data

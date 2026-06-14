@@ -315,6 +315,7 @@
 </template>
 
 <script setup lang="ts">
+import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed } from 'vue'
 import { useExpansion } from '@/composables/useExpansion'
@@ -448,8 +449,8 @@ function getSeverityForFactor(
   return 'low'
 }
 
-function getRiskFactorIcon(factor: string): string {
-  const icons: Record<string, string> = {
+function getRiskFactorIcon(factor: string): IconName {
+  const icons: Record<string, IconName> = {
     complexity: 'project-diagram',
     change_frequency: 'history',
     file_size: 'file-alt',

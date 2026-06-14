@@ -2,17 +2,19 @@
 # All core services on one machine. Frontend at /, SLM at /slm.
 # Requires Docker Compose v2+ for resource limits (deploy.resources).
 #
-# Usage:
-#   bash docker/generate-secrets.sh                              # First run only — generate signing secrets
-#   docker compose --env-file docker/.env.docker --env-file docker/.env.secrets up -d          # Start all core services
-#   docker compose --env-file docker/.env.docker --env-file docker/.env.secrets --profile monitoring up -d
-#   docker compose --env-file docker/.env.docker --env-file docker/.env.secrets --profile ollama up -d
+# Usage (works out of the box — no manual secret step):
+#   docker compose up -d --build                       # Start all core services
+#   docker compose --profile monitoring up -d
+#   docker compose --profile ollama up -d
 #
-# SECRETS (GH#9775): AUTOBOT_JWT_SECRET / SECRET_KEY have NO static fallback —
-# a committed shared signing secret allows token forgery. Run
-# docker/generate-secrets.sh once to create a gitignored docker/.env.secrets with
-# unique random values, then pass it via --env-file (or set the vars yourself).
-# Compose fails fast with a clear message if they are unset.
+# SECRETS (GH#9775, GH#9905): AUTOBOT_JWT_SECRET / SECRET_KEY have NO committed
+# fallback — a shared committed signing secret allows token forgery. On first
+# `up`, the `autobot-secrets-init` service auto-generates UNIQUE per-deployment
+# secrets into the shared `autobot_secrets` volume (never in git, reused across
+# restarts); with-secrets.sh loads them into backend/worker/slm at runtime.
+# To pin your own (production), set AUTOBOT_JWT_SECRET / SECRET_KEY in the
+# environment or root .env, or run docker/generate-secrets.sh + --env-file —
+# an explicit value always overrides the auto-generated one.
 #
 # NOTE: --env-file docker/.env.docker is required when the root .env contains
 # fleet-specific paths (e.g. AUTOBOT_TLS_CERT_DIR=infrastructure/shared/certs)
@@ -164,21 +166,52 @@ services:
 
   # ---- Application Layer ----
 
+  # GH#9905: auto-provision per-deployment signing secrets into the shared
+  # autobot_secrets volume so `docker compose up` works out of the box with no
+  # committed secret. Runs once, idempotently; all app services wait for it.
+  autobot-secrets-init:
+    image: alpine:3.20
+    container_name: autobot-secrets-init
+    restart: "no"
+    volumes:
+      - autobot_secrets:/secrets
+      - ./docker/secrets-init.sh:/secrets-init.sh:ro
+    command: ["/bin/sh", "/secrets-init.sh"]
+    networks:
+      - autobot-mgmt
+
   autobot-backend:
     build:
       context: .
       dockerfile: docker/backend/Dockerfile
+      # claude CLI version pin (GH#9950): optional exact package version for a
+      # reproducible build (e.g. 2.1.89). Empty default = current stable-channel
+      # build from Anthropic's signed apt repo (integrity verified by apt).
+      args:
+        CLAUDE_CLI_VERSION: "${CLAUDE_CLI_VERSION:-}"
     image: autobot/backend:latest
     container_name: autobot-backend
     restart: unless-stopped
+    # GH#9905: load the shared auto-generated signing secret, then chain the
+    # image's own entrypoint (/app/entrypoint.sh), which runs Alembic
+    # migrations for Postgres-backed user modes before exec'ing the app
+    # (#9759). NB: overriding entrypoint clears the image CMD, so the command
+    # is re-declared here (kept in sync with docker/backend/Dockerfile).
+    entrypoint: ["/bin/sh", "/usr/local/bin/with-secrets.sh", "/app/entrypoint.sh"]
+    command: ["python3", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8001", "--workers", "1", "--app-dir", "/app/autobot-backend"]
     env_file:
       - docker/.env.docker
     volumes:
       - backend_data:/app/data
       - backend_logs:/app/logs
+      - autobot_secrets:/secrets:ro
+      - ./docker/with-secrets.sh:/usr/local/bin/with-secrets.sh:ro
     environment:
       - AUTOBOT_ENVIRONMENT=production
       - AUTOBOT_DEPLOYMENT_MODE=local
+      # No AI Stack VM ships with compose — disable the poll to stop the per-boot
+      # connection-error warning flood (#9782). Set to true if you run an AI Stack.
+      - AUTOBOT_AI_STACK_ENABLED=${AUTOBOT_AI_STACK_ENABLED:-false}
       - AUTOBOT_LOG_LEVEL=${AUTOBOT_LOG_LEVEL:-INFO}
       - AUTOBOT_REDIS_HOST=autobot-redis
       - AUTOBOT_REDIS_PORT=6379
@@ -198,9 +231,9 @@ services:
       - AUTOBOT_LLAMAINDEX_EMBEDDING_ENDPOINT=http://${AUTOBOT_OLLAMA_HOST:-autobot-ollama}:11434
       - AUTOBOT_AUDIT_LOG_FILE=/app/logs/audit.log
       # User mode defaults to single_user (no Postgres schema bootstrap needed).
-      # RBAC (single_company → first user becomes admin) is wired and ready — set
-      # AUTOBOT_USER_MODE=single_company once the fresh-DB schema bootstrap lands
-      # (#9759). The Postgres env below is kept so that flip is a single var.
+      # RBAC (single_company → first user becomes admin) is wired and ready —
+      # setting AUTOBOT_USER_MODE=single_company is now a single-var flip: the
+      # entrypoint bootstraps the schema via `alembic upgrade head` (#9759).
       - AUTOBOT_USER_MODE=${AUTOBOT_USER_MODE:-single_user}
       - AUTOBOT_POSTGRES_HOST=autobot-postgres
       - AUTOBOT_POSTGRES_PORT=5432
@@ -217,12 +250,28 @@ services:
       # backend Redis service routing can target it instead of an empty id (#9761).
       - REDIS_NODE_ID=${REDIS_NODE_ID:-00-SLM-Manager}
       # Shared signing secrets — must match SLM so the node JWT verifies (#9715)
-      - AUTOBOT_JWT_SECRET=${AUTOBOT_JWT_SECRET:?unset - run docker/generate-secrets.sh then add --env-file docker/.env.secrets (GH#9775)}
-      - SECRET_KEY=${SECRET_KEY:?unset - run docker/generate-secrets.sh then add --env-file docker/.env.secrets (GH#9775)}
+      # GH#9905: no parse-time fail. If unset, with-secrets.sh loads a unique
+      # per-deployment secret auto-generated by secrets-init into the shared
+      # autobot_secrets volume. An explicit value here (prod) still wins.
+      - AUTOBOT_JWT_SECRET=${AUTOBOT_JWT_SECRET:-}
+      - SECRET_KEY=${SECRET_KEY:-}
+      # LLC subprocess agent CLIs (GH#9793): the spawned claude / gh process
+      # inherits os.environ from the backend process, so these must be present
+      # in the container environment.  All three default to empty so the image
+      # boots without them; set real values in the root .env or host shell.
+      - LLC_AGENT_API_BASE_URL=http://localhost:8001/api
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - GH_TOKEN=${GH_TOKEN:-}
     depends_on:
+      autobot-secrets-init:
+        condition: service_completed_successfully
       autobot-redis:
         condition: service_healthy
       autobot-chromadb:
+        condition: service_healthy
+      # Startup migrations (#9759) need Postgres reachable before the
+      # entrypoint runs `alembic upgrade head`.
+      autobot-postgres:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8001/api/system/health"]
@@ -257,23 +306,41 @@ services:
     build:
       context: .
       dockerfile: docker/backend/Dockerfile
+      # claude CLI version pin (GH#9950): optional exact package version for a
+      # reproducible build (e.g. 2.1.89). Empty default = current stable-channel
+      # build from Anthropic's signed apt repo (integrity verified by apt).
+      args:
+        CLAUDE_CLI_VERSION: "${CLAUDE_CLI_VERSION:-}"
     image: autobot/backend:latest
     container_name: autobot-worker
     restart: unless-stopped
-    command: >
-      python3.12 -m celery -A celery_app worker
-      --loglevel=info
-      --queues=celery,deployments,provisioning,services
-      --concurrency=2
+    # GH#9905: load the shared secret, then exec celery. Exec-form command so it
+    # survives the with-secrets.sh entrypoint's `exec "$@"` as proper argv.
+    entrypoint: ["/bin/sh", "/usr/local/bin/with-secrets.sh"]
+    command:
+      - python3.12
+      - -m
+      - celery
+      - -A
+      - celery_app
+      - worker
+      - --loglevel=info
+      - --queues=celery,deployments,provisioning,services
+      - --concurrency=2
     working_dir: /app/autobot-backend
     env_file:
       - docker/.env.docker
     volumes:
       - backend_data:/app/data
       - backend_logs:/app/logs
+      - autobot_secrets:/secrets:ro
+      - ./docker/with-secrets.sh:/usr/local/bin/with-secrets.sh:ro
     environment:
       - AUTOBOT_ENVIRONMENT=production
       - AUTOBOT_DEPLOYMENT_MODE=local
+      # No AI Stack VM ships with compose — disable the poll to stop the per-boot
+      # connection-error warning flood (#9782). Set to true if you run an AI Stack.
+      - AUTOBOT_AI_STACK_ENABLED=${AUTOBOT_AI_STACK_ENABLED:-false}
       - AUTOBOT_LOG_LEVEL=${AUTOBOT_LOG_LEVEL:-INFO}
       - AUTOBOT_REDIS_HOST=autobot-redis
       - AUTOBOT_REDIS_PORT=6379
@@ -283,7 +350,8 @@ services:
       - AUTOBOT_CHROMADB_PORT=8000
       - AUTOBOT_AUDIT_LOG_FILE=/app/logs/audit.log
       # User-mgmt/RBAC tasks need the same Postgres + mode wiring as the backend.
-      # Defaults to single_user; flip AUTOBOT_USER_MODE once #9759 lands.
+      # Defaults to single_user; the backend entrypoint bootstraps the schema
+      # on flip (#9759), so no manual migration step is needed here.
       - AUTOBOT_USER_MODE=${AUTOBOT_USER_MODE:-single_user}
       - AUTOBOT_POSTGRES_HOST=autobot-postgres
       - AUTOBOT_POSTGRES_PORT=5432
@@ -297,8 +365,11 @@ services:
       # backend Redis service routing can target it instead of an empty id (#9761).
       - REDIS_NODE_ID=${REDIS_NODE_ID:-00-SLM-Manager}
       # Shared signing secrets — must match SLM so the node JWT verifies (#9715)
-      - AUTOBOT_JWT_SECRET=${AUTOBOT_JWT_SECRET:?unset - run docker/generate-secrets.sh then add --env-file docker/.env.secrets (GH#9775)}
-      - SECRET_KEY=${SECRET_KEY:?unset - run docker/generate-secrets.sh then add --env-file docker/.env.secrets (GH#9775)}
+      # GH#9905: no parse-time fail. If unset, with-secrets.sh loads a unique
+      # per-deployment secret auto-generated by secrets-init into the shared
+      # autobot_secrets volume. An explicit value here (prod) still wins.
+      - AUTOBOT_JWT_SECRET=${AUTOBOT_JWT_SECRET:-}
+      - SECRET_KEY=${SECRET_KEY:-}
     healthcheck:
       # $$HOSTNAME (escaped) expands inside the container at runtime. A single
       # $HOSTNAME is interpolated by Compose at parse time to an empty string,
@@ -309,9 +380,16 @@ services:
       start_period: 30s
       retries: 3
     depends_on:
+      autobot-secrets-init:
+        condition: service_completed_successfully
       autobot-redis:
         condition: service_healthy
       autobot-chromadb:
+        condition: service_healthy
+      # The backend entrypoint runs the schema migrations (#9759); waiting for
+      # it to be healthy stops worker tasks hitting a not-yet-migrated DB on
+      # first boot in Postgres-backed user modes.
+      autobot-backend:
         condition: service_healthy
     deploy:
       resources:
@@ -340,6 +418,10 @@ services:
     image: autobot/backend:latest
     container_name: autobot-celery-beat
     restart: unless-stopped
+    # NB: inherits the image ENTRYPOINT (/app/entrypoint.sh, #9759). Migrations
+    # stay skipped here because AUTOBOT_USER_MODE is deliberately NOT set for
+    # beat — do not add it, or beat and the backend would run
+    # `alembic upgrade head` concurrently (alembic takes no advisory lock).
     command: >
       python3.12 -m celery -A celery_app beat
       --loglevel=info
@@ -356,6 +438,9 @@ services:
     environment:
       - AUTOBOT_ENVIRONMENT=production
       - AUTOBOT_DEPLOYMENT_MODE=local
+      # No AI Stack VM ships with compose — disable the poll to stop the per-boot
+      # connection-error warning flood (#9782). Set to true if you run an AI Stack.
+      - AUTOBOT_AI_STACK_ENABLED=${AUTOBOT_AI_STACK_ENABLED:-false}
       - AUTOBOT_LOG_LEVEL=${AUTOBOT_LOG_LEVEL:-INFO}
       - AUTOBOT_REDIS_HOST=autobot-redis
       - AUTOBOT_REDIS_PORT=6379
@@ -405,9 +490,17 @@ services:
     image: autobot/slm:latest
     container_name: autobot-slm
     restart: unless-stopped
+    # GH#9905: load the shared secret, then chain the image's own entrypoint
+    # (/app/entrypoint.sh) so SLM startup is unchanged. Overriding entrypoint
+    # clears the image CMD, so it is re-declared here (kept in sync with
+    # docker/slm/Dockerfile); /app/entrypoint.sh runs migrations then exec "$@".
+    entrypoint: ["/bin/sh", "/usr/local/bin/with-secrets.sh", "/app/entrypoint.sh"]
+    command: ["python3", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1", "--app-dir", "/app/autobot-slm-backend"]
     volumes:
       - slm_data:/app/data
       - slm_logs:/app/logs
+      - autobot_secrets:/secrets:ro
+      - ./docker/with-secrets.sh:/usr/local/bin/with-secrets.sh:ro
     environment:
       - AUTOBOT_ENVIRONMENT=production
       - AUTOBOT_LOG_LEVEL=${AUTOBOT_LOG_LEVEL:-INFO}
@@ -424,10 +517,18 @@ services:
       # Shared signing secrets so the backend node's JWT verifies on SLM —
       # without a shared secret each service generates its own and SLM rejects
       # the node WS with 401, leaving the host shown offline (#9715). CHANGE in
-      # production via AUTOBOT_JWT_SECRET / SECRET_KEY.
-      - AUTOBOT_JWT_SECRET=${AUTOBOT_JWT_SECRET:?unset - run docker/generate-secrets.sh then add --env-file docker/.env.secrets (GH#9775)}
-      - SECRET_KEY=${SECRET_KEY:?unset - run docker/generate-secrets.sh then add --env-file docker/.env.secrets (GH#9775)}
+      # production via AUTOBOT_JWT_SECRET / SECRET_KEY / SLM_SECRET_KEY.
+      # GH#9905: no parse-time fail. If unset, with-secrets.sh loads a unique
+      # per-deployment secret auto-generated by secrets-init into the shared
+      # autobot_secrets volume. An explicit value here (prod) still wins.
+      # GH#9852: SLM_SECRET_KEY must equal SECRET_KEY so the backend-minted
+      # service JWT passes auth_service.decode_token on the SLM side.
+      - AUTOBOT_JWT_SECRET=${AUTOBOT_JWT_SECRET:-}
+      - SECRET_KEY=${SECRET_KEY:-}
+      - SLM_SECRET_KEY=${SLM_SECRET_KEY:-}
     depends_on:
+      autobot-secrets-init:
+        condition: service_completed_successfully
       autobot-redis:
         condition: service_healthy
       autobot-postgres:
@@ -644,6 +745,7 @@ services:
       - monitoring
 
 volumes:
+  autobot_secrets:
   postgres_data:
   redis_data:
   chroma_data:

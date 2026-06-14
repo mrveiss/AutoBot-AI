@@ -69,6 +69,7 @@
 
 <script setup lang="ts">
 // Issue #1367: Merge active (finished) + persisted completed workflows
+import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed } from 'vue';
 import type { ActiveWorkflow } from '@/composables/useWorkflowBuilder';
@@ -149,7 +150,7 @@ function getStatusClass(wf: ActiveWorkflow): string {
   return 'success';
 }
 
-function getStatusIcon(wf: ActiveWorkflow): string {
+function getStatusIcon(wf: ActiveWorkflow): IconName {
   if (wf.is_cancelled) return 'times';
   if (getFailedCount(wf) > 0) return 'exclamation-triangle';
   return 'check';

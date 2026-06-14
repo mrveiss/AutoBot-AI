@@ -15,10 +15,25 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
+from migrations.guards import pg_enum
+
 revision: str = "20260524_036"
 down_revision: Union[str, None] = "20260523_035"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
+
+# The type already exists (created by 20260523_022); this is a reference only.
+_workitemtype = pg_enum(
+    "workitemtype",
+    "epic",
+    "feature",
+    "pbi",
+    "task",
+    "bug",
+    "subtask",
+    "spike",
+    "risk",
+)
 
 
 def upgrade() -> None:
@@ -33,18 +48,7 @@ def upgrade() -> None:
         sa.Column("company_id", sa.dialects.postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column(
             "item_type",
-            sa.Enum(
-                "epic",
-                "feature",
-                "pbi",
-                "task",
-                "bug",
-                "subtask",
-                "spike",
-                "risk",
-                name="workitemtype",
-                create_type=False,
-            ),
+            _workitemtype,
             nullable=False,
         ),
         sa.Column("requires_human_review", sa.Boolean(), nullable=False, server_default="false"),

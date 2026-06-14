@@ -22,11 +22,10 @@ A subclass provides:
 
 from __future__ import annotations
 
-import asyncio
 import json
 import os
 import pathlib
-import signal
+import shutil
 import time
 from typing import Callable, Optional
 
@@ -34,7 +33,7 @@ from autobot_shared.logging_manager import get_logger
 
 from ..models.enums import LLCRunStatus
 from .base import AdapterRunStatus
-from .subprocess_support import render_context_markdown
+from .subprocess_support import probe_pid, render_context_markdown, terminate_pid
 
 logger = get_logger(__name__)
 
@@ -66,6 +65,22 @@ class SubprocessLifecycleAdapter:
     _LOG_NAME: str = "SubprocessAdapter"
     # staticmethod (output_dir, run_id) -> str; set by each subclass.
     _state_path: Callable[[str, str], str]
+    # Name of the CLI binary required by this adapter (e.g. "claude", "gh").
+    # Subclasses declare this; None means no external CLI required (GH#9793).
+    _required_cli: Optional[str] = None
+
+    # CLI availability gate (GH#9793) ----------------------------------------
+    def is_cli_available(self) -> bool:
+        """Return True if the adapter's required CLI binary is on PATH.
+
+        Called by the heartbeat scheduler before dispatch so that runs are
+        skipped (logged) rather than dispatched and immediately FAILED when the
+        CLI is absent from the container image.  Adapters with no required CLI
+        (``_required_cli is None``) always return True.
+        """
+        if self._required_cli is None:
+            return True
+        return shutil.which(self._required_cli) is not None
 
     # Invoke ----------------------------------------------------------------
     async def invoke(self, agent_config: dict, context: dict) -> str:
@@ -100,7 +115,7 @@ class SubprocessLifecycleAdapter:
                 pid = int(run_id.split("/")[0])
             except (ValueError, IndexError):
                 return AdapterRunStatus(status=LLCRunStatus.FAILED, error=f"Unparseable run_id: {run_id!r}")
-            return self._probe_pid(pid)
+            return probe_pid(pid)
 
         pid: int = state["pid"]
         timeout_sec: float = state.get("timeout_seconds", DEFAULT_TIMEOUT_SECONDS)
@@ -111,18 +126,7 @@ class SubprocessLifecycleAdapter:
             await self.cancel(agent_config, run_id)
             return AdapterRunStatus(status=LLCRunStatus.TIMEOUT)
 
-        return self._probe_pid(pid)
-
-    def _probe_pid(self, pid: int) -> AdapterRunStatus:
-        try:
-            os.kill(pid, 0)
-            return AdapterRunStatus(status=LLCRunStatus.RUNNING)
-        except ProcessLookupError:
-            return AdapterRunStatus(status=LLCRunStatus.COMPLETED)
-        except PermissionError:
-            return AdapterRunStatus(status=LLCRunStatus.RUNNING)
-        except OSError as exc:
-            return AdapterRunStatus(status=LLCRunStatus.FAILED, error=str(exc))
+        return probe_pid(pid)
 
     # Cancel ----------------------------------------------------------------
     async def cancel(self, agent_config: dict, run_id: str) -> None:
@@ -141,24 +145,11 @@ class SubprocessLifecycleAdapter:
             logger.error("%s.cancel: unparseable run_id %r", self._LOG_NAME, run_id)
             return
 
-        try:
-            os.kill(pid, signal.SIGTERM)
-            logger.info("%s: SIGTERM -> PID %d", self._LOG_NAME, pid)
-        except ProcessLookupError:
-            pass
-        else:
-            for _ in range(SIGTERM_GRACE_SECONDS * 10):
-                await asyncio.sleep(0.1)
-                try:
-                    os.kill(pid, 0)
-                except ProcessLookupError:
-                    break
-            else:
-                try:
-                    os.kill(pid, signal.SIGKILL)
-                    logger.warning("%s: SIGKILL -> PID %d", self._LOG_NAME, pid)
-                except ProcessLookupError:
-                    pass
+        # terminate_pid returns True when the process was already gone
+        # (SIGTERM raised ProcessLookupError); we still continue to
+        # _post_cancel and state-file cleanup regardless — the process
+        # must be fully cleaned up whether or not it was already dead.
+        await terminate_pid(pid, SIGTERM_GRACE_SECONDS, self._LOG_NAME)
 
         await self._post_cancel(agent_config, run_id)
 
@@ -194,4 +185,14 @@ __all__ = [
     "DEFAULT_TIMEOUT_SECONDS",
     "DEFAULT_OUTPUT_DIR",
     "resolve_timeout",
+    "is_subprocess_adapter",
 ]
+
+
+def is_subprocess_adapter(adapter: object) -> bool:
+    """Return True if *adapter* is a :class:`SubprocessLifecycleAdapter` instance.
+
+    Convenience predicate used by the heartbeat scheduler gate (GH#9793) so it
+    can call ``is_cli_available()`` without importing from the adapters package.
+    """
+    return isinstance(adapter, SubprocessLifecycleAdapter)

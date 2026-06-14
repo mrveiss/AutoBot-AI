@@ -82,7 +82,27 @@
     "hasMore": "Load more",
     "previous": "Previous",
     "optional": "אופציונלי",
-    "remove": "הסר"
+    "remove": "הסר",
+    "dismiss": "Dismiss",
+    "forward": "Forward",
+    "saving": "Saving...",
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out",
+    "fitToView": "Fit to view",
+    "toggleLayout": "Toggle layout",
+    "fullscreen": "Fullscreen",
+    "exitFullscreen": "Exit fullscreen",
+    "expand": "Expand",
+    "collapse": "Collapse",
+    "copyToClipboard": "Copy to clipboard",
+    "sortAscending": "Sort ascending",
+    "sortDescending": "Sort descending",
+    "moreOptions": "More options",
+    "exportJson": "Export as JSON",
+    "exportCsv": "Export as CSV",
+    "download": "Download",
+    "filterByCategory": "Filter by category",
+    "copied": "Copied"
   },
   "nav": {
     "chat": "צ'אט",
@@ -128,7 +148,28 @@
     "llcPortability": "Portability",
     "settingsAndTools": "Settings & Tools",
     "adminPanel": "Admin Panel",
-    "documents": "AI Documents"
+    "documents": "AI Documents",
+    "canvas": "Canvas",
+    "visionAutomation": "Vision",
+    "llmApiKeys": "LLM API Keys",
+    "llmProviders": "LLM Providers",
+    "adminHosts": "Host Inventory",
+    "adminSandbox": "Sandbox",
+    "budgetPolicies": "Budget Policies",
+    "companyOs": "Company OS",
+    "llcDashboard": "Dashboard",
+    "llcOrgChart": "Org Chart",
+    "llcGoals": "Goals",
+    "llcCompanies": "Companies",
+    "llcBacklog": "Backlog",
+    "llcApprovals": "Approvals",
+    "llcCosts": "Costs & Budget",
+    "llcHeartbeat": "Heartbeat",
+    "llcCeoChat": "CEO Chat",
+    "llcSelectCompany": "Switch Company",
+    "llcSelectCompanyPrompt": "Select a company to open its dashboard, backlog, and tools.",
+    "llcNoCompanies": "No companies yet.",
+    "llcCreateCompany": "Create a company"
   },
   "agent": {
     "registry": {
@@ -198,7 +239,13 @@
     "title": "Agents",
     "orchestrator": "Orchestrator",
     "config": "Agent Configuration",
-    "status": "Agent Status"
+    "status": "Agent Status",
+    "nav": {
+      "label": "Agents navigation",
+      "registry": "Registry",
+      "activity": "Activity",
+      "heartbeat": "Heartbeat"
+    }
   },
   "_meta": {
     "dir": "rtl",
@@ -762,7 +809,13 @@
         "usage": "שימוש",
         "usageAria": "שימוש & עלויות",
         "operations": "תפעול",
-        "operationsAria": "פעולות ארוכות טווח"
+        "operationsAria": "פעולות ארוכות טווח",
+        "devTools": "Dev Tools",
+        "devToolsAria": "Developer tools and utilities",
+        "errors": "Errors",
+        "errorsAria": "Error monitoring",
+        "diagnostics": "Diagnostics",
+        "diagnosticsAria": "Failure analysis and causal inference"
       }
     },
     "header": {
@@ -1130,7 +1183,8 @@
       "file": "File",
       "score": "Score",
       "topIssue": "Top Issue",
-      "close": "Close"
+      "close": "Close",
+      "noScanData": "No analysis data yet — run a codebase scan to populate the quality dashboard."
     },
     "bugPrediction": {
       "title": "Bug Prediction Dashboard",
@@ -1705,6 +1759,38 @@
         "scanning": "Scanning...",
         "scanFile": "Scan File"
       }
+    },
+    "failureAnalysis": {
+      "title": "Failure Analysis",
+      "subtitle": "Root-cause analysis powered by the causal inference engine",
+      "empty": "Enter a task ID above to run a failure analysis.",
+      "form": {
+        "title": "Analyze a Failure",
+        "taskId": "Task ID",
+        "taskIdPlaceholder": "e.g. task-abc123",
+        "errorDescription": "Error Description",
+        "errorDescriptionPlaceholder": "Optional: describe the error or paste a stack trace",
+        "analyze": "Analyze",
+        "analyzing": "Analyzing...",
+        "clear": "Clear"
+      },
+      "result": {
+        "taskId": "Task ID",
+        "confidence": "Confidence",
+        "status": "Status",
+        "duration": "Duration",
+        "rootCause": "Root Cause",
+        "causalChain": "Causal Chain",
+        "interventions": "Interventions",
+        "confounders": "Confounders",
+        "recommendations": "Recommendations",
+        "participants": "Participants",
+        "mechanism": "Mechanism",
+        "successRate": "Success Rate",
+        "cost": "Cost",
+        "risk": "Risk",
+        "confoundingStrength": "Confounding Strength"
+      }
     }
   },
   "knowledge": {
@@ -1802,7 +1888,9 @@
       "toggleLayout": "Toggle layout",
       "typeConversation": "Conversation",
       "create": "Create",
-      "loading3dVisualization": "Loading3d visualization"
+      "loading3dVisualization": "Loading3d visualization",
+      "loadingVisualization": "Loading visualization library...",
+      "retry": "Retry"
     },
     "vectorization": {
       "actionVectorize": "Vectorize",
@@ -2690,7 +2778,11 @@
       "graphAriaLabel": "View knowledge graph",
       "title": "Knowledge Base",
       "analytics": "Analytics",
-      "entities": "Entities"
+      "entities": "Entities",
+      "webResearch": "Web Research",
+      "webResearchAriaLabel": "4-tab web research panel",
+      "openSidebar": "Open navigation menu",
+      "closeSidebar": "Close navigation menu"
     },
     "upload": {
       "selectCategory": "Select category...",
@@ -3201,7 +3293,9 @@
       "tabManage": "Manage",
       "tabSearch": "Search",
       "tabStatistics": "Statistics",
-      "tabUpload": "Upload"
+      "tabUpload": "Upload",
+      "tabPromptEditor": "Prompts",
+      "tabSystemDocs": "System Docs"
     },
     "emptyState": {
       "title": "Your knowledge base is empty",
@@ -3215,6 +3309,81 @@
     "categoriesError": {
       "title": "Knowledge base is unreachable",
       "description": "Redis connection failed. Check that the backend has Redis running."
+    },
+    "webResearch": {
+      "title": "Web Research",
+      "subtitle": "Fetch, crawl, discover, and extract data from the web",
+      "navLabel": "Web Research",
+      "navAriaLabel": "Web research panel",
+      "settingsNavLabel": "Research Settings",
+      "settingsNavAriaLabel": "Web research settings",
+      "tabListAriaLabel": "Web research tabs",
+      "renderLabel": "Render Mode",
+      "renderAuto": "Auto",
+      "renderFast": "Fast (no JS)",
+      "renderPlaywright": "Full JS (Playwright)",
+      "ingestLabel": "Save to Knowledge Base",
+      "respectRobotsLabel": "Respect robots.txt",
+      "reset": "Clear",
+      "retry": "Retry",
+      "fetching": "Fetching…",
+      "crawling": "Crawling…",
+      "discovering": "Discovering…",
+      "extracting": "Extracting…",
+      "indexed": "Saved to KB",
+      "failed": "Failed",
+      "schemaValid": "Schema Valid",
+      "schemaInvalid": "Schema Invalid",
+      "filterPlaceholder": "Filter URLs…",
+      "filterLabel": "Filter URLs",
+      "noFilterResults": "No URLs match the current filter.",
+      "depthLabel": "Depth {depth}",
+      "errorGeneric": "An unexpected error occurred. Please try again.",
+      "tabs": {
+        "scrape": "Fetch Page",
+        "scrapeAriaLabel": "Fetch Page — extract text from a single URL",
+        "crawl": "Crawl Site",
+        "crawlAriaLabel": "Crawl Site — follow links and index multiple pages",
+        "siteMap": "Find Pages",
+        "siteMapAriaLabel": "Find Pages — discover all URLs on a domain",
+        "extract": "Get Data",
+        "extractAriaLabel": "Get Data — extract structured data using a schema"
+      },
+      "scrape": {
+        "urlLabel": "URL",
+        "urlPlaceholder": "https://example.com/page",
+        "formatLabel": "Output Format",
+        "submitLabel": "Fetch Page",
+        "emptyState": "Enter a URL above and click Fetch Page to extract its text content."
+      },
+      "crawl": {
+        "seedLabel": "Seed URL",
+        "seedPlaceholder": "https://example.com",
+        "depthLabel": "Max Depth",
+        "maxPagesLabel": "Max Pages",
+        "sameOriginLabel": "Same origin only",
+        "submitLabel": "Crawl Site",
+        "emptyState": "Enter a starting URL and click Crawl Site to follow its links.",
+        "resultTitle": "{count} pages crawled",
+        "urlListLabel": "Crawled pages"
+      },
+      "siteMap": {
+        "domainLabel": "Domain",
+        "domainPlaceholder": "example.com",
+        "maxUrlsLabel": "Max URLs",
+        "submitLabel": "Find Pages",
+        "emptyState": "Enter a domain name and click Find Pages to discover its URLs.",
+        "resultTitle": "{count} URLs found on {domain}",
+        "urlListLabel": "Discovered URLs"
+      },
+      "extract": {
+        "urlLabel": "URL",
+        "urlPlaceholder": "https://example.com/page",
+        "schemaLabel": "JSON Schema",
+        "submitLabel": "Get Data",
+        "emptyState": "Enter a URL and a JSON Schema, then click Get Data to extract structured information.",
+        "resultTitle": "Extracted Data"
+      }
     }
   },
   "reasoningTrace": {
@@ -3370,7 +3539,10 @@
       "refresh": "Refresh",
       "availableAgents": "Available Agents",
       "min": "min",
-      "overviewAriaLabel": "View workflow overview"
+      "overviewAriaLabel": "View workflow overview",
+      "historyAriaLabel": "Workflow execution history",
+      "visualizerAriaLabel": "Orchestration visualizer",
+      "agentsAriaLabel": "Agent capabilities"
     },
     "runner": {
       "completed": "Completed",
@@ -3477,7 +3649,16 @@
       "visionWait": "Wait for Element",
       "conditionPlaceholder": "Condition (e.g., $? -eq 0)",
       "save": "Save",
-      "confirm": "Confirm"
+      "confirm": "Confirm",
+      "addCase": "Add case",
+      "addSwitch": "Add switch",
+      "conditionCompare": "Condition compare",
+      "conditionExpr": "Condition expr",
+      "switch": "Switch",
+      "switchDefaultHint": "Switch default hint",
+      "switchLabel": "switch",
+      "loopLabel": "Loop",
+      "switchOnPlaceholder": "Enter switch on..."
     },
     "notifications": {
       "emailRecipients": "Email Recipients",
@@ -3996,7 +4177,10 @@
       "noSession": "No active browser session. Launch a session to start browsing.",
       "testButton": "Test",
       "getStarted": "Use automation controls above to get started",
-      "sessionId": "Session ID: {id}"
+      "sessionId": "Session ID: {id}",
+      "templates": "Scrape Templates",
+      "exitRegionMode": "Exit region mode",
+      "markRegions": "Mark regions"
     },
     "interface": {
       "typeText": "Type Text",
@@ -4160,7 +4344,9 @@
       "networkView": "Network View (Cytoscape)",
       "title": "Function Call Graph",
       "orphanedView": "Orphaned Functions (unused)",
-      "allModules": "All Modules"
+      "allModules": "All Modules",
+      "loadingVisualization": "Loading visualization library...",
+      "retry": "Retry"
     },
     "moduleImports": {
       "tooltipFunctions": "functions",
@@ -4286,7 +4472,12 @@
       "loading": "Loading chart...",
       "total": "Total",
       "noData": "No data available"
-    }
+    },
+    "ariaLabel": "Accessible label",
+    "cellPlaceholder": "Loading...",
+    "defaultAriaLabel": "default (accessible)",
+    "renderError": "Render error",
+    "viewData": "View data"
   },
   "profile": {
     "confirmNewPassword": "Confirm new password",
@@ -4329,7 +4520,8 @@
     "closeAria": "Close profile",
     "themeAuto": "Auto",
     "pwChanged": "Password changed successfully!",
-    "username": "Username:"
+    "username": "Username:",
+    "tabDevices": "Tab devices"
   },
   "ui": {
     "themeToggle": {
@@ -4743,7 +4935,10 @@
       "you": "You",
       "silenceTimeout": "Silence timeout",
       "hintResponding": "AutoBot is responding...",
-      "title": "Voice Chat"
+      "title": "Voice Chat",
+      "realtimeWebrtc": "Realtime WebRTC",
+      "realtimeConnecting": "Connecting to Realtime...",
+      "realtimeConnected": "Realtime — speak anytime"
     },
     "filePanel": {
       "listView": "List view",
@@ -4787,7 +4982,35 @@
       "factsSelected": "{selected} of {total} facts selected",
       "share": "Share",
       "selectAll": "Select All",
-      "deselectAll": "Deselect All"
+      "deselectAll": "Deselect All",
+      "createAnother": "Create another",
+      "createLink": "Create link",
+      "creating": "Creating",
+      "emptyConversation": "Empty conversation",
+      "enterPassword": "Enter password",
+      "expiry": "Expiry",
+      "expiry1d": "Expiry1d",
+      "expiry1h": "Expiry1h",
+      "expiry30d": "Expiry30d",
+      "expiry7d": "Expiry7d",
+      "expiryNever": "Expiry never",
+      "linkExpired": "Link expired",
+      "linkExpires": "Link expires",
+      "linkNotFound": "Link not found",
+      "linkPasswordProtected": "Link password protected",
+      "linkReady": "Link ready",
+      "optionalPassword": "Optional password",
+      "passwordGate": "Password gate",
+      "passwordGateHint": "Password gate hint",
+      "passwordPlaceholder": "Enter password...",
+      "publicLink": "Public link",
+      "publicView": "Public view",
+      "readOnlyNote": "Read only note",
+      "revokeLink": "Revoke link",
+      "revoking": "Revoking",
+      "shareWithUsers": "Share with users",
+      "unlock": "Unlock",
+      "wrongPassword": "Wrong password"
     },
     "typing": {
       "understanding": "Understanding your request...",
@@ -4928,7 +5151,21 @@
       "attachFile": "Attach file",
       "retryUpload": "Retry upload",
       "removeFile": "Remove file",
-      "overseerLabel": "Overseer"
+      "overseerLabel": "Overseer",
+      "managePresets": "Manage slash command presets",
+      "generate": "Generate",
+      "generateImage": "Generate image",
+      "generateImageTitle": "generate Image",
+      "generating": "Generating",
+      "imagePromptLabel": "image Prompt",
+      "imagePromptPlaceholder": "Enter image prompt...",
+      "imageProvider": "Image provider",
+      "selectPromptTemplate": "Select prompt template",
+      "thinkingBudget": "Thinking budget",
+      "thinkingOff": "Thinking off",
+      "thinkingOffLabel": "thinking Off",
+      "thinkingOn": "Thinking on",
+      "thinkingOnLabel": "thinking On"
     },
     "visualBrowser": {
       "disconnected": "Disconnected",
@@ -4947,7 +5184,8 @@
       "reload": "Reload",
       "captureScreenshot": "Capture Screenshot",
       "urlPlaceholder": "Enter URL or search…",
-      "reloadFailed": "Reload failed"
+      "reloadFailed": "Reload failed",
+      "go": "Navigate"
     },
     "browser": {
       "connectingStatus": "Connecting",
@@ -5049,7 +5287,8 @@
       "senderSystem": "System",
       "statusSent": "Sent",
       "ctrlEnterToSave": "Press Ctrl+Enter (Cmd+Enter on Mac) to save",
-      "badgePlanning": "Planning"
+      "badgePlanning": "Planning",
+      "thinkingUsed": "Thinking used"
     },
     "stopGenerating": "Stop generating",
     "thinking": "Thinking...",
@@ -5070,7 +5309,11 @@
       "delete": "Delete message",
       "copy": "Copy message",
       "tokens": "{count} tokens",
-      "edit": "Edit message"
+      "edit": "Edit message",
+      "thinking": {
+        "badge": "🧠 Extended thinking ({count} tokens)",
+        "tooltip": "This response used extended thinking mode to reason through the problem step-by-step"
+      }
     },
     "docResult": {
       "copyContent": "Copy content",
@@ -5133,7 +5376,64 @@
       "streaming": "Streaming…",
       "done": "Done",
       "error": "Error"
-    }
+    },
+    "contextWindow": {
+      "ariaLabel": "{used} of {max} tokens used",
+      "tooltip": "{used} / {max} tokens used ({percent}% of context window)",
+      "warningToast": "Conversation approaching context limit ({percent}%). Older messages may be summarized.",
+      "compressedToast": "Context window optimized - older messages summarized",
+      "summaryTitle": "Context Summary",
+      "summaryToggle": "Show details",
+      "summarizing": "Summarizing..."
+    },
+    "openSettings": "Chat settings",
+    "settings": {
+      "title": "Chat Settings",
+      "contextOverflowLabel": "Context Overflow Protection",
+      "contextOverflowDescription": "Choose how to handle conversations approaching the context limit",
+      "contextOverflowAuto": "Auto-summarize",
+      "contextOverflowWarn": "Warn only",
+      "contextOverflowDisabled": "Disabled"
+    },
+    "folders": {
+      "folders": "Folders",
+      "newFolder": "New folder",
+      "folderName": "Folder name",
+      "rename": "Rename folder",
+      "addSubfolder": "Add subfolder",
+      "pin": "Pin folder",
+      "unpin": "Unpin folder",
+      "assignToFolder": "Move to folder",
+      "removeFromFolder": "Remove from folder",
+      "confirmDelete": "Delete folder \"{name}\"? Subfolders will be moved to root."
+    },
+    "presets": {
+      "modalTitle": "Slash Command Presets",
+      "newPreset": "New Preset",
+      "editPreset": "Edit Preset",
+      "fieldName": "Name",
+      "namePlaceholder": "my-preset",
+      "fieldDescription": "Description",
+      "descriptionPlaceholder": "What this preset does",
+      "fieldContent": "Content",
+      "contentPlaceholder": "Enter the prompt text...",
+      "cancel": "Cancel",
+      "create": "Create",
+      "update": "Update",
+      "delete": "Delete",
+      "listLabel": "Your presets",
+      "loading": "Loading presets...",
+      "empty": "No presets yet. Create one above.",
+      "editAriaLabel": "Edit preset {name}",
+      "deleteAriaLabel": "Delete preset {name}",
+      "deleteConfirmTitle": "Delete preset",
+      "deleteConfirmMessage": "Delete /{name}? This cannot be undone.",
+      "nameRequired": "Name is required",
+      "nameInvalid": "Only letters, numbers, hyphens, and underscores are allowed",
+      "contentRequired": "Content is required"
+    },
+    "lightweightMode": "Lightweight mode",
+    "lightweightModeTooltip": "lightweight Mode tooltip"
   },
   "serviceMessages": {
     "metadata": "Metadata",
@@ -5518,6 +5818,65 @@
       "confidenceLabel": "Confidence",
       "fixedInterval": "Fixed Interval",
       "toastProcessed": "Processed {count} frames successfully"
+    },
+    "visionAutomation": {
+      "title": "Vision Automation",
+      "subtitle": "Screen analysis, UI element detection, OCR, and automation opportunity discovery",
+      "serviceStatus": "Service",
+      "sessionContext": "Session Context (optional)",
+      "sessionIdPlaceholder": "Session ID for context",
+      "tabsAriaLabel": "Vision automation tabs",
+      "analyzing": "Analyzing...",
+      "detecting": "Detecting...",
+      "extracting": "Extracting...",
+      "scanning": "Scanning...",
+      "errorLabel": "Error",
+      "tabs": {
+        "analysis": "Screen Analysis",
+        "elements": "Element Detection",
+        "ocr": "OCR",
+        "opportunities": "Automation Opportunities"
+      },
+      "columns": {
+        "id": "ID",
+        "type": "Type",
+        "confidence": "Confidence",
+        "text": "Text",
+        "interactions": "Interactions",
+        "position": "Center"
+      },
+      "analysis": {
+        "cardTitle": "Capture & Analyze Screen",
+        "trigger": "Capture & Analyze",
+        "elementsFound": "Elements",
+        "textRegions": "Text Regions",
+        "confidence": "Confidence",
+        "automationOpps": "Opportunities",
+        "detectedElements": "Detected UI Elements",
+        "empty": "Press Capture and Analyze to analyze the current screen"
+      },
+      "elements": {
+        "cardTitle": "Detect UI Elements",
+        "trigger": "Detect Elements",
+        "typePlaceholder": "Filter by element type (e.g. button)",
+        "minConfidence": "Min Confidence",
+        "results": "{filtered} of {total} elements",
+        "empty": "No elements match the current filter"
+      },
+      "ocr": {
+        "cardTitle": "OCR Text Extraction",
+        "trigger": "Extract Text",
+        "regionsFound": "{count} text region(s) found",
+        "noRegions": "No text regions detected",
+        "empty": "Press Extract Text to run OCR on the current screen"
+      },
+      "opportunities": {
+        "cardTitle": "Automation Opportunities",
+        "trigger": "Scan for Opportunities",
+        "total": "Total Opportunities",
+        "empty": "No automation opportunities found",
+        "emptyHint": "Press Scan for Opportunities to discover interactive elements"
+      }
     }
   },
   "views": {
@@ -5686,7 +6045,9 @@
       "widgetTitle": "Title",
       "bar": "Bar",
       "create": "Create",
-      "area": "Area"
+      "area": "Area",
+      "saved": "Saved",
+      "dashboardSaved": "Dashboard saved"
     },
     "devSpeedup": {
       "after": "After",
@@ -5785,7 +6146,8 @@
       "goToChat": "Go to Chat",
       "analytics": "Analytics",
       "knowledgeBase": "Knowledge Base",
-      "goBack": "Go Back"
+      "goBack": "Go Back",
+      "goHome": "Go Home"
     },
     "plugins": {
       "requires": "Requires",
@@ -5835,7 +6197,9 @@
       "reload": "Reload",
       "version": "Version",
       "configuration": "Configuration",
-      "marketplace": "מרקטפלייס"
+      "marketplace": "מרקטפלייס",
+      "auditLog": "Audit log",
+      "trustTier": "Trust tier"
     },
     "vision": {
       "serviceOffline": "Service Offline",
@@ -5934,7 +6298,8 @@
       "noEndpointData": "No endpoint data available",
       "daysAnalyzed": "Days Analyzed",
       "vsYesterday": "vs yesterday",
-      "byEndpoint": "By Endpoint"
+      "byEndpoint": "By Endpoint",
+      "last14Days": "Last 14 days"
     },
     "modeSelector": {
       "modeDisabled": "Disabled",
@@ -6121,7 +6486,22 @@
     "backendOffline": "Backend offline — showing cached settings",
     "connection": {
       "title": "Connection",
-      "desc": "Configure backend connection settings"
+      "desc": "Configure backend connection settings",
+      "backendCheck": {
+        "title": "Backend reachability",
+        "description": "Run a one-shot ping to verify that the AutoBot backend is reachable from this browser. No periodic polling — manual only.",
+        "button": "Test backend connection",
+        "checking": "Checking…",
+        "reachable": "Reachable",
+        "unreachable": "Unreachable",
+        "latency": "Latency",
+        "lastTested": "Last tested",
+        "neverTested": "Not yet tested"
+      }
+    },
+    "presets": {
+      "title": "Slash Presets",
+      "description": "Create reusable slash commands that expand into full prompts in the chat input. Type / followed by the preset name to trigger them."
     }
   },
   "visualizations": {
@@ -6208,7 +6588,8 @@
       "minimum": "Minimum",
       "memoryUsage": "Memory Usage",
       "average": "Average",
-      "networkIo": "Network I/O"
+      "networkIo": "Network I/O",
+      "noData": "No metrics available yet"
     },
     "agentActivity": {
       "activeCount": "{count} active",
@@ -6224,7 +6605,8 @@
       "pauseBtn": "Pause",
       "liveActivityFeed": "Live Activity Feed",
       "defaultTitle": "Agent Activity Monitor",
-      "timelineView": "Timeline view"
+      "timelineView": "Timeline view",
+      "abstained": "Abstained"
     }
   },
   "audit": {
@@ -6508,6 +6890,22 @@
       "statTotal": "Total",
       "startingUrl": "Starting URL",
       "pause": "Pause"
+    },
+    "scrapeTemplates": {
+      "title": "Scrape Templates",
+      "refresh": "Refresh templates",
+      "emptyTitle": "No Saved Templates",
+      "emptyMessage": "Mark regions on a page and save a template to see it here.",
+      "run": "Re-run template",
+      "duplicate": "Duplicate template",
+      "delete": "Delete template",
+      "deleteConfirm": "Delete \"{name}\"? This cannot be undone.",
+      "targetUrl": "Target URL",
+      "runButton": "Run",
+      "running": "Running...",
+      "extractedResults": "Extracted results",
+      "noValue": "(not found)",
+      "noResults": "No regions extracted."
     }
   },
   "secrets": {
@@ -6666,7 +7064,8 @@
     "generic": "Something went wrong. Please try again.",
     "notFound": "Not found.",
     "unauthorized": "Unauthorized. Please log in.",
-    "serverError": "Server error. Please try again later."
+    "serverError": "Server error. Please try again later.",
+    "genericError": "Generic error"
   },
   "status": {
     "error": "Error",
@@ -7154,6 +7553,176 @@
       "expired": "פג תוקף",
       "refresh": "קבל קוד חדש",
       "retry": "נסה שוב"
+    }
+  },
+  "llmKeys": {
+    "title": "LLM API Keys",
+    "issueKey": "Issue Key",
+    "revoke": "Revoke",
+    "rotate": "Rotate",
+    "unlimited": "Unlimited",
+    "empty": "No API keys found.",
+    "rawKeyWarning": "Copy this key now — it will not be shown again.",
+    "col": {
+      "prefix": "Key Prefix",
+      "team": "Team",
+      "label": "Label",
+      "budget": "Monthly Budget",
+      "spend": "Spend (MTD)",
+      "models": "Allowed Models",
+      "status": "Status",
+      "expires": "Expires"
+    },
+    "status": {
+      "active": "Active",
+      "revoked": "Revoked"
+    },
+    "form": {
+      "teamId": "Team ID",
+      "label": "Label",
+      "budget": "Monthly Budget (USD)",
+      "budgetHint": "Set to 0 for unlimited.",
+      "models": "Allowed Models (JSON array)",
+      "modelsHint": "E.g. [\"gpt-4\", \"claude-*\"]. Leave blank to allow all.",
+      "expiresAt": "Expires At (optional)"
+    },
+    "revokeConfirm": {
+      "title": "Revoke API Key",
+      "body": "Are you sure you want to revoke key {id}? This cannot be undone."
+    }
+  },
+  "llc": {
+    "templates": {
+      "searchPlaceholder": "Search templates...",
+      "loading": "Loading templates...",
+      "noMatch": "No templates found matching your search",
+      "preview": "Preview template",
+      "select": "Select template",
+      "useTemplate": "Use this template"
+    },
+    "wizard": {
+      "step1": {
+        "title": "Choose a Starting Point",
+        "description": "Start with a template or build from scratch",
+        "startFromScratch": "Start from Scratch",
+        "startFromScratchDesc": "Build your company structure from the ground up",
+        "useTemplate": "Use a Template",
+        "useTemplateDesc": "Start with a pre-configured company template"
+      },
+      "step2": {
+        "title": "Configure Your Company",
+        "description": "Set up your company details and preferences",
+        "companyName": "Company Name",
+        "companyNamePlaceholder": "e.g., Acme Corporation",
+        "issuePrefix": "Issue Prefix",
+        "issuePrefixPlaceholder": "e.g., ACM",
+        "issuePrefixHint": "2-10 uppercase letters for issue identifiers (e.g., ACM-123)",
+        "mission": "Mission Statement",
+        "missionPlaceholder": "What is your company's mission?",
+        "monthlyBudget": "Monthly Budget",
+        "monthlyBudgetPlaceholder": "100",
+        "estimatedCost": "Estimated cost",
+        "brandColor": "Brand Color",
+        "brandColorPlaceholder": "#667eea",
+        "templateVariables": "Template Configuration"
+      },
+      "step3": {
+        "title": "Review & Create",
+        "description": "Review your configuration and create your company",
+        "companyDetails": "Company Details",
+        "template": "Template",
+        "agents": "Agents",
+        "goals": "Goals",
+        "workItems": "Work Items",
+        "kbCollections": "Knowledge Collections",
+        "createCompany": "Create Company"
+      }
+    }
+  },
+  "code": {
+    "cellPlaceholder": "Loading...",
+    "copied": "Copied",
+    "copy": "Copy",
+    "copyCodeAriaLabel": "copy Code (accessible)",
+    "copyFailed": "Copy failed"
+  },
+  "devices": {
+    "addDevice": "Add device",
+    "confirmDelete": "Confirm delete",
+    "daysAgo": "Days ago",
+    "error": "Error",
+    "hoursAgo": "Hours ago",
+    "justNow": "Just now",
+    "lastSeen": "Last seen",
+    "loading": "Loading",
+    "minutesAgo": "Minutes ago",
+    "noDevices": "No devices",
+    "pairDevice": "Pair device",
+    "pairFirst": "Pair first",
+    "pairNewDevice": "Pair new device",
+    "paired": "Paired",
+    "pairedDevices": "Paired devices",
+    "pairingInstructions": "Pairing instructions",
+    "pairingNote": "Pairing note",
+    "step1": "Step1",
+    "step2": "Step2",
+    "step3": "Step3",
+    "step4": "Step4",
+    "unpair": "Unpair"
+  },
+  "imageCell": {
+    "copyUrl": "Copy url",
+    "download": "Download",
+    "downloadLabel": "download",
+    "generated": "Generated",
+    "lightbox": "Lightbox",
+    "loadError": "Load error",
+    "placeholder": "Placeholder",
+    "viewFull": "View full"
+  },
+  "plugins": {
+    "capabilities": {
+      "approvalDescription": "Approval description",
+      "approvalTitle": "approval",
+      "approveAll": "Approve all",
+      "approveSelected": "Approve selected",
+      "approving": "Approving",
+      "auditLogTitle": "audit Log",
+      "capability": "Capability",
+      "denied": "Denied",
+      "filterByPlugin": "Filter by plugin",
+      "granted": "Granted",
+      "loading": "Loading",
+      "loadingAudit": "Loading audit",
+      "noAuditEntries": "No audit entries",
+      "noPending": "No pending",
+      "operation": "Operation",
+      "plugin": "Plugin",
+      "status": "Status",
+      "timestamp": "Timestamp"
+    }
+  },
+  "errorMonitoring": {
+    "title": "Error Monitoring",
+    "subtitle": "System-wide error statistics, recent errors, and component breakdown",
+    "lastUpdate": "Last updated",
+    "noMessage": "(no message)",
+    "cards": {
+      "totalErrors": "Total Errors"
+    },
+    "filters": {
+      "category": "Category",
+      "component": "Component",
+      "all": "All"
+    },
+    "sections": {
+      "recentErrors": "Recent Errors",
+      "categories": "Errors by Category",
+      "components": "Errors by Component"
+    },
+    "empty": {
+      "noErrors": "No errors recorded",
+      "noData": "No data available"
     }
   }
 }

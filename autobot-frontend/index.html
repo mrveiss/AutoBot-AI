@@ -11,10 +11,10 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
-  <!-- No-flash theme-variant initialization (Issue #9274 / MVA-3096) -->
-  <script>
-    (function(){try{var v=localStorage.getItem('autobot-theme-variant');if(v&&v!=='default')document.documentElement.setAttribute('data-theme-variant',v);}catch(e){}})();
-  </script>
+  <!-- No-flash theme-variant initialization (Issue #9274 / MVA-3096).
+       Externalized into a bundled module so the strict CSP `script-src 'self'`
+       (no unsafe-inline) passes on co-located installs (Issue #9966). -->
+  <script type="module" src="/src/theme-variant-init.ts"></script>
 </head>
 <body>
   <!-- Ember icon sprite (Issue #9274 / MVA-3096) — inlined for instant <use> resolution -->

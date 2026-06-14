@@ -9,6 +9,7 @@ FastAPI dependencies for user management endpoints.
 """
 
 import uuid
+from typing import AsyncGenerator, Optional
 
 from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -43,6 +44,26 @@ async def get_db_session() -> AsyncSession:
         yield session
 
 
+async def get_optional_db_session() -> AsyncGenerator[Optional[AsyncSession], None]:
+    """Get database session when Postgres is available, or None in single_user mode.
+
+    Use this dependency for endpoints whose primary operation is independent of
+    the database (e.g. config-file writes) but that record an optional audit
+    trail when Postgres is available.  The caller must guard any DB operation
+    with ``if session is not None``.
+
+    Issue #10000: telemetry consent save must work in single_user mode.
+    """
+    config = get_deployment_config()
+
+    if not config.postgres_enabled:
+        yield None
+        return
+
+    async for session in get_async_session():
+        yield session
+
+
 def get_current_user(request: Request) -> dict:
     """
     Get current authenticated user from request.
@@ -69,6 +90,31 @@ def get_current_user(request: Request) -> dict:
             detail="Authentication required",
         )
     return user_data
+
+
+def get_current_user_id(
+    current_user: dict = Depends(get_current_user),
+) -> uuid.UUID:
+    """Resolve the authenticated user's UUID id.
+
+    GH#9037: per-user resources (e.g. provider credentials) key on the user's
+    UUID. Real authenticated users carry an ``id``/``user_id``/``sub`` claim;
+    service/internal principals do not, so they are rejected here. Deployment-
+    mode gating (single_user → 503) is handled by ``get_db_session``.
+    """
+    raw = current_user.get("id") or current_user.get("user_id") or current_user.get("sub")
+    if not raw:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User identity required",
+        )
+    try:
+        return uuid.UUID(str(raw))
+    except (ValueError, TypeError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User identity is not a valid id",
+        ) from exc
 
 
 def get_tenant_context(

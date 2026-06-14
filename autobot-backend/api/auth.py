@@ -593,7 +593,7 @@ async def refresh_token(request: Request):
     if config.mode == DeploymentMode.SINGLE_USER:
         return {
             "success": True,
-            "token": "single_user_mode",
+            "token": "single_user_mode",  # nosec B105 - sentinel token value for single-user mode, not a real
             "expiresIn": 86400,
         }
 

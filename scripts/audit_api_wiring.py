@@ -72,17 +72,31 @@ def norm_path(p: str) -> str:
 
 def dump_openapi(out_path: str) -> int:
     """Import the app and dump app.openapi() — authoritative route table."""
+    # Resolve BEFORE chdir: a relative out_path must land where the caller
+    # expects, not inside autobot-backend/ (#9864 — this stranded openapi.json
+    # in CI and the audit step crashed with FileNotFoundError every run).
+    out = Path(out_path).resolve()
     sys.path.insert(0, str(BACKEND))
     os.chdir(BACKEND)
     try:
         from app_factory import create_app  # type: ignore
         app = create_app()
         spec = app.openapi()
+        # FastAPI omits WebSocket routes from OpenAPI — record them in a
+        # custom key so the audit can verify /api/ws* style frontend calls
+        # against the real route table instead of flagging them (GH#9864).
+        from starlette.routing import WebSocketRoute  # type: ignore
+        spec["x-websocket-paths"] = sorted(
+            {r.path for r in app.routes if isinstance(r, WebSocketRoute)}
+        )
     except Exception as e:  # noqa: BLE001
         print(f"[dump-openapi] FAILED to build app: {e}", file=sys.stderr)
         return 1
-    Path(out_path).write_text(json.dumps(spec, indent=1))
-    print(f"[dump-openapi] wrote {len(spec.get('paths', {}))} paths to {out_path}")
+    out.write_text(json.dumps(spec, indent=1))
+    print(
+        f"[dump-openapi] wrote {len(spec.get('paths', {}))} paths "
+        f"(+{len(spec.get('x-websocket-paths', []))} websocket) to {out}"
+    )
     return 0
 
 
@@ -92,7 +106,10 @@ def backend_paths_from_openapi(src: str) -> set[str]:
             spec = json.load(r)
     else:
         spec = json.loads(Path(src).read_text())
-    return {norm_path(p) for p in spec.get("paths", {})}
+    paths = {norm_path(p) for p in spec.get("paths", {})}
+    # Websocket routes recorded by dump_openapi (absent from live-server specs).
+    paths |= {norm_path(p) for p in spec.get("x-websocket-paths", [])}
+    return paths
 
 
 ROUTER_PREFIX_RE = re.compile(r"APIRouter\([^)]*?prefix\s*=\s*[\'\"]([^\'\"]+)", re.S)
@@ -129,8 +146,27 @@ def backend_paths_static() -> tuple[set[str], dict[str, list[str]]]:
     return paths, raw_routes
 
 
-def find_unmounted_routers() -> list[str]:
-    """Router modules under api/ and llc/api/ never referenced by registry/factory."""
+def _module_served_by_openapi(txt: str, backend: set[str]) -> bool:
+    """Authoritative suppression: a module is mounted when ALL of its declared
+    routes appear in the real route table (any-route matching would let one
+    coincidental suffix like /status suppress a whole unmounted module)."""
+    own = ROUTER_PREFIX_RE.search(txt)
+    prefix = own.group(1).rstrip("/") if own else ""
+    checked = 0
+    for _m, route in ROUTE_DECORATOR_RE.findall(txt):
+        full = norm_path(prefix + (route if route.startswith("/") or not route else "/" + route))
+        if full == "/":
+            continue
+        checked += 1
+        if not any(b.endswith(full) for b in backend):
+            return False
+    return checked > 0
+
+
+def find_unmounted_routers(backend: set[str] | None = None) -> list[str]:
+    """Router modules under api/ and llc/api/ never reachable from the
+    registry/factory — directly or via sibling-module include_router chains
+    (e.g. api/analytics.py sub-including analytics_engagement, GH#9864)."""
     registry_txt = ""
     for src in [BACKEND / "initialization", BACKEND / "app_factory.py",
                 REPO_ROOT / "main.py", BACKEND / "llc"]:
@@ -146,17 +182,40 @@ def find_unmounted_routers() -> list[str]:
     for api_dir in [BACKEND / "api", BACKEND / "llc" / "api"]:
         if not api_dir.exists():
             continue
-        for py in sorted(api_dir.glob("*.py")):
-            name = py.stem
-            if name == "__init__" or name.endswith("_test") or name.startswith("test_"):
+        module_txt = {
+            py.stem: py.read_text(encoding="utf-8", errors="ignore")
+            for py in api_dir.glob("*.py")
+            if py.stem != "__init__" and not py.stem.endswith("_test")
+            and not py.stem.startswith("test_")
+        }
+        init_txt = (api_dir / "__init__.py").read_text(encoding="utf-8", errors="ignore") \
+            if (api_dir / "__init__.py").exists() else ""
+
+        # Transitive vouching: registry-mounted modules vouch for siblings
+        # they sub-include via `<name>.router`, to a fixpoint (GH#9864 —
+        # e.g. api/analytics.py sub-includes analytics_engagement). Word
+        # boundary required: bare substring matching would let
+        # `gpu_monitoring.router` vouch an unmounted `monitoring` module.
+        mounted = {n for n in module_txt if n in registry_txt or n in init_txt}
+        changed = True
+        while changed:
+            changed = False
+            for parent in list(mounted):
+                for child in module_txt:
+                    if child not in mounted and re.search(
+                        rf"(?<![A-Za-z0-9_.]){re.escape(child)}\.router",
+                        module_txt[parent],
+                    ):
+                        mounted.add(child)
+                        changed = True
+
+        for name in sorted(module_txt):
+            txt = module_txt[name]
+            if "APIRouter" not in txt or name in mounted:
                 continue
-            txt = py.read_text(encoding="utf-8", errors="ignore")
-            if "APIRouter" not in txt:
+            if backend and _module_served_by_openapi(txt, backend):
                 continue
-            init_txt = (api_dir / "__init__.py").read_text(encoding="utf-8", errors="ignore") \
-                if (api_dir / "__init__.py").exists() else ""
-            if name not in registry_txt and name not in init_txt:
-                unmounted.append(str(py.relative_to(REPO_ROOT)))
+            unmounted.append(str((api_dir / f"{name}.py").relative_to(REPO_ROOT)))
     return unmounted
 
 
@@ -171,25 +230,56 @@ def frontend_calls() -> dict[str, set[str]]:
             if "node_modules" in sp or any(x in sp for x in FE_EXCLUDE_PATTERNS):
                 continue
             txt = f.read_text(encoding="utf-8", errors="ignore")
-            for m in FE_API_RE.findall(txt):
-                calls[norm_path(m)].add(str(f.relative_to(REPO_ROOT)))
+            for line in txt.splitlines():
+                # Comment lines hold doc EXAMPLES (`* apiClient.get('/api/users')`),
+                # not real calls — skip them.
+                if line.lstrip()[:2] in ("* ", "//", "/*") or line.strip() == "*":
+                    continue
+                for m in FE_API_RE.findall(line):
+                    p = norm_path(m)
+                    # Unbalanced braces = extraction artifact (brace-expansion
+                    # notation inside comments, e.g. `/api/x/{a,b}/y`), not a call.
+                    if p.count("{") != p.count("}"):
+                        continue
+                    calls[p].add(str(f.relative_to(REPO_ROOT)))
     return calls
 
 
 # ------------------------------------------------------------------ match ----
 
+def _segments_match(fe: str, b: str) -> bool:
+    """Segment-wise comparison where {p} (a runtime-resolved template segment
+    or a path parameter) matches any single concrete segment on either side."""
+    sa, sb = fe.strip("/").split("/"), b.strip("/").split("/")
+    if len(sa) != len(sb):
+        return False
+    return all(x == y or x == "{p}" or y == "{p}" for x, y in zip(sa, sb))
+
+
 def matches(fe: str, backend: set[str]) -> bool:
     """fe like /api/devices/paired vs backend paths possibly without /api."""
     candidates = {fe}
-    if fe.startswith("/api/"):
+    # /api-stripped variant (static-mode tables lack the /api prefix) — but
+    # not when the next segment is a wildcard: /{p}/x would re-match /api/x.
+    if fe.startswith("/api/") and not fe.startswith("/api/{p}"):
         candidates.add(fe[len("/api"):])
+    # `…x${qs}` template tails are usually query strings appended to the path
+    # (norm turns them into a glued `x{p}`) — also try the stripped path.
+    for c in list(candidates):
+        if c.endswith("{p}") and not c.endswith("/{p}"):
+            candidates.add(c[: -len("{p}")].rstrip("/") or "/")
     for c in candidates:
         if c in backend:
             return True
-        # allow backend paths that are suffix/superset matches (prefix-mounted)
-        for b in backend:
-            if b.endswith(c) or c.endswith(b) and len(b) > 3:
-                return True
+        if any(_segments_match(c, b) for b in backend):
+            return True
+        # Bare base-URL string (`/api/transcriber` + path concatenation):
+        # treat as wired when real routes exist beneath it. Known trade-off:
+        # this also masks a missing collection-root endpoint (GET /api/x when
+        # only /api/x/{id} exists) — static extraction cannot tell a base
+        # constant from a full call.
+        if any(b.startswith(c + "/") for b in backend):
+            return True
     return False
 
 
@@ -203,6 +293,10 @@ def main() -> int:
                     help="also report backend paths with no frontend consumer")
     ap.add_argument("--fail-on-unwired", action="store_true",
                     help="exit non-zero if any unwired call or unmounted router found")
+    ap.add_argument("--only-prefix", metavar="PREFIX",
+                    help="restrict unwired-call reporting and exit code to frontend "
+                         "calls under PREFIX (e.g. /api/llc). Lets CI gate one module "
+                         "while other pre-existing findings are tracked separately.")
     args = ap.parse_args()
 
     if args.dump_openapi:
@@ -220,13 +314,16 @@ def main() -> int:
     print(f"backend paths: {len(backend)} | frontend distinct /api/ paths: {len(fe)}\n")
 
     unwired = {p: files for p, files in sorted(fe.items()) if not matches(p, backend)}
+    if args.only_prefix:
+        unwired = {p: files for p, files in unwired.items() if p.startswith(args.only_prefix)}
+        print(f"(scoped to {args.only_prefix})")
     print(f"== UNWIRED FRONTEND CALLS: {len(unwired)} ==")
     for p, files in unwired.items():
         print(f"  {p}")
         for f in sorted(files)[:3]:
             print(f"      <- {f}")
 
-    unmounted = find_unmounted_routers()
+    unmounted = find_unmounted_routers(backend if args.openapi else None)
     print(f"\n== UNMOUNTED ROUTER MODULES: {len(unmounted)} ==")
     for m in unmounted:
         print(f"  {m}")
@@ -245,7 +342,9 @@ def main() -> int:
     if args.fail_on_unwired:
         if unwired:
             rc |= 1
-        if unmounted:
+        # When scoped to a single module, don't fail on repo-wide unmounted
+        # routers — those are tracked outside the scoped gate.
+        if unmounted and not args.only_prefix:
             rc |= 2
     return rc
 

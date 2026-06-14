@@ -119,6 +119,25 @@
     backend_slm_auth_tok: "{{ _backend_slm_auth_tok.stdout | default('') | trim }}"
   tags: ['backend', 'config']
 
+# #9914: Deploy the systemd unit BEFORE any stop/start so a fresh VM provisions
+# out-of-box. Previously the unit was deployed after the MVA-1633 start task, so
+# first-run on a clean node failed: "Could not find the requested service
+# autobot-backend". Tagged backend,config so tag-filtered runs register it too.
+- name: "Backend | Deploy backend systemd service (#9914)"
+  ansible.builtin.template:
+    src: autobot-backend.service.j2
+    dest: /etc/systemd/system/autobot-backend.service
+    mode: "0644"
+  notify:
+    - reload systemd
+    - restart backend
+  tags: ['backend', 'config']
+
+- name: "Backend | Reload systemd so the unit is registered before start (#9914)"
+  ansible.builtin.systemd:
+    daemon_reload: true
+  tags: ['backend', 'config']
+
 # MVA-1633: Prevent systemd Restart=always race during env updates.
 # The backend service may restart BEFORE the new .env is written if we use
 # async notify. Stop explicitly, write env files, verify they exist, then start.
@@ -292,24 +311,51 @@
   notify: restart backend
   tags: ['backend', 'deploy']
 
-- name: Sync autobot_shared to backend install dir
-  ansible.posix.synchronize:
-    src: "{{ code_source_dir | default('/opt/autobot/code_source') }}/autobot_shared/"
-    dest: "{{ backend_install_dir }}/autobot_shared/"
-    rsync_opts:
-      - "--exclude=__pycache__"
-      - "--exclude=*.pyc"
-      - "--exclude=*.egg-info"
-      - "--exclude=.git"
+# Issue #10020: The old rsync task created a real directory copy of autobot_shared
+# inside backend_install_dir (/opt/autobot/autobot-backend/autobot_shared/).
+# Because PYTHONPATH lists backend_install_dir first, that embedded copy shadowed
+# the standalone /opt/autobot/autobot_shared/ on every partial sync — the root cause
+# of stale-shadow divergence. Replaced with a symlink so the embedded path always
+# resolves to the single canonical standalone copy, making import priority irrelevant.
+#
+# Step 1: stat the embedded path so subsequent tasks can gate on whether it is a
+# real directory (needs removal) or already a symlink (leave it; force: true handles update).
+- name: "Backend | Stat embedded autobot_shared path (#10020)"
+  ansible.builtin.stat:
+    path: "{{ backend_install_dir }}/autobot_shared"
+  register: _embedded_shared_stat
+  tags: ['backend', 'deploy']
+
+# Step 2: If a real directory exists (not a symlink), remove it before creating the symlink.
+# ansible.builtin.file with state: link + force: true can replace an existing symlink but
+# will fail if a non-empty directory occupies the destination.
+- name: "Backend | Remove stale embedded autobot_shared real-dir if present (#10020)"
+  ansible.builtin.file:
+    path: "{{ backend_install_dir }}/autobot_shared"
+    state: absent
+  when:
+    - _embedded_shared_stat.stat.exists
+    - not _embedded_shared_stat.stat.islnk
+  tags: ['backend', 'deploy']
+
+# Step 3: Create (or update) the symlink. force: true updates the link target when the
+# destination is already a symlink pointing elsewhere (e.g. old partial-path symlinks).
+- name: "Backend | Symlink embedded autobot_shared to standalone canonical copy (#10020)"
+  ansible.builtin.file:
+    src: "{{ backend_shared_standalone_dir }}"
+    dest: "{{ backend_install_dir }}/autobot_shared"
+    state: link
+    force: true
+    owner: "{{ backend_user }}"
+    group: "{{ backend_group }}"
   notify:
     - restart backend
     - restart celery
   tags: ['backend', 'deploy']
 
-# Issue #3649: Also sync to the standalone /opt/autobot/autobot_shared/ that workers
-# resolve via PYTHONPATH. The backend venv editable-install points at backend_install_dir
-# but Celery workers and other services import from the standalone copy — skipping this
-# sync caused ModuleNotFoundError when new modules were added (pagination.py, task_result.py).
+# Issue #3649: Sync the single canonical autobot_shared to the standalone PYTHONPATH dir.
+# Workers, Celery, and MCP-bridge services all import from here. The backend's embedded
+# path is now a symlink to this directory, so syncing here is sufficient for all consumers.
 - name: "Backend | Sync autobot_shared to standalone PYTHONPATH dir (#3649)"
   ansible.posix.synchronize:
     src: "{{ code_source_dir | default('/opt/autobot/code_source') }}/autobot_shared/"
@@ -344,10 +390,13 @@
       - "--exclude=archives"
   tags: ['backend', 'deploy']
 
+# Issue #10020: backend_install_dir/autobot_shared is now a symlink to
+# backend_shared_standalone_dir — cleaning one is enough, but both find
+# commands are kept for clarity; find follows the symlink, so the second
+# is effectively a no-op when the target is the same directory.
 - name: "Backend | Clear stale .pyc files after source sync (#6193)"
   ansible.builtin.shell: |
     find "{{ backend_code_dir }}" -name '*.pyc' -delete
-    find "{{ backend_install_dir }}/autobot_shared" -name '*.pyc' -delete 2>/dev/null || true
     find "{{ backend_shared_standalone_dir }}" -name '*.pyc' -delete 2>/dev/null || true
   changed_when: false
   tags: ['backend', 'deploy']
@@ -623,15 +672,6 @@
     state: started
     daemon_reload: false
   tags: ['backend', 'config']
-
-- name: Deploy backend systemd service
-  ansible.builtin.template:
-    src: autobot-backend.service.j2
-    dest: /etc/systemd/system/autobot-backend.service
-    mode: "0644"
-  notify:
-    - reload systemd
-    - restart backend
 
 - name: Enable and start backend service
   ansible.builtin.systemd:

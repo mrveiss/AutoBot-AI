@@ -280,6 +280,7 @@ import { useBodyScrollLock } from '@/composables/useBodyScrollLock'
 import { useVoiceOutput } from '@/composables/useVoiceOutput'
 import { useVoiceConversation } from '@/composables/useVoiceConversation'
 import { useChatStore } from '@/stores/useChatStore'
+import type { ChatSession } from '@/stores/useChatStore'
 import { useChatController } from '@/models/controllers'
 import { useAppStore } from '@/stores/useAppStore'
 import { useNotificationBus } from '@/composables/useNotificationBus'
@@ -887,7 +888,7 @@ const onCommandApproved = async (commandData: any) => {
   logger.debug('Dialog closed, backend will execute the approved command')
 }
 
-const onCommandDenied = (reason: string) => {
+const onCommandDenied = ({ reason }: { command: string; reason: string }) => {
   logger.debug('Command denied:', reason)
   showCommandDialog.value = false
   // Handle command denial
@@ -1047,7 +1048,8 @@ const initializeChatInterface = async () => {
         // is correct (user deleted all). Pass this through so syncSessionsWithBackend
         // can bypass the #4328 defensive guard and clear local sessions as intended.
         const intentionalEmpty = Boolean(data.chat_sessions.intentional_empty)
-        store.syncSessionsWithBackend(sessions, intentionalEmpty)
+        // Backend JSON boundary: raw session objects match ChatSession at runtime
+        store.syncSessionsWithBackend(sessions as unknown as ChatSession[], intentionalEmpty)
       } else if (data.chat_sessions?.error) {
         // Explicit error case - log and proceed with fallback
         logger.warn('Failed to load chat sessions from backend:', data.chat_sessions.error)

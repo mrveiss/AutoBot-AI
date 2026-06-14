@@ -5,8 +5,14 @@
 #
 # Generate per-deployment signing secrets for the docker-compose stack (GH#9775).
 #
-# The compose file no longer ships static fallback values for AUTOBOT_JWT_SECRET
-# / SECRET_KEY — a committed shared signing secret allows JWT/session forgery
+# OPTIONAL since GH#9905: the compose stack auto-generates unique secrets on the
+# first `up` (autobot-secrets-init + shared autobot_secrets volume), so
+# `docker compose up` works with no manual step. Use this script only to PIN
+# explicit secrets (share one across hosts, or manage them yourself) — an
+# explicit value always overrides the auto-generated one.
+#
+# The compose file ships no static fallback values for AUTOBOT_JWT_SECRET /
+# SECRET_KEY — a committed shared signing secret allows JWT/session forgery
 # against any default deployment. This script writes unique, random secrets to a
 # gitignored docker/.env.secrets that you then pass to compose.
 #

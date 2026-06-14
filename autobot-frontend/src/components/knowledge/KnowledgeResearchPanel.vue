@@ -70,7 +70,8 @@ const {
       board_id: selectedBoardId.value !== '__global__' ? selectedBoardId.value : undefined,
     }))
   },
-  onMessage: (data: string) => {
+  onMessage: (data: unknown) => {
+    if (typeof data !== 'string') return
     try {
       _handleEvent(JSON.parse(data) as Record<string, unknown>)
     } catch (e) {

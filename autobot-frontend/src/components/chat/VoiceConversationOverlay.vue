@@ -58,9 +58,9 @@
                 class="voice-overlay__ws-indicator"
                 :class="{
                   'voice-overlay__ws-indicator--connected':
-                    wsConnected.value,
+                    wsConnected,
                 }"
-                :title="wsConnected.value
+                :title="wsConnected
                   ? $t('chat.voice.connected') : $t('chat.voice.disconnected')"
               ></div>
 

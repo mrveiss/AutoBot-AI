@@ -8,7 +8,10 @@ aliases:
 
 # AutoBot-AI Documentation
 
-Welcome to the AutoBot-AI documentation. Use this index to navigate all documentation sections.
+**Your data. Your AI.** AutoBot is a self-hosted AI platform you own: a small, solid
+core, a management layer that runs the hard infrastructure for you, and modules you
+install on top. Start with [[architecture/PLATFORM_MODEL|The AutoBot Platform Model]]
+for the core → SLM → modules picture, then use this index to navigate everything else.
 
 ## Getting Started
 
@@ -25,6 +28,7 @@ Welcome to the AutoBot-AI documentation. Use this index to navigate all document
 | [[agents/_index\|Agents]] | Agent roles, configuration, and capabilities |
 | [[api/_index\|API]] | REST API endpoint reference, auth, schemas |
 | [[architecture/_index\|Architecture]] | System design, component diagrams, data flow |
+| [[backend/_index\|Backend]] | Backend services, LLM gateway, fallback configuration |
 | [[changelog/_index\|Changelog]] | Release notes and version history |
 | [[configuration/_index\|Configuration]] | Environment variables, config keys, settings |
 | [[connectors/_index\|Connectors]] | Third-party integrations and connector docs |

@@ -39,11 +39,19 @@ from typing import Optional
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 
+from ..models.enums import LLCRunStatus
+from .base import AdapterRunStatus
 from .subprocess_base import DEFAULT_OUTPUT_DIR as _DEFAULT_OUTPUT_DIR
 from .subprocess_base import SIGTERM_GRACE_SECONDS as _SIGTERM_GRACE_SECONDS
 from .subprocess_base import SubprocessLifecycleAdapter
 from .subprocess_base import resolve_timeout as _resolve_timeout
-from .subprocess_support import inject_agent_credentials, serialize_invoke_context
+from .subprocess_support import (
+    final_result_event,
+    inject_agent_credentials,
+    is_rate_limit_output,
+    read_output_tail,
+    serialize_invoke_context,
+)
 
 logger = get_logger(__name__)
 
@@ -88,6 +96,7 @@ class ClaudeCodeAdapter(SubprocessLifecycleAdapter):
 
     _LOG_NAME = "ClaudeCodeAdapter"
     _state_path = staticmethod(_state_path)
+    _required_cli = "claude"  # GH#9793: CLI-availability gate in heartbeat dispatch
 
     async def _invoke(self, agent_config: dict, context: dict) -> str:
         cli = _resolve_claude_cli()
@@ -106,7 +115,10 @@ class ClaudeCodeAdapter(SubprocessLifecycleAdapter):
         os.makedirs(output_dir, exist_ok=True)
 
         prompt = self._build_prompt(context)
-        resume_session_id = await self._get_resumable_session(agent_id)
+        # H3: replay-mode runs must never resume an existing session so they
+        # execute from scratch against the stored inputs.
+        replay_mode: bool = bool(context.get("replay"))
+        resume_session_id = None if replay_mode else await self._get_resumable_session(agent_id)
 
         cmd: list[str] = [cli, "--output-format", "stream-json", "--print"]
 
@@ -189,6 +201,68 @@ class ClaudeCodeAdapter(SubprocessLifecycleAdapter):
 
         await self._store_session(agent_id, session_id)
         return run_id
+
+    async def _status(self, agent_config: dict, run_id: str) -> AdapterRunStatus:
+        """Extend base status to detect provider rate-limiting on process exit (GH#9773).
+
+        When the process is gone (base returns COMPLETED), read the tail of the
+        output JSONL and gate on the final result event before scanning for
+        rate-limit markers:
+
+        * A ``{"type": "result", "subtype": "success"}`` event with falsy
+          ``is_error`` → clean success; return COMPLETED unconditionally without
+          keyword scanning.  This prevents successful runs whose summary happens
+          to mention "rate limit", issue numbers containing "429", or SHA-like
+          tokens from being wrongly reclassified.
+        * No result event present → process was killed mid-stream (the real
+          rate-limit-kill signature); keyword-scan the tail.
+        * Result event present but ``is_error`` is truthy or subtype is not
+          "success" → explicit failure result; keyword-scan the tail.
+
+        Detection is conservative: only the shared ``_RL_KEYWORDS`` set triggers
+        reclassification; every other exit is left as COMPLETED.
+        RATE_LIMITED is a terminal state — ``_await_adapter_completion`` in the
+        heartbeat scheduler will translate it into a raised ``ProviderRateLimited``
+        so the standard exponential-backoff path applies (GH#8204).
+        """
+        base = await super()._status(agent_config, run_id)
+
+        if base.status != LLCRunStatus.COMPLETED:
+            return base
+
+        state = self._load_state(
+            self._state_path(
+                agent_config.get("adapter_config", {}).get("output_dir", _DEFAULT_OUTPUT_DIR),
+                run_id,
+            ),
+            agent_config.get("adapter_config", {}).get("output_dir", _DEFAULT_OUTPUT_DIR),
+        )
+        output_file: Optional[str] = state.get("output_file") if state else None
+        if not output_file:
+            return base
+
+        tail = read_output_tail(output_file)
+        result_event = final_result_event(tail)
+
+        # Clean success: skip keyword scan entirely to avoid false-positive
+        # reclassification of completed runs whose transcript mentions rate-limit
+        # terms incidentally (e.g. in tool output, issue numbers, SHAs).
+        if result_event is not None and not result_event.get("is_error") and result_event.get("subtype") == "success":
+            return base
+
+        # Either no result event (mid-stream kill) or an error/non-success result:
+        # scan the tail for rate-limit markers.
+        if is_rate_limit_output(tail):
+            logger.warning(
+                "ClaudeCodeAdapter: rate-limit markers in output for run %s — signalling RATE_LIMITED",
+                run_id,
+            )
+            return AdapterRunStatus(
+                status=LLCRunStatus.RATE_LIMITED,
+                error="provider rate-limited (detected in CLI output)",
+            )
+
+        return base
 
     async def _post_cancel(self, agent_config: dict, run_id: str) -> None:
         """Clear the Redis resume session so the next run starts fresh (GH#9834)."""

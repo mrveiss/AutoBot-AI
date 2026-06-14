@@ -20,7 +20,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from user_management.models.base import Base
 
-from .enums import ApprovalStatus, ApprovalType
+from .enums import ApprovalStatus, ApprovalType, pg_enum_values
 
 
 class LLCApproval(Base):
@@ -36,12 +36,12 @@ class LLCApproval(Base):
     company_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
 
     type: Mapped[str] = mapped_column(
-        sa.Enum(ApprovalType, name="approvaltype", create_type=False),
+        sa.Enum(ApprovalType, name="approvaltype", create_type=False, values_callable=pg_enum_values),
         nullable=False,
         index=True,
     )
     status: Mapped[str] = mapped_column(
-        sa.Enum(ApprovalStatus, name="approvalstatus", create_type=False),
+        sa.Enum(ApprovalStatus, name="approvalstatus", create_type=False, values_callable=pg_enum_values),
         nullable=False,
         server_default=ApprovalStatus.PENDING.value,
         index=True,

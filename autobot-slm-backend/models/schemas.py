@@ -1616,13 +1616,15 @@ class DriftResolveRequest(BaseModel):
 
 
 class DriftResolveResponse(BaseModel):
-    """Result of a local rsync to resolve drift for a component (#7149)."""
+    """Result of a local rsync to resolve drift for a component (#7149, #9982)."""
 
     success: bool
     component: str
     message: str
     source_dir: str
     deployed_dir: str
+    deps_changed: bool = False
+    post_steps: List[str] = []
 
 
 class PendingNodeResponse(BaseModel):

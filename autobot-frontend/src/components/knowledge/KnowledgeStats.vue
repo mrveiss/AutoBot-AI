@@ -380,6 +380,7 @@
 </template>
 
 <script setup lang="ts">
+import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -716,8 +717,8 @@ const getTypePercentage = (count: number): number => {
   return Math.round((count / store.documentCount) * 100)
 }
 
-const getActivityIcon = (type: string): string => {
-  const icons: Record<string, string> = {
+const getActivityIcon = (type: string): IconName => {
+  const icons: Record<string, IconName> = {
     created: 'plus-circle',
     updated: 'edit',
     deleted: 'trash',

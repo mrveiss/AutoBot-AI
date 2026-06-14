@@ -89,8 +89,10 @@ from api.structured_thinking_mcp import router as structured_thinking_mcp_router
 from api.system import router as system_router
 from api.telegram_bot import router as telegram_bot_router  # MVA-2074
 from api.transcriber import router as transcriber_router  # Issue #9044, MVA-2186
+from api.transcripts import router as transcripts_router  # Issue #9863, MVA-2176
 from api.usage import router as usage_router  # Issue #1807
 from api.user_management.router import router as user_management_router  # Issue #1801
+from api.user_provider_credentials import router as user_provider_credentials_router  # GH#9037
 from api.vnc_manager import router as vnc_router
 from api.vnc_mcp import router as vnc_mcp_router
 from api.vnc_proxy import router as vnc_proxy_router
@@ -110,10 +112,25 @@ from services.knowledge_sync_service import router as knowledge_sync_router
 def _get_system_routers() -> list:
     """Get system and settings routers (Issue #560: extracted, #1281: audit, #4461: event-logs)."""
     return [
-        (admin_event_logs_router, "", ["admin", "compliance"], "admin_event_logs"),  # Issue #4461
+        (
+            admin_event_logs_router,
+            "",
+            ["admin", "compliance"],
+            "admin_event_logs",
+        ),  # Issue #4461
         (admin_pricing_router, "", ["admin", "pricing"], "admin_pricing"),  # GH#6480
-        (admin_retention_policies_router, "", ["admin", "retention"], "admin_retention_policies"),  # MVA-3145, GH#8995
-        (admin_schedulers_router, "", ["admin", "schedulers"], "admin_schedulers"),  # GH#6594
+        (
+            admin_retention_policies_router,
+            "",
+            ["admin", "retention"],
+            "admin_retention_policies",
+        ),  # MVA-3145, GH#8995
+        (
+            admin_schedulers_router,
+            "",
+            ["admin", "schedulers"],
+            "admin_schedulers",
+        ),  # GH#6594
         (audit_router, "", ["audit"], "audit"),
         (auth_router, "/auth", ["auth"], "auth"),
         (service_messages_router, "", ["service-messages"], "service_messages"),
@@ -122,12 +139,33 @@ def _get_system_routers() -> list:
         (chat_embed_router, "", ["chat", "embed"], "chat_embed"),  # GH#9047
         (chat_presets_router, "", ["chat"], "chat_presets"),  # GH#8595
         (collaboration_router, "", ["collaboration"], "collaboration"),
-        (telegram_bot_router, "", ["telegram-bot", "integrations"], "telegram_bot"),  # MVA-2074
+        (
+            telegram_bot_router,
+            "",
+            ["telegram-bot", "integrations"],
+            "telegram_bot",
+        ),  # MVA-2074
         (system_router, "/system", ["system"], "system"),
         (settings_router, "/settings", ["settings"], "settings"),
         (usage_router, "/usage", ["usage", "analytics"], "usage"),  # Issue #1807
-        (user_management_router, "", ["user-management"], "user_management"),  # Issue #1801
-        (mobile_devices_router, "/devices", ["devices", "integrations"], "mobile_devices"),  # GH#4463
+        (
+            user_management_router,
+            "",
+            ["user-management"],
+            "user_management",
+        ),  # Issue #1801
+        (
+            user_provider_credentials_router,
+            "",
+            ["user-provider-credentials"],
+            "user_provider_credentials",
+        ),  # GH#9037
+        (
+            mobile_devices_router,
+            "/devices",
+            ["devices", "integrations"],
+            "mobile_devices",
+        ),  # GH#4463
         (data_storage_router, "", ["data-storage"], "data_storage"),
         (prompts_router, "/prompts", ["prompts"], "prompts"),
         (frontend_config_router, "", ["frontend-config"], "frontend_config"),
@@ -142,7 +180,12 @@ def _get_core_knowledge_routers() -> list:
     return [
         (knowledge_router, "/knowledge_base", ["knowledge"], "knowledge"),
         (knowledge_audit_router, "", ["knowledge-audit"], "knowledge_audit"),
-        (knowledge_chroma_router, "", ["knowledge-chroma"], "knowledge_chroma"),  # MVA-2046
+        (
+            knowledge_chroma_router,
+            "",
+            ["knowledge-chroma"],
+            "knowledge_chroma",
+        ),  # MVA-2046
         (
             knowledge_search_router,
             "/knowledge_base",
@@ -327,7 +370,12 @@ def _get_service_routers() -> list:
         (models_router, "/models", ["models"], "models"),
         (adapters_router, "/adapters", ["adapters"], "adapters"),
         (redis_router, "/redis", ["redis"], "redis"),
-        (execution_snapshots_router, "", ["execution", "snapshots"], "execution_snapshots"),  # GH#4458, MVA-2227
+        (
+            execution_snapshots_router,
+            "",
+            ["execution", "snapshots"],
+            "execution_snapshots",
+        ),  # GH#4458, MVA-2227
         (voice_realtime_router, "/voice", ["voice"], "voice_realtime"),
         (voice_router, "/voice", ["voice"], "voice"),
         (bundle_me_router, "/voice", ["voice", "rbac"], "voice_bundle_me"),
@@ -335,7 +383,18 @@ def _get_service_routers() -> list:
         (voice_bundle_user_router, "/voice", ["voice", "rbac"], "voice_bundle_user"),
         (voice_stream_router, "/voice", ["voice", "websocket"], "voice_stream"),
         (wake_word_router, "/wake_word", ["wake_word", "voice"], "wake_word"),
-        (transcriber_router, "", ["transcriber"], "transcriber"),  # Issue #9044, MVA-2186
+        (
+            transcriber_router,
+            "",
+            ["transcriber"],
+            "transcriber",
+        ),  # Issue #9044, MVA-2186
+        (
+            transcripts_router,
+            "",
+            ["transcriber"],
+            "transcripts",
+        ),  # Issue #9863, MVA-2176
         (websockets_router, "", ["websockets"], "websockets"),  # Issue #6229
         (live_events_router, "", ["live-events"], "live_events"),  # Issue #6229
         (vnc_router, "/vnc", ["vnc"], "vnc"),
@@ -385,7 +444,12 @@ def _get_mcp_routers() -> list:
             "prometheus_mcp",
         ),
         (redis_mcp_router, "/redis", ["redis_mcp", "mcp"], "redis_mcp"),  # Issue #2511
-        (manual_mcp_router, "/manual", ["manual_mcp", "mcp"], "manual_mcp"),  # Issue #4256
+        (
+            manual_mcp_router,
+            "/manual",
+            ["manual_mcp", "mcp"],
+            "manual_mcp",
+        ),  # Issue #4256
     ]
 
 

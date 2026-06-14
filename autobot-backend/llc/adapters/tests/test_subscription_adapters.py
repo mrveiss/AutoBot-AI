@@ -6,6 +6,7 @@
 
 import os
 import tempfile
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -15,17 +16,7 @@ from llc.adapters.codex_subscription_adapter import CodexSubscriptionAdapter
 from llc.adapters.copilot_subscription_adapter import CopilotSubscriptionAdapter
 from llc.models.enums import LLCRunStatus
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
-def _agent_cfg(agent_id: str = "agent-1", output_dir: str | None = None, **kwargs) -> dict:
-    cfg: dict = {"agent_id": agent_id, "adapter_config": {**kwargs}}
-    if output_dir:
-        cfg["adapter_config"]["output_dir"] = output_dir
-    return cfg
-
+from .conftest import agent_cfg as _agent_cfg
 
 # ---------------------------------------------------------------------------
 # ClaudeCodeSubscriptionAdapter
@@ -93,6 +84,63 @@ class TestClaudeCodeSubscriptionAdapter:
         """Verify quota exhaustion check handles missing output file gracefully."""
         adapter = ClaudeCodeSubscriptionAdapter()
         assert adapter._check_quota_exhaustion("/nonexistent/file.jsonl") is False
+
+    @pytest.mark.asyncio
+    async def test_quota_exhausted_wins_over_rate_limited(self) -> None:
+        """M2: quota-exhaustion (→ FAILED, no retry) must beat RATE_LIMITED (→ backoff loop).
+
+        When both quota-exhaustion patterns AND rate-limit keywords are present in the
+        output, ``status()`` must return FAILED (not RATE_LIMITED), because a subscription
+        quota hit should never enter the exponential-backoff retry loop.
+        """
+        import json
+        import time as _time
+
+        from llc.adapters.claude_code_adapter import _state_path
+
+        adapter = ClaudeCodeSubscriptionAdapter()
+
+        with tempfile.TemporaryDirectory() as td:
+            run_id = "3001/session-quota-rl"
+            # output_file must match the _output_path convention used by the adapter
+            from llc.adapters.claude_code_adapter import _output_path
+
+            output_file = _output_path(td, "agent-quota", run_id)
+
+            with open(output_file, "w", encoding="utf-8") as fh:
+                # Contains BOTH a quota-exhaustion marker AND a rate-limit keyword so
+                # both _check_quota_exhaustion and _status's keyword scan would fire.
+                # Also: NO success result event, so C1 gate does not suppress the scan.
+                fh.write('{"type": "error", "message": "quota exceeded — rate_limit_error on subscription"}\n')
+
+            state = {
+                "pid": 3001,
+                "session_id": "session-quota-rl",
+                "agent_id": "agent-quota",
+                "output_file": output_file,
+                "started_at": _time.time(),
+                "timeout_seconds": 3600,
+            }
+            with open(_state_path(td, run_id), "w", encoding="utf-8") as fh:
+                json.dump(state, fh)
+
+            cfg = {"agent_id": "agent-quota", "adapter_config": {"output_dir": td}}
+
+            with (
+                patch("os.kill", side_effect=ProcessLookupError()),
+                patch(
+                    "llc.adapters.claude_code_adapter.get_async_redis_client",
+                    new_callable=AsyncMock,
+                    return_value=None,
+                ),
+            ):
+                result = await adapter.status(cfg, run_id)
+
+        assert (
+            result.status == LLCRunStatus.FAILED
+        ), "Quota exhaustion must return FAILED (no retry), not RATE_LIMITED (backoff loop)."
+        assert result.error is not None
+        assert "quota" in result.error.lower()
 
 
 # ---------------------------------------------------------------------------

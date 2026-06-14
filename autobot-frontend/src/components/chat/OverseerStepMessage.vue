@@ -147,6 +147,7 @@
  * @copyright 2025 mrveiss
  */
 
+import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -171,9 +172,10 @@ const stepStatusClass = computed(() => ({
 }))
 
 const statusIcon = computed(() => {
-  const icons: Record<string, string> = {
+  const icons: Record<string, IconName> = {
     pending: 'clock',
-    running: 'fas fa-spinner fa-spin',
+    // #9724: was an FA class string, which <Icon> rendered as an empty SVG
+    running: 'spinner',
     streaming: 'stream',
     explaining: 'brain',
     completed: 'check-circle',

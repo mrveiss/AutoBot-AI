@@ -32,8 +32,10 @@ describe('CodeCell.vue', () => {
     const wrapper = mount(CodeCell, {
       props: { richPayload: null },
     })
-    expect(wrapper.find('[aria-busy="true"]').exists()).toBe(true)
-    expect(wrapper.text()).toContain('Loading code')
+    const skeleton = wrapper.find('[aria-busy="true"]')
+    expect(skeleton.exists()).toBe(true)
+    // Loading state is a visual skeleton; text lives in the aria-label
+    expect(skeleton.attributes('aria-label')).toContain('Loading code')
   })
 
   it('renders code block when payload provided', async () => {
