@@ -240,12 +240,12 @@ const chartOptions = computed<ApexOptions>(() => ({
   tooltip: {
     enabled: true,
     theme: 'dark',
-    custom: ({ seriesIndex, dataPointIndex, w }: {
-      seriesIndex: number
-      dataPointIndex: number
-      w: { config: { series: Array<{ name: string; data: Array<{ x: string; y: number }> }> } }
-    }) => {
-      const series = w.config.series[seriesIndex]
+    // Read from the component's typed `heatmapData` (same pattern as the
+    // dataPointSelection handler above) rather than apexcharts' `w.config.series`,
+    // whose type tightened to `ApexNonAxisChartSeries | undefined` in 5.14 and no
+    // longer matches the heatmap series shape (#10091).
+    custom: ({ seriesIndex, dataPointIndex }: { seriesIndex: number; dataPointIndex: number }) => {
+      const series = heatmapData.value[seriesIndex]
       const point = series.data[dataPointIndex]
       return `
         <div class="heatmap-tooltip">
