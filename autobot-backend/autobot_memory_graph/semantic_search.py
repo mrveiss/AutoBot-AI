@@ -205,7 +205,9 @@ class MemoryGraphQueryProcessor:
     def __init__(self, redis_client: Any, embedding_model: str | None = None):
         """
         Args:
-            redis_client:    Async Redis client (already connected, knowledge DB).
+            redis_client:    Async Redis client (already connected, DB 0 / "memory"
+                             alias).  RediSearch FT.SEARCH requires DB 0; entity
+                             data keys also live on DB 0 after #9943.
             embedding_model: Ollama model name.  Falls back to
                              config["knowledge.embedding_model"] or
                              "nomic-embed-text".
@@ -583,7 +585,11 @@ async def ensure_indexes(redis_client: Any) -> None:
         memory_fulltext_idx — phonetic full-text index
 
     Args:
-        redis_client: Async Redis client connected to the knowledge database.
+        redis_client: Async Redis client connected to Redis logical DB 0.
+            RediSearch FT.CREATE only operates on DB 0; pass a client created
+            with ``database="memory"`` (the DB 0 alias).  The data keys
+            (``memory:entity:*``) written by ``AutoBotMemoryGraphCore`` also
+            live on DB 0 after the fix in #9943.
     """
     await asyncio.gather(
         _ensure_entity_idx(redis_client),
