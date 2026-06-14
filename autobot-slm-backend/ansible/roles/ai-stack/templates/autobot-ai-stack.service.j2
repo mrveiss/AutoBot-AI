@@ -12,7 +12,10 @@ User={{ ai_user }}
 Group={{ ai_group }}
 WorkingDirectory={{ ai_install_dir }}
 Environment="PATH={{ backend_install_dir | default('/opt/autobot/autobot-backend') }}/venv/bin:/usr/local/bin:/usr/bin:/bin"
-Environment="PYTHONPATH={{ ai_install_dir }}:{{ ai_install_dir }}/src:{{ backend_install_dir | default('/opt/autobot/autobot-backend') }}"
+# PYTHONPATH must include the standalone autobot_shared (and its parent), mirroring
+# the backend unit (#10020) — ai_api_server imports autobot_shared and otherwise
+# crash-loops with ModuleNotFoundError (#10121).
+Environment="PYTHONPATH={{ ai_install_dir }}:{{ ai_install_dir }}/src:{{ backend_install_dir | default('/opt/autobot/autobot-backend') }}:{{ ai_install_dir | dirname }}/autobot_shared:{{ ai_install_dir | dirname }}"
 EnvironmentFile=/etc/autobot/autobot-ai-stack.env
 ExecStart={{ backend_install_dir | default('/opt/autobot/autobot-backend') }}/venv/bin/uvicorn ai_api_server:app --host {{ ai_host }} --port {{ ai_port }} --workers 2
 Restart=always
