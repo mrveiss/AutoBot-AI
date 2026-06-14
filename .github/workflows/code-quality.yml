@@ -20,9 +20,15 @@ on:
       - 'autobot-infrastructure/ansible/roles/slm_agent/files/**'
       - 'docs/developer/**'
       - '.github/workflows/code-quality.yml'
+  # NOTE: no pull_request.paths filter — this workflow ALWAYS runs on PRs so its
+  # required-check context ("code-quality") always reports a conclusion. A
+  # path-filtered required check that never triggers leaves the PR deadlocked on
+  # "Expected — Waiting for status". The real work is gated on the `changes` job
+  # below and self-skips (reporting success) when no backend paths are touched.
+  # Branch-protection promotion to required is the separate owner-confirmed
+  # follow-up (#10022).
   pull_request:
     branches: [ main, Dev_new_gui, develop ]
-    paths: *cq_paths
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -33,7 +39,35 @@ permissions:
   contents: read
 
 jobs:
+  changes:
+    name: Detect changed paths
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dorny/paths-filter@d1c1ffe0248fe513906c8e24db8ea791d46f8590  # v3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - '**/*.py'
+              - '**/requirements*.txt'
+              - 'requirements-ci/**'
+              - 'pyproject.toml'
+              - '.flake8'
+              - '.bandit'
+              - '.pre-commit-config.yaml'
+              - 'pipeline-scripts/**'
+              - 'tools/lint/**'
+              - 'autobot-infrastructure/shared/scripts/hooks/**'
+              - 'autobot-infrastructure/ansible/roles/slm_agent/files/**'
+              - 'docs/developer/**'
+              - '.github/workflows/code-quality.yml'
+
   code-quality:
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest  # Temporary: self-hosted runner offline (MVA-2605)
 
     steps:

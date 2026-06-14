@@ -655,18 +655,21 @@ class VisionStatusFeaturesResponse(BaseModel):
 
 
 class VisionStatusResponse(BaseModel):
-    """Response for GET /vision/status.
+    """Response for GET /vision/status (api/vision.py::get_vision_status).
 
-    Error path returns only service+status+error — extra fields allowed."""
+    Success path: service, status, features, supported_element_types,
+                  supported_interaction_types.
+    Error path:   service, status, error  (features/counts absent).
+    All success-only fields are Optional so the model validates both shapes.
+    """
 
-    model_config = {"extra": "allow"}
-
-    timestamp: float | None = None
-    overall_status: str | None = None
-    total_services: int | None = None
-    healthy_services: int | None = None
-    degraded_services: int | None = None
-    critical_services: int | None = None
+    service: str
+    status: str
+    features: VisionStatusFeaturesResponse | None = None
+    supported_element_types: int | None = None
+    supported_interaction_types: int | None = None
+    # Present only on the error path
+    error: str | None = None
 
 
 class VMStatusItem(BaseModel):
