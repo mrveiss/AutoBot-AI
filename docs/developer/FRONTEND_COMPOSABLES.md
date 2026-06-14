@@ -444,3 +444,22 @@ Banned patterns in composables:
 - `useErrorHandler.ts` — error handling composable pattern
 - `formatHelpers.ts` — date/time/number formatting utilities
 - `COMPOSABLE_HTTP_PATTERNS.md` — detailed HTTP request patterns
+
+## Composable Example Docs
+
+Each composable has a co-located `.examples.md` with usage patterns and edge cases:
+
+- [useAsyncOperation.examples.md](../../autobot-frontend/src/composables/useAsyncOperation.examples.md)
+- [useClipboard.examples.md](../../autobot-frontend/src/composables/useClipboard.examples.md)
+- [useConnectionTester.examples.md](../../autobot-frontend/src/composables/useConnectionTester.examples.md)
+- [useErrorHandler.examples.md](../../autobot-frontend/src/composables/useErrorHandler.examples.md)
+- [useErrorHandler.api-migration.md](../../autobot-frontend/src/composables/useErrorHandler.api-migration.md)
+- [useFormValidation.examples.md](../../autobot-frontend/src/composables/useFormValidation.examples.md)
+- [useKeyboard.examples.md](../../autobot-frontend/src/composables/useKeyboard.examples.md)
+- [useLocalStorage.examples.md](../../autobot-frontend/src/composables/useLocalStorage.examples.md)
+- [useModal.examples.md](../../autobot-frontend/src/composables/useModal.examples.md)
+- [usePagination.examples.md](../../autobot-frontend/src/composables/usePagination.examples.md)
+- [useTimeout.examples.md](../../autobot-frontend/src/composables/useTimeout.examples.md)
+- [iconMappings.examples.md](../../autobot-frontend/src/utils/iconMappings.examples.md)
+
+Component examples: [src/components/examples/](../../autobot-frontend/src/components/examples/)

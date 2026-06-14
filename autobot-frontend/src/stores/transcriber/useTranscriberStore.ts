@@ -4,7 +4,7 @@
 // Author: mrveiss
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import type { Project, Recording, Segment, Speaker, TranscriptResponse } from '@/composables/transcriber/useTranscriberApi'
+import type { Project, Recording, RecordingStatus, Segment, Speaker, TranscriptResponse } from '@/composables/transcriber/useTranscriberApi'
 
 export const useTranscriberStore = defineStore('transcriber', () => {
   const projects = ref<Project[]>([])
@@ -37,7 +37,7 @@ export const useTranscriberStore = defineStore('transcriber', () => {
     if (spk) spk.display_name = displayName
   }
 
-  function updateRecordingStatus(recordingId: number, status: Recording['status']) {
+  function updateRecordingStatus(recordingId: number, status: RecordingStatus) {
     const rec = recordings.value.find(r => r.id === recordingId)
     if (rec) rec.status = status
   }

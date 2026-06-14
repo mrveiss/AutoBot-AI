@@ -64,6 +64,37 @@ Bulk: `scripts/cleanup-worktrees.sh --dry-run` then `scripts/cleanup-worktrees.s
 
 ---
 
+## Session Lifecycle
+
+Sessions terminate before their PRs merge, so a session cannot clean up after
+its own merge. Responsibility is inverted: **each session cleans up its
+predecessors at start and leaves a machine-readable handoff at end.** Full
+protocol lives in the `session-lifecycle` skill; the handoff schema is in
+[`.session/README.md`](../../.session/README.md).
+
+**Start of session** (before any task work):
+1. `git fetch --prune`, then remove worktrees + local branches already merged
+   into `origin/Dev_new_gui` (inherited cleanup).
+2. Create your **own** isolated worktree — never two sessions in one checkout:
+   `git worktree add .worktrees/issue-XXXX -b issue-XXXX origin/Dev_new_gui`.
+3. Read predecessor handoffs in [`.session/`](../../.session/): if a branch is
+   unmerged, decide to continue it (rebase onto base first) or start fresh —
+   never duplicate its work blind.
+
+**End of session** (mandatory — also when blocked):
+1. Leave nothing uncommitted; WIP gets a `wip:` commit and a handoff note.
+2. Rebase onto latest base, re-run the relevant gates, grep for conflict
+   markers (`^<<<<<<< `) before the final push.
+3. Push and open/update the PR.
+4. Write `.session/HANDOFF-<branch>.md` (see schema) and commit it on your branch.
+5. Remove scratch only — **not** your own worktree; the next session's start
+   protocol removes it after the branch merges.
+
+LICENSE/NOTICE/SPDX headers are read-only during a session — flag concerns,
+never edit.
+
+---
+
 ## Multi-Agent Safety
 
 - Do NOT create/apply/drop `git stash` unless explicitly requested
