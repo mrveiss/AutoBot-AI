@@ -17,6 +17,7 @@ New code should import directly from ``autobot_shared.status_enums``.
 from autobot_shared.status_enums import (
     AgentLifecycleStatus,
     AgentStatus,
+    ConnectionStatus,
     HealthStatus,
     LLMProvider,
     OperationOutcome,
@@ -29,6 +30,7 @@ from autobot_shared.status_enums import (
 __all__ = [
     "AgentLifecycleStatus",
     "AgentStatus",
+    "ConnectionStatus",
     "HealthStatus",
     "LLMProvider",
     "OperationOutcome",
