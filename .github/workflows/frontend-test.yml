@@ -13,10 +13,15 @@ on:
     # 'Dev_*' covers the Dev_new_gui integration branch — every frontend PR
     # merges here, so the suite must run pre-merge, not only post-merge on the
     # push trigger (#10019). main/develop kept for promotion PRs.
+    #
+    # NOTE: no pull_request.paths filter — this workflow ALWAYS runs on PRs so
+    # its required-check context ("Unit & Integration Tests") always reports a
+    # conclusion. A path-filtered required check that never triggers leaves the
+    # PR deadlocked on "Expected — Waiting for status". The real work is gated on
+    # the `changes` job below and self-skips (reporting success) when no frontend
+    # paths are touched. Branch-protection promotion to required is the separate
+    # owner-confirmed follow-up (#10022).
     branches: [main, develop, 'Dev_*']
-    paths:
-      - 'autobot-frontend/**'
-      - '.github/workflows/frontend-test.yml'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -30,9 +35,28 @@ permissions:
   contents: read
 
 jobs:
+  # Job 0: Detect changed paths — always runs so the required contexts report
+  changes:
+    name: Detect changed paths
+    runs-on: ubuntu-latest
+    outputs:
+      frontend: ${{ steps.filter.outputs.frontend }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dorny/paths-filter@d1c1ffe0248fe513906c8e24db8ea791d46f8590  # v3
+        id: filter
+        with:
+          filters: |
+            frontend:
+              - 'autobot-frontend/**'
+              - '!autobot-frontend/node_modules/**'
+              - '.github/workflows/frontend-test.yml'
+
   # Job 1: Unit and Integration Tests
   unit-tests:
     name: Unit & Integration Tests
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
     runs-on: [self-hosted, Linux, X64]
 
     steps:
@@ -122,6 +146,8 @@ jobs:
   # Job 2: Security Scanning
   security-scan:
     name: Security Scan
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
     runs-on: [self-hosted, Linux, X64]
 
     steps:
@@ -167,7 +193,9 @@ jobs:
   build-test:
     name: Build Test
     runs-on: [self-hosted, Linux, X64]
-    needs: unit-tests
+    # `changes` added so the dependency graph is consistent; build-test already
+    # self-skips when unit-tests skips (path-untouched PRs).
+    needs: [changes, unit-tests]
 
     steps:
       - name: Checkout code
