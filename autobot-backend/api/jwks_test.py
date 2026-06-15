@@ -18,7 +18,6 @@ from jwt.algorithms import RSAAlgorithm
 
 from autobot_shared.auth.jwt_core import decode_jwt, encode_jwt
 
-
 # ---------------------------------------------------------------------------
 # Helpers: minimal AuthenticationMiddleware stub
 # ---------------------------------------------------------------------------
@@ -28,9 +27,7 @@ class _StubMiddleware:
     """Minimal stub that provides the attributes consumed by _build_jwks."""
 
     def __init__(self):
-        private_key = rsa.generate_private_key(
-            public_exponent=65537, key_size=2048, backend=default_backend()
-        )
+        private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048, backend=default_backend())
         public_key = private_key.public_key()
         self.jwt_private_key = private_key.private_bytes(
             encoding=serialization.Encoding.PEM,
@@ -53,8 +50,9 @@ def stub_mw():
 def jwks_response(stub_mw, monkeypatch):
     """Build a JWKS dict using our stub middleware."""
     # Patch get_auth_middleware to return the stub
-    import api.jwks as jwks_module
     from unittest.mock import patch
+
+    import api.jwks as jwks_module
 
     with patch.object(jwks_module, "get_auth_middleware", return_value=stub_mw):
         return jwks_module._build_jwks()
@@ -66,8 +64,9 @@ def jwks_response(stub_mw, monkeypatch):
 
 
 def test_jwks_has_keys_list(stub_mw):
-    import api.jwks as jwks_module
     from unittest.mock import patch
+
+    import api.jwks as jwks_module
 
     with patch.object(jwks_module, "get_auth_middleware", return_value=stub_mw):
         jwks = jwks_module._build_jwks()
@@ -76,8 +75,9 @@ def test_jwks_has_keys_list(stub_mw):
 
 
 def test_jwks_key_fields(stub_mw):
-    import api.jwks as jwks_module
     from unittest.mock import patch
+
+    import api.jwks as jwks_module
 
     with patch.object(jwks_module, "get_auth_middleware", return_value=stub_mw):
         jwks = jwks_module._build_jwks()
@@ -95,8 +95,9 @@ def test_jwks_key_fields(stub_mw):
 
 def test_jwks_n_e_reconstruct_key_and_verify_token(stub_mw):
     """The JWK n/e values must reconstruct a key that verifies a freshly-minted token."""
-    import api.jwks as jwks_module
     from unittest.mock import patch
+
+    import api.jwks as jwks_module
 
     with patch.object(jwks_module, "get_auth_middleware", return_value=stub_mw):
         jwks = jwks_module._build_jwks()
@@ -122,9 +123,11 @@ def test_jwks_n_e_reconstruct_key_and_verify_token(stub_mw):
 
 def test_jwks_kid_matches_token_kid(stub_mw):
     """The kid in the JWK must match the kid embedded in signed tokens."""
-    import jwt as _jwt
-    import api.jwks as jwks_module
     from unittest.mock import patch
+
+    import jwt as _jwt
+
+    import api.jwks as jwks_module
 
     with patch.object(jwks_module, "get_auth_middleware", return_value=stub_mw):
         jwks = jwks_module._build_jwks()
