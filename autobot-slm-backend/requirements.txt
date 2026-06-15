@@ -57,7 +57,7 @@ ldap3>=2.9.1  # LDAP/Active Directory
 pysaml2>=7.5.4  # SAML 2.0 Service Provider
 
 # 2FA/MFA (Issue #576 Phase 5)
-pyotp>=2.9.0  # TOTP generation and verification
+pyotp>=2.10.0  # TOTP generation and verification
 
 # Security: explicit pins to override vulnerable transitive versions
 cryptography>=47.0.0  # CVE fix — pulled in by PyJWT[crypto] and pysaml2
