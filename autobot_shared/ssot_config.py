@@ -1306,6 +1306,31 @@ class MiscConfig(BaseSettings):
     internal_api_key: str = Field(default="", alias="AUTOBOT_INTERNAL_API_KEY")
     jaeger_endpoint: str = Field(default="", alias="AUTOBOT_JAEGER_ENDPOINT")
     jwt_secret: str = Field(default="", alias="AUTOBOT_JWT_SECRET")
+    jwt_private_key: str = Field(
+        default="",
+        alias="AUTOBOT_JWT_PRIVATE_KEY",
+        description=(
+            "PEM-encoded RSA private key for signing RS256 user JWTs (#10196). "
+            "When absent, autobot-backend auto-generates and persists a 2048-bit keypair. "
+            "Supply this to use an externally-managed key (e.g. from a secrets manager). "
+            "NEVER share with consumer services; they use the public key from JWKS."
+        ),
+    )
+    jwt_public_key: str = Field(
+        default="",
+        alias="AUTOBOT_JWT_PUBLIC_KEY",
+        description=(
+            "PEM-encoded RSA public key corresponding to AUTOBOT_JWT_PRIVATE_KEY (#10196). "
+            "Optional: derived from the private key at startup when absent. "
+            "Useful when you want to distribute the public key via env without "
+            "embedding the private key on consumer hosts."
+        ),
+    )
+    jwt_kid: str = Field(
+        default="autobot-1",
+        alias="AUTOBOT_JWT_KID",
+        description="Key ID (kid) embedded in RS256 JWT headers and published in the JWKS (#10196).",
+    )
     llm_key_rotation_grace_secs: str = Field(default="", alias="AUTOBOT_LLM_KEY_ROTATION_GRACE_SECS")
     llm_key_rotation_interval_minutes: str = Field(default="", alias="AUTOBOT_LLM_KEY_ROTATION_INTERVAL_MINUTES")
     llm_models_yaml: str = Field(default="", alias="AUTOBOT_LLM_MODELS_YAML")

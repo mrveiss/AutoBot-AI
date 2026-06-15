@@ -42,6 +42,7 @@ from api.frontend_config import router as frontend_config_router
 from api.git_mcp import router as git_mcp_router
 from api.http_client_mcp import router as http_client_mcp_router
 from api.intelligent_agent import router as intelligent_agent_router
+from api.jwks import auth_router as jwks_auth_router  # #10196
 from api.knowledge import router as knowledge_router
 from api.knowledge_ai_stack import router as knowledge_ai_stack_router
 from api.knowledge_audit import router as knowledge_audit_router
@@ -134,6 +135,7 @@ def _get_system_routers() -> list:
         ),  # GH#6594
         (audit_router, "", ["audit"], "audit"),
         (auth_router, "/auth", ["auth"], "auth"),
+        (jwks_auth_router, "/auth", ["auth", "jwks"], "jwks_auth"),  # #10196 /api/auth/jwks
         (service_messages_router, "", ["service-messages"], "service_messages"),
         (chat_router, "", ["chat"], "chat"),
         (chat_compare_router, "", ["chat", "compare"], "chat_compare"),  # Issue #4414
