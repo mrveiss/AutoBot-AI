@@ -29,7 +29,7 @@ from api.schemas_agent import (
 from api.schemas_common import DataResponse
 from api.schemas_system import AuthLogoutData, AuthRefreshData
 from auth_middleware import get_auth_middleware
-from autobot_shared.auth.jwt_core import JWTDecodeError, decode_jwt_no_verify_exp
+from autobot_shared.auth.jwt_core import JWTDecodeError, _peek_alg, decode_jwt_no_verify_exp
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config as ssot_config
@@ -557,9 +557,23 @@ def _decode_refresh_token(token: str) -> Dict:
     """Decode JWT for refresh, allowing recently expired tokens (1h grace).
 
     Helper for refresh_token (#827).
+    Accepts both RS256 (new) and HS256 (legacy) tokens (#10196).
     """
+    mw = get_auth_middleware()
+    token_alg = _peek_alg(token)
     try:
-        payload = decode_jwt_no_verify_exp(token, get_auth_middleware().jwt_secret)
+        if token_alg == "RS256":  # nosec B105 - JWT algorithm identifier, not a credential
+            payload = decode_jwt_no_verify_exp(
+                token,
+                public_key=mw.jwt_public_key,
+                algorithms=["RS256"],
+            )
+        else:
+            payload = decode_jwt_no_verify_exp(
+                token,
+                secret=mw.jwt_secret,
+                algorithms=["HS256"],
+            )
     except JWTDecodeError as exc:
         raise HTTPException(status_code=401, detail=ERR_INVALID_TOKEN) from exc
 
