@@ -49,7 +49,6 @@ jobs:
           filters: |
             frontend:
               - 'autobot-frontend/**'
-              - '!autobot-frontend/node_modules/**'
               - '.github/workflows/frontend-test.yml'
 
   # Job 1: Unit and Integration Tests
