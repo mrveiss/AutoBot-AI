@@ -207,13 +207,19 @@ class BoardType(str, Enum):
 
 
 class MembershipRole(str, Enum):
-    """Role of a human user within an LLC company (GH#8223)."""
+    """Role of a human user within an LLC company (GH#8223).
+
+    Member order matches the deployed (migration-built) enum label order so a
+    create_all-built ``membershiprole`` sorts identically to a migration-built
+    one (GH#10076): migration 031 created ('owner','admin','member','guest') and
+    043 appended 'lead' at the end via ALTER TYPE ADD VALUE.
+    """
 
     OWNER = "owner"
     ADMIN = "admin"
-    LEAD = "lead"
     MEMBER = "member"
     GUEST = "guest"
+    LEAD = "lead"
 
 
 class RoutineStatus(str, Enum):
