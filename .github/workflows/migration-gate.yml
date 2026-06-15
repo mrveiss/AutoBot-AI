@@ -79,6 +79,7 @@ jobs:
             "alembic>=1.13" "sqlalchemy[asyncio]>=2.0" asyncpg aiosqlite \
             pydantic pydantic-settings \
             bcrypt pyjwt redis httpx aiofiles python-dotenv pyyaml \
+            cryptography \
             pytest pytest-asyncio
 
       - name: Run migration matrix

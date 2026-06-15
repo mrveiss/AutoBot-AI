@@ -1097,6 +1097,12 @@ export const routes: RouteRecordRaw[] = [
         component: () => import('@/views/llc/KanbanBoardView.vue'),
         meta: { title: 'Kanban Board', requiresAuth: true, hideInNav: true },
       },
+      {
+        path: 'timeline',
+        name: 'llc-timeline',
+        component: () => import('@/views/llc/GanttTimelineView.vue'),
+        meta: { title: 'Timeline', requiresAuth: true, hideInNav: true },
+      },
       { path: 'approvals', name: 'llc-approvals', component: () => import('@/views/llc/ApprovalsInbox.vue'), props: true, meta: { title: 'Approvals Inbox', requiresAuth: true } },
       { path: 'costs', name: 'llc-costs', component: () => import('@/views/llc/CostDashboard.vue'), props: true, meta: { title: 'Cost Dashboard', requiresAuth: true } },
       { path: 'heartbeat', name: 'llc-heartbeat', component: () => import('@/views/llc/HeartbeatMonitor.vue'), props: true, meta: { title: 'Heartbeat Monitor', requiresAuth: true } },

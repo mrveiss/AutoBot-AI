@@ -43,11 +43,13 @@ from autobot_shared.logging_manager import get_logger
 from user_management.database import get_async_session
 
 from ..kb.collections import KbCollectionManager
-from ..models.enums import SprintStatus
+from ..models.enums import SprintStatus, WorkItemRelationType
 from ..models.sprint import LLCPortfolio, LLCProgram, LLCProject, LLCSprint
+from ..models.work_item import LLCWorkItem, LLCWorkItemRelation
 from ..services.approval import ApprovalNotFoundError, ApprovalService, ApprovalStateError
 from ..services.sprint_autoclose import SprintAutoCloseService
 from ..services.sprint_planning import SprintNotFound, SprintPlanningService
+from ..services.timeline import compute_critical_path, duration_days
 
 logger = get_logger(__name__)
 router = APIRouter(tags=["llc-sprints"])
@@ -358,6 +360,19 @@ async def list_projects(
     return list(result.scalars().all())
 
 
+@router.get("/companies/{company_id}/projects", response_model=List[ProjectResponse])
+async def list_company_projects(
+    company_id: uuid.UUID,
+    session: AsyncSession = Depends(get_async_session),
+) -> List[LLCProject]:
+    """Flat list of all projects in a company (GH#9020 — drives the timeline
+    project picker; also reused by the project browser)."""
+    result = await session.execute(
+        select(LLCProject).where(LLCProject.company_id == company_id).order_by(LLCProject.name)
+    )
+    return list(result.scalars().all())
+
+
 @router.post("/programs/{program_id}/projects", response_model=ProjectResponse, status_code=201)
 async def create_project(
     program_id: uuid.UUID,
@@ -574,6 +589,89 @@ async def get_project_velocity(
 ) -> dict:
     """Return velocity history for the last N closed sprints in a project."""
     return await _planning_svc.get_velocity_history(session, project_id, n_sprints)
+
+
+class TimelineItem(BaseModel):
+    id: uuid.UUID
+    identifier: str
+    title: str
+    type: str
+    status: str
+    assignee_agent_id: Optional[uuid.UUID]
+    assignee_user_id: Optional[uuid.UUID]
+    scheduled_start: Optional[datetime]
+    scheduled_end: Optional[datetime]
+    started_at: Optional[datetime]
+    completed_at: Optional[datetime]
+    on_critical_path: bool
+
+
+class TimelineEdge(BaseModel):
+    # ``from`` finishes before ``to`` starts (a blocked_by dependency).
+    from_id: uuid.UUID
+    to_id: uuid.UUID
+
+
+class ProjectTimelineResponse(BaseModel):
+    project_id: uuid.UUID
+    items: List[TimelineItem]
+    edges: List[TimelineEdge]
+
+
+@router.get("/projects/{project_id}/timeline", response_model=ProjectTimelineResponse)
+async def get_project_timeline(
+    project_id: uuid.UUID,
+    session: AsyncSession = Depends(get_async_session),
+) -> ProjectTimelineResponse:
+    """Return the project's work items with blocked-by dependency edges and
+    critical-path flags for the Gantt/timeline view (GH#9020)."""
+    project = (await session.execute(select(LLCProject).where(LLCProject.id == project_id))).scalar_one_or_none()
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    items = list((await session.execute(select(LLCWorkItem).where(LLCWorkItem.project_id == project_id))).scalars())
+    item_ids = {item.id for item in items}
+
+    # Dependency edges among these items: blocked_by means source is blocked by
+    # target, so target must finish before source — edge (target → source).
+    relations = list(
+        (
+            await session.execute(
+                select(LLCWorkItemRelation).where(
+                    LLCWorkItemRelation.relation_type == WorkItemRelationType.BLOCKED_BY,
+                    LLCWorkItemRelation.source_id.in_(item_ids or {uuid.uuid4()}),
+                )
+            )
+        ).scalars()
+    )
+    edges = [
+        (rel.target_id, rel.source_id) for rel in relations if rel.target_id in item_ids and rel.source_id in item_ids
+    ]
+
+    durations = {str(item.id): duration_days(item.scheduled_start, item.scheduled_end) for item in items}
+    critical = compute_critical_path(durations, [(str(a), str(b)) for a, b in edges])
+
+    return ProjectTimelineResponse(
+        project_id=project_id,
+        items=[
+            TimelineItem(
+                id=item.id,
+                identifier=item.identifier,
+                title=item.title,
+                type=item.type,
+                status=item.status,
+                assignee_agent_id=item.assignee_agent_id,
+                assignee_user_id=item.assignee_user_id,
+                scheduled_start=item.scheduled_start,
+                scheduled_end=item.scheduled_end,
+                started_at=item.started_at,
+                completed_at=item.completed_at,
+                on_critical_path=str(item.id) in critical,
+            )
+            for item in items
+        ],
+        edges=[TimelineEdge(from_id=a, to_id=b) for a, b in edges],
+    )
 
 
 @router.get("/sprints/{sprint_id}/burndown")

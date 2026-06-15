@@ -123,6 +123,11 @@ class LLCWorkItem(Base):
     reviewer_agent_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True, index=True)
     review_brief: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
 
+    # Planned schedule for Gantt/timeline view (GH#9020) — distinct from the
+    # actual started_at/completed_at timestamps below.
+    scheduled_start: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    scheduled_end: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
     # Lifecycle timestamps
     started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
