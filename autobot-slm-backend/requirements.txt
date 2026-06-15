@@ -60,6 +60,6 @@ pysaml2>=7.5.4  # SAML 2.0 Service Provider
 pyotp>=2.9.0  # TOTP generation and verification
 
 # Security: explicit pins to override vulnerable transitive versions
-cryptography>=47.0.0  # CVE fix — pulled in by PyJWT[crypto] and pysaml2
+cryptography>=49.0.0  # CVE fix — pulled in by PyJWT[crypto] and pysaml2
 # Note: pyopenssl version resolved by pysaml2's dependencies (constraints conflict with >=26.0.0)
-# cryptography>=47.0.0 provides primary security coverage
+# cryptography>=49.0.0 provides primary security coverage
