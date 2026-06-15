@@ -20,7 +20,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from llc.adapters.base import AdapterRunStatus
-from llc.exceptions import AdapterRunFailed
+from llc.exceptions import AdapterRunFailed, HeartbeatDispatchSkipped
 from llc.models.enums import LLCRunStatus
 from llc.models.heartbeat_run import LLCHeartbeatRun
 from llc.scheduler.heartbeat_scheduler import (
@@ -325,10 +325,13 @@ class TestDispatchAdapterRouting:
         mock_reg.assert_awaited_once()
 
     async def test_unknown_adapter_type_skipped(self):
+        # GH#9951: an unregistered adapter type is a degraded SKIP, signalled by
+        # HeartbeatDispatchSkipped (not a silent return → phantom COMPLETED).
         agent = _make_agent(adapter_type="does-not-exist")
         with (
             patch(f"{_HBS}.get_adapter", side_effect=KeyError("nope")),
             patch(f"{_HBS}._dispatch_registry_adapter", new=AsyncMock()) as mock_reg,
+            pytest.raises(HeartbeatDispatchSkipped),
         ):
             await _dispatch_adapter(agent, {})
         mock_reg.assert_not_awaited()
@@ -484,8 +487,11 @@ class TestRegistryAdapterTerminalStatus:
 class TestDispatchAutobotAgent:
     async def test_skips_when_no_agent_class(self):
         agent = _make_agent(adapter_type="autobot_agent", adapter_config={})
-        # No agent_class → graceful skip, no adapter instantiated.
-        with patch(f"{_HBS}.AutoBotAgentAdapter") as mock_cls:
+        # No agent_class → degraded SKIP (GH#9951), no adapter instantiated.
+        with (
+            patch(f"{_HBS}.AutoBotAgentAdapter") as mock_cls,
+            pytest.raises(HeartbeatDispatchSkipped),
+        ):
             await _dispatch_autobot_agent(agent, {})
         mock_cls.assert_not_called()
 
@@ -509,7 +515,8 @@ class TestCliAvailabilityGate:
 
     async def test_skips_dispatch_when_cli_absent(self):
         """When is_cli_available() returns False, _dispatch_registry_adapter is
-        never called and the function returns cleanly (no raise, no run recorded).
+        never called and HeartbeatDispatchSkipped is raised so the run is
+        recorded as SKIPPED rather than phantom-COMPLETED (GH#9793, GH#9951).
         """
         agent = _make_agent(adapter_type="claude_code")
         fake_adapter = MagicMock()
@@ -520,6 +527,7 @@ class TestCliAvailabilityGate:
             patch(f"{_HBS}.get_adapter", return_value=fake_adapter),
             patch(f"{_HBS}.is_subprocess_adapter", return_value=True),
             patch(f"{_HBS}._dispatch_registry_adapter", new=AsyncMock()) as mock_reg,
+            pytest.raises(HeartbeatDispatchSkipped),
         ):
             await _dispatch_adapter(agent, {})
 
@@ -566,8 +574,58 @@ class TestCliAvailabilityGate:
             patch(f"{_HBS}.get_adapter", return_value=fake_adapter),
             patch(f"{_HBS}.is_subprocess_adapter", return_value=True),
             patch(f"{_HBS}._dispatch_registry_adapter", new=AsyncMock()) as mock_reg,
+            pytest.raises(HeartbeatDispatchSkipped),
         ):
             await _dispatch_adapter(agent, {})
+
+        mock_reg.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+class TestRunAdapterSkipped:
+    """GH#9951: a skipped dispatch records SKIPPED and never bumps last_heartbeat_at."""
+
+    async def test_skip_records_skipped_and_no_heartbeat_bump(self):
+        scheduler = HeartbeatScheduler()
+        agent = _make_agent(adapter_type="claude_code")
+        run_id = uuid.uuid4()
+
+        sql_text: list = []
+        params: list = []
+
+        class _Session:
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *exc):
+                return False
+
+            async def execute(self, stmt, *args, **kwargs):
+                sql_text.append(str(stmt))
+                try:
+                    params.append(dict(stmt.compile().params))
+                except Exception:
+                    params.append({})
+                result = MagicMock()
+                result.scalar_one_or_none.return_value = 0
+                return result
+
+            async def commit(self):
+                return None
+
+        with (
+            patch(f"{_HBS}.get_async_session_factory", return_value=lambda: _Session()),
+            patch(
+                f"{_HBS}._dispatch_adapter",
+                new=AsyncMock(side_effect=HeartbeatDispatchSkipped("agent-1", "CLI absent")),
+            ),
+        ):
+            await scheduler._run_adapter(agent, run_id, {})
+
+        # No phantom health: the last_heartbeat_at bump is never issued.
+        assert not any("agent_org_nodes" in s for s in sql_text)
+        # The run's final status is written as SKIPPED.
+        assert any(p.get("status") == LLCRunStatus.SKIPPED.value for p in params)
 
 
 # ---------------------------------------------------------------------------

@@ -49,7 +49,7 @@ from user_management.database import get_async_session_factory
 from ..adapters import AutoBotAgentAdapter, get_adapter
 from ..adapters.subprocess_base import is_subprocess_adapter
 from ..config import AGENT_API_BASE_URL
-from ..exceptions import AdapterRunFailed, ProviderRateLimited
+from ..exceptions import AdapterRunFailed, HeartbeatDispatchSkipped, ProviderRateLimited
 from ..models.enums import HeartbeatInvocationSource, LLCRunStatus
 from ..models.heartbeat_run import LLCHeartbeatRun
 from ..services.api_key import ApiKeyService
@@ -491,6 +491,11 @@ class HeartbeatScheduler:
             external_run_id = await _dispatch_adapter(agent, context)
         except ProviderRateLimited as exc:
             rate_limited_exc = exc
+        except HeartbeatDispatchSkipped as exc:
+            # GH#9951: not dispatched → record SKIPPED, do NOT bump last_heartbeat_at.
+            logger.info("Heartbeat skipped for run %s: %s", run_id, exc.reason)
+            final_status = LLCRunStatus.SKIPPED.value
+            error_msg = exc.reason
         except Exception as exc:
             logger.exception("Adapter error for run %s", run_id)
             error_msg = str(exc)
@@ -522,12 +527,14 @@ class HeartbeatScheduler:
 
         # GH#9034: fire-and-forget replay recording — must never affect run status.
         # Pass external_run_id so the recording locates the exact output file (H1).
-        _record_task = asyncio.create_task(
-            _record_run_for_replay(agent, run_id, context, final_status, external_run_id=external_run_id),
-            name=f"replay-record-{run_id}",
-        )
-        self._tasks.add(_record_task)
-        _record_task.add_done_callback(self._tasks.discard)
+        # GH#9951: a SKIPPED run never dispatched, so there is nothing to record.
+        if final_status != LLCRunStatus.SKIPPED.value:
+            _record_task = asyncio.create_task(
+                _record_run_for_replay(agent, run_id, context, final_status, external_run_id=external_run_id),
+                name=f"replay-record-{run_id}",
+            )
+            self._tasks.add(_record_task)
+            _record_task.add_done_callback(self._tasks.discard)
 
     async def _handle_rate_limited(
         self,
@@ -746,23 +753,20 @@ async def _dispatch_adapter(agent: Dict[str, Any], context: Dict[str, Any]) -> O
     try:
         adapter = get_adapter(adapter_type)
     except KeyError:
-        logger.warning(
-            "agent %s: no LLC adapter registered for type %r — skipping dispatch",
-            agent["agent_id"],
-            adapter_type,
-        )
-        return None
+        # GH#9951: signal a skip (not a phantom COMPLETED) so the run is
+        # recorded as SKIPPED and last_heartbeat_at is not advanced.
+        raise HeartbeatDispatchSkipped(
+            agent["agent_id"], f"no LLC adapter registered for type {adapter_type!r}"
+        ) from None
 
     # GH#9793: skip dispatch when the required CLI binary is absent from PATH.
-    # Converts every-heartbeat FAILED runs into a clean degraded state.
+    # Converts every-heartbeat FAILED runs into a clean degraded state (GH#9951).
     if is_subprocess_adapter(adapter) and not adapter.is_cli_available():  # type: ignore[union-attr]
-        logger.info(
-            "agent %s: adapter %r requires CLI %r which is not on PATH — skipping dispatch",
+        raise HeartbeatDispatchSkipped(
             agent["agent_id"],
-            adapter_type,
-            adapter._required_cli,  # type: ignore[union-attr]
+            f"adapter {adapter_type!r} requires CLI "
+            f"{adapter._required_cli!r} which is not on PATH",  # type: ignore[union-attr]
         )
-        return None
 
     return await _dispatch_registry_adapter(adapter, agent, context)
 
@@ -771,12 +775,11 @@ async def _dispatch_autobot_agent(agent: Dict[str, Any], context: Dict[str, Any]
     """Dispatch an in-process AutoBot agent via :class:`AutoBotAgentAdapter`."""
     adapter_config = agent.get("adapter_config") or {}
     if not adapter_config.get("agent_class"):
-        # No agent_class configured — log and return (graceful degradation).
-        logger.warning(
-            "agent %s has no adapter_config.agent_class — skipping dispatch (configure agent_class to enable)",
+        # No agent_class configured — degraded skip, not a phantom success (GH#9951).
+        raise HeartbeatDispatchSkipped(
             agent["agent_id"],
+            "no adapter_config.agent_class configured",
         )
-        return
 
     # GH#8502: use run_blocking() so ProviderRateLimited propagates to _run_adapter
     # and triggers exponential-backoff recovery.  _run_adapter is already a
