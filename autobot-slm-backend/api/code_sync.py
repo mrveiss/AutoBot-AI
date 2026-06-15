@@ -9,6 +9,7 @@ Provides endpoints for code version tracking and sync operations.
 """
 
 import asyncio
+import functools
 import logging
 import os
 import uuid
@@ -392,8 +393,9 @@ async def get_file_drift(
     Compare file checksums between code_source and the deployed directory (Issue #2834).
 
     Detects files that have drifted due to manual patches or incomplete Ansible deploys.
-    Only Python, config, and script files are compared; .pyc, __pycache__, venv, and
-    .git directories are always excluded.
+    For backend components Python/config/script files are compared; for frontend
+    components (.vue/.ts/.css etc.) frontend source files are also included (Issue #10120).
+    node_modules, dist, build, __pycache__, venv, and .git are always excluded.
 
     Query params:
         component: Sub-directory to compare (default: autobot-slm-backend).
@@ -417,9 +419,7 @@ async def get_file_drift(
 
     report = await asyncio.get_running_loop().run_in_executor(
         None,
-        build_drift_report,
-        source_dir,
-        deployed_dir,
+        functools.partial(build_drift_report, source_dir, deployed_dir, component),
     )
 
     logger.info(
