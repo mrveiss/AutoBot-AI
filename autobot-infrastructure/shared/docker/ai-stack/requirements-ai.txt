@@ -50,7 +50,7 @@ protobuf>=7.35.0,<8.0.0           # floor: opentelemetry-exporter-otlp-proto-grp
 googleapis-common-protos>=1.75.0,<2.0.0  # required by opentelemetry-exporter-otlp-proto-grpc~=1.57; needs protobuf>=4.25.8 satisfied by floor above (#4061)
 python-dotenv>=1.2.2
 tenacity>=9.1.4
-tqdm>=4.67.3
+tqdm>=4.68.2
 typing-extensions>=4.15.0
 
 # Logging and Monitoring
