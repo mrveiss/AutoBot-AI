@@ -9,6 +9,9 @@ Handles SSO provider configuration and authentication flows.
 Supports OAuth2 (Google, GitHub, Facebook), LDAP/AD, and SAML.
 """
 
+import base64
+import hashlib
+import json
 import logging
 import secrets
 import uuid
@@ -41,6 +44,14 @@ except ImportError:
     Saml2Client = Saml2Config = None  # type: ignore
 
 logger = logging.getLogger(__name__)
+
+OAUTH_STATE_TTL_SECONDS = 600
+
+
+def _pkce_challenge_s256(verifier: str) -> str:
+    """Derive the RFC 7636 S256 code_challenge from a code_verifier."""
+    digest = hashlib.sha256(verifier.encode("ascii")).digest()
+    return base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
 
 
 class SSOServiceError(Exception):

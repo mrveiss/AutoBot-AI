@@ -32,6 +32,12 @@ _MODELS_SSO = "user_management.models.sso"
 if _MODELS_SSO not in sys.modules:
     sys.modules[_MODELS_SSO] = MagicMock()
 
+# sso_service.py imports SSOSecretsManager from sso_secrets; stub it so the
+# module loads without the real SQLAlchemy/encryption stack.
+_SSO_SECRETS = "user_management.services.sso_secrets"
+if _SSO_SECRETS not in sys.modules:
+    sys.modules[_SSO_SECRETS] = MagicMock()
+
 # Provide a minimal real BaseService so `class SSOService(BaseService)` compiles
 # and SSOService(session=...) is constructable.
 _base_mod = types.ModuleType("user_management.services.base_service")
@@ -52,7 +58,29 @@ _spec.loader.exec_module(_sso_mod)  # type: ignore[union-attr]
 
 SSOService = _sso_mod.SSOService
 SSOAuthenticationError = _sso_mod.SSOAuthenticationError
+_pkce_challenge_s256 = _sso_mod._pkce_challenge_s256
 # ─────────────────────────────────────────────────────────────────────────────
+
+
+# ---------------------------------------------------------------------------
+# PKCE helper — RFC 7636 S256 challenge derivation (Task 1)
+# ---------------------------------------------------------------------------
+
+
+def test_pkce_challenge_s256_matches_rfc7636():
+    """S256 challenge must match the RFC 7636 reference computation."""
+    import base64
+    import hashlib
+
+    verifier = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"
+    expected = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode("ascii")).digest()).rstrip(b"=").decode("ascii")
+    assert _pkce_challenge_s256(verifier) == expected
+
+
+def test_pkce_challenge_is_url_safe_and_unpadded():
+    """Challenge must be URL-safe base64 with no padding characters."""
+    challenge = _pkce_challenge_s256("a" * 64)
+    assert "=" not in challenge and "+" not in challenge and "/" not in challenge
 
 
 # ---------------------------------------------------------------------------
