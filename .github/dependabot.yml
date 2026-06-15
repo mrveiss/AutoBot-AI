@@ -1,11 +1,15 @@
 # Dependabot configuration — Issue #1938
 # Guards against incompatible major version bumps in pip and npm deps.
 #
-# Grouping (Issue #9755): every entry batches all minor + patch updates into a
-# single grouped PR per ecosystem/directory to avoid a per-dependency PR flood.
-# Named groups (opentelemetry, frontend-core) are listed first so they keep
-# their own grouping; `all-minor-patch` catches everything else. Major updates
-# still arrive individually (and dangerous majors stay in the `ignore:` lists).
+# Grouping (Issue #9755, widened #10146-followup): every entry batches ALL
+# update types — minor, patch AND major — into a single grouped PR per
+# ecosystem/directory, so a weekly run produces a handful of grouped PRs instead
+# of a per-dependency flood (clogs the single self-hosted CI runner). Named
+# groups (opentelemetry, frontend-core) are listed first so they keep their own
+# grouping; `all-dependencies` catches everything else. Dangerous majors are
+# still blocked via the per-ecosystem `ignore:` lists below — including
+# python/ubuntu Docker semver-MINOR (3.12→3.14, 22.04→22.10 are minor in
+# tag-semver but breaking for us: py3.14 is gated on #9825, 22.04 is the LTS).
 version: 2
 updates:
   - package-ecosystem: "pip"
@@ -22,12 +26,9 @@ updates:
       opentelemetry:
         patterns:
           - "opentelemetry-*"
-      all-minor-patch:
+      all-dependencies:
         patterns:
           - "*"
-        update-types:
-          - "minor"
-          - "patch"
     ignore:
       - dependency-name: "numpy"
         update-types: ["version-update:semver-major"]
@@ -54,12 +55,9 @@ updates:
       opentelemetry:
         patterns:
           - "opentelemetry-*"
-      all-minor-patch:
+      all-dependencies:
         patterns:
           - "*"
-        update-types:
-          - "minor"
-          - "patch"
     ignore:
       - dependency-name: "pydantic"
         update-types: ["version-update:semver-major"]
@@ -81,12 +79,9 @@ updates:
       - "dependencies"
       - "backend"
     groups:
-      all-minor-patch:
+      all-dependencies:
         patterns:
           - "*"
-        update-types:
-          - "minor"
-          - "patch"
     ignore:
       - dependency-name: "pydantic"
         update-types: ["version-update:semver-major"]
@@ -114,12 +109,9 @@ updates:
           - "vite"
           - "@vitejs/*"
           - "typescript"
-      all-minor-patch:
+      all-dependencies:
         patterns:
           - "*"
-        update-types:
-          - "minor"
-          - "patch"
     ignore:
       - dependency-name: "vue"
         update-types: ["version-update:semver-major"]
@@ -143,12 +135,9 @@ updates:
       - "dependencies"
       - "frontend"
     groups:
-      all-minor-patch:
+      all-dependencies:
         patterns:
           - "*"
-        update-types:
-          - "minor"
-          - "patch"
 
   - package-ecosystem: "github-actions"
     directory: "/"
@@ -161,12 +150,9 @@ updates:
       - "dependencies"
       - "devops"
     groups:
-      all-minor-patch:
+      all-dependencies:
         patterns:
           - "*"
-        update-types:
-          - "minor"
-          - "patch"
 
   # Docker base images (Issue #7157 — supply-chain hardening, sister of #7091/#7120)
   # Dependabot auto-PRs digest updates when new versions publish.
@@ -186,15 +172,14 @@ updates:
       - "devops"
       - "security"
     groups:
-      all-minor-patch:
+      all-dependencies:
         patterns:
           - "*"
-        update-types:
-          - "minor"
-          - "patch"
     ignore:
       - dependency-name: "python"
-        update-types: ["version-update:semver-major"]
+        # #9825: stay on 3.12 until the vLLM py3.14 blocker clears. Block minor
+        # too — 3.12→3.14 is tag-semver-MINOR but a breaking runtime jump.
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
 
   - package-ecosystem: "docker"
     directory: "/docker/slm"
@@ -208,15 +193,14 @@ updates:
       - "devops"
       - "security"
     groups:
-      all-minor-patch:
+      all-dependencies:
         patterns:
           - "*"
-        update-types:
-          - "minor"
-          - "patch"
     ignore:
       - dependency-name: "python"
-        update-types: ["version-update:semver-major"]
+        # #9825: stay on 3.12 until the vLLM py3.14 blocker clears. Block minor
+        # too — 3.12→3.14 is tag-semver-MINOR but a breaking runtime jump.
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
 
   - package-ecosystem: "docker"
     directory: "/docker/frontend"
@@ -230,17 +214,16 @@ updates:
       - "devops"
       - "security"
     groups:
-      all-minor-patch:
+      all-dependencies:
         patterns:
           - "*"
-        update-types:
-          - "minor"
-          - "patch"
     ignore:
       - dependency-name: "node"
         update-types: ["version-update:semver-major"]
       - dependency-name: "ubuntu"
-        update-types: ["version-update:semver-major"]
+        # Stay on the 22.04 LTS. Block minor too — 22.04→22.10 is tag-semver-
+        # MINOR but 22.10 is an EOL interim release. LTS bumps are done by hand.
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
 
   # Self-review during #7157 implementation surfaced 2 missed Dockerfiles:
   - package-ecosystem: "docker"
@@ -255,15 +238,14 @@ updates:
       - "devops"
       - "security"
     groups:
-      all-minor-patch:
+      all-dependencies:
         patterns:
           - "*"
-        update-types:
-          - "minor"
-          - "patch"
     ignore:
       - dependency-name: "python"
-        update-types: ["version-update:semver-major"]
+        # #9825: stay on 3.12 until the vLLM py3.14 blocker clears. Block minor
+        # too — 3.12→3.14 is tag-semver-MINOR but a breaking runtime jump.
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
 
   - package-ecosystem: "docker"
     directory: "/autobot-infrastructure/shared/mcp/tools/context7"
@@ -277,12 +259,9 @@ updates:
       - "devops"
       - "security"
     groups:
-      all-minor-patch:
+      all-dependencies:
         patterns:
           - "*"
-        update-types:
-          - "minor"
-          - "patch"
     ignore:
       - dependency-name: "node"
         update-types: ["version-update:semver-major"]
@@ -301,12 +280,9 @@ updates:
       - "dependencies"
       - "devops"
     groups:
-      all-minor-patch:
+      all-dependencies:
         patterns:
           - "*"
-        update-types:
-          - "minor"
-          - "patch"
 
   # === #7182 P1: Production worker dirs ===
   # Comprehensive audit of all manifest files vs Dependabot coverage caught
@@ -323,12 +299,9 @@ updates:
       - "dependencies"
       - "backend"
     groups:
-      all-minor-patch:
+      all-dependencies:
         patterns:
           - "*"
-        update-types:
-          - "minor"
-          - "patch"
 
   - package-ecosystem: "npm"
     directory: "/autobot-browser-worker"
@@ -341,12 +314,9 @@ updates:
       - "dependencies"
       - "frontend"
     groups:
-      all-minor-patch:
+      all-dependencies:
         patterns:
           - "*"
-        update-types:
-          - "minor"
-          - "patch"
 
   - package-ecosystem: "pip"
     directory: "/autobot-npu-worker"
@@ -359,12 +329,9 @@ updates:
       - "dependencies"
       - "backend"
     groups:
-      all-minor-patch:
+      all-dependencies:
         patterns:
           - "*"
-        update-types:
-          - "minor"
-          - "patch"
     ignore:
       - dependency-name: "torch"
         update-types: ["version-update:semver-major"]
@@ -382,12 +349,9 @@ updates:
       - "dependencies"
       - "backend"
     groups:
-      all-minor-patch:
+      all-dependencies:
         patterns:
           - "*"
-        update-types:
-          - "minor"
-          - "patch"
     ignore:
       - dependency-name: "torch"
         update-types: ["version-update:semver-major"]
@@ -407,12 +371,9 @@ updates:
       - "dependencies"
       - "backend"
     groups:
-      all-minor-patch:
+      all-dependencies:
         patterns:
           - "*"
-        update-types:
-          - "minor"
-          - "patch"
     ignore:
       - dependency-name: "torch"
         update-types: ["version-update:semver-major"]
@@ -436,12 +397,9 @@ updates:
       - "dependencies"
       - "backend"
     groups:
-      all-minor-patch:
+      all-dependencies:
         patterns:
           - "*"
-        update-types:
-          - "minor"
-          - "patch"
     ignore:
       - dependency-name: "numpy"
         update-types: ["version-update:semver-major"]
@@ -469,12 +427,9 @@ updates:
       opentelemetry:
         patterns:
           - "opentelemetry-*"
-      all-minor-patch:
+      all-dependencies:
         patterns:
           - "*"
-        update-types:
-          - "minor"
-          - "patch"
     ignore:
       - dependency-name: "fastapi"
         update-types: ["version-update:semver-major"]
