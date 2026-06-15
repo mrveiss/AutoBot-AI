@@ -107,6 +107,15 @@ def _register_routers(app: FastAPI) -> None:
     except Exception as e:
         logger.warning("⚠️ Failed to register Anthropic-compat router: %s", e)
 
+    # #10196: JWKS well-known endpoint at /.well-known/jwks.json (unauthenticated)
+    try:
+        from api.jwks import well_known_router as jwks_well_known_router
+
+        app.include_router(jwks_well_known_router, prefix="/.well-known")
+        logger.info("✅ Registered JWKS well-known router at /.well-known/jwks.json")
+    except Exception as e:
+        logger.warning("⚠️ Failed to register JWKS well-known router: %s", e)
+
     logger.info("✅ API routes configured with optional AI Stack integration")
 
 
