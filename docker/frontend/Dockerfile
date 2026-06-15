@@ -53,7 +53,7 @@ RUN npx vite build --base /slm/
 
 
 # ---- Production stage ----
-FROM ubuntu:22.04 AS production
+FROM ubuntu:22.10 AS production
 
 ENV DEBIAN_FRONTEND=noninteractive
 
