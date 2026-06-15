@@ -14,11 +14,18 @@ import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { createLogger } from '@/utils/debugUtils'
 import { useVoiceProfiles } from '@/composables/useVoiceProfiles'
 import { usePreferences } from '@/composables/usePreferences'
+import { useToast } from '@/composables/useToast'
 import { getBackendWsUrl, getApiBase } from '@/config/ssot-config'
 
 const logger = createLogger('useVoiceOutput')
 
 const STORAGE_KEY = 'autobot-voice-output-enabled'
+
+// #9999: user-visible message when a deployment has no TTS voices installed
+// (e.g. no tts-worker provisioned in small topologies). Without this, TTS
+// no-ops silently and the operator gets no feedback.
+const NO_VOICES_MESSAGE =
+  'Text-to-speech is not available on this deployment — no speech voices are installed.'
 
 // Module-level singletons so state is shared across component instances
 const voiceOutputEnabled = ref<boolean>(
@@ -47,6 +54,11 @@ let _ttsWsConnecting: Promise<WebSocket> | null = null
 let _ttsWsIdleTimer: ReturnType<typeof setTimeout> | null = null
 const _TTS_WS_IDLE_TIMEOUT = 30_000
 
+// #9999: suppress repeat "no voices" toasts within a short window so a burst of
+// speak() calls (e.g. per-sentence streaming) surfaces the message only once.
+let _noVoicesNotifiedAt = 0
+const _NO_VOICES_NOTIFY_COOLDOWN = 30_000
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type VoiceMessage = Record<string, any>
 type VoiceMessageHandler = (msg: VoiceMessage) => void
@@ -56,6 +68,42 @@ const wsConnected = ref<boolean>(false)
 // AbortController for the current in-flight speak() HTTP request.
 // Module-level so a new speak() call can abort the previous one.
 let _speakController: AbortController | null = null
+
+/**
+ * #9999: Surface the "no voices available" message once per cooldown window.
+ * Uses the app's standard toast mechanism so the operator gets feedback
+ * instead of TTS silently no-op'ing.
+ */
+function _notifyNoVoices(): void {
+  const now = Date.now()
+  if (now - _noVoicesNotifiedAt < _NO_VOICES_NOTIFY_COOLDOWN) return
+  _noVoicesNotifiedAt = now
+  logger.warn('TTS attempted with zero available voices')
+  useToast().showToast(NO_VOICES_MESSAGE, 'warning')
+}
+
+/**
+ * #9999: Return true when at least one TTS voice is available, otherwise
+ * surface a user-visible message and return false. Lazily fetches the voice
+ * list once if it has not been loaded yet (it is normally only populated by
+ * the settings panel), so an empty list reflects a genuine zero-voices
+ * deployment rather than an unfetched cache.
+ */
+async function _hasVoicesAvailable(): Promise<boolean> {
+  const { voices, fetchVoices } = useVoiceProfiles()
+  if (voices.value.length === 0) {
+    try {
+      await fetchVoices()
+    } catch (e) {
+      logger.warn('fetchVoices failed during TTS voice check:', e)
+    }
+  }
+  if (voices.value.length === 0) {
+    _notifyNoVoices()
+    return false
+  }
+  return true
+}
 
 function _getOrCreateContext(): AudioContext {
   if (!_audioContext) {
@@ -270,6 +318,10 @@ export function useVoiceOutput() {
     if ((!force && !voiceOutputEnabled.value) || !text.trim()) return
     if (isSpeaking.value) _stopCurrentAudio()
 
+    // #9999: surface a clear message instead of failing silently when the
+    // deployment has no TTS voices installed.
+    if (!(await _hasVoicesAvailable())) return
+
     _speakController?.abort()
     _speakController = new AbortController()
     const signal = _speakController.signal
@@ -293,6 +345,10 @@ export function useVoiceOutput() {
       })
       if (!response.ok) {
         logger.warn('TTS synthesize failed:', response.status)
+        // #9999: 404/503 here means no TTS service/voices on this deployment.
+        if (response.status === 404 || response.status === 503) {
+          _notifyNoVoices()
+        }
         return
       }
       const blob = await response.blob()
@@ -319,6 +375,9 @@ export function useVoiceOutput() {
 
   async function speakStreaming(text: string): Promise<void> {
     if (!text.trim()) return
+    // #9999: surface a clear message instead of failing silently when the
+    // deployment has no TTS voices installed.
+    if (!(await _hasVoicesAvailable())) return
     try {
       const ws = await _connectTtsWs()
       const { effectiveVoiceId } = useVoiceProfiles()
