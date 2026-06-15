@@ -7,20 +7,29 @@
  *
  * Provides type-safe access to the Vision and Multimodal API endpoints.
  * Issue #582: GUI integration for Vision & Multimodal Interface
+ * Issue #9985: vision methods migrated to the canonical ApiClient and the
+ *   shared `@/types/vision` types (no hand-rolled fetch, no duplicate
+ *   response-type declarations for the migrated surface).
  */
 
-import appConfig from '@/config/AppConfig.js';
-import { NetworkConstants } from '@/constants/network';
+import { useApiClient } from '@/plugins/api';
 import { createLogger } from '@/utils/debugUtils';
-import { fetchWithAuth } from '@/utils/fetchWithAuth';
 import { getApiBase } from '@/config/ssot-config';
 import type { ApiResponse } from '@/types/api';
+import type {
+  VisionStatusResponse,
+  ScreenAnalysisResponse,
+} from '@/types/vision';
 
 const logger = createLogger('VisionMultimodalApiClient');
 
 // ==================================================================================
 // VISION API TYPES
 // ==================================================================================
+
+// VisionStatusResponse and ScreenAnalysisResponse are the canonical, backend-
+// verified shapes (#9890 / #9986) — imported above and re-exported below for
+// any caller that still imports them from this module.
 
 export interface BoundingBox {
   x: number;
@@ -77,18 +86,6 @@ export interface OCRRequest {
   session_id?: string;
 }
 
-export interface ScreenAnalysisResponse {
-  timestamp: number;
-  ui_elements: UIElement[];
-  text_regions: TextRegion[];
-  dominant_colors: ColorInfo[];
-  layout_structure: Record<string, unknown>;
-  automation_opportunities: AutomationOpportunity[];
-  context_analysis: Record<string, unknown>;
-  confidence_score: number;
-  multimodal_analysis?: Record<string, unknown>[];
-}
-
 export interface ElementDetectionResponse {
   total_detected: number;
   filtered_count: number;
@@ -133,26 +130,15 @@ export interface VisionHealthResponse {
   interaction_types_supported: string[];
 }
 
-export interface VisionStatusResponse {
-  service: string;
-  status: string;
-  features: {
-    screen_analysis: boolean;
-    element_detection: boolean;
-    ocr_extraction: boolean;
-    template_matching: boolean;
-    multimodal_processing: boolean;
-  };
-  supported_element_types: number;
-  supported_interaction_types: number;
-  error?: string;
-}
-
 export interface LayoutResponse {
   layout_structure: Record<string, unknown>;
   dominant_colors: ColorInfo[];
   timestamp: number;
 }
+
+// Re-export the canonical shared vision types so existing importers of this
+// module keep resolving (#9985 dedup — single source of truth in @/types/vision).
+export type { VisionStatusResponse, ScreenAnalysisResponse } from '@/types/vision';
 
 // ==================================================================================
 // MULTIMODAL API TYPES
@@ -315,105 +301,39 @@ export interface GalleryItem {
 /**
  * Vision & Multimodal API Client
  *
- * Communicates with /api/vision and /api/multimodal endpoints
+ * Communicates with /api/vision and /api/multimodal endpoints via the canonical
+ * ApiClient (auth injection, retry, timeout, 401 handling). The ApiResponse<T>
+ * envelope is preserved so existing callers keep their { success, data, error }
+ * contract.
  */
 class VisionMultimodalApiClient {
-  private baseUrl: string = '';
-  private baseUrlPromise: Promise<string> | null = null;
-
-  constructor() {
-    this.initializeBaseUrl();
+  private get api() {
+    return useApiClient();
   }
 
-  private async initializeBaseUrl(): Promise<void> {
+  private toErrorMessage(error: unknown): string {
+    return error instanceof Error ? error.message : 'Unknown error occurred';
+  }
+
+  /** GET via the canonical ApiClient, wrapped in the ApiResponse envelope. */
+  private async get<T>(endpoint: string): Promise<ApiResponse<T>> {
     try {
-      this.baseUrl = await appConfig.getApiUrl('');
-    } catch {
-      logger.warn('AppConfig initialization failed, using NetworkConstants fallback');
-      this.baseUrl = `http://${NetworkConstants.MAIN_MACHINE_IP}:${NetworkConstants.BACKEND_PORT}`;
-    }
-  }
-
-  private async ensureBaseUrl(): Promise<string> {
-    if (this.baseUrl) {
-      return this.baseUrl;
-    }
-
-    if (!this.baseUrlPromise) {
-      this.baseUrlPromise = this.initializeBaseUrl().then(() => this.baseUrl);
-    }
-
-    return await this.baseUrlPromise;
-  }
-
-  private async request<T>(
-    endpoint: string,
-    options: RequestInit = {}
-  ): Promise<ApiResponse<T>> {
-    const baseUrl = await this.ensureBaseUrl();
-    const url = `${baseUrl}${endpoint}`;
-
-    const defaultHeaders: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
-
-    try {
-      const response = await fetchWithAuth(url, {
-        ...options,
-        headers: { ...defaultHeaders, ...options.headers },
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        logger.error(`API request failed with status ${response.status}`, data);
-        return {
-          success: false,
-          error: data.detail || data.message || `Request failed with status ${response.status}`,
-        };
-      }
-
+      const data = await this.api.get<T>(endpoint);
       return { success: true, data };
     } catch (error) {
-      logger.error('API request error:', error);
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error occurred',
-      };
+      logger.error('API GET error:', error);
+      return { success: false, error: this.toErrorMessage(error) };
     }
   }
 
-  private async requestFormData<T>(
-    endpoint: string,
-    formData: FormData
-  ): Promise<ApiResponse<T>> {
-    const baseUrl = await this.ensureBaseUrl();
-    const url = `${baseUrl}${endpoint}`;
-
+  /** POST via the canonical ApiClient, wrapped in the ApiResponse envelope. */
+  private async post<T>(endpoint: string, body?: unknown): Promise<ApiResponse<T>> {
     try {
-      const response = await fetchWithAuth(url, {
-        method: 'POST',
-        body: formData,
-        // Don't set Content-Type - browser will set it with boundary for multipart
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        logger.error(`Form data request failed with status ${response.status}`, data);
-        return {
-          success: false,
-          error: data.detail || data.message || `Request failed with status ${response.status}`,
-        };
-      }
-
+      const data = await this.api.post<T>(endpoint, body);
       return { success: true, data };
     } catch (error) {
-      logger.error('Form data request error:', error);
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error occurred',
-      };
+      logger.error('API POST error:', error);
+      return { success: false, error: this.toErrorMessage(error) };
     }
   }
 
@@ -426,7 +346,7 @@ class VisionMultimodalApiClient {
    * GET /api/vision/health
    */
   async getVisionHealth(): Promise<ApiResponse<VisionHealthResponse>> {
-    return this.request<VisionHealthResponse>(`${getApiBase()}/vision/health`);
+    return this.get<VisionHealthResponse>(`${getApiBase()}/vision/health`);
   }
 
   /**
@@ -434,7 +354,7 @@ class VisionMultimodalApiClient {
    * GET /api/vision/status
    */
   async getVisionStatus(): Promise<ApiResponse<VisionStatusResponse>> {
-    return this.request<VisionStatusResponse>(`${getApiBase()}/vision/status`);
+    return this.get<VisionStatusResponse>(`${getApiBase()}/vision/status`);
   }
 
   /**
@@ -444,10 +364,7 @@ class VisionMultimodalApiClient {
   async analyzeScreen(
     request: ScreenAnalysisRequest = {}
   ): Promise<ApiResponse<ScreenAnalysisResponse>> {
-    return this.request<ScreenAnalysisResponse>(`${getApiBase()}/vision/analyze`, {
-      method: 'POST',
-      body: JSON.stringify(request),
-    });
+    return this.post<ScreenAnalysisResponse>(`${getApiBase()}/vision/analyze`, request);
   }
 
   /**
@@ -457,10 +374,7 @@ class VisionMultimodalApiClient {
   async detectElements(
     request: ElementDetectionRequest = {}
   ): Promise<ApiResponse<ElementDetectionResponse>> {
-    return this.request<ElementDetectionResponse>(`${getApiBase()}/vision/elements`, {
-      method: 'POST',
-      body: JSON.stringify(request),
-    });
+    return this.post<ElementDetectionResponse>(`${getApiBase()}/vision/elements`, request);
   }
 
   /**
@@ -468,10 +382,7 @@ class VisionMultimodalApiClient {
    * POST /api/vision/ocr
    */
   async extractText(request: OCRRequest = {}): Promise<ApiResponse<OCRResponse>> {
-    return this.request<OCRResponse>(`${getApiBase()}/vision/ocr`, {
-      method: 'POST',
-      body: JSON.stringify(request),
-    });
+    return this.post<OCRResponse>(`${getApiBase()}/vision/ocr`, request);
   }
 
   /**
@@ -482,7 +393,7 @@ class VisionMultimodalApiClient {
     sessionId?: string
   ): Promise<ApiResponse<AutomationOpportunitiesResponse>> {
     const params = sessionId ? `?session_id=${encodeURIComponent(sessionId)}` : '';
-    return this.request<AutomationOpportunitiesResponse>(
+    return this.get<AutomationOpportunitiesResponse>(
       `${getApiBase()}/vision/automation-opportunities${params}`
     );
   }
@@ -495,7 +406,7 @@ class VisionMultimodalApiClient {
     element_types: ElementTypeInfo[];
     total_types: number;
   }>> {
-    return this.request(`${getApiBase()}/vision/element-types`);
+    return this.get(`${getApiBase()}/vision/element-types`);
   }
 
   /**
@@ -506,7 +417,7 @@ class VisionMultimodalApiClient {
     interaction_types: InteractionTypeInfo[];
     total_types: number;
   }>> {
-    return this.request(`${getApiBase()}/vision/interaction-types`);
+    return this.get(`${getApiBase()}/vision/interaction-types`);
   }
 
   /**
@@ -515,7 +426,7 @@ class VisionMultimodalApiClient {
    */
   async getLayoutAnalysis(sessionId?: string): Promise<ApiResponse<LayoutResponse>> {
     const params = sessionId ? `?session_id=${encodeURIComponent(sessionId)}` : '';
-    return this.request<LayoutResponse>(`${getApiBase()}/vision/layout${params}`);
+    return this.get<LayoutResponse>(`${getApiBase()}/vision/layout${params}`);
   }
 
   // ==================================================================================
@@ -527,7 +438,7 @@ class VisionMultimodalApiClient {
    * GET /api/multimodal/health
    */
   async getMultimodalHealth(): Promise<ApiResponse<MultimodalHealthResponse>> {
-    return this.request<MultimodalHealthResponse>(`${getApiBase()}/multimodal/health`);
+    return this.get<MultimodalHealthResponse>(`${getApiBase()}/multimodal/health`);
   }
 
   /**
@@ -535,7 +446,7 @@ class VisionMultimodalApiClient {
    * GET /api/multimodal/stats
    */
   async getMultimodalStats(): Promise<ApiResponse<MultimodalStats>> {
-    return this.request<MultimodalStats>(`${getApiBase()}/multimodal/stats`);
+    return this.get<MultimodalStats>(`${getApiBase()}/multimodal/stats`);
   }
 
   /**
@@ -554,7 +465,7 @@ class VisionMultimodalApiClient {
       formData.append('question', question);
     }
 
-    return this.requestFormData<MultiModalResponse>(`${getApiBase()}/multimodal/process/image`, formData);
+    return this.post<MultiModalResponse>(`${getApiBase()}/multimodal/process/image`, formData);
   }
 
   /**
@@ -569,7 +480,7 @@ class VisionMultimodalApiClient {
     formData.append('file', file);
     formData.append('intent', intent);
 
-    return this.requestFormData<MultiModalResponse>(`${getApiBase()}/multimodal/process/audio`, formData);
+    return this.post<MultiModalResponse>(`${getApiBase()}/multimodal/process/audio`, formData);
   }
 
   /**
@@ -579,10 +490,7 @@ class VisionMultimodalApiClient {
   async processText(
     request: TextProcessingRequest
   ): Promise<ApiResponse<MultiModalResponse>> {
-    return this.request<MultiModalResponse>(`${getApiBase()}/multimodal/process/text`, {
-      method: 'POST',
-      body: JSON.stringify(request),
-    });
+    return this.post<MultiModalResponse>(`${getApiBase()}/multimodal/process/text`, request);
   }
 
   /**
@@ -592,10 +500,7 @@ class VisionMultimodalApiClient {
   async generateEmbedding(
     request: EmbeddingRequest
   ): Promise<ApiResponse<EmbeddingResponse>> {
-    return this.request<EmbeddingResponse>(`${getApiBase()}/multimodal/embeddings/generate`, {
-      method: 'POST',
-      body: JSON.stringify(request),
-    });
+    return this.post<EmbeddingResponse>(`${getApiBase()}/multimodal/embeddings/generate`, request);
   }
 
   /**
@@ -605,10 +510,7 @@ class VisionMultimodalApiClient {
   async crossModalSearch(
     request: CrossModalSearchRequest
   ): Promise<ApiResponse<CrossModalSearchResponse>> {
-    return this.request<CrossModalSearchResponse>(`${getApiBase()}/multimodal/search/cross-modal`, {
-      method: 'POST',
-      body: JSON.stringify(request),
-    });
+    return this.post<CrossModalSearchResponse>(`${getApiBase()}/multimodal/search/cross-modal`, request);
   }
 
   /**
@@ -634,7 +536,7 @@ class VisionMultimodalApiClient {
     }
     formData.append('intent', intent);
 
-    return this.requestFormData<FusionResponse>(`${getApiBase()}/multimodal/fusion/combine`, formData);
+    return this.post<FusionResponse>(`${getApiBase()}/multimodal/fusion/combine`, formData);
   }
 
   /**
@@ -642,7 +544,7 @@ class VisionMultimodalApiClient {
    * GET /api/multimodal/performance/stats
    */
   async getPerformanceStats(): Promise<ApiResponse<PerformanceStats>> {
-    return this.request<PerformanceStats>(`${getApiBase()}/multimodal/performance/stats`);
+    return this.get<PerformanceStats>(`${getApiBase()}/multimodal/performance/stats`);
   }
 
   /**
@@ -650,7 +552,7 @@ class VisionMultimodalApiClient {
    * GET /api/multimodal/performance/summary
    */
   async getPerformanceSummary(): Promise<ApiResponse<PerformanceSummary>> {
-    return this.request<PerformanceSummary>(`${getApiBase()}/multimodal/performance/summary`);
+    return this.get<PerformanceSummary>(`${getApiBase()}/multimodal/performance/summary`);
   }
 
   /**
@@ -663,9 +565,7 @@ class VisionMultimodalApiClient {
     optimization_result: Record<string, unknown>;
     message: string;
   }>> {
-    return this.request(`${getApiBase()}/multimodal/performance/optimize`, {
-      method: 'POST',
-    });
+    return this.post(`${getApiBase()}/multimodal/performance/optimize`);
   }
 
   /**
@@ -687,9 +587,7 @@ class VisionMultimodalApiClient {
       modality,
       batch_size: batchSize.toString(),
     });
-    return this.request(`${getApiBase()}/multimodal/performance/batch-size?${params}`, {
-      method: 'POST',
-    });
+    return this.post(`${getApiBase()}/multimodal/performance/batch-size?${params}`);
   }
 }
 

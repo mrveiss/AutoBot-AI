@@ -97,7 +97,7 @@
               <div class="element-info">
                 <span class="element-type">{{ element.element_type }}</span>
                 <span class="element-text" v-if="element.text_content">
-                  {{ truncateText(element.text_content, 40) }}
+                  {{ truncateText(element.text_content ?? '', 40) }}
                 </span>
               </div>
               <div class="element-confidence">
@@ -218,9 +218,11 @@ import { usePollingJob } from '@/composables/usePollingJob';
 import {
   visionMultimodalApiClient,
   type ScreenAnalysisResponse,
-  type UIElement,
   type ElementTypeInfo,
 } from '@/utils/VisionMultimodalApiClient';
+// #9985: ui_elements is now the canonical VisionUIElement from @/types/vision
+// (ScreenAnalysisResponse re-exported from VisionMultimodalApiClient delegates here).
+import type { VisionUIElement } from '@/types/vision';
 
 const { t } = useI18n();
 const logger = createLogger('ScreenCaptureViewer');
@@ -242,7 +244,7 @@ const emit = defineEmits<{
 const analyzing = ref(false);
 const analyzeError = ref<string | null>(null);
 const analysisResult = ref<ScreenAnalysisResponse | null>(null);
-const selectedElement = ref<UIElement | null>(null);
+const selectedElement = ref<VisionUIElement | null>(null);
 const elementTypes = ref<ElementTypeInfo[]>([]);
 
 // Filters
@@ -306,7 +308,7 @@ const loadElementTypes = async () => {
   }
 };
 
-const selectElement = (element: UIElement) => {
+const selectElement = (element: VisionUIElement) => {
   selectedElement.value = element;
 };
 
