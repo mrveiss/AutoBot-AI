@@ -11,6 +11,36 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from llc.scheduler.liveness_monitor import LivenessMonitor, run_id_label
+from user_management.config import DeploymentMode
+
+
+@pytest.fixture(autouse=True)
+def _multi_company_mode():
+    """_check_once() early-returns in single_user mode (no PostgreSQL, #9089);
+    force a multi-tenant mode so the recovery path under test actually runs."""
+    with patch("llc.scheduler.liveness_monitor.get_deployment_config") as cfg:
+        cfg.return_value.mode = DeploymentMode.MULTI_COMPANY
+        yield
+
+
+def _mock_session(stuck_runs: list, work_item: object | None = None) -> AsyncMock:
+    """Build an async session mock whose execute() returns a *sync* result.
+
+    ``AsyncMock`` propagates async to its children, so the naive
+    ``session.execute.return_value.scalars()`` yields a coroutine, not a row
+    set. Configure execute() to return an explicit MagicMock instead so
+    ``.scalars().all()`` / ``.scalar_one_or_none()`` / ``.fetchone()`` work.
+    """
+    result = MagicMock()
+    result.scalars.return_value.all.return_value = stuck_runs
+    result.scalar_one_or_none.return_value = work_item
+    result.fetchone.return_value = None  # _agent_deliberately_paused DB fallback
+    session = AsyncMock()
+    session.execute = AsyncMock(return_value=result)
+    session.add = MagicMock()
+    session.commit = AsyncMock()
+    session.rollback = AsyncMock()
+    return session
 
 
 def _make_run(
@@ -66,18 +96,13 @@ async def test_stuck_run_marked_timed_out() -> None:
 
     with (
         patch("llc.scheduler.liveness_monitor.get_async_redis_client", new_callable=AsyncMock) as mock_redis,
-        patch("llc.scheduler.liveness_monitor.get_adapter_for_agent", new_callable=AsyncMock) as mock_adapter,
+        patch("llc.adapters.get_adapter_for_agent", new_callable=AsyncMock) as mock_adapter,
         patch("llc.scheduler.liveness_monitor.WorkItemService"),
     ):
         mock_redis.return_value = None
         mock_adapter.return_value = None
 
-        session = AsyncMock()
-        session.execute.return_value.scalars.return_value.all.return_value = [run]
-        session.execute.return_value.scalar_one_or_none.return_value = None
-        session.add = MagicMock()
-        session.commit = AsyncMock()
-        session.rollback = AsyncMock()
+        session = _mock_session([run])
 
         factory = MagicMock()
         factory.return_value.__aenter__ = AsyncMock(return_value=session)
@@ -98,6 +123,9 @@ async def test_checkout_lock_released_on_recovery() -> None:
 
     mock_redis = AsyncMock()
     mock_redis.delete = AsyncMock()
+    # exists() must be falsy or _agent_deliberately_paused() treats the agent as
+    # paused and skips the recovery flow under test.
+    mock_redis.exists = AsyncMock(return_value=0)
 
     with (
         patch(
@@ -105,15 +133,10 @@ async def test_checkout_lock_released_on_recovery() -> None:
             new_callable=AsyncMock,
             return_value=mock_redis,
         ),
-        patch("llc.scheduler.liveness_monitor.get_adapter_for_agent", new_callable=AsyncMock, return_value=None),
+        patch("llc.adapters.get_adapter_for_agent", new_callable=AsyncMock, return_value=None),
         patch("llc.scheduler.liveness_monitor.WorkItemService"),
     ):
-        session = AsyncMock()
-        session.execute.return_value.scalars.return_value.all.return_value = [run]
-        session.execute.return_value.scalar_one_or_none.return_value = None
-        session.add = MagicMock()
-        session.commit = AsyncMock()
-        session.rollback = AsyncMock()
+        session = _mock_session([run])
 
         factory = MagicMock()
         factory.return_value.__aenter__ = AsyncMock(return_value=session)
@@ -135,19 +158,14 @@ async def test_adapter_cancel_called_best_effort() -> None:
 
     with (
         patch(
-            "llc.scheduler.liveness_monitor.get_adapter_for_agent",
+            "llc.adapters.get_adapter_for_agent",
             new_callable=AsyncMock,
             return_value=mock_adapter,
         ),
         patch("llc.scheduler.liveness_monitor.get_async_redis_client", new_callable=AsyncMock, return_value=None),
         patch("llc.scheduler.liveness_monitor.WorkItemService"),
     ):
-        session = AsyncMock()
-        session.execute.return_value.scalars.return_value.all.return_value = [run]
-        session.execute.return_value.scalar_one_or_none.return_value = None
-        session.add = MagicMock()
-        session.commit = AsyncMock()
-        session.rollback = AsyncMock()
+        session = _mock_session([run])
 
         factory = MagicMock()
         factory.return_value.__aenter__ = AsyncMock(return_value=session)
@@ -169,19 +187,14 @@ async def test_adapter_cancel_exception_is_swallowed() -> None:
 
     with (
         patch(
-            "llc.scheduler.liveness_monitor.get_adapter_for_agent",
+            "llc.adapters.get_adapter_for_agent",
             new_callable=AsyncMock,
             return_value=mock_adapter,
         ),
         patch("llc.scheduler.liveness_monitor.get_async_redis_client", new_callable=AsyncMock, return_value=None),
         patch("llc.scheduler.liveness_monitor.WorkItemService"),
     ):
-        session = AsyncMock()
-        session.execute.return_value.scalars.return_value.all.return_value = [run]
-        session.execute.return_value.scalar_one_or_none.return_value = None
-        session.add = MagicMock()
-        session.commit = AsyncMock()
-        session.rollback = AsyncMock()
+        session = _mock_session([run])
 
         factory = MagicMock()
         factory.return_value.__aenter__ = AsyncMock(return_value=session)

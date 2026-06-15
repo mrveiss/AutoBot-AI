@@ -47,6 +47,10 @@ get_default_deployed_dir = _dc.get_default_deployed_dir
 ALLOWED_COMPONENTS = _dc.ALLOWED_COMPONENTS
 _SKIP_DIRS = _dc._SKIP_DIRS
 _INCLUDE_EXTENSIONS = _dc._INCLUDE_EXTENSIONS
+_BACKEND_EXTENSIONS = _dc._BACKEND_EXTENSIONS
+_FRONTEND_EXTENSIONS = _dc._FRONTEND_EXTENSIONS
+_FRONTEND_COMPONENTS = _dc._FRONTEND_COMPONENTS
+comparable_extensions = _dc.comparable_extensions
 
 
 # ---------------------------------------------------------------------------
@@ -483,3 +487,315 @@ class TestAllowedComponents:
             assert (
                 attempt not in ALLOWED_COMPONENTS
             ), f"Path traversal payload '{attempt}' should not be in ALLOWED_COMPONENTS"
+
+
+# ===========================================================================
+# Extension sets and frontend drift (Issue #10120)
+# ===========================================================================
+
+
+class TestExtensionSets:
+    """Verify that the extension constants are correctly structured (Issue #10120)."""
+
+    def test_backend_extensions_subset_of_include(self):
+        """Every backend extension must be in the unified _INCLUDE_EXTENSIONS set."""
+        assert _BACKEND_EXTENSIONS <= _INCLUDE_EXTENSIONS
+
+    def test_frontend_extensions_subset_of_include(self):
+        """Every frontend extension must be in the unified _INCLUDE_EXTENSIONS set."""
+        assert _FRONTEND_EXTENSIONS <= _INCLUDE_EXTENSIONS
+
+    def test_frontend_extensions_present(self):
+        """Core frontend source extensions are all in _INCLUDE_EXTENSIONS."""
+        required = {".vue", ".ts", ".tsx", ".js", ".jsx", ".css", ".scss", ".html", ".json"}
+        assert required <= _INCLUDE_EXTENSIONS, f"Missing frontend extensions: {required - _INCLUDE_EXTENSIONS}"
+
+    def test_frontend_components_named_correctly(self):
+        """_FRONTEND_COMPONENTS names match the ALLOWED_COMPONENTS frontend entries."""
+        expected_frontends = {"autobot-frontend", "autobot-slm-frontend"}
+        assert _FRONTEND_COMPONENTS == expected_frontends
+
+    def test_no_build_artifact_extensions_added(self):
+        """Map/lock extensions that only appear as build output are not included."""
+        build_only = {".map", ".wasm", ".br", ".gz"}
+        overlap = build_only & _INCLUDE_EXTENSIONS
+        assert not overlap, f"Build-artifact extensions must not be included: {overlap}"
+
+
+class TestFrontendDriftDetection:
+    """
+    Regression tests for Issue #10120.
+
+    Before the fix, _INCLUDE_EXTENSIONS contained only backend extensions
+    (.py/.yaml/...) so a frontend component whose source consists of .vue/.ts/.css
+    files produced total_compared≈0 and drift_detected=False even when 200+ source
+    files differed.  These tests assert the corrected behaviour.
+    """
+
+    # ------------------------------------------------------------------
+    # REGRESSION: .vue file drift was invisible before fix
+    # ------------------------------------------------------------------
+
+    def test_vue_file_drift_detected(self, tmp_path):
+        """REGRESSION (#10120): a changed .vue file must appear in drifted_files."""
+        src = tmp_path / "src"
+        dep = tmp_path / "dep"
+        _write(src / "App.vue", b"<template>v1</template>")
+        _write(dep / "App.vue", b"<template>v2</template>")
+        drifted, total = compute_drift(str(src), str(dep))
+        assert total == 1, "App.vue must be compared"
+        assert len(drifted) == 1
+        assert drifted[0]["path"] == "App.vue"
+        assert drifted[0]["status"] == "modified"
+
+    def test_ts_file_drift_detected(self, tmp_path):
+        """REGRESSION (#10120): a changed .ts file must appear in drifted_files."""
+        src = tmp_path / "src"
+        dep = tmp_path / "dep"
+        _write(src / "main.ts", b"const x = 1")
+        _write(dep / "main.ts", b"const x = 2")
+        drifted, total = compute_drift(str(src), str(dep))
+        assert total == 1
+        assert drifted[0]["path"] == "main.ts"
+        assert drifted[0]["status"] == "modified"
+
+    def test_css_file_drift_detected(self, tmp_path):
+        """REGRESSION (#10120): a changed .css file must appear in drifted_files."""
+        src = tmp_path / "src"
+        dep = tmp_path / "dep"
+        _write(src / "styles.css", b"body { color: red; }")
+        _write(dep / "styles.css", b"body { color: blue; }")
+        drifted, total = compute_drift(str(src), str(dep))
+        assert total == 1
+        assert drifted[0]["status"] == "modified"
+
+    def test_frontend_source_only_in_source_is_detected(self, tmp_path):
+        """A .vue file present in source but not deployed → 'source_only' drift."""
+        src = tmp_path / "src"
+        dep = tmp_path / "dep"
+        dep.mkdir()
+        _write(src / "views" / "HomeView.vue", b"<template>Home</template>")
+        drifted, total = compute_drift(str(src), str(dep))
+        assert total == 1
+        assert drifted[0]["path"] == "views/HomeView.vue"
+        assert drifted[0]["status"] == "source_only"
+
+    def test_mixed_frontend_and_backend_drift(self, tmp_path):
+        """Both .py and .vue drifts are detected in a mixed component."""
+        src = tmp_path / "src"
+        dep = tmp_path / "dep"
+        _write(src / "server.py", b"v1")
+        _write(dep / "server.py", b"v2")
+        _write(src / "App.vue", b"<template>v1</template>")
+        _write(dep / "App.vue", b"<template>v2</template>")
+        _write(src / "same.yaml", b"config: 1")
+        _write(dep / "same.yaml", b"config: 1")
+        drifted, total = compute_drift(str(src), str(dep))
+        assert total == 3
+        paths = {e["path"] for e in drifted}
+        assert "server.py" in paths
+        assert "App.vue" in paths
+        assert "same.yaml" not in paths
+
+    def test_build_drift_report_frontend_drift_detected_true(self, tmp_path):
+        """build_drift_report returns drift_detected=True for a changed .vue file."""
+        src = tmp_path / "src"
+        dep = tmp_path / "dep"
+        _write(src / "Component.vue", b"<template>source</template>")
+        _write(dep / "Component.vue", b"<template>deployed</template>")
+        report = build_drift_report(str(src), str(dep))
+        assert report["drift_detected"] is True
+        assert report["total_compared"] == 1
+        assert len(report["drifted_files"]) == 1
+
+    # ------------------------------------------------------------------
+    # node_modules / dist must remain excluded despite frontend extensions
+    # ------------------------------------------------------------------
+
+    def test_node_modules_excluded_even_with_js_extensions(self, tmp_path):
+        """node_modules/.ts and node_modules/.vue files are never compared."""
+        src = tmp_path / "src"
+        dep = tmp_path / "dep"
+        # Both sides have a real source file (identical — no drift).
+        _write(src / "App.vue", b"same")
+        _write(dep / "App.vue", b"same")
+        # Deployed side has node_modules with a different .ts file (must be ignored).
+        _write(dep / "node_modules" / "lodash" / "index.ts", b"different ts in nm")
+        drifted, total = compute_drift(str(src), str(dep))
+        assert total == 1, "Only App.vue must be compared; node_modules must be skipped"
+        assert drifted == [], "App.vue is identical — no drift"
+
+    def test_dist_excluded_even_with_js_extensions(self, tmp_path):
+        """dist/*.js build artifacts are never compared."""
+        src = tmp_path / "src"
+        dep = tmp_path / "dep"
+        _write(src / "main.ts", b"source ts")
+        _write(dep / "main.ts", b"source ts")
+        # Deployed dist/ has a different .js bundle (must be ignored).
+        _write(dep / "dist" / "assets" / "index.js", b"bundled output")
+        drifted, total = compute_drift(str(src), str(dep))
+        assert total == 1, "Only main.ts must be compared; dist/ must be skipped"
+        assert drifted == [], "main.ts is identical — no drift"
+
+    def test_build_dir_excluded(self, tmp_path):
+        """build/ directory contents are never compared."""
+        src = tmp_path / "src"
+        dep = tmp_path / "dep"
+        _write(src / "index.ts", b"ts source")
+        _write(dep / "index.ts", b"ts source")
+        _write(dep / "build" / "chunk.js", b"compiled chunk")
+        drifted, total = compute_drift(str(src), str(dep))
+        assert total == 1
+        assert drifted == []
+
+    # ------------------------------------------------------------------
+    # Backend component behaviour is unchanged
+    # ------------------------------------------------------------------
+
+    def test_backend_py_drift_still_detected(self, tmp_path):
+        """Backend .py drift still detected — extension addition is additive."""
+        src = tmp_path / "src"
+        dep = tmp_path / "dep"
+        _write(src / "api.py", b"def get(): pass")
+        _write(dep / "api.py", b"def get(): return 1")
+        drifted, total = compute_drift(str(src), str(dep))
+        assert total == 1
+        assert drifted[0]["path"] == "api.py"
+        assert drifted[0]["status"] == "modified"
+
+    def test_backend_yaml_drift_still_detected(self, tmp_path):
+        """Backend .yaml drift still detected after extension superset change."""
+        src = tmp_path / "src"
+        dep = tmp_path / "dep"
+        _write(src / "ansible" / "deploy.yaml", b"version: 1")
+        _write(dep / "ansible" / "deploy.yaml", b"version: 2")
+        drifted, total = compute_drift(str(src), str(dep))
+        assert total == 1
+        assert drifted[0]["status"] == "modified"
+
+    def test_all_frontend_extensions_collected(self, tmp_path):
+        """Every extension in _FRONTEND_EXTENSIONS produces a checksum entry."""
+        for ext in _FRONTEND_EXTENSIONS:
+            _write(tmp_path / f"file{ext}", b"content")
+        result = _collect_checksums(tmp_path)
+        for ext in _FRONTEND_EXTENSIONS:
+            assert f"file{ext}" in result, f"Frontend extension {ext} not collected"
+
+
+# ===========================================================================
+# comparable_extensions (Issue #10120)
+# ===========================================================================
+
+
+class TestComparableExtensions:
+    """Unit tests for the comparable_extensions() selector function."""
+
+    def test_frontend_component_includes_vue(self):
+        """autobot-frontend returns a set that includes .vue."""
+        assert ".vue" in comparable_extensions("autobot-frontend")
+
+    def test_frontend_component_includes_ts(self):
+        """autobot-frontend returns a set that includes .ts."""
+        assert ".ts" in comparable_extensions("autobot-frontend")
+
+    def test_slm_frontend_component_includes_vue(self):
+        """autobot-slm-frontend returns a set that includes .vue."""
+        assert ".vue" in comparable_extensions("autobot-slm-frontend")
+
+    def test_frontend_component_includes_backend_extensions(self):
+        """Frontend extension set is a superset of the backend extensions."""
+        assert _BACKEND_EXTENSIONS <= comparable_extensions("autobot-frontend")
+
+    def test_backend_component_excludes_vue(self):
+        """autobot-backend does NOT include .vue in its extension set."""
+        assert ".vue" not in comparable_extensions("autobot-backend")
+
+    def test_backend_component_excludes_ts(self):
+        """autobot-backend does NOT include .ts in its extension set."""
+        assert ".ts" not in comparable_extensions("autobot-backend")
+
+    def test_backend_component_includes_py(self):
+        """autobot-backend includes .py."""
+        assert ".py" in comparable_extensions("autobot-backend")
+
+    def test_slm_backend_component_excludes_vue(self):
+        """autobot-slm-backend does NOT include .vue."""
+        assert ".vue" not in comparable_extensions("autobot-slm-backend")
+
+    def test_unknown_component_returns_backend_set(self):
+        """An unknown component name falls back to the backend extension set."""
+        assert comparable_extensions("unknown-component") == _BACKEND_EXTENSIONS
+
+    def test_returns_frozenset(self):
+        """Return type is frozenset for both component types."""
+        assert isinstance(comparable_extensions("autobot-frontend"), frozenset)
+        assert isinstance(comparable_extensions("autobot-backend"), frozenset)
+
+
+# ===========================================================================
+# Per-component compute_drift isolation (Issue #10120)
+# ===========================================================================
+
+
+class TestComputeDriftPerComponent:
+    """Verify that the component parameter correctly scopes which files are compared."""
+
+    def test_frontend_component_detects_vue_drift(self, tmp_path):
+        """compute_drift with component='autobot-frontend' detects .vue drift."""
+        src = tmp_path / "src"
+        dep = tmp_path / "dep"
+        _write(src / "App.vue", b"<template>v1</template>")
+        _write(dep / "App.vue", b"<template>v2</template>")
+        drifted, total = compute_drift(str(src), str(dep), "autobot-frontend")
+        assert total == 1
+        assert drifted[0]["path"] == "App.vue"
+        assert drifted[0]["status"] == "modified"
+
+    def test_backend_component_ignores_vue_files(self, tmp_path):
+        """compute_drift with component='autobot-backend' ignores .vue files."""
+        src = tmp_path / "src"
+        dep = tmp_path / "dep"
+        # .vue file differs — must be invisible for a backend component.
+        _write(src / "App.vue", b"<template>src</template>")
+        _write(dep / "App.vue", b"<template>dep</template>")
+        # .py file differs — must be reported.
+        _write(src / "app.py", b"v1")
+        _write(dep / "app.py", b"v2")
+        drifted, total = compute_drift(str(src), str(dep), "autobot-backend")
+        assert total == 1, ".vue must be excluded for a backend component"
+        assert drifted[0]["path"] == "app.py"
+
+    def test_slm_frontend_component_detects_ts_drift(self, tmp_path):
+        """compute_drift with component='autobot-slm-frontend' detects .ts drift."""
+        src = tmp_path / "src"
+        dep = tmp_path / "dep"
+        _write(src / "main.ts", b"const x = 1")
+        _write(dep / "main.ts", b"const x = 2")
+        drifted, total = compute_drift(str(src), str(dep), "autobot-slm-frontend")
+        assert total == 1
+        assert drifted[0]["path"] == "main.ts"
+
+    def test_no_component_uses_full_union_set(self, tmp_path):
+        """compute_drift without component uses _INCLUDE_EXTENSIONS union."""
+        src = tmp_path / "src"
+        dep = tmp_path / "dep"
+        _write(src / "App.vue", b"v1")
+        _write(dep / "App.vue", b"v2")
+        _write(src / "app.py", b"v1")
+        _write(dep / "app.py", b"v2")
+        drifted, total = compute_drift(str(src), str(dep))
+        assert total == 2
+        paths = {e["path"] for e in drifted}
+        assert "App.vue" in paths
+        assert "app.py" in paths
+
+    def test_frontend_node_modules_excluded_with_component(self, tmp_path):
+        """node_modules stay excluded even when component='autobot-frontend'."""
+        src = tmp_path / "src"
+        dep = tmp_path / "dep"
+        _write(src / "App.vue", b"same")
+        _write(dep / "App.vue", b"same")
+        _write(dep / "node_modules" / "react" / "index.ts", b"different")
+        drifted, total = compute_drift(str(src), str(dep), "autobot-frontend")
+        assert total == 1
+        assert drifted == []

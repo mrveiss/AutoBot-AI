@@ -152,6 +152,9 @@ class LLCRunStatus(str, Enum):
     TIMEOUT = "timeout"
     CANCELLED = "cancelled"
     RATE_LIMITED = "rate_limited"
+    # GH#9951: heartbeat was not dispatched to any adapter (no adapter / CLI
+    # absent / no agent_class) — degraded, distinct from COMPLETED or FAILED.
+    SKIPPED = "skipped"
 
     def is_terminal(self) -> bool:
         """True once the run has reached a final state (not queued/running).

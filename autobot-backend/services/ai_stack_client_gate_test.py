@@ -11,6 +11,7 @@ single_user deployments that ship no AI Stack VM).
 
 import pytest
 
+from autobot_shared.status_enums import ConnectionStatus
 from services.ai_stack_client import AIStackClient
 
 
@@ -26,14 +27,15 @@ async def test_health_check_disabled_returns_disabled_without_network(monkeypatc
 
     result = await client.health_check()
     assert result["status"] == "disabled"
-    assert client.connection_status == "disabled"
+    assert client.connection_status is ConnectionStatus.DISABLED
+    assert client.connection_status == "disabled"  # str-subclass back-compat
 
 
 @pytest.mark.asyncio
 async def test_connect_disabled_is_quiet_noop():
     client = AIStackClient(enabled=False)
     await client.connect()  # must not raise / must not hit the network
-    assert client.connection_status == "disabled"
+    assert client.connection_status is ConnectionStatus.DISABLED
 
 
 def test_start_retry_loop_noop_when_disabled():

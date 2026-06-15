@@ -11,6 +11,7 @@ env injection, allowed-tools flag, Redis session resume, FD management, and
 workspace-dir retry logic.
 """
 
+import asyncio
 import json
 import os
 import tempfile
@@ -186,6 +187,39 @@ class TestInvoke:
             assert state["pid"] == 77
             assert "session_id" in state
 
+    async def test_invoke_redirects_stderr_to_sidecar(self) -> None:
+        """GH#9992: stderr must go to a sidecar file, never an unread PIPE
+        (which hides CLI errors and risks a >64KB-buffer deadlock)."""
+        adapter = ClaudeCodeAdapter()
+        fake_proc = _make_fake_proc(55)
+        captured: dict = {}
+
+        async def _fake_exec(*args, **kwargs):
+            captured.update(kwargs)
+            return fake_proc
+
+        with tempfile.TemporaryDirectory() as td:
+            cfg = _agent_cfg(output_dir=td)
+            with (
+                patch("llc.adapters.claude_code_adapter.shutil.which", return_value="/usr/bin/claude"),
+                patch(
+                    "llc.adapters.claude_code_adapter.get_async_redis_client",
+                    new_callable=AsyncMock,
+                    return_value=None,
+                ),
+                patch("asyncio.create_subprocess_exec", side_effect=_fake_exec),
+            ):
+                run_id = await adapter.invoke(cfg, {"task_id": "tX"})
+
+            # stderr is a writable file fd, not the unread PIPE.
+            assert captured["stderr"] is not asyncio.subprocess.PIPE
+            assert hasattr(captured["stderr"], "write")
+            # The sidecar path is recorded in state and exists on disk.
+            with open(_state_path(td, run_id)) as fh:
+                state = json.load(fh)
+            assert state["stderr_file"].endswith(".stderr.log")
+            assert os.path.exists(state["stderr_file"])
+
     async def test_invoke_resumes_when_session_exists(self) -> None:
         adapter = ClaudeCodeAdapter()
         fake_proc = _make_fake_proc(55)
@@ -315,7 +349,8 @@ class TestInvoke:
                 with pytest.raises(OSError):
                     await adapter.invoke(cfg, {})
 
-        fake_fh.close.assert_called_once()
+        # GH#9992: both the stdout and the stderr-sidecar handles are closed.
+        assert fake_fh.close.call_count == 2
 
     async def test_fd_closed_on_success(self) -> None:
         """out_fh must be closed even on the happy path."""
@@ -335,7 +370,8 @@ class TestInvoke:
             ):
                 await adapter.invoke(cfg, {})
 
-        fake_fh.close.assert_called_once()
+        # GH#9992: both the stdout and the stderr-sidecar handles are closed.
+        assert fake_fh.close.call_count == 2
 
     async def test_workspace_dir_missing_retries_without_cwd(self) -> None:
         """If workspace_dir is deleted, adapter retries without cwd and clears it from context."""
@@ -371,7 +407,8 @@ class TestInvoke:
         assert call_count == 2
         assert "workspace_dir" not in context
         assert run_id.startswith("77/")
-        fake_fh.close.assert_called_once()
+        # GH#9992: both the stdout and the stderr-sidecar handles are closed.
+        assert fake_fh.close.call_count == 2
         assert "AUTOBOT_WORKSPACE_DIR" in captured_envs[0]
         assert "AUTOBOT_WORKSPACE_DIR" not in captured_envs[1]
         retry_ctx = json.loads(captured_envs[1]["LLC_INVOKE_CONTEXT"])

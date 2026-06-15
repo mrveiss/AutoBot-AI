@@ -59,7 +59,7 @@ const budgetBarColor = (node: CompanyNode) => {
         <span class="text-xs text-gray-400 w-8 text-right">{{ budgetPercent(node) }}%</span>
       </div>
 
-      <span class="text-xs text-gray-500">{{ node.agent_count }} agents</span>
+      <span v-if="node.agent_count != null" class="text-xs text-gray-500">{{ node.agent_count }} agents</span>
       <svg class="w-4 h-4 text-gray-300 group-hover:text-indigo-400 transition-colors flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
       </svg>

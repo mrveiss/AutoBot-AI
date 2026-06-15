@@ -268,6 +268,23 @@ class AgentLifecycleStatus(str, Enum):
     ARCHIVED = "archived"
 
 
+class ConnectionStatus(str, Enum):
+    """
+    Client-side reachability state of an external service connection (#10008).
+
+    Canonical states for AIStackClient.connection_status and sibling client
+    status fields. str-subclass so existing ``== "connected"`` comparisons and
+    JSON serialization keep working while the states become type-checked and
+    greppable. Replaces the bare literals "unknown"/"connected"/"error"/
+    "disabled" that drifted when #9782 added the 4th value.
+    """
+
+    UNKNOWN = "unknown"
+    CONNECTED = "connected"
+    ERROR = "error"
+    DISABLED = "disabled"
+
+
 # Task priority — canonical alias for Priority covering agent/task scheduling.
 # Replaces local TaskPriority classes in services/agents/subagent_task.py,
 # utils/task_queue.py, and orchestrator.py (#7504).
@@ -286,4 +303,5 @@ __all__ = [
     "HealthStatus",
     "AgentStatus",
     "AgentLifecycleStatus",
+    "ConnectionStatus",
 ]

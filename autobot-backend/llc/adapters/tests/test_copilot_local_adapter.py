@@ -243,7 +243,8 @@ class TestInvoke:
                 with pytest.raises(OSError):
                     await adapter.invoke(cfg, {})
 
-        fake_fh.close.assert_called_once()
+        # GH#9992: both the stdout and the stderr-sidecar handles are closed.
+        assert fake_fh.close.call_count == 2
 
     async def test_fd_closed_on_success(self) -> None:
         adapter = CopilotLocalAdapter()
@@ -259,7 +260,8 @@ class TestInvoke:
             ):
                 await adapter.invoke(cfg, {})
 
-        fake_fh.close.assert_called_once()
+        # GH#9992: both the stdout and the stderr-sidecar handles are closed.
+        assert fake_fh.close.call_count == 2
 
     async def test_workspace_dir_missing_retries_without_cwd(self) -> None:
         adapter = CopilotLocalAdapter()
@@ -291,7 +293,8 @@ class TestInvoke:
         assert run_id.startswith("77/")
         assert captured_kwargs[0].get("cwd") == "/deleted/worktree"
         assert captured_kwargs[1].get("cwd") is None
-        fake_fh.close.assert_called_once()
+        # GH#9992: both the stdout and the stderr-sidecar handles are closed.
+        assert fake_fh.close.call_count == 2
 
 
 # ---------------------------------------------------------------------------

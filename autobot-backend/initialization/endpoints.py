@@ -16,6 +16,7 @@ from fastapi import FastAPI, Request
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.status_enums import ConnectionStatus
 from circuit_breaker import get_circuit_breaker_manager
 
 logger = get_logger(__name__)
@@ -40,12 +41,12 @@ def _ai_stack_status(state: Any) -> str:
     client = getattr(state, "ai_stack_client", None)
     if not client:
         return "unavailable"
-    status = getattr(client, "connection_status", "unknown")
-    if status == "connected":
-        return "connected"
-    if status == "error":
-        return "error"
-    return "unknown"
+    status = getattr(client, "connection_status", ConnectionStatus.UNKNOWN)
+    if status == ConnectionStatus.CONNECTED:
+        return ConnectionStatus.CONNECTED.value
+    if status == ConnectionStatus.ERROR:
+        return ConnectionStatus.ERROR.value
+    return ConnectionStatus.UNKNOWN.value
 
 
 def _build_services_status(state: Any) -> Dict[str, str]:
