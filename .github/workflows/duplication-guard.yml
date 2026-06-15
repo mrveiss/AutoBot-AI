@@ -53,7 +53,7 @@ jobs:
       THRESHOLD: '1.05'
       JSCPD_VERSION: '5.0.6'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: actions/setup-node@v6.4.0
         with:
