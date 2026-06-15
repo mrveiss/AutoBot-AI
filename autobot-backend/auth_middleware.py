@@ -16,9 +16,7 @@ from typing import Dict, Tuple
 from fastapi import HTTPException, Request, status
 
 from autobot_shared.auth.jwt_core import (
-    JWTDecodeError,
     decode_jwt_multi,
-    decode_jwt_or_none,
     encode_jwt,
     hash_password,
     verify_password,

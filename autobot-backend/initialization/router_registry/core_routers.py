@@ -24,7 +24,6 @@ from api.agent_org import router as agent_org_router  # #1405
 from api.approval_gates import router as approval_gates_router  # #1402
 from api.audit import router as audit_router
 from api.auth import router as auth_router
-from api.jwks import auth_router as jwks_auth_router  # #10196
 from api.browser_mcp import router as browser_mcp_router
 from api.canvas import router as canvas_router  # MVA-359
 from api.chat import router as chat_router
@@ -43,6 +42,7 @@ from api.frontend_config import router as frontend_config_router
 from api.git_mcp import router as git_mcp_router
 from api.http_client_mcp import router as http_client_mcp_router
 from api.intelligent_agent import router as intelligent_agent_router
+from api.jwks import auth_router as jwks_auth_router  # #10196
 from api.knowledge import router as knowledge_router
 from api.knowledge_ai_stack import router as knowledge_ai_stack_router
 from api.knowledge_audit import router as knowledge_audit_router

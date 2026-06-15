@@ -220,8 +220,7 @@ def decode_jwt(
 
     if token_alg not in algorithms:
         raise JWTDecodeError(
-            f"JWT algorithm mismatch: token uses {token_alg!r} "
-            f"but allowed algorithms are {algorithms!r}"
+            f"JWT algorithm mismatch: token uses {token_alg!r} " f"but allowed algorithms are {algorithms!r}"
         )
 
     if token_alg == _ALGORITHM_RS256:
@@ -296,17 +295,20 @@ def decode_jwt_no_verify_exp(
 
     if token_alg not in algorithms:
         raise JWTDecodeError(
-            f"JWT algorithm mismatch: token uses {token_alg!r} "
-            f"but allowed algorithms are {algorithms!r}"
+            f"JWT algorithm mismatch: token uses {token_alg!r} " f"but allowed algorithms are {algorithms!r}"
         )
 
     if token_alg == _ALGORITHM_RS256:
         if not public_key:
-            raise JWTDecodeError("RS256 token presented but no public_key supplied — algorithm-confusion guard rejected")
+            raise JWTDecodeError(
+                "RS256 token presented but no public_key supplied — algorithm-confusion guard rejected"
+            )
         key: Any = public_key
     else:
         if not secret:
-            raise JWTDecodeError(f"{token_alg} token presented but no secret supplied — algorithm-confusion guard rejected")
+            raise JWTDecodeError(
+                f"{token_alg} token presented but no secret supplied — algorithm-confusion guard rejected"
+            )
         key = secret
 
     try:
