@@ -22,6 +22,11 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Import canvas models so Alembic autogenerate sees them (MVA-359)
 import canvas.models  # noqa: F401
+
+# GH#10044: ProcessRun/TaskDecomposition/AgentSession live on the UM Base and
+# their tables are built by migration 010 — register them so autogenerate does
+# not emit spurious drop_table ops for process_runs/task_decompositions/agent_sessions.
+import models.process_run  # noqa: F401,E402
 from autobot_shared.async_compat import run_or_schedule
 
 # Import models to register with SQLAlchemy
