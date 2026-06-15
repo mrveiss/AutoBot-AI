@@ -1,7 +1,7 @@
 # AutoBot Code Analysis Suite Requirements
 
 # Core Dependencies
-redis>=7.4.0
+redis>=8.0.0
 
 # Data Processing and ML
 numpy>=2.4.6,<3.0.0
