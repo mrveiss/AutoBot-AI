@@ -119,32 +119,39 @@ def _mock_redis(stored: dict | None = None) -> tuple[MagicMock, dict]:
 class TestGenerateOauthState:
     @pytest.mark.asyncio
     async def test_stores_provider_id_in_redis(self):
+        import json
+
         redis, store = _mock_redis()
         service = _make_service()
         with patch.object(_sso_mod, "get_redis_client", return_value=redis):
-            state = await service._generate_oauth_state(_PROVIDER_ID)
+            state, verifier = await service._generate_oauth_state(_PROVIDER_ID)
 
         assert state
         assert len(store) == 1
         key = f"sso:state:{state}"
         assert key in store
-        assert store[key] == str(_PROVIDER_ID)
+        stored = json.loads(store[key])
+        assert stored == {"provider_id": str(_PROVIDER_ID), "code_verifier": verifier}
 
     @pytest.mark.asyncio
     async def test_set_called_with_correct_ttl(self):
+        import json
+
         redis, _ = _mock_redis()
         service = _make_service()
         with patch.object(_sso_mod, "get_redis_client", return_value=redis):
-            state = await service._generate_oauth_state(_PROVIDER_ID)
+            state, verifier = await service._generate_oauth_state(_PROVIDER_ID)
 
-        redis.set.assert_awaited_once_with(f"sso:state:{state}", str(_PROVIDER_ID), ex=600)
+        expected_payload = json.dumps({"provider_id": str(_PROVIDER_ID), "code_verifier": verifier})
+        redis.set.assert_awaited_once_with(f"sso:state:{state}", expected_payload, ex=600)
 
     @pytest.mark.asyncio
     async def test_returns_token_even_when_redis_unavailable(self):
         service = _make_service()
         with patch.object(_sso_mod, "get_redis_client", return_value=None):
-            state = await service._generate_oauth_state(_PROVIDER_ID)
+            state, verifier = await service._generate_oauth_state(_PROVIDER_ID)
         assert state  # token still generated; Redis write silently skipped
+        assert verifier  # verifier is still returned
 
 
 # ---------------------------------------------------------------------------
@@ -158,10 +165,11 @@ class TestValidateOauthState:
         redis, store = _mock_redis()
         service = _make_service()
         with patch.object(_sso_mod, "get_redis_client", return_value=redis):
-            state = await service._generate_oauth_state(_PROVIDER_ID)
-            recovered = await service._validate_oauth_state(state)
+            state, _ = await service._generate_oauth_state(_PROVIDER_ID)
+            recovered_id, recovered_verifier = await service._validate_oauth_state(state)
 
-        assert recovered == _PROVIDER_ID
+        assert recovered_id == _PROVIDER_ID
+        assert recovered_verifier is not None  # verifier round-trips through JSON
 
     @pytest.mark.asyncio
     async def test_second_use_raises(self):
@@ -169,7 +177,7 @@ class TestValidateOauthState:
         redis, store = _mock_redis()
         service = _make_service()
         with patch.object(_sso_mod, "get_redis_client", return_value=redis):
-            state = await service._generate_oauth_state(_PROVIDER_ID)
+            state, _ = await service._generate_oauth_state(_PROVIDER_ID)
             await service._validate_oauth_state(state)  # first use succeeds
             with pytest.raises(SSOAuthenticationError, match="Invalid or expired"):
                 await service._validate_oauth_state(state)  # second use raises
@@ -195,10 +203,67 @@ class TestValidateOauthState:
         redis, store = _mock_redis()
         service = _make_service()
         with patch.object(_sso_mod, "get_redis_client", return_value=redis):
-            state = await service._generate_oauth_state(_PROVIDER_ID)
+            state, _ = await service._generate_oauth_state(_PROVIDER_ID)
             await service._validate_oauth_state(state)
 
         assert f"sso:state:{state}" not in store
+
+
+# ---------------------------------------------------------------------------
+# PKCE verifier persisted in OAuth state (Task 2)
+# ---------------------------------------------------------------------------
+
+
+class TestPkceStateStorage:
+    @pytest.mark.asyncio
+    async def test_generate_state_persists_verifier(self):
+        """_generate_oauth_state stores JSON with provider_id + code_verifier."""
+        import json
+
+        redis, _ = _mock_redis()
+        service = _make_service()
+        with patch.object(_sso_mod, "get_redis_client", return_value=redis):
+            state, verifier = await service._generate_oauth_state(_PROVIDER_ID)
+
+        assert isinstance(state, str) and len(verifier) >= 43
+        key, value = redis.set.call_args.args[0], redis.set.call_args.args[1]
+        assert key == f"sso:state:{state}"
+        stored = json.loads(value)
+        assert stored == {"provider_id": str(_PROVIDER_ID), "code_verifier": verifier}
+
+    @pytest.mark.asyncio
+    async def test_validate_state_returns_provider_and_verifier(self):
+        """_validate_oauth_state returns (provider_id, code_verifier) from JSON."""
+        import json
+
+        redis, store = _mock_redis()
+        verifier = "v" * 64
+        store[f"sso:state:abc"] = json.dumps({"provider_id": str(_PROVIDER_ID), "code_verifier": verifier})
+        service = _make_service()
+        with patch.object(_sso_mod, "get_redis_client", return_value=redis):
+            got_pid, got_verifier = await service._validate_oauth_state("abc")
+
+        assert got_pid == _PROVIDER_ID and got_verifier == verifier
+
+    @pytest.mark.asyncio
+    async def test_validate_state_legacy_plain_uuid(self):
+        """Legacy plain-UUID values (pre-PKCE deploys) decode to code_verifier=None."""
+        redis, store = _mock_redis()
+        store[f"sso:state:abc"] = str(_PROVIDER_ID)
+        service = _make_service()
+        with patch.object(_sso_mod, "get_redis_client", return_value=redis):
+            got_pid, got_verifier = await service._validate_oauth_state("abc")
+
+        assert got_pid == _PROVIDER_ID and got_verifier is None
+
+    @pytest.mark.asyncio
+    async def test_validate_state_rejects_missing(self):
+        """Missing state token raises SSOAuthenticationError."""
+        redis, _ = _mock_redis()
+        service = _make_service()
+        with patch.object(_sso_mod, "get_redis_client", return_value=redis):
+            with pytest.raises(SSOAuthenticationError):
+                await service._validate_oauth_state("nonexistent")
 
 
 # ---------------------------------------------------------------------------
@@ -280,9 +345,11 @@ class TestSamlRelayStateRedisRoundTrip:
         with patch.object(_sso_mod, "get_redis_client", return_value=redis):
             with patch.object(service, "_build_saml_client", return_value=mock_client):
                 _, relay_state = await service._generate_saml_authn_request(provider)
-            recovered_id = await service._validate_oauth_state(relay_state)
+            recovered_id, recovered_verifier = await service._validate_oauth_state(relay_state)
 
+        # SAML stores plain UUID string (legacy path); verifier is None
         assert recovered_id == _PROVIDER_ID
+        assert recovered_verifier is None
         assert f"sso:state:{relay_state}" not in store
 
     @pytest.mark.asyncio

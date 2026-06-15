@@ -212,23 +212,29 @@ class SSOService(BaseService):
             logger.error("LDAP connection test failed: %s", e)
             return {"success": False, "message": "LDAP connection test failed"}
 
-    async def _generate_oauth_state(self, provider_id: uuid.UUID) -> str:
-        """Generate OAuth2 state token and store provider mapping in Redis with 10-min TTL."""
+    async def _generate_oauth_state(self, provider_id: uuid.UUID) -> tuple[str, str]:
+        """Generate OAuth2 state + PKCE verifier; store both in Redis with TTL."""
         state = secrets.token_urlsafe(32)
+        code_verifier = secrets.token_urlsafe(64)
         redis = get_redis_client()
         if redis:
-            await redis.set(f"sso:state:{state}", str(provider_id), ex=600)
-        return state
+            payload = json.dumps({"provider_id": str(provider_id), "code_verifier": code_verifier})
+            await redis.set(f"sso:state:{state}", payload, ex=OAUTH_STATE_TTL_SECONDS)
+        return state, code_verifier
 
-    async def _validate_oauth_state(self, state: str) -> uuid.UUID:
-        """Validate OAuth2 state token via atomic GETDEL (single-use, replay-safe)."""
+    async def _validate_oauth_state(self, state: str) -> tuple[uuid.UUID, str | None]:
+        """Validate state via atomic GETDEL (single-use). Returns (provider_id, code_verifier)."""
         redis = get_redis_client()
-        if redis:
-            provider_id_str = await redis.getdel(f"sso:state:{state}")
-            if not provider_id_str:
-                raise SSOAuthenticationError("Invalid or expired OAuth state")
-            return uuid.UUID(provider_id_str)
-        raise SSOAuthenticationError("Redis unavailable for state validation")
+        if not redis:
+            raise SSOAuthenticationError("Redis unavailable for state validation")
+        raw = await redis.getdel(f"sso:state:{state}")
+        if not raw:
+            raise SSOAuthenticationError("Invalid or expired OAuth state")
+        try:
+            data = json.loads(raw)
+            return uuid.UUID(data["provider_id"]), data.get("code_verifier")
+        except (json.JSONDecodeError, TypeError, KeyError):
+            return uuid.UUID(raw), None
 
     async def _build_oauth_client(self, provider: SSOProvider) -> Any:
         """Build OAuth2 client from provider config with decrypted credentials."""
