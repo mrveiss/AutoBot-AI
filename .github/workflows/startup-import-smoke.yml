@@ -13,7 +13,7 @@ name: Backend Startup Import Smoke
 on:
   push:
     branches: [main, Dev_new_gui, develop]
-    paths: &smoke_paths
+    paths:
       - 'autobot-backend/**/*.py'
       - 'autobot_shared/**/*.py'
       - 'autobot-slm-backend/**/*.py'

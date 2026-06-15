@@ -212,6 +212,17 @@ export const routes: RouteRecordRaw[] = [
         }
       },
       {
+        // #8999: ChromaDB / vector-store explorer — browse collections,
+        // inspect documents, run similarity search (backend: api/knowledge_chroma.py)
+        path: 'vector-store',
+        name: 'knowledge-vector-store',
+        component: () => import('@/components/knowledge/ChromaDBExplorer.vue'),
+        meta: {
+          title: 'Vector Store',
+          parent: 'knowledge'
+        }
+      },
+      {
         path: 'connectors',
         name: 'knowledge-connectors',
         component: () => import('@/components/knowledge/connectors/ConnectorManager.vue'),

@@ -18,6 +18,11 @@ from pathlib import Path
 from typing import Callable, Dict, List
 
 from services.ansible_secrets import fetch_deploy_secrets
+from services.inventory_builder import (
+    build_registry_inventory,
+    validate_inventory,
+    write_temp_inventory,
+)
 from services.provision_progress import TaskProgressTracker
 
 logger = logging.getLogger(__name__)
@@ -436,6 +441,40 @@ class PlaybookExecutor:
         await process.wait()
         return {"output": "\n".join(output_lines), "returncode": process.returncode}
 
+    async def _build_dynamic_inventory(self) -> Path:
+        """Generate an Ansible inventory from the DB node registry (#10109, #10095).
+
+        Queries all Node records, builds a YAML inventory where each host name
+        equals node_id (so --limit <node_id> always resolves), and writes it to
+        a uid-scoped temp file.  Nodes whose IP is local/loopback receive
+        ``ansible_connection: local`` so the SLM never SSH-loops to itself.
+
+        Returns:
+            Path to the written temp inventory file.
+
+        Raises:
+            ValueError: when validate_inventory detects missing required groups.
+        """
+        from autobot_shared.network_utils import is_local_ip
+        from models.database import Node
+        from services.database import db_service
+
+        async with db_service.session() as db:
+            from sqlalchemy import select
+
+            result = await db.execute(select(Node))
+            nodes = list(result.scalars().all())
+
+        inv = build_registry_inventory(nodes, is_local_ip)
+        validate_inventory(inv)
+        tmp_path = write_temp_inventory(inv, uid_tmp_dir=ANSIBLE_LOCAL_TMP)
+        logger.info(
+            "_build_dynamic_inventory: wrote inventory for %d node(s) to %s",
+            len(nodes),
+            tmp_path,
+        )
+        return tmp_path
+
     async def execute_playbook(
         self,
         playbook_name: str,
@@ -448,6 +487,12 @@ class PlaybookExecutor:
     ) -> Dict[str, any]:
         """
         Execute an Ansible playbook with optional progress updates (Issue #880).
+
+        When ``inventory_path`` is None (the normal path for all non-wizard
+        calls), a dynamic inventory is generated from the DB node registry
+        (#10109, #10095).  When ``inventory_path`` is provided explicitly
+        (wizard provisioning, Issue #1294), the caller's inventory is used
+        unchanged.
 
         Args:
             playbook_name: Name of playbook file (e.g., "update-all-nodes.yml")
@@ -464,12 +509,29 @@ class PlaybookExecutor:
         await self._update_code_source()
 
         playbook_path = self.ansible_dir / playbook_name
-        effective_inventory = inventory_path or self.inventory_path
-
         if not playbook_path.exists():
             raise FileNotFoundError(f"Playbook not found: {playbook_path}")
-        if not effective_inventory.exists():
-            raise FileNotFoundError(f"Inventory not found: {effective_inventory}")
+
+        # Determine which inventory to use.
+        # Explicit caller-supplied path (wizard) → use as-is.
+        # No path provided → generate from DB node registry (#10109, #10095).
+        dynamic_inv_path: Path | None = None
+        if inventory_path is not None:
+            effective_inventory = inventory_path
+            if not effective_inventory.exists():
+                raise FileNotFoundError(f"Inventory not found: {effective_inventory}")
+        else:
+            try:
+                dynamic_inv_path = await self._build_dynamic_inventory()
+                effective_inventory = dynamic_inv_path
+            except Exception as exc:
+                logger.warning(
+                    "execute_playbook: dynamic inventory failed (%s); " "falling back to static slm-nodes.yml",
+                    exc,
+                )
+                effective_inventory = self.inventory_path
+                if not effective_inventory.exists():
+                    raise FileNotFoundError(f"Inventory not found: {effective_inventory}") from exc
 
         # Merge stored SLM secrets into extra_vars so standalone re-deploys
         # receive the same secrets as the full wizard provisioning flow (#3519).
@@ -510,6 +572,13 @@ class PlaybookExecutor:
                 "output": f"Error: {str(e)}",
                 "returncode": -1,
             }
+        finally:
+            # Clean up the per-run temp inventory file
+            if dynamic_inv_path is not None:
+                try:
+                    dynamic_inv_path.unlink(missing_ok=True)
+                except OSError as exc:
+                    logger.debug("Could not remove temp inventory %s: %s", dynamic_inv_path, exc)
 
 
 # Singleton instance

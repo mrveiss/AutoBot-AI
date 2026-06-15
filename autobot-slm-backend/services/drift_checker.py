@@ -21,7 +21,43 @@ from services.git_tracker import DEFAULT_REPO_PATH
 logger = logging.getLogger(__name__)
 
 # File extensions that are meaningful to compare.
-_INCLUDE_EXTENSIONS = {".py", ".cfg", ".ini", ".toml", ".yaml", ".yml", ".sh", ".txt"}
+#
+# Backend/config extensions (Python services, Ansible, shell scripts):
+_BACKEND_EXTENSIONS: frozenset[str] = frozenset({".py", ".cfg", ".ini", ".toml", ".yaml", ".yml", ".sh", ".txt"})
+# Frontend source extensions (Vue SFC, TypeScript, styles, HTML, manifests).
+# These are source files — node_modules/dist/build are excluded by _SKIP_DIRS
+# so compiled output is never compared, only source (Issue #10120).
+_FRONTEND_EXTENSIONS: frozenset[str] = frozenset(
+    {".vue", ".ts", ".tsx", ".js", ".jsx", ".css", ".scss", ".html", ".json"}
+)
+
+# Components whose source is primarily frontend files (Issue #10120).
+_FRONTEND_COMPONENTS: frozenset[str] = frozenset({"autobot-frontend", "autobot-slm-frontend"})
+
+# Union set — used as the broadest possible filter and by tests that call
+# _collect_checksums without a component (backward-compatible default).
+_INCLUDE_EXTENSIONS: frozenset[str] = _BACKEND_EXTENSIONS | _FRONTEND_EXTENSIONS
+
+
+def comparable_extensions(component: str) -> frozenset[str]:
+    """Return the file-extension set appropriate for *component* (Issue #10120).
+
+    Frontend components (``autobot-frontend``, ``autobot-slm-frontend``) use
+    the full frontend source set so that .vue/.ts/.css files are included in
+    the drift comparison.  All other components (Python backends, Ansible
+    playbook repos) use only the backend extension set so that stray .ts/.js
+    files inside a backend directory are not accidentally compared.
+
+    Args:
+        component: Bare component name, e.g. ``"autobot-frontend"``.
+
+    Returns:
+        A frozenset of lower-case file-extension strings (e.g. ``".vue"``).
+    """
+    if component in _FRONTEND_COMPONENTS:
+        return _FRONTEND_EXTENSIONS | _BACKEND_EXTENSIONS
+    return _BACKEND_EXTENSIONS
+
 
 # Permitted component names for the /drift endpoint (Issue #3427).
 # Only these sub-directories may be requested to prevent path traversal.
@@ -102,18 +138,26 @@ def _file_checksum(path: Path, block_size: int = 65536) -> str:
     return h.hexdigest()
 
 
-def _collect_checksums(root: Path) -> Dict[str, str]:
+def _collect_checksums(
+    root: Path,
+    extensions: frozenset[str] | None = None,
+) -> Dict[str, str]:
     """Walk *root* and return a mapping of relative-path → SHA-256 checksum.
 
-    Only files with extensions in ``_INCLUDE_EXTENSIONS`` are included.
+    Only files whose suffix is in *extensions* are included.  When *extensions*
+    is ``None`` the full ``_INCLUDE_EXTENSIONS`` union is used (backward-
+    compatible default for tests that call this function without a component).
     Directories in ``_SKIP_DIRS`` are pruned from the walk.
 
     Args:
         root: Directory to scan.
+        extensions: Frozenset of lower-case file-extension strings to include.
+            Defaults to ``_INCLUDE_EXTENSIONS`` (the backend ∪ frontend set).
 
     Returns:
         Dict mapping POSIX-style relative path strings to hex digest strings.
     """
+    active_extensions = extensions if extensions is not None else _INCLUDE_EXTENSIONS
     checksums: Dict[str, str] = {}
     for dirpath, dirnames, filenames in os.walk(root):
         # Prune skip dirs in-place so os.walk does not descend into them.
@@ -121,7 +165,7 @@ def _collect_checksums(root: Path) -> Dict[str, str]:
 
         for filename in filenames:
             filepath = Path(dirpath) / filename
-            if filepath.suffix not in _INCLUDE_EXTENSIONS:
+            if filepath.suffix not in active_extensions:
                 continue
             try:
                 rel = filepath.relative_to(root).as_posix()
@@ -135,6 +179,7 @@ def _collect_checksums(root: Path) -> Dict[str, str]:
 def compute_drift(
     source_dir: str,
     deployed_dir: str,
+    component: str | None = None,
 ) -> Tuple[List[dict], int]:
     """Compare file checksums between *source_dir* and *deployed_dir*.
 
@@ -152,6 +197,9 @@ def compute_drift(
     Args:
         source_dir: Absolute path to the authoritative code source directory.
         deployed_dir: Absolute path to the currently deployed directory.
+        component: Bare component name used to select the correct extension
+            set via ``comparable_extensions()``.  When ``None`` the full
+            ``_INCLUDE_EXTENSIONS`` union is used (backward-compatible default).
 
     Returns:
         Tuple of (list_of_drift_dicts, total_files_compared).
@@ -167,8 +215,9 @@ def compute_drift(
         logger.warning("drift_checker: deployed_dir does not exist: %s", deployed_dir)
         return [], 0
 
-    src_checksums = _collect_checksums(src_path)
-    dep_checksums = _collect_checksums(dep_path)
+    extensions = comparable_extensions(component) if component is not None else None
+    src_checksums = _collect_checksums(src_path, extensions)
+    dep_checksums = _collect_checksums(dep_path, extensions)
 
     all_paths = set(src_checksums) | set(dep_checksums)
     compared = 0
@@ -209,17 +258,21 @@ def compute_drift(
 def build_drift_report(
     source_dir: str,
     deployed_dir: str,
+    component: str | None = None,
 ) -> dict:
     """Build the full drift report dict for the API response (Issue #2834).
 
     Args:
         source_dir: Path to code_source directory.
         deployed_dir: Path to deployed component directory.
+        component: Bare component name forwarded to ``compute_drift`` so that
+            the correct per-component extension set is used (Issue #10120).
+            When ``None`` the full ``_INCLUDE_EXTENSIONS`` union is used.
 
     Returns:
         Dict matching the ``FileDriftReport`` schema.
     """
-    drifted, total = compute_drift(source_dir, deployed_dir)  # codeql[py/path-injection]
+    drifted, total = compute_drift(source_dir, deployed_dir, component)  # codeql[py/path-injection]
 
     return {
         "source_dir": source_dir,

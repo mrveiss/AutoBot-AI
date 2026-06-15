@@ -6,7 +6,7 @@ name: Code Quality
 on:
   push:
     branches: [ main, Dev_new_gui, develop ]
-    paths: &cq_paths
+    paths:
       - '**/*.py'
       - '**/requirements*.txt'
       - 'requirements-ci/**'
