@@ -23,9 +23,7 @@ logger = logging.getLogger(__name__)
 # File extensions that are meaningful to compare.
 #
 # Backend/config extensions (Python services, Ansible, shell scripts):
-_BACKEND_EXTENSIONS: frozenset[str] = frozenset(
-    {".py", ".cfg", ".ini", ".toml", ".yaml", ".yml", ".sh", ".txt"}
-)
+_BACKEND_EXTENSIONS: frozenset[str] = frozenset({".py", ".cfg", ".ini", ".toml", ".yaml", ".yml", ".sh", ".txt"})
 # Frontend source extensions (Vue SFC, TypeScript, styles, HTML, manifests).
 # These are source files — node_modules/dist/build are excluded by _SKIP_DIRS
 # so compiled output is never compared, only source (Issue #10120).

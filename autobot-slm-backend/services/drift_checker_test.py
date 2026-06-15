@@ -508,9 +508,7 @@ class TestExtensionSets:
     def test_frontend_extensions_present(self):
         """Core frontend source extensions are all in _INCLUDE_EXTENSIONS."""
         required = {".vue", ".ts", ".tsx", ".js", ".jsx", ".css", ".scss", ".html", ".json"}
-        assert required <= _INCLUDE_EXTENSIONS, (
-            f"Missing frontend extensions: {required - _INCLUDE_EXTENSIONS}"
-        )
+        assert required <= _INCLUDE_EXTENSIONS, f"Missing frontend extensions: {required - _INCLUDE_EXTENSIONS}"
 
     def test_frontend_components_named_correctly(self):
         """_FRONTEND_COMPONENTS names match the ALLOWED_COMPONENTS frontend entries."""
