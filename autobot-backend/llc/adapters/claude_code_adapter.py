@@ -84,6 +84,11 @@ def _state_path(output_dir: str, run_id: str) -> str:
     return os.path.join(output_dir, f"llc_state_{safe_run}.json")
 
 
+def _stderr_path(output_file: str) -> str:
+    """Sidecar stderr capture next to the stdout .jsonl (GH#9992)."""
+    return f"{output_file}.stderr.log"
+
+
 def _resolve_claude_cli() -> str:
     path = shutil.which("claude")
     if path is None:
@@ -152,13 +157,19 @@ class ClaudeCodeAdapter(SubprocessLifecycleAdapter):
         # GH#9623/GH#9789: forward the run-scoped LLC bearer token + API base.
         inject_agent_credentials(env, context)
 
+        # GH#9992: redirect stderr to a sidecar file instead of an unread PIPE.
+        # The run is detached (we return run_id immediately), so an unread PIPE
+        # makes CLI errors invisible AND risks a >64KB-buffer deadlock that hangs
+        # the child. A file fd drains to disk and is scanned in _status().
+        stderr_file = _stderr_path(output_file)
         out_fh = open(output_file, "w", encoding="utf-8")
+        err_fh = open(stderr_file, "w", encoding="utf-8")
         try:
             try:
                 proc = await asyncio.create_subprocess_exec(
                     *cmd,
                     stdout=out_fh,
-                    stderr=asyncio.subprocess.PIPE,
+                    stderr=err_fh,
                     env=env,
                     cwd=workspace_dir or None,
                 )
@@ -173,11 +184,12 @@ class ClaudeCodeAdapter(SubprocessLifecycleAdapter):
                 proc = await asyncio.create_subprocess_exec(
                     *cmd,
                     stdout=out_fh,
-                    stderr=asyncio.subprocess.PIPE,
+                    stderr=err_fh,
                     env=env,
                 )
         finally:
             out_fh.close()
+            err_fh.close()
 
         run_id = f"{proc.pid}/{session_id}"
         logger.info(
@@ -193,6 +205,7 @@ class ClaudeCodeAdapter(SubprocessLifecycleAdapter):
             "session_id": session_id,
             "agent_id": agent_id,
             "output_file": output_file,
+            "stderr_file": stderr_file,  # GH#9992
             "started_at": time.time(),
             "timeout_seconds": timeout_sec,
         }
@@ -251,15 +264,28 @@ class ClaudeCodeAdapter(SubprocessLifecycleAdapter):
             return base
 
         # Either no result event (mid-stream kill) or an error/non-success result:
-        # scan the tail for rate-limit markers.
-        if is_rate_limit_output(tail):
+        # scan the stdout tail AND the stderr sidecar for rate-limit markers —
+        # some CLI rate-limit errors only reach stderr, never the stream-json
+        # stdout file (GH#9992).
+        stderr_file: Optional[str] = state.get("stderr_file") if state else None
+        stderr_tail = read_output_tail(stderr_file) if stderr_file else ""
+        if is_rate_limit_output(tail) or is_rate_limit_output(stderr_tail):
             logger.warning(
-                "ClaudeCodeAdapter: rate-limit markers in output for run %s — signalling RATE_LIMITED",
+                "ClaudeCodeAdapter: rate-limit markers in output/stderr for run %s — signalling RATE_LIMITED",
                 run_id,
             )
             return AdapterRunStatus(
                 status=LLCRunStatus.RATE_LIMITED,
                 error="provider rate-limited (detected in CLI output)",
+            )
+
+        # Surface non-rate-limit stderr so a failed/killed run is diagnosable
+        # instead of silent (the PIPE was previously never drained).
+        if stderr_tail.strip():
+            logger.warning(
+                "ClaudeCodeAdapter: run %s stderr tail: %s",
+                run_id,
+                stderr_tail.strip()[-1000:],
             )
 
         return base
