@@ -18,13 +18,13 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.voice_bundle_helpers import _require_admin
 from api.voice_bundle_user import (
     _check_self_or_admin,
     _get_user_id,
     _is_admin,
     router,
 )
-from api.voice_bundle_helpers import _require_admin
 from auth_middleware import get_current_user
 from utils.catalog_http_exceptions import raise_auth_error
 
