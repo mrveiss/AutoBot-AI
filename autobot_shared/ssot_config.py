@@ -909,6 +909,33 @@ class AuthConfig(BaseSettings):
         description="OAuth client_secret for GitLab connectors.",
     )
 
+    # ------------------------------------------------------------------
+    # Default admin seed credentials (epic #10193 / issue #10199)
+    #
+    # AUTOBOT_ADMIN_PASSWORD is set by the installer/wizard alongside
+    # SLM_ADMIN_PASSWORD.  When present at startup, autobot-backend seeds
+    # a real admin account into autobot_users (idempotent, Postgres-gated).
+    # Leave blank to skip seeding — do NOT ship a hard-coded default.
+    # ------------------------------------------------------------------
+
+    admin_username: str = Field(
+        default="admin",
+        alias="AUTOBOT_ADMIN_USERNAME",
+        description=(
+            "Username for the default admin account seeded at startup (#10199). "
+            "Defaults to 'admin'. Override via AUTOBOT_ADMIN_USERNAME."
+        ),
+    )
+    admin_password: str = Field(
+        default="",
+        alias="AUTOBOT_ADMIN_PASSWORD",
+        description=(
+            "Password for the default admin account seeded into autobot_users at "
+            "startup (#10199). Set by the installer/wizard. "
+            "Empty string disables admin seeding — no default password is shipped."
+        ),
+    )
+
 
 class PermissionMode(str, Enum):
     """
