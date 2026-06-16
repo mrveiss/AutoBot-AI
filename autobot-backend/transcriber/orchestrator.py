@@ -72,16 +72,25 @@ class TranscriberOrchestrator:
             language = await detect_language(audio_path=tmp_wav_path, filename_hint=recording["filename"])
             logger.info("Recording %d: detected language=%s", recording_id, language)
 
-            speaker_segments = await self._diarize(tmp_wav_path)
-            transcript_segments = await self._transcribe(tmp_wav_path, language)
+            provider = self.provider_registry.get_provider(language)
+            transcript_segments = await self._transcribe_with_provider(tmp_wav_path, language, provider)
 
-            speaker_ids = await self._persist_speakers(recording_id, speaker_segments, language)
-            await self._persist_segments(recording_id, transcript_segments, speaker_segments, speaker_ids)
+            if _provider_diarizes(provider, transcript_segments):
+                logger.info(
+                    "Recording %d: provider %r supplies diarization — skipping Pyannote",
+                    recording_id,
+                    getattr(provider, "provider_name", "?"),
+                )
+                speaker_ids = await self._persist_speakers_from_segments(recording_id, transcript_segments, language)
+                await self._persist_segments_diarized(recording_id, transcript_segments, speaker_ids)
+            else:
+                speaker_segments = await self._diarize(tmp_wav_path)
+                speaker_ids = await self._persist_speakers(recording_id, speaker_segments, language)
+                await self._persist_segments(recording_id, transcript_segments, speaker_segments, speaker_ids)
 
             speaker_count = len(speaker_ids)
             process_seconds = time.monotonic() - start_ts
-            engine = self.provider_registry.get_provider(language)
-            engine_name = engine.provider_name if engine else None
+            engine_name = provider.provider_name if provider else None
             await self.db.update_recording_status(
                 recording_id,
                 RecordingStatus.COMPLETE.value,
@@ -144,16 +153,52 @@ class TranscriberOrchestrator:
             logger.warning("Diarization failed (%s) — using single-speaker fallback", exc)
             return []
 
-    async def _transcribe(self, wav_path: str, language: str) -> List[TranscriptSegment]:
-        """Transcribe audio via the registered provider for the detected language."""
-        provider = self.provider_registry.get_provider(language)
+    async def _transcribe_with_provider(
+        self, wav_path: str, language: str, provider: Optional[object]
+    ) -> List[TranscriptSegment]:
+        """Transcribe using the given provider; raise when provider is None."""
         if provider is None:
             raise ValueError(f"No speech provider available for language: {language}")
-        logger.info("Transcribing with %s (lang=%s)", provider.provider_name, language)
-        result = await provider.transcribe(wav_path, language)
+        logger.info("Transcribing with %s (lang=%s)", getattr(provider, "provider_name", "?"), language)
+        result = await provider.transcribe(wav_path, language)  # type: ignore[union-attr]
         if result is None:
             raise ValueError("Transcription returned None")
         return result
+
+    async def _persist_speakers_from_segments(
+        self,
+        recording_id: int,
+        transcript_segments: List[TranscriptSegment],
+        language: str,
+    ) -> Dict[str, int]:
+        """Create speaker rows from provider-supplied speaker labels on segments.
+
+        Used by the diarizing-provider F4 branch (Issue #10147).
+        """
+        labels = sorted({s.speaker for s in transcript_segments if s.speaker} or [_SINGLE_SPEAKER_LABEL])
+        label_to_id: Dict[str, int] = {}
+        for label in labels:
+            sid = await self.db.create_speaker(recording_id, label=label, display_name=label, language=language)
+            label_to_id[label] = sid
+        return label_to_id
+
+    async def _persist_segments_diarized(
+        self,
+        recording_id: int,
+        transcript_segments: List[TranscriptSegment],
+        speaker_ids: Dict[str, int],
+    ) -> None:
+        """Persist segments where speaker is already set by the provider (F4 path)."""
+        for seg in transcript_segments:
+            label = seg.speaker or _SINGLE_SPEAKER_LABEL
+            speaker_id = speaker_ids.get(label, speaker_ids.get(_SINGLE_SPEAKER_LABEL))
+            await self.db.create_segment(
+                recording_id,
+                speaker_id=speaker_id,
+                start_time=seg.start_time,
+                end_time=seg.end_time,
+                text=seg.text,
+            )
 
     async def _persist_speakers(
         self,
@@ -191,6 +236,19 @@ class TranscriberOrchestrator:
                 end_time=seg.end_time,
                 text=seg.text,
             )
+
+
+def _provider_diarizes(provider: Optional[object], segments: List[TranscriptSegment]) -> bool:
+    """Return True if the provider declares it diarizes AND produced speaker-labeled segments.
+
+    Checks the provider's `diarizes` attribute (set to True on CloudSpeechProvider)
+    and confirms at least one segment carries a .speaker label.
+    """
+    if provider is None:
+        return False
+    if not getattr(provider, "diarizes", False):
+        return False
+    return any(s.speaker for s in segments)
 
 
 def _validate_file_path(filepath: str) -> None:
