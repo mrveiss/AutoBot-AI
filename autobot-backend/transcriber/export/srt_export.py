@@ -15,12 +15,17 @@ def _fmt_srt_time(seconds: float) -> str:
 
 
 def segments_to_srt(segments: list[dict], *, include_speaker: bool = True) -> str:
+    """Convert segment dicts (as returned by build_segment_list) to SRT text.
+
+    Segment keys: start_time, end_time, text, speaker_name (optional).
+    """
     if not segments:
         return ""
     lines = []
     for i, seg in enumerate(segments, start=1):
-        start = _fmt_srt_time(seg["start"])
-        end = _fmt_srt_time(seg["end"])
-        text = f"{seg['speaker']}: {seg['text']}" if include_speaker else seg["text"]
+        start = _fmt_srt_time(seg["start_time"])
+        end = _fmt_srt_time(seg["end_time"])
+        speaker = seg.get("speaker_name") or seg.get("speaker", "")
+        text = f"{speaker}: {seg['text']}" if include_speaker and speaker else seg["text"]
         lines.append(f"{i}\n{start} --> {end}\n{text}\n")
     return "\n".join(lines)
