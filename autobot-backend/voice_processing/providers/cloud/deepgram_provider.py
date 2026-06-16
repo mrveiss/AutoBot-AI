@@ -13,7 +13,6 @@ Privacy: Audio is sent off-box — opt-in only (key must be set explicitly).
 import os
 from typing import List, Optional
 
-import aiohttp
 
 from autobot_shared.logging_manager import get_logger
 from voice_processing.providers import TranscriptSegment

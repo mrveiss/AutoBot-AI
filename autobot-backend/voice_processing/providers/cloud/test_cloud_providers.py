@@ -8,14 +8,11 @@ Unit tests for cloud ASR provider adapters (Issue #10147).
 All HTTP calls are mocked — no live API required.
 """
 
-import json
 import os
-import tempfile
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from voice_processing.providers import TranscriptSegment
 from voice_processing.providers.cloud.assemblyai_provider import AssemblyAIProvider
 from voice_processing.providers.cloud.deepgram_provider import DeepgramProvider
 from voice_processing.providers.cloud.google_provider import GoogleSpeechProvider
