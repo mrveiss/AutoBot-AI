@@ -80,9 +80,7 @@ class AuthService:
             # RS256 verification is async; sync callers get None and should
             # migrate to decode_token_async.  This is not a security hole —
             # the token is simply treated as unverified rather than accepted.
-            logger.debug(
-                "decode_token (sync) received RS256 token; use decode_token_async in async contexts"
-            )
+            logger.debug("decode_token (sync) received RS256 token; use decode_token_async in async contexts")
             return None
         return decode_jwt_or_none(token, settings.secret_key)
 

@@ -44,8 +44,8 @@ logger = logging.getLogger(__name__)
 # Internal cache — module-level singleton (never use mutable default args)
 # ---------------------------------------------------------------------------
 
-_cache_entries: Dict[str, Any] = {}   # kid -> public key object (RSA)
-_cache_fetched_at: float = 0.0        # epoch seconds of last successful fetch
+_cache_entries: Dict[str, Any] = {}  # kid -> public key object (RSA)
+_cache_fetched_at: float = 0.0  # epoch seconds of last successful fetch
 
 
 def _cache_expired(ttl: int) -> bool:

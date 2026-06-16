@@ -114,10 +114,14 @@ def rsa_keypair():
         format=serialization.PrivateFormat.TraditionalOpenSSL,
         encryption_algorithm=serialization.NoEncryption(),
     ).decode("utf-8")
-    pem_public = private_key.public_key().public_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PublicFormat.SubjectPublicKeyInfo,
-    ).decode("utf-8")
+    pem_public = (
+        private_key.public_key()
+        .public_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo,
+        )
+        .decode("utf-8")
+    )
     return pem_private, pem_public
 
 
@@ -134,10 +138,14 @@ def rsa_keypair_b():
         format=serialization.PrivateFormat.TraditionalOpenSSL,
         encryption_algorithm=serialization.NoEncryption(),
     ).decode("utf-8")
-    pem_public = private_key.public_key().public_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PublicFormat.SubjectPublicKeyInfo,
-    ).decode("utf-8")
+    pem_public = (
+        private_key.public_key()
+        .public_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo,
+        )
+        .decode("utf-8")
+    )
     return pem_private, pem_public
 
 
@@ -244,12 +252,12 @@ async def test_authority_rs256_user_role_maps_admin_false(rsa_keypair):
 
 def test_algorithm_confusion_rs256_vs_hs256_direct():
     """The shared jwt_core guard rejects RS256 token when secret= only supplied."""
-    from autobot_shared.auth.jwt_core import decode_jwt
-
     # We can't call verify_authority_token with HS256 path — it routes to RS256.
     # Directly test that decode_jwt rejects the attempt.
     from cryptography.hazmat.backends import default_backend as _db
     from cryptography.hazmat.primitives.asymmetric import rsa as _rsa
+
+    from autobot_shared.auth.jwt_core import decode_jwt
 
     priv = _rsa.generate_private_key(public_exponent=65537, key_size=2048, backend=_db())
     pem_priv = priv.private_bytes(
