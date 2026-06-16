@@ -28,7 +28,7 @@ from typing import Optional
 
 import httpx
 
-from extensions.base import Extension, HookContext
+from middleware.base import Extension, HookContext
 
 logger = logging.getLogger(__name__)
 
@@ -146,7 +146,7 @@ Create `plugins/my-telemetry-middleware/plugin.json`:
 ### Via Python at startup
 
 ```python
-from extensions.manager import get_extension_manager
+from middleware.manager import get_extension_manager
 from plugins.my_telemetry_middleware.plugin import TelemetryPromptMiddleware
 
 get_extension_manager().register(TelemetryPromptMiddleware())
@@ -182,7 +182,7 @@ import asyncio
 import pytest
 from unittest.mock import AsyncMock, patch
 
-from extensions.manager import get_extension_manager, reset_extension_manager
+from middleware.manager import get_extension_manager, reset_extension_manager
 from chat_workflow.llm_handler import _emit_full_prompt_ready
 
 
@@ -220,8 +220,8 @@ async def test_no_modification_when_cpu_low():
 
 ## Architecture reference
 
-- **Hook definitions** — `autobot-backend/extensions/hooks.py` (`HookPoint.SYSTEM_PROMPT_READY`, `HookPoint.FULL_PROMPT_READY`)
-- **Extension base class** — `autobot-backend/extensions/base.py`
+- **Hook definitions** — `autobot-backend/middleware/hooks.py` (`HookPoint.SYSTEM_PROMPT_READY`, `HookPoint.FULL_PROMPT_READY`)
+- **Extension base class** — `autobot-backend/middleware/base.py`
 - **Hook call sites** — `autobot-backend/chat_workflow/llm_handler.py`
 - **Reference plugin** — `plugins/core-plugins/telemetry-prompt-middleware/plugin.py`
 - **Full developer guide** — `docs/developer/PROMPT_MIDDLEWARE_GUIDE.md`

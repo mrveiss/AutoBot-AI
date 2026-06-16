@@ -83,19 +83,19 @@ const formatOptions = computed(() => [
   {
     value: 'markdown' as const,
     label: t('knowledge.modals.export.formatMarkdown'),
-    icon: 'file-alt',
+    icon: 'file-alt' as const,
     description: t('knowledge.modals.export.formatMarkdownDesc')
   },
   {
     value: 'json' as const,
     label: t('knowledge.modals.export.formatJson'),
-    icon: 'file-code',
+    icon: 'file-code' as const,
     description: t('knowledge.modals.export.formatJsonDesc')
   },
   {
     value: 'txt' as const,
     label: t('knowledge.modals.export.formatPlainText'),
-    icon: 'file',
+    icon: 'file' as const,
     description: t('knowledge.modals.export.formatPlainTextDesc')
   }
 ])

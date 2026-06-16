@@ -160,3 +160,25 @@ class RunBenchmarkRequest(BaseModel):
         pattern="^(dev|test|all)$",
     )
     k: int = Field(default=5, ge=1, le=50, description="Top-k results per query.")
+
+
+# Issue #9018: CAG/KAG retrieval strategy dispatcher schemas.
+
+
+class RetrievalContextRequest(BaseModel):
+    """Request body for POST /context — strategy-dispatched context retrieval."""
+
+    query: str = Field(..., min_length=1, max_length=2000, description="Generation query")
+    collection_id: str | None = Field(default=None, description="Target collection identifier")
+    mode: str = Field(default="auto", pattern="^(auto|rag|cag|kag)$", description="Retrieval mode")
+    model: str | None = Field(default=None, description="Active model name for budget calculation")
+
+
+class RetrievalContextResponse(BaseModel):
+    """Response from POST /context."""
+
+    model_config = ConfigDict(extra="allow")
+
+    context: str
+    strategy: str
+    metrics: Dict[str, Any] = Field(default_factory=dict)

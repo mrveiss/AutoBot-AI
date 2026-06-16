@@ -19,7 +19,7 @@ Cross-domain enum duplication eliminated by routing all status/severity/risk typ
 - **#6973 — TaskStatus consolidation** (PR #7266): Workflow/Job `*Status` enums now alias canonical `autobot_shared.status_enums.TaskStatus`. Added lint rule to prevent reintroduction.
 - **#6689 — Severity/Risk/Level consolidation** (PR #7261): 11 duplicate enums consolidated onto canonical `autobot_shared.status_enums.Severity`.
 - **#6534 — Marketplace enum migration**: Test imports repointed past the migration (PR #7250).
-- **#7226 — Codegen MANIFEST extension** (PR #7269): Codegen now covers `WorkflowStepStatus` and `RiskLevel`.
+- **#7226 — Codegen MANIFEST extension** (PR #7269): Codegen now covers `WorkflowStepStatus` and `RiskLevel`. MANIFEST scope, the add-an-enum workflow, and reintroduction lint rules are documented in [developer/CODEGEN_MANIFEST.md](developer/CODEGEN_MANIFEST.md).
 
 **Canonical source:** `autobot_shared/status_enums.py:26` (`TaskStatus`), with `JobStatus`/`WorkflowStatus` as aliases.
 

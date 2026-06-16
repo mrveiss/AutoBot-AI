@@ -169,19 +169,19 @@ const accessLevels = computed(() => [
   {
     value: 'private' as const,
     label: t('analytics.sources.access.private'),
-    icon: 'lock',
+    icon: 'lock' as const,
     description: t('analytics.sources.access.onlyYou')
   },
   {
     value: 'shared' as const,
     label: t('analytics.sources.access.shared'),
-    icon: 'users',
+    icon: 'users' as const,
     description: t('analytics.sources.access.specificUsers')
   },
   {
     value: 'public' as const,
     label: t('analytics.sources.access.public'),
-    icon: 'globe',
+    icon: 'globe' as const,
     description: t('analytics.sources.access.allUsers')
   }
 ])

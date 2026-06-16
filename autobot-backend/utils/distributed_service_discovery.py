@@ -9,6 +9,11 @@ This module provides instant service resolution for the distributed VM architect
 by maintaining a local cache of service endpoints and implementing health-based routing.
 
 ROOT CAUSE FIX: Replaces DNS resolution delays with cached service endpoints
+
+Wiring status (#9893): This is an available library API. It is intentionally NOT
+wired into the production inter-service path, which uses SSOT-config endpoint
+resolution + ServiceMessageBus (Redis streams) + mTLS. Retained deliberately
+(not dead code); wire it in only with a concrete dynamic-node-resolution need.
 """
 
 import asyncio

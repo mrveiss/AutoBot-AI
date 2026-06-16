@@ -15,6 +15,21 @@ AgentStatus values. Cross-reference: GH#7504.
 from enum import Enum
 
 
+def pg_enum_values(enum_cls: type[Enum]) -> list[str]:
+    """``values_callable`` for ``sa.Enum`` so a create_all-built Postgres enum
+    uses each member's ``.value`` (lowercase) — not its NAME (#9980).
+
+    Every enum here is ``UPPERCASE = "lowercase"``. Generic ``sa.Enum(EnumCls)``
+    defaults to member NAMES as the Postgres enum labels, so a create_all
+    bootstrap built ``approvalstatus`` as ``{PENDING, …}`` while the Alembic
+    migrations build it as ``{pending, …}``. The ORM then binds members by
+    name and ``server_default=ApprovalStatus.PENDING.value`` ('pending') is
+    invalid against the create_all-built type. Passing this callable makes the
+    model-built type and the ORM bind values match the migration-built ones.
+    """
+    return [member.value for member in enum_cls]
+
+
 class WorkItemType(str, Enum):
     """Type of LLC work item (GH#8213).
 
@@ -137,6 +152,9 @@ class LLCRunStatus(str, Enum):
     TIMEOUT = "timeout"
     CANCELLED = "cancelled"
     RATE_LIMITED = "rate_limited"
+    # GH#9951: heartbeat was not dispatched to any adapter (no adapter / CLI
+    # absent / no agent_class) — degraded, distinct from COMPLETED or FAILED.
+    SKIPPED = "skipped"
 
     def is_terminal(self) -> bool:
         """True once the run has reached a final state (not queued/running).
@@ -192,13 +210,19 @@ class BoardType(str, Enum):
 
 
 class MembershipRole(str, Enum):
-    """Role of a human user within an LLC company (GH#8223)."""
+    """Role of a human user within an LLC company (GH#8223).
+
+    Member order matches the deployed (migration-built) enum label order so a
+    create_all-built ``membershiprole`` sorts identically to a migration-built
+    one (GH#10076): migration 031 created ('owner','admin','member','guest') and
+    043 appended 'lead' at the end via ALTER TYPE ADD VALUE.
+    """
 
     OWNER = "owner"
     ADMIN = "admin"
-    LEAD = "lead"
     MEMBER = "member"
     GUEST = "guest"
+    LEAD = "lead"
 
 
 class RoutineStatus(str, Enum):

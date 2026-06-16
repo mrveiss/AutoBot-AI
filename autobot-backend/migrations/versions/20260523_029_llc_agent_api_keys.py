@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """LLC agent API keys table (GH#8218).
 
 Revision ID: 20260523_029

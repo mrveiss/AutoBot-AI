@@ -90,6 +90,7 @@
  * Issue #165: Chat Documentation UI Integration
  */
 
+import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -126,7 +127,7 @@ const props = withDefaults(defineProps<Props>(), {
 const emit = defineEmits<Emits>()
 
 // Category icon mapping
-const categoryIcons: Record<string, string> = {
+const categoryIcons: Record<string, IconName> = {
   architecture: 'project-diagram',
   developer: 'code',
   api: 'plug',
@@ -165,7 +166,7 @@ const showDocsSelected = computed(() => {
          props.selectedCategories.length === docCategories.length
 })
 
-const getCategoryIcon = (categoryId: string): string => {
+const getCategoryIcon = (categoryId: string): IconName => {
   return categoryIcons[categoryId] || categoryIcons.general
 }
 

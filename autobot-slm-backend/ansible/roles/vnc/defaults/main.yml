@@ -29,6 +29,9 @@ websockify_service_name: vnc-websockify
 
 # SLM credential auto-registration (#2926)
 vnc_register_credentials: true
-slm_api_url: "https://{{ slm_host | default('127.0.0.1') }}"
+# #9953: /slm prefix is the UNIVERSAL SLM API path — served in both co-located
+# and dedicated nginx modes (#3268). The bare /api/ path routes to the USER
+# backend on co-located hosts, so SLM auth there returns 401.
+slm_api_url: "https://{{ slm_host | default('127.0.0.1') }}/slm"
 slm_admin_user: "admin"
 slm_admin_password: "{{ lookup('env', 'SLM_ADMIN_PASSWORD') | default('admin', true) }}"

@@ -757,7 +757,7 @@ class ExistingOperationMigrator:
 
         try:
             # Run pytest on single file
-            result = subprocess.run(  # nosec B607 - pytest runner
+            result = subprocess.run(  # nosec B603 B607 - sys.executable with fixed pytest args, no user input
                 ["python", "-m", "pytest", str(test_file), "-v"],
                 capture_output=True,
                 text=True,

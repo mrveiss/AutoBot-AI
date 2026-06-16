@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """Unit tests for claims-audit verifiers."""
 
 from datetime import datetime

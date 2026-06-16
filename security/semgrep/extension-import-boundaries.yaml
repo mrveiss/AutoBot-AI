@@ -25,16 +25,16 @@ rules:
           - pattern: from autobot_shared.$REST import $X
           - pattern: import autobot_shared.$REST
           # Own package imports are allowed
-          - pattern: from extensions.$OWN import $X
+          - pattern: from middleware.$OWN import $X
           - pattern: from skills.$OWN import $X
           # Stdlib and third-party are allowed (no autobot prefix)
     paths:
       include:
-        - autobot-backend/extensions/builtin/
+        - autobot-backend/middleware/builtin/
         - autobot-backend/skills/builtin/
         - plugins/core-plugins/
     focus-metavariable: $MOD
-    pattern-not-regex: "^(autobot_shared|extensions|skills|plugins).*"
+    pattern-not-regex: "^(autobot_shared|middleware|skills|plugins).*"
     message: |
       Extensions/skills/plugins must import from autobot_shared/ (public SDK)
       or their own package — not from autobot-backend core modules.
@@ -53,14 +53,14 @@ rules:
       autofix: false
 
   - id: extension-no-sibling-import
-    pattern: from extensions.builtin.$OTHER import $X
+    pattern: from middleware.builtin.$OTHER import $X
     paths:
       include:
-        - autobot-backend/extensions/builtin/
+        - autobot-backend/middleware/builtin/
     # Allow __init__.py to re-export siblings — that is the package's job
     path-filter:
       exclude:
-        - autobot-backend/extensions/builtin/__init__.py
+        - autobot-backend/middleware/builtin/__init__.py
     message: |
       Extensions must not import sibling extensions directly.
       This creates inter-plugin coupling; use the ExtensionManager hooks

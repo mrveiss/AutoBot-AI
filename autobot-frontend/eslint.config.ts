@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 import { globalIgnores } from 'eslint/config'
 import { defineConfigWithVueTs, vueTsConfigs } from '@vue/eslint-config-typescript'
 import pluginVue from 'eslint-plugin-vue'
@@ -23,6 +25,13 @@ export default defineConfigWithVueTs(
     '**/dist/**',
     '**/dist-ssr/**',
     '**/coverage/**',
+    // #9693: Storybook build output is an untracked artifact (gitignored);
+    // ignore it here too so local `npm run lint` matches CI.
+    '**/storybook-static/**',
+    // #9693: generated code is not hand-maintained; eslint --fix strips the
+    // generator's /* eslint-disable */ banner, breaking the
+    // frontend-codegen-drift sync check (#7122).
+    'src/types/_generated/**',
     // Issue #6784: ESLint rule fixtures contain intentional rule violations
     // (deny.test.ts) and counter-examples (allow.test.ts). Excluded from
     // production lint; verify manually with `npx eslint --no-ignore eslint-tests/`.

@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """Add user_voice_bundle table for per-user voice bundle assignment (GH#8605).
 
 Revision ID: 20260527_046

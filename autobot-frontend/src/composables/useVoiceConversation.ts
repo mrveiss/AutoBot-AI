@@ -480,7 +480,7 @@ function _resumeAutoListening(): void {
 function _dispatchTranscript(text: string): void {
   const store = useChatStore()
   const controller = useChatController()
-  const { speakStreaming, flushStreaming, _isSpeaking } = useVoiceOutput()
+  const { speakStreaming, flushStreaming } = useVoiceOutput()
 
   state.value = 'processing'
   _sendWs({ type: 'transcript', text, final: true })
@@ -860,9 +860,14 @@ export function useVoiceConversation() {
     deactivate()
   }
 
+  const { wsConnected } = useVoiceOutput()
+
   return {
     state,
     mode,
+    // #9724: VoiceConversationPanel renders the full-duplex WS indicator from
+    // this composable — expose the shared voice-output WS state.
+    wsConnected,
     currentTranscript,
     currentLanguage,
     bubbles,

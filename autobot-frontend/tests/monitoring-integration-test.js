@@ -1,4 +1,5 @@
-/* eslint-disable no-console */
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 /**
  * Integration Test for Optimized Monitoring System
  * Tests the performance and functionality of the new monitoring architecture

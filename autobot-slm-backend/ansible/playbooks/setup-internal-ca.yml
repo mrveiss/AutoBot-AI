@@ -10,7 +10,7 @@
 # TLS certificates, deploys them to each fleet node, and records cert metadata
 # in the SLM database via POST /api/security/certificates/report.
 #
-# CA lives at:    /etc/autobot/ca/             (on 00-SLM-Manager only)
+# CA lives at:    /etc/autobot/ca/             (on the slm_server node only)
 # Node certs at:  /etc/autobot/certs/          (on each node)
 #
 # Idempotency: existing certs with >30 days remaining are skipped unless
@@ -48,7 +48,7 @@
   hosts: localhost
   gather_facts: false
   vars:
-    slm_admin_url: "{{ lookup('env', 'AUTOBOT_SLM_URL') | default('https://' ~ {{ slm_host | default(hostvars[groups.get('slm_manager', groups.get('slm', ['localhost']))[0]]['ansible_host'] | default('127.0.0.1')) }}, true) }}"
+    slm_admin_url: "{{ lookup('env', 'AUTOBOT_SLM_URL') | default('https://' ~ (slm_host | default(hostvars[groups.get('slm_manager', groups.get('slm', ['localhost']))[0]]['ansible_host'] | default('127.0.0.1'))) ~ '/slm', true) }}"
     slm_admin_password: "{{ lookup('env', 'AUTOBOT_SLM_ADMIN_PASSWORD') | default('admin', true) }}"
 
   tasks:
@@ -71,10 +71,10 @@
         slm_api_url: "{{ slm_admin_url }}"
 
 # ---------------------------------------------------------------------------
-# Play 1: Set up Internal CA on SLM server (00-SLM-Manager)
+# Play 1: Set up Internal CA on SLM server (slm_server group)
 # ---------------------------------------------------------------------------
 - name: "CA Setup: Create Internal CA on SLM Server"
-  hosts: 00-SLM-Manager
+  hosts: slm_server
   gather_facts: false
   become: true
   vars:
@@ -155,7 +155,7 @@
     - name: "CA | Show CA info"
       ansible.builtin.debug:
         msg:
-          - "Internal CA ready on 00-SLM-Manager"
+          - "Internal CA ready on {{ slm_manager_inventory_host }}"
           - "CA cert: {{ ca_cert }}"
           - "Fingerprint: {{ _ca_fingerprint.stdout }}"
 
@@ -254,7 +254,7 @@
         content: "{{ _csr_b64.content | b64decode }}"
         dest: "/tmp/ansible-sign-{{ inventory_hostname }}.csr"
         mode: "0600"
-      delegate_to: 00-SLM-Manager
+      delegate_to: "{{ slm_manager_inventory_host }}"
       become: true
       when: _key_gen is not skipped
 
@@ -269,7 +269,7 @@
           -out /tmp/ansible-sign-{{ inventory_hostname }}.crt
           -days {{ node_cert_days }}
           -sha256
-      delegate_to: 00-SLM-Manager
+      delegate_to: "{{ slm_manager_inventory_host }}"
       become: true
       when: _key_gen is not skipped
       changed_when: true
@@ -278,7 +278,7 @@
       ansible.builtin.slurp:
         src: "/tmp/ansible-sign-{{ inventory_hostname }}.crt"
       register: _signed_cert_b64
-      delegate_to: 00-SLM-Manager
+      delegate_to: "{{ slm_manager_inventory_host }}"
       become: true
       when: _key_gen is not skipped
 
@@ -353,7 +353,7 @@
       loop:
         - "/tmp/ansible-sign-{{ inventory_hostname }}.csr"
         - "/tmp/ansible-sign-{{ inventory_hostname }}.crt"
-      delegate_to: 00-SLM-Manager
+      delegate_to: "{{ slm_manager_inventory_host }}"
       become: true
       failed_when: false
       when: _key_gen is not skipped
@@ -386,7 +386,7 @@
       ansible.builtin.slurp:
         src: /etc/autobot/ca/ca-cert.pem
       register: _ca_cert_b64
-      delegate_to: 00-SLM-Manager
+      delegate_to: "{{ slm_manager_inventory_host }}"
 
     - name: "CA Dist | Deploy CA cert to /etc/autobot/certs/ca-cert.pem"
       ansible.builtin.copy:
@@ -427,7 +427,7 @@
           - "║  AutoBot Internal CA Setup Complete (Issue #926 Phase 7)     ║"
           - "╚═══════════════════════════════════════════════════════════════╝"
           - ""
-          - "CA location  : 00-SLM-Manager ({{ slm_host | default(hostvars[groups.get('slm_manager', groups.get('slm', ['localhost']))[0]]['ansible_host'] | default('127.0.0.1')) }})"
+          - "CA location  : {{ slm_manager_inventory_host }} ({{ slm_host | default(hostvars[slm_manager_inventory_host]['ansible_host'] | default('127.0.0.1')) }})"
           - "CA key       : /etc/autobot/ca/ca-key.pem  (root:root 0600)"
           - "CA cert      : /etc/autobot/ca/ca-cert.pem (root:root 0644)"
           - ""

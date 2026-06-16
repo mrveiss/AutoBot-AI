@@ -193,6 +193,7 @@
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
 
+import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -213,7 +214,7 @@ const router = useRouter()
 interface Tab {
   id: string
   label: string
-  icon: string
+  icon: IconName
 }
 
 interface ExtractionResult {
@@ -262,7 +263,7 @@ function handleViewGraph(): void {
   router.push('/knowledge/graph')
 }
 
-function getStatusIcon(status: string): string {
+function getStatusIcon(status: string): IconName {
   switch (status) {
     case 'healthy': return 'check-circle'
     case 'degraded': return 'exclamation-triangle'

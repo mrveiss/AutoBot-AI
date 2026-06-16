@@ -202,6 +202,120 @@ export function useDocumentVisibility() {
 }
 ```
 
+## Probe-Backed Health Pattern
+
+For service-status displays, do **not** write a bespoke `getHealth()` that fetches a per-module health endpoint. Use the shared `useProbeBackedHealth` composable, which wraps the canonical aggregator at `/api/system/health` (legacy per-module health endpoints are sunset — see #6902).
+
+```typescript
+import { useProbeBackedHealth, probeStatusToLegacy } from '@/composables/useProbeBackedHealth'
+```
+
+### `ProbeResponse` Shape & Lifecycle
+
+`ProbeResponse` is exported from `@/composables/useHealthProbeRegistry` and describes one probe entry inside the `/api/system/health` payload:
+
+```typescript
+export interface ProbeResponse {
+  name: string
+  status?: 'ok' | 'degraded' | 'unavailable' | string
+  data?: Record<string, unknown>   // probe-specific diagnostic fields
+  detail?: string                  // human-readable status message
+}
+```
+
+Lifecycle of one `getHealth()` call:
+
+1. `GET /api/system/health` via `useApiClient()`.
+2. The named probe is looked up with `findProbeByName()`, which validates the name against the canonical probe registry (`GET /api/system/health/probes`, lazily fetched and cached) — a typo'd probe name surfaces as a one-shot `logger.warn` instead of a silent `'unavailable'` fallback. Call `refreshProbeRegistry()` after a backend reconnect; probe names can change between deploys.
+3. `probe.status === 'ok'` → your `buildHealthy(probe, probe.data ?? {})` runs.
+4. Probe missing or non-`ok` → your `buildUnavailable(message)` runs (with `probe.detail` when available).
+5. Fetch error → logged via `createLogger`, then `buildUnavailable('Service unavailable')`. The returned function **never throws**.
+
+`probeStatusToLegacy()` maps probe status to the legacy per-module vocab (`'ok'` → `'healthy'`, everything else → `'unavailable'`), mirroring the backend's `_PROBE_TO_LEGACY` dict.
+
+### Minimal Usage
+
+`useProbeBackedHealth<R>(options)` is a factory: it returns a `getHealth: () => Promise<R | null>` function you expose from your API composable and call from `setup()`.
+
+```typescript
+import { ref } from 'vue'
+import { useProbeBackedHealth, probeStatusToLegacy } from '@/composables/useProbeBackedHealth'
+import type { MyServiceHealthResponse } from '@/types/myService'
+
+const getHealth = useProbeBackedHealth<MyServiceHealthResponse>({
+  probeName: 'my_service',                       // must exist in the probe registry
+  buildHealthy: (probe, data) => ({
+    status: probeStatusToLegacy(probe.status),
+    redis_connected: Boolean(data.redis_connected),
+    message: probe.detail,
+  }),
+  buildUnavailable: (message) => ({
+    status: 'unavailable' as const,
+    redis_connected: false,
+    message,
+  }),
+  errorMessage: 'Failed to check my_service health',  // optional; logged on fetch error
+})
+
+// In setup():
+const healthStatus = ref<MyServiceHealthResponse | null>(null)
+async function checkHealth() {
+  healthStatus.value = await getHealth()
+}
+```
+
+`buildHealthy` and `buildUnavailable` must return the **same shape** `R` so consumers can render one response type regardless of outcome.
+
+### Worked Example: Operations Health
+
+Real wire-up from `src/composables/useOperationsApi.ts` (consumed by `src/views/OperationsView.vue` via `useOperationsApi()`):
+
+```typescript
+// useOperationsApi.ts — API composable exposes getHealth built by the factory
+getHealth: useProbeBackedHealth<OperationsHealthResponse>({
+  probeName: 'long_running',
+  buildHealthy: (probe, data) => ({
+    status: probeStatusToLegacy(probe.status),
+    active_operations: Number(data.active_operations ?? 0),
+    total_operations: Number(data.total_operations ?? 0),
+    redis_connected: Boolean(data.redis_connected),
+    background_processor_running: Boolean(data.background_processor_running),
+    message: probe.detail,
+  }),
+  buildUnavailable: (message) => ({
+    status: 'unavailable' as const,
+    active_operations: 0,
+    total_operations: 0,
+    redis_connected: false,
+    background_processor_running: false,
+    message,
+  }),
+  errorMessage: 'Failed to check operations health',
+}),
+
+// useOperationsState (same file) — view-facing state wrapper
+const healthStatus = ref<OperationsHealthResponse | null>(null)
+const isServiceHealthy = computed(() => healthStatus.value?.status === 'healthy')
+
+async function checkHealth() {
+  healthStatus.value = await operationsApi.getHealth()
+  return healthStatus.value
+}
+```
+
+`src/composables/useBatchProcessing.ts` (`probeName: PROBE_NAMES.BATCH_JOBS`) is the second production consumer — prefer the `PROBE_NAMES` constants from `@/types/probe-names` over string literals where one exists.
+
+### When to Prefer It Over a Bespoke Health Composable
+
+Use `useProbeBackedHealth` whenever a service-status display answers "is service X up, and what are its diagnostic fields?" from the system health aggregator. It gives you for free:
+
+- The canonical `/api/system/health` endpoint (no new per-module health route to build, document, and sunset later)
+- Probe-name validation against the registry (typos warn loudly)
+- Consistent never-throws error handling with logging
+- The `probeStatusToLegacy` status mapping kept in sync with the backend
+
+Roll a bespoke composable only when health is **not** probe-backed — e.g. polling an external system the backend doesn't probe, or streaming health over WebSocket/SSE.
+
 ## Date & Number Formatting
 
 Use `formatHelpers.ts` utilities instead of `.toLocaleString()` for i18n compatibility:
@@ -325,6 +439,27 @@ Banned patterns in composables:
 
 - `usePagination.ts` — canonical pagination composable example
 - `useLoadingState.ts` — loading state wrapper pattern
+- `useProbeBackedHealth.ts` — probe-backed health factory (see Probe-Backed Health Pattern above)
+- `useHealthProbeRegistry.ts` — `ProbeResponse` type + probe-name registry validation
 - `useErrorHandler.ts` — error handling composable pattern
 - `formatHelpers.ts` — date/time/number formatting utilities
 - `COMPOSABLE_HTTP_PATTERNS.md` — detailed HTTP request patterns
+
+## Composable Example Docs
+
+Each composable has a co-located `.examples.md` with usage patterns and edge cases:
+
+- [useAsyncOperation.examples.md](../../autobot-frontend/src/composables/useAsyncOperation.examples.md)
+- [useClipboard.examples.md](../../autobot-frontend/src/composables/useClipboard.examples.md)
+- [useConnectionTester.examples.md](../../autobot-frontend/src/composables/useConnectionTester.examples.md)
+- [useErrorHandler.examples.md](../../autobot-frontend/src/composables/useErrorHandler.examples.md)
+- [useErrorHandler.api-migration.md](../../autobot-frontend/src/composables/useErrorHandler.api-migration.md)
+- [useFormValidation.examples.md](../../autobot-frontend/src/composables/useFormValidation.examples.md)
+- [useKeyboard.examples.md](../../autobot-frontend/src/composables/useKeyboard.examples.md)
+- [useLocalStorage.examples.md](../../autobot-frontend/src/composables/useLocalStorage.examples.md)
+- [useModal.examples.md](../../autobot-frontend/src/composables/useModal.examples.md)
+- [usePagination.examples.md](../../autobot-frontend/src/composables/usePagination.examples.md)
+- [useTimeout.examples.md](../../autobot-frontend/src/composables/useTimeout.examples.md)
+- [iconMappings.examples.md](../../autobot-frontend/src/utils/iconMappings.examples.md)
+
+Component examples: [src/components/examples/](../../autobot-frontend/src/components/examples/)

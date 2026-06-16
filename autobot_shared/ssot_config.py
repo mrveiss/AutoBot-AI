@@ -869,6 +869,46 @@ class AuthConfig(BaseSettings):
         ),
     )
 
+    # ------------------------------------------------------------------
+    # Connector OAuth application credentials (ADR-007 / GH#9019)
+    #
+    # Per-provider OAuth *application* client_id/client_secret registered by the
+    # operator. Empty by default — a provider's "Connect" flow is disabled until
+    # its credentials are configured. These identify AutoBot's OAuth app; the
+    # resulting user refresh/access tokens are stored via SecretsService.
+    # ------------------------------------------------------------------
+
+    google_oauth_client_id: str = Field(
+        default="",
+        alias="AUTOBOT_GOOGLE_OAUTH_CLIENT_ID",
+        description="OAuth client_id for Google connectors (Drive). Empty disables the Google Connect flow.",
+    )
+    google_oauth_client_secret: str = Field(
+        default="",
+        alias="AUTOBOT_GOOGLE_OAUTH_CLIENT_SECRET",
+        description="OAuth client_secret for Google connectors (Drive).",
+    )
+    microsoft_oauth_client_id: str = Field(
+        default="",
+        alias="AUTOBOT_MICROSOFT_OAUTH_CLIENT_ID",
+        description="OAuth client_id for Microsoft connectors (OneDrive/SharePoint). Empty disables the flow.",
+    )
+    microsoft_oauth_client_secret: str = Field(
+        default="",
+        alias="AUTOBOT_MICROSOFT_OAUTH_CLIENT_SECRET",
+        description="OAuth client_secret for Microsoft connectors (OneDrive/SharePoint).",
+    )
+    gitlab_oauth_client_id: str = Field(
+        default="",
+        alias="AUTOBOT_GITLAB_OAUTH_CLIENT_ID",
+        description="OAuth client_id for GitLab connectors. Empty disables the GitLab Connect flow.",
+    )
+    gitlab_oauth_client_secret: str = Field(
+        default="",
+        alias="AUTOBOT_GITLAB_OAUTH_CLIENT_SECRET",
+        description="OAuth client_secret for GitLab connectors.",
+    )
+
 
 class PermissionMode(str, Enum):
     """
@@ -1186,6 +1226,7 @@ class MiscConfig(BaseSettings):
     autoresearch_staged_eval_fraction: str = Field(default="", alias="AUTOBOT_AUTORESEARCH_STAGED_EVAL_FRACTION")
     autoresearch_staged_eval_threshold: float = Field(default=0.0, alias="AUTOBOT_AUTORESEARCH_STAGED_EVAL_THRESHOLD")
     autoresearch_timeout: int = Field(default=0, alias="AUTOBOT_AUTORESEARCH_TIMEOUT")
+    ai_stack_enabled: bool = Field(default=True, alias="AUTOBOT_AI_STACK_ENABLED")
     cache_enabled: bool = Field(default=False, alias="AUTOBOT_CACHE_ENABLED")
     cache_size: int = Field(default=0, alias="AUTOBOT_CACHE_SIZE")
     cache_l1_size: int = Field(
@@ -1265,6 +1306,31 @@ class MiscConfig(BaseSettings):
     internal_api_key: str = Field(default="", alias="AUTOBOT_INTERNAL_API_KEY")
     jaeger_endpoint: str = Field(default="", alias="AUTOBOT_JAEGER_ENDPOINT")
     jwt_secret: str = Field(default="", alias="AUTOBOT_JWT_SECRET")
+    jwt_private_key: str = Field(
+        default="",
+        alias="AUTOBOT_JWT_PRIVATE_KEY",
+        description=(
+            "PEM-encoded RSA private key for signing RS256 user JWTs (#10196). "
+            "When absent, autobot-backend auto-generates and persists a 2048-bit keypair. "
+            "Supply this to use an externally-managed key (e.g. from a secrets manager). "
+            "NEVER share with consumer services; they use the public key from JWKS."
+        ),
+    )
+    jwt_public_key: str = Field(
+        default="",
+        alias="AUTOBOT_JWT_PUBLIC_KEY",
+        description=(
+            "PEM-encoded RSA public key corresponding to AUTOBOT_JWT_PRIVATE_KEY (#10196). "
+            "Optional: derived from the private key at startup when absent. "
+            "Useful when you want to distribute the public key via env without "
+            "embedding the private key on consumer hosts."
+        ),
+    )
+    jwt_kid: str = Field(
+        default="autobot-1",
+        alias="AUTOBOT_JWT_KID",
+        description="Key ID (kid) embedded in RS256 JWT headers and published in the JWKS (#10196).",
+    )
     llm_key_rotation_grace_secs: str = Field(default="", alias="AUTOBOT_LLM_KEY_ROTATION_GRACE_SECS")
     llm_key_rotation_interval_minutes: str = Field(default="", alias="AUTOBOT_LLM_KEY_ROTATION_INTERVAL_MINUTES")
     llm_models_yaml: str = Field(default="", alias="AUTOBOT_LLM_MODELS_YAML")
@@ -1354,7 +1420,7 @@ class MiscConfig(BaseSettings):
     celery_result_backend: str = Field(default="", alias="CELERY_RESULT_BACKEND")
     ci: str = Field(default="", alias="CI")
     codebase_index_batch_size: int = Field(default=0, alias="CODEBASE_INDEX_BATCH_SIZE")
-    codebase_index_embedding_mode: int = Field(default=0, alias="CODEBASE_INDEX_EMBEDDING_MODE")
+    codebase_index_embedding_mode: str = Field(default="precompute", alias="CODEBASE_INDEX_EMBEDDING_MODE")
     codebase_index_embed_batch_size: int = Field(default=0, alias="CODEBASE_INDEX_EMBED_BATCH_SIZE")
     codebase_index_incremental: str = Field(default="", alias="CODEBASE_INDEX_INCREMENTAL")
     codebase_index_parallel_batches: str = Field(default="", alias="CODEBASE_INDEX_PARALLEL_BATCHES")
@@ -1773,7 +1839,15 @@ class AutoBotConfig(BaseSettings):
 
     @property
     def slm_url(self) -> str:
-        """Get the SLM Admin server URL (Issue #768)."""
+        """Get the SLM Admin server URL (Issue #768).
+
+        Honor an explicit ``SLM_URL`` when set, otherwise build it from
+        ``AUTOBOT_SLM_HOST``/``AUTOBOT_SLM_PORT`` so the alias is not a silent
+        no-op (#9768).
+        """
+        explicit = self.misc.slm_url
+        if explicit:
+            return explicit
         if self.tls.slm_tls_enabled:
             return f"https://{self.vm.slm}:{self.tls.slm_tls_port}"
         return f"http://{self.vm.slm}:{self.port.slm}"

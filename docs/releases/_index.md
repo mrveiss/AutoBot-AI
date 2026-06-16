@@ -6,15 +6,6 @@ aliases:
   - Releases Index
 ---
 
-<<<<<<< HEAD
-# Releases
-
-Release notes and optimization documentation.
-
-| Document | Description |
-| --- | --- |
-| [[VLLM_OPTIMIZATION_RELEASE_NOTES]] | vLLM optimization release notes |
-=======
 # Release Notes
 
 Release notes and optimization reports for AutoBot versions.
@@ -30,4 +21,3 @@ Release notes and optimization reports for AutoBot versions.
 - [[../migration/_index\|Migration]] — Migration guides for version upgrades
 - [[../project/_index\|Project]] — Project-level planning and milestones
 - [[../superpowers/_index\|Superpowers]] — Feature plans that become releases
->>>>>>> origin/Dev_new_gui

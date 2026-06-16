@@ -366,16 +366,18 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         "heartbeat",
     ),
     # Issue #6470: Budget policy CRUD API and hard-stop auto-pause
+    # #9864: registry prefix must NOT be "/api" — the app factory prepends it
+    # (the old "/api" here served /api/api/budget-policies).
     (
         "api.budget_policies",
-        "/api",
+        "",
         ["budget-policies"],
         "budget_policies",
     ),
-    # GH#6471: per-task git worktree workspace info
+    # GH#6471: per-task git worktree workspace info (#9864: same /api fix)
     (
         "api.task_workspace",
-        "/api",
+        "",
         ["task-workspace"],
         "task_workspace",
     ),
@@ -610,7 +612,8 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         "ai_documents",
     ),
     # Issue #4342: Error resilience monitoring endpoints (circuit breakers, error budgets)
-    # Router defines prefix="/api/resilience" internally — use "" here to avoid double-prefix
+    # Router defines prefix="/resilience" internally (#9864: was "/api/resilience",
+    # which still double-prefixed because the app factory prepends /api)
     (
         "api.error_resilience",
         "",
@@ -676,16 +679,12 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
     # as a system router. Duplicate registration caused routes to appear twice.
     # GH#4459: Web push notification endpoints (subscribe/unsubscribe/vapid-key)
     ("api.push", "/push", ["push", "notifications"], "push"),
-    # GH#9044: Transcriber module — project + recording CRUD under /api/transcriber
-    # Guarded by TRANSCRIBER_ENABLED env var (defaults to true).
-    # The combined router in transcriber_extension carries its own /api/transcriber
-    # prefix so we use "" here to avoid a double-prefix.
-    (
-        "extensions.builtin.transcriber_extension",
-        "",
-        ["transcriber"],
-        "transcriber",
-    ),
+    # GH#9044: Transcriber routes are mounted by core_routers via
+    # api.transcriber.router (prefix "/transcriber" → /api/transcriber/*).
+    # The transcriber_extension combined router carries a full "/api/transcriber"
+    # prefix, so registering it here mounted a duplicate at /api/api/transcriber/*
+    # (app_factory prepends "/api"). Removed to eliminate the double-prefix; the
+    # core registration already serves the full transcriber surface (incl. kb).
 ]
 
 

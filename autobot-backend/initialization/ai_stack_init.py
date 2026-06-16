@@ -12,6 +12,7 @@ for the AutoBot backend.
 from fastapi import FastAPI
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.status_enums import ConnectionStatus
 from services.ai_stack_client import get_ai_stack_client
 
 logger = get_logger(__name__, "backend")
@@ -50,8 +51,11 @@ async def initialize_ai_stack(app: FastAPI, update_status_fn, append_error_fn) -
         health_status = await ai_client.health_check()
         app.state.ai_stack_client = ai_client
 
-        if health_status["status"] == "healthy":
-            await update_status_fn("ai_stack", "connected")
+        if health_status["status"] == "disabled":
+            await update_status_fn("ai_stack", ConnectionStatus.DISABLED.value)
+            log_initialization_step("AI Stack", "AI Stack disabled — skipping (single_user/compose)", 100, True)
+        elif health_status["status"] == "healthy":
+            await update_status_fn("ai_stack", ConnectionStatus.CONNECTED.value)
             log_initialization_step("AI Stack", "AI Stack connection established", 50, True)
 
             # Test agent availability
@@ -77,13 +81,13 @@ async def initialize_ai_stack(app: FastAPI, update_status_fn, append_error_fn) -
                 "AI Stack API unreachable at %s — agent routing disabled",
                 ai_client.base_url,
             )
-            await update_status_fn("ai_stack", "error")
+            await update_status_fn("ai_stack", ConnectionStatus.ERROR.value)
             await append_error_fn("AI Stack health check failed")
             ai_client.start_retry_loop()
             log_initialization_step("AI Stack", "AI Stack unreachable — retry enabled", 100, False)
 
     except Exception as e:
         logger.warning("AI Stack API unreachable — agent routing disabled: %s", e)
-        await update_status_fn("ai_stack", "error")
+        await update_status_fn("ai_stack", ConnectionStatus.ERROR.value)
         await append_error_fn(f"AI Stack init: {str(e)}")
         log_initialization_step("AI Stack", f"Initialization failed: {str(e)}", 100, False)

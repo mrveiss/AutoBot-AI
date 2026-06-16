@@ -148,6 +148,38 @@ describe('navItems coverage (#6499)', () => {
     expect(canvasItem?.featureFlag).toBe('canvas')
   })
 
+  // #9984: filterByFeatureFlag must gate the PRIMARY nav too (was a no-op before —
+  // App.vue used `computed(() => navItems)` so flagged primary items always showed).
+  it('transcriber primary navItem is flagged and fails OPEN (shipped feature)', () => {
+    const transcriber = navItems.find((i) => i.to === '/transcriber')
+    expect(transcriber?.featureFlag).toBe('transcriber')
+    expect(transcriber?.featureDefaultVisible).toBe(true)
+  })
+
+  it('transcriber stays VISIBLE when VITE_FEATURE_TRANSCRIBER is unset (fail-open)', () => {
+    const result = filterByFeatureFlag(navItems, {})
+    expect(result.map((i) => i.to)).toContain('/transcriber')
+  })
+
+  it('transcriber is hidden only when VITE_FEATURE_TRANSCRIBER is explicitly "false"', () => {
+    const result = filterByFeatureFlag(navItems, { VITE_FEATURE_TRANSCRIBER: 'false' })
+    expect(result.map((i) => i.to)).not.toContain('/transcriber')
+  })
+
+  it('canvas fails CLOSED — hidden when its flag is unset, shown only on "true"', () => {
+    const hidden = filterByFeatureFlag(profileMenuItems, {})
+    expect(hidden.map((i) => i.to)).not.toContain('/canvas')
+    const shown = filterByFeatureFlag(profileMenuItems, { VITE_FEATURE_CANVAS: 'true' })
+    expect(shown.map((i) => i.to)).toContain('/canvas')
+  })
+
+  it('unflagged primary navItems are always visible regardless of env', () => {
+    const result = filterByFeatureFlag(navItems, {})
+    expect(result.map((i) => i.to)).toEqual(
+      expect.arrayContaining(['/home', '/chat', '/knowledge', '/automation']),
+    )
+  })
+
   it('allowlist size and route counts (regression sentinel)', () => {
     const allowlistSize = Object.keys(INTENTIONALLY_HIDDEN).length
     const checkedCount = topLevelRoutes().filter(

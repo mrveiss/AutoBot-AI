@@ -132,7 +132,7 @@ class RoleDetector:
     def _check_service(self, service_name: str) -> bool:
         """Check if a systemd service is running."""
         try:
-            result = subprocess.run(  # nosec B607 - fixed systemctl command
+            result = subprocess.run(  # nosec B603 B607 - fixed systemctl argv; service_name is a configured role name
                 ["systemctl", "is-active", service_name],
                 capture_output=True,
                 text=True,

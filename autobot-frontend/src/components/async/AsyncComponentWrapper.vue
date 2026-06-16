@@ -41,7 +41,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onUnmounted, inject, withDefaults, useAttrs } from 'vue'
+import { ref, computed, onUnmounted, inject, useAttrs } from 'vue'
 import type { Component, AsyncComponentLoader } from 'vue'
 import AsyncErrorFallback from './AsyncErrorFallback.vue'
 import { createLogger } from '@/utils/debugUtils'

@@ -304,7 +304,7 @@
 
           <!-- SLM services: shown as locked on manager node only (#1455, #2900) -->
           <div
-            v-if="node.node_id === '00-SLM-Manager' && node.detected_roles.some(r => SLM_ROLES.includes(r))"
+            v-if="node.detected_roles.some(r => SLM_ROLES.includes(r))"
             class="infra-roles-row"
           >
             <span class="infra-label">{{ $t('setupWizardView.sLMServices') }}</span>
@@ -632,8 +632,8 @@ interface DeploymentGroup {
 const DEPLOYMENT_GROUPS: DeploymentGroup[] = [
   {
     label: 'Backend Stack',
-    description: 'API server and task queue',
-    roles: ['backend', 'celery'],
+    description: 'API server, task queue, and beat scheduler',
+    roles: ['backend', 'celery', 'scheduler'],
   },
   {
     label: 'Frontend',
@@ -642,8 +642,8 @@ const DEPLOYMENT_GROUPS: DeploymentGroup[] = [
   },
   {
     label: 'Database',
-    description: 'Redis Stack persistence layer',
-    roles: ['redis'],
+    description: 'Redis Stack and PostgreSQL persistence layers',
+    roles: ['redis', 'postgres'],
   },
   {
     label: 'AI Stack',

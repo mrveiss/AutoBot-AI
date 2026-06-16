@@ -180,13 +180,20 @@
   when: ufw_enabled | bool
   tags: ['common', 'firewall']
 
+# #9956: Identify the SLM manager by `slm_server` group membership, NOT by a
+# hardcoded display name or name-substring. The wizard may label the node
+# `node_00_SLM_Manager` or operators may rename it entirely; gating on the
+# group works regardless of the chosen name (supersedes the #9915 substring
+# guard, which still missed renamed nodes).
 - name: "Common | Set hostname"
   hostname:
-    name: "{{ inventory_hostname }}"
+    name: "{{ _hostname_sanitized }}"
   become: true
+  vars:
+    _hostname_sanitized: "{{ inventory_hostname | regex_replace('[^A-Za-z0-9-]', '-') | lower }}"
   when:
     - inventory_hostname is defined
-    - inventory_hostname != '00-SLM-Manager'
+    - inventory_hostname not in (groups.get('slm_server', []) | default([]))
   tags: ['common', 'hostname']
 
 - name: "Common | Update /etc/hosts"
@@ -198,7 +205,7 @@
   become: true
   when:
     - ansible_facts['default_ipv4'].address is defined
-    - inventory_hostname != '00-SLM-Manager'
+    - inventory_hostname not in (groups.get('slm_server', []) | default([]))
   tags: ['common', 'hostname']
 
 - name: "Common | Configure DNS resolvers"

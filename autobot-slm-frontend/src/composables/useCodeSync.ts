@@ -23,6 +23,11 @@ const API_BASE = getSlmApiBase()
 // Type Definitions
 // =============================================================================
 
+// #9956: SLM-component role names — a node carrying any of these IS the SLM
+// manager, regardless of its (user-editable) display name. Mirrors the
+// backend SLM_ROLES set used for self-identification.
+const SLM_ROLE_NAMES = ['slm-backend', 'slm-frontend', 'slm-database', 'slm-monitoring']
+
 export interface CodeSyncStatus {
   latest_version: string | null
   local_version: string | null
@@ -176,6 +181,32 @@ export interface DriftResolveResponse {
 
 // Re-export role types for consumers (Issue #779)
 export type { Role, SyncResult }
+
+// Issue #9971: One-click update-all types
+export type StageStatus = 'pending' | 'running' | 'success' | 'failed' | 'skipped'
+
+export interface UpdateAllStage {
+  name: string
+  status: StageStatus
+  message: string | null
+  sha: string | null
+  deps_changed: boolean
+  log_lines: string[]
+  started_at: string | null
+  completed_at: string | null
+}
+
+export interface UpdateAllJob {
+  job_id: string
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'already_current'
+  stages: UpdateAllStage[]
+  total_fleet_nodes: number
+  completed_fleet_nodes: number
+  failed_fleet_nodes: number
+  created_at: string
+  completed_at: string | null
+  failure_reason: string | null
+}
 
 // =============================================================================
 // Composable
@@ -367,8 +398,14 @@ export function useCodeSync() {
     } catch (e) {
       // Special handling for SLM Manager self-restart (502 errors expected)
       if (axios.isAxiosError(e) && e.response?.status === 502) {
-        // Check if this is the SLM server itself
-        const isSLMServer = nodeId === '00-SLM-Manager' || nodeId.includes('SLM')
+        // #9956: Identify the SLM server by its detected SLM roles, not by a
+        // hardcoded/substring node name — operators may rename the node.
+        const nodeRoles = await rolesComposable
+          .getNodeRoles(nodeId)
+          .catch(() => null)
+        const isSLMServer = (nodeRoles?.detected_roles ?? []).some((r) =>
+          SLM_ROLE_NAMES.includes(r)
+        )
 
         if (isSLMServer && (options.restart ?? true)) {
           // 502 is expected when SLM restarts itself - treat as success
@@ -748,6 +785,56 @@ export function useCodeSync() {
 
     // SLM self-update (#9073)
     selfUpdate,
+
+    // One-click full-pipeline update (#9971)
+    startUpdateAll,
+    getUpdateAllStatus,
+  }
+
+  // ---------------------------------------------------------------------------
+  // One-click full-pipeline update (#9971)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Start the one-click update-all orchestration pipeline.
+   * Returns the initial UpdateAllJob or null on 409 (already running).
+   * F1: distinguishes 404 (no job) from transient errors (network/5xx).
+   */
+  async function startUpdateAll(): Promise<UpdateAllJob | null> {
+    try {
+      const response = await client.post<UpdateAllJob>('/code-sync/update-all')
+      return response.data
+    } catch (e: unknown) {
+      const axiosErr = e as { response?: { status?: number; data?: { detail?: string } } }
+      if (axiosErr?.response?.status === 409) {
+        error.value = axiosErr.response?.data?.detail || 'Update already running'
+      } else {
+        error.value = axiosErr?.response?.data?.detail || 'Failed to start update'
+      }
+      return null
+    }
+  }
+
+  /**
+   * Poll the status of the current update-all job.
+   *
+   * F1: Returns null ONLY on true 404 (no job ever started).
+   *     Returns undefined on transient errors (network refused / 5xx during
+   *     SLM restart) so the caller can distinguish "stop polling" from "keep polling".
+   */
+  async function getUpdateAllStatus(): Promise<UpdateAllJob | null | undefined> {
+    try {
+      const response = await client.get<UpdateAllJob>('/code-sync/update-all/status')
+      return response.data
+    } catch (e: unknown) {
+      const axiosErr = e as { response?: { status?: number }; code?: string; message?: string }
+      // True 404 = no job started yet → stop polling
+      if (axiosErr?.response?.status === 404) {
+        return null
+      }
+      // Network error or 5xx during SLM restart → transient, keep polling
+      return undefined
+    }
   }
 
   async function selfUpdate(): Promise<{ success: boolean; message: string }> {

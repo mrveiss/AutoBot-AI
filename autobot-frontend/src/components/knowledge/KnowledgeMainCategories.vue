@@ -63,7 +63,7 @@
         @click="$emit('select', mainCat.id)"
       >
         <div class="category-icon" :style="{ backgroundColor: mainCat.color }">
-          <Icon :name="mainCat.icon" />
+          <Icon :name="categoryIcon(mainCat)" />
         </div>
         <div class="category-info">
           <h3>{{ mainCat.name }}</h3>
@@ -116,6 +116,8 @@
  * Issue #5201: Distinguish empty-KB from broken-KB with clear CTA panels
  */
 
+import { asIconName } from '@/utils/iconMappings'
+import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { computed } from 'vue'
 import BaseButton from '@/components/base/BaseButton.vue'
@@ -127,6 +129,13 @@ interface MainCategory {
   icon: string
   color: string
   count: number
+}
+
+// #9724: category icons come from the backend as plain strings — validate
+// against the ICONS registry so unknown names degrade to 'folder' instead of
+// rendering an empty SVG.
+function categoryIcon(cat: MainCategory): IconName {
+  return asIconName(cat.icon, 'folder')
 }
 
 interface PopulationState {

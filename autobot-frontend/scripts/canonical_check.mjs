@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 import { argv, exit, stderr, stdout } from "node:process";
 import { writeFile } from "node:fs/promises";
 

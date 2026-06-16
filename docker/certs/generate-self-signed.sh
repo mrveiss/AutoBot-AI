@@ -1,9 +1,10 @@
 #!/bin/bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot - Self-Signed TLS Certificate Generator (#1896)
 # For development/testing only. Use proper CA certs in production.
 #
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
 # Author: mrveiss
 
 set -e

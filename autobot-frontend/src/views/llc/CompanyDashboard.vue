@@ -8,20 +8,29 @@ import { useApiClient } from '@/plugins/api'
 import { useWebSocket } from '@/composables/useWebSocket'
 import { getBackendUrl } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
-import { useRoute, useRouter } from 'vue-router'
+import { useRouter } from 'vue-router'
+import { useLlcCompanyContext } from '@/composables/llc/useLlcCompanyContext'
+import {
+  agentStatusColor,
+  runStatusToAgentStatus,
+  runStatusToRunDisplayStatus,
+} from '@/composables/llc/llcStatus'
+import type { AgentDisplayStatus, RunDisplayStatus } from '@/composables/llc/llcStatus'
 
 const logger = createLogger('CompanyDashboard')
 const api = useApiClient()
-const route = useRoute()
 const router = useRouter()
+const { resolveCompanyId } = useLlcCompanyContext()
 
-const companyId = computed(() => route.params.companyId as string)
+// Resolved at mount: the top-level /llc/dashboard nav entry carries no
+// :companyId, so fall back to ?company= or the first company (#9861).
+const companyId = ref<string>('')
 
 interface AgentStatus {
   id: string
   name: string
   title: string
-  status: 'active' | 'idle' | 'error' | 'paused'
+  status: AgentDisplayStatus
   adapter_type: string
   last_heartbeat: string | null
 }
@@ -44,7 +53,7 @@ interface HeartbeatRun {
   agent_id: string
   agent_name: string
   run_id: string
-  status: 'running' | 'done' | 'failed'
+  status: RunDisplayStatus
   started_at: string
   duration_ms: number | null
 }
@@ -55,6 +64,58 @@ interface ActivityEvent {
   summary: string
   agent_name: string | null
   timestamp: string
+}
+
+// Raw backend shapes (differ from the display interfaces above) + mappers.
+interface RawAgentRow {
+  id: string
+  name: string
+  last_heartbeat_at: string | null
+  last_run_status: string | null
+}
+interface RawBudgetRow {
+  agent_id: string
+  budget_limit: string | number
+  budget_spent: string | number
+}
+interface RawRunRow {
+  id: string
+  agent_id: string
+  status: string
+  started_at: string | null
+  finished_at: string | null
+}
+
+function mapAgent(r: RawAgentRow): AgentStatus {
+  return {
+    id: r.id,
+    name: r.name,
+    title: '',
+    status: runStatusToAgentStatus(r.last_run_status),
+    adapter_type: '',
+    last_heartbeat: r.last_heartbeat_at,
+  }
+}
+function mapBudget(r: RawBudgetRow): BudgetInfo {
+  return {
+    spent: Number(r.budget_spent) || 0,
+    total: Number(r.budget_limit) || 0,
+    label: r.agent_id,
+  }
+}
+function mapRun(r: RawRunRow): HeartbeatRun {
+  const duration =
+    r.started_at && r.finished_at
+      ? new Date(r.finished_at).getTime() - new Date(r.started_at).getTime()
+      : null
+  return {
+    agent_id: r.agent_id,
+    agent_name: r.agent_id,
+    run_id: r.id,
+    status: runStatusToRunDisplayStatus(r.status),
+    started_at: r.started_at ?? '',
+    duration_ms: duration,
+  }
 }
 
 const agents = ref<AgentStatus[]>([])
@@ -69,7 +130,7 @@ const wsUrl = computed(
   () => `${getBackendUrl().replace(/^http/, 'ws')}/api/llc/ws/activity/${companyId.value}`
 )
 
-const { lastMessage, connect, disconnect } = useWebSocket(wsUrl.value, {
+const { lastMessage, connect, disconnect } = useWebSocket(wsUrl, {
   autoConnect: false,
   autoReconnect: true,
 })
@@ -81,13 +142,6 @@ function handleWsMessage(raw: string) {
   } catch (err) {
     logger.warn('WS parse error', err)
   }
-}
-
-const statusColor = (status: string) => {
-  if (status === 'active') return 'bg-green-500'
-  if (status === 'idle') return 'bg-yellow-400'
-  if (status === 'error') return 'bg-red-500'
-  return 'bg-gray-400'
 }
 
 const budgetPercent = (b: BudgetInfo) =>
@@ -105,18 +159,24 @@ async function fetchDashboardData() {
   isLoading.value = true
   error.value = null
   try {
+    // GH#9851/#9861: canonical LLC routes. The api client returns parsed JSON
+    // directly (no {data:{...}} envelope); these endpoints return arrays
+    // (agents/approvals/budget/runs) or an ActivityLogResponse ({items}). The
+    // backend field shapes differ from this view's display interfaces, so map
+    // them explicitly (#9861 — was rendering NaN budgets / unstyled statuses).
+    const cid = companyId.value
     const [agentsResp, approvalsResp, budgetsResp, runsResp, activityResp] = await Promise.all([
-      api.get<{ data: { agents: AgentStatus[] } }>('/api/llc/agents/status'),
-      api.get<{ data: { approvals: PendingApproval[] } }>('/api/llc/approvals/pending'),
-      api.get<{ data: { budgets: BudgetInfo[] } }>('/api/llc/budgets'),
-      api.get<{ data: { runs: HeartbeatRun[] } }>('/api/llc/heartbeat-runs?limit=20'),
-      api.get<{ data: { events: ActivityEvent[] } }>('/api/llc/activity?limit=50'),
+      api.get<RawAgentRow[]>(`/api/llc/agents?company_id=${cid}`),
+      api.get<PendingApproval[]>(`/api/llc/approvals?company_id=${cid}`),
+      api.get<RawBudgetRow[]>(`/api/llc/budget?company_id=${cid}`),
+      api.get<RawRunRow[]>('/api/llc/heartbeat-runs?limit=20'),
+      api.get<{ items: ActivityEvent[] }>(`/api/llc/companies/${cid}/activity?page_size=50`),
     ])
-    agents.value = (agentsResp as { data: { agents: AgentStatus[] } }).data?.agents ?? []
-    pendingApprovals.value = (approvalsResp as { data: { approvals: PendingApproval[] } }).data?.approvals ?? []
-    budgets.value = (budgetsResp as { data: { budgets: BudgetInfo[] } }).data?.budgets ?? []
-    heartbeatRuns.value = (runsResp as { data: { runs: HeartbeatRun[] } }).data?.runs ?? []
-    activityFeed.value = (activityResp as { data: { events: ActivityEvent[] } }).data?.events ?? []
+    agents.value = (agentsResp ?? []).map(mapAgent)
+    pendingApprovals.value = approvalsResp ?? []
+    budgets.value = (budgetsResp ?? []).map(mapBudget)
+    heartbeatRuns.value = (runsResp ?? []).map(mapRun)
+    activityFeed.value = activityResp?.items ?? []
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)
     logger.error('Failed to fetch dashboard data:', msg)
@@ -128,7 +188,7 @@ async function fetchDashboardData() {
 
 async function quickApprove(approvalId: string) {
   try {
-    await api.post(`/api/llc/approvals/${approvalId}/approve`, {})
+    await api.post(`/api/llc/approvals/${approvalId}/decide`, { decision: 'approved' })
     pendingApprovals.value = pendingApprovals.value.filter(a => a.id !== approvalId)
   } catch (err: unknown) {
     logger.error('Quick approve failed', err)
@@ -151,6 +211,7 @@ function formatTime(ts: string): string {
 }
 
 onMounted(async () => {
+  await resolveCompanyId().then((id) => { companyId.value = id })
   if (!companyId.value) return
   await fetchDashboardData()
   connect()
@@ -257,7 +318,7 @@ watch(lastMessage, (msg) => {
               class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3 flex flex-col gap-1"
             >
               <div class="flex items-center gap-2">
-                <span class="w-2.5 h-2.5 rounded-full flex-shrink-0" :class="statusColor(agent.status)" />
+                <span class="w-2.5 h-2.5 rounded-full flex-shrink-0" :class="agentStatusColor(agent.status)" />
                 <span class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{{ agent.name }}</span>
               </div>
               <span class="text-xs text-gray-500 truncate">{{ agent.title }}</span>

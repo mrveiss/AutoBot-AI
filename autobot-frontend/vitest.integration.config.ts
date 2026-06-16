@@ -1,8 +1,16 @@
-import { mergeConfig, defineConfig, configDefaults } from 'vitest/config'
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
+import { mergeConfig, defineConfig, configDefaults, type UserConfig } from 'vitest/config'
 import viteConfig from './vite.config'
 
+// #9693: vite.config exports a function (Vite 7) — mergeConfig cannot merge a
+// callback, so resolve it first (same pattern as vitest.config.ts).
+const resolvedViteConfig = typeof viteConfig === 'function'
+  ? viteConfig({ command: 'serve', mode: 'test' })
+  : viteConfig
+
 export default mergeConfig(
-  viteConfig,
+  resolvedViteConfig as UserConfig,
   defineConfig({
     test: {
       // Integration test environment
@@ -24,7 +32,7 @@ export default mergeConfig(
         reporter: ['text', 'json', 'html'],
         reportsDirectory: 'coverage/integration',
         exclude: [
-          ...configDefaults.coverage.exclude,
+          ...(configDefaults.coverage?.exclude || []),
           'src/test/**',
           'src/**/*.d.ts',
           'src/**/*.config.ts',
@@ -32,12 +40,10 @@ export default mergeConfig(
       },
 
       // Sequential execution for integration tests
+      // (Vitest 4 removed poolOptions.forks.singleFork — maxWorkers: 1 is
+      // the top-level equivalent.)
       pool: 'forks',
-      poolOptions: {
-        forks: {
-          singleFork: true,
-        },
-      },
+      maxWorkers: 1,
 
       // Mock options
       clearMocks: true,
@@ -45,10 +51,10 @@ export default mergeConfig(
       restoreMocks: true,
 
       // Reporter configuration
-      reporter: process.env.CI ? ['junit', 'default'] : ['default'],
+      reporters: process.env.CI ? ['junit', 'default'] : ['default'],
       outputFile: {
         junit: 'test-results/integration-junit.xml',
       },
     },
-  }),
+  }) as UserConfig,
 )

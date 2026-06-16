@@ -26,8 +26,6 @@ Config keys (under ``ConnectorConfig.config``):
                                       Default [".gdoc", ".gsheet", ".pdf", ".docx", ".md"].
 """
 
-import hashlib
-import io
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -37,6 +35,8 @@ from autobot_shared.auth import BearerAuth
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc, parse_utc_iso
 from knowledge.connectors.base import AbstractConnector
+from knowledge.connectors.content_extraction import extract_text_from_docx as _extract_text_from_docx
+from knowledge.connectors.content_extraction import extract_text_from_pdf as _extract_text_from_pdf
 from knowledge.connectors.models import (
     ChangeInfo,
     ConnectorConfig,
@@ -60,41 +60,6 @@ _DEFAULT_MAX_FILE_SIZE = 100 * 1024 * 1024
 # Google Drive native MIME types
 _GDOC_MIME = "application/vnd.google-apps.document"
 _GSHEET_MIME = "application/vnd.google-apps.spreadsheet"
-
-
-def _content_hash(text: str) -> str:
-    """Generate SHA-256 hash of content for change detection."""
-    return hashlib.sha256(text.encode("utf-8")).hexdigest()
-
-
-def _extract_text_from_docx(content_bytes: bytes) -> str:
-    """Extract text from Word .docx file."""
-    try:
-        from docx import Document
-
-        doc = Document(io.BytesIO(content_bytes))
-        paragraphs = [para.text for para in doc.paragraphs if para.text.strip()]
-        return "\n\n".join(paragraphs)
-    except Exception as exc:
-        logger.warning("Failed to extract text from DOCX: %s", exc)
-        return ""
-
-
-def _extract_text_from_pdf(content_bytes: bytes) -> str:
-    """Extract text from PDF file."""
-    try:
-        from PyPDF2 import PdfReader
-
-        pdf = PdfReader(io.BytesIO(content_bytes))
-        pages_text = []
-        for page_num, page in enumerate(pdf.pages, start=1):
-            text = page.extract_text()
-            if text.strip():
-                pages_text.append(f"## Page {page_num}\n{text}")
-        return "\n\n".join(pages_text)
-    except Exception as exc:
-        logger.warning("Failed to extract text from PDF: %s", exc)
-        return ""
 
 
 async def _load_ts(connector_id: str, source_id: str) -> Optional[str]:

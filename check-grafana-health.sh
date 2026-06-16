@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot Grafana Health Check
 # Usage: ./check-grafana-health.sh [grafana_host] [grafana_port]
 #

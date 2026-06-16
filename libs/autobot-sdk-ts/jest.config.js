@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 /** @type {import('jest').Config} */
 export default {
   preset: "ts-jest/presets/default-esm",

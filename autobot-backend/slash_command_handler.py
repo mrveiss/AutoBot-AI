@@ -1028,9 +1028,9 @@ No secrets found.
 
         type_emojis = {
             "ssh_key": "🔑",
-            "password": "🔒",
+            "password": "🔒",  # nosec B105 - UI emoji mapping for secret type labels, not a password
             "api_key": "🔌",
-            "token": "🎫",
+            "token": "🎫",  # nosec B105 - UI emoji mapping for token type label, not a credential
             "certificate": "📜",
             "database_url": "🗄️",
             "other": "📦",

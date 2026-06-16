@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # Closure-gate wiring check: verify new modules added in this PR have production callers.
 # Single source of truth referenced by /implement, /issue, /batch-implement skills.
 #

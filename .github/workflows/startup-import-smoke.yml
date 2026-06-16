@@ -13,16 +13,22 @@ name: Backend Startup Import Smoke
 on:
   push:
     branches: [main, Dev_new_gui, develop]
-    paths: &smoke_paths
+    paths:
       - 'autobot-backend/**/*.py'
       - 'autobot_shared/**/*.py'
       - 'autobot-slm-backend/**/*.py'
       - '**/requirements*.txt'
       - 'requirements-ci/**'
       - '.github/workflows/startup-import-smoke.yml'
+  # NOTE: no pull_request.paths filter — this workflow ALWAYS runs on PRs so its
+  # required-check context ("startup-import-smoke") always reports a conclusion.
+  # A path-filtered required check that never triggers leaves the PR deadlocked
+  # on "Expected — Waiting for status". The real work is gated on the `changes`
+  # job below and self-skips (reporting success) when no backend paths are
+  # touched. Branch-protection promotion to required is the separate
+  # owner-confirmed follow-up (#10022).
   pull_request:
     branches: [main, Dev_new_gui, develop]
-    paths: *smoke_paths
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -32,7 +38,28 @@ permissions:
   contents: read
 
 jobs:
+  changes:
+    name: Detect changed paths
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dorny/paths-filter@d1c1ffe0248fe513906c8e24db8ea791d46f8590  # v3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'autobot-backend/**/*.py'
+              - 'autobot_shared/**/*.py'
+              - 'autobot-slm-backend/**/*.py'
+              - '**/requirements*.txt'
+              - 'requirements-ci/**'
+              - '.github/workflows/startup-import-smoke.yml'
+
   startup-import-smoke:
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -72,4 +99,3 @@ jobs:
             echo "autobot-backend/tests/test_startup_imports.py with issue ref."
             exit 1
           }
-

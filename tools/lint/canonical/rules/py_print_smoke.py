@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """py-print-smoke — pipeline smoke-test rule.
 
 Detects bare `print()` calls in production Python code. Aliases the existing
@@ -17,7 +19,7 @@ from tools.lint.canonical.diagnostic import Diagnostic
 RULE_ID = "py-print-smoke"
 ISSUE = "#7458"
 SEVERITY = "warn"
-TARGETS = ["autobot-backend", "autobot-slm-backend", "autobot_shared", "tests/lint/canonical/fixtures"]
+TARGETS = ["autobot-backend", "autobot-slm-backend", "autobot_shared", "repo_tests/lint/canonical/fixtures"]
 DESCRIPTION = "print() in production code — pipeline smoke-test rule for canonical-check"
 FIX_HINT = (
     "Replace print() with a logger call:\n"

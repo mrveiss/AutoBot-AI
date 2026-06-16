@@ -43,21 +43,20 @@ vi.mock('@/config/ssot-config', () => ({
   getApiBase: vi.fn(() => '/api'),
 }))
 
-let mockFetchResponse: { ok: boolean; status: number; text: () => Promise<string> } = {
-  ok: true,
-  status: 200,
-  text: async () => '',
-}
+// useToolApproval submits via apiClient.post (parsed-JSON contract), not raw
+// fetchWithAuth. vi.fn(impl) keeps its implementation across mockReset.
+const mockPost = vi.fn(async (..._args: unknown[]) => ({}))
 
-vi.mock('@/utils/fetchWithAuth', () => ({
-  fetchWithAuth: vi.fn(async () => mockFetchResponse),
+vi.mock('@/utils/ApiClient', () => ({
+  default: {
+    post: (...args: unknown[]) => mockPost(...args),
+  },
 }))
 
 // ---------------------------------------------------------------------------
 // Import the composable AFTER mocks are in place
 // ---------------------------------------------------------------------------
 import { useToolApproval } from '../useToolApproval'
-import { fetchWithAuth } from '@/utils/fetchWithAuth'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -84,7 +83,6 @@ const validPayload = {
 describe('useToolApproval', () => {
   beforeEach(() => {
     capturedGlobalListener = null
-    mockFetchResponse = { ok: true, status: 200, text: async () => '' }
     vi.clearAllMocks()
   })
 
@@ -121,12 +119,9 @@ describe('useToolApproval', () => {
 
     await submitToolApproval(true, 'looks safe')
 
-    expect(fetchWithAuth).toHaveBeenCalledWith(
-      'http://backend/api/agent-terminal/tools/approve/test-uuid-1234',
-      expect.objectContaining({
-        method: 'POST',
-        body: JSON.stringify({ approved: true, comment: 'looks safe', task_id: 'task-abc' }),
-      })
+    expect(mockPost).toHaveBeenCalledWith(
+      '/api/agent-terminal/tools/approve/test-uuid-1234',
+      { approved: true, comment: 'looks safe', task_id: 'task-abc' }
     )
     // Cleared after success
     expect(pendingToolApproval.value).toBeNull()
@@ -138,16 +133,14 @@ describe('useToolApproval', () => {
 
     await submitToolApproval(false)
 
-    expect(fetchWithAuth).toHaveBeenCalledWith(
+    expect(mockPost).toHaveBeenCalledWith(
       expect.any(String),
-      expect.objectContaining({
-        body: JSON.stringify({ approved: false, comment: null, task_id: 'task-abc' }),
-      })
+      expect.objectContaining({ approved: false, comment: null, task_id: 'task-abc' })
     )
   })
 
   it('throws and keeps pendingToolApproval when HTTP POST fails', async () => {
-    mockFetchResponse = { ok: false, status: 500, text: async () => 'internal error' }
+    mockPost.mockRejectedValueOnce(new Error('HTTP 500: internal error'))
     const { pendingToolApproval, submitToolApproval } = useToolApproval()
     capturedGlobalListener!(makeLiveEvent('APPROVAL_REQUIRED', validPayload))
 
@@ -164,6 +157,6 @@ describe('useToolApproval', () => {
     clearToolApproval()
 
     expect(pendingToolApproval.value).toBeNull()
-    expect(fetchWithAuth).not.toHaveBeenCalled()
+    expect(mockPost).not.toHaveBeenCalled()
   })
 })

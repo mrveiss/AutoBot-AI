@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """
 Advanced Terminal Debugging Utility for AutoBot
 Tests both REST API sessions and Chat-based WebSocket sessions

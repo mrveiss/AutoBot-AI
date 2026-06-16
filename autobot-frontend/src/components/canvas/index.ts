@@ -4,7 +4,8 @@
 // Author: mrveiss
 export { default as CanvasView } from './CanvasView.vue'
 export { default as CanvasCell } from './CanvasCell.vue'
-export { default as ChartCell } from './ChartCell.vue'
+// ChartCell lives with the other artifact cells (#9724: path was wrong)
+export { default as ChartCell } from '../artifact-cells/ChartCell.vue'
 export { default as CodeCell } from './CodeCell.vue'
 export { default as CanvasSplitLayout } from './CanvasSplitLayout.vue'
 export { default as CanvasPanel } from './CanvasPanel.vue'

@@ -1,16 +1,24 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
 # Author: mrveiss
-"""Tests for shared subprocess-adapter helpers (GH#9789, GH#9769, GH#9777)."""
+"""Tests for shared subprocess-adapter helpers (GH#9789, GH#9769, GH#9777, GH#9839)."""
 
 import json
+import signal
+from unittest.mock import AsyncMock, patch
+
+import pytest
 
 from llc.adapters.subprocess_support import (
     AGENT_API_KEY_PLACEHOLDER,
     inject_agent_credentials,
+    probe_pid,
     render_context_markdown,
     serialize_invoke_context,
+    terminate_pid,
 )
+from llc.models.enums import LLCRunStatus
 
 
 class TestRenderContextMarkdown:
@@ -79,3 +87,107 @@ class TestInjectAgentCredentials:
         assert "AUTOBOT_LLC_API_KEY" not in env
         # api_base falls back to the module default
         assert env.get("AUTOBOT_LLC_API_BASE")
+
+
+# ---------------------------------------------------------------------------
+# probe_pid (GH#9839)
+# ---------------------------------------------------------------------------
+
+
+class TestProbePid:
+    def test_running_when_kill_succeeds(self) -> None:
+        with patch("os.kill", return_value=None):
+            result = probe_pid(12345)
+        assert result.status is LLCRunStatus.RUNNING
+
+    def test_completed_on_process_lookup_error(self) -> None:
+        with patch("os.kill", side_effect=ProcessLookupError):
+            result = probe_pid(99999)
+        assert result.status is LLCRunStatus.COMPLETED
+
+    def test_running_on_permission_error(self) -> None:
+        with patch("os.kill", side_effect=PermissionError):
+            result = probe_pid(1)
+        assert result.status is LLCRunStatus.RUNNING
+
+    def test_failed_on_oserror(self) -> None:
+        with patch("os.kill", side_effect=OSError("bad fd")):
+            result = probe_pid(12345)
+        assert result.status is LLCRunStatus.FAILED
+        assert "bad fd" in (result.error or "")
+
+    def test_uses_signal_zero(self) -> None:
+        calls = []
+
+        def capture(pid, sig):
+            calls.append((pid, sig))
+
+        with patch("os.kill", side_effect=capture):
+            probe_pid(42)
+
+        assert calls == [(42, 0)]
+
+
+# ---------------------------------------------------------------------------
+# terminate_pid (GH#9839)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+class TestTerminatePid:
+    async def test_returns_true_when_already_gone(self) -> None:
+        # SIGTERM immediately raises ProcessLookupError → process was already dead.
+        with patch("os.kill", side_effect=ProcessLookupError):
+            result = await terminate_pid(99999, grace_seconds=1, log_name="Test")
+        assert result is True
+
+    async def test_returns_false_when_process_exits_during_grace(self) -> None:
+        # SIGTERM succeeds; first poll raises ProcessLookupError (process gone).
+        kill_calls = []
+
+        def smart_kill(pid, sig):
+            kill_calls.append(sig)
+            if sig == 0:
+                raise ProcessLookupError  # gone after SIGTERM
+
+        with patch("os.kill", side_effect=smart_kill):
+            with patch("asyncio.sleep", new_callable=AsyncMock):
+                result = await terminate_pid(12345, grace_seconds=1, log_name="Test")
+
+        assert result is False
+        assert signal.SIGTERM in kill_calls
+        assert signal.SIGKILL not in kill_calls
+
+    async def test_sigkill_sent_when_grace_expires(self) -> None:
+        # SIGTERM succeeds; signal-0 always succeeds (process never exits).
+        kill_calls = []
+
+        def stubborn_kill(pid, sig):
+            kill_calls.append(sig)
+            # signal 0 always returns (process alive); SIGKILL succeeds too.
+
+        with patch("os.kill", side_effect=stubborn_kill):
+            with patch("asyncio.sleep", new_callable=AsyncMock):
+                result = await terminate_pid(12345, grace_seconds=1, log_name="Test")
+
+        assert result is False
+        assert signal.SIGTERM in kill_calls
+        assert signal.SIGKILL in kill_calls
+
+    async def test_sigkill_tolerates_already_gone(self) -> None:
+        # SIGTERM succeeds; signal-0 always succeeds (never exits); SIGKILL raises
+        # ProcessLookupError — should not propagate.
+        sigkill_count = [0]
+
+        def kill_fn(pid, sig):
+            if sig == signal.SIGKILL:
+                sigkill_count[0] += 1
+                raise ProcessLookupError
+            # SIGTERM: pass; signal-0: pass (alive)
+
+        with patch("os.kill", side_effect=kill_fn):
+            with patch("asyncio.sleep", new_callable=AsyncMock):
+                result = await terminate_pid(12345, grace_seconds=1, log_name="Test")
+
+        assert result is False
+        assert sigkill_count[0] == 1  # SIGKILL was attempted once

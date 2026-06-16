@@ -1,10 +1,11 @@
 #!/bin/bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # Blocks edits to sensitive or generated files.
 # PreToolUse hook for Edit|Write operations.
 # Exit 2 = block the action. Exit 0 = allow.
 #
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
 # Author: mrveiss
 # Issue: #3026
 

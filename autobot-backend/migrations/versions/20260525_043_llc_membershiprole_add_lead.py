@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """Add LEAD value to membershiprole PG enum (GH#8583 follow-up).
 
 Commit 332ca3b5a added MembershipRole.LEAD to the Python enum but omitted

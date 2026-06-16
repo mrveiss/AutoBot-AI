@@ -489,10 +489,26 @@
       changed_when: true
       tags: ['frontend', 'slm-nginx', 'provision']
 
+    # #9933: In co-located mode the SLM nginx config (autobot-slm) owns the
+    # `upstream autobot_backend` block. The frontend role (Phase 4b) runs before
+    # the co-location flag is set, so it enables a standalone `autobot-frontend`
+    # site that ALSO declares `upstream autobot_backend` → `nginx -t` fails with
+    # `duplicate upstream "autobot_backend"`. Remove the conflicting symlink here,
+    # where co-location is definitively known, before testing the config.
+    - name: "SLM | Disable standalone autobot-frontend site in co-located mode (#9933)"
+      ansible.builtin.file:
+        path: /etc/nginx/sites-enabled/autobot-frontend
+        state: absent
+      when: _is_slm_frontend_colocated | bool
+      register: _frontend_site_disabled
+      tags: ['frontend', 'slm-nginx', 'provision']
+
     - name: "SLM | Test nginx config after co-location update"
       ansible.builtin.command:
         cmd: nginx -t
-      when: _slm_nginx_rerendered is defined and _slm_nginx_rerendered is changed
+      when: >-
+        (_slm_nginx_rerendered is defined and _slm_nginx_rerendered is changed)
+        or (_frontend_site_disabled is defined and _frontend_site_disabled is changed)
       changed_when: false
       tags: ['frontend', 'slm-nginx', 'provision']
 
@@ -500,7 +516,9 @@
       ansible.builtin.systemd:
         name: nginx
         state: reloaded
-      when: _slm_nginx_rerendered is defined and _slm_nginx_rerendered is changed
+      when: >-
+        (_slm_nginx_rerendered is defined and _slm_nginx_rerendered is changed)
+        or (_frontend_site_disabled is defined and _frontend_site_disabled is changed)
       tags: ['frontend', 'slm-nginx', 'provision']
 
 # -------------------------------------------------------------------
@@ -659,7 +677,7 @@
 
     - name: "Mark-synced | Login to SLM API"
       ansible.builtin.uri:
-        url: "https://{{ hostvars['00-SLM-Manager']['ansible_host'] | default('127.0.0.1') }}/api/auth/login"
+        url: "https://{{ hostvars[slm_manager_inventory_host]['ansible_host'] | default('127.0.0.1') }}/slm/api/auth/login"
         method: POST
         body_format: json
         body:
@@ -687,7 +705,7 @@
 
     - name: "Mark-synced | POST to /api/code-sync/nodes/{{ inventory_hostname }}/mark-synced"
       ansible.builtin.uri:
-        url: "https://{{ hostvars['00-SLM-Manager']['ansible_host'] | default('127.0.0.1') }}/api/code-sync/nodes/{{ inventory_hostname }}/mark-synced"
+        url: "https://{{ hostvars[slm_manager_inventory_host]['ansible_host'] | default('127.0.0.1') }}/slm/api/code-sync/nodes/{{ inventory_hostname }}/mark-synced"
         method: POST
         headers:
           Authorization: "Bearer {{ _slm_login.json.access_token | default('') }}"

@@ -9,7 +9,7 @@ from datetime import datetime
 from typing import Optional
 
 import sqlalchemy as sa
-from sqlalchemy import Index, UniqueConstraint
+from sqlalchemy import UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from user_management.models.base import Base
@@ -44,10 +44,10 @@ class LLCSecret(Base):
     )
     revoked_at: Mapped[Optional[datetime]] = mapped_column(sa.DateTime(timezone=True), nullable=True, default=None)
 
-    __table_args__ = (
-        UniqueConstraint("company_id", "name", name="uq_llc_secrets_company_name"),
-        Index("ix_llc_secrets_company_id", "company_id"),
-    )
+    # company_id already declares index=True above (auto-creates
+    # ix_llc_secrets_company_id); a second explicit Index of the same name made
+    # create_all emit it twice → DuplicateTableError (#10075).
+    __table_args__ = (UniqueConstraint("company_id", "name", name="uq_llc_secrets_company_name"),)
 
     @property
     def is_revoked(self) -> bool:

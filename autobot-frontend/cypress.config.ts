@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 import { defineConfig } from 'cypress'
 
 // Frontend URL configuration (matches NetworkConstants.FRONTEND_PORT = 5173)

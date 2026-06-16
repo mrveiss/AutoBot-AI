@@ -81,7 +81,7 @@ class JWTRefreshConflictError(Exception):
 
 logger = get_logger(__name__)
 
-_ENV_SECRET = "RUN_JWT_SECRET"
+_ENV_SECRET = "RUN_JWT_SECRET"  # nosec B105 - environment variable name constant, not a hardcoded secret
 _ENV_TTL = "RUN_JWT_TTL_SECONDS"
 _ENV_AUDIENCE = "RUN_JWT_AUDIENCE"
 _ENV_FAIL_OPEN = "RUN_JWT_REDIS_FAIL_OPEN"

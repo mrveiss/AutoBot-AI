@@ -38,6 +38,12 @@ interface VectorizationJobStatusResponse {
   status?: string
   progress?: number
   error?: string
+  /** Nested job record: { status: 'completed'|'failed'|..., error } */
+  job?: {
+    status?: string
+    error?: string | null
+    [key: string]: unknown
+  }
   [key: string]: unknown
 }
 

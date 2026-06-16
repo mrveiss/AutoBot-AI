@@ -81,11 +81,17 @@ export interface ChatMessage {
   /** Error detail when status is 'error' — frontend-only. */
   error?: string;
   attachments?: FileAttachment[];
+  /** Backend-assigned message id (distinct from the frontend `id`). */
+  message_id?: string;
+  /** Backend role field ('user' | 'assistant' | 'system') — see `sender`. */
+  role?: string;
   metadata?: {
     model?: string;
     tokens?: number;
     duration?: number;
-    [key: string]: string | number | boolean | undefined;
+    // #9724: structured payloads (image_payload, summarized_message_ids,
+    // overseer step objects) are stored here — values must allow objects.
+    [key: string]: unknown;
   };
   /**
    * RAG retrieval sources persisted alongside the message (Issue #4448).

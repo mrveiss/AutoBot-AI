@@ -536,21 +536,19 @@ Import statement has been added: `import {{ devLog }} from '@/utils/devLogger.js
             report_content: Complete report markdown string to finalize and save
             output_file: Optional path override for the markdown report file
         """
-        report_content += """
-## Next Steps
-1. **Test Development Mode**: Verify logs appear in browser console during development
-2. **Test Production Build**: Confirm logs are silent in production build
-3. **Update Build Config**: Ensure NODE_ENV is properly set for different environments
-4. **ESLint Configuration**: Add rule to prefer devLog over console.log
-
-## Environment Setup
-Make sure your build process sets NODE_ENV appropriately:
-- Development: `NODE_ENV=development`
-- Production: `NODE_ENV=production`
-
-## Backup Location
-All modified files have been backed up to: `{}`
-""".format(self.backup_dir)
+        report_content += (
+            "\n## Next Steps\n"  # nosec B608 - markdown report text, not SQL
+            "1. **Test Development Mode**: Verify logs appear in browser console during development\n"
+            "2. **Test Production Build**: Confirm logs are silent in production build\n"
+            "3. **Update Build Config**: Ensure NODE_ENV is properly set for different environments\n"
+            "4. **ESLint Configuration**: Add rule to prefer devLog over console.log\n"
+            "\n## Environment Setup\n"
+            "Make sure your build process sets NODE_ENV appropriately:\n"
+            "- Development: `NODE_ENV=development`\n"
+            "- Production: `NODE_ENV=production`\n"
+            "\n## Backup Location\n"
+            f"All modified files have been backed up to: `{self.backup_dir}`\n"
+        )
 
         report_path = Path(output_file) if output_file else (self.project_root / "dev-logging-conversion-report.md")
         with open(report_path, "w", encoding="utf-8") as f:

@@ -34,7 +34,7 @@ class FingerprintType(Enum):
     AST_STRUCTURAL = "ast_structural"  # Based on AST structure
     AST_NORMALIZED = "ast_normalized"  # Normalized identifiers
     SEMANTIC = "semantic"  # Based on data/control flow
-    TOKEN_SEQUENCE = "token_sequence"  # Based on token patterns
+    TOKEN_SEQUENCE = "token_sequence"  # nosec B105 - enum value for fingerprint strategy type, not a credential
 
 
 class CloneSeverity(Enum):

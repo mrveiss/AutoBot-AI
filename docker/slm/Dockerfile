@@ -1,12 +1,15 @@
 # AutoBot SLM Backend - Service Lifecycle Manager (#1809, #1836)
-# python:3.12-slim-bookworm base — eliminates deadsnakes PPA cold build overhead (#6213)
+# python:${PYTHON_VERSION}-slim-bookworm base — eliminates deadsnakes PPA cold build overhead (#6213)
+# PYTHON_VERSION build ARG keeps the interpreter minor in one place so a 3.14 bump
+# only changes one value and the COPY site-packages path tracks it (#9949).
 #
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 
 # ---- Dependencies stage ----
-FROM python:3.12-slim-bookworm AS deps
+ARG PYTHON_VERSION=3.12
+FROM python:${PYTHON_VERSION}-slim-bookworm AS deps
 
 ENV DEBIAN_FRONTEND=noninteractive
 WORKDIR /app
@@ -29,7 +32,9 @@ RUN grep -v -E "(autobot_shared|^-r )" /tmp/requirements.txt > /app/requirements
 
 
 # ---- Production stage ----
-FROM python:3.12-slim-bookworm AS production
+FROM python:${PYTHON_VERSION}-slim-bookworm AS production
+# Re-declare after FROM so it is in scope for the COPY paths below.
+ARG PYTHON_VERSION=3.12
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -43,7 +48,7 @@ RUN groupadd -r --gid 999 autobot && useradd -r --uid 999 -g autobot -d /app aut
 WORKDIR /app
 
 # Copy Python packages from deps stage
-COPY --from=deps /usr/local/lib/python3.12/ /usr/local/lib/python3.12/
+COPY --from=deps /usr/local/lib/python${PYTHON_VERSION}/ /usr/local/lib/python${PYTHON_VERSION}/
 COPY --from=deps /usr/local/bin/ /usr/local/bin/
 
 # Copy shared module

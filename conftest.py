@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """Root conftest.py — adds worktree root to sys.path so that tools.lint.* is importable.
 
 tools/ is a namespace package (no __init__.py); it lives at the repo root alongside

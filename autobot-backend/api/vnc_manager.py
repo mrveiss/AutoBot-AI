@@ -79,7 +79,7 @@ def is_vnc_running() -> bool:
     """Check if VNC server is running on display :1"""
     try:
         # Check for Xtigervnc process on display :1
-        result = subprocess.run(  # nosec B607
+        result = subprocess.run(  # nosec B603 B607 - fixed argv, no user input
             ["pgrep", "-f", "Xtigervnc :1"],
             capture_output=True,
             timeout=5,
@@ -95,7 +95,7 @@ def _launch_websockify() -> None:
     """Start websockify daemon for noVNC access (TLS-only, proxied by nginx). Ref: #2735."""
     websockify_bind = f"{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.VNC_PORT}"
     vnc_target = f"{NetworkConstants.LOCALHOST_NAME}:5901"
-    subprocess.Popen(  # nosec B607
+    subprocess.Popen(  # nosec B603 B607 - fixed argv, no user input
         [
             "/usr/bin/websockify",
             "--web",
@@ -126,7 +126,7 @@ def start_vnc_server() -> Dict[str, str]:
         }
 
     try:
-        result = subprocess.run(  # nosec B607
+        result = subprocess.run(  # nosec B603 B607 - fixed argv, no user input
             [
                 "/usr/bin/vncserver",
                 ":1",
@@ -508,7 +508,7 @@ async def vnc_screenshot(
             tmp_path = tmp_file.name
 
         # Use scrot to capture screenshot
-        result = subprocess.run(  # nosec B607
+        result = subprocess.run(  # nosec B603 B607 - fixed argv, no user input
             ["scrot", "-o", tmp_path],
             capture_output=True,
             text=True,
@@ -518,7 +518,7 @@ async def vnc_screenshot(
 
         if result.returncode != 0:
             # Fallback to import command if scrot fails
-            result = subprocess.run(  # nosec B607
+            result = subprocess.run(  # nosec B603 B607 - fixed argv, no user input
                 ["import", "-window", "root", tmp_path],
                 capture_output=True,
                 text=True,
@@ -569,7 +569,7 @@ async def vnc_clipboard_sync(
     """
     try:
         # Use xclip to set clipboard content
-        proc = subprocess.Popen(  # nosec B607
+        proc = subprocess.Popen(  # nosec B603 B607 - fixed argv, no user input
             ["xclip", "-selection", "clipboard"],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
@@ -684,7 +684,7 @@ async def get_connection_quality_metrics(
 
     # Get websockify process info
     try:
-        result = subprocess.run(  # nosec B607
+        result = subprocess.run(  # nosec B603 B607 - fixed argv, no user input
             ["pgrep", "-a", "websockify"],
             capture_output=True,
             text=True,
@@ -764,7 +764,7 @@ def _get_desktop_info() -> Dict[str, str]:
 
     # Screen resolution
     try:
-        result = subprocess.run(  # nosec B607
+        result = subprocess.run(  # nosec B603 B607 - fixed argv, no user input
             ["xdpyinfo"],
             capture_output=True,
             text=True,
@@ -783,7 +783,7 @@ def _get_desktop_info() -> Dict[str, str]:
 
     # Active window
     try:
-        result = subprocess.run(  # nosec B607
+        result = subprocess.run(  # nosec B603 B607 - fixed argv, no user input
             ["xdotool", "getactivewindow", "getwindowname"],
             capture_output=True,
             text=True,
@@ -797,7 +797,7 @@ def _get_desktop_info() -> Dict[str, str]:
 
     # Window count
     try:
-        result = subprocess.run(  # nosec B607
+        result = subprocess.run(  # nosec B603 B607 - fixed argv, no user input
             ["wmctrl", "-l"],
             capture_output=True,
             text=True,
@@ -823,7 +823,7 @@ def _get_process_list() -> List[Dict[str, str]]:
 
     try:
         # Get process list with their display usage
-        result = subprocess.run(  # nosec B607
+        result = subprocess.run(  # nosec B603 B607 - fixed argv, no user input
             ["ps", "aux"],
             capture_output=True,
             text=True,

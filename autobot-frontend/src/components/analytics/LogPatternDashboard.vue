@@ -225,6 +225,7 @@
 </template>
 
 <script setup lang="ts">
+import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -315,7 +316,7 @@ const formatAnomalyType = (type: string): string => {
   return translated !== key ? translated : type
 }
 
-const getTrendIcon = (direction: string): string => {
+const getTrendIcon = (direction: string): IconName => {
   switch (direction) {
     case 'increasing': return 'arrow-up'
     case 'decreasing': return 'arrow-down'

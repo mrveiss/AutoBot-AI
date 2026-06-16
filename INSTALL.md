@@ -2,15 +2,22 @@
 
 ## Overview
 
-AutoBot uses a two-phase deployment model:
+AutoBot is a self-hosted AI platform you own: a small core, the **Service Lifecycle
+Manager (SLM)** management layer, and modules on top. Installing AutoBot means standing
+up that stack on your own hardware. (Throughout this guide, **SLM** always means *Service
+Lifecycle Manager* — AutoBot's management layer — never "small language model." For the
+full picture, see [The AutoBot Platform Model](docs/architecture/PLATFORM_MODEL.md).)
 
-1. **`install.sh`** — A Virtualmin-style shell script that deploys the SLM
-   (Service Lifecycle Manager) and all dependencies onto a blank Debian/Ubuntu
-   host.
-2. **Setup Wizard** — A guided web UI that walks you through adding fleet nodes,
-   testing connections, enrolling agents, assigning roles, and provisioning.
+Installation uses a two-phase deployment model:
 
-After both phases complete you have a fully operational AutoBot fleet.
+1. **`install.sh`** — a shell script that deploys the **Service Lifecycle Manager (SLM)**
+   and all dependencies onto a blank Debian/Ubuntu host. The SLM is the management layer
+   that then deploys, operates, and scales the rest of the infrastructure.
+2. **Setup Wizard** — a guided web UI that walks you through adding fleet nodes, testing
+   connections, enrolling agents, assigning roles, and provisioning.
+
+After both phases complete you have a fully operational AutoBot platform and fleet —
+ready to run the core and install modules.
 
 ---
 

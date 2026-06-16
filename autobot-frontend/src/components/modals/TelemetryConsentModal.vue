@@ -76,12 +76,12 @@ Issue #9035: Operator-controlled local usage metrics (never transmitted)
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { useApi } from '@/composables/useApi'
+import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
 import Icon from '@/components/ui/Icon.vue'
 
 const logger = createLogger('TelemetryConsentModal')
-const api = useApi()
+const api = useApiClient()
 
 const isVisible = ref(false)
 const isProcessing = ref(false)
