@@ -227,6 +227,13 @@ async def require_admin(current_user: dict = Depends(get_current_user)) -> dict:
     return current_user
 
 
+# Pre-built dependency for the service-management gate (#10198, epic #10193).
+# Applied at router level to all SLM service-management routers so that an
+# authenticated user WITHOUT service.management gets 403.  Reuses the shared
+# ROLE_PERMISSIONS table — no second permission system.
+require_service_management = require_permission(Permission.SERVICE_MANAGEMENT)
+
+
 async def get_slm_db():
     """Local dependency for SLM database session."""
     from user_management.database import get_slm_session

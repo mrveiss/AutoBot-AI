@@ -99,6 +99,9 @@ class Permission(str, Enum):
     SANDBOX_EXECUTE = "sandbox.execute"
     SANDBOX_MANAGE = "sandbox.manage"
 
+    # === Service Lifecycle Manager ===
+    SERVICE_MANAGEMENT = "service.management"
+
     # === Shell Execution (dangerous — no single-user bypass allowed) ===
     SHELL_EXECUTE = "allow_shell_execute"
 
@@ -163,6 +166,8 @@ SYSTEM_PERMISSIONS: List[tuple] = [
     ("secrets:role:write", "secrets", "role:write", "Write role-vault secrets"),
     ("secrets:role:share", "secrets", "role:share", "Share role-vault secrets"),
     ("secrets:role:revoke", "secrets", "role:revoke", "Revoke role-vault secret grants"),
+    # Service management (#10198) — gates the SLM/service-management surface.
+    ("service.management", "service", "management", "Manage services / SLM administrative surface"),
 ]
 
 # Default system roles with their permissions for database seeding.
@@ -204,6 +209,7 @@ SYSTEM_ROLES: Dict[str, Dict] = {
             "secrets:role:write",
             "secrets:role:share",
             "secrets:role:revoke",
+            "service.management",
         ],
     },
     "user": {
@@ -289,6 +295,7 @@ ROLE_PERMISSIONS: Dict[Role, List[Permission]] = {
         Permission.SANDBOX_VIEW,
         Permission.SANDBOX_EXECUTE,
         Permission.SANDBOX_MANAGE,
+        Permission.SERVICE_MANAGEMENT,
         Permission.SHELL_EXECUTE,
     ],
     Role.OPERATOR: [
@@ -313,6 +320,7 @@ ROLE_PERMISSIONS: Dict[Role, List[Permission]] = {
         Permission.BATCH_EXECUTE,
         Permission.SANDBOX_VIEW,
         Permission.SANDBOX_EXECUTE,
+        Permission.SERVICE_MANAGEMENT,
     ],
     Role.ANALYST: [
         Permission.API_READ,
