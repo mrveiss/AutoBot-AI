@@ -1278,6 +1278,25 @@ async def _seed_agent_registry() -> None:
         logger.warning("Agent registry seeding failed: %s", e)
 
 
+@requires_postgres("Default Admin Seed")
+async def _seed_default_admin() -> None:
+    """Seed the default platform-admin into autobot_users (#10199).
+
+    Idempotent — skips if any admin user already exists or if
+    AUTOBOT_ADMIN_PASSWORD is not configured.  Non-fatal: errors are
+    logged and swallowed so a seed failure never blocks startup.
+    """
+    logger.info("[ 97%%] Admin Seed: seeding default admin user...")
+    try:
+        from user_management.database import get_async_session_factory
+        from user_management.services.seed import seed_default_admin
+
+        async with get_async_session_factory()() as session:
+            await seed_default_admin(session)
+    except Exception as e:
+        logger.warning("Default admin seeding failed (non-critical): %s", e)
+
+
 async def _init_process_adapter(app: FastAPI) -> None:
     """Start ProcessAdapterService queue dispatcher (#1748).
 
@@ -1766,6 +1785,7 @@ async def initialize_background_services(app: FastAPI):
         await _ensure_agent_memory_index()
         await _init_process_adapter(app)
         await _init_orchestrator(app)
+        await _seed_default_admin()
         await _seed_agent_registry()
         await _wire_npu_task_queue()
         await _wire_scheduler_executor()
