@@ -15,7 +15,6 @@ import importlib
 import importlib.util
 
 
-
 def test_mock_transcript_export_module_not_importable():
     """api.transcript_export must not be importable after retirement (#9958)."""
     spec = importlib.util.find_spec("api.transcript_export")
