@@ -18,8 +18,7 @@ Verifies:
   and operator only among the named roles.
 """
 
-import pytest
-from unittest.mock import AsyncMock, patch
+
 
 from autobot_shared.auth.permissions import ROLE_PERMISSIONS, Permission, Role
 

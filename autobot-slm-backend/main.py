@@ -69,8 +69,8 @@ from api.roles import router as roles_router
 from api.voice_proxy import router as voice_proxy_router
 from config import settings
 from middleware import SecurityHeadersMiddleware
-from services.auth import require_service_management
 from services.a2a_card_fetcher import start_card_refresh_task
+from services.auth import require_service_management
 from services.compose_fleet import (
     _SLM_MGMT_IP,
     _compose_nodes_enabled,
