@@ -72,6 +72,21 @@ async def upload_recording(
         project_id,
         file.filename,
     )
+
+    # GH#10128 F5: enqueue transcription pipeline via Celery.
+    # Guard against broker unavailability — a broken broker must not 500 the upload.
+    try:
+        from tasks.transcriber_tasks import transcribe_recording
+
+        transcribe_recording.delay(rid)
+        logger.info("Transcription task enqueued for recording_id=%s", rid)
+    except Exception as _enqueue_err:
+        logger.warning(
+            "Failed to enqueue transcription task for recording_id=%s (broker unavailable?): %s",
+            rid,
+            _enqueue_err,
+        )
+
     rec = await db.get_recording(rid)
     return RecordingOut(**rec)
 

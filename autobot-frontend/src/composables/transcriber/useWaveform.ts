@@ -11,7 +11,7 @@ export function useWaveform(container: Ref<HTMLElement | null>) {
   const isPlaying = ref(false)
   let ws: import('wavesurfer.js').default | null = null
 
-  async function init(audioUrl: string) {
+  async function init(audioUrl: string, peaks?: number[]) {
     const WaveSurfer = (await import('wavesurfer.js')).default
     if (!container.value) return
     ws?.destroy()
@@ -21,6 +21,8 @@ export function useWaveform(container: Ref<HTMLElement | null>) {
       progressColor: 'var(--color-primary-600, #2563eb)',
       height: 64,
       normalize: true,
+      // Precomputed peaks (#9466 /audio/waveform) skip client-side decoding.
+      ...(peaks && peaks.length ? { peaks: [peaks] } : {}),
     })
     ws.on('timeupdate', (t: number) => { currentTime.value = t })
     ws.on('ready', () => { duration.value = ws!.getDuration() })
