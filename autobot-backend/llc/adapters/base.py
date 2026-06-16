@@ -25,6 +25,10 @@ class AdapterRunStatus:
     status: LLCRunStatus
     exit_code: Optional[int] = None
     error: Optional[str] = None
+    # GH#10220: token usage parsed from the CLI output on a completed run, so the
+    # scheduler can forward it to BudgetService.ingest_cost_event (None = unknown).
+    tokens_in: Optional[int] = None
+    tokens_out: Optional[int] = None
 
 
 @runtime_checkable

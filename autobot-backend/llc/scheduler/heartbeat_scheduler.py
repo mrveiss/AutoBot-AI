@@ -46,13 +46,14 @@ from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
 from user_management.database import get_async_session_factory
 
-from ..adapters import AutoBotAgentAdapter, get_adapter
+from ..adapters import AdapterRunStatus, AutoBotAgentAdapter, get_adapter
 from ..adapters.subprocess_base import is_subprocess_adapter
 from ..config import AGENT_API_BASE_URL
-from ..exceptions import AdapterRunFailed, HeartbeatDispatchSkipped, ProviderRateLimited
+from ..exceptions import AdapterRunFailed, BudgetExhausted, HeartbeatDispatchSkipped, ProviderRateLimited
 from ..models.enums import HeartbeatInvocationSource, LLCRunStatus
 from ..models.heartbeat_run import LLCHeartbeatRun
 from ..services.api_key import ApiKeyService
+from ..services.budget import BudgetService
 from ..services.replay_service import RunReplayService, parse_jsonl_events
 
 logger = logging.getLogger(__name__)
@@ -823,7 +824,8 @@ async def _dispatch_registry_adapter(adapter: Any, agent: Dict[str, Any], contex
     external_run_id: Optional[str] = None
     try:
         external_run_id = await adapter.invoke(agent_config, enriched)
-        final_status = await _await_adapter_completion(adapter, agent_config, external_run_id)
+        result = await _await_adapter_completion(adapter, agent_config, external_run_id)
+        final_status = result.status
     except asyncio.CancelledError:
         # Shutdown / task cancellation — kill the external run so it does not
         # outlive its about-to-be-revoked key, then propagate.
@@ -851,7 +853,35 @@ async def _dispatch_registry_adapter(adapter: Any, agent: Dict[str, Any], contex
     if final_status != LLCRunStatus.COMPLETED:
         raise AdapterRunFailed(agent.get("adapter_type") or "", str(external_run_id), final_status)
 
+    # GH#10220: forward parsed token usage to the agent's budget. BudgetExhausted
+    # is re-raised (GH#8215 hard-stop → run marked FAILED); other cost errors are
+    # best-effort and never fail an otherwise-successful run.
+    await _ingest_adapter_usage(agent, result)
+
     return external_run_id
+
+
+async def _ingest_adapter_usage(agent: Dict[str, Any], result: AdapterRunStatus) -> None:
+    """Record a completed registry run's token usage against the agent budget."""
+    if result.tokens_in is None and result.tokens_out is None:
+        return  # adapter did not report usage (e.g. CLI without stream-json result)
+    agent_id: str = agent["agent_id"]
+    model = (agent.get("adapter_config") or {}).get("model") or agent.get("model") or ""
+    try:
+        factory = get_async_session_factory()
+        async with factory() as session:
+            await BudgetService().ingest_cost_event(
+                session,
+                agent_id,
+                int(result.tokens_in or 0),
+                int(result.tokens_out or 0),
+                model,
+            )
+            await session.commit()
+    except BudgetExhausted:
+        raise  # GH#8215 hard-stop — propagate so the run is recorded FAILED
+    except Exception:
+        logger.warning("Budget ingest failed for agent %s (best-effort)", agent_id)
 
 
 async def _safe_cancel(adapter: Any, agent_config: Dict[str, Any], run_id: str) -> None:
@@ -894,22 +924,23 @@ async def _revoke_run_key(agent_id: str, key_id: uuid.UUID) -> None:
         logger.exception("Failed to revoke ephemeral heartbeat key %s for agent %s", key_id, agent_id)
 
 
-async def _await_adapter_completion(adapter: Any, agent_config: Dict[str, Any], run_id: str) -> LLCRunStatus:
+async def _await_adapter_completion(adapter: Any, agent_config: Dict[str, Any], run_id: str) -> AdapterRunStatus:
     """Poll ``adapter.status`` until the run is terminal or the max wait elapses.
 
-    Cancels the run if it overruns ``_ADAPTER_MAX_WAIT_SECONDS`` so the
-    ephemeral key is never left live indefinitely.
+    Returns the full terminal :class:`AdapterRunStatus` (carrying token usage for
+    billing, GH#10220). Cancels the run if it overruns
+    ``_ADAPTER_MAX_WAIT_SECONDS`` so the ephemeral key is never left live forever.
     """
     started = time.monotonic()
     while time.monotonic() - started < _ADAPTER_MAX_WAIT_SECONDS:
         result = await adapter.status(agent_config, run_id)
         if result.status.is_terminal():
-            return result.status
+            return result
         await asyncio.sleep(_ADAPTER_POLL_INTERVAL)
 
     logger.warning("Adapter run %s exceeded max wait — cancelling", run_id)
     await adapter.cancel(agent_config, run_id)
-    return LLCRunStatus.TIMEOUT
+    return AdapterRunStatus(status=LLCRunStatus.TIMEOUT)
 
 
 async def _fetch_recent_decisions(company_id: str, n: int = 5) -> list[Dict[str, Any]]:
