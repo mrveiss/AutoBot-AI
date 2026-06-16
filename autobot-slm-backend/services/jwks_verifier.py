@@ -180,7 +180,7 @@ async def verify_authority_token(token: str) -> Optional[Dict[str, Any]]:
     fetch_timeout = settings.jwks_fetch_timeout_seconds
 
     token_alg = _peek_alg(token)
-    if token_alg != "RS256":
+    if token_alg != "RS256":  # nosec B105 - JWT algorithm identifier, not a credential
         # Called with a non-RS256 token — logic error in caller
         logger.warning("verify_authority_token called with non-RS256 token (alg=%r)", token_alg)
         return None
