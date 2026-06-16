@@ -13,9 +13,8 @@ work runs inside ``asyncio.run()``, matching the pattern of
 
 import asyncio
 
-from celery_app import celery_app
-
 from autobot_shared.logging_manager import get_logger
+from celery_app import celery_app
 
 logger = get_logger(__name__)
 
