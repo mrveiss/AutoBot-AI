@@ -113,6 +113,14 @@ class RAGConfig:
     autonomous_loop_dry_run: bool = True  # dry-run until explicitly disabled
     autonomous_loop_promotion_threshold: float = 0.05  # 5 % improvement required
 
+    # Issue #9018: CAG/KAG retrieval strategy flags (Phase 1)
+    # Shipped disabled by default; enable after benchmarking (Phase 4).
+    enable_cag: bool = False
+    enable_kag: bool = False
+    cag_max_documents: int = 10
+    cag_output_headroom_tokens: int = 2048
+    default_retrieval_mode: Literal["auto", "rag", "cag", "kag"] = "auto"
+
     def __post_init__(self) -> None:
         """Validate configuration values and propagate mmr_lambda to rerank_weights.
 
@@ -262,6 +270,12 @@ class RAGConfig:
             "autonomous_loop_cron": self.autonomous_loop_cron,
             "autonomous_loop_dry_run": self.autonomous_loop_dry_run,
             "autonomous_loop_promotion_threshold": self.autonomous_loop_promotion_threshold,
+            # Issue #9018: CAG/KAG retrieval strategy flags
+            "enable_cag": self.enable_cag,
+            "enable_kag": self.enable_kag,
+            "cag_max_documents": self.cag_max_documents,
+            "cag_output_headroom_tokens": self.cag_output_headroom_tokens,
+            "default_retrieval_mode": self.default_retrieval_mode,
         }
 
 
