@@ -13,9 +13,7 @@ These tests confirm no orphan registration or importable module remains.
 
 import importlib
 import importlib.util
-import sys
 
-import pytest
 
 
 def test_mock_transcript_export_module_not_importable():
