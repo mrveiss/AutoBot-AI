@@ -703,6 +703,39 @@ class AuthPermissionResponse(BaseModel):
     error: str | None = None
 
 
+class AuthValidateRequest(BaseModel):
+    """Optional body for POST /auth/validate — token may also come from Bearer header."""
+
+    token: str | None = None
+
+
+class AuthValidateClaims(BaseModel):
+    """Claims block nested inside AuthValidateResponse."""
+
+    username: str | None = None
+    role: str | None = None
+    user_id: str | None = None
+    org_id: str | None = None
+    email: str | None = None
+    exp: int | None = None
+
+
+class AuthValidateResponse(BaseModel):
+    """Response for POST /auth/validate (#10195)."""
+
+    valid: bool
+    claims: AuthValidateClaims | None = None
+    expired: bool = False
+    revoked: bool = False
+
+
+class AuthRoleEntry(BaseModel):
+    """Single role entry for GET /auth/roles (#10195)."""
+
+    name: str
+    permissions: List[str]
+
+
 # ---------------------------------------------------------------------------
 # agent_terminal.py schemas  (Issue #5985)
 # ---------------------------------------------------------------------------
