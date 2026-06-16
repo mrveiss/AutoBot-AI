@@ -18,8 +18,6 @@ Verifies:
   and operator only among the named roles.
 """
 
-
-
 from autobot_shared.auth.permissions import ROLE_PERMISSIONS, Permission, Role
 
 # ---------------------------------------------------------------------------
