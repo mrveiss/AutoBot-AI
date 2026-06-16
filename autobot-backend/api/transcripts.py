@@ -35,7 +35,7 @@ from knowledge import get_knowledge_base
 from llm_shared import LLMRequest, get_provider_registry
 from transcriber.ai.context import build_context
 from transcriber.ai.prompts import get_system_prompt
-from transcriber.deps import DEFAULT_USER, can_access
+from transcriber.deps import can_access
 from transcriber.export.segments import build_segment_list
 
 logger = get_logger(__name__)
@@ -46,8 +46,16 @@ _WS_CLOSE_CODES = {404: 4004, 400: 1008}
 
 
 def _resolve_user_id(user: dict) -> str:
-    """Map an auth payload to the transcriber user-id convention."""
-    return str(user.get("user_id") or user.get("username") or DEFAULT_USER)
+    """Map an auth payload to the transcriber user-id string.
+
+    Raises 403 if the principal carries no identity fields.  A
+    malformed-but-authenticated principal must NOT silently inherit
+    DEFAULT_USER — that was the IDOR (#9968) at the resolver level.
+    """
+    uid = user.get("user_id") or user.get("username")
+    if not uid:
+        raise HTTPException(status_code=403, detail="Authenticated principal has no identity")
+    return str(uid)
 
 
 async def _load_recording(state: State, transcript_id: str, caller_id: str) -> dict:

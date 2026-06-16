@@ -69,3 +69,13 @@ def get_adapter(adapter_type: str) -> LLCAdapter:
     if adapter_type not in _registry:
         raise KeyError(f"No LLC adapter registered for type {adapter_type!r}. " f"Known types: {sorted(_registry)}")
     return _registry[adapter_type]
+
+
+def registered_adapter_types() -> list[str]:
+    """Sorted list of adapter_type keys currently in the registry.
+
+    Used to validate an agent's ``adapter_type`` at hire time (GH#9008/#9033)
+    so an unknown type cannot create an agent that is then perpetually SKIPPED
+    by the heartbeat scheduler (no adapter registered → skip).
+    """
+    return sorted(_registry)
