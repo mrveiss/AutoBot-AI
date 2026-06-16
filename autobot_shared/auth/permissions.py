@@ -152,6 +152,17 @@ SYSTEM_PERMISSIONS: List[tuple] = [
     # Audit (Issue #683: Role-Based Access Control)
     ("audit:read", "audit", "read", "View audit logs"),
     ("audit:write", "audit", "write", "Manage audit logs (cleanup)"),
+    # Unified secrets — team/role vault access (#10088). The system/user/company/
+    # node vaults are gated by admin / ownership / LLC-membership, so only the
+    # team and role vaults consult these RBAC permissions (services/secrets_authz).
+    ("secrets:team:read", "secrets", "team:read", "Read team-vault secrets"),
+    ("secrets:team:write", "secrets", "team:write", "Write team-vault secrets"),
+    ("secrets:team:share", "secrets", "team:share", "Share team-vault secrets"),
+    ("secrets:team:revoke", "secrets", "team:revoke", "Revoke team-vault secret grants"),
+    ("secrets:role:read", "secrets", "role:read", "Read role-vault secrets"),
+    ("secrets:role:write", "secrets", "role:write", "Write role-vault secrets"),
+    ("secrets:role:share", "secrets", "role:share", "Share role-vault secrets"),
+    ("secrets:role:revoke", "secrets", "role:revoke", "Revoke role-vault secret grants"),
 ]
 
 # Default system roles with their permissions for database seeding.
@@ -184,6 +195,15 @@ SYSTEM_ROLES: Dict[str, Dict] = {
             "admin:organization",
             "audit:read",
             "audit:write",
+            # Unified secrets (#10088): full team/role vault control.
+            "secrets:team:read",
+            "secrets:team:write",
+            "secrets:team:share",
+            "secrets:team:revoke",
+            "secrets:role:read",
+            "secrets:role:write",
+            "secrets:role:share",
+            "secrets:role:revoke",
         ],
     },
     "user": {
@@ -200,6 +220,12 @@ SYSTEM_ROLES: Dict[str, Dict] = {
             "files:upload",
             "files:download",
             "settings:read",
+            # Unified secrets (#10088): members read/write their team/role vault
+            # secrets; sharing/revoking grants stays admin-only.
+            "secrets:team:read",
+            "secrets:team:write",
+            "secrets:role:read",
+            "secrets:role:write",
         ],
     },
     "readonly": {
