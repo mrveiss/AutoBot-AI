@@ -3,6 +3,7 @@
 // AutoBot - AI-Powered Automation Platform
 // Author: mrveiss
 import { useApiClient } from '@/plugins/api'
+import { getBackendUrl } from '@/config/ssot-config'
 
 export interface Project {
   id: number
@@ -55,6 +56,20 @@ export interface TranscriptResponse {
   segments: Segment[]
 }
 
+export interface WaveformSegmentMarker {
+  start_time: number
+  end_time: number
+  speaker_id: number | null
+}
+
+export interface WaveformResponse {
+  recording_id: number
+  duration: number
+  peaks: number[]
+  width: number
+  segments: WaveformSegmentMarker[]
+}
+
 export interface KbPushStatus {
   pushed: boolean
   pushed_at: string | null
@@ -97,6 +112,13 @@ export function useTranscriberApi() {
     createNote: (segmentId: number, content: string) =>
       api.post(`${base}/segments/${segmentId}/notes`, { content }),
     deleteNote: (noteId: number) => api.delete(`${base}/notes/${noteId}`),
+
+    // Audio playback (#9466)
+    // Absolute URL streamed directly by the <audio>/wavesurfer element via HTTP Range.
+    audioChunksUrl: (recordingId: number) =>
+      `${getBackendUrl()}${base}/recordings/${recordingId}/audio/chunks`,
+    getWaveform: (recordingId: number) =>
+      api.get<WaveformResponse>(`${base}/recordings/${recordingId}/audio/waveform`),
 
     // Export
     exportRecording: (recordingId: number, format: 'docx' | 'pdf' | 'srt' | 'vtt', options = {}) =>
