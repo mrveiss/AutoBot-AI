@@ -424,7 +424,7 @@ async def _init_builtin_extensions(app: FastAPI) -> None:
 
 
 async def _init_transcriber_db(app: FastAPI) -> None:
-    """Initialize the transcriber SQLite database (GH#9044).
+    """Initialize the transcriber SQLite database and speech providers (GH#9044, #10128).
 
     Non-critical: a failure logs a warning but does not block startup.
     Skipped entirely when TRANSCRIBER_ENABLED != true.
@@ -455,6 +455,16 @@ async def _init_transcriber_db(app: FastAPI) -> None:
         logger.info("Transcriber DB initialized")
     except Exception as _tc_err:
         logger.warning("Transcriber DB init failed (non-critical): %s", _tc_err)
+
+    # Register speech providers (GH#10128 F3).  Non-critical — a single bad
+    # provider must not abort startup.
+    try:
+        from voice_processing.providers.registry_init import initialize_providers
+
+        initialize_providers()
+        logger.info("Speech provider registry initialized")
+    except Exception as _prov_err:
+        logger.warning("Speech provider registry init failed (non-critical): %s", _prov_err)
 
 
 async def initialize_critical_services(app: FastAPI):
