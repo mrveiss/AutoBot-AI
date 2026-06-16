@@ -68,8 +68,9 @@
                   :items="overflowNavItems"
                 />
 
-                <!-- SLM Admin: external link (Issue #729, #8753) -->
-                <div class="flex items-center shrink-0">
+                <!-- SLM Admin: external link (Issue #729, #8753, #10198) -->
+                <!-- Gate: visible only to roles with service.management (admin, operator) -->
+                <div v-if="userStore.hasServiceManagement" class="flex items-center shrink-0">
                   <div class="w-px h-5 bg-autobot-border mx-1" aria-hidden="true"></div>
                   <a
                     :href="slmAdminUrl"
@@ -239,8 +240,9 @@
             </router-link>
             </template>
 
-            <!-- SLM Admin: external link (Issue #729, #8753) -->
-            <div class="border-t border-autobot-border pt-2 mt-1">
+            <!-- SLM Admin: external link (Issue #729, #8753, #10198) -->
+            <!-- Gate: visible only to roles with service.management (admin, operator) -->
+            <div v-if="userStore.hasServiceManagement" class="border-t border-autobot-border pt-2 mt-1">
               <a
                 :href="slmAdminUrl"
                 target="_blank"

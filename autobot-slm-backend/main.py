@@ -14,7 +14,7 @@ import os
 import sys
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from api import (
@@ -69,6 +69,7 @@ from api.roles import router as roles_router
 from api.voice_proxy import router as voice_proxy_router
 from config import settings
 from middleware import SecurityHeadersMiddleware
+from services.auth import require_service_management
 from services.a2a_card_fetcher import start_card_refresh_task
 from services.compose_fleet import (
     _SLM_MGMT_IP,
@@ -462,60 +463,74 @@ app.add_middleware(
 # Registered after CORSMiddleware so CORS headers are already present.
 app.add_middleware(SecurityHeadersMiddleware)
 
+# Routers intentionally left open (no service.management gate):
+#   health_router   — liveness/readiness probes; must be reachable without credentials
+#   auth_router     — login, /me, refresh, JWKS consumer; authentication entry points
+#   sso_router      — SSO provider list; accessed before credentials are available
+#   sso_auth_router — OAuth callback; must complete before a token exists
+#   websocket_router — out of scope (#10198); has separate async auth handling
+
+# Service-management gate (#10198, epic #10193): all other routers require
+# Permission.SERVICE_MANAGEMENT.  Ordinary users (role=user/readonly/analyst/editor)
+# do not have this permission and receive 403.  Admin and Operator do.
+_SM = [Depends(require_service_management)]
+
 app.include_router(health_router, prefix="/api")
-app.include_router(browser_router, prefix="/api")
-app.include_router(agents_router, prefix="/api")
 app.include_router(auth_router, prefix="/api")
-app.include_router(nodes_router, prefix="/api")
-app.include_router(nodes_execution_router, prefix="/api")  # Issue #3406
-app.include_router(services_router, prefix="/api")
-app.include_router(fleet_services_router, prefix="/api")
-app.include_router(deployments_router, prefix="/api")
-app.include_router(blue_green_router, prefix="/api")
-app.include_router(settings_router, prefix="/api")
-app.include_router(stateful_router, prefix="/api")
-app.include_router(updates_router, prefix="/api")
-app.include_router(maintenance_router, prefix="/api")
-app.include_router(monitoring_router, prefix="/api")
-app.include_router(performance_router, prefix="/api")
-app.include_router(errors_router, prefix="/api")
-app.include_router(events_router, prefix="/api")
-app.include_router(external_agents_router, prefix="/api")
 app.include_router(websocket_router, prefix="/api")
-app.include_router(node_rdp_router, prefix="/api")
-app.include_router(rdp_router, prefix="/api")
-app.include_router(node_vnc_router, prefix="/api")
-app.include_router(vnc_router, prefix="/api")
-app.include_router(node_tls_router, prefix="/api")
-app.include_router(tls_router, prefix="/api")
-app.include_router(secrets_router, prefix="/api")
-app.include_router(security_router, prefix="/api")
-app.include_router(code_sync_router, prefix="/api")
-app.include_router(roles_router, prefix="/api")
-app.include_router(code_source_router, prefix="/api")
-app.include_router(personality_proxy_router, prefix="/api")  # Issue #1145
-app.include_router(voice_proxy_router, prefix="/api")  # Voice proxy for personality voice assignment
-app.include_router(orchestration_router, prefix="/api")
-app.include_router(discovery_router, prefix="/api")
-app.include_router(config_router, prefix="/api")
-app.include_router(node_config_router, prefix="/api/nodes")
-app.include_router(npu_router, prefix="/api")
-# Issue #786: Infrastructure setup playbooks
-app.include_router(infrastructure_router, prefix="/api")
-# User Management routers (Issue #576)
-app.include_router(slm_users_router, prefix="/api")
-app.include_router(autobot_users_router, prefix="/api")
-app.include_router(autobot_teams_router, prefix="/api")
-# SSO Integration (Issue #576 Phase 4)
+# SSO Integration (Issue #576 Phase 4) — open: auth entry points
 app.include_router(sso_router, prefix="/api")
 app.include_router(sso_auth_router, prefix="/api")
+
+# --- Service-management–gated routers ---
+app.include_router(browser_router, prefix="/api", dependencies=_SM)
+app.include_router(agents_router, prefix="/api", dependencies=_SM)
+app.include_router(nodes_router, prefix="/api", dependencies=_SM)
+app.include_router(nodes_execution_router, prefix="/api", dependencies=_SM)  # Issue #3406
+app.include_router(services_router, prefix="/api", dependencies=_SM)
+app.include_router(fleet_services_router, prefix="/api", dependencies=_SM)
+app.include_router(deployments_router, prefix="/api", dependencies=_SM)
+app.include_router(blue_green_router, prefix="/api", dependencies=_SM)
+app.include_router(settings_router, prefix="/api", dependencies=_SM)
+app.include_router(stateful_router, prefix="/api", dependencies=_SM)
+app.include_router(updates_router, prefix="/api", dependencies=_SM)
+app.include_router(maintenance_router, prefix="/api", dependencies=_SM)
+app.include_router(monitoring_router, prefix="/api", dependencies=_SM)
+app.include_router(performance_router, prefix="/api", dependencies=_SM)
+app.include_router(errors_router, prefix="/api", dependencies=_SM)
+app.include_router(events_router, prefix="/api", dependencies=_SM)
+app.include_router(external_agents_router, prefix="/api", dependencies=_SM)
+app.include_router(node_rdp_router, prefix="/api", dependencies=_SM)
+app.include_router(rdp_router, prefix="/api", dependencies=_SM)
+app.include_router(node_vnc_router, prefix="/api", dependencies=_SM)
+app.include_router(vnc_router, prefix="/api", dependencies=_SM)
+app.include_router(node_tls_router, prefix="/api", dependencies=_SM)
+app.include_router(tls_router, prefix="/api", dependencies=_SM)
+app.include_router(secrets_router, prefix="/api", dependencies=_SM)
+app.include_router(security_router, prefix="/api", dependencies=_SM)
+app.include_router(code_sync_router, prefix="/api", dependencies=_SM)
+app.include_router(roles_router, prefix="/api", dependencies=_SM)
+app.include_router(code_source_router, prefix="/api", dependencies=_SM)
+app.include_router(personality_proxy_router, prefix="/api", dependencies=_SM)  # Issue #1145
+app.include_router(voice_proxy_router, prefix="/api", dependencies=_SM)  # Voice proxy for personality voice assignment
+app.include_router(orchestration_router, prefix="/api", dependencies=_SM)
+app.include_router(discovery_router, prefix="/api", dependencies=_SM)
+app.include_router(config_router, prefix="/api", dependencies=_SM)
+app.include_router(node_config_router, prefix="/api/nodes", dependencies=_SM)
+app.include_router(npu_router, prefix="/api", dependencies=_SM)
+# Issue #786: Infrastructure setup playbooks
+app.include_router(infrastructure_router, prefix="/api", dependencies=_SM)
+# User Management routers (Issue #576)
+app.include_router(slm_users_router, prefix="/api", dependencies=_SM)
+app.include_router(autobot_users_router, prefix="/api", dependencies=_SM)
+app.include_router(autobot_teams_router, prefix="/api", dependencies=_SM)
 # MFA and API Keys (Issue #576 Phase 5)
-app.include_router(mfa_router, prefix="/api")
-app.include_router(api_keys_router, prefix="/api")
+app.include_router(mfa_router, prefix="/api", dependencies=_SM)
+app.include_router(api_keys_router, prefix="/api", dependencies=_SM)
 # Setup Wizard (Issue #1294)
-app.include_router(setup_wizard_router, prefix="/api")
+app.include_router(setup_wizard_router, prefix="/api", dependencies=_SM)
 # LLM Configuration (Issue #2371)
-app.include_router(llm_config_router, prefix="/api")
+app.include_router(llm_config_router, prefix="/api", dependencies=_SM)
 
 
 @app.get("/")

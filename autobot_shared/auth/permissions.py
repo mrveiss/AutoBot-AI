@@ -99,6 +99,9 @@ class Permission(str, Enum):
     SANDBOX_EXECUTE = "sandbox.execute"
     SANDBOX_MANAGE = "sandbox.manage"
 
+    # === Service Lifecycle Manager ===
+    SERVICE_MANAGEMENT = "service.management"
+
     # === Shell Execution (dangerous — no single-user bypass allowed) ===
     SHELL_EXECUTE = "allow_shell_execute"
 
@@ -289,6 +292,7 @@ ROLE_PERMISSIONS: Dict[Role, List[Permission]] = {
         Permission.SANDBOX_VIEW,
         Permission.SANDBOX_EXECUTE,
         Permission.SANDBOX_MANAGE,
+        Permission.SERVICE_MANAGEMENT,
         Permission.SHELL_EXECUTE,
     ],
     Role.OPERATOR: [
@@ -313,6 +317,7 @@ ROLE_PERMISSIONS: Dict[Role, List[Permission]] = {
         Permission.BATCH_EXECUTE,
         Permission.SANDBOX_VIEW,
         Permission.SANDBOX_EXECUTE,
+        Permission.SERVICE_MANAGEMENT,
     ],
     Role.ANALYST: [
         Permission.API_READ,
