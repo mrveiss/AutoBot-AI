@@ -23,7 +23,6 @@ from unittest.mock import AsyncMock, patch
 
 from autobot_shared.auth.permissions import ROLE_PERMISSIONS, Permission, Role
 
-
 # ---------------------------------------------------------------------------
 # 1. Canonical permission is present and correctly placed
 # ---------------------------------------------------------------------------
@@ -125,9 +124,7 @@ class TestRequireServiceManagementLogic:
 
     def test_unknown_role_denied(self):
         """Injected or unknown role string falls back to USER → denied."""
-        assert not _simulate_require_service_management(
-            {"sub": "attacker", "role": "superadmin_inject"}
-        )
+        assert not _simulate_require_service_management({"sub": "attacker", "role": "superadmin_inject"})
 
     def test_missing_role_and_no_admin_flag_denied(self):
         """Payload with no role and no admin flag → USER → denied."""
