@@ -16,9 +16,10 @@ from types import SimpleNamespace
 
 import pytest
 import pytest_asyncio
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from httpx import ASGITransport, AsyncClient
 
+from api.transcripts import _resolve_user_id
 from transcriber.database import Database
 from transcriber.deps import DEFAULT_USER, can_access, get_db
 from transcriber.routes.projects import router as projects_router
@@ -76,12 +77,50 @@ async def _upload_recording(client, user: str, pid: int) -> int:
 
 
 def test_can_access_policy_unit():
-    """can_access: owner yes, other user no, legacy DEFAULT_USER rows shared."""
+    """can_access: strict ownership — owner yes, everyone else no.
+
+    Cases required by #9968:
+    (a) owner == caller → allow
+    (b) different real users → deny
+    (c) DEFAULT_USER row + DEFAULT_USER caller (single_user mode) → allow
+    (d) DEFAULT_USER row + real user → DENY  (was the IDOR)
+    (e) unowned / empty user_id → deny
+    """
+    # (a) owner == caller → allow
     assert can_access({"user_id": "alice"}, "alice") is True
+    # (b) different real users → deny
     assert can_access({"user_id": "alice"}, "bob") is False
-    assert can_access({"user_id": DEFAULT_USER}, "bob") is True
-    # Rows from before auth wiring (no user_id stamp) stay readable.
-    assert can_access({}, "bob") is True
+    # (c) single_user: DEFAULT_USER caller accesses DEFAULT_USER row → allow
+    assert can_access({"user_id": DEFAULT_USER}, DEFAULT_USER) is True
+    # (d) IDOR fix: real user must NOT access DEFAULT_USER-owned row
+    assert can_access({"user_id": DEFAULT_USER}, "bob") is False
+    # (e) unowned (no user_id key) → deny
+    assert can_access({}, "bob") is False
+    # (e) explicit empty string user_id → deny
+    assert can_access({"user_id": ""}, "bob") is False
+
+
+def test_resolve_user_id_returns_real_identity():
+    """_resolve_user_id: returns user_id or username when present."""
+    assert _resolve_user_id({"user_id": "alice"}) == "alice"
+    assert _resolve_user_id({"username": "bob"}) == "bob"
+    # user_id takes precedence over username
+    assert _resolve_user_id({"user_id": "alice", "username": "other"}) == "alice"
+
+
+def test_resolve_user_id_raises_when_no_identity():
+    """_resolve_user_id: raises 403 — never silently returns DEFAULT_USER (#9968)."""
+    with pytest.raises(HTTPException) as exc_info:
+        _resolve_user_id({})
+    assert exc_info.value.status_code == 403
+
+    with pytest.raises(HTTPException) as exc_info:
+        _resolve_user_id({"user_id": None, "username": None})
+    assert exc_info.value.status_code == 403
+
+    with pytest.raises(HTTPException) as exc_info:
+        _resolve_user_id({"user_id": "", "username": ""})
+    assert exc_info.value.status_code == 403
 
 
 @pytest.mark.asyncio
@@ -139,11 +178,21 @@ async def test_second_user_cannot_access_recordings(client):
 
 
 @pytest.mark.asyncio
-async def test_legacy_default_rows_stay_accessible(client):
-    """Pre-auth rows (stamped DEFAULT_USER) remain readable by any caller."""
+async def test_legacy_default_rows_not_accessible_to_other_users(client):
+    """DEFAULT_USER rows are NOT shared across real users (#9968 IDOR fix).
+
+    Pre-auth rows (stamped DEFAULT_USER) are accessible only by the
+    DEFAULT_USER caller (single_user mode).  Real authenticated users are
+    denied — the old "any caller can read default rows" behaviour was the
+    IDOR.  Cross-user reassignment of legacy rows is tracked separately.
+    """
     r = await client.post(
         "/api/transcriber/projects", json={"name": "legacy", "description": ""}
     )  # no user header -> DEFAULT_USER
     pid = r.json()["id"]
+    # Real user bob is DENIED access to a DEFAULT_USER-owned row
     r = await client.get(f"/api/transcriber/projects/{pid}", headers={USER_HEADER: "bob"})
+    assert r.status_code == 404, "IDOR (#9968): real user should not access DEFAULT_USER rows"
+    # DEFAULT_USER caller (single_user) can still access its own rows
+    r = await client.get(f"/api/transcriber/projects/{pid}", headers={USER_HEADER: DEFAULT_USER})
     assert r.status_code == 200
