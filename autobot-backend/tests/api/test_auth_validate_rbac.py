@@ -32,7 +32,6 @@ from api.schemas_agent import AuthValidateRequest
 from autobot_shared.auth.jwt_core import JWTDecodeError
 from autobot_shared.auth.permissions import ROLE_PERMISSIONS, Permission, Role
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -248,29 +247,27 @@ class TestValidateRequiresServiceAuth:
         req = _make_request()
 
         with patch("api.auth.get_auth_middleware", return_value=mw):
-            result = asyncio.get_event_loop().run_until_complete(
-                validate_token(request=req, body=body, _=True)
-            )
+            result = asyncio.get_event_loop().run_until_complete(validate_token(request=req, body=body, _=True))
         assert result.valid is True
 
     def test_validate_endpoint_blocked_when_dependency_raises(self):
         """When the dependency raises HTTPException the endpoint must not run."""
         import asyncio
+
         from fastapi import HTTPException
 
         mw = _make_mw(payload=GOOD_PAYLOAD, session={"user_data": {}})
         body = AuthValidateRequest(token="any.token.here")
-        req = _make_request()
+        _make_request()
 
         # Simulate what check_admin_permission does for an unauthenticated caller:
         # raise HTTPException(403).  We pass it as the FastAPI dependency would.
         async def _call():
             raise HTTPException(status_code=403, detail="Admin permission required")
+
         with patch("api.auth.get_auth_middleware", return_value=mw):
             with pytest.raises(HTTPException) as exc_info:
-                asyncio.get_event_loop().run_until_complete(
-                    _call()
-                )
+                asyncio.get_event_loop().run_until_complete(_call())
         assert exc_info.value.status_code == 403
 
 

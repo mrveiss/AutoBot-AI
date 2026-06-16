@@ -754,8 +754,7 @@ async def list_roles(
     Gated by ``get_current_user`` (any authenticated caller).
     """
     return [
-        AuthRoleEntry(name=role.value, permissions=[p.value for p in perms])
-        for role, perms in ROLE_PERMISSIONS.items()
+        AuthRoleEntry(name=role.value, permissions=[p.value for p in perms]) for role, perms in ROLE_PERMISSIONS.items()
     ]
 
 
