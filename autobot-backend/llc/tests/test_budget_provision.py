@@ -429,3 +429,68 @@ async def test_provision_budget_race_returns_existing(session_factory) -> None: 
 
     assert created is False
     assert row.agent_id == agent_id
+
+
+# ---------------------------------------------------------------------------
+# adapter_type validation at hire time (GH#9008/#9033)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_hire_rejects_unknown_adapter_type(client) -> None:  # noqa: ANN001
+    """An unregistered adapter_type is rejected with 422 (not silently created
+    into a perpetually-skipped agent)."""
+    company_id = str(uuid.uuid4())
+    resp = await client.post(
+        f"/api/llc/companies/{company_id}/agent-hires",
+        json={"agent_name": "BadAdapter", "adapter_type": "totally-bogus"},
+    )
+    assert resp.status_code == 422
+    assert "adapter_type" in resp.text
+
+
+@pytest.mark.asyncio
+async def test_hire_accepts_registered_adapter_type(client) -> None:  # noqa: ANN001
+    """A registered adapter_type (e.g. copilot_local) passes validation."""
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    company_id = str(uuid.uuid4())
+    mock_provision = AsyncMock(
+        return_value=(
+            MagicMock(
+                agent_id="stub",
+                company_id=company_id,
+                budget_mode="dollars",
+                budget_spent=Decimal("0"),
+                budget_limit=Decimal("10.00"),
+                token_limit=None,
+                tokens_spent=0,
+                alert_threshold=0.8,
+            ),
+            True,
+        )
+    )
+    with (
+        patch("llc.api.agent_hires.BudgetService.provision_budget", mock_provision),
+        patch("sqlalchemy.ext.asyncio.AsyncSession.execute", AsyncMock(return_value=MagicMock())),
+    ):
+        resp = await client.post(
+            f"/api/llc/companies/{company_id}/agent-hires",
+            json={"agent_name": "GoodAdapter", "adapter_type": "copilot_local"},
+        )
+    assert resp.status_code == 201, resp.text
+
+
+def test_registered_adapter_types_includes_all_five() -> None:
+    """The five canonical adapter types are registered (GH#9008/#9033)."""
+    from llc.adapters import registered_adapter_types
+
+    types = registered_adapter_types()
+    for expected in (
+        "claude_code",
+        "claude_code_subscription",
+        "copilot_local",
+        "copilot_subscription",
+        "codex_subscription",
+    ):
+        assert expected in types, types

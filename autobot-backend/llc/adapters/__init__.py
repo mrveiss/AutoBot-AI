@@ -21,7 +21,13 @@ Public surface:
 from typing import Optional
 
 from .autobot_agent_adapter import AutoBotAgentAdapter
-from .base import AdapterRunStatus, LLCAdapter, get_adapter, register_adapter
+from .base import (
+    AdapterRunStatus,
+    LLCAdapter,
+    get_adapter,
+    register_adapter,
+    registered_adapter_types,
+)
 from .claude_code_adapter import ClaudeCodeAdapter
 from .claude_code_subscription_adapter import ClaudeCodeSubscriptionAdapter
 from .codex_subscription_adapter import CodexSubscriptionAdapter
@@ -40,6 +46,7 @@ __all__ = [
     "get_adapter",
     "get_adapter_for_agent",
     "register_adapter",
+    "registered_adapter_types",
 ]
 
 # Register adapters under their canonical type keys.

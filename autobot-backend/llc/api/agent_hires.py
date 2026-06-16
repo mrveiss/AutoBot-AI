@@ -22,6 +22,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.logging_manager import get_logger
+from llc.adapters import registered_adapter_types
 from llc.services.budget import BudgetService
 from llc.services.model_tiers import get_model_tier_service
 from user_management.database import get_async_session
@@ -351,6 +352,16 @@ async def hire_agent(
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"Unsupported model {resolved_model!r}. Supported values: {sorted(_VALID_MODELS)}",
+        )
+
+    # GH#9008/#9033: reject an unregistered adapter_type at hire time. Without
+    # this, an unknown type silently creates an agent whose every heartbeat is
+    # skipped (no adapter registered), looking degraded forever.
+    resolved_adapter = body.adapter_type or "claude_code"
+    if resolved_adapter not in registered_adapter_types():
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(f"Unknown adapter_type {resolved_adapter!r}. " f"Registered types: {registered_adapter_types()}"),
         )
 
     is_haiku = resolved_model == HAIKU_MODEL
