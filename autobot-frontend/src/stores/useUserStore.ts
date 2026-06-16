@@ -14,7 +14,7 @@ export interface UserProfile {
   email?: string
   displayName: string
   avatar?: string
-  role: 'admin' | 'user' | 'viewer'
+  role: 'admin' | 'operator' | 'analyst' | 'editor' | 'user' | 'viewer' | 'readonly'
   preferences: UserPreferences
   createdAt: Date
   lastLoginAt?: Date
@@ -97,6 +97,14 @@ export const useUserStore = defineStore('user', () => {
   const isAuthenticated = computed(() => authState.value.isAuthenticated)
 
   const isAdmin = computed(() => currentUser.value?.role === 'admin')
+
+  // Roles that hold Permission.SERVICE_MANAGEMENT (service.management) — must
+  // mirror ROLE_PERMISSIONS in autobot_shared/auth/permissions.py (#10198).
+  // Fail-safe: unknown role → false (hidden).
+  const hasServiceManagement = computed(() => {
+    const role = currentUser.value?.role
+    return role === 'admin' || role === 'operator'
+  })
 
   const preferences = computed(() => currentUser.value?.preferences || defaultPreferences)
 
@@ -342,7 +350,7 @@ export const useUserStore = defineStore('user', () => {
             username: data.username,
             email: data.email || '',
             displayName: data.username.charAt(0).toUpperCase() + data.username.slice(1),
-            role: data.role as 'admin' | 'user' | 'viewer',
+            role: data.role as UserProfile['role'],
             preferences: defaultPreferences,
             createdAt: new Date(),
             lastLoginAt: new Date()
@@ -420,6 +428,7 @@ export const useUserStore = defineStore('user', () => {
     // Computed
     isAuthenticated,
     isAdmin,
+    hasServiceManagement,
     preferences,
     theme,
     isTokenExpired,
