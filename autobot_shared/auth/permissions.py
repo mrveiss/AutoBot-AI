@@ -166,6 +166,8 @@ SYSTEM_PERMISSIONS: List[tuple] = [
     ("secrets:role:write", "secrets", "role:write", "Write role-vault secrets"),
     ("secrets:role:share", "secrets", "role:share", "Share role-vault secrets"),
     ("secrets:role:revoke", "secrets", "role:revoke", "Revoke role-vault secret grants"),
+    # Service management (#10198) — gates the SLM/service-management surface.
+    ("service.management", "service", "management", "Manage services / SLM administrative surface"),
 ]
 
 # Default system roles with their permissions for database seeding.
@@ -207,6 +209,7 @@ SYSTEM_ROLES: Dict[str, Dict] = {
             "secrets:role:write",
             "secrets:role:share",
             "secrets:role:revoke",
+            "service.management",
         ],
     },
     "user": {
