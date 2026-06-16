@@ -12,12 +12,16 @@ from collections import defaultdict
 from time import time
 from typing import Dict, List
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 
 from api.schemas_agent import (
     AuthCheckResponse,
     AuthPermissionResponse,
+    AuthRoleEntry,
     AuthUserInfoResponse,
+    AuthValidateClaims,
+    AuthValidateRequest,
+    AuthValidateResponse,
     ChangePasswordRequest,
     ChangePasswordResponse,
     LoginRequest,
@@ -28,8 +32,9 @@ from api.schemas_agent import (
 )
 from api.schemas_common import DataResponse
 from api.schemas_system import AuthLogoutData, AuthRefreshData
-from auth_middleware import get_auth_middleware
+from auth_middleware import check_admin_permission, get_auth_middleware, get_current_user
 from autobot_shared.auth.jwt_core import JWTDecodeError, _peek_alg, decode_jwt_no_verify_exp
+from autobot_shared.auth.permissions import ROLE_PERMISSIONS, Role
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config as ssot_config
@@ -636,3 +641,150 @@ async def refresh_token(request: Request):
         "token": new_token,
         "expiresIn": expiry_seconds,
     }
+
+
+# ---------------------------------------------------------------------------
+# Identity authority introspection + RBAC discovery (#10195)
+# ---------------------------------------------------------------------------
+
+
+def _extract_token_from_request(request: Request, body: AuthValidateRequest | None) -> str | None:
+    """Return the token string from body or Bearer header (body takes priority)."""
+    if body and body.token:
+        return body.token
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        return auth_header.split(" ", 1)[1]
+    return None
+
+
+def _build_validate_claims(payload: Dict) -> AuthValidateClaims:
+    """Extract the public claim fields from a verified JWT payload."""
+    exp_raw = payload.get("exp")
+    exp_int: int | None = int(exp_raw) if exp_raw is not None else None
+    return AuthValidateClaims(
+        username=payload.get("username"),
+        role=payload.get("role"),
+        user_id=payload.get("user_id"),
+        org_id=payload.get("org_id"),
+        email=payload.get("email"),
+        exp=exp_int,
+    )
+
+
+def _is_session_revoked(payload: Dict) -> bool:
+    """Return True when the token's session has been invalidated (logout/revocation).
+
+    The JWT may be structurally valid but the session it was minted for could
+    have been invalidated via /logout.  ``get_session`` returns None for
+    invalidated or timed-out sessions.  When no session_id is embedded in the
+    token (legacy tokens) we conservatively return False so old tokens are not
+    incorrectly treated as revoked.
+    """
+    session_id = payload.get("session_id")
+    if not session_id:
+        return False
+    session = get_auth_middleware().get_session(session_id)
+    return session is None
+
+
+@router.post("/validate", response_model=AuthValidateResponse)
+async def validate_token(
+    request: Request,
+    body: AuthValidateRequest | None = None,
+    _: bool = Depends(check_admin_permission),
+) -> AuthValidateResponse:
+    """Token introspection for trusted callers (#10195).
+
+    Accepts the token via the request body ``{"token": "..."}`` or as a
+    ``Bearer`` header on the **same** request.  The endpoint itself is gated
+    by ``check_admin_permission`` which requires either:
+    - ``X-Internal-API-Key`` matching ``AUTOBOT_INTERNAL_API_KEY`` (SLM / service), or
+    - an authenticated user with the ``admin`` role.
+
+    Returns whether the token is valid, its public claims, and whether it was
+    explicitly revoked (session invalidated) regardless of expiry.
+    """
+    token = _extract_token_from_request(request, body)
+    if not token:
+        raise HTTPException(status_code=400, detail="No token provided in body or Authorization header")
+
+    mw = get_auth_middleware()
+
+    # Step 1: try full verification (signature + expiry)
+    payload = mw.verify_jwt_token(token)
+    if payload is not None:
+        revoked = _is_session_revoked(payload)
+        return AuthValidateResponse(
+            valid=not revoked,
+            claims=_build_validate_claims(payload),
+            expired=False,
+            revoked=revoked,
+        )
+
+    # Step 2: try decode ignoring expiry to distinguish expired vs. invalid
+    token_alg = _peek_alg(token)
+    try:
+        if token_alg == "RS256":  # nosec B105 - JWT algorithm identifier, not a credential
+            expired_payload = decode_jwt_no_verify_exp(token, public_key=mw.jwt_public_key, algorithms=["RS256"])
+        else:
+            expired_payload = decode_jwt_no_verify_exp(token, secret=mw.jwt_secret, algorithms=["HS256"])
+        # Signature valid but token is expired
+        revoked = _is_session_revoked(expired_payload)
+        return AuthValidateResponse(
+            valid=False,
+            claims=_build_validate_claims(expired_payload),
+            expired=True,
+            revoked=revoked,
+        )
+    except JWTDecodeError:
+        # Signature verification failed — tampered or garbage token
+        logger.debug("validate_token: token failed signature check (tampered or malformed)")
+        return AuthValidateResponse(valid=False, expired=False, revoked=False)
+
+
+@router.get("/roles", response_model=List[AuthRoleEntry])
+async def list_roles(
+    _: Dict = Depends(get_current_user),
+) -> List[AuthRoleEntry]:
+    """Return all roles with their associated permissions (#10195).
+
+    Serialised directly from the canonical ``ROLE_PERMISSIONS`` mapping in
+    ``autobot_shared.auth.permissions`` — no database access required.
+    Gated by ``get_current_user`` (any authenticated caller).
+    """
+    return [
+        AuthRoleEntry(name=role.value, permissions=[p.value for p in perms]) for role, perms in ROLE_PERMISSIONS.items()
+    ]
+
+
+@router.get("/all-permissions", response_model=List[str])
+async def list_permissions(
+    _: Dict = Depends(get_current_user),
+) -> List[str]:
+    """Return all defined Permission values (#10195).
+
+    No database access — data is read directly from the ``Permission`` enum.
+    Gated by ``get_current_user`` (any authenticated caller).
+    """
+    from autobot_shared.auth.permissions import Permission
+
+    return [p.value for p in Permission]
+
+
+@router.get("/roles/{role}/permissions", response_model=List[str])
+async def get_role_permissions(
+    role: str,
+    _: Dict = Depends(get_current_user),
+) -> List[str]:
+    """Return the permissions assigned to a single role (#10195).
+
+    Returns 404 when *role* does not match any known ``Role`` enum value.
+    Gated by ``get_current_user`` (any authenticated caller).
+    """
+    try:
+        role_enum = Role(role.lower())
+    except ValueError:
+        raise HTTPException(status_code=404, detail=f"Unknown role: {role!r}")
+    perms = ROLE_PERMISSIONS.get(role_enum, [])
+    return [p.value for p in perms]
