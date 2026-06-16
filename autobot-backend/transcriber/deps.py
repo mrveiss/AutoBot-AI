@@ -19,12 +19,23 @@ async def get_db(request: Request) -> Database:
 
 
 def can_access(row: dict, caller_id: str) -> bool:
-    """Single ownership policy for transcriber rows (recordings/projects).
+    """Strict ownership policy for transcriber rows (recordings/projects).
 
-    Rows stamped with DEFAULT_USER (created before real auth wiring) are
-    accessible to any authenticated caller; otherwise the owner must match.
+    Only the row owner may access the row.  The caller_id must equal the
+    stored user_id exactly:
+
+    - owner == caller_id  → allow (includes single_user: "default" == "default")
+    - different real users → deny
+    - DEFAULT_USER row + real caller  → DENY  (this was the IDOR — #9968)
+    - unowned / falsy user_id row    → deny (create_recording always stamps user_id)
+
+    Cross-user access to legacy DEFAULT_USER rows is intentionally NOT
+    supported.  If a future multi-user migration needs to reassign those rows
+    to real owners, that is tracked separately — do not re-introduce the
+    shared-DEFAULT_USER bypass here.
+
     All transcriber-data access checks must go through this helper so the
     policy cannot fork between routes (#9863 review).
     """
-    owner = row.get("user_id") or DEFAULT_USER
-    return owner in (DEFAULT_USER, caller_id)
+    owner = row.get("user_id")
+    return bool(owner) and owner == caller_id
