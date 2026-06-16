@@ -153,7 +153,7 @@ async def create_shared_link(
             created_at=link.created_at,
         ).model_dump(mode="json"),
         message="Shared link created",
-    )
+    ).model_dump(mode="json")
 
 
 @router.delete(
@@ -195,7 +195,7 @@ async def revoke_shared_link(
     await db.commit()
 
     logger.info("Revoked shared link token=%s session=%s by=%s", token[:8], session_id, user_id)
-    return create_success_response(data={"revoked": True}, message="Shared link revoked")
+    return create_success_response(data={"revoked": True}, message="Shared link revoked").model_dump(mode="json")
 
 
 @router.get(
@@ -247,7 +247,9 @@ async def list_shared_links(
         if not lnk.is_expired
     ]
 
-    return create_success_response(data={"links": items, "count": len(items)}, message="Active shared links")
+    return create_success_response(
+        data={"links": items, "count": len(items)}, message="Active shared links"
+    ).model_dump(mode="json")
 
 
 # ============================================================
@@ -346,7 +348,7 @@ async def get_shared_session(
                 has_password=True,
             ).model_dump(mode="json"),
             message="Password required",
-        )
+        ).model_dump(mode="json")
 
     return await _load_session_data(link, request)
 
@@ -414,4 +416,4 @@ async def _load_session_data(link: ChatSharedLink, request: Request) -> Dict[str
             has_password=link.has_password,
         ).model_dump(mode="json"),
         message="Shared session retrieved",
-    )
+    ).model_dump(mode="json")

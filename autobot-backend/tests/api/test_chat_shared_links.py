@@ -10,7 +10,7 @@ Covers the admin cross-user view (AC4):
 """
 
 from datetime import timedelta
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -109,3 +109,31 @@ class TestAdminListAllSharedLinks:
         response = client.get("/chat/shared-links/admin")
 
         assert response.status_code == 403
+
+
+class TestSharedLinkResponseSerialization:
+    """Regression: every success response must be `.model_dump()`'d to a dict.
+
+    Each endpoint declares ``response_model=Dict[str, Any]`` but returned the
+    ``DataResponse`` Pydantic model un-dumped, which FastAPI rejects with
+    ResponseValidationError → 500 on success. This guards the owner-scoped list
+    endpoint (representative of the create/revoke/access/session siblings).
+    """
+
+    def test_owner_list_serializes_to_200(self):
+        client = _make_client(_USER_ALICE, [_make_link(owner="alice", session_id="sess-a")])
+
+        with (
+            patch("api.chat_shared_links.SessionOwnershipValidator") as MockValidator,
+            patch(
+                "autobot_shared.redis_client.get_redis_client",
+                new=AsyncMock(return_value=MagicMock()),
+            ),
+        ):
+            MockValidator.return_value.get_session_owner = AsyncMock(return_value="alice")
+            response = client.get("/chat/sessions/sess-a/share-links")
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["success"] is True
+        assert body["data"]["count"] == 1
