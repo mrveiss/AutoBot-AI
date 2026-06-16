@@ -167,8 +167,11 @@ def get_deployment_config() -> DeploymentConfig:
     try:
         mode = DeploymentMode(mode_str)
     except ValueError:
-        # Default to single_user for invalid values
-        mode = DeploymentMode.SINGLE_USER
+        # #10199: default to single_company (Postgres-backed, real auth) when
+        # AUTOBOT_USER_MODE is unset/invalid. A single user signs in with the
+        # seeded default admin account — there is no passwordless single_user
+        # fallback in the default deployment.
+        mode = DeploymentMode.SINGLE_COMPANY
 
     # Get feature flags for this mode
     features = MODE_FEATURES[mode]
