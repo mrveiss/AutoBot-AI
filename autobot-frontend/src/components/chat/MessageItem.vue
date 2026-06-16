@@ -80,7 +80,8 @@
     <div class="message-content" :class="contentClass">
       <!-- Streaming content with typing indicator -->
       <div v-if="isStreaming" class="streaming-content">
-        <div class="message-text" v-html="formattedContent"></div>
+        <!-- Issue #9479: intercept entity-anchor clicks for in-app navigation -->
+        <div class="message-text" v-html="formattedContent" @click="handleContentClick"></div>
         <div v-if="isTyping && isLast" class="typing-indicator">
           <div class="typing-dots">
             <span></span>
@@ -91,7 +92,8 @@
       </div>
 
       <!-- Regular message content -->
-      <div v-else class="message-text" v-html="formattedContent"></div>
+      <!-- Issue #9479: intercept entity-anchor clicks for in-app navigation -->
+      <div v-else class="message-text" v-html="formattedContent" @click="handleContentClick"></div>
 
       <!-- Message Metadata -->
       <div v-if="showMetadata" class="message-metadata">
@@ -179,6 +181,7 @@ import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
 import type { ChatMessage } from '@/stores/useChatStore'
 import { formatTime } from '@/utils/formatHelpers'
 
@@ -190,6 +193,10 @@ import CitationsDisplay from './CitationsDisplay.vue'
 import MessageAttachments from './MessageAttachments.vue'
 import { sanitizeChatHtml } from '@/utils/sanitize'
 import { useAIDocument } from '@/composables/useAIDocument'
+import {
+  createEntityAnchorClickHandler,
+  renderMarkdownLinks,
+} from '@/composables/chat/useEntityAnchors'
 
 interface Props {
   message: ChatMessage
@@ -225,6 +232,10 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const emit = defineEmits<Emits>()
+
+// Issue #9479: route entity anchors (`[Name](#kind-id)`) to the right view
+const router = useRouter()
+const handleContentClick = createEntityAnchorClickHandler(router)
 
 // Issue #3245: Save-as-document integration
 const { saveMessageAsDocument } = useAIDocument()
@@ -336,6 +347,11 @@ const formattedContent = computed(() => {
     return `<pre class="code-block${lang ? ` language-${lang}` : ''}"><code>${code.trim()}</code></pre>`
   })
 
+  // Issue #9479: render `[text](href)` markdown links — including entity
+  // anchors (`#kind-id`) — into <a> before inline formatting so they become
+  // clickable. Output is sanitized by sanitizeChatHtml below.
+  content = renderMarkdownLinks(content)
+
   // Basic markdown formatting
   content = content
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
@@ -343,9 +359,9 @@ const formattedContent = computed(() => {
     .replace(/`(.*?)`/g, '<code>$1</code>')
     .replace(/\n/g, '<br>')
 
-  // Links
+  // Bare URLs — skip URLs already inside an anchor href (rendered above)
   content = content.replace(
-    /(https?:\/\/[^\s]+)/g,
+    /(?<!href=")(https?:\/\/[^\s<]+)/g,
     '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>'
   )
 
