@@ -611,6 +611,8 @@ export default {
         async (authenticated) => {
           if (authenticated) {
             await prefs.loadLanguageFromBackend();
+            // Cross-device appearance sync: pull stored theme/accent/density (#8988)
+            await prefs.loadAppearanceFromBackend();
           }
         },
         { immediate: true }
