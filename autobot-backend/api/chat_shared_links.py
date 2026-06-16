@@ -32,12 +32,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.schemas_chat import (
     SharedLinkAccessRequest,
+    SharedLinkAdminItem,
     SharedLinkCreateRequest,
     SharedLinkData,
     SharedLinkSessionData,
     SharedMessageItem,
 )
 from api.user_management.dependencies import get_db_session
+from api.voice_bundle_helpers import _require_admin
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
@@ -246,6 +248,51 @@ async def list_shared_links(
     ]
 
     return create_success_response(data={"links": items, "count": len(items)}, message="Active shared links")
+
+
+# ============================================================
+# Admin — cross-user view of all active links
+# ============================================================
+
+
+@router.get(
+    "/chat/shared-links/admin",
+    response_model=Dict[str, Any],
+    summary="List all active shared links across all users (admin)",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_all_shared_links_admin",
+    error_code_prefix="CHAT_SHARED_LINKS",
+)
+async def list_all_shared_links_admin(
+    request: Request,
+    admin_user: Dict = Depends(_require_admin),
+    db: AsyncSession = Depends(get_db_session),
+) -> Dict[str, Any]:
+    """Return every active (non-expired) shared link with its owner (GH#8996, AC4)."""
+    result = await db.execute(
+        select(ChatSharedLink).where(ChatSharedLink.is_active.is_(True)).order_by(ChatSharedLink.created_at.desc())
+    )
+    links: List[ChatSharedLink] = list(result.scalars().all())
+
+    items = [
+        SharedLinkAdminItem(
+            id=str(lnk.id),
+            token=lnk.token,
+            session_id=lnk.session_id,
+            owner=lnk.created_by,
+            has_password=lnk.has_password,
+            expires_at=lnk.expires_at,
+            created_at=lnk.created_at,
+        ).model_dump(mode="json")
+        for lnk in links
+        if not lnk.is_expired
+    ]
+
+    return create_success_response(
+        data={"links": items, "count": len(items)}, message="All active shared links"
+    ).model_dump(mode="json")
 
 
 # ============================================================
