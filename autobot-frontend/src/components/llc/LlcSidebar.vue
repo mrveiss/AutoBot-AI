@@ -39,6 +39,7 @@ const links = computed<SidebarLink[]>(() => {
     { labelKey: 'nav.llcDashboard', to: { path: '/llc/dashboard', query: { company: id } } },
     // Company-scoped views (/llc/companies/:companyId/…)
     { labelKey: 'nav.llcBacklog', to: { path: `/llc/companies/${id}/backlog` } },
+    { labelKey: 'nav.llcPortfolios', to: { path: `/llc/companies/${id}/portfolios` } },
     { labelKey: 'nav.llcTimeline', to: { path: `/llc/companies/${id}/timeline` } },
     { labelKey: 'nav.llcGoals', to: { path: '/llc/goals', query: { company: id } } },
     { labelKey: 'nav.llcOrgChart', to: { path: '/llc/org-chart', query: { company: id } } },
