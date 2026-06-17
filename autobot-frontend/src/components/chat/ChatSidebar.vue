@@ -678,8 +678,8 @@ const reloadSystem = async () => {
 
   try {
     // Call real system reload API
-    // ApiClient.post returns parsed JSON directly — no .json() (#10013)
-    const data = await ApiClient.post<any>(`${getApiBase()}/system/reload_config`)
+    const response = await ApiClient.post<any>(`${getApiBase()}/system/reload_config`)
+    const data = await (response as any).json()
 
     if (data && data.success) {
       systemStatus.value = t('status.ready')
