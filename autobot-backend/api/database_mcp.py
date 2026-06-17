@@ -306,9 +306,15 @@ def _list_tables_sync(db_path: Path) -> list[dict]:
         # This is unavoidable without approximate statistics.
         table_info = []
         for (table_name,) in tables:
-            # nosec B608 - table_name comes from sqlite_master (system table), not user input
-            # nosemgrep: autobot-sql-string-format
-            cursor.execute(f"SELECT COUNT(*) FROM [{table_name}]")  # nosec B608
+            # table_name originates from sqlite_master (system catalogue), not user input.
+            # SQLite does not support parameterised identifiers; f-string is unavoidable.
+            # _validate_sql_identifier enforces an allowlist as defence-in-depth.
+            _validate_sql_identifier(table_name, "table name")
+            # Bare-assign the SQL so the nosec/nosemgrep stay on the flagged line:
+            # black would split `cursor.execute(f"...")  # nosec` and orphan the
+            # comment onto the `)` line, defeating the suppression (#9489).
+            count_sql = f"SELECT COUNT(*) FROM [{table_name}]"  # nosec B608  # nosemgrep: python.lang.security.audit.formatted-sql-query.formatted-sql-query,python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query  # noqa: E501
+            cursor.execute(count_sql)
             row_count = cursor.fetchone()[0]
             table_info.append({"name": table_name, "row_count": row_count})
 
@@ -328,9 +334,11 @@ def _describe_schema_sync(db_path: Path, table: str | None) -> dict:
         schemas = {}
 
         if table:
+            # table is validated by _validate_sql_identifier (allowlist) above.
+            # PRAGMA does not accept parameterised identifiers in SQLite.
             _validate_sql_identifier(table, "table name")
-            # nosemgrep: autobot-sql-string-format
-            cursor.execute(f"PRAGMA table_info([{table}])")  # nosec B608
+            pragma_sql = f"PRAGMA table_info([{table}])"  # nosec B608  # nosemgrep: python.lang.security.audit.formatted-sql-query.formatted-sql-query,python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query  # noqa: E501
+            cursor.execute(pragma_sql)
             columns = cursor.fetchall()
             schemas[table] = [
                 {
@@ -348,8 +356,11 @@ def _describe_schema_sync(db_path: Path, table: str | None) -> dict:
             tables = cursor.fetchall()
 
             for (table_name,) in tables:
-                # nosemgrep: autobot-sql-string-format
-                cursor.execute(f"PRAGMA table_info([{table_name}])")  # nosec B608  # fmt: skip
+                # table_name from sqlite_master; _validate_sql_identifier enforces allowlist.
+                # PRAGMA does not support ? parameters in SQLite.
+                _validate_sql_identifier(table_name, "table name")
+                pragma_sql = f"PRAGMA table_info([{table_name}])"  # nosec B608  # nosemgrep: python.lang.security.audit.formatted-sql-query.formatted-sql-query,python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query  # noqa: E501
+                cursor.execute(pragma_sql)
                 columns = cursor.fetchall()
                 schemas[table_name] = [
                     {
@@ -392,9 +403,12 @@ def _get_db_statistics_sync(db_path: Path) -> dict:
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
         tables = cursor.fetchall()
         for (table_name,) in tables:
-            # nosec B608 - table_name comes from sqlite_master (system table), not user input
-            # nosemgrep: autobot-sql-string-format
-            cursor.execute(f"SELECT COUNT(*) FROM [{table_name}]")  # nosec B608
+            # table_name from sqlite_master (system catalogue), not user input.
+            # SQLite does not support parameterised identifiers; f-string unavoidable.
+            # _validate_sql_identifier enforces an allowlist as defence-in-depth.
+            _validate_sql_identifier(table_name, "table name")
+            count_sql = f"SELECT COUNT(*) FROM [{table_name}]"  # nosec B608  # nosemgrep: python.lang.security.audit.formatted-sql-query.formatted-sql-query,python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query  # noqa: E501
+            cursor.execute(count_sql)
             total_rows += cursor.fetchone()[0]
 
         cursor.execute("SELECT sqlite_version()")
@@ -735,7 +749,7 @@ async def database_execute_mcp(request: SQLExecuteRequest) -> Metadata:
         raise HTTPException(status_code=404, detail=f"Database file not found: {request.database}")
 
     # Log the operation with warning (data modification)
-    logger.warning(f"Database EXECUTE on {request.database}: {request.statement[:100]}...")
+    logger.warning("Database EXECUTE on %s: %s...", request.database, request.statement[:100])
 
     try:
         # Execute statement in thread pool (Issue #357: non-blocking)

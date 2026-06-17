@@ -3080,7 +3080,21 @@
         "gdriveDriveId": "Shared Drive ID",
         "gdriveFolderId": "Folder ID (optional)",
         "gdriveFolderHint": "Limit the sync to a single folder. Leave blank to sync the whole drive.",
-        "gdriveSyncSubfolders": "Sync subfolders recursively"
+        "gdriveSyncSubfolders": "Sync subfolders recursively",
+        "typeOnedrive": "OneDrive / SharePoint",
+        "typeOnedriveDesc": "Index documents from OneDrive or a SharePoint library",
+        "onedriveAccount": "Microsoft Account",
+        "onedriveLabel": "OneDrive",
+        "onedriveConnected": "OneDrive connected.",
+        "onedriveSourceType": "Source Type",
+        "onedriveOneDrive": "OneDrive",
+        "onedriveSharePoint": "SharePoint",
+        "onedriveSiteId": "SharePoint Site ID",
+        "onedriveDriveId": "Drive ID (optional)",
+        "onedriveDriveIdHint": "Specific drive to sync. Leave blank to use the default drive.",
+        "onedriveFolderPath": "Folder Path (optional)",
+        "onedriveFolderHint": "Limit the sync to a single folder path. Leave blank to sync the whole drive.",
+        "onedriveSyncSubfolders": "Sync subfolders recursively"
       },
       "tier": {
         "ready": "Ready",

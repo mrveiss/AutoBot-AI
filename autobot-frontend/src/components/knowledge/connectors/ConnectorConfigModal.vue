@@ -82,6 +82,19 @@ const gdOAuthError = ref<string | null>(null)
 // Scopes requested for Google Drive read-only access.
 const GDRIVE_SCOPES = ['https://www.googleapis.com/auth/drive.readonly']
 
+// OneDrive / SharePoint config (Issue #9004)
+const odSourceType = ref<'onedrive' | 'sharepoint'>('onedrive')
+const odSiteId = ref('')
+const odDriveId = ref('')
+const odFolderPath = ref('')
+const odSyncSubfolders = ref(true)
+const odMaxFileSizeMb = ref(100)
+// OAuth secret reference captured from the Microsoft Connect flow (ADR-007 §10).
+const odSecretId = ref<string | null>(null)
+const odOAuthError = ref<string | null>(null)
+// Scopes requested for Microsoft Graph read-only access.
+const ONEDRIVE_SCOPES = ['offline_access', 'Files.Read.All', 'Sites.Read.All']
+
 const isEditing = computed(() => props.editConnector !== null)
 
 const modalTitle = computed(() =>
@@ -112,6 +125,11 @@ const typeCards = computed(() => [
     type: 'gdrive' as ConnectorType,
     label: t('knowledge.connectors.config.typeGdrive'),
     description: t('knowledge.connectors.config.typeGdriveDesc')
+  },
+  {
+    type: 'onedrive' as ConnectorType,
+    label: t('knowledge.connectors.config.typeOnedrive'),
+    description: t('knowledge.connectors.config.typeOnedriveDesc')
   }
 ])
 
@@ -178,6 +196,14 @@ function populateFromConfig(cfg: ConnectorConfig) {
       gdSyncSubfolders.value = c.sync_subfolders ?? true
       gdMaxFileSizeMb.value = c.max_file_size_mb ?? 100
       break
+    case 'onedrive':
+      odSourceType.value = c.source_type === 'sharepoint' ? 'sharepoint' : 'onedrive'
+      odSiteId.value = c.site_id || ''
+      odDriveId.value = c.drive_id || ''
+      odFolderPath.value = c.folder_path || ''
+      odSyncSubfolders.value = c.sync_subfolders ?? true
+      odMaxFileSizeMb.value = c.max_file_size_mb ?? 100
+      break
   }
 }
 
@@ -215,6 +241,15 @@ function resetForm() {
   gdMaxFileSizeMb.value = 100
   gdSecretId.value = null
   gdOAuthError.value = null
+
+  odSourceType.value = 'onedrive'
+  odSiteId.value = ''
+  odDriveId.value = ''
+  odFolderPath.value = ''
+  odSyncSubfolders.value = true
+  odMaxFileSizeMb.value = 100
+  odSecretId.value = null
+  odOAuthError.value = null
 }
 
 // =========================================================================
@@ -265,6 +300,18 @@ function buildPayload(): Partial<ConnectorConfig> & { secret_id?: string } {
       // The token never touches the frontend; attach the OAuth secret by reference.
       if (gdSecretId.value) base.secret_id = gdSecretId.value
       break
+    case 'onedrive':
+      base.config = {
+        source_type: odSourceType.value,
+        site_id: odSourceType.value === 'sharepoint' ? odSiteId.value : undefined,
+        drive_id: odDriveId.value || undefined,
+        folder_path: odFolderPath.value || undefined,
+        sync_subfolders: odSyncSubfolders.value,
+        max_file_size_mb: odMaxFileSizeMb.value
+      }
+      // The token never touches the frontend; attach the OAuth secret by reference.
+      if (odSecretId.value) base.secret_id = odSecretId.value
+      break
   }
 
   return base
@@ -313,6 +360,12 @@ const isConfigValid = computed(() => {
         gdSecretId.value !== null &&
         (gdSourceType.value !== 'shared' || gdDriveId.value.trim().length > 0)
       )
+    case 'onedrive':
+      // Requires a completed OAuth connect; SharePoint also needs a site_id.
+      return (
+        odSecretId.value !== null &&
+        (odSourceType.value !== 'sharepoint' || odSiteId.value.trim().length > 0)
+      )
     default:
       return false
   }
@@ -357,6 +410,21 @@ function onGdriveConnected(payload: { secretId: string }) {
 function onGdriveOAuthError(message: string) {
   gdOAuthError.value = message
   logger.error('Google Drive OAuth failed: %s', message)
+}
+
+// =========================================================================
+// OneDrive / SharePoint OAuth (Issue #9004)
+// =========================================================================
+
+function onOnedriveConnected(payload: { secretId: string }) {
+  odSecretId.value = payload.secretId
+  odOAuthError.value = null
+  logger.info('OneDrive connected via OAuth')
+}
+
+function onOnedriveOAuthError(message: string) {
+  odOAuthError.value = message
+  logger.error('OneDrive OAuth failed: %s', message)
 }
 
 // =========================================================================
@@ -770,6 +838,114 @@ function closeModal() {
           />
         </div>
       </template>
+
+      <!-- OneDrive / SharePoint Fields (Issue #9004) -->
+      <template v-if="connectorType === 'onedrive'">
+        <div class="form-group">
+          <label class="form-label">
+            {{ $t('knowledge.connectors.config.onedriveAccount') }}
+          </label>
+          <ConnectorOAuthButton
+            provider="microsoft"
+            :label="$t('knowledge.connectors.config.onedriveLabel')"
+            :scopes="ONEDRIVE_SCOPES"
+            @connected="onOnedriveConnected"
+            @error="onOnedriveOAuthError"
+          />
+          <span v-if="odSecretId" class="form-hint onedrive-connected">
+            {{ $t('knowledge.connectors.config.onedriveConnected') }}
+          </span>
+          <span v-if="odOAuthError" class="form-hint onedrive-error">
+            {{ odOAuthError }}
+          </span>
+        </div>
+        <div class="form-group">
+          <label class="form-label">{{ $t('knowledge.connectors.config.onedriveSourceType') }}</label>
+          <div class="mode-toggle">
+            <button
+              class="mode-btn"
+              :class="{ active: odSourceType === 'onedrive' }"
+              type="button"
+              @click="odSourceType = 'onedrive'"
+            >
+              {{ $t('knowledge.connectors.config.onedriveOneDrive') }}
+            </button>
+            <button
+              class="mode-btn"
+              :class="{ active: odSourceType === 'sharepoint' }"
+              type="button"
+              @click="odSourceType = 'sharepoint'"
+            >
+              {{ $t('knowledge.connectors.config.onedriveSharePoint') }}
+            </button>
+          </div>
+        </div>
+        <div v-if="odSourceType === 'sharepoint'" class="form-group">
+          <label class="form-label" for="od-site-id">
+            {{ $t('knowledge.connectors.config.onedriveSiteId') }}
+          </label>
+          <input
+            id="od-site-id"
+            v-model="odSiteId"
+            type="text"
+            class="form-input"
+            placeholder="contoso.sharepoint.com,abc123,def456"
+          />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="od-drive-id">
+            {{ $t('knowledge.connectors.config.onedriveDriveId') }}
+          </label>
+          <input
+            id="od-drive-id"
+            v-model="odDriveId"
+            type="text"
+            class="form-input"
+            placeholder="b!aBcDeFgHiJkLmNoPqRsTuVwXyZ"
+          />
+          <span class="form-hint">
+            {{ $t('knowledge.connectors.config.onedriveDriveIdHint') }}
+          </span>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="od-folder-path">
+            {{ $t('knowledge.connectors.config.onedriveFolderPath') }}
+          </label>
+          <input
+            id="od-folder-path"
+            v-model="odFolderPath"
+            type="text"
+            class="form-input"
+            placeholder="/Documents"
+          />
+          <span class="form-hint">
+            {{ $t('knowledge.connectors.config.onedriveFolderHint') }}
+          </span>
+        </div>
+        <div class="form-group">
+          <label class="toggle-row">
+            <input
+              type="checkbox"
+              v-model="odSyncSubfolders"
+              class="toggle-checkbox"
+            />
+            <span class="toggle-label">{{ $t('knowledge.connectors.config.onedriveSyncSubfolders') }}</span>
+          </label>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="od-max-size">
+            {{ $t('knowledge.connectors.config.maxFileSize') }}
+          </label>
+          <input
+            id="od-max-size"
+            v-model.number="odMaxFileSizeMb"
+            type="number"
+            class="form-input form-input-narrow"
+            min="1"
+            max="500"
+          />
+        </div>
+      </template>
     </div>
 
     <!-- Step 3: Schedule -->
@@ -1069,11 +1245,13 @@ function closeModal() {
   font-family: var(--font-sans);
 }
 
-.gdrive-connected {
+.gdrive-connected,
+.onedrive-connected {
   color: var(--color-success);
 }
 
-.gdrive-error {
+.gdrive-error,
+.onedrive-error {
   color: var(--color-error);
 }
 
