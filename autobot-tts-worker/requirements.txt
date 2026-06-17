@@ -6,4 +6,4 @@ soundfile>=0.14.0
 numpy>=2.4.6,<3.0.0
 huggingface_hub>=1.16.1
 aiofiles>=25.1.0
-python-multipart>=0.0.29          # SECURITY UPDATE - arbitrary file write fix
+python-multipart>=0.0.31          # SECURITY UPDATE - arbitrary file write fix
