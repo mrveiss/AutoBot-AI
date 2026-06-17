@@ -49,11 +49,18 @@ from user_management.database import get_async_session_factory
 from ..adapters import AdapterRunStatus, AutoBotAgentAdapter, get_adapter
 from ..adapters.subprocess_base import is_subprocess_adapter
 from ..config import AGENT_API_BASE_URL
-from ..exceptions import AdapterRunFailed, BudgetExhausted, HeartbeatDispatchSkipped, ProviderRateLimited
+from ..exceptions import (
+    AdapterRunFailed,
+    BudgetExhausted,
+    HeartbeatDispatchSkipped,
+    ProviderRateLimited,
+    SubscriptionQuotaExhausted,
+)
 from ..models.enums import HeartbeatInvocationSource, LLCRunStatus
 from ..models.heartbeat_run import LLCHeartbeatRun
 from ..services.api_key import ApiKeyService
 from ..services.budget import BudgetService
+from ..services.controls_service import ControlsService
 from ..services.replay_service import RunReplayService, parse_jsonl_events
 
 logger = logging.getLogger(__name__)
@@ -486,12 +493,15 @@ class HeartbeatScheduler:
         error_msg: Optional[str] = None
         final_status = LLCRunStatus.COMPLETED.value
         rate_limited_exc: Optional[ProviderRateLimited] = None
+        quota_exc: Optional[SubscriptionQuotaExhausted] = None
         external_run_id: Optional[str] = None
 
         try:
             external_run_id = await _dispatch_adapter(agent, context)
         except ProviderRateLimited as exc:
             rate_limited_exc = exc
+        except SubscriptionQuotaExhausted as exc:
+            quota_exc = exc
         except HeartbeatDispatchSkipped as exc:
             # GH#9951: not dispatched → record SKIPPED, do NOT bump last_heartbeat_at.
             logger.info("Heartbeat skipped for run %s: %s", run_id, exc.reason)
@@ -504,6 +514,10 @@ class HeartbeatScheduler:
 
         if rate_limited_exc is not None:
             await self._handle_rate_limited(agent, run_id, retry_count, rate_limited_exc)
+            return
+
+        if quota_exc is not None:
+            await self._handle_quota_exhausted(agent, run_id, quota_exc)
             return
 
         try:
@@ -629,6 +643,49 @@ class HeartbeatScheduler:
                     await redis.zadd(_SCHEDULE_KEY, {agent_id: retry_ts})
         except Exception:
             logger.exception("Could not re-queue rate-limited agent %s in Redis for run %s", agent_id, run_id)
+
+    async def _handle_quota_exhausted(
+        self,
+        agent: Dict[str, Any],
+        run_id: uuid.UUID,
+        exc: SubscriptionQuotaExhausted,
+    ) -> None:
+        """Record the run ``quota_exhausted`` and auto-pause the agent (GH#10218).
+
+        A subscription quota is spent for the billing window, so — unlike
+        RATE_LIMITED — retrying is futile. ``ControlsService.pause_agent`` flips
+        the agent to ``paused`` AND logs a board-visible ``CONTROL_AGENT_PAUSED``
+        event (the board notification), so a human resumes it after topping up.
+        """
+        agent_id = agent["agent_id"]
+        company_id = str(agent.get("company_id") or "")
+        factory = get_async_session_factory()
+        try:
+            async with factory() as session:
+                await session.execute(
+                    update(LLCHeartbeatRun)
+                    .where(LLCHeartbeatRun.id == run_id)
+                    .values(
+                        status=LLCRunStatus.QUOTA_EXHAUSTED.value,
+                        finished_at=datetime.now(tz=timezone.utc),
+                        error=exc.reason,
+                    )
+                )
+                if company_id:
+                    await ControlsService().pause_agent(
+                        session,
+                        company_id,
+                        agent_id,
+                        actor_user_id=None,
+                        reason=f"subscription quota exhausted (run {run_id})",
+                        actor_type="system",
+                    )
+                else:
+                    logger.warning("Agent %s quota-exhausted but has no company_id — not auto-paused", agent_id)
+                await session.commit()
+            logger.warning("Agent %s auto-paused: %s (run %s)", agent_id, exc.reason, run_id)
+        except Exception:
+            logger.exception("Could not record quota-exhausted / pause agent %s for run %s", agent_id, run_id)
 
 
 # ------------------------------------------------------------------
@@ -820,7 +877,13 @@ async def _dispatch_registry_adapter(adapter: Any, agent: Dict[str, Any], contex
     else:
         logger.warning("agent %s has no company_id — dispatching without an LLC API key", agent_id)
 
-    agent_config = {"agent_id": agent_id, "adapter_config": agent.get("adapter_config") or {}}
+    # GH#10217: include company_id so subscription adapters can resolve
+    # company-scoped credential secrets (e.g. gh_token_secret) at invoke time.
+    agent_config = {
+        "agent_id": agent_id,
+        "company_id": company_id,
+        "adapter_config": agent.get("adapter_config") or {},
+    }
     external_run_id: Optional[str] = None
     try:
         external_run_id = await adapter.invoke(agent_config, enriched)
@@ -847,6 +910,12 @@ async def _dispatch_registry_adapter(adapter: Any, agent: Dict[str, Any], contex
             external_run_id,
         )
         raise ProviderRateLimited(provider=agent.get("adapter_type") or "registry", retry_after_seconds=0)
+
+    # GH#10218: subscription quota exhausted is terminal-with-no-retry — surface
+    # it so _run_adapter auto-pauses the agent + notifies the board rather than
+    # recording a generic FAILED that the liveness monitor would try to recover.
+    if final_status == LLCRunStatus.QUOTA_EXHAUSTED:
+        raise SubscriptionQuotaExhausted(agent_id, str(result.error or "subscription quota exhausted"))
 
     # GH#9622: surface non-success terminal states so _run_adapter records the
     # run as FAILED (and the liveness monitor can act) instead of COMPLETED.

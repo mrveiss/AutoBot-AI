@@ -63,6 +63,22 @@ class HeartbeatDispatchSkipped(Exception):
         super().__init__(f"agent {agent_id}: heartbeat dispatch skipped — {reason}")
 
 
+class SubscriptionQuotaExhausted(Exception):
+    """Raised when a subscription-mode adapter run hits the subscription quota (GH#10218).
+
+    Unlike :class:`ProviderRateLimited` (a transient per-minute limit that backs
+    off and retries the same run), a subscription quota is exhausted for the
+    billing window — retrying is futile. The heartbeat scheduler catches this,
+    records the run ``quota_exhausted``, auto-pauses the agent, and logs a
+    board-visible pause event so a human can intervene.
+    """
+
+    def __init__(self, agent_id: str, reason: str = "subscription quota exhausted") -> None:
+        self.agent_id = agent_id
+        self.reason = reason
+        super().__init__(f"agent {agent_id}: {reason}")
+
+
 class ProviderRateLimited(Exception):
     """Raised by an adapter when the LLM provider rejects a request due to rate or quota limits.
 

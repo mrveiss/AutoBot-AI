@@ -12,7 +12,9 @@ Like CopilotLocalAdapter but enforces subscription-only mode:
 adapter_config schema::
 
     {
-        "gh_token": "ghp_...",          # GitHub PAT (OAuth recommended)
+        "gh_token_secret": "copilot_gh_token",  # name of a secret in the company
+                                                # vault — preferred (GH#10217)
+        "gh_token": "ghp_...",          # plaintext fallback (discouraged)
         "copilot_model": "copilot-4o",  # default
         "workspace_dir": "/path/to",
         "output_dir": "/tmp",
@@ -61,7 +63,9 @@ class CopilotSubscriptionAdapter(CopilotLocalAdapter):
 
         output_dir: str = cfg.get("output_dir", "/tmp")  # nosec B108
         timeout_sec: int = int(cfg.get("timeout_seconds", 3600))
-        gh_token: Optional[str] = cfg.get("gh_token")
+        # GH#10217: prefer a credential stored in the LLC secrets vault
+        # (gh_token_secret = secret name) over a plaintext gh_token in config.
+        gh_token: Optional[str] = await self._resolve_gh_token(agent_config, cfg)
         copilot_model: str = cfg.get("copilot_model", "copilot-4o")
 
         session_id = str(uuid.uuid4())
@@ -156,6 +160,33 @@ class CopilotSubscriptionAdapter(CopilotLocalAdapter):
 
         return run_id
 
+    async def _resolve_gh_token(self, agent_config: dict, cfg: dict) -> Optional[str]:
+        """Resolve the GitHub token, preferring the LLC secrets vault (GH#10217).
+
+        ``adapter_config.gh_token_secret`` names a secret in the agent's company
+        vault; when set it is decrypted at invoke time so the token is never
+        stored in plaintext adapter_config. Falls back to a plaintext
+        ``gh_token`` for backward compatibility.
+        """
+        secret_name = cfg.get("gh_token_secret")
+        company_id = agent_config.get("company_id")
+        if secret_name and company_id:
+            try:
+                from user_management.database import get_async_session_factory  # noqa: PLC0415
+
+                from ..services.secret import SecretService  # noqa: PLC0415
+
+                factory = get_async_session_factory()
+                async with factory() as session:
+                    return await SecretService().get(session, str(company_id), secret_name)
+            except Exception:
+                logger.warning(
+                    "CopilotSubscriptionAdapter: could not resolve gh_token_secret %r — "
+                    "falling back to plaintext gh_token",
+                    secret_name,
+                )
+        return cfg.get("gh_token")
+
     async def status(self, agent_config: dict, run_id: str) -> AdapterRunStatus:
         """Check status and parse token usage from output."""
         base_status = await super().status(agent_config, run_id)
@@ -175,9 +206,10 @@ class CopilotSubscriptionAdapter(CopilotLocalAdapter):
                     run_id,
                 )
 
-                # TODO: Implement auto-pause + board notification (depends on GH#8225)
+                # GH#10218: signal QUOTA_EXHAUSTED so the scheduler auto-pauses
+                # the agent and logs a board-visible pause event (no retry).
                 return AdapterRunStatus(
-                    status=LLCRunStatus.FAILED,
+                    status=LLCRunStatus.QUOTA_EXHAUSTED,
                     error="GitHub Copilot subscription quota exhausted. Please check your subscription limits.",
                 )
 

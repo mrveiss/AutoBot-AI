@@ -136,9 +136,9 @@ class TestClaudeCodeSubscriptionAdapter:
             ):
                 result = await adapter.status(cfg, run_id)
 
-        assert (
-            result.status == LLCRunStatus.FAILED
-        ), "Quota exhaustion must return FAILED (no retry), not RATE_LIMITED (backoff loop)."
+        assert result.status == LLCRunStatus.QUOTA_EXHAUSTED, (
+            "Quota exhaustion must return QUOTA_EXHAUSTED (no retry → auto-pause), " "not RATE_LIMITED (backoff loop)."
+        )
         assert result.error is not None
         assert "quota" in result.error.lower()
 
@@ -194,3 +194,44 @@ class TestCodexSubscriptionAdapter:
         status = await adapter.status(cfg, "fake-run-id")
         assert status.status == LLCRunStatus.FAILED
         assert "does not exist" in status.error.lower()
+
+
+@pytest.mark.asyncio
+class TestResolveGhToken:
+    """GH#10217: copilot subscription resolves gh_token from the LLC secrets vault."""
+
+    async def test_resolves_from_secret(self) -> None:
+        from unittest.mock import MagicMock
+
+        adapter = CopilotSubscriptionAdapter()
+        session = AsyncMock()
+        factory = MagicMock()
+        factory.return_value.__aenter__ = AsyncMock(return_value=session)
+        factory.return_value.__aexit__ = AsyncMock(return_value=False)
+        with (
+            patch("user_management.database.get_async_session_factory", return_value=factory),
+            patch("llc.services.secret.SecretService.get", new=AsyncMock(return_value="resolved-token")),
+        ):
+            token = await adapter._resolve_gh_token({"company_id": "c1"}, {"gh_token_secret": "gh_pat"})
+        assert token == "resolved-token"
+
+    async def test_falls_back_to_plaintext_when_no_secret(self) -> None:
+        adapter = CopilotSubscriptionAdapter()
+        token = await adapter._resolve_gh_token({"company_id": "c1"}, {"gh_token": "plain"})
+        assert token == "plain"
+
+    async def test_falls_back_on_secret_error(self) -> None:
+        adapter = CopilotSubscriptionAdapter()
+        with patch(
+            "user_management.database.get_async_session_factory",
+            side_effect=RuntimeError("no db"),
+        ):
+            token = await adapter._resolve_gh_token(
+                {"company_id": "c1"}, {"gh_token_secret": "x", "gh_token": "fallback"}
+            )
+        assert token == "fallback"
+
+    async def test_no_company_uses_plaintext(self) -> None:
+        adapter = CopilotSubscriptionAdapter()
+        token = await adapter._resolve_gh_token({}, {"gh_token_secret": "x", "gh_token": "plain"})
+        assert token == "plain"
