@@ -63,10 +63,16 @@ class ControlsService:
         session: AsyncSession,
         company_id: str,
         agent_id: str,
-        actor_user_id: str,
+        actor_user_id: Optional[str] = None,
         reason: Optional[str] = None,
+        actor_type: str = "user",
     ) -> dict:
-        """Set agent status=paused and set Redis pause flag."""
+        """Set agent status=paused and set Redis pause flag.
+
+        ``actor_type="system"`` (with ``actor_user_id=None``) records the pause
+        as a system-initiated board event — used by the auto-pause on
+        subscription-quota exhaustion (GH#10218).
+        """
         row = await self._get_agent_row(session, company_id, agent_id)
         if row is None:
             raise AgentNotFoundError(agent_id)
@@ -94,7 +100,7 @@ class ControlsService:
         await self._activity_log.record(
             session=session,
             company_id=company_id,
-            actor_type="user",
+            actor_type=actor_type,
             actor_id=actor_user_id,
             event_type=ActivityEventType.CONTROL_AGENT_PAUSED,
             entity_type="agent",

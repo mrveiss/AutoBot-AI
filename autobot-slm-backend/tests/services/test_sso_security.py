@@ -27,6 +27,12 @@ _MODELS_SSO = "user_management.models.sso"
 if _MODELS_SSO not in sys.modules:
     sys.modules[_MODELS_SSO] = MagicMock()
 
+# sso_service.py imports SSOSecretsManager from sso_secrets; stub it so the
+# module loads without the real SQLAlchemy/encryption stack.
+_SSO_SECRETS = "user_management.services.sso_secrets"
+if _SSO_SECRETS not in sys.modules:
+    sys.modules[_SSO_SECRETS] = MagicMock()
+
 _base_mod = types.ModuleType("user_management.services.base_service")
 
 
@@ -347,7 +353,7 @@ class TestOauthSecurity:
         service = _make_service()
 
         with patch.object(_sso_mod, "get_redis_client", return_value=redis_mock):
-            state = await service._generate_oauth_state(_PROVIDER_ID)
+            state, _ = await service._generate_oauth_state(_PROVIDER_ID)
             # First use succeeds
             await service._validate_oauth_state(state)
             # Second use must raise (replay attack prevention)
