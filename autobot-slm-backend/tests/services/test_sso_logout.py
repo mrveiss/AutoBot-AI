@@ -3,24 +3,22 @@
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
 """
-TDD tests for Task 3: provider end_session_endpoint templates + SAML SLO config.
+Tests for provider end_session_endpoint templates (OIDC RP-initiated logout).
 
 Covers:
 - get_provider_endpoint_template includes end_session_endpoint for Okta
 - get_provider_endpoint_template includes end_session_endpoint for Microsoft Entra
 - get_provider_endpoint_template has no end_session_endpoint for Google
   (Google uses /o/oauth2/revoke which is token-revocation, not RP-initiated OIDC logout)
-- _get_saml_config includes single_logout_service in the SP endpoints
-- initiate_saml_logout generates a redirect URL and stores relay state in Redis
+
+SAML SLO is not yet implemented — tracked in #10281.
 """
 
 import importlib.util
 import sys
 import types
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
-
-import pytest
+from unittest.mock import MagicMock
 
 # ---------------------------------------------------------------------------
 # Path setup
@@ -77,10 +75,6 @@ _sso_mod = importlib.util.module_from_spec(_spec)  # type: ignore[arg-type]
 _spec.loader.exec_module(_sso_mod)  # type: ignore[union-attr]
 
 SSOService = _sso_mod.SSOService
-SSOServiceError = _sso_mod.SSOServiceError
-
-# Provider type constants (access via the MagicMock stub module)
-_provider_types = sys.modules[_MODELS_SSO].SSOProviderType
 
 
 # ---------------------------------------------------------------------------
@@ -93,7 +87,7 @@ def _get_template(provider_value: str, domain: str = "dev.okta.com") -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Task 3a: end_session_endpoint in OIDC templates
+# end_session_endpoint in OIDC templates
 # ---------------------------------------------------------------------------
 
 
@@ -133,81 +127,3 @@ class TestGoogleWorkspaceEndSessionEndpoint:
         # Acceptable: key absent OR value is None
         endpoint = template.get("end_session_endpoint")
         assert endpoint is None
-
-
-# ---------------------------------------------------------------------------
-# Task 3b: SAML SLO in _get_saml_config
-# ---------------------------------------------------------------------------
-
-
-class TestSamlSloConfig:
-    def _make_provider(self, **config_overrides) -> MagicMock:
-        provider = MagicMock()
-        base_cfg = {
-            "sp_entity_id": "https://slm.example.com/saml/metadata",
-            "acs_url": "https://slm.example.com/api/auth/sso/saml/acs",
-            "slo_url": "https://slm.example.com/api/auth/sso/saml/slo",
-            "idp_metadata_url": "https://idp.example.com/metadata.xml",
-        }
-        base_cfg.update(config_overrides)
-        provider.config = base_cfg
-        return provider
-
-    def test_saml_config_includes_single_logout_service(self):
-        service = SSOService(session=MagicMock())
-        provider = self._make_provider()
-        config = service._get_saml_config(provider)
-        sp_section = config["service"]["sp"]
-        assert "single_logout_service" in sp_section["endpoints"]
-
-    def test_saml_slo_endpoint_uses_provider_slo_url(self):
-        service = SSOService(session=MagicMock())
-        provider = self._make_provider(slo_url="https://slm.example.com/api/auth/sso/saml/slo")
-        config = service._get_saml_config(provider)
-        slo_entries = config["service"]["sp"]["endpoints"]["single_logout_service"]
-        slo_urls = [entry[0] for entry in slo_entries]
-        assert any("saml/slo" in url for url in slo_urls)
-
-
-# ---------------------------------------------------------------------------
-# Task 3c: initiate_saml_logout method exists and returns (url, relay_state)
-# ---------------------------------------------------------------------------
-
-
-class TestInitiateSamlLogout:
-    def test_method_exists_on_sso_service(self):
-        assert hasattr(SSOService, "initiate_saml_logout")
-
-    @pytest.mark.asyncio
-    async def test_returns_tuple_of_url_and_relay_state(self):
-        """initiate_saml_logout must return a (redirect_url, relay_state) tuple."""
-        service = SSOService(session=MagicMock())
-        provider = MagicMock()
-        provider.id = "test-provider-id"
-        provider.config = {
-            "sp_entity_id": "https://slm.example.com/saml",
-            "acs_url": "https://slm.example.com/api/auth/sso/saml/acs",
-            "slo_url": "https://slm.example.com/api/auth/sso/saml/slo",
-            "idp_metadata_url": "https://idp.example.com/metadata.xml",
-        }
-
-        # Mock the Saml2Client so we don't need a real IdP
-        mock_client = MagicMock()
-        mock_client.global_logout.return_value = (
-            "test-logout-request-id",
-            {"headers": [("Location", "https://idp.example.com/slo")]},
-        )
-
-        redis_mock = AsyncMock()
-        redis_mock.set = AsyncMock(return_value=True)
-
-        with patch.object(_sso_mod, "get_redis_client", return_value=redis_mock):
-            with patch.object(service, "_build_saml_client", return_value=mock_client):
-                result = await service.initiate_saml_logout(provider)
-
-        assert isinstance(result, tuple)
-        assert len(result) == 2
-        redirect_url, relay_state = result
-        assert isinstance(redirect_url, str)
-        assert isinstance(relay_state, str)
-        assert len(relay_state) > 0

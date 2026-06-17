@@ -397,23 +397,14 @@ class SSOService(BaseService):
     def _get_saml_config(self, provider: SSOProvider) -> dict[str, Any]:
         """Build pysaml2 config from provider settings.
 
-        Includes Single Logout Service (SLO) endpoint when ``slo_url`` is
-        present in the provider config.  The SLO callback route is
-        ``/api/auth/sso/saml/slo`` (registered in api/sso_auth.py).
+        SAML SLO is not yet implemented — tracked in #10281.
         """
         _http_post = "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST"
-        _http_redirect = "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect"
-        slo_url = provider.config.get("slo_url")
         endpoints: dict[str, Any] = {
             "assertion_consumer_service": [
                 (provider.config.get("acs_url"), _http_post),
             ],
         }
-        if slo_url:
-            endpoints["single_logout_service"] = [
-                (slo_url, _http_redirect),
-                (slo_url, _http_post),
-            ]
         return {
             "entityid": provider.config.get("sp_entity_id"),
             "service": {"sp": {"endpoints": endpoints}},
@@ -437,31 +428,6 @@ class SSOService(BaseService):
         if redis:
             await redis.set(f"sso:state:{relay_state}", str(provider.id), ex=600)
         request_id, info = client.prepare_for_authenticate()
-        redirect_url = dict(info["headers"])["Location"]
-        return redirect_url, relay_state
-
-    async def initiate_saml_logout(self, provider: SSOProvider) -> tuple[str, str]:
-        """Initiate SAML SP-initiated Single Logout (SLO).
-
-        Generates a SAML LogoutRequest via pysaml2's ``global_logout`` method,
-        stores the relay state in Redis (same TTL pattern as authn requests),
-        and returns ``(redirect_url, relay_state)``.
-
-        Limitation: pysaml2 ``global_logout`` requires a live session subject
-        (NameID).  Without a real NameID this method uses a placeholder subject
-        — callers should pass the NameID from the user's SSO metadata when
-        available.  The SLO callback route ``/api/auth/sso/saml/slo`` must be
-        registered separately in ``api/sso_auth.py``.
-
-        Raises:
-            SSOServiceError: If pysaml2 is not installed.
-        """
-        client = self._build_saml_client(provider)
-        relay_state = secrets.token_urlsafe(32)
-        redis = get_redis_client()
-        if redis:
-            await redis.set(f"sso:slo_state:{relay_state}", str(provider.id), ex=600)
-        _request_id, info = client.global_logout(subject_id=None)
         redirect_url = dict(info["headers"])["Location"]
         return redirect_url, relay_state
 
