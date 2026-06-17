@@ -46,7 +46,7 @@ A waiver without a `#NNNN` issue reference is itself a violation. Globally disab
 ## Adding a new rule
 
 1. Create `tools/lint/canonical/rules/py_<name>.py` (or appropriate package) exporting the rule contract.
-2. Add positive / negative / waiver fixtures under `tests/lint/canonical/fixtures/<rule>/`.
-3. Add `tests/lint/canonical/rules/test_<rule>.py` with at least 4 assertions (positive, negative, waiver, metadata).
+2. Add positive / negative / waiver fixtures under `repo_tests/lint/canonical/fixtures/<rule>/`.
+3. Add `repo_tests/lint/canonical/rules/test_<rule>.py` with at least 4 assertions (positive, negative, waiver, metadata).
 4. Add a row to the table above.
 5. File or reference a tracking issue under [#7458](https://github.com/mrveiss/AutoBot-AI/issues/7458).

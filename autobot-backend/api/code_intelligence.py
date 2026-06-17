@@ -77,7 +77,7 @@ from code_intelligence.performance_analyzer import (
     get_performance_issue_types,
 )
 from code_intelligence.redis_optimizer import OptimizationSeverity, RedisOptimizer
-from code_intelligence.security_analyzer import (
+from code_intelligence.security import (
     SecurityAnalyzer,
     SecuritySeverity,
     get_vulnerability_types,

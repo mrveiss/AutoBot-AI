@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """Add LLC extension columns to organizations table.
 
 Revision ID: 20260523_023

@@ -125,7 +125,7 @@ export interface UseNotificationBusReturn {
   error(message: string, duration?: number): void
   warning(message: string, duration?: number): void
   info(message: string, duration?: number): void
-  showToast(message: string, type: ToastType, duration?: number): void
+  showToast(message: string, type?: ToastType, duration?: number): void
 }
 
 // ============================================================
@@ -140,7 +140,7 @@ export function useNotificationBus(): UseNotificationBusReturn {
   const { showToast } = useToast()
   const lastError = ref<Error | null>(null)
 
-  function _toast(message: string, type: ToastType, duration?: number): void {
+  function _toast(message: string, type: ToastType = 'info', duration?: number): void {
     showToast(message, type, duration)
   }
 

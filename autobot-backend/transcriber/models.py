@@ -3,12 +3,26 @@
 # autobot-backend/transcriber/models.py
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Pydantic request/response schemas for the transcriber module."""
+"""Pydantic request/response schemas and status enum for the transcriber module."""
 
 from datetime import datetime
+from enum import Enum
 from typing import Literal
 
 from pydantic import BaseModel, Field
+
+
+class RecordingStatus(str, Enum):
+    """Canonical recording lifecycle states.
+
+    Values match the DB default ('pending'), the RecordingOut schema Literal,
+    and the frontend type — do not change string values.
+    """
+
+    PENDING = "pending"
+    PROCESSING = "processing"
+    COMPLETE = "complete"
+    ERROR = "error"
 
 
 class ProjectCreate(BaseModel):

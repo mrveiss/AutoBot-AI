@@ -30,7 +30,8 @@ export interface Agent {
   id: string
   name: string
   type: 'orchestrator' | 'worker' | 'monitor' | 'analyzer' | 'executor'
-  status: 'working' | 'idle' | 'error' | 'paused'
+  // #9724: 'abstained' added — AgentActivityVisualization renders this state
+  status: 'working' | 'idle' | 'error' | 'paused' | 'abstained'
   currentTask?: string
   tasksCompleted: number
   uptime: number

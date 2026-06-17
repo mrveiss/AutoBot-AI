@@ -6,23 +6,52 @@
 import { ref, onMounted } from 'vue'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
+import { useLlcCompanyContext } from '@/composables/llc/useLlcCompanyContext'
+import { markExpanded, buildTreeFromParent } from '@/composables/llc/useLlcTree'
 import GoalTreeNode from './GoalTreeNode.vue'
 import type { Goal } from './GoalTreeNode.vue'
 
 const logger = createLogger('GoalTree')
 const api = useApiClient()
+const { resolveCompanyId } = useLlcCompanyContext()
 
 const goals = ref<Goal[]>([])
 const isLoading = ref(false)
 const error = ref<string | null>(null)
 const selectedGoal = ref<Goal | null>(null)
 
+// Flat goal row returned by GET /api/llc/goals?company_id=.
+interface FlatGoal {
+  id: string
+  parent_goal_id: string | null
+  title: string
+  status: string
+}
+
+function toGoalNode(g: FlatGoal): Goal {
+  return {
+    id: g.id,
+    title: g.title,
+    status: g.status as Goal['status'],
+    linked_item_count: 0,
+    children: [],
+    expanded: false,
+  }
+}
+
 async function fetchGoals() {
   isLoading.value = true
   error.value = null
   try {
-    const resp = await api.get<{ data: { goals: Goal[] } }>('/api/llc/goals/tree')
-    goals.value = (resp as { data: { goals: Goal[] } }).data?.goals ?? []
+    const cid = await resolveCompanyId()
+    if (!cid) {
+      goals.value = []
+      return
+    }
+    // No /goals/tree route — fetch flat goals and assemble the tree client-side
+    // from parent_goal_id (#9861).
+    const flat = await api.get<FlatGoal[]>(`/api/llc/goals?company_id=${cid}`)
+    goals.value = buildTreeFromParent(flat ?? [], 'id', 'parent_goal_id', toGoalNode)
     markExpanded(goals.value, true)
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)
@@ -30,13 +59,6 @@ async function fetchGoals() {
     error.value = msg
   } finally {
     isLoading.value = false
-  }
-}
-
-function markExpanded(nodes: Goal[], expanded: boolean) {
-  for (const node of nodes) {
-    node.expanded = expanded
-    if (node.children) markExpanded(node.children, false)
   }
 }
 
@@ -53,8 +75,9 @@ async function selectGoal(goal: Goal) {
   if (!goal.linked_items && goal.linked_item_count > 0) {
     goal.loading_items = true
     try {
-      const resp = await api.get<{ data: { items: Goal['linked_items'] } }>(`/api/llc/goals/${goal.id}/items`)
-      goal.linked_items = (resp as { data: { items: Goal['linked_items'] } }).data?.items ?? []
+      // GH#9851: backend route is /tasks and returns an array directly.
+      const resp = await api.get<NonNullable<Goal['linked_items']>>(`/api/llc/goals/${goal.id}/tasks`)
+      goal.linked_items = resp ?? []
     } catch (err: unknown) {
       logger.error('Failed to fetch goal items', err)
       goal.linked_items = []

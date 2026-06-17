@@ -47,6 +47,13 @@ PATH_TRAVERSAL_PATTERNS: FrozenSet[str] = frozenset({"..", "/", "\\"})
 # Extended patterns including null byte (for session IDs and identifiers)
 INJECTION_PATTERNS: FrozenSet[str] = frozenset({"..", "/", "\\", "\0"})
 
+# Patterns for validating file paths (absolute paths) — only dotdot and null byte.
+# Forward-slash is intentionally excluded: absolute paths legitimately contain "/".
+# Use this instead of contains_path_traversal() when the value being checked is a
+# full filesystem path (e.g. a backup file path) rather than a bare filename or
+# identifier.  (#9670)
+DOTDOT_TRAVERSAL_PATTERNS: FrozenSet[str] = frozenset({"..", "\0"})
+
 
 def contains_path_traversal(value: str) -> bool:
     """
@@ -72,6 +79,32 @@ def contains_path_traversal(value: str) -> bool:
         True
     """
     return any(pattern in value for pattern in PATH_TRAVERSAL_PATTERNS)
+
+
+def contains_dotdot_traversal(value: str) -> bool:
+    """
+    Check if a file path contains dotdot traversal sequences or null bytes.
+
+    Use this function when *value* is a full filesystem path (e.g. an absolute
+    backup file path like ``/opt/autobot/backups/kb_backup.json``).  Unlike
+    ``contains_path_traversal``, forward-slash is **not** treated as suspicious
+    because absolute paths legitimately contain ``/``.  (#9670)
+
+    Args:
+        value: File path string to check.
+
+    Returns:
+        True if dotdot traversal or null bytes are detected, False otherwise.
+
+    Examples:
+        >>> contains_dotdot_traversal("/opt/autobot/backups/kb_backup.json")
+        False
+        >>> contains_dotdot_traversal("/opt/autobot/backups/../../../etc/passwd")
+        True
+        >>> contains_dotdot_traversal("/tmp/file\\x00.txt")
+        True
+    """
+    return any(pattern in value for pattern in DOTDOT_TRAVERSAL_PATTERNS)
 
 
 def is_invalid_name(name: str) -> bool:
@@ -151,7 +184,9 @@ def contains_injection_patterns(value: str) -> bool:
 __all__ = [
     "PATH_TRAVERSAL_PATTERNS",
     "INJECTION_PATTERNS",
+    "DOTDOT_TRAVERSAL_PATTERNS",
     "contains_path_traversal",
+    "contains_dotdot_traversal",
     "contains_injection_patterns",
     "is_invalid_name",
     "is_safe_identifier",

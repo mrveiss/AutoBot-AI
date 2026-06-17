@@ -59,6 +59,7 @@
  * Issue #184: Split oversized Vue components
  */
 
+import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { computed } from 'vue'
 import BaseButton from '@/components/base/BaseButton.vue'
@@ -98,9 +99,11 @@ defineEmits<Emits>()
 
 const { getFileIcon: getFileIconUtil } = useKnowledgeIcons()
 
-const fileIcon = computed(() => {
+const fileIcon = computed<IconName>(() => {
   if (!props.selectedFile) return 'file'
-  return getFileIconUtil(props.selectedFile as any)
+  // #9724: getFileIcon expects the file NAME — passing the whole TreeNode
+  // always fell through to the generic 'file' icon.
+  return getFileIconUtil(props.selectedFile.name, props.selectedFile.type === 'folder')
 })
 </script>
 

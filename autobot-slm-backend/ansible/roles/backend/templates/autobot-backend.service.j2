@@ -1,6 +1,13 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
+#
+# #10005: Single source of truth for the autobot-backend systemd unit.
+# Every playbook/role that installs /etc/systemd/system/autobot-backend.service
+# must render THIS template (the former copy at ansible/templates/systemd/
+# drifted and was removed). Required vars: backend_user, backend_group,
+# backend_install_dir, backend_code_dir, backend_host, backend_port,
+# backend_workers, backend_log_dir.
 [Unit]
 Description=AutoBot Backend API
 After=network-online.target redis-stack-server.service
@@ -20,10 +27,17 @@ ExecStartPre={{ backend_code_dir | default(backend_install_dir) }}/venv/bin/pyth
 # Issue #891: Removed ExecStartPre symlink creation - causes infinite import loops with fixed backend imports
 ExecStart={{ backend_code_dir }}/venv/bin/uvicorn main:app --host {{ backend_host }} --port {{ backend_port }} --workers {{ backend_workers }}
 Restart=always
-# Issue #957: nginx holds port {{ backend_nginx_port }}; WDF rule tied to nginx not uvicorn
+# Issue #957: nginx holds port {{ backend_nginx_port | default(8443) }}; WDF rule tied to nginx not uvicorn
 RestartSec=5
 StartLimitInterval=120
 StartLimitBurst=5
+# #9934: Raise the file-descriptor ceiling. The backend runs multiple uvicorn
+# workers with DB/Redis/ChromaDB pools + HTTP clients and exhausts the default
+# soft limit on busy/co-located hosts (OSError: [Errno 24] Too many open files →
+# socket.accept() out of system resource → #3687 health gate never goes green).
+# Matches the convention used by every other AutoBot unit (slm-agent, frontend,
+# ollama, browser, coordinator = 65535/65536).
+LimitNOFILE={{ backend_nofile_limit | default(65536) }}
 StandardOutput=append:{{ backend_log_dir }}/backend.log
 StandardError=append:{{ backend_log_dir }}/backend-error.log
 

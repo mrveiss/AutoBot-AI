@@ -16,7 +16,7 @@ from typing import Dict, Tuple
 from fastapi import HTTPException, Request, status
 
 from autobot_shared.auth.jwt_core import (
-    decode_jwt_or_none,
+    decode_jwt_multi,
     encode_jwt,
     hash_password,
     verify_password,
@@ -45,6 +45,9 @@ class AuthenticationMiddleware:
         self.session_timeout_minutes = self.security_config.get("session_timeout_minutes", 30)
         self.max_failed_attempts = self.security_config.get("max_failed_attempts", 3)
         self.lockout_duration_minutes = self.security_config.get("lockout_duration_minutes", 15)
+
+        # RS256 keypair (#10196): loaded/generated at startup
+        self.jwt_private_key, self.jwt_public_key, self.jwt_kid = self._get_rs256_keypair()
 
         # Use Redis for session storage if available, fallback to in-memory
         self.redis_client = None
@@ -77,12 +80,14 @@ class AuthenticationMiddleware:
         # Priority order: AUTOBOT_JWT_SECRET -> SECRET_KEY -> Config file -> Generated secret
 
         # 1. Check dedicated JWT secret env var first (most specific)
-        secret = config.jwt_secret
+        # #9960: module-global `config` is the ConfigManager — the ssot fields
+        # live on `ssot_config` (same fix class as #9828 / internal_api_key).
+        secret = ssot_config.jwt_secret
         if secret:
             return secret
 
         # 2. Fall back to SECRET_KEY env var (stable across restarts)
-        secret = config.secret_key
+        secret = ssot_config.secret_key
         if secret:
             return secret
 
@@ -108,6 +113,94 @@ class AuthenticationMiddleware:
             logger.error("Failed to store JWT secret in config: %s", e)
             # Still return the secure secret even if we can't store it
             return secure_secret
+
+    def _get_rs256_keypair(self) -> Tuple[str, str, str]:
+        """Load or auto-generate the RS256 keypair for signing user JWTs (#10196).
+
+        Priority order:
+        1. ``AUTOBOT_JWT_PRIVATE_KEY`` env var (PEM string)
+        2. Auto-generate a 2048-bit RSA keypair, persist in security config
+           (mirrors the existing HS256 generated-secret pattern)
+
+        The public key is always derived from the private key so they are
+        guaranteed to be consistent even when only the private key is supplied.
+
+        Returns:
+            Tuple of (pem_private_key, pem_public_key, kid).
+        """
+        from cryptography.hazmat.backends import default_backend
+        from cryptography.hazmat.primitives import serialization
+        from cryptography.hazmat.primitives.asymmetric import rsa
+
+        kid = ssot_config.misc.jwt_kid or "autobot-1"
+
+        # 1. Check env var for private key
+        pem_private = ssot_config.misc.jwt_private_key
+        if pem_private:
+            try:
+                private_key = serialization.load_pem_private_key(
+                    pem_private.encode("utf-8"),
+                    password=None,
+                    backend=default_backend(),
+                )
+                public_key = private_key.public_key()
+                pem_public = public_key.public_bytes(
+                    encoding=serialization.Encoding.PEM,
+                    format=serialization.PublicFormat.SubjectPublicKeyInfo,
+                ).decode("utf-8")
+                logger.info("RS256 private key loaded from AUTOBOT_JWT_PRIVATE_KEY")
+                return pem_private, pem_public, kid
+            except Exception as exc:
+                logger.error("Failed to load AUTOBOT_JWT_PRIVATE_KEY: %s — will auto-generate", exc)
+
+        # 2. Check security config for a previously persisted keypair
+        stored_pem = self.security_config.get("jwt_private_key_pem", "")
+        if stored_pem:
+            try:
+                private_key = serialization.load_pem_private_key(
+                    stored_pem.encode("utf-8"),
+                    password=None,
+                    backend=default_backend(),
+                )
+                public_key = private_key.public_key()
+                pem_public = public_key.public_bytes(
+                    encoding=serialization.Encoding.PEM,
+                    format=serialization.PublicFormat.SubjectPublicKeyInfo,
+                ).decode("utf-8")
+                logger.info("RS256 keypair loaded from security config (previously auto-generated)")
+                return stored_pem, pem_public, kid
+            except Exception as exc:
+                logger.warning("Stored RS256 keypair in config is invalid: %s — regenerating", exc)
+
+        # 3. Auto-generate a fresh RSA-2048 keypair and persist it
+        logger.warning(
+            "No RS256 private key configured. Auto-generating RSA-2048 keypair. "
+            "Set AUTOBOT_JWT_PRIVATE_KEY to use a stable externally-managed key."
+        )
+        private_key = rsa.generate_private_key(
+            public_exponent=65537,
+            key_size=2048,
+            backend=default_backend(),
+        )
+        public_key = private_key.public_key()
+
+        pem_private = private_key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.TraditionalOpenSSL,
+            encryption_algorithm=serialization.NoEncryption(),
+        ).decode("utf-8")
+        pem_public = public_key.public_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo,
+        ).decode("utf-8")
+
+        try:
+            config.set_nested("security_config.jwt_private_key_pem", pem_private)
+            logger.info("Auto-generated RS256 keypair persisted in security config")
+        except Exception as exc:
+            logger.error("Failed to persist RS256 keypair in config: %s — keypair is ephemeral", exc)
+
+        return pem_private, pem_public, kid
 
     def hash_password(self, password: str) -> str:
         """Hash password using bcrypt."""
@@ -255,7 +348,13 @@ class AuthenticationMiddleware:
         return self._build_successful_auth_response(username, user_config, ip_address)
 
     def create_jwt_token(self, user_data: Dict) -> str:
-        """Create JWT token for authenticated user."""
+        """Create an RS256-signed JWT token for authenticated user (#10196).
+
+        Signs with the RS256 private key and embeds the ``kid`` header so
+        consumers can locate the correct public key in the JWKS response.
+        Claims are unchanged: username / role / email / iat (+ user_id / org_id
+        from #684).
+        """
         payload = {
             "username": user_data["username"],
             "role": user_data["role"],
@@ -269,12 +368,32 @@ class AuthenticationMiddleware:
         if user_data.get("org_id"):
             payload["org_id"] = str(user_data["org_id"])
 
-        return encode_jwt(payload, secret=self.jwt_secret, expiry_hours=self.jwt_expiry_hours)
+        return encode_jwt(
+            payload,
+            private_key=self.jwt_private_key,
+            algorithm="RS256",
+            kid=self.jwt_kid,
+            expiry_hours=self.jwt_expiry_hours,
+        )
 
     def verify_jwt_token(self, token: str) -> Dict | None:
-        """Verify and decode JWT token."""
-        payload = decode_jwt_or_none(token, self.jwt_secret)
-        if payload is None:
+        """Verify and decode a JWT token.
+
+        Accepts both:
+        - RS256 tokens (new, signed by this authority with the private key)
+        - HS256 tokens (legacy, signed before the RS256 migration)
+
+        Algorithm-confusion is prevented by ``decode_jwt_multi``: an RS256
+        token is never verified with the HS256 secret, and vice-versa.
+        HS256 acceptance is logged as deprecated to track migration progress.
+        """
+        try:
+            payload = decode_jwt_multi(
+                token,
+                public_key=self.jwt_public_key,
+                hs256_secret=self.jwt_secret,
+            )
+        except Exception:
             return None
 
         # Check if user is locked out even when token is structurally valid

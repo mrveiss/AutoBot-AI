@@ -30,6 +30,8 @@ from knowledge.schemas.rag import (
     RagStatsResponse,
     RerankRequest,
     RerankResultsResponse,
+    RetrievalContextRequest,
+    RetrievalContextResponse,
     RunBenchmarkRequest,
     UpdateRagConfigResponse,
 )
@@ -117,6 +119,11 @@ def _build_search_metrics(metrics) -> dict:
         "documents_considered": metrics.documents_considered,
         "final_results_count": metrics.final_results_count,
         "hybrid_search_enabled": metrics.hybrid_search_enabled,
+        # Issue #9018: retrieval strategy + CAG observability (defaults for non-CAG).
+        "strategy": getattr(metrics, "strategy", "rag"),
+        "documents_loaded": getattr(metrics, "documents_loaded", 0),
+        "tokens_used": getattr(metrics, "tokens_used", 0),
+        "budget": getattr(metrics, "budget", 0),
     }
 
 
@@ -607,4 +614,53 @@ async def get_entity_history(
         "entity_id": entity_id,
         "versions": versions,
         "count": len(versions),
+    }
+
+
+# Issue #9018: CAG/KAG strategy-dispatched context retrieval endpoint.
+
+
+@router.post("/context", response_model=RetrievalContextResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="retrieval_context",
+    error_code_prefix="KNOWLEDGE_RAG",
+)
+async def retrieval_context(
+    request: RetrievalContextRequest,
+    rag_service: RAGService = Depends(get_rag_service_dependency),
+    current_user: dict = Depends(get_current_user),
+):
+    """Strategy-dispatched context retrieval (RAG / CAG).
+
+    Issue #9018 Phase 1.
+
+    **Parameters:**
+    - **query**: Generation query string.
+    - **collection_id**: Optional collection to target (future: per-collection mode lookup).
+    - **mode**: Retrieval mode — 'auto' | 'rag' | 'cag' | 'kag'.
+    - **model**: Active model name for token-budget calculation (CAG only).
+
+    **Returns:**
+    - **context**: Assembled context string for LLM injection.
+    - **strategy**: Actual strategy used ('rag' or 'cag').
+    - **metrics**: Timing and result-count metrics.
+    """
+    from services.cag_service import CAGService
+    from services.retrieval_dispatcher import get_context
+
+    cag_service = CAGService(rag_service)
+    context, metrics = await get_context(
+        query=request.query,
+        rag_service=rag_service,
+        cag_service=cag_service,
+        mode=request.mode,
+        collection=request.collection_id,
+        model=request.model,
+    )
+    strategy = getattr(metrics, "strategy", "rag")
+    return {
+        "context": context,
+        "strategy": strategy,
+        "metrics": _build_search_metrics(metrics),
     }

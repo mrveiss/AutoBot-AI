@@ -7,6 +7,7 @@ import { ref, onMounted } from 'vue'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
 import { useRouter } from 'vue-router'
+import { markExpanded, mapTree } from '@/composables/llc/useLlcTree'
 import CompanyTreeNode from './CompanyTreeNode.vue'
 import type { CompanyNode } from './CompanyTreeNode.vue'
 
@@ -18,12 +19,46 @@ const tree = ref<CompanyNode[]>([])
 const isLoading = ref(false)
 const error = ref<string | null>(null)
 
+// Raw recursive shape returned by GET /api/llc/companies/{id}/tree.
+interface RawCompanyTreeNode {
+  id: string
+  name: string
+  slug?: string
+  llc_status?: string
+  children?: RawCompanyTreeNode[]
+}
+
+function statusOf(llcStatus?: string): CompanyNode['status'] {
+  if (llcStatus === 'active') return 'active'
+  if (llcStatus === 'paused') return 'paused'
+  return 'inactive'
+}
+
+function toCompanyNode(raw: RawCompanyTreeNode, children: CompanyNode[]): CompanyNode {
+  return {
+    id: raw.id,
+    name: raw.name,
+    status: statusOf(raw.llc_status),
+    // Budget is not exposed by the tree endpoint; shown as 0 until a
+    // budget-aware tree endpoint exists (#9861).
+    budget_spent: 0,
+    budget_total: 0,
+    children,
+    expanded: false,
+  }
+}
+
 async function fetchTree() {
   isLoading.value = true
   error.value = null
   try {
-    const resp = await api.get<{ data: { companies: CompanyNode[] } }>('/api/llc/companies/tree')
-    tree.value = (resp as { data: { companies: CompanyNode[] } }).data?.companies ?? []
+    // No global tree route exists — build the forest from the root-company
+    // list plus each root's recursive subtree (#9861).
+    const roots = await api.get<{ id: string }[]>('/api/llc/companies/')
+    const subtrees = await Promise.all(
+      (roots ?? []).map((c) => api.get<RawCompanyTreeNode>(`/api/llc/companies/${c.id}/tree`)),
+    )
+    tree.value = subtrees.filter(Boolean).map((subtree) => mapTree(subtree, toCompanyNode))
     markExpanded(tree.value, true)
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)
@@ -31,13 +66,6 @@ async function fetchTree() {
     error.value = msg
   } finally {
     isLoading.value = false
-  }
-}
-
-function markExpanded(nodes: CompanyNode[], expanded: boolean) {
-  for (const node of nodes) {
-    node.expanded = expanded
-    if (node.children) markExpanded(node.children, false)
   }
 }
 

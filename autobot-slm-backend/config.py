@@ -164,10 +164,28 @@ class Settings(BaseSettings):
     port: int = 8000
     debug: bool = False
 
+    # SLM self-identity (#9956)
+    # The SLM manager's own DB node_id. Deployments may rename the node, so this
+    # is read from the environment instead of being hardcoded. The default
+    # matches the inventory default (slm_server host in slm-nodes.yml).
+    slm_node_id: str = os.getenv("SLM_NODE_ID", "00-SLM-Manager")
+
     # Authentication
     secret_key: str = os.getenv("SLM_SECRET_KEY", "")
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 60 * 24  # 24 hours
+
+    # Authority (autobot-backend) RS256 verification — Pattern B (#10197).
+    # The SLM fetches the public key from the authority's JWKS endpoint and
+    # verifies RS256 tokens locally; the signing private key never leaves the
+    # authority.  Override these in /etc/autobot/slm-secrets.env for
+    # non-co-located deployments.
+    authority_base_url: str = os.getenv("SLM_AUTHORITY_BASE_URL", "http://127.0.0.1:8001")
+    authority_jwks_path: str = os.getenv("SLM_AUTHORITY_JWKS_PATH", "/.well-known/jwks.json")
+    # How long to trust a cached JWKS before re-fetching (seconds).
+    jwks_cache_ttl_seconds: int = int(os.getenv("SLM_JWKS_CACHE_TTL", "3600"))
+    # HTTP connect+read timeout for JWKS endpoint calls (seconds).
+    jwks_fetch_timeout_seconds: float = float(os.getenv("SLM_JWKS_FETCH_TIMEOUT", "10"))
 
     # HMAC signing key for API key hashing (#2160).
     # Default preserves backward compatibility with existing hashed keys.

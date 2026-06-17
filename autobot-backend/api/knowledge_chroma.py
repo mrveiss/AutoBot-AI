@@ -22,8 +22,11 @@ from utils.async_chromadb_client import get_async_chromadb_client
 
 logger = get_logger(__name__)
 
+# Prefix must NOT include "/api" — the app factory prepends it (#9864:
+# the old "/api/knowledge/chroma" prefix served /api/api/knowledge/chroma/*,
+# 404ing every ChromaDBExplorer call).
 router = APIRouter(
-    prefix="/api/knowledge/chroma",
+    prefix="/knowledge/chroma",
     tags=["knowledge-chroma", "chroma"],
 )
 

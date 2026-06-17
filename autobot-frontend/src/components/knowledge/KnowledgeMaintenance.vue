@@ -194,6 +194,7 @@
 </template>
 
 <script setup lang="ts">
+import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, onMounted } from 'vue'
 import { formatFileSize, formatTimeAgo } from '@/utils/formatHelpers'
@@ -265,8 +266,8 @@ const getQualityClass = (score: number): string => {
   return 'critical'
 }
 
-const getHistoryIcon = (type: string): string => {
-  const icons: Record<string, string> = {
+const getHistoryIcon = (type: string): IconName => {
+  const icons: Record<string, IconName> = {
     cleanup: 'broom',
     dedup: 'copy',
     backup: 'download',

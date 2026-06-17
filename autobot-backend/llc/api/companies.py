@@ -27,10 +27,12 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.user_management.dependencies import get_current_user, require_org_context
 from autobot_shared.logging_manager import get_logger
+from llc.deps import get_session, service_dep
 from llc.kb.collections import KbCollectionManager
 from llc.models.company import (
     CompanyAncestor,
@@ -39,8 +41,9 @@ from llc.models.company import (
     CompanyTreeNode,
     CompanyUpdate,
 )
-from llc.models.enums import ExternalPMType, LLCCompanyStatus, MembershipRole
+from llc.models.enums import ExternalPMType, LLCCompanyStatus, MembershipRole, WorkItemStatus
 from llc.models.membership import LLCCompanyMembership
+from llc.services.backlog import BacklogService
 from llc.services.company import (
     CompanyBudgetError,
     CompanyCycleError,
@@ -57,8 +60,11 @@ from llc.services.membership_service import (
 from llc.services.portability import PortabilityService
 from user_management.database import get_async_session
 from user_management.models.organization import Organization
+from user_management.services import TenantContext
 
 logger = get_logger(__name__)
+
+_backlog_svc = service_dep(BacklogService)
 
 router = APIRouter(prefix="/companies", tags=["llc-companies"])
 
@@ -463,6 +469,257 @@ class AgentSearchResult(BaseModel):
     role: str
     capabilities: str
     manager_name: Optional[str] = None
+
+
+# ------------------------------------------------------------------
+# Backlog reorder (GH#9861)
+# ------------------------------------------------------------------
+
+
+class BacklogReorderRequest(BaseModel):
+    """Bulk-reorder request — ordered list of work item UUIDs.
+
+    Positions are assigned 0..n-1 (deduplicated, preserving first occurrence)
+    in the order items appear in the list.  Items belonging to a different
+    company are silently skipped (tenant isolation: callers should only submit
+    ids they already fetched from this company's backlog).
+
+    ``work_item_ids`` is typed as ``List[uuid.UUID]`` so Pydantic validates
+    each entry and returns a 422 for any malformed id — no manual parsing
+    needed in the service.
+    """
+
+    work_item_ids: List[uuid.UUID] = Field(..., min_length=1, max_length=500)
+
+
+class BacklogReorderResponse(BaseModel):
+    updated: int
+    unknown_count: int
+
+
+@router.post(
+    "/{company_id}/backlog/reorder",
+    response_model=BacklogReorderResponse,
+    status_code=200,
+)
+async def reorder_backlog(
+    company_id: uuid.UUID,
+    body: BacklogReorderRequest,
+    session: AsyncSession = Depends(get_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
+) -> BacklogReorderResponse:
+    """Assign ``backlog_position`` 0..n-1 to the supplied ordered work item ids.
+
+    Tenant access is enforced the same way as ``get_org_chart``: the caller's
+    org must match *company_id* unless they are a platform admin.  Unknown or
+    cross-tenant ids within the payload are counted in ``unknown_count`` and
+    silently skipped (not an error, so that a stale UI with a partially-loaded
+    backlog can still submit a reorder without receiving a 400).  A 400 is only
+    raised when the entire list is empty (caught by pydantic min_length=1).
+    """
+    cid = str(company_id)
+    if str(ctx.org_id) != cid and not ctx.is_platform_admin:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
+    result = await _backlog_svc().bulk_reorder(
+        session,
+        company_id=cid,
+        ordered_ids=[str(i) for i in body.work_item_ids],
+    )
+    await session.commit()
+    return BacklogReorderResponse(**result)
+
+
+# ------------------------------------------------------------------
+# Org chart (GH#9861) — read-only composition of existing models
+# ------------------------------------------------------------------
+
+
+class OrgChartNode(BaseModel):
+    """One agent node in the company org chart.
+
+    Composed read-only from ``agent_org_nodes`` (hierarchy/title/role),
+    ``llc_agent_budgets`` (budget), and the latest ``llc_heartbeat_runs`` row
+    (liveness/status). No new persistence is introduced.
+    """
+
+    id: str
+    name: str
+    title: str
+    status: str  # active | idle | error | paused
+    adapter_type: str
+    is_human: bool
+    last_heartbeat: Optional[str]
+    budget_spent: float
+    budget_total: float
+    assigned_item_count: int
+    parent_id: Optional[str]
+    children: List["OrgChartNode"] = []
+
+
+class OrgChartResponse(BaseModel):
+    nodes: List[OrgChartNode]
+
+
+def _heartbeat_status_to_org_status(run_status: Optional[str]) -> str:
+    """Map an ``LLCRunStatus`` value onto the org-chart node status vocabulary."""
+    if run_status == "running":
+        return "active"
+    # LLCRunStatus failure-ish terminal states (values, not names).
+    if run_status in ("failed", "timeout", "interrupted"):
+        return "error"
+    # completed / cancelled / rate_limited / queued / no-run → idle
+    return "idle"
+
+
+@router.get("/{company_id}/org-chart", response_model=OrgChartResponse)
+async def get_org_chart(
+    company_id: uuid.UUID,
+    session: AsyncSession = Depends(get_async_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
+) -> OrgChartResponse:
+    """Return the agent reporting hierarchy for a company (GH#9861).
+
+    Read-only composition — joins the org-hierarchy, budget, and latest
+    heartbeat for each agent scoped to the company, then assembles a forest
+    from the self-referencing ``reports_to`` edges. Tenant access is enforced
+    via :func:`require_org_context`.
+    """
+    from sqlalchemy import func, select
+
+    from llc.models.budget import LLCAgentBudget
+    from llc.models.heartbeat_run import LLCHeartbeatRun
+    from llc.models.work_item import LLCWorkItem
+    from models.agent_org import AgentOrgNode
+
+    cid = str(company_id)
+    if str(ctx.org_id) != cid and not ctx.is_platform_admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+
+    # 1. Hierarchy rows for the company.
+    org_rows = (
+        (await session.execute(select(AgentOrgNode).where(AgentOrgNode.company_id == company_id))).scalars().all()
+    )
+
+    # 2. Budgets keyed by agent_id.
+    budget_rows = (
+        (await session.execute(select(LLCAgentBudget).where(LLCAgentBudget.company_id == cid))).scalars().all()
+    )
+    budgets = {b.agent_id: b for b in budget_rows}
+
+    # 3. Latest heartbeat run per agent (status + liveness).
+    subq = (
+        select(
+            LLCHeartbeatRun.agent_id,
+            func.max(LLCHeartbeatRun.created_at).label("latest_at"),
+        )
+        .where(LLCHeartbeatRun.company_id == company_id)
+        .group_by(LLCHeartbeatRun.agent_id)
+        .subquery()
+    )
+    latest_runs = (
+        (
+            await session.execute(
+                select(LLCHeartbeatRun).join(
+                    subq,
+                    (LLCHeartbeatRun.agent_id == subq.c.agent_id) & (LLCHeartbeatRun.created_at == subq.c.latest_at),
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    runs = {r.agent_id: r for r in latest_runs}
+
+    # 4. Assigned work-item counts per agent — single grouped query, no N+1.
+    #    "Assigned" means the item has an assignee_agent_id matching the
+    #    AgentOrgNode.id (UUID PK) AND the item is not yet in a terminal state.
+    #    We join through AgentOrgNode so the result is keyed by AgentOrgNode.agent_id
+    #    (the logical string slug used everywhere else), not the UUID PK.  This
+    #    correctly handles hire-generated slug agent_ids that differ from the PK.
+    #    GH#9980: Use enum members directly so PG serialises to lowercase values
+    #    (sa.cast to String was a workaround for the test harness's _rebind_enums
+    #    helper — fixing production code to use enum members and letting the
+    #    harness handle the rebind is the correct approach; see #9980).
+    assign_q = (
+        select(
+            AgentOrgNode.agent_id,
+            func.count(LLCWorkItem.id).label("cnt"),
+        )
+        .join(AgentOrgNode, AgentOrgNode.id == LLCWorkItem.assignee_agent_id)
+        .where(
+            LLCWorkItem.company_id == company_id,
+            LLCWorkItem.assignee_agent_id.isnot(None),
+            LLCWorkItem.status.notin_(
+                [WorkItemStatus.DONE, WorkItemStatus.CANCELLED]
+            ),  # noqa: E501 — see GH#9980 (enum NAME-vs-value drift)
+        )
+        .group_by(AgentOrgNode.agent_id)
+    )
+    assigned_counts: Dict[str, int] = {row.agent_id: row.cnt for row in (await session.execute(assign_q)).all()}
+
+    # Compose flat nodes.
+    flat: Dict[str, OrgChartNode] = {}
+    for row in org_rows:
+        budget = budgets.get(row.agent_id)
+        run = runs.get(row.agent_id)
+        # Budget enrichment: expose token numbers for token-mode agents when
+        # the field is populated, otherwise fall back to dollar amounts.
+        b_mode = budget.budget_mode if budget else "dollars"
+        if b_mode == "tokens" and budget and budget.token_limit is not None:
+            b_spent = float(budget.tokens_spent)
+            b_total = float(budget.token_limit)
+        else:
+            b_spent = float(budget.budget_spent) if budget else 0.0
+            b_total = float(budget.budget_limit) if budget else 0.0
+        flat[row.agent_id] = OrgChartNode(
+            id=row.agent_id,
+            name=row.name,
+            title=row.title or row.org_role,
+            status=_heartbeat_status_to_org_status(run.status if run else None),
+            adapter_type=row.org_role,
+            is_human=False,
+            # Liveness: latest run is picked by created_at; a just-queued run
+            # may have no started_at, so fall back to created_at.
+            last_heartbeat=(
+                (run.started_at or run.created_at).isoformat() if run and (run.started_at or run.created_at) else None
+            ),
+            budget_spent=b_spent,
+            budget_total=b_total,
+            assigned_item_count=assigned_counts.get(row.agent_id, 0),
+            parent_id=row.reports_to,
+            children=[],
+        )
+
+    def _chain_resolves_to_root(agent_id: str) -> bool:
+        """True if following reports_to from ``agent_id`` ends at a node with no
+        (or missing/self) parent without revisiting a node — i.e. no cycle."""
+        seen: set[str] = set()
+        cur: Optional[OrgChartNode] = flat.get(agent_id)
+        while cur is not None and cur.parent_id:
+            if cur.id in seen:
+                return False  # cycle
+            seen.add(cur.id)
+            parent = flat.get(cur.parent_id)
+            if parent is None or parent.id == cur.id:
+                return True  # parent absent/self → effectively rooted
+            cur = parent
+        return True
+
+    # Assemble the forest from reports_to edges. Attach a node to its parent
+    # only when its chain is acyclic; cycle members (and nodes whose parent is
+    # absent/self) become roots with no parent edge, so the output is always a
+    # true forest — every agent appears exactly once, never infinitely nested.
+    roots: List[OrgChartNode] = []
+    for node in flat.values():
+        parent = flat.get(node.parent_id) if node.parent_id else None
+        if parent is not None and parent.id != node.id and _chain_resolves_to_root(node.id):
+            parent.children.append(node)
+        else:
+            roots.append(node)
+
+    return OrgChartResponse(nodes=roots)
 
 
 @router.get("/{company_id}/agents/search")

@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """Rule discovery and execution.
 
 Rule modules are auto-discovered from a Python package via pkgutil. A valid

@@ -20,6 +20,8 @@ Provides mock implementations of core components for tests and the
 - MockWorkerNode       - Mock NPU/worker node for distributed-flow tests.
 """
 
+from __future__ import annotations
+
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Any, Dict, List

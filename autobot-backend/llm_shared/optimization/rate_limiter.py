@@ -153,7 +153,9 @@ class RateLimitHandler:
         base_delay = min(base_delay, self.config.max_delay)
 
         # Add jitter to prevent thundering herd
-        jitter = base_delay * self.config.jitter_factor * random.random()
+        jitter = (
+            base_delay * self.config.jitter_factor * random.random()  # nosec B311 - jitter to prevent thundering herd,
+        )
 
         return base_delay + jitter
 

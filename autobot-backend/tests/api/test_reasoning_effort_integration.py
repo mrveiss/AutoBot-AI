@@ -74,10 +74,19 @@ def _async_redis(mock_redis):
     return AsyncMock(return_value=mock_redis)
 
 
+def _redis_get_only(field: str, value: bytes):
+    """Return an async get() that yields value only for the given preference field."""
+
+    async def _get(key):
+        return value if key.endswith(f":{field}") else None
+
+    return _get
+
+
 @pytest.mark.asyncio
 async def test_get_preferences_returns_stored_value():
     mock_redis = AsyncMock()
-    mock_redis.get.return_value = b"high"
+    mock_redis.get.side_effect = _redis_get_only("reasoning_effort", b"high")
     with patch("api.users.get_redis_client", new=_async_redis(mock_redis)):
         pref = await _get_user_preferences_from_redis("user-123")
     assert pref.reasoning_effort == "high"
@@ -106,7 +115,7 @@ async def test_store_preferences_calls_redis_set():
     mock_redis = AsyncMock()
     with patch("api.users.get_redis_client", new=_async_redis(mock_redis)):
         await _store_user_preferences_to_redis("user-123", UserPreferences(reasoning_effort="medium"))
-    mock_redis.set.assert_awaited_once_with("user:user-123:preferences:reasoning_effort", "medium")
+    mock_redis.set.assert_any_await("user:user-123:preferences:reasoning_effort", "medium")
 
 
 # ---------------------------------------------------------------------------
@@ -121,7 +130,7 @@ async def test_store_preferences_calls_redis_set():
 async def test_get_preferences_full_flow_returns_correct_effort():
     """Full get-preferences flow: Redis returns stored value → correct pref returned."""
     mock_redis = AsyncMock()
-    mock_redis.get.return_value = b"low"
+    mock_redis.get.side_effect = _redis_get_only("reasoning_effort", b"low")
     with patch("api.users.get_redis_client", new=_async_redis(mock_redis)):
         pref = await _get_user_preferences_from_redis("u-abc")
     assert pref.reasoning_effort == "low"
@@ -133,7 +142,98 @@ async def test_update_preferences_full_flow_stores_effort():
     mock_redis = AsyncMock()
     with patch("api.users.get_redis_client", new=_async_redis(mock_redis)):
         await _store_user_preferences_to_redis("u-xyz", UserPreferences(reasoning_effort="high"))
-    mock_redis.set.assert_awaited_once_with("user:u-xyz:preferences:reasoning_effort", "high")
+    mock_redis.set.assert_any_await("user:u-xyz:preferences:reasoning_effort", "high")
+
+
+# ---------------------------------------------------------------------------
+# Appearance preferences (#8988): theme/accent/density persist per account
+# ---------------------------------------------------------------------------
+
+
+class TestAppearancePreferencesModel:
+    def test_appearance_defaults(self):
+        pref = UserPreferences()
+        assert pref.theme == "dark"
+        assert pref.accent_color == "blue"
+        assert pref.layout_density == "comfortable"
+        assert pref.font_size == "medium"
+        assert pref.theme_preset == "auto"
+
+    @pytest.mark.parametrize("theme", ["dark", "light", "system"])
+    def test_valid_theme_accepted(self, theme):
+        assert UserPreferences(theme=theme).theme == theme
+
+    def test_invalid_theme_rejected(self):
+        import pydantic
+
+        with pytest.raises(pydantic.ValidationError):
+            UserPreferences(theme="neon")
+
+    def test_invalid_accent_rejected(self):
+        import pydantic
+
+        with pytest.raises(pydantic.ValidationError):
+            UserPreferences(accent_color="chartreuse")
+
+    def test_invalid_density_rejected(self):
+        import pydantic
+
+        with pytest.raises(pydantic.ValidationError):
+            UserPreferences(layout_density="cramped")
+
+
+@pytest.mark.asyncio
+async def test_store_appearance_writes_all_fields():
+    """Storing appearance prefs writes a Redis key per field."""
+    mock_redis = AsyncMock()
+    prefs = UserPreferences(
+        reasoning_effort="low",
+        theme="light",
+        accent_color="purple",
+        layout_density="compact",
+        font_size="large",
+        theme_preset="catppuccin-latte",
+    )
+    with patch("api.users.get_redis_client", new=_async_redis(mock_redis)):
+        await _store_user_preferences_to_redis("u-app", prefs)
+    mock_redis.set.assert_any_await("user:u-app:preferences:theme", "light")
+    mock_redis.set.assert_any_await("user:u-app:preferences:accent_color", "purple")
+    mock_redis.set.assert_any_await("user:u-app:preferences:layout_density", "compact")
+    mock_redis.set.assert_any_await("user:u-app:preferences:font_size", "large")
+    mock_redis.set.assert_any_await("user:u-app:preferences:theme_preset", "catppuccin-latte")
+
+
+@pytest.mark.asyncio
+async def test_appearance_round_trip_returns_stored_values():
+    """Save → load returns the stored appearance prefs (cross-device round-trip)."""
+    store: dict[str, str] = {}
+
+    async def _set(key, value):
+        store[key] = value
+
+    async def _get(key):
+        return store.get(key)
+
+    mock_redis = AsyncMock()
+    mock_redis.set.side_effect = _set
+    mock_redis.get.side_effect = _get
+
+    saved = UserPreferences(
+        theme="light",
+        accent_color="teal",
+        layout_density="spacious",
+        font_size="small",
+        theme_preset="solarized-light",
+    )
+    with patch("api.users.get_redis_client", new=_async_redis(mock_redis)):
+        await _store_user_preferences_to_redis("u-rt", saved)
+        loaded = await _get_user_preferences_from_redis("u-rt")
+
+    assert loaded.theme == "light"
+    assert loaded.accent_color == "teal"
+    assert loaded.layout_density == "spacious"
+    assert loaded.font_size == "small"
+    assert loaded.theme_preset == "solarized-light"
 
 
 @pytest.mark.asyncio

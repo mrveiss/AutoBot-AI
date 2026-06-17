@@ -425,6 +425,7 @@
 </template>
 
 <script setup lang="ts">
+import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, nextTick, onMounted, onUnmounted, inject, watch, type Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -438,7 +439,7 @@ import TranslationShortcutPanel from './TranslationShortcutPanel.vue'
 import SlashCommandDropdown from './SlashCommandDropdown.vue'
 import McpPromptPicker from './McpPromptPicker.vue'
 import { formatFileSize } from '@/utils/formatHelpers'
-import { getFileIconByMimeType } from '@/utils/iconMappings'
+import { getFileIconNameByMimeType } from '@/utils/iconMappings'
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
 import type { MultiModalResponse } from '@/utils/VisionMultimodalApiClient'
@@ -566,10 +567,10 @@ watch(showQuickActions, (val) => localStorage.setItem('autobot_showQuickActions'
 
 // Quick actions
 const quickActions = computed(() => [
-  { id: 'help', label: t('chat.input.help'), icon: 'question-circle', description: t('chat.input.helpDesc') },
-  { id: 'summarize', label: t('chat.input.summarize'), icon: 'compress', description: t('chat.input.summarizeDesc') },
-  { id: 'translate', label: t('agent.translate'), icon: 'language', description: t('chat.input.translateDesc') },
-  { id: 'explain', label: t('chat.input.explain'), icon: 'lightbulb', description: t('chat.input.explainDesc') },
+  { id: 'help', label: t('chat.input.help'), icon: 'question-circle' as const, description: t('chat.input.helpDesc') },
+  { id: 'summarize', label: t('chat.input.summarize'), icon: 'compress' as const, description: t('chat.input.summarizeDesc') },
+  { id: 'translate', label: t('agent.translate'), icon: 'language' as const, description: t('chat.input.translateDesc') },
+  { id: 'explain', label: t('chat.input.explain'), icon: 'lightbulb' as const, description: t('chat.input.explainDesc') },
 ])
 
 // Common emojis
@@ -994,23 +995,9 @@ const resetTextareaHeight = () => {
 
 // Icon mapping centralized in @/utils/iconMappings
 // Color classes added for visual distinction
-const getFileIcon = (type: string): string => {
-  const icon = getFileIconByMimeType(type)
-
-  // Add color classes based on MIME type
-  const colorMap: Record<string, string> = {
-    'image': 'text-green-600',
-    'video': 'text-blue-600',
-    'music': 'text-purple-600',
-    'file-pdf': 'text-red-600',
-    'file-word': 'text-blue-600',
-    'file-excel': 'text-green-600',
-    'file-alt': 'text-autobot-text-secondary'
-  }
-
-  const color = colorMap[icon] || 'text-autobot-text-secondary'
-  return `${icon} ${color}`
-}
+// #9724: consumed by <Icon :name="..."> — must return an SVG IconName. The
+// previous "<fa-class> <color-class>" strings rendered an empty SVG.
+const getFileIcon = (type: string): IconName => getFileIconNameByMimeType(type)
 
 // NOTE: formatFileSize removed - now using shared utility from @/utils/formatHelpers
 

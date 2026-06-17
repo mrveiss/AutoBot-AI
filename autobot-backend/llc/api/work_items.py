@@ -26,6 +26,7 @@ Routes:
   DELETE /api/llc/work-items/{work_item_id}/attachments/{attachment_id}          (GH#8253)
 """
 
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
@@ -34,14 +35,16 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.user_management.dependencies import get_current_user
+from api.user_management.dependencies import get_current_user, require_org_context
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
+from llc.deps import get_session, service_dep
 from models.agent_org import AgentOrgNode
-from user_management.database import get_async_session_factory
 from user_management.models.user import User
+from user_management.services import TenantContext
 
+from ..kb.ac_suggester import AcSuggester
 from ..kb.collections import KbCollectionManager
 from ..models.enums import (
     WorkItemPriority,
@@ -49,7 +52,9 @@ from ..models.enums import (
     WorkItemStatus,
     WorkItemType,
 )
+from ..models.work_item import LLCWorkItemComment
 from ..scheduler.heartbeat_scheduler import HeartbeatScheduler
+from ..services.activity_log import ActivityLogQuery, LLCActivityLogService
 from ..services.attachment_service import (
     AttachmentNotFound,
     AttachmentService,
@@ -71,6 +76,8 @@ from ..services.work_item_service import (
     resolve_actor_role,
 )
 from ..services.work_product_service import WorkProductService
+from .activity import ActivityLogEntry, ActivityLogResponse
+from .github_webhooks import validate_github_pr_url
 
 
 class HumanClaimRequest(BaseModel):
@@ -100,7 +107,6 @@ class CoworkerRequest(BaseModel):
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/work-items", tags=["llc-work-items"])
-_get_service = lazy_singleton(WorkItemService)
 _get_product_service = lazy_singleton(WorkProductService)
 _get_handoff_service = lazy_singleton(HandoffService)
 _kb_manager = KbCollectionManager()
@@ -108,10 +114,10 @@ _get_relation_service = lazy_singleton(WorkItemRelationService)
 _get_attachment_service = lazy_singleton(AttachmentService)
 _get_comment_wake_service = lazy_singleton(CommentWakeService)
 _get_heartbeat_scheduler = lazy_singleton(HeartbeatScheduler)
+_get_activity_service = lazy_singleton(LLCActivityLogService)
+_get_ac_suggester = lazy_singleton(AcSuggester)
 
-
-def _service() -> WorkItemService:
-    return _get_service()
+_service = service_dep(WorkItemService)
 
 
 def _handoff_service() -> HandoffService:
@@ -124,12 +130,6 @@ def _relation_service() -> WorkItemRelationService:
 
 def _attachment_service() -> AttachmentService:
     return _get_attachment_service()
-
-
-async def get_session() -> AsyncSession:
-    factory = get_async_session_factory()
-    async with factory() as session:
-        yield session
 
 
 # ------------------------------------------------------------------
@@ -168,11 +168,16 @@ class WorkItemUpdate(BaseModel):
     goal_id: Optional[str] = None
     assignee_agent_id: Optional[str] = None
     assignee_user_id: Optional[str] = None
+    # GH#9020: planned schedule for the Gantt/timeline view.
+    scheduled_start: Optional[datetime] = None
+    scheduled_end: Optional[datetime] = None
 
 
 class CheckoutRequest(BaseModel):
     agent_id: str
     run_id: Optional[str] = None
+    # GH#9532: optional free-text intent for the audit trail + similarity check
+    work_intent: Optional[str] = None
 
 
 class ReleaseRequest(BaseModel):
@@ -188,6 +193,14 @@ class CommentCreate(BaseModel):
     body: str
     author_agent_id: Optional[str] = None
     author_user_id: Optional[str] = None
+
+
+class LinkPrRequest(BaseModel):
+    """Link a GitHub PR to a work item (GH#9625)."""
+
+    pr_url: str
+    pr_number: Optional[int] = None
+    repo: Optional[str] = None
 
 
 class HandoffAttachmentRequest(BaseModel):
@@ -317,6 +330,7 @@ async def _item_to_dict(item: Any, session: AsyncSession) -> Dict[str, Any]:
         "priority": item.priority,
         "story_points": item.story_points,
         "labels": item.labels,
+        "linked_pr_urls": item.linked_pr_urls or [],  # GH#9625
         "parent_id": str(item.parent_id) if item.parent_id else None,
         "project_id": str(item.project_id) if item.project_id else None,
         "sprint_id": str(item.sprint_id) if item.sprint_id else None,
@@ -327,11 +341,14 @@ async def _item_to_dict(item: Any, session: AsyncSession) -> Dict[str, Any]:
         "assignee_display": await _assignee_display(item, session),
         "checkout_run_id": item.checkout_run_id,
         "checkout_locked_at": (item.checkout_locked_at.isoformat() if item.checkout_locked_at else None),
+        "checkout_intent": item.checkout_intent,  # GH#9532
         "version": item.version,
         "created_by_agent_id": (str(item.created_by_agent_id) if item.created_by_agent_id else None),
         "created_by_user_id": (str(item.created_by_user_id) if item.created_by_user_id else None),
         "reviewer_user_id": (str(item.reviewer_user_id) if item.reviewer_user_id else None),
         "reviewer_agent_id": (str(item.reviewer_agent_id) if item.reviewer_agent_id else None),
+        "scheduled_start": (item.scheduled_start.isoformat() if item.scheduled_start else None),  # GH#9020
+        "scheduled_end": (item.scheduled_end.isoformat() if item.scheduled_end else None),  # GH#9020
         "started_at": item.started_at.isoformat() if item.started_at else None,
         "completed_at": item.completed_at.isoformat() if item.completed_at else None,
         "cancelled_at": item.cancelled_at.isoformat() if item.cancelled_at else None,
@@ -417,9 +434,11 @@ async def list_work_items(
 async def get_work_item(
     work_item_id: str,
     session: AsyncSession = Depends(get_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
     item = await _service().get(session, work_item_id)
-    if item is None:
+    if item is None or str(item.company_id) != str(ctx.org_id):
         raise HTTPException(status_code=404, detail="Work item not found")
     return await _item_to_dict(item, session)
 
@@ -429,7 +448,13 @@ async def update_work_item(
     work_item_id: str,
     body: WorkItemUpdate,
     session: AsyncSession = Depends(get_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
+    # IDOR guard: verify item belongs to caller's org before mutating (GH#9861).
+    existing = await _service().get(session, work_item_id)
+    if existing is None or str(existing.company_id) != str(ctx.org_id):
+        raise HTTPException(status_code=404, detail="Work item not found")
     fields = {k: v for k, v in body.model_dump(exclude_none=True).items()}
     item = await _service().update(session, work_item_id, **fields)
     if item is None:
@@ -442,9 +467,11 @@ async def update_work_item(
 async def delete_work_item(
     work_item_id: str,
     session: AsyncSession = Depends(get_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> None:
     item = await _service().get(session, work_item_id)
-    if item is None:
+    if item is None or str(item.company_id) != str(ctx.org_id):
         raise HTTPException(status_code=404, detail="Work item not found")
     await session.delete(item)
     await session.commit()
@@ -455,13 +482,20 @@ async def checkout_work_item(
     work_item_id: str,
     body: CheckoutRequest,
     session: AsyncSession = Depends(get_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
+    # IDOR guard (M4/GH#9861): verify ownership before mutating.
+    existing = await _service().get(session, work_item_id)
+    if existing is None or str(existing.company_id) != str(ctx.org_id):
+        raise HTTPException(status_code=404, detail="Work item not found")
     try:
         item = await _service().checkout(
             session,
             work_item_id=work_item_id,
             agent_id=body.agent_id,
             run_id=body.run_id,
+            work_intent=body.work_intent,  # GH#9532
         )
         await session.commit()
         return await _item_to_dict(item, session)
@@ -478,7 +512,13 @@ async def release_work_item(
     work_item_id: str,
     body: ReleaseRequest,
     session: AsyncSession = Depends(get_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
+    # IDOR guard (M4/GH#9861).
+    existing = await _service().get(session, work_item_id)
+    if existing is None or str(existing.company_id) != str(ctx.org_id):
+        raise HTTPException(status_code=404, detail="Work item not found")
     try:
         item = await _service().release(session, work_item_id=work_item_id, agent_id=body.agent_id)
         await session.commit()
@@ -496,7 +536,13 @@ async def transition_work_item(
     work_item_id: str,
     body: TransitionRequest,
     session: AsyncSession = Depends(get_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
+    # IDOR guard (M4/GH#9861).
+    existing = await _service().get(session, work_item_id)
+    if existing is None or str(existing.company_id) != str(ctx.org_id):
+        raise HTTPException(status_code=404, detail="Work item not found")
     try:
         item = await _service().transition_status(session, work_item_id, body.status)
         await session.commit()
@@ -511,12 +557,55 @@ async def transition_work_item(
         raise HTTPException(status_code=404, detail="Internal server error")
 
 
+@router.post("/{work_item_id}/link-pr")
+async def link_pr(
+    work_item_id: str,
+    body: LinkPrRequest,
+    session: AsyncSession = Depends(get_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
+) -> Dict[str, Any]:
+    """Link a GitHub PR URL to a work item (GH#9625).
+
+    Called by LLC adapters/agents after opening a PR for the work item.
+    """
+    # IDOR guard: verify item belongs to caller's org before mutating.
+    item = await _service().get(session, work_item_id)
+    if item is None or str(item.company_id) != str(ctx.org_id):
+        raise HTTPException(status_code=404, detail="Work item not found")
+
+    if not validate_github_pr_url(body.pr_url, body.repo):
+        raise HTTPException(status_code=422, detail="Invalid GitHub PR URL")
+
+    current_urls = item.linked_pr_urls or []
+    if body.pr_url not in current_urls:
+        item.linked_pr_urls = current_urls + [body.pr_url]
+        pr_label = f"#{body.pr_number}" if body.pr_number else body.pr_url
+        session.add(
+            LLCWorkItemComment(
+                company_id=item.company_id,
+                work_item_id=item.id,
+                body=f"🔗 GitHub PR {pr_label} linked: {body.pr_url}",
+                author_agent_id=None,
+                author_user_id=None,
+            )
+        )
+    await session.commit()
+    return await _item_to_dict(item, session)
+
+
 @router.post("/{work_item_id}/claim")
 async def claim_work_item(
     work_item_id: str,
     body: HumanClaimRequest,
     session: AsyncSession = Depends(get_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
+    # IDOR guard (M4/GH#9861).
+    existing = await _service().get(session, work_item_id)
+    if existing is None or str(existing.company_id) != str(ctx.org_id):
+        raise HTTPException(status_code=404, detail="Work item not found")
     try:
         item = await _service().claim_human(
             session,
@@ -539,7 +628,13 @@ async def unclaim_work_item(
     work_item_id: str,
     body: HumanUnclaimRequest,
     session: AsyncSession = Depends(get_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
+    # IDOR guard (M4/GH#9861).
+    existing = await _service().get(session, work_item_id)
+    if existing is None or str(existing.company_id) != str(ctx.org_id):
+        raise HTTPException(status_code=404, detail="Work item not found")
     try:
         item = await _service().unclaim_human(
             session,
@@ -618,7 +713,13 @@ async def add_comment(
     work_item_id: str,
     body: CommentCreate,
     session: AsyncSession = Depends(get_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
+    # IDOR guard (M4/GH#9861).
+    existing = await _service().get(session, work_item_id)
+    if existing is None or str(existing.company_id) != str(ctx.org_id):
+        raise HTTPException(status_code=404, detail="Work item not found")
     comment = await _service().add_comment(
         session,
         work_item_id=work_item_id,
@@ -658,8 +759,14 @@ async def handoff_to_agent(
     work_item_id: str,
     body: HandoffToAgentRequest,
     session: AsyncSession = Depends(get_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
     """Human→Agent handoff: ingest notes into KB, reassign to agent (GH#8232)."""
+    # IDOR guard (M4/GH#9861).
+    existing = await _service().get(session, work_item_id)
+    if existing is None or str(existing.company_id) != str(ctx.org_id):
+        raise HTTPException(status_code=404, detail="Work item not found")
     atts = [
         HandoffAttachment(
             attachment_id=a.attachment_id,
@@ -705,7 +812,13 @@ async def handoff_to_human(
     work_item_id: str,
     body: HandoffToHumanRequest,
     session: AsyncSession = Depends(get_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
+    # IDOR guard (M4/GH#9861).
+    existing = await _service().get(session, work_item_id)
+    if existing is None or str(existing.company_id) != str(ctx.org_id):
+        raise HTTPException(status_code=404, detail="Work item not found")
     try:
         item = await _handoff_service().agent_to_human(
             session,
@@ -730,7 +843,13 @@ async def review_approve(
     work_item_id: str,
     body: ReviewApproveRequest,
     session: AsyncSession = Depends(get_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
+    # IDOR guard (M4/GH#9861).
+    existing = await _service().get(session, work_item_id)
+    if existing is None or str(existing.company_id) != str(ctx.org_id):
+        raise HTTPException(status_code=404, detail="Work item not found")
     try:
         item = await _handoff_service().approve(
             session,
@@ -753,7 +872,13 @@ async def review_request_changes(
     work_item_id: str,
     body: ReviewChangesRequest,
     session: AsyncSession = Depends(get_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
+    # IDOR guard (M4/GH#9861).
+    existing = await _service().get(session, work_item_id)
+    if existing is None or str(existing.company_id) != str(ctx.org_id):
+        raise HTTPException(status_code=404, detail="Work item not found")
     try:
         item = await _handoff_service().request_changes(
             session,
@@ -777,7 +902,13 @@ async def review_request_changes(
 async def get_handoff_brief(
     work_item_id: str,
     session: AsyncSession = Depends(get_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
+    # IDOR guard (GH#9861): reject cross-tenant access before touching handoff KB.
+    item = await _service().get(session, work_item_id)
+    if item is None or str(item.company_id) != str(ctx.org_id):
+        raise HTTPException(status_code=404, detail="Work item not found")
     try:
         brief = await _handoff_service().get_brief(session, work_item_id)
         return {"work_item_id": work_item_id, "brief": brief}
@@ -840,8 +971,13 @@ async def list_work_products(
     limit: int = Query(100, ge=1, le=200),
     offset: int = Query(0, ge=0),
     session: AsyncSession = Depends(get_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
     """List all work products for a work item (GH#8242)."""
+    item = await _service().get(session, work_item_id)
+    if item is None or str(item.company_id) != str(ctx.org_id):
+        raise HTTPException(status_code=404, detail="Work item not found")
     products = await _get_product_service().list_by_work_item(
         session,
         work_item_id=work_item_id,
@@ -868,6 +1004,60 @@ async def list_work_products(
     }
 
 
+@router.get("/{work_item_id}/activity", response_model=ActivityLogResponse)
+async def list_work_item_activity(
+    work_item_id: str,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
+    session: AsyncSession = Depends(get_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
+) -> ActivityLogResponse:
+    """Per-work-item activity trail (GH#9851).
+
+    Tenant scope is derived from the authenticated org context, never the
+    requested resource: the item must belong to the caller's org (else 404,
+    indistinguishable from "missing"), and the activity query is filtered by
+    ctx.org_id. Newest first.
+    """
+    item = await _service().get(session, work_item_id)
+    if item is None or str(item.company_id) != str(ctx.org_id):
+        raise HTTPException(status_code=404, detail="Work item not found")
+
+    params = ActivityLogQuery(
+        entity_type="work_item",
+        entity_id=work_item_id,
+        page=page,
+        page_size=page_size,
+    )
+    result = await _get_activity_service().query(session=session, company_id=str(ctx.org_id), params=params)
+
+    items = [
+        ActivityLogEntry(
+            id=str(row.id),
+            company_id=str(row.company_id),
+            actor_type=row.actor_type,
+            actor_agent_id=str(row.actor_agent_id) if row.actor_agent_id else None,
+            actor_user_id=str(row.actor_user_id) if row.actor_user_id else None,
+            entity_type=row.entity_type,
+            entity_id=str(row.entity_id),
+            action=row.action,
+            before_state=row.before_state,
+            after_state=row.after_state,
+            metadata=row.log_metadata,
+            occurred_at=row.occurred_at,
+        )
+        for row in result.items
+    ]
+    return ActivityLogResponse(
+        items=items,
+        page=result.page,
+        page_size=result.page_size,
+        total=result.total,
+        has_next=result.has_next,
+    )
+
+
 # ------------------------------------------------------------------
 # Relation endpoints (GH#8252)
 # ------------------------------------------------------------------
@@ -878,7 +1068,13 @@ async def add_relation(
     work_item_id: str,
     body: RelationCreate,
     session: AsyncSession = Depends(get_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
+    # IDOR guard (M4/GH#9861).
+    existing = await _service().get(session, work_item_id)
+    if existing is None or str(existing.company_id) != str(ctx.org_id):
+        raise HTTPException(status_code=404, detail="Work item not found")
     try:
         rel = await _relation_service().add(
             company_id=body.company_id,
@@ -911,7 +1107,13 @@ async def remove_relation(
     actor_agent_id: Optional[str] = Query(None),
     actor_user_id: Optional[str] = Query(None),
     session: AsyncSession = Depends(get_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> None:
+    # IDOR guard (M4/GH#9861).
+    existing = await _service().get(session, work_item_id)
+    if existing is None or str(existing.company_id) != str(ctx.org_id):
+        raise HTTPException(status_code=404, detail="Work item not found")
     try:
         await _relation_service().remove(
             company_id=company_id,
@@ -923,6 +1125,78 @@ async def remove_relation(
     except ValueError as exc:
         logger.error("Exception in API handler: %s", exc, exc_info=True)
         raise HTTPException(status_code=404, detail="Internal server error")
+
+
+# ---------------------------------------------------------------------------
+# Acceptance-criteria suggestion (GH#9861)
+# ---------------------------------------------------------------------------
+
+
+class SuggestAcRequest(BaseModel):
+    """Request body for the acceptance-criteria suggestion endpoint.
+
+    ``company_id`` is intentionally absent — the tenant is derived from the
+    authenticated session's org context (H2 fix: client-supplied company_id
+    was a cross-tenant KB read vector via the ChromaDB ``company:{id}``
+    collection name).
+    """
+
+    work_item_id: Optional[str] = None
+    title: Optional[str] = None
+    description: Optional[str] = None
+    project_id: Optional[str] = None
+
+
+class SuggestAcResponse(BaseModel):
+    suggestions: List[str]
+    sources: List[str]
+
+
+@router.post("/suggest-ac", response_model=SuggestAcResponse)
+async def suggest_acceptance_criteria(
+    body: SuggestAcRequest,
+    session: AsyncSession = Depends(get_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
+) -> SuggestAcResponse:
+    """Suggest acceptance criteria for a work item using the RAG-backed AcSuggester.
+
+    The company scope is derived from the authenticated org context — never
+    from the request body.  Provide ``work_item_id`` to resolve title/description
+    from the DB (with tenant check), or supply ``title`` directly.  Returns an
+    empty list on LLM failure so the caller can degrade gracefully without
+    surfacing a 500 error.
+    """
+    company_id = str(ctx.org_id)
+    title = body.title
+    description = body.description or ""
+    project_id = body.project_id or ""
+
+    if not title and body.work_item_id:
+        item = await _service().get(session, body.work_item_id)
+        if item is None or str(item.company_id) != company_id:
+            raise HTTPException(status_code=404, detail="Work item not found")
+        title = item.title
+        description = item.description or ""
+        if not project_id and item.project_id:
+            project_id = str(item.project_id)
+
+    if not title:
+        raise HTTPException(
+            status_code=422,
+            detail="Provide work_item_id or title to generate suggestions",
+        )
+
+    result = await _get_ac_suggester().suggest(
+        company_id=company_id,
+        project_id=project_id,
+        item_title=title,
+        item_description=description,
+    )
+    return SuggestAcResponse(
+        suggestions=result.get("suggestions", []),
+        sources=result.get("sources", []),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -953,7 +1227,13 @@ async def upload_attachment(
     uploaded_by_agent_id: Optional[str] = Query(None),
     uploaded_by_user_id: Optional[str] = Query(None),
     session: AsyncSession = Depends(get_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
+    # IDOR guard (M4/GH#9861): verify item ownership before accepting the upload.
+    existing = await _service().get(session, work_item_id)
+    if existing is None or str(existing.company_id) != str(ctx.org_id):
+        raise HTTPException(status_code=404, detail="Work item not found")
     try:
         content = await file.read()
         row = await _attachment_service().upload(
@@ -977,7 +1257,13 @@ async def list_attachments(
     work_item_id: str,
     company_id: str = Query(...),
     session: AsyncSession = Depends(get_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
+    # IDOR guard (M4/GH#9861).
+    existing = await _service().get(session, work_item_id)
+    if existing is None or str(existing.company_id) != str(ctx.org_id):
+        raise HTTPException(status_code=404, detail="Work item not found")
     rows = await _attachment_service().list_attachments(session, work_item_id=work_item_id, company_id=company_id)
     return {"attachments": [_attachment_to_dict(r) for r in rows]}
 
@@ -988,7 +1274,13 @@ async def download_attachment(
     attachment_id: str,
     company_id: str = Query(...),
     session: AsyncSession = Depends(get_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> Response:
+    # IDOR guard (M4/GH#9861): cross-tenant file read prevented here.
+    existing = await _service().get(session, work_item_id)
+    if existing is None or str(existing.company_id) != str(ctx.org_id):
+        raise HTTPException(status_code=404, detail="Work item not found")
     try:
         row, content = await _attachment_service().download(
             session,
@@ -1011,7 +1303,13 @@ async def get_attachment_text(
     attachment_id: str,
     company_id: str = Query(...),
     session: AsyncSession = Depends(get_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
+    # IDOR guard (M4/GH#9861).
+    existing = await _service().get(session, work_item_id)
+    if existing is None or str(existing.company_id) != str(ctx.org_id):
+        raise HTTPException(status_code=404, detail="Work item not found")
     text = await _attachment_service().get_text(
         session,
         attachment_id=attachment_id,
@@ -1031,7 +1329,13 @@ async def delete_attachment(
     attachment_id: str,
     company_id: str = Query(...),
     session: AsyncSession = Depends(get_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> None:
+    # IDOR guard (M4/GH#9861).
+    existing = await _service().get(session, work_item_id)
+    if existing is None or str(existing.company_id) != str(ctx.org_id):
+        raise HTTPException(status_code=404, detail="Work item not found")
     try:
         await _attachment_service().delete(
             session,

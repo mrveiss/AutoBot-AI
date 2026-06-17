@@ -23,7 +23,7 @@
 # safe to always import from deploy-slm-manager.yml without a guard.
 ---
 - name: "Sync code_source: push from controller to SLM"
-  hosts: 00-SLM-Manager
+  hosts: slm_server
   become: true
   gather_facts: false
 

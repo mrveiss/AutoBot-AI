@@ -73,6 +73,13 @@ export const NODE_ROLE_METADATA: Record<NodeRole, RoleMetadata> = {
     category: 'application',
     tools: ['celery', 'python3'],
   },
+  'scheduler': {
+    name: 'scheduler',
+    displayName: 'Celery Beat Scheduler',
+    description: 'Celery beat periodic task scheduler',
+    category: 'application',
+    tools: ['celery', 'python3'],
+  },
   'frontend': {
     name: 'frontend',
     displayName: 'Frontend',
@@ -86,6 +93,13 @@ export const NODE_ROLE_METADATA: Record<NodeRole, RoleMetadata> = {
     description: 'Redis Stack server for data persistence',
     category: 'data',
     tools: ['redis-server', 'redis-cli', 'redis-sentinel'],
+  },
+  'postgres': {
+    name: 'postgres',
+    displayName: 'PostgreSQL',
+    description: 'PostgreSQL relational database server',
+    category: 'data',
+    tools: ['postgresql', 'psql', 'pg_dump', 'pg_restore'],
   },
   'ai-stack': {
     name: 'ai-stack',

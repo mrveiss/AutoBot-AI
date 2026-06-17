@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """Add config_revisions table for audit trail and rollback
 
 Revision ID: 20260315_008

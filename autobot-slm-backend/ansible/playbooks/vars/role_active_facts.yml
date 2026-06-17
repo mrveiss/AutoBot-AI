@@ -60,8 +60,7 @@ role_browser_active: >-
      (inventory_hostname in (groups.get('browser_worker', []) | default([]))) }}
 
 role_slm_active: >-
-  {{ (inventory_hostname == '00-SLM-Manager') or
-     (inventory_hostname in (groups.get('slm_server', []) | default([]))) or
+  {{ (inventory_hostname in (groups.get('slm_server', []) | default([]))) or
      (inventory_hostname in (groups.get('slm', []) | default([]))) }}
 
 role_redis_active: >-

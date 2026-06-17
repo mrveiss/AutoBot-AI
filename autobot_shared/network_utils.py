@@ -56,7 +56,7 @@ def get_local_ips() -> set:
 
     # Enumerate all interface IPs via ``ip addr``
     try:
-        result = subprocess.run(
+        result = subprocess.run(  # nosec B603 B607 - fixed ip argv for interface enumeration, no user input
             ["ip", "-4", "addr", "show"],
             capture_output=True,
             text=True,

@@ -8,27 +8,6 @@ aliases:
 
 # Examples
 
-<<<<<<< HEAD
-Example code and workflow samples demonstrating AutoBot-AI capabilities.
-
-## Sub-sections
-
-| Section | Description |
-| --- | --- |
-| [[mcp_agent_workflows/_index\|MCP Agent Workflows]] | Example MCP agent workflow implementations |
-
-## Code Examples
-
-| File | Description |
-| --- | --- |
-| before_after_optimization_comparison.py | Before/after optimization comparison example |
-| circuit_breaker_usage.py | Circuit breaker usage example |
-| parallel_fleet_workflow.py | Parallel fleet workflow example |
-| retry_mechanism_usage.py | Retry mechanism usage example |
-| service_failure_monitoring.py | Service failure monitoring example |
-| vllm_prefix_caching_usage.py | vLLM prefix caching usage example |
-| env_template.txt | Environment variables template |
-=======
 Code examples and sample workflows demonstrating AutoBot features.
 
 ## Python Examples
@@ -47,6 +26,7 @@ Code examples and sample workflows demonstrating AutoBot features.
 
 | Document | Description |
 | --- | --- |
+| [[mcp_agent_workflows/_index\|MCP Agent Workflows]] | MCP agent workflows index |
 | [[mcp_agent_workflows/README\|MCP Agent Workflows README]] | Overview of MCP agent workflow examples |
 | `mcp_agent_workflows/base.py` | Base MCP workflow class |
 | `mcp_agent_workflows/code_analysis.py` | Code analysis workflow |
@@ -58,4 +38,3 @@ Code examples and sample workflows demonstrating AutoBot features.
 - [[../how-to/_index\|How-To]] — Step-by-step how-to guides
 - [[../connectors/_index\|Connectors]] — Connector examples
 - [[../plugins/_index\|Plugins]] — Plugin examples
->>>>>>> origin/Dev_new_gui

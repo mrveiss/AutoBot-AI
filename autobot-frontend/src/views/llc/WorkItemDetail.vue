@@ -209,20 +209,7 @@ import { createLogger } from '@/utils/debugUtils'
 const logger = createLogger('WorkItemDetail')
 const api = useApiClient()
 
-interface WorkItem {
-  id: string
-  identifier: string
-  type: string
-  title: string
-  description: string
-  priority: string
-  story_points: number | null
-  assignee_name: string | null
-  sprint_id: string | null
-  status: string
-  labels: string[]
-  acceptance_criteria: string[]
-}
+import type { WorkItem } from './workItemTypes'
 
 interface Comment {
   id: string
@@ -435,8 +422,10 @@ async function fetchComments() {
 async function fetchArtifacts() {
   isLoadingArtifacts.value = true
   try {
-    const result = await api.get<{ artifacts: Artifact[] }>(`/api/llc/work-items/${props.item.id}/artifacts`)
-    artifacts.value = result.artifacts ?? []
+    // GH#9851: backend names these "products" (work products), returned as
+    // {products:[...]}. The api client returns parsed JSON directly.
+    const result = await api.get<{ products: Artifact[] }>(`/api/llc/work-items/${props.item.id}/products`)
+    artifacts.value = result.products ?? []
   } catch (err) {
     logger.error('Failed to load artifacts', err)
   } finally {
@@ -447,8 +436,9 @@ async function fetchArtifacts() {
 async function fetchActivity() {
   isLoadingActivity.value = true
   try {
-    const result = await api.get<{ events: ActivityEvent[] }>(`/api/llc/work-items/${props.item.id}/activity`)
-    activity.value = result.events ?? []
+    // GH#9851: /activity returns an ActivityLogResponse ({items:[...]}).
+    const result = await api.get<{ items: ActivityEvent[] }>(`/api/llc/work-items/${props.item.id}/activity`)
+    activity.value = result.items ?? []
   } catch (err) {
     logger.error('Failed to load activity', err)
   } finally {

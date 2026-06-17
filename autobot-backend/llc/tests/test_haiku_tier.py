@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import importlib
 import importlib.util
+import os
 import sys
 import types
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -44,9 +45,14 @@ sys.modules["autobot_shared.logging_manager"] = _asl
 
 # Pre-stub the llc.api package so its __init__ is NOT executed when loading
 # submodules directly (the __init__ triggers a deep import chain that requires
-# a live database + deployment config).
+# a live database + deployment config). The stub MUST carry a real __path__ so
+# it still behaves as a package: without it, sys.modules['llc.api'] becomes a
+# non-package module and every later `import llc.api.<x>` in a full-suite run
+# fails with "llc.api is not a package", masking real regressions (GH#9995).
 if "llc.api" not in sys.modules:
-    sys.modules["llc.api"] = types.ModuleType("llc.api")
+    _api_stub = types.ModuleType("llc.api")
+    _api_stub.__path__ = [os.path.join(os.path.dirname(os.path.dirname(__file__)), "api")]
+    sys.modules["llc.api"] = _api_stub
 
 
 def _load_module_file(dotted_name: str, rel_path: str) -> types.ModuleType:

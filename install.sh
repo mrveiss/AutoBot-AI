@@ -1,6 +1,7 @@
 #!/bin/bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
 # Author: mrveiss
 #
 # AutoBot Install Script (Issue #1294)
@@ -27,6 +28,11 @@ readonly LOG_FILE="${LOG_DIR}/install-$(date +%Y%m%d-%H%M%S).log"
 readonly AUTOBOT_BASE="/opt/autobot"
 readonly CODE_SOURCE="${AUTOBOT_BASE}/code_source"
 readonly SECRETS_FILE="/etc/autobot/slm-secrets.env"
+# #9956: Default SLM manager node_id. Must match the host/slm_node_id written
+# into the generated localhost inventory (generate_inventory) — that inventory
+# is the canonical definition; this constant mirrors it for the API
+# registration calls so the value is not duplicated as scattered literals.
+readonly SLM_NODE_ID="00-SLM-Manager"
 readonly DEFAULT_REPO="https://github.com/mrveiss/AutoBot-AI.git"
 readonly DEFAULT_BRANCH="Dev_new_gui"
 readonly REQUIRED_DISK_MB=5120
@@ -627,11 +633,14 @@ EOF
     # When install.sh runs ansible as root during bootstrap, these dirs get
     # created as root-owned. Later ansible runs (and become operations) need
     # write access as the autobot user, causing permission denied errors.
-    mkdir -p /tmp/ansible_fact_cache /tmp/ansible-retry /tmp/.ansible-cp /tmp/ansible_local_tmp
-    chown autobot:autobot /tmp/ansible_fact_cache /tmp/ansible-retry /tmp/.ansible-cp /tmp/ansible_local_tmp
+    # NOTE (#10006): local_tmp is per-user (~/.ansible/tmp) and no longer
+    # pre-created here — a fixed /tmp/ansible_local_tmp locked out every
+    # user except whoever created it first.
+    mkdir -p /tmp/ansible_fact_cache /tmp/ansible-retry /tmp/.ansible-cp
+    chown autobot:autobot /tmp/ansible_fact_cache /tmp/ansible-retry /tmp/.ansible-cp
 
     info "Running Ansible deployment (this may take several minutes)..."
-    # #6600: keep `provision` so backend role applies to 00-SLM-Manager in
+    # #6600: keep `provision` so backend role applies to the SLM manager node in
     # single-host mode. Skip only `seed` — fleet seeding requires SLM DB
     # rows that don't exist yet on a fresh install.
     log "  Playbook: deploy-slm-manager.yml --skip-tags seed"
@@ -775,7 +784,7 @@ register_local_node() {
         -d "{
             \"hostname\": \"${hostname_val}\",
             \"ip_address\": \"${local_ip}\",
-            \"node_id\": \"00-SLM-Manager\",
+            \"node_id\": \"${SLM_NODE_ID}\",
             \"roles\": [
                 \"slm-backend\",
                 \"slm-frontend\",
@@ -804,7 +813,7 @@ register_local_node() {
         -H "Content-Type: application/json" \
         -H "Authorization: Bearer ${token}" \
         -d "{
-            \"node_id\": \"00-SLM-Manager\",
+            \"node_id\": \"${SLM_NODE_ID}\",
             \"repo_path\": \"${CODE_SOURCE}\",
             \"branch\": \"${GIT_BRANCH}\"
         }" 2>/dev/null)

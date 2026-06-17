@@ -173,7 +173,10 @@ export function useChatApi() {
      */
     async sendMessage(message: string, options: { sessionId?: string } = {}) {
       return withErrorHandling(
-        () => api.sendChatMessage(message, options),
+        // #9724: ChatMessageOptions has no `sessionId` field — the previous
+        // pass-through silently dropped the session id (message went to a
+        // null session). Map it to the supported `chatId` field.
+        () => api.sendChatMessage(message, { chatId: options.sessionId }),
         { errorMessage: 'Failed to send message' }
       )
     },

@@ -38,6 +38,7 @@
  *
  * Issue #184: Split oversized Vue components
  */
+import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 
 interface Attachment {
@@ -60,8 +61,8 @@ interface Emits {
 defineProps<Props>()
 defineEmits<Emits>()
 
-const getAttachmentIcon = (type: string): string => {
-  const iconMap: Record<string, string> = {
+const getAttachmentIcon = (type: string): IconName => {
+  const iconMap: Record<string, IconName> = {
     image: 'file-image',
     video: 'file-video',
     audio: 'file-audio',

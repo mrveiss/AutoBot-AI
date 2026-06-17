@@ -272,8 +272,11 @@ class AIHardwareAccelerator:
         try:
             # Use singleton HTTP client for connection pooling
             http_client = get_http_client()
+            # NPU worker may be absent — keep probe failures at DEBUG (#9767).
             async with await http_client.get(
-                f"{self.npu_worker_url}/health", timeout=aiohttp.ClientTimeout(total=5)
+                f"{self.npu_worker_url}/health",
+                timeout=aiohttp.ClientTimeout(total=5),
+                suppress_error_log=True,
             ) as response:
                 if response.status == 200:
                     health_data = await response.json()

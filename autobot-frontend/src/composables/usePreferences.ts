@@ -13,8 +13,18 @@ import { setLocale } from '@/i18n'
 import apiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
+import { useTheme, type Theme, type ThemePreset, type AccentColor as ThemeAccentColor } from '@/composables/useTheme'
 
 const logger = createLogger('usePreferences')
+
+/** Shape of the appearance prefs persisted per user account (#8988). */
+interface AccountAppearance {
+  theme: Theme
+  accent_color: ThemeAccentColor
+  layout_density: LayoutDensity
+  font_size: FontSize
+  theme_preset: ThemePreset
+}
 
 // Preference types
 export type FontSize = 'small' | 'medium' | 'large'
@@ -52,6 +62,9 @@ const contextOverflowMode = ref<ContextOverflowMode>('auto')
 
 // Local storage key
 const STORAGE_KEY = 'autobot-preferences'
+
+// Debounce window for coalescing appearance changes into one account-sync request (#8988)
+const APPEARANCE_SYNC_DEBOUNCE_MS = 600
 
 // Module-level initialization flag (#1502)
 let _initialized = false
@@ -168,6 +181,56 @@ export function usePreferences() {
     }
   }
 
+  // Theme owns base mode / accent / preset; usePreferences owns density / fontSize.
+  // Both are persisted together to the account so choices follow the user (#8988).
+  const theme = useTheme()
+
+  /**
+   * Persist all appearance prefs to the user account (source of truth across devices).
+   * localStorage stays a write-through cache (already updated by each setter).
+   */
+  async function saveAppearanceToBackend(): Promise<void> {
+    try {
+      const payload: AccountAppearance = {
+        theme: theme.theme.value,
+        accent_color: theme.accentColor.value,
+        layout_density: layoutDensity.value,
+        font_size: fontSize.value,
+        theme_preset: theme.preset.value,
+      }
+      await apiClient.patch(`${getApiBase()}/users/me/preferences`, payload)
+      logger.debug('Appearance prefs saved to account', payload)
+    } catch (error) {
+      logger.warn('Could not save appearance prefs to account', error)
+    }
+  }
+
+  /**
+   * Load appearance prefs from the user account and apply them. Called after login
+   * so a fresh device inherits the user's stored theme/accent/density.
+   */
+  async function loadAppearanceFromBackend(): Promise<void> {
+    try {
+      const res = await apiClient.get<{ data?: { preferences?: AccountAppearance } }>(
+        `${getApiBase()}/users/me/preferences`
+      )
+      const prefs = res.data?.preferences
+      if (!prefs) return
+
+      if (prefs.theme_preset && prefs.theme_preset !== 'auto') {
+        theme.setPreset(prefs.theme_preset)
+      } else {
+        if (prefs.theme) theme.setTheme(prefs.theme)
+        if (prefs.accent_color) theme.setAccentColor(prefs.accent_color)
+      }
+      if (prefs.layout_density) setLayoutDensity(prefs.layout_density)
+      if (prefs.font_size) setFontSize(prefs.font_size)
+      logger.debug('Appearance prefs loaded from account', prefs)
+    } catch (error) {
+      logger.warn('Could not load appearance prefs from account', error)
+    }
+  }
+
   // Initialize once: load preferences, apply to DOM, register watchers (#1502)
   if (!_initialized) {
     _initialized = true
@@ -180,10 +243,20 @@ export function usePreferences() {
     applyLayoutDensity(layoutDensity.value)
     setLocale(language.value)
 
-    // Watch for changes and persist
+    // Debounced account sync so rapid changes coalesce into one request (#8988)
+    let _appearanceSyncTimer: ReturnType<typeof setTimeout> | null = null
+    const _scheduleAppearanceSync = (): void => {
+      if (_appearanceSyncTimer) clearTimeout(_appearanceSyncTimer)
+      _appearanceSyncTimer = setTimeout(() => {
+        void saveAppearanceToBackend()
+      }, APPEARANCE_SYNC_DEBOUNCE_MS)
+    }
+
+    // Watch for changes and persist (localStorage write-through + account sync)
     watch(fontSize, (newSize) => {
       applyFontSize(newSize)
       savePreferences()
+      _scheduleAppearanceSync()
     })
 
     watch(accentColor, (newColor) => {
@@ -194,6 +267,12 @@ export function usePreferences() {
     watch(layoutDensity, (newDensity) => {
       applyLayoutDensity(newDensity)
       savePreferences()
+      _scheduleAppearanceSync()
+    })
+
+    // Theme owns base mode / accent / preset — sync those to the account too
+    watch([theme.theme, theme.accentColor, theme.preset], () => {
+      _scheduleAppearanceSync()
     })
 
     watch(voiceDisplayMode, () => {
@@ -273,6 +352,8 @@ export function usePreferences() {
     setLanguage,
     setContextOverflowMode,
     loadLanguageFromBackend,
+    loadAppearanceFromBackend,
+    saveAppearanceToBackend,
     resetPreferences
   }
 }

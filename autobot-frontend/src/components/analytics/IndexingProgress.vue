@@ -98,6 +98,7 @@
  * Issue #184: Split oversized Vue components
  * Issue #704: Migrated to design tokens
  */
+import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 
 interface Phase {
@@ -137,7 +138,7 @@ interface Props {
 
 defineProps<Props>()
 
-const getPhaseIcon = (status: string): string => {
+const getPhaseIcon = (status: string): IconName => {
   switch (status) {
     case 'completed': return 'check-circle'
     case 'running': return 'spinner'

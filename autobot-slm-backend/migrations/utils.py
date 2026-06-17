@@ -88,7 +88,19 @@ def add_column_if_not_exists(
     column_name: str,
     column_def: str,
 ) -> bool:
-    """Add a column to a table if it doesn't exist. Returns True if added (#786)."""
+    """Add a column to a table if it doesn't exist. Returns True if added (#786).
+
+    On a fresh DB the target table may not exist yet (migration ordering); skip
+    cleanly rather than issue an ALTER that errors with 'relation does not
+    exist' (#9785).
+    """
+    if not table_exists(cursor, table_name):
+        logger.debug(
+            "Skipping add column %s.%s: table does not exist yet",
+            table_name,
+            column_name,
+        )
+        return False
     existing = get_table_columns(cursor, table_name)
     if column_name.lower() not in {c.lower() for c in existing}:
         sql = f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_def}"
@@ -105,7 +117,18 @@ def create_index_if_not_exists(
     table_name: str,
     columns: str,
 ) -> bool:
-    """Create an index if it doesn't exist. Returns True if created (#786)."""
+    """Create an index if it doesn't exist. Returns True if created (#786).
+
+    Skip cleanly when the target table does not exist yet on a fresh DB so a
+    later create-all converges the schema without a Postgres ERROR (#9785).
+    """
+    if not table_exists(cursor, table_name):
+        logger.debug(
+            "Skipping index %s: table %s does not exist yet",
+            index_name,
+            table_name,
+        )
+        return False
     if not index_exists(cursor, index_name):
         sql = f"CREATE INDEX {index_name} ON {table_name}({columns})"
         logger.info("Creating index: %s", index_name)

@@ -22,7 +22,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseChart from './BaseChart.vue'
-import type { ApexOptions } from 'apexcharts'
+import type { ApexOptions, ApexFormatterOpts } from 'apexcharts'
 import { getCssVar } from '@/composables/useCssVars'
 
 const { t } = useI18n()
@@ -100,8 +100,12 @@ const chartOptions = computed<ApexOptions>(() => ({
       fontSize: '12px',
       fontWeight: 600
     },
-    formatter: (text: string, op: { value: number }) => {
-      return `${text}\n${op.value} ${t('charts.dependencyTreemap.uses')}`
+    formatter: (text: string | number | (string | number)[], op?: ApexFormatterOpts) => {
+      // apexcharts 5.14 dropped the `[key: string]: any` index signature from
+      // ApexFormatterOpts; the treemap data-point `value` is still provided at
+      // runtime, so narrow the type to read it (#10091).
+      const value = (op as (ApexFormatterOpts & { value?: number }) | undefined)?.value
+      return `${text}\n${value ?? ''} ${t('charts.dependencyTreemap.uses')}`
     },
     offsetY: -4
   },

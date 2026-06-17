@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """Create llc_boards and llc_board_columns tables.
 
 Revision ID: 20260523_032
@@ -18,17 +20,18 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 
+from migrations.guards import drop_pg_enum, ensure_pg_enum, pg_enum
+
 revision: str = "20260523_032"
 down_revision: Union[str, None] = "20260523_031"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
-_boardtype = sa.Enum("kanban", "sprint", name="boardtype")
+_boardtype = pg_enum("boardtype", "kanban", "sprint")
 
 
 def upgrade() -> None:
-    bind = op.get_bind()
-    _boardtype.create(bind, checkfirst=True)
+    ensure_pg_enum(_boardtype)
 
     op.create_table(
         "llc_boards",
@@ -41,7 +44,7 @@ def upgrade() -> None:
         sa.Column("company_id", UUID(as_uuid=True), nullable=False),
         sa.Column("project_id", UUID(as_uuid=True), nullable=True),
         sa.Column("sprint_id", UUID(as_uuid=True), nullable=True),
-        sa.Column("type", sa.Enum("kanban", "sprint", name="boardtype", create_type=False), nullable=False),
+        sa.Column("type", _boardtype, nullable=False),
         sa.Column("name", sa.Text, nullable=False),
         sa.Column(
             "created_at",
@@ -115,5 +118,4 @@ def downgrade() -> None:
     op.drop_index("ix_llc_boards_project_id", table_name="llc_boards")
     op.drop_index("ix_llc_boards_company_id", table_name="llc_boards")
     op.drop_table("llc_boards")
-    bind = op.get_bind()
-    _boardtype.drop(bind, checkfirst=True)
+    drop_pg_enum(_boardtype)

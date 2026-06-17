@@ -78,6 +78,12 @@ class RAGMetrics:
     final_results_count: int = 0
     gpu_acceleration_used: bool = False
     hybrid_search_enabled: bool = False
+    # Retrieval strategy that produced this result: "rag" | "cag" | "kag" (#9018).
+    strategy: str = "rag"
+    # CAG-specific observability (0 for non-CAG strategies).
+    documents_loaded: int = 0
+    tokens_used: int = 0
+    budget: int = 0
 
 
 @dataclass

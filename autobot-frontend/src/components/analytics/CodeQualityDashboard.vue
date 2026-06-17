@@ -603,7 +603,8 @@ const {
     logger.error('WebSocket error:', error);
     wsConnected.value = false;
   },
-  onMessage: (data: string) => {
+  onMessage: (data: unknown) => {
+    if (typeof data !== 'string') return;
     try {
       handleWebSocketMessage(JSON.parse(data));
     } catch (error) {

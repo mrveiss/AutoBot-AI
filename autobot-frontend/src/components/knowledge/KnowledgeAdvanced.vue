@@ -170,6 +170,7 @@
 </template>
 
 <script setup lang="ts">
+import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -260,8 +261,8 @@ const getButtonText = (type: keyof typeof populateStatus.value) => {
   }
 }
 
-const getMessageIcon = (type: string) => {
-  const icons = {
+const getMessageIcon = (type: string): IconName => {
+  const icons: Record<string, IconName> = {
     success: 'check-circle',
     error: 'exclamation-circle',
     warning: 'exclamation-triangle',

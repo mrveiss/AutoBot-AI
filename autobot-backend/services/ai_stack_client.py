@@ -21,6 +21,7 @@ import aiohttp
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
+from autobot_shared.status_enums import ConnectionStatus
 from autobot_shared.time_utils import utc_timestamp
 from constants.network_constants import NetworkConstants
 from type_defs.common import Metadata
@@ -130,11 +131,18 @@ class AIStackClient:
 
     RETRY_INTERVAL_SECONDS = 60
 
-    def __init__(self, base_url: str | None = None) -> None:
-        """Initialize AI Stack client with base URL and HTTP client configuration."""
-        # Connection status: "unknown" -> "connected" | "error"
-        self.connection_status: str = "unknown"
+    def __init__(self, base_url: str | None = None, enabled: bool | None = None) -> None:
+        """Initialize AI Stack client with base URL and HTTP client configuration.
+
+        When `enabled` is False (env AUTOBOT_AI_STACK_ENABLED=false, default off
+        for compose/single_user with no AI Stack VM), health probes short-circuit
+        to a "disabled" status with no network attempts — stopping the per-boot
+        warning flood (#9782).
+        """
+        # Connection status: UNKNOWN -> CONNECTED | ERROR | DISABLED (#10008)
+        self.connection_status: ConnectionStatus = ConnectionStatus.UNKNOWN
         self._retry_task: asyncio.Task | None = None
+        self.enabled: bool = config.ai_stack_enabled if enabled is None else enabled
 
         # Use NetworkConstants for AI Stack configuration
         ai_stack_config = {
@@ -194,6 +202,10 @@ class AIStackClient:
 
     async def connect(self) -> None:
         """Initialize HTTP session and verify AI Stack reachability."""
+        if not self.enabled:
+            logger.info("AI Stack disabled (AUTOBOT_AI_STACK_ENABLED=false) — skipping connection")
+            self.connection_status = ConnectionStatus.DISABLED
+            return
         logger.info("AI Stack client connecting to %s", self.base_url)
         check = await self.health_check()
         if check["status"] != "healthy":
@@ -210,6 +222,8 @@ class AIStackClient:
 
     def start_retry_loop(self) -> None:
         """Start background task that retries AI Stack health every 60s."""
+        if not self.enabled:
+            return  # Disabled — nothing to retry
         if self._retry_task and not self._retry_task.done():
             return  # Already running
         self._retry_task = asyncio.create_task(self._retry_health_loop())
@@ -334,6 +348,14 @@ class AIStackClient:
 
     async def health_check(self) -> Metadata:
         """Check AI Stack health — uses Ollama as backing service when configured (#6228)."""
+        if not self.enabled:
+            # Gated off (#9782): no network attempt, no warning flood.
+            self.connection_status = ConnectionStatus.DISABLED
+            return {
+                "status": "disabled",
+                "backend": "none",
+                "timestamp": utc_timestamp(),
+            }
         if self._ollama_url:
             try:
                 async with aiohttp.ClientSession() as _sess:
@@ -344,9 +366,9 @@ class AIStackClient:
                         if resp.status == 200:
                             data = await resp.json()
                             models = [m["name"] for m in data.get("models", [])]
-                            if self.connection_status != "connected":
+                            if self.connection_status != ConnectionStatus.CONNECTED:
                                 logger.info("Ollama backing connected at %s", self._ollama_url)
-                            self.connection_status = "connected"
+                            self.connection_status = ConnectionStatus.CONNECTED
                             return {
                                 "status": "healthy",
                                 "models": models,
@@ -362,9 +384,9 @@ class AIStackClient:
             # AI Stack exposes /health (#6649) — /api/v2 is the ChromaDB heartbeat
             # path and was wrongly applied here, producing a 404 every poll.
             response = await self._make_request("GET", "/health")
-            if self.connection_status != "connected":
+            if self.connection_status != ConnectionStatus.CONNECTED:
                 logger.info("AI Stack connection restored at %s", self.base_url)
-            self.connection_status = "connected"
+            self.connection_status = ConnectionStatus.CONNECTED
             return {
                 "status": "healthy",
                 "ai_stack_response": response,
@@ -372,8 +394,8 @@ class AIStackClient:
             }
         except AIStackError as e:
             prev = self.connection_status
-            self.connection_status = "error"
-            if prev != "error":
+            self.connection_status = ConnectionStatus.ERROR
+            if prev != ConnectionStatus.ERROR:
                 logger.warning(
                     "AI Stack unreachable at %s: %s — starting retry loop",
                     self.base_url,

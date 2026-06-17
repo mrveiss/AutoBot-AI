@@ -2,11 +2,11 @@
 
 # Your data. Your AI.
 
-**AutoBot is the self-hosted AI platform that belongs to you — not to us.**
+**AutoBot is a self-hosted AI platform you own — not a service you rent.**
 
 Feed it your docs, your codebase, your business knowledge.
-Plug in any brain you want — Ollama, OpenAI, Claude, Gemini, or any LLM.
-Your data stays on your machine. Your AI stays yours.
+Plug in any LLM you trust — local or hosted.
+Your data stays on your machines. Your AI stays yours.
 
 [Get Started](#quick-start-3-steps) · [Documentation](docs/) · [Community](https://github.com/mrveiss/AutoBot-AI/discussions) · [Sponsor](https://github.com/sponsors/mrveiss)
 
@@ -19,19 +19,38 @@ Your data stays on your machine. Your AI stays yours.
 
 ---
 
-> WordPress gave everyone a website. AutoBot gives everyone an AI.
-> Self-hosted. Open source. Yours to extend.
-
-**AutoBot is not a SaaS subscription. It's infrastructure you own.**
-Deploy it once with Docker Compose. Feed your knowledge base — drag in docs, paste URLs, upload files.
-Connect whatever LLM you trust. Run it forever, on your terms.
+> **AutoBot is infrastructure you own, not a subscription.**
+> A small, solid core. A management layer that runs the hard infrastructure for you.
+> Modules you install on top. Deploy it once, feed it your knowledge, connect whatever
+> LLM you trust, and run it forever — on your terms.
 
 | What you get | What stays yours |
 |---|---|
 | Chat interface | Your prompts |
 | RAG knowledge base | Your documents |
 | Fleet management | Your infrastructure |
-| Plugin ecosystem | Your data |
+| Module ecosystem | Your data |
+
+## The Platform Model
+
+AutoBot is three layers, bottom to top:
+
+1. **Platform Core** — small, solid, and yours. Chat and streaming, a RAG knowledge
+   base backed by a knowledge graph (your *institutional memory*), an LLM gateway with
+   provider fallback, local inference, hooks, and governance (auth, RBAC, review gates,
+   budgets). It changes slowly so everything above can depend on it.
+2. **Management Layer — Service Lifecycle Manager (SLM).** Private AI has a lot of
+   moving infrastructure: vector DB, cache, database, inference, and background workers,
+   often across several machines. The **Service Lifecycle Manager (SLM)** owns the full
+   lifecycle — **deploy → operate → scale** — so you can run it in production without
+   becoming a full-time operator. *(SLM means Service Lifecycle Manager, never "small
+   language model.")*
+3. **Modules** — installable capabilities built on the core's bones. A module inherits
+   institutional memory, local inference at zero marginal cost, hooks, and governance,
+   so it stays small relative to what it delivers. Modules include **AutoBot LLC** (an
+   autonomous *agent-company*), **Codebase Analytics**, and the **Transcriber**.
+
+→ Full picture: [The AutoBot Platform Model](docs/architecture/PLATFORM_MODEL.md)
 
 ## Quick Start (3 Steps)
 
@@ -54,15 +73,25 @@ Visit **http://localhost** in your browser. AutoBot is ready to use.
 
 ## What AutoBot Does
 
-AutoBot is a **self-hosted infrastructure automation platform** that combines conversational AI with distributed automation. Deploy it on your own hardware and keep complete control:
+AutoBot is a **self-hosted AI platform**: conversational AI, a private knowledge base,
+and the machinery to deploy and operate it all on your own hardware. You keep complete
+control:
 
-- **Unified Self-Hosted Dashboard** — Manage infrastructure, fleet operations, and analytics from one place on your servers
-- **Natural Language Control** — Issue commands in plain English; AutoBot handles the complexity locally
-- **Self-Hosted Knowledge Bases** — Build custom knowledge bases from your infrastructure docs, runbooks, and workflows — all stored locally
-- **Code Analytics** — Understand codebases, extract insights, identify risks without sending data to external services
-- **Vision Processing** — Analyze screenshots and diagrams locally to guide infrastructure decisions
-- **Self-Hosted Fleet Management** — Orchestrate multi-server deployments, updates, and monitoring with Ansible across your infrastructure
-- **Complete Data Privacy** — Full data control, no external dependencies, runs entirely on your hardware, no cloud vendor lock-in
+- **Unified Self-Hosted Dashboard** — manage AI, infrastructure, fleet operations, and
+  analytics from one place on your servers
+- **Natural Language Control** — issue commands in plain English; AutoBot handles the
+  complexity locally
+- **Self-Hosted Knowledge Bases** — build knowledge bases from your docs, code, runbooks,
+  and workflows — RAG-indexed and stored locally
+- **Vision Processing** — analyze screenshots and diagrams locally to guide decisions
+- **Self-Hosted Fleet Management** — deploy, operate, and scale multi-server stacks with
+  the Service Lifecycle Manager (SLM)
+- **Installable Modules** — extend the platform with AutoBot LLC (an autonomous
+  agent-company), Codebase Analytics, the Transcriber, and more
+- **Complete Data Privacy** — full data control, no external dependencies, runs entirely
+  on your hardware, no vendor lock-in
+
+→ Browse everything in the [Capability Catalog](docs/features/CATALOG.md).
 
 ---
 
@@ -79,33 +108,62 @@ AutoBot is a **self-hosted infrastructure automation platform** that combines co
 
 ---
 
-## Features at a Glance
+## Platform Core: Features at a Glance
 
 | Feature | Capability |
 |---------|-----------|
 | **Chat** | Multi-turn conversations with function calling, streaming responses |
 | **Knowledge Bases** | RAG-powered retrieval from documents, code, infrastructure docs |
-| **Workflow Builder** | Visual and code-based workflow creation for infrastructure tasks |
-| **Codebase Analytics** | Code structure analysis, risk detection, dependency insights |
-| **Vision** | Image/screenshot analysis for infrastructure troubleshooting |
-| **Fleet Management** | Ansible-powered multi-server orchestration and monitoring |
+| **Knowledge Graph** | Institutional memory shared across sessions and modules |
+| **LLM Gateway** | One place to plug in any model, with provider routing and fallback |
+| **Workflow Builder** | Visual and code-based workflow creation |
+| **Vision** | Image/screenshot analysis for troubleshooting |
+
+## Management Layer: the Service Lifecycle Manager (SLM)
+
+The **Service Lifecycle Manager (SLM)** is how AutoBot runs the infrastructure behind
+private AI for you. It owns the full lifecycle of the stack — vector DB, cache, database,
+inference, and workers — across one or more machines:
+
+| Stage | What the SLM does |
+|-------|-------------------|
+| **Deploy** | Stand up the full stack from a blank host or across a fleet (Ansible) |
+| **Operate** | Upgrades, health monitoring, recovery, certificate rotation, configuration |
+| **Scale** | Add fleet nodes, add NPU workers, assign roles, provision new capacity |
+
+The SLM dashboard lives at **http://localhost/slm**. See
+[SLM deployment](docs/guides/slm-docker-ansible-deployment.md).
+
+## Modules
+
+Modules are large capabilities you install on the core. Because they inherit the core's
+institutional memory, local inference, hooks, and governance, they stay small relative to
+what they deliver.
+
+- **AutoBot LLC** — an autonomous *agent-company*: define a company of AI agents (and
+  human co-workers), give them goals and a backlog, schedule them to work autonomously,
+  and govern their spend. See [AutoBot LLC](docs/llc/_index.md).
+- **Codebase Analytics** — understand codebases, extract insights, and identify risks
+  entirely on your own hardware: code structure analysis, risk detection, and dependency
+  insights, with no source ever leaving your machines.
+- **Transcriber** — a general-purpose audio transcription module: organize projects and
+  recordings, transcribe locally, and export transcripts.
+
+→ Browse all capabilities in the [Capability Catalog](docs/features/CATALOG.md).
 
 ---
 
-## Why Self-Hosted? AutoBot vs Cloud Alternatives
+## Why Self-Hosted
 
-| Aspect | AutoBot (Self-Hosted) | Cloud AI Tools | 
-|--------|----------------------|----------------|
-| **Data Privacy** | Your data stays on your hardware | Data sent to external servers |
-| **Cost** | One-time setup, no per-request fees | Recurring API costs, usage-based pricing |
-| **Control** | Full customization, no vendor lock-in | Limited by cloud provider's roadmap |
-| **Compliance** | Meet HIPAA, GDPR, SOC2 requirements | Subject to cloud provider's compliance |
-| **Latency** | Local inference, millisecond response times | Network latency to cloud APIs |
-| **Offline Capability** | Works without internet connection | Requires constant cloud connectivity |
-| **Customization** | Run custom models, modify code | Locked to cloud provider's models |
-| **Scalability** | Scale within your infrastructure | Limited by cloud provider's quotas |
+AutoBot keeps your AI and your data on infrastructure you control:
 
-For teams prioritizing **data privacy, cost efficiency, and infrastructure control**, self-hosted automation with AutoBot is the ideal choice.
+- **Data privacy & compliance** — your data never leaves your hardware; supports HIPAA,
+  GDPR, and SOC2 requirements
+- **Predictable cost** — local inference runs at zero marginal cost per request; no
+  per-request fees
+- **Full control** — run custom models, modify the code, no vendor lock-in
+- **Low latency** — local inference and command execution, no network round-trip
+- **Scale on your terms** — grow within your own infrastructure with the SLM
 
 📚 **Learn more:** [Why Self-Hosted Infrastructure Automation?](docs/self-hosted-advantages.md)
 
@@ -114,6 +172,7 @@ For teams prioritizing **data privacy, cost efficiency, and infrastructure contr
 ## Architecture Overview
 
 > Full diagrams (data flows, deployment topologies, sequence diagrams): [docs/architecture/system-diagram.md](docs/architecture/system-diagram.md)  
+> The conceptual model (core → SLM → modules): [docs/architecture/PLATFORM_MODEL.md](docs/architecture/PLATFORM_MODEL.md)  
 > Feature walkthroughs and demo recording scripts: [docs/DEMOS.md](docs/DEMOS.md)
 
 ```mermaid
@@ -121,26 +180,28 @@ graph TB
     User["👤 User<br/>(Browser)"]
     Frontend["🎨 Frontend<br/>(Vue.js)"]
     Backend["⚡ Backend<br/>(FastAPI)"]
-    
+
     Redis["🔴 Redis<br/>(Cache/Queue)"]
     PostgreSQL["🐘 PostgreSQL<br/>(Data)"]
     ChromaDB["🔍 ChromaDB<br/>(Vectors)"]
-    
-    SLM["🧠 Small LLM<br/>(Ollama)"]
-    
+
+    Inference["🧠 Local LLM<br/>(Ollama inference)"]
+
+    SLM["🛠️ Service Lifecycle Manager<br/>(deploy · operate · scale)"]
     Ansible["🔧 Ansible<br/>(Fleet Ops)"]
     Browser["🌐 Browser Automation<br/>(Chromium)"]
 
     User -->|HTTP/WS| Frontend
     Frontend -->|API| Backend
-    
+
     Backend -->|Read/Write| Redis
     Backend -->|Query| PostgreSQL
     Backend -->|Vector Search| ChromaDB
-    Backend -->|Inference| SLM
-    
-    Backend -->|Execute| Ansible
+    Backend -->|Inference| Inference
+
     Backend -->|Control| Browser
+    SLM -->|Manages lifecycle of| Backend
+    SLM -->|Executes| Ansible
 
     style User fill:#e1f5ff
     style Frontend fill:#f3e5f5
@@ -148,7 +209,8 @@ graph TB
     style Redis fill:#ffebee
     style PostgreSQL fill:#e8f5e9
     style ChromaDB fill:#fce4ec
-    style SLM fill:#f1f8e9
+    style Inference fill:#f1f8e9
+    style SLM fill:#ede7f6
     style Ansible fill:#ede7f6
     style Browser fill:#e0f2f1
 ```
@@ -183,10 +245,11 @@ AutoBot runs as a coordinated set of services:
 |---------|------|------|
 | **Frontend** | Vue.js UI, TLS termination | 80, 443 |
 | **Backend** | FastAPI API server | 8001 |
+| **SLM** | Service Lifecycle Manager — fleet deploy/operate/scale | (via dashboard `/slm`) |
 | **Redis** | Cache, message queue | 6379 |
 | **PostgreSQL** | Relational database | 5432 |
 | **ChromaDB** | Vector embeddings store | 8100 |
-| **SLM (Ollama)** | Small language model inference | 11434 (optional) |
+| **Inference (Ollama)** | Local LLM inference | 11434 (optional) |
 | **Prometheus** | Metrics collection | 9090 (optional) |
 | **Grafana** | Monitoring dashboards | 3000 (optional) |
 
@@ -196,14 +259,15 @@ AutoBot runs as a coordinated set of services:
 
 ### Dashboard Overview
 Once running, navigate to **http://localhost** to access:
-- **Chat Interface** — Start conversing with AutoBot about your infrastructure
-- **Knowledge Bases** — Upload and manage documents, codebases, runbooks
-- **Workflows** — Create automated tasks and infrastructure operations
-- **Fleet Management** — View and orchestrate multiple servers
-- **Analytics** — Monitor system health, performance, and activity
+- **Chat Interface** — start conversing with AutoBot about your knowledge and infrastructure
+- **Knowledge Bases** — upload and manage documents, codebases, runbooks
+- **Workflows** — create automated tasks and operations
+- **Fleet Management** — view and orchestrate multiple servers
+- **Analytics** — monitor system health, performance, and activity
 
-The **Service Lifecycle Manager** (SLM) — the control plane for your AI infrastructure
-(vector DB, Redis, and per-agent provider routing) — lives at **http://localhost/slm**.
+The **Service Lifecycle Manager (SLM)** — AutoBot's management layer for deploying,
+operating, and scaling your AI infrastructure (vector DB, cache, database, inference, and
+workers) — lives at **http://localhost/slm**.
 
 ### Example: Managing a Fleet
 ```bash
@@ -231,7 +295,9 @@ Key settings:
 
 ### LLM Providers and Fallback
 
-AutoBot supports Ollama, OpenAI, Anthropic Claude, Groq, vLLM, HuggingFace, and OpenRouter. When a model hits a rate limit or quota cap, requests automatically route to a backup model via configurable fallback chains.
+AutoBot's LLM gateway supports local and hosted providers (Ollama, OpenAI, Anthropic,
+Groq, vLLM, HuggingFace, and OpenRouter). When a model hits a rate limit or quota cap,
+requests automatically route to a backup model via configurable fallback chains.
 
 - [LLM Fallback Configuration](docs/backend/llm-fallback.md) — configure fallback chains, tune rate limits, and troubleshoot quota issues
 - [Environment Variables Reference](docs/configuration/environment-variables.md) — full variable listing including `AUTOBOT_FALLBACK_CHAIN_*` and `AUTOBOT_LLM_RL_*`
@@ -258,7 +324,7 @@ We welcome contributions! Whether you're fixing bugs, adding features, or improv
 
 ## How to Contribute
 
-AutoBot is open source and we welcome contributions from the community! Whether you're fixing bugs, adding features, or improving documentation, your contributions help build better infrastructure automation for everyone.
+AutoBot is open source and we welcome contributions from the community! Whether you're fixing bugs, adding features, or improving documentation, your contributions help build a better self-hosted AI platform for everyone.
 
 ### 🚀 For Beginners (New to Open Source)
 
@@ -329,22 +395,10 @@ becomes paid tomorrow. Production support is how we keep it funded — see
 
 ## Production support & funding
 
-AutoBot is free to run forever. Paid **production support** is how the project stays funded
-and maintained — you pay for our time, guarantees, and compliance work, never for permission
-to use the software:
-
-- **Community — Free.** Self-host, modify, build, and profit under Apache-2.0.
-  Support via [GitHub Issues](https://github.com/mrveiss/AutoBot-AI/issues) &
-  [Discussions](https://github.com/mrveiss/AutoBot-AI/discussions).
-- **Production Support** — guaranteed security patching, version-pinned stable releases,
-  defined SLA response times, priority bug fixes, and upgrade assistance for companies
-  running AutoBot in production.
-- **Compliance Pack** — NIS2 / ISO 27001 documentation, security architecture overview,
-  hardening guide, and audit-support materials (builds on AutoBot's existing
-  [security framework](docs/security/SECURITY_FRAMEWORK.md)).
-
-Prefer to chip in toward the free core instead? [GitHub Sponsors](https://github.com/sponsors/mrveiss)
-and [Ko-fi](https://ko-fi.com/mrveiss) fund community development.
+<!-- Tier copy is canonical in FUNDING.md (#9846) — do not restate tier definitions here. -->
+AutoBot is free to run forever. Paid production support (Community / Production Support /
+Compliance Pack) is how the project stays funded — tier definitions, sponsorship links, and
+the support contact path live in **[FUNDING.md](FUNDING.md)**.
 
 ---
 
@@ -354,7 +408,7 @@ and [Ko-fi](https://ko-fi.com/mrveiss) fund community development.
 - [ ] Multi-user authentication and RBAC
 - [ ] Kubernetes orchestration support
 - [ ] Advanced analytics dashboards
-- [ ] Custom integrations marketplace
+- [ ] Module ecosystem and registry
 - [ ] Mobile companion app
 
 ### Under Consideration
@@ -369,7 +423,7 @@ and [Ko-fi](https://ko-fi.com/mrveiss) fund community development.
 - **Frontend**: Vue.js, TypeScript, Vite
 - **Backend**: FastAPI, Python, AsyncIO
 - **Database**: PostgreSQL, Redis, ChromaDB
-- **LLM**: Ollama (local), LangChain
+- **Inference**: Ollama (local), LangChain
 - **Orchestration**: Ansible, Docker, Kubernetes (coming)
 - **Infrastructure**: Docker Compose, systemd
 
@@ -377,10 +431,11 @@ and [Ko-fi](https://ko-fi.com/mrveiss) fund community development.
 
 ## Documentation
 
-Full documentation coming soon. In the meantime:
-- See [INSTALL.md](INSTALL.md) for detailed setup instructions
-- Check [CONTRIBUTING.md](CONTRIBUTING.md) to get involved
-- Explore [docs/](docs/) for architecture details
+- [Documentation Index](docs/INDEX.md) — the full documentation home
+- [The AutoBot Platform Model](docs/architecture/PLATFORM_MODEL.md) — core → SLM → modules
+- [Capability Catalog](docs/features/CATALOG.md) — everything AutoBot can do
+- [INSTALL.md](INSTALL.md) — detailed setup instructions
+- [CONTRIBUTING.md](CONTRIBUTING.md) — get involved
 
 ---
 
@@ -388,7 +443,8 @@ Full documentation coming soon. In the meantime:
 
 **Current Version**: v1.5.0 (Active Development)
 
-AutoBot is actively developed and used for infrastructure automation. It's suitable for:
+AutoBot is actively developed and used for self-hosted AI and infrastructure automation.
+It's suitable for:
 - ✅ Self-hosted deployments on your infrastructure
 - ✅ Development and testing environments
 - ✅ Learning AI-driven automation
