@@ -145,7 +145,11 @@ class TestRoundTripSignatureOverRealPayload:
         secret = "app-secret"  # nosec B105 - test fixture
         payload = {
             "entry": [
-                {"changes": [{"value": {"messages": [{"from": "1", "id": "m", "type": "text", "text": {"body": "yo"}}]}}]}
+                {
+                    "changes": [
+                        {"value": {"messages": [{"from": "1", "id": "m", "type": "text", "text": {"body": "yo"}}]}}
+                    ]
+                }
             ]
         }
         raw = json.dumps(payload).encode("utf-8")
