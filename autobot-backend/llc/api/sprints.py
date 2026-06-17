@@ -39,8 +39,10 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.user_management.dependencies import get_current_user, require_org_context
 from autobot_shared.logging_manager import get_logger
-from user_management.database import get_async_session
+from llc.deps import get_session
+from user_management.services import TenantContext
 
 from ..kb.collections import KbCollectionManager
 from ..models.enums import SprintStatus, WorkItemRelationType
@@ -215,8 +217,13 @@ class SprintCloseRequest(BaseModel):
 @router.get("/companies/{company_id}/portfolios", response_model=List[PortfolioResponse])
 async def list_portfolios(
     company_id: uuid.UUID,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = Depends(get_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> List[LLCPortfolio]:
+    # IDOR guard (#10148): reject callers accessing another company's portfolios.
+    if str(company_id) != str(ctx.org_id):
+        raise HTTPException(status_code=404, detail="Company not found")
     result = await session.execute(select(LLCPortfolio).where(LLCPortfolio.company_id == company_id))
     return list(result.scalars().all())
 
@@ -225,8 +232,13 @@ async def list_portfolios(
 async def create_portfolio(
     company_id: uuid.UUID,
     body: PortfolioCreate,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = Depends(get_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> LLCPortfolio:
+    # IDOR guard (#10148): reject callers creating portfolios in another company.
+    if str(company_id) != str(ctx.org_id):
+        raise HTTPException(status_code=404, detail="Company not found")
     portfolio = LLCPortfolio(company_id=company_id, name=body.name, description=body.description)
     session.add(portfolio)
     await session.commit()
@@ -237,11 +249,14 @@ async def create_portfolio(
 @router.get("/portfolios/{portfolio_id}", response_model=PortfolioResponse)
 async def get_portfolio(
     portfolio_id: uuid.UUID,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = Depends(get_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> LLCPortfolio:
     result = await session.execute(select(LLCPortfolio).where(LLCPortfolio.id == portfolio_id))
     portfolio = result.scalar_one_or_none()
-    if portfolio is None:
+    # IDOR guard (#10148): 404 on missing OR cross-tenant to avoid existence disclosure.
+    if portfolio is None or str(portfolio.company_id) != str(ctx.org_id):
         raise HTTPException(status_code=404, detail="Portfolio not found")
     return portfolio
 
@@ -250,11 +265,14 @@ async def get_portfolio(
 async def update_portfolio(
     portfolio_id: uuid.UUID,
     body: PortfolioUpdate,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = Depends(get_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> LLCPortfolio:
     result = await session.execute(select(LLCPortfolio).where(LLCPortfolio.id == portfolio_id))
     portfolio = result.scalar_one_or_none()
-    if portfolio is None:
+    # IDOR guard (#10148).
+    if portfolio is None or str(portfolio.company_id) != str(ctx.org_id):
         raise HTTPException(status_code=404, detail="Portfolio not found")
     for field, value in body.model_dump(exclude_none=True).items():
         setattr(portfolio, field, value)
@@ -266,11 +284,14 @@ async def update_portfolio(
 @router.delete("/portfolios/{portfolio_id}", status_code=204)
 async def delete_portfolio(
     portfolio_id: uuid.UUID,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = Depends(get_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> None:
     result = await session.execute(select(LLCPortfolio).where(LLCPortfolio.id == portfolio_id))
     portfolio = result.scalar_one_or_none()
-    if portfolio is None:
+    # IDOR guard (#10148).
+    if portfolio is None or str(portfolio.company_id) != str(ctx.org_id):
         raise HTTPException(status_code=404, detail="Portfolio not found")
     await session.delete(portfolio)
     await session.commit()
@@ -282,8 +303,14 @@ async def delete_portfolio(
 @router.get("/portfolios/{portfolio_id}/programs", response_model=List[ProgramResponse])
 async def list_programs(
     portfolio_id: uuid.UUID,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = Depends(get_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> List[LLCProgram]:
+    # IDOR guard (#10148): verify the portfolio belongs to the caller's org before listing.
+    pf_row = (await session.execute(select(LLCPortfolio).where(LLCPortfolio.id == portfolio_id))).scalar_one_or_none()
+    if pf_row is None or str(pf_row.company_id) != str(ctx.org_id):
+        raise HTTPException(status_code=404, detail="Portfolio not found")
     result = await session.execute(select(LLCProgram).where(LLCProgram.portfolio_id == portfolio_id))
     return list(result.scalars().all())
 
@@ -292,8 +319,14 @@ async def list_programs(
 async def create_program(
     portfolio_id: uuid.UUID,
     body: ProgramCreate,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = Depends(get_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> LLCProgram:
+    # IDOR guard (#10148): verify the portfolio belongs to the caller's org before creating.
+    pf_row = (await session.execute(select(LLCPortfolio).where(LLCPortfolio.id == portfolio_id))).scalar_one_or_none()
+    if pf_row is None or str(pf_row.company_id) != str(ctx.org_id):
+        raise HTTPException(status_code=404, detail="Portfolio not found")
     program = LLCProgram(
         company_id=body.company_id,
         portfolio_id=portfolio_id,
@@ -309,11 +342,14 @@ async def create_program(
 @router.get("/programs/{program_id}", response_model=ProgramResponse)
 async def get_program(
     program_id: uuid.UUID,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = Depends(get_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> LLCProgram:
     result = await session.execute(select(LLCProgram).where(LLCProgram.id == program_id))
     program = result.scalar_one_or_none()
-    if program is None:
+    # IDOR guard (#10148).
+    if program is None or str(program.company_id) != str(ctx.org_id):
         raise HTTPException(status_code=404, detail="Program not found")
     return program
 
@@ -322,11 +358,14 @@ async def get_program(
 async def update_program(
     program_id: uuid.UUID,
     body: ProgramUpdate,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = Depends(get_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> LLCProgram:
     result = await session.execute(select(LLCProgram).where(LLCProgram.id == program_id))
     program = result.scalar_one_or_none()
-    if program is None:
+    # IDOR guard (#10148).
+    if program is None or str(program.company_id) != str(ctx.org_id):
         raise HTTPException(status_code=404, detail="Program not found")
     for field, value in body.model_dump(exclude_none=True).items():
         setattr(program, field, value)
@@ -338,11 +377,14 @@ async def update_program(
 @router.delete("/programs/{program_id}", status_code=204)
 async def delete_program(
     program_id: uuid.UUID,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = Depends(get_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> None:
     result = await session.execute(select(LLCProgram).where(LLCProgram.id == program_id))
     program = result.scalar_one_or_none()
-    if program is None:
+    # IDOR guard (#10148).
+    if program is None or str(program.company_id) != str(ctx.org_id):
         raise HTTPException(status_code=404, detail="Program not found")
     await session.delete(program)
     await session.commit()
@@ -354,8 +396,14 @@ async def delete_program(
 @router.get("/programs/{program_id}/projects", response_model=List[ProjectResponse])
 async def list_projects(
     program_id: uuid.UUID,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = Depends(get_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> List[LLCProject]:
+    # IDOR guard (#10148): verify the program belongs to the caller's org before listing.
+    prog = (await session.execute(select(LLCProgram).where(LLCProgram.id == program_id))).scalar_one_or_none()
+    if prog is None or str(prog.company_id) != str(ctx.org_id):
+        raise HTTPException(status_code=404, detail="Program not found")
     result = await session.execute(select(LLCProject).where(LLCProject.program_id == program_id))
     return list(result.scalars().all())
 
@@ -363,10 +411,15 @@ async def list_projects(
 @router.get("/companies/{company_id}/projects", response_model=List[ProjectResponse])
 async def list_company_projects(
     company_id: uuid.UUID,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = Depends(get_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> List[LLCProject]:
     """Flat list of all projects in a company (GH#9020 — drives the timeline
     project picker; also reused by the project browser)."""
+    # IDOR guard (#10148): reject callers accessing another company's projects.
+    if str(company_id) != str(ctx.org_id):
+        raise HTTPException(status_code=404, detail="Company not found")
     result = await session.execute(
         select(LLCProject).where(LLCProject.company_id == company_id).order_by(LLCProject.name)
     )
@@ -377,8 +430,14 @@ async def list_company_projects(
 async def create_project(
     program_id: uuid.UUID,
     body: ProjectCreate,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = Depends(get_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> LLCProject:
+    # IDOR guard (#10148): verify the program belongs to the caller's org before creating.
+    prog = (await session.execute(select(LLCProgram).where(LLCProgram.id == program_id))).scalar_one_or_none()
+    if prog is None or str(prog.company_id) != str(ctx.org_id):
+        raise HTTPException(status_code=404, detail="Program not found")
     project = LLCProject(
         company_id=body.company_id,
         program_id=program_id,
@@ -401,11 +460,14 @@ async def create_project(
 @router.get("/projects/{project_id}", response_model=ProjectResponse)
 async def get_project(
     project_id: uuid.UUID,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = Depends(get_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> LLCProject:
     result = await session.execute(select(LLCProject).where(LLCProject.id == project_id))
     project = result.scalar_one_or_none()
-    if project is None:
+    # IDOR guard (#10148).
+    if project is None or str(project.company_id) != str(ctx.org_id):
         raise HTTPException(status_code=404, detail="Project not found")
     return project
 
@@ -414,11 +476,14 @@ async def get_project(
 async def update_project(
     project_id: uuid.UUID,
     body: ProjectUpdate,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = Depends(get_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> LLCProject:
     result = await session.execute(select(LLCProject).where(LLCProject.id == project_id))
     project = result.scalar_one_or_none()
-    if project is None:
+    # IDOR guard (#10148).
+    if project is None or str(project.company_id) != str(ctx.org_id):
         raise HTTPException(status_code=404, detail="Project not found")
     for field, value in body.model_dump(exclude_none=True).items():
         setattr(project, field, value)
@@ -430,11 +495,14 @@ async def update_project(
 @router.delete("/projects/{project_id}", status_code=204)
 async def delete_project(
     project_id: uuid.UUID,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = Depends(get_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> None:
     result = await session.execute(select(LLCProject).where(LLCProject.id == project_id))
     project = result.scalar_one_or_none()
-    if project is None:
+    # IDOR guard (#10148).
+    if project is None or str(project.company_id) != str(ctx.org_id):
         raise HTTPException(status_code=404, detail="Project not found")
     await session.delete(project)
     await session.commit()
@@ -447,8 +515,14 @@ async def delete_project(
 async def list_sprints(
     project_id: uuid.UUID,
     status: Optional[SprintStatus] = Query(None),
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = Depends(get_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> List[LLCSprint]:
+    # IDOR guard (#10148): verify the project belongs to the caller's org before listing sprints.
+    proj = (await session.execute(select(LLCProject).where(LLCProject.id == project_id))).scalar_one_or_none()
+    if proj is None or str(proj.company_id) != str(ctx.org_id):
+        raise HTTPException(status_code=404, detail="Project not found")
     stmt = select(LLCSprint).where(LLCSprint.project_id == project_id)
     if status is not None:
         stmt = stmt.where(LLCSprint.status == status.value)
@@ -460,8 +534,14 @@ async def list_sprints(
 async def create_sprint(
     project_id: uuid.UUID,
     body: SprintCreate,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = Depends(get_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> LLCSprint:
+    # IDOR guard (#10148): verify the project belongs to the caller's org before creating a sprint.
+    proj = (await session.execute(select(LLCProject).where(LLCProject.id == project_id))).scalar_one_or_none()
+    if proj is None or str(proj.company_id) != str(ctx.org_id):
+        raise HTTPException(status_code=404, detail="Project not found")
     sprint = LLCSprint(
         company_id=body.company_id,
         project_id=project_id,
@@ -482,11 +562,14 @@ async def create_sprint(
 @router.get("/sprints/{sprint_id}", response_model=SprintResponse)
 async def get_sprint(
     sprint_id: uuid.UUID,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = Depends(get_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> LLCSprint:
     result = await session.execute(select(LLCSprint).where(LLCSprint.id == sprint_id))
     sprint = result.scalar_one_or_none()
-    if sprint is None:
+    # IDOR guard (#10148).
+    if sprint is None or str(sprint.company_id) != str(ctx.org_id):
         raise HTTPException(status_code=404, detail="Sprint not found")
     return sprint
 
@@ -498,11 +581,14 @@ _LIFECYCLE_STATUSES = frozenset([SprintStatus.ACTIVE, SprintStatus.CLOSED])
 async def update_sprint(
     sprint_id: uuid.UUID,
     body: SprintUpdate,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = Depends(get_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> LLCSprint:
     result = await session.execute(select(LLCSprint).where(LLCSprint.id == sprint_id).with_for_update())
     sprint = result.scalar_one_or_none()
-    if sprint is None:
+    # IDOR guard (#10148).
+    if sprint is None or str(sprint.company_id) != str(ctx.org_id):
         raise HTTPException(status_code=404, detail="Sprint not found")
     if body.status is not None and body.status in _LIFECYCLE_STATUSES:
         raise HTTPException(
@@ -522,11 +608,14 @@ async def update_sprint(
 @router.delete("/sprints/{sprint_id}", status_code=204)
 async def delete_sprint(
     sprint_id: uuid.UUID,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = Depends(get_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> None:
     result = await session.execute(select(LLCSprint).where(LLCSprint.id == sprint_id))
     sprint = result.scalar_one_or_none()
-    if sprint is None:
+    # IDOR guard (#10148).
+    if sprint is None or str(sprint.company_id) != str(ctx.org_id):
         raise HTTPException(status_code=404, detail="Sprint not found")
     await session.delete(sprint)
     await session.commit()
@@ -536,7 +625,9 @@ async def delete_sprint(
 async def close_sprint(
     sprint_id: uuid.UUID,
     body: SprintCloseRequest,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = Depends(get_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> LLCSprint:
     """Manual sprint close trigger — board only, requires an APPROVED approval.
 
@@ -546,6 +637,10 @@ async def close_sprint(
       2. Board approves the approval record.
       3. This endpoint is called with the approval_id to execute the close.
     """
+    # IDOR guard (#10148): verify the sprint belongs to the caller's org before closing.
+    _sprint_check = (await session.execute(select(LLCSprint).where(LLCSprint.id == sprint_id))).scalar_one_or_none()
+    if _sprint_check is None or str(_sprint_check.company_id) != str(ctx.org_id):
+        raise HTTPException(status_code=404, detail="Sprint not found")
     try:
         sprint = await _autoclose_svc.execute_close(
             session,
@@ -571,9 +666,15 @@ _planning_svc = SprintPlanningService()
 @router.get("/sprints/{sprint_id}/capacity")
 async def get_sprint_capacity(
     sprint_id: uuid.UUID,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = Depends(get_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> dict:
     """Return total and per-agent assigned story points for a sprint."""
+    # IDOR guard (#10148).
+    sprint = (await session.execute(select(LLCSprint).where(LLCSprint.id == sprint_id))).scalar_one_or_none()
+    if sprint is None or str(sprint.company_id) != str(ctx.org_id):
+        raise HTTPException(status_code=404, detail="Sprint not found")
     try:
         return await _planning_svc.get_capacity(session, sprint_id)
     except SprintNotFound as exc:
@@ -585,9 +686,15 @@ async def get_sprint_capacity(
 async def get_project_velocity(
     project_id: uuid.UUID,
     n_sprints: int = Query(default=5, ge=1, le=52, description="Number of closed sprints to include"),
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = Depends(get_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> dict:
     """Return velocity history for the last N closed sprints in a project."""
+    # IDOR guard (#10148).
+    proj = (await session.execute(select(LLCProject).where(LLCProject.id == project_id))).scalar_one_or_none()
+    if proj is None or str(proj.company_id) != str(ctx.org_id):
+        raise HTTPException(status_code=404, detail="Project not found")
     return await _planning_svc.get_velocity_history(session, project_id, n_sprints)
 
 
@@ -621,12 +728,15 @@ class ProjectTimelineResponse(BaseModel):
 @router.get("/projects/{project_id}/timeline", response_model=ProjectTimelineResponse)
 async def get_project_timeline(
     project_id: uuid.UUID,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = Depends(get_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> ProjectTimelineResponse:
     """Return the project's work items with blocked-by dependency edges and
     critical-path flags for the Gantt/timeline view (GH#9020)."""
     project = (await session.execute(select(LLCProject).where(LLCProject.id == project_id))).scalar_one_or_none()
-    if project is None:
+    # IDOR guard (#10148): 404 on missing OR cross-tenant to avoid existence disclosure.
+    if project is None or str(project.company_id) != str(ctx.org_id):
         raise HTTPException(status_code=404, detail="Project not found")
 
     items = list((await session.execute(select(LLCWorkItem).where(LLCWorkItem.project_id == project_id))).scalars())
@@ -677,9 +787,15 @@ async def get_project_timeline(
 @router.get("/sprints/{sprint_id}/burndown")
 async def get_sprint_burndown(
     sprint_id: uuid.UUID,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = Depends(get_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> dict:
     """Return day-by-day burndown series for a sprint."""
+    # IDOR guard (#10148).
+    sprint = (await session.execute(select(LLCSprint).where(LLCSprint.id == sprint_id))).scalar_one_or_none()
+    if sprint is None or str(sprint.company_id) != str(ctx.org_id):
+        raise HTTPException(status_code=404, detail="Sprint not found")
     try:
         return await _planning_svc.get_burndown(session, sprint_id)
     except SprintNotFound as exc:
@@ -692,12 +808,19 @@ async def get_project_knowledge(
     project_id: uuid.UUID,
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
+    session: AsyncSession = Depends(get_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> dict:
     """Return recently indexed work product artifacts for a project (GH#8242).
 
     Queries the ``project:{project_id}`` ChromaDB collection — available
     once ArtifactIngestor has indexed at least one work product.
     """
+    # IDOR guard (#10148): verify the project belongs to the caller's org before reading KB.
+    proj = (await session.execute(select(LLCProject).where(LLCProject.id == project_id))).scalar_one_or_none()
+    if proj is None or str(proj.company_id) != str(ctx.org_id):
+        raise HTTPException(status_code=404, detail="Project not found")
     from autobot_shared.singleton_factory import lazy_singleton
 
     from ..services.work_product_service import WorkProductService
@@ -726,7 +849,9 @@ class SprintSummaryResponse(BaseModel):
 @router.get("/sprints/{sprint_id}/summary", response_model=SprintSummaryResponse)
 async def get_sprint_summary(
     sprint_id: uuid.UUID,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = Depends(get_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> SprintSummaryResponse:
     """Return the LLM-generated KB summary for a closed sprint (GH#8238).
 
@@ -734,7 +859,8 @@ async def get_sprint_summary(
     """
     result = await session.execute(select(LLCSprint).where(LLCSprint.id == sprint_id))
     sprint = result.scalar_one_or_none()
-    if sprint is None:
+    # IDOR guard (#10148).
+    if sprint is None or str(sprint.company_id) != str(ctx.org_id):
         raise HTTPException(status_code=404, detail="Sprint not found")
     return SprintSummaryResponse(
         sprint_id=sprint.id,

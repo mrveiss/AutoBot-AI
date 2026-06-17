@@ -5,9 +5,12 @@
 """ClaudeCodeSubscriptionAdapter — runs Claude Code CLI with subscription auth (GH#9033).
 
 Like ClaudeCodeAdapter but enforces subscription-only mode:
-- No API key in environment (uses browser OAuth)
-- Token usage parsed from CLI output
-- Quota exhaustion triggers auto-pause + board notification
+- No API key in environment — the Claude Code CLI authenticates via its own
+  one-time browser login (``claude login``, stored in ~/.claude), so there is
+  no token to inject from secrets here (GH#10217); this adapter only strips the
+  API-key env vars so the CLI falls back to that subscription session.
+- Token usage parsed from CLI output (GH#10220)
+- Quota exhaustion triggers auto-pause + board notification (GH#10218)
 
 adapter_config schema::
 
@@ -207,10 +210,10 @@ class ClaudeCodeSubscriptionAdapter(ClaudeCodeAdapter):
                     run_id,
                 )
 
-                # TODO: Implement auto-pause + board notification (depends on GH#8225)
-                # For now, just return FAILED status with clear error
+                # GH#10218: signal QUOTA_EXHAUSTED so the scheduler auto-pauses
+                # the agent and logs a board-visible pause event (no retry).
                 return AdapterRunStatus(
-                    status=LLCRunStatus.FAILED,
+                    status=LLCRunStatus.QUOTA_EXHAUSTED,
                     error="Subscription quota exhausted. Please check your Claude Max subscription limits.",
                 )
 

@@ -79,13 +79,9 @@ INTEGRATION_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         ["integrations-github"],
         "integration_github",
     ),
-    # Telegram bot integration (MVA-2928 / GH#9006)
-    (
-        "api.telegram_bot",
-        "",  # No prefix - endpoints are /telegram/webhook and /telegram/config
-        ["telegram-bot"],
-        "telegram_bot",
-    ),
+    # Telegram bot integration is registered in core_routers (MVA-2074); do NOT
+    # add it here too — duplicate include_router double-mounts /telegram/* routes
+    # and OpenAPI operations (GH#9006).
     # WhatsApp Business API channel (GH#9007)
     (
         "api.whatsapp",
