@@ -78,24 +78,34 @@ class SSOService(BaseService):
                 "token_url": f"https://{domain}/oauth2/v1/token",
                 "userinfo_url": f"https://{domain}/oauth2/v1/userinfo",
                 "scope": "openid email profile groups",
+                # OIDC RP-initiated logout (RFC 9207 / Okta docs)
+                "end_session_endpoint": f"https://{domain}/oauth2/v1/logout",
             },
             SSOProviderType.MICROSOFT_ENTRA.value: {
                 "authorize_url": f"https://login.microsoftonline.com/{domain}/oauth2/v2.0/authorize",
                 "token_url": f"https://login.microsoftonline.com/{domain}/oauth2/v2.0/token",
                 "userinfo_url": "https://graph.microsoft.com/oidc/userinfo",
                 "scope": "openid email profile",
+                # OIDC RP-initiated logout (Microsoft Identity Platform docs)
+                "end_session_endpoint": f"https://login.microsoftonline.com/{domain}/oauth2/v2.0/logout",
             },
             SSOProviderType.GOOGLE_WORKSPACE.value: {
                 "authorize_url": "https://accounts.google.com/o/oauth2/v2/auth",
                 "token_url": "https://oauth2.googleapis.com/token",  # nosec B105 - OAuth2 public token endpoint URL,
                 "userinfo_url": "https://openidconnect.googleapis.com/v1/userinfo",
                 "scope": "openid email profile",
+                # Google does NOT support RP-initiated OIDC end_session (no end_session_endpoint
+                # in their OIDC discovery doc).  The /o/oauth2/revoke endpoint revokes tokens
+                # server-side but is not an OIDC logout redirect.  Callers should handle None.
+                "end_session_endpoint": None,
             },
             SSOProviderType.GITHUB.value: {
                 "authorize_url": "https://github.com/login/oauth/authorize",
                 "token_url": "https://github.com/login/oauth/access_token",  # nosec B105 - OAuth2 public token endpoint
                 "userinfo_url": "https://api.github.com/user",
                 "scope": "user:email read:user",
+                # GitHub OAuth2 (not OIDC) — no standard end_session_endpoint
+                "end_session_endpoint": None,
             },
         }
         return templates.get(provider_type, {})
@@ -385,21 +395,28 @@ class SSOService(BaseService):
         return await self._find_or_provision_user(provider, username, user_data)
 
     def _get_saml_config(self, provider: SSOProvider) -> dict[str, Any]:
-        """Build pysaml2 config from provider settings."""
+        """Build pysaml2 config from provider settings.
+
+        Includes Single Logout Service (SLO) endpoint when ``slo_url`` is
+        present in the provider config.  The SLO callback route is
+        ``/api/auth/sso/saml/slo`` (registered in api/sso_auth.py).
+        """
+        _http_post = "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST"
+        _http_redirect = "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect"
+        slo_url = provider.config.get("slo_url")
+        endpoints: dict[str, Any] = {
+            "assertion_consumer_service": [
+                (provider.config.get("acs_url"), _http_post),
+            ],
+        }
+        if slo_url:
+            endpoints["single_logout_service"] = [
+                (slo_url, _http_redirect),
+                (slo_url, _http_post),
+            ]
         return {
             "entityid": provider.config.get("sp_entity_id"),
-            "service": {
-                "sp": {
-                    "endpoints": {
-                        "assertion_consumer_service": [
-                            (
-                                provider.config.get("acs_url"),
-                                "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
-                            ),
-                        ],
-                    },
-                },
-            },
+            "service": {"sp": {"endpoints": endpoints}},
             "metadata": {"remote": [{"url": provider.config.get("idp_metadata_url")}]},
         }
 
@@ -420,6 +437,31 @@ class SSOService(BaseService):
         if redis:
             await redis.set(f"sso:state:{relay_state}", str(provider.id), ex=600)
         request_id, info = client.prepare_for_authenticate()
+        redirect_url = dict(info["headers"])["Location"]
+        return redirect_url, relay_state
+
+    async def initiate_saml_logout(self, provider: SSOProvider) -> tuple[str, str]:
+        """Initiate SAML SP-initiated Single Logout (SLO).
+
+        Generates a SAML LogoutRequest via pysaml2's ``global_logout`` method,
+        stores the relay state in Redis (same TTL pattern as authn requests),
+        and returns ``(redirect_url, relay_state)``.
+
+        Limitation: pysaml2 ``global_logout`` requires a live session subject
+        (NameID).  Without a real NameID this method uses a placeholder subject
+        — callers should pass the NameID from the user's SSO metadata when
+        available.  The SLO callback route ``/api/auth/sso/saml/slo`` must be
+        registered separately in ``api/sso_auth.py``.
+
+        Raises:
+            SSOServiceError: If pysaml2 is not installed.
+        """
+        client = self._build_saml_client(provider)
+        relay_state = secrets.token_urlsafe(32)
+        redis = get_redis_client()
+        if redis:
+            await redis.set(f"sso:slo_state:{relay_state}", str(provider.id), ex=600)
+        _request_id, info = client.global_logout(subject_id=None)
         redirect_url = dict(info["headers"])["Location"]
         return redirect_url, relay_state
 
