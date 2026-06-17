@@ -125,6 +125,31 @@ def final_result_event(tail: str) -> dict | None:
     return None
 
 
+def extract_usage(result_event: dict | None) -> tuple[int | None, int | None]:
+    """Return ``(tokens_in, tokens_out)`` from a stream-json result event (GH#10220).
+
+    The Claude CLI result event carries a ``usage`` object. Input tokens are the
+    sum of fresh + cache-read + cache-creation input tokens (all billed input);
+    output is ``output_tokens``. Returns ``(None, None)`` when no usable usage is
+    present so callers can skip budget ingestion rather than record zeros.
+    """
+    if not isinstance(result_event, dict):
+        return (None, None)
+    usage = result_event.get("usage")
+    if not isinstance(usage, dict):
+        return (None, None)
+
+    def _int(key: str) -> int:
+        val = usage.get(key)
+        return val if isinstance(val, int) and val >= 0 else 0
+
+    tokens_in = _int("input_tokens") + _int("cache_read_input_tokens") + _int("cache_creation_input_tokens")
+    tokens_out = _int("output_tokens")
+    if tokens_in == 0 and tokens_out == 0:
+        return (None, None)
+    return (tokens_in, tokens_out)
+
+
 # Context keys rendered by dedicated prompt sections or consumed as env vars —
 # excluded from the generic "Additional Context" catch-all.
 _RENDERED_CONTEXT_KEYS = frozenset(
