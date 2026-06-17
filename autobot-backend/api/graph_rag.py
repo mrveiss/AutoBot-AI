@@ -30,6 +30,7 @@ from fastapi.responses import JSONResponse
 from api.schemas_common import DataResponse
 from api.schemas_knowledge import (
     GraphRagMetricsData,
+    GraphRAGHealthResponse,
     GraphRAGSearchRequest,
     GraphRAGSearchResponse,
 )
@@ -37,6 +38,7 @@ from api.system_health import register_app_state_probe
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.time_utils import utc_timestamp
 from services.graph_rag_service import GraphRAGService
 from type_defs.common import Metadata
 from utils.request_utils import generate_request_id
@@ -200,6 +202,36 @@ async def graph_rag_search(
 
 
 register_app_state_probe("graph_rag", "graph_rag_service")
+
+
+@router.get("/health", response_model=GraphRAGHealthResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="graph_rag_health",
+    error_code_prefix="GRAPH_RAG",
+)
+async def graph_rag_health(
+    service: GraphRAGService = Depends(get_graph_rag_service),
+    current_user: dict = Depends(get_current_user),
+) -> JSONResponse:
+    """
+    Check Graph-RAG service health (#10011: route declared in docstring but missing).
+
+    Reuses _check_component_health / _determine_overall_status helpers.
+    Issue #744: Requires authenticated user.
+    """
+    components = _check_component_health(service)
+    overall_status = _determine_overall_status(components)
+
+    return JSONResponse(
+        status_code=200 if overall_status == "healthy" else 503,
+        content={
+            "status": overall_status,
+            "components": components,
+            "timestamp": utc_timestamp(),
+        },
+        media_type="application/json; charset=utf-8",
+    )
 
 
 @router.get("/metrics", response_model=DataResponse[GraphRagMetricsData])
