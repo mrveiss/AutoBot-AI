@@ -2200,7 +2200,19 @@
         "create": "Create",
         "timestampColumn": "Timestamp Column",
         "update": "Update",
-        "selectTypeDesc": "Select the type of data source to connect."
+        "selectTypeDesc": "Select the type of data source to connect.",
+        "typeGdrive": "Google Drive",
+        "typeGdriveDesc": "Index documents from a personal or shared Google Drive",
+        "gdriveAccount": "Google Account",
+        "gdriveLabel": "Google Drive",
+        "gdriveConnected": "Google Drive connected.",
+        "gdriveSourceType": "Drive Type",
+        "gdriveMyDrive": "My Drive",
+        "gdriveShared": "Shared Drive",
+        "gdriveDriveId": "Shared Drive ID",
+        "gdriveFolderId": "Folder ID (optional)",
+        "gdriveFolderHint": "Limit the sync to a single folder. Leave blank to sync the whole drive.",
+        "gdriveSyncSubfolders": "Sync subfolders recursively"
       },
       "loadingConnectors": "Loading connectors...",
       "status": {
