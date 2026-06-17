@@ -32,6 +32,12 @@ _MODELS_SSO = "user_management.models.sso"
 if _MODELS_SSO not in sys.modules:
     sys.modules[_MODELS_SSO] = MagicMock()
 
+# sso_service.py imports SSOSecretsManager from sso_secrets; stub it so the
+# module loads without the real SQLAlchemy/encryption stack.
+_SSO_SECRETS = "user_management.services.sso_secrets"
+if _SSO_SECRETS not in sys.modules:
+    sys.modules[_SSO_SECRETS] = MagicMock()
+
 # Provide a minimal real BaseService so `class SSOService(BaseService)` compiles
 # and SSOService(session=...) is constructable.
 _base_mod = types.ModuleType("user_management.services.base_service")
@@ -52,7 +58,29 @@ _spec.loader.exec_module(_sso_mod)  # type: ignore[union-attr]
 
 SSOService = _sso_mod.SSOService
 SSOAuthenticationError = _sso_mod.SSOAuthenticationError
+_pkce_challenge_s256 = _sso_mod._pkce_challenge_s256
 # ─────────────────────────────────────────────────────────────────────────────
+
+
+# ---------------------------------------------------------------------------
+# PKCE helper — RFC 7636 S256 challenge derivation (Task 1)
+# ---------------------------------------------------------------------------
+
+
+def test_pkce_challenge_s256_matches_rfc7636():
+    """S256 challenge must match the RFC 7636 reference computation."""
+    import base64
+    import hashlib
+
+    verifier = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"
+    expected = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode("ascii")).digest()).rstrip(b"=").decode("ascii")
+    assert _pkce_challenge_s256(verifier) == expected
+
+
+def test_pkce_challenge_is_url_safe_and_unpadded():
+    """Challenge must be URL-safe base64 with no padding characters."""
+    challenge = _pkce_challenge_s256("a" * 64)
+    assert "=" not in challenge and "+" not in challenge and "/" not in challenge
 
 
 # ---------------------------------------------------------------------------
@@ -91,32 +119,39 @@ def _mock_redis(stored: dict | None = None) -> tuple[MagicMock, dict]:
 class TestGenerateOauthState:
     @pytest.mark.asyncio
     async def test_stores_provider_id_in_redis(self):
+        import json
+
         redis, store = _mock_redis()
         service = _make_service()
         with patch.object(_sso_mod, "get_redis_client", return_value=redis):
-            state = await service._generate_oauth_state(_PROVIDER_ID)
+            state, verifier = await service._generate_oauth_state(_PROVIDER_ID)
 
         assert state
         assert len(store) == 1
         key = f"sso:state:{state}"
         assert key in store
-        assert store[key] == str(_PROVIDER_ID)
+        stored = json.loads(store[key])
+        assert stored == {"provider_id": str(_PROVIDER_ID), "code_verifier": verifier}
 
     @pytest.mark.asyncio
     async def test_set_called_with_correct_ttl(self):
+        import json
+
         redis, _ = _mock_redis()
         service = _make_service()
         with patch.object(_sso_mod, "get_redis_client", return_value=redis):
-            state = await service._generate_oauth_state(_PROVIDER_ID)
+            state, verifier = await service._generate_oauth_state(_PROVIDER_ID)
 
-        redis.set.assert_awaited_once_with(f"sso:state:{state}", str(_PROVIDER_ID), ex=600)
+        expected_payload = json.dumps({"provider_id": str(_PROVIDER_ID), "code_verifier": verifier})
+        redis.set.assert_awaited_once_with(f"sso:state:{state}", expected_payload, ex=600)
 
     @pytest.mark.asyncio
     async def test_returns_token_even_when_redis_unavailable(self):
         service = _make_service()
         with patch.object(_sso_mod, "get_redis_client", return_value=None):
-            state = await service._generate_oauth_state(_PROVIDER_ID)
+            state, verifier = await service._generate_oauth_state(_PROVIDER_ID)
         assert state  # token still generated; Redis write silently skipped
+        assert verifier  # verifier is still returned
 
 
 # ---------------------------------------------------------------------------
@@ -130,10 +165,11 @@ class TestValidateOauthState:
         redis, store = _mock_redis()
         service = _make_service()
         with patch.object(_sso_mod, "get_redis_client", return_value=redis):
-            state = await service._generate_oauth_state(_PROVIDER_ID)
-            recovered = await service._validate_oauth_state(state)
+            state, _ = await service._generate_oauth_state(_PROVIDER_ID)
+            recovered_id, recovered_verifier = await service._validate_oauth_state(state)
 
-        assert recovered == _PROVIDER_ID
+        assert recovered_id == _PROVIDER_ID
+        assert recovered_verifier is not None  # verifier round-trips through JSON
 
     @pytest.mark.asyncio
     async def test_second_use_raises(self):
@@ -141,7 +177,7 @@ class TestValidateOauthState:
         redis, store = _mock_redis()
         service = _make_service()
         with patch.object(_sso_mod, "get_redis_client", return_value=redis):
-            state = await service._generate_oauth_state(_PROVIDER_ID)
+            state, _ = await service._generate_oauth_state(_PROVIDER_ID)
             await service._validate_oauth_state(state)  # first use succeeds
             with pytest.raises(SSOAuthenticationError, match="Invalid or expired"):
                 await service._validate_oauth_state(state)  # second use raises
@@ -167,10 +203,141 @@ class TestValidateOauthState:
         redis, store = _mock_redis()
         service = _make_service()
         with patch.object(_sso_mod, "get_redis_client", return_value=redis):
-            state = await service._generate_oauth_state(_PROVIDER_ID)
+            state, _ = await service._generate_oauth_state(_PROVIDER_ID)
             await service._validate_oauth_state(state)
 
         assert f"sso:state:{state}" not in store
+
+
+# ---------------------------------------------------------------------------
+# PKCE verifier persisted in OAuth state (Task 2)
+# ---------------------------------------------------------------------------
+
+
+class TestPkceStateStorage:
+    @pytest.mark.asyncio
+    async def test_generate_state_persists_verifier(self):
+        """_generate_oauth_state stores JSON with provider_id + code_verifier."""
+        import json
+
+        redis, _ = _mock_redis()
+        service = _make_service()
+        with patch.object(_sso_mod, "get_redis_client", return_value=redis):
+            state, verifier = await service._generate_oauth_state(_PROVIDER_ID)
+
+        assert isinstance(state, str) and len(verifier) >= 43
+        key, value = redis.set.call_args.args[0], redis.set.call_args.args[1]
+        assert key == f"sso:state:{state}"
+        stored = json.loads(value)
+        assert stored == {"provider_id": str(_PROVIDER_ID), "code_verifier": verifier}
+
+    @pytest.mark.asyncio
+    async def test_validate_state_returns_provider_and_verifier(self):
+        """_validate_oauth_state returns (provider_id, code_verifier) from JSON."""
+        import json
+
+        redis, store = _mock_redis()
+        verifier = "v" * 64
+        store["sso:state:abc"] = json.dumps({"provider_id": str(_PROVIDER_ID), "code_verifier": verifier})
+        service = _make_service()
+        with patch.object(_sso_mod, "get_redis_client", return_value=redis):
+            got_pid, got_verifier = await service._validate_oauth_state("abc")
+
+        assert got_pid == _PROVIDER_ID and got_verifier == verifier
+
+    @pytest.mark.asyncio
+    async def test_validate_state_legacy_plain_uuid(self):
+        """Legacy plain-UUID values (pre-PKCE deploys) decode to code_verifier=None."""
+        redis, store = _mock_redis()
+        store["sso:state:abc"] = str(_PROVIDER_ID)
+        service = _make_service()
+        with patch.object(_sso_mod, "get_redis_client", return_value=redis):
+            got_pid, got_verifier = await service._validate_oauth_state("abc")
+
+        assert got_pid == _PROVIDER_ID and got_verifier is None
+
+    @pytest.mark.asyncio
+    async def test_validate_state_rejects_missing(self):
+        """Missing state token raises SSOAuthenticationError."""
+        redis, _ = _mock_redis()
+        service = _make_service()
+        with patch.object(_sso_mod, "get_redis_client", return_value=redis):
+            with pytest.raises(SSOAuthenticationError):
+                await service._validate_oauth_state("nonexistent")
+
+    @pytest.mark.asyncio
+    async def test_validate_state_malformed_raises(self):
+        """Garbage (non-JSON, non-UUID) state value raises SSOAuthenticationError."""
+        redis, store = _mock_redis()
+        store["sso:state:abc"] = "{not-valid-json-and-not-a-uuid"
+        service = _make_service()
+        with patch.object(_sso_mod, "get_redis_client", return_value=redis):
+            with pytest.raises(SSOAuthenticationError):
+                await service._validate_oauth_state("abc")
+
+
+# ---------------------------------------------------------------------------
+# PKCE authorize URL + token exchange (Task 3)
+# ---------------------------------------------------------------------------
+
+
+def _make_oauth_provider() -> MagicMock:
+    """Return a minimal OAuth provider mock."""
+    p = MagicMock()
+    p.id = _PROVIDER_ID
+    p.is_active = True
+    p.config = {
+        "client_id": "cid",
+        "authorize_url": "https://idp/authorize",
+        "token_url": "https://idp/token",
+        "scope": "openid email",
+    }
+    return p
+
+
+class TestPkceAuthorizeAndExchange:
+    @pytest.mark.asyncio
+    async def test_authorize_url_sends_s256_challenge(self):
+        """_get_oauth_authorize_url must pass code_challenge + S256 method to authlib."""
+        service = _make_service()
+        provider = _make_oauth_provider()
+        client = AsyncMock()
+        client.create_authorization_url.return_value = ("https://idp/authorize?x=1", "ignored")
+
+        with patch.object(service, "_build_oauth_client", AsyncMock(return_value=client)):
+            with patch.object(service, "_generate_oauth_state", AsyncMock(return_value=("st", "ver123"))):
+                url, state = await service._get_oauth_authorize_url(provider, "https://app/cb")
+
+        kwargs = client.create_authorization_url.call_args.kwargs
+        assert kwargs["code_challenge_method"] == "S256"
+        assert kwargs["code_challenge"] == _pkce_challenge_s256("ver123")
+        assert state == "st"
+
+    @pytest.mark.asyncio
+    async def test_exchange_forwards_code_verifier(self):
+        """_exchange_oauth_code must pass code_verifier to fetch_token when present."""
+        service = _make_service()
+        provider = _make_oauth_provider()
+        client = AsyncMock()
+        client.fetch_token.return_value = {"access_token": "t"}
+
+        with patch.object(service, "_build_oauth_client", AsyncMock(return_value=client)):
+            await service._exchange_oauth_code(provider, "code1", "https://app/cb", code_verifier="ver123")
+
+        assert client.fetch_token.call_args.kwargs["code_verifier"] == "ver123"
+
+    @pytest.mark.asyncio
+    async def test_exchange_omits_verifier_when_none(self):
+        """_exchange_oauth_code must NOT send code_verifier when it is None (legacy SAML)."""
+        service = _make_service()
+        provider = _make_oauth_provider()
+        client = AsyncMock()
+        client.fetch_token.return_value = {"access_token": "t"}
+
+        with patch.object(service, "_build_oauth_client", AsyncMock(return_value=client)):
+            await service._exchange_oauth_code(provider, "code1", "https://app/cb", code_verifier=None)
+
+        assert "code_verifier" not in client.fetch_token.call_args.kwargs
 
 
 # ---------------------------------------------------------------------------
@@ -252,9 +419,11 @@ class TestSamlRelayStateRedisRoundTrip:
         with patch.object(_sso_mod, "get_redis_client", return_value=redis):
             with patch.object(service, "_build_saml_client", return_value=mock_client):
                 _, relay_state = await service._generate_saml_authn_request(provider)
-            recovered_id = await service._validate_oauth_state(relay_state)
+            recovered_id, recovered_verifier = await service._validate_oauth_state(relay_state)
 
+        # SAML stores plain UUID string (legacy path); verifier is None
         assert recovered_id == _PROVIDER_ID
+        assert recovered_verifier is None
         assert f"sso:state:{relay_state}" not in store
 
     @pytest.mark.asyncio
