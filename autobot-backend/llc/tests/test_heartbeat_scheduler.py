@@ -30,6 +30,7 @@ from llc.scheduler.heartbeat_scheduler import (
     _dispatch_adapter,
     _dispatch_autobot_agent,
     _dispatch_registry_adapter,
+    _ingest_adapter_usage,
     _next_fire,
 )
 
@@ -355,7 +356,10 @@ class TestRegistryAdapterKeyLifecycle:
         with (
             patch(f"{_HBS}._issue_run_key", new=AsyncMock(return_value=(key_record, "llc_rawkey"))),
             patch(f"{_HBS}._revoke_run_key", new=AsyncMock()) as mock_revoke,
-            patch(f"{_HBS}._await_adapter_completion", new=AsyncMock(return_value=LLCRunStatus.COMPLETED)),
+            patch(
+                f"{_HBS}._await_adapter_completion",
+                new=AsyncMock(return_value=AdapterRunStatus(status=LLCRunStatus.COMPLETED)),
+            ),
         ):
             await _dispatch_registry_adapter(fake_adapter, agent, {"recent_decisions": []})
 
@@ -397,7 +401,10 @@ class TestRegistryAdapterKeyLifecycle:
         with (
             patch(f"{_HBS}._issue_run_key", new=AsyncMock()) as mock_issue,
             patch(f"{_HBS}._revoke_run_key", new=AsyncMock()) as mock_revoke,
-            patch(f"{_HBS}._await_adapter_completion", new=AsyncMock(return_value=LLCRunStatus.COMPLETED)),
+            patch(
+                f"{_HBS}._await_adapter_completion",
+                new=AsyncMock(return_value=AdapterRunStatus(status=LLCRunStatus.COMPLETED)),
+            ),
         ):
             await _dispatch_registry_adapter(fake_adapter, agent, {})
 
@@ -418,7 +425,7 @@ class TestAwaitAdapterCompletion:
         )
         with patch(f"{_HBS}.asyncio.sleep", new=AsyncMock()):
             result = await _await_adapter_completion(fake_adapter, {"agent_id": "a"}, "1/s")
-        assert result == LLCRunStatus.COMPLETED
+        assert result.status == LLCRunStatus.COMPLETED
         assert fake_adapter.status.await_count == 2
 
     async def test_cancels_on_max_wait(self):
@@ -427,7 +434,7 @@ class TestAwaitAdapterCompletion:
         fake_adapter.cancel = AsyncMock()
         with patch(f"{_HBS}._ADAPTER_MAX_WAIT_SECONDS", 0):
             result = await _await_adapter_completion(fake_adapter, {"agent_id": "a"}, "1/s")
-        assert result == LLCRunStatus.TIMEOUT
+        assert result.status == LLCRunStatus.TIMEOUT
         fake_adapter.cancel.assert_awaited_once()
 
 
@@ -443,7 +450,10 @@ class TestRegistryAdapterTerminalStatus:
         with (
             patch(f"{_HBS}._issue_run_key", new=AsyncMock(return_value=(key_record, "llc_k"))),
             patch(f"{_HBS}._revoke_run_key", new=AsyncMock()) as mock_revoke,
-            patch(f"{_HBS}._await_adapter_completion", new=AsyncMock(return_value=LLCRunStatus.FAILED)),
+            patch(
+                f"{_HBS}._await_adapter_completion",
+                new=AsyncMock(return_value=AdapterRunStatus(status=LLCRunStatus.FAILED)),
+            ),
         ):
             with pytest.raises(AdapterRunFailed):
                 await _dispatch_registry_adapter(fake_adapter, agent, {})
@@ -457,7 +467,10 @@ class TestRegistryAdapterTerminalStatus:
         with (
             patch(f"{_HBS}._issue_run_key", new=AsyncMock(return_value=(None, None))),
             patch(f"{_HBS}._revoke_run_key", new=AsyncMock()),
-            patch(f"{_HBS}._await_adapter_completion", new=AsyncMock(return_value=LLCRunStatus.COMPLETED)),
+            patch(
+                f"{_HBS}._await_adapter_completion",
+                new=AsyncMock(return_value=AdapterRunStatus(status=LLCRunStatus.COMPLETED)),
+            ),
         ):
             await _dispatch_registry_adapter(fake_adapter, agent, {})  # no raise
 
@@ -780,3 +793,70 @@ class TestClaudeCodeAdapterNoResume:
                 pass
 
         assert len(resume_called) == 1, "resume SHOULD be called for normal runs"
+
+
+@pytest.mark.asyncio
+class TestIngestAdapterUsage:
+    """GH#10220: completed registry runs forward token usage to the budget."""
+
+    async def test_ingests_tokens_with_model(self):
+        agent = _make_agent(adapter_type="claude_code", adapter_config={"model": "claude-x"})
+        result = AdapterRunStatus(status=LLCRunStatus.COMPLETED, tokens_in=120, tokens_out=40)
+
+        session = AsyncMock()
+        session.commit = AsyncMock()
+        factory = MagicMock()
+        factory.return_value.__aenter__ = AsyncMock(return_value=session)
+        factory.return_value.__aexit__ = AsyncMock(return_value=False)
+        mock_ingest = AsyncMock()
+
+        with (
+            patch(f"{_HBS}.get_async_session_factory", return_value=factory),
+            patch(f"{_HBS}.BudgetService.ingest_cost_event", new=mock_ingest),
+        ):
+            await _ingest_adapter_usage(agent, result)
+
+        mock_ingest.assert_awaited_once()
+        args = mock_ingest.await_args.args
+        assert args[1] == agent["agent_id"] and args[2] == 120 and args[3] == 40 and args[4] == "claude-x"
+
+    async def test_noop_when_usage_unknown(self):
+        agent = _make_agent(adapter_type="claude_code")
+        result = AdapterRunStatus(status=LLCRunStatus.COMPLETED)  # tokens None
+        mock_ingest = AsyncMock()
+        with patch(f"{_HBS}.BudgetService.ingest_cost_event", new=mock_ingest):
+            await _ingest_adapter_usage(agent, result)
+        mock_ingest.assert_not_awaited()
+
+    async def test_budget_exhausted_propagates(self):
+        from llc.exceptions import BudgetExhausted
+
+        agent = _make_agent(adapter_type="claude_code", adapter_config={"model": "m"})
+        result = AdapterRunStatus(status=LLCRunStatus.COMPLETED, tokens_in=10, tokens_out=5)
+        session = AsyncMock()
+        factory = MagicMock()
+        factory.return_value.__aenter__ = AsyncMock(return_value=session)
+        factory.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        with (
+            patch(f"{_HBS}.get_async_session_factory", return_value=factory),
+            patch(
+                f"{_HBS}.BudgetService.ingest_cost_event",
+                new=AsyncMock(side_effect=BudgetExhausted("agent", 100.0, 50.0)),
+            ),
+            pytest.raises(BudgetExhausted),
+        ):
+            await _ingest_adapter_usage(agent, result)
+
+    async def test_other_errors_best_effort(self):
+        agent = _make_agent(adapter_type="claude_code", adapter_config={"model": "m"})
+        result = AdapterRunStatus(status=LLCRunStatus.COMPLETED, tokens_in=10, tokens_out=5)
+        session = AsyncMock()
+        factory = MagicMock()
+        factory.return_value.__aenter__ = AsyncMock(return_value=session)
+        factory.return_value.__aexit__ = AsyncMock(return_value=False)
+        with (
+            patch(f"{_HBS}.get_async_session_factory", return_value=factory),
+            patch(f"{_HBS}.BudgetService.ingest_cost_event", new=AsyncMock(side_effect=RuntimeError("db down"))),
+        ):
+            await _ingest_adapter_usage(agent, result)  # must not raise
