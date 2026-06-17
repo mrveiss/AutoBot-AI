@@ -27,10 +27,15 @@ COPY requirements.txt /app/requirements-root.txt
 
 # Install backend dependencies (filter out local refs, install root deps separately)
 COPY autobot-backend/requirements.txt /tmp/requirements.txt
-RUN grep -v -E "(autobot.shared|^-r )" /tmp/requirements.txt > /app/requirements-filtered.txt \
+# torch/torchvision/torchaudio are excluded from the filtered list and installed
+# explicitly from the CPU index below. Otherwise the final filtered install pulls
+# the default-PyPI CUDA build (libtorch_cuda.so + nvidia-*-cu13, several GB),
+# bloating this CPU-only image and exhausting CI disk (#10251).
+RUN grep -v -E "(autobot.shared|^-r |^torch==|^torchvision==|^torchaudio==)" /tmp/requirements.txt \
+        > /app/requirements-filtered.txt \
     && python3 -m pip install --no-cache-dir -r /app/requirements-root.txt \
     && python3 -m pip install --no-cache-dir \
-        "torch>=2.11.0" "torchvision>=0.26.0" \
+        torch==2.12.0 torchvision==0.27.0 torchaudio==2.11.0 \
         --index-url https://download.pytorch.org/whl/cpu \
     && python3 -m pip install --no-cache-dir -r /app/requirements-filtered.txt
 
