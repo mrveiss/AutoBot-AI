@@ -673,6 +673,7 @@ class FolderUpdate(BaseModel):
     name: str | None = Field(None, min_length=1, max_length=100, description="New folder name")
     parent_id: str | None = Field(None, description="New parent folder ID (None = root)")
     pinned: bool | None = Field(None, description="Pin folder to top of list")
+    archived: bool | None = Field(None, description="Archive folder (hidden from main list, still searchable)")
 
 
 class FolderData(BaseModel):
@@ -683,6 +684,7 @@ class FolderData(BaseModel):
     parent_id: str | None = None
     owner: str
     pinned: bool = False
+    archived: bool = False
     created_at: str
     session_ids: List[str] = Field(default_factory=list)
     session_count: int = 0
