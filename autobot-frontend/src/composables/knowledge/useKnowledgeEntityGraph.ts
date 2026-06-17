@@ -36,8 +36,17 @@ export interface EntityGraphStats {
 }
 
 export interface EntityGraphHealthStatus {
-  status: 'healthy' | 'degraded' | 'unhealthy' | 'unknown'
+  status: 'healthy' | 'degraded' | 'unhealthy' | 'unavailable' | 'unknown'
   components: Record<string, string>
+}
+
+/**
+ * A 503 from a health probe is an expected feature-degraded signal, not a
+ * failure. Returns true when the thrown error reflects an unavailable service
+ * (HTTP 503) so the caller can degrade calmly without retry spam or toasts.
+ */
+function _isServiceUnavailable(error: unknown): boolean {
+  return error instanceof Error && error.message.includes('HTTP 503')
 }
 
 // ============================================================================
@@ -91,7 +100,7 @@ export function useKnowledgeEntityGraph(): UseKnowledgeEntityGraphReturn {
   async function _fetchGraphStats(): Promise<void> {
     try {
       const data = await apiClient.get<Record<string, unknown>>(
-        `${getApiBase()}/knowledge_base/unified/graph?max_facts=0`,
+        `${getApiBase()}/knowledge_base/unified/graph?max_facts=100`,
       )
       const graphData = (data as Record<string, unknown>)?.data ?? data
 
@@ -113,8 +122,10 @@ export function useKnowledgeEntityGraph(): UseKnowledgeEntityGraphReturn {
 
   async function _fetchExtractionHealth(): Promise<void> {
     try {
+      // maxRetries:1 — a 503 is an expected degraded signal; do not retry-spam.
       const data = await apiClient.get<Record<string, unknown>>(
         `${getApiBase()}/entities/extract/health`,
+        { maxRetries: 1 },
       )
       const healthData = (data as Record<string, unknown>)?.data ?? data
 
@@ -124,16 +135,24 @@ export function useKnowledgeEntityGraph(): UseKnowledgeEntityGraphReturn {
       extractionHealth.components =
         ((healthData as Record<string, unknown>)?.components as Record<string, string>) ?? {}
     } catch (error) {
-      logger.warn('Could not fetch extraction health:', error)
-      extractionHealth.status = 'unhealthy'
+      if (_isServiceUnavailable(error)) {
+        // Feature-degraded, not an error: surface calmly, no toast.
+        logger.info('Entity extraction service unavailable (503) — degraded mode')
+        extractionHealth.status = 'unavailable'
+      } else {
+        logger.warn('Could not fetch extraction health:', error)
+        extractionHealth.status = 'unhealthy'
+      }
       extractionHealth.components = {}
     }
   }
 
   async function _fetchGraphRagHealth(): Promise<void> {
     try {
+      // maxRetries:1 — a 503 is an expected degraded signal; do not retry-spam.
       const data = await apiClient.get<Record<string, unknown>>(
         `${getApiBase()}/graph-rag/health`,
+        { maxRetries: 1 },
       )
       const healthData = (data as Record<string, unknown>)?.data ?? data
 
@@ -143,8 +162,14 @@ export function useKnowledgeEntityGraph(): UseKnowledgeEntityGraphReturn {
       graphRagHealth.components =
         ((healthData as Record<string, unknown>)?.components as Record<string, string>) ?? {}
     } catch (error) {
-      logger.warn('Could not fetch graph-rag health:', error)
-      graphRagHealth.status = 'unhealthy'
+      if (_isServiceUnavailable(error)) {
+        // Feature-degraded, not an error: surface calmly, no toast.
+        logger.info('Graph-RAG service unavailable (503) — degraded mode')
+        graphRagHealth.status = 'unavailable'
+      } else {
+        logger.warn('Could not fetch graph-rag health:', error)
+        graphRagHealth.status = 'unhealthy'
+      }
       graphRagHealth.components = {}
     }
   }
