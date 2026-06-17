@@ -8,6 +8,6 @@
 ---
 
 deployment:
-  mode: "{{ backend_user_mode | default('single_company') }}"
+  mode: "{{ backend_user_mode | default('single_user') }}"
   host: "{{ backend_redis_host | default('127.0.0.1') }}"
   port: {{ backend_port | default(8001) }}
