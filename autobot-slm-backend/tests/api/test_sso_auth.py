@@ -218,7 +218,7 @@ def _load_sso_auth_with_real_endpoints() -> object:
 
     A fresh spec/module is created on every call so tests are isolated.
     """
-    _API_PATH = Path(__file__).parent.parent.parent
+    Path(__file__).parent.parent.parent
 
     # ---- fastapi stub with identity router decorators ----
     class _MockHTTPException(Exception):
