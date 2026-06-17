@@ -4,14 +4,20 @@
 import { ref, onMounted, watch } from 'vue'
 import { useWaveform } from '@/composables/transcriber/useWaveform'
 
-const props = defineProps<{ audioUrl: string }>()
+const props = defineProps<{ audioUrl: string; peaks?: number[] }>()
 const emit = defineEmits<{ (e: 'seek', seconds: number): void }>()
 
 const container = ref<HTMLElement | null>(null)
-const { currentTime, duration, isPlaying, init, togglePlay } = useWaveform(container)
+const { currentTime, duration, isPlaying, init, seekTo, togglePlay } = useWaveform(container)
 
-onMounted(() => init(props.audioUrl))
-watch(() => props.audioUrl, (url) => init(url))
+onMounted(() => init(props.audioUrl, props.peaks))
+watch(() => props.audioUrl, (url) => init(url, props.peaks))
+
+// Emit progress so the parent view can sync the active segment in SegmentTable.
+watch(currentTime, (t) => emit('seek', t))
+
+// Exposed so the parent view can seek the player when a segment is clicked.
+defineExpose({ seekTo })
 
 function fmt(s: number) {
   const m = Math.floor(s / 60), sec = Math.floor(s % 60)

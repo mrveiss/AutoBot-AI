@@ -424,7 +424,7 @@ async def _init_builtin_extensions(app: FastAPI) -> None:
 
 
 async def _init_transcriber_db(app: FastAPI) -> None:
-    """Initialize the transcriber SQLite database (GH#9044).
+    """Initialize the transcriber SQLite database and speech providers (GH#9044, #10128).
 
     Non-critical: a failure logs a warning but does not block startup.
     Skipped entirely when TRANSCRIBER_ENABLED != true.
@@ -455,6 +455,16 @@ async def _init_transcriber_db(app: FastAPI) -> None:
         logger.info("Transcriber DB initialized")
     except Exception as _tc_err:
         logger.warning("Transcriber DB init failed (non-critical): %s", _tc_err)
+
+    # Register speech providers (GH#10128 F3).  Non-critical — a single bad
+    # provider must not abort startup.
+    try:
+        from voice_processing.providers.registry_init import initialize_providers
+
+        initialize_providers()
+        logger.info("Speech provider registry initialized")
+    except Exception as _prov_err:
+        logger.warning("Speech provider registry init failed (non-critical): %s", _prov_err)
 
 
 async def initialize_critical_services(app: FastAPI):
@@ -1268,6 +1278,25 @@ async def _seed_agent_registry() -> None:
         logger.warning("Agent registry seeding failed: %s", e)
 
 
+@requires_postgres("Default Admin Seed")
+async def _seed_default_admin() -> None:
+    """Seed the default platform-admin into autobot_users (#10199).
+
+    Idempotent — skips if any admin user already exists or if
+    AUTOBOT_ADMIN_PASSWORD is not configured.  Non-fatal: errors are
+    logged and swallowed so a seed failure never blocks startup.
+    """
+    logger.info("[ 97%%] Admin Seed: seeding default admin user...")
+    try:
+        from user_management.database import get_async_session_factory
+        from user_management.services.seed import seed_default_admin
+
+        async with get_async_session_factory()() as session:
+            await seed_default_admin(session)
+    except Exception as e:
+        logger.warning("Default admin seeding failed (non-critical): %s", e)
+
+
 async def _init_process_adapter(app: FastAPI) -> None:
     """Start ProcessAdapterService queue dispatcher (#1748).
 
@@ -1756,6 +1785,7 @@ async def initialize_background_services(app: FastAPI):
         await _ensure_agent_memory_index()
         await _init_process_adapter(app)
         await _init_orchestrator(app)
+        await _seed_default_admin()
         await _seed_agent_registry()
         await _wire_npu_task_queue()
         await _wire_scheduler_executor()

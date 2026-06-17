@@ -11,7 +11,7 @@ from transcriber.export.docx_export import build_docx
 
 def test_build_docx_returns_bytes():
     segments = [
-        {"start": 0.0, "end": 1.5, "text": "Hello", "speaker_name": "Alice", "notes": []},
+        {"start_time": 0.0, "end_time": 1.5, "text": "Hello", "speaker_name": "Alice", "notes": []},
     ]
     result = build_docx(
         title="Test Recording",
@@ -26,7 +26,7 @@ def test_build_docx_returns_bytes():
 
 
 def test_build_docx_without_timestamps():
-    segments = [{"start": 0.0, "end": 1.0, "text": "Hi", "speaker_name": "Bob", "notes": []}]
+    segments = [{"start_time": 0.0, "end_time": 1.0, "text": "Hi", "speaker_name": "Bob", "notes": []}]
     result = build_docx(
         title="Test",
         segments=segments,

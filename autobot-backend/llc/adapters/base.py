@@ -25,6 +25,10 @@ class AdapterRunStatus:
     status: LLCRunStatus
     exit_code: Optional[int] = None
     error: Optional[str] = None
+    # GH#10220: token usage parsed from the CLI output on a completed run, so the
+    # scheduler can forward it to BudgetService.ingest_cost_event (None = unknown).
+    tokens_in: Optional[int] = None
+    tokens_out: Optional[int] = None
 
 
 @runtime_checkable
@@ -69,3 +73,13 @@ def get_adapter(adapter_type: str) -> LLCAdapter:
     if adapter_type not in _registry:
         raise KeyError(f"No LLC adapter registered for type {adapter_type!r}. " f"Known types: {sorted(_registry)}")
     return _registry[adapter_type]
+
+
+def registered_adapter_types() -> list[str]:
+    """Sorted list of adapter_type keys currently in the registry.
+
+    Used to validate an agent's ``adapter_type`` at hire time (GH#9008/#9033)
+    so an unknown type cannot create an agent that is then perpetually SKIPPED
+    by the heartbeat scheduler (no adapter registered → skip).
+    """
+    return sorted(_registry)

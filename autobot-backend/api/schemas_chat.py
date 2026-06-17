@@ -415,6 +415,18 @@ class SharedLinkData(BaseModel):
     created_at: datetime
 
 
+class SharedLinkAdminItem(BaseModel):
+    """Admin view of a single active shared link, including its owner (GH#8996)."""
+
+    id: str
+    token: str
+    session_id: str
+    owner: str
+    has_password: bool
+    expires_at: datetime | None
+    created_at: datetime
+
+
 class SharedLinkAccessRequest(BaseModel):
     """Request body for accessing a password-protected shared link."""
 

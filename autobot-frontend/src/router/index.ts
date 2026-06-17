@@ -866,6 +866,19 @@ export const routes: RouteRecordRaw[] = [
       hideInNav: true,
     },
   },
+  // GH#8996: Admin cross-user view of all active shared chat links (AC4)
+  {
+    path: '/admin/shared-links',
+    name: 'admin-shared-links',
+    component: () => import('@/views/Admin/SharedLinksAdminView.vue'),
+    meta: {
+      title: 'Shared Chat Links',
+      description: 'View all active shared chat links across users',
+      requiresAuth: true,
+      admin: true,
+      hideInNav: true,
+    },
+  },
   // GH#6470: Budget policy management (admin-only)
   {
     path: '/admin/budget-policies',
@@ -1102,6 +1115,24 @@ export const routes: RouteRecordRaw[] = [
         name: 'llc-timeline',
         component: () => import('@/views/llc/GanttTimelineView.vue'),
         meta: { title: 'Timeline', requiresAuth: true, hideInNav: true },
+      },
+      {
+        path: 'portfolios',
+        name: 'llc-portfolios',
+        component: () => import('@/views/llc/PortfolioBrowserView.vue'),
+        meta: { title: 'Portfolios', requiresAuth: true, hideInNav: true },
+      },
+      {
+        path: 'portfolios/:portfolioId/programs',
+        name: 'llc-programs',
+        component: () => import('@/views/llc/ProgramBrowserView.vue'),
+        meta: { title: 'Programs', requiresAuth: true, hideInNav: true },
+      },
+      {
+        path: 'programs/:programId/projects',
+        name: 'llc-projects',
+        component: () => import('@/views/llc/ProjectBrowserView.vue'),
+        meta: { title: 'Projects', requiresAuth: true, hideInNav: true },
       },
       { path: 'approvals', name: 'llc-approvals', component: () => import('@/views/llc/ApprovalsInbox.vue'), props: true, meta: { title: 'Approvals Inbox', requiresAuth: true } },
       { path: 'costs', name: 'llc-costs', component: () => import('@/views/llc/CostDashboard.vue'), props: true, meta: { title: 'Cost Dashboard', requiresAuth: true } },

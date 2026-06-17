@@ -28,14 +28,48 @@ router = APIRouter(prefix="/users", tags=["users"])
 
 
 class UserPreferences(BaseModel):
-    """User preferences model."""
+    """User preferences model.
+
+    Appearance fields (#8988) persist UI theme/accent/density per user account so
+    choices follow the user across devices. localStorage remains a write-through
+    cache on the frontend; the account is the source of truth.
+    """
 
     reasoning_effort: str = Field(
         "auto",
         pattern="^(low|medium|high|auto)$",
         description="Default reasoning effort level (low, medium, high, auto)",
     )
+    theme: str = Field(
+        "dark",
+        pattern="^(dark|light|system)$",
+        description="Base theme mode (dark, light, system)",
+    )
+    accent_color: str = Field(
+        "blue",
+        pattern="^(blue|green|purple|orange|pink|teal|indigo|red)$",
+        description="Accent color preset",
+    )
+    layout_density: str = Field(
+        "comfortable",
+        pattern="^(compact|comfortable|spacious)$",
+        description="Layout density (compact, comfortable, spacious)",
+    )
+    font_size: str = Field(
+        "medium",
+        pattern="^(small|medium|large)$",
+        description="Base font size (small, medium, large)",
+    )
+    theme_preset: str = Field(
+        "auto",
+        max_length=64,
+        description="Selected named theme preset (e.g. catppuccin-mocha); 'auto' when none",
+    )
     # Additional preferences can be added here in the future
+
+
+# Appearance fields persisted alongside reasoning_effort (#8988).
+_APPEARANCE_FIELDS = ("theme", "accent_color", "layout_density", "font_size", "theme_preset")
 
 
 class UserPreferencesData(BaseModel):
@@ -57,17 +91,20 @@ async def _get_user_preferences_from_redis(user_id: str) -> UserPreferences:
     """
     try:
         redis_client = await get_redis_client(database=RedisDatabase.MAIN)
-        key = f"user:{user_id}:preferences:reasoning_effort"
 
-        reasoning_effort = await redis_client.get(key)
-        if reasoning_effort:
-            reasoning_effort = (
-                reasoning_effort.decode("utf-8") if isinstance(reasoning_effort, bytes) else reasoning_effort
-            )
-        else:
-            reasoning_effort = "auto"
+        async def _read(field: str) -> str | None:
+            raw = await redis_client.get(f"user:{user_id}:preferences:{field}")
+            if raw is None:
+                return None
+            return raw.decode("utf-8") if isinstance(raw, bytes) else raw
 
-        return UserPreferences(reasoning_effort=reasoning_effort)
+        defaults = UserPreferences()
+        values: Dict[str, str] = {}
+        for field in ("reasoning_effort", *_APPEARANCE_FIELDS):
+            stored = await _read(field)
+            values[field] = stored if stored is not None else getattr(defaults, field)
+
+        return UserPreferences(**values)
 
     except RedisError as e:
         logger.error(f"Redis error retrieving user preferences: {e}")
@@ -87,12 +124,19 @@ async def _store_user_preferences_to_redis(user_id: str, preferences: UserPrefer
         RedisError: If Redis operation fails
     """
     redis_client = await get_redis_client(database=RedisDatabase.MAIN)
-    key = f"user:{user_id}:preferences:reasoning_effort"
 
-    # Store reasoning_effort (no expiration - permanent preference)
-    await redis_client.set(key, preferences.reasoning_effort)
+    # Store each preference under its own key (no expiration - permanent preference)
+    for field in ("reasoning_effort", *_APPEARANCE_FIELDS):
+        await redis_client.set(f"user:{user_id}:preferences:{field}", getattr(preferences, field))
 
-    logger.info(f"Stored user preferences for user {user_id}: reasoning_effort={preferences.reasoning_effort}")
+    logger.info(
+        "Stored user preferences for user %s: reasoning_effort=%s theme=%s accent=%s density=%s",
+        user_id,
+        preferences.reasoning_effort,
+        preferences.theme,
+        preferences.accent_color,
+        preferences.layout_density,
+    )
 
 
 @router.get("/me/preferences", response_model=DataResponse[UserPreferencesData])

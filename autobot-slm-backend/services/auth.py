@@ -6,6 +6,24 @@
 SLM Authentication Service
 
 JWT-based authentication and user management.
+
+Token verification strategy (#10197, epic #10193)
+--------------------------------------------------
+The SLM accepts tokens from two issuers during the migration window:
+
+1. **Authority RS256 tokens** — issued by autobot-backend, signed with an RSA
+   private key.  Verified here using the authority's public key fetched from its
+   JWKS endpoint (Pattern B — SLM never holds the private key).  Claims are
+   normalized to a common shape.
+
+2. **Legacy SLM HS256 tokens** — issued by this service via
+   ``create_access_token``.  Verified with ``settings.secret_key`` as before.
+
+Routing is done by reading the ``alg`` header from the unverified JWT — an
+RS256 token is NEVER verified with the HS256 secret, and vice-versa.  The
+shared ``autobot_shared.auth.jwt_core`` algorithm-confusion guard applies on
+every verification call, so ``alg=none`` and cross-algorithm attacks are
+rejected before PyJWT is invoked.
 """
 
 import logging
@@ -17,7 +35,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from autobot_shared.auth.jwt_core import decode_jwt_or_none, encode_jwt, hash_password
+from autobot_shared.auth.jwt_core import _peek_alg, decode_jwt_or_none, encode_jwt, hash_password
 from autobot_shared.auth.permissions import ROLE_PERMISSIONS, Permission, Role
 from config import settings
 from models.schemas import TokenResponse, UserCreate, UserResponse
@@ -45,8 +63,52 @@ class AuthService:
         )
 
     def decode_token(self, token: str) -> dict | None:
-        """Decode and validate a JWT token."""
+        """Decode and validate a JWT token (synchronous HS256 path only).
+
+        Routes by ``alg`` header:
+        - HS256 → legacy SLM token; verified with ``settings.secret_key``.
+        - RS256 → authority token; cannot be verified synchronously (JWKS fetch
+          is async).  Returns ``None`` so that callers with async context use
+          ``decode_token_async`` instead.  Logs a debug note to avoid silent
+          confusion in WebSocket / other sync call sites.
+
+        Use ``decode_token_async`` in async contexts — it handles both alg
+        values and performs JWKS key lookup for RS256 tokens.
+        """
+        alg = _peek_alg(token)
+        if alg == "RS256":
+            # RS256 verification is async; sync callers get None and should
+            # migrate to decode_token_async.  This is not a security hole —
+            # the token is simply treated as unverified rather than accepted.
+            logger.debug("decode_token (sync) received RS256 token; use decode_token_async in async contexts")
+            return None
         return decode_jwt_or_none(token, settings.secret_key)
+
+    async def decode_token_async(self, token: str) -> dict | None:
+        """Decode and validate a JWT token in an async context.
+
+        Routes by ``alg`` header:
+        - RS256 → authority token; fetches/caches JWKS from the authority
+          endpoint and verifies via ``jwt_core.decode_jwt(public_key=...)``.
+          Never falls back to HS256 for an RS256 token.
+        - HS256 → legacy SLM token; verified with ``settings.secret_key``.
+        - Any other / ``none`` → rejected (algorithm-confusion guard).
+
+        Returns the normalized claims dict, or ``None`` on any failure.
+        """
+        alg = _peek_alg(token)
+
+        if alg == "RS256":
+            from services.jwks_verifier import verify_authority_token
+
+            return await verify_authority_token(token)
+
+        if alg == "HS256":
+            return decode_jwt_or_none(token, settings.secret_key)
+
+        # alg=none or unsupported — reject
+        logger.warning("decode_token_async: rejecting token with unsupported alg=%r", alg)
+        return None
 
     async def create_user(self, db: AsyncSession, user_data: UserCreate) -> UserResponse:
         """Create a new user."""
@@ -97,9 +159,14 @@ auth_service = AuthService()
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
 ) -> dict:
-    """FastAPI dependency to get the current authenticated user."""
+    """FastAPI dependency to get the current authenticated user.
+
+    Accepts both authority RS256 tokens (verified via JWKS) and legacy SLM
+    HS256 tokens.  Routing is determined by the JWT ``alg`` header so
+    algorithm-confusion attacks are structurally prevented.
+    """
     token = credentials.credentials
-    payload = auth_service.decode_token(token)
+    payload = await auth_service.decode_token_async(token)
 
     if not payload:
         raise HTTPException(
@@ -158,6 +225,13 @@ async def require_admin(current_user: dict = Depends(get_current_user)) -> dict:
             detail="Admin privileges required",
         )
     return current_user
+
+
+# Pre-built dependency for the service-management gate (#10198, epic #10193).
+# Applied at router level to all SLM service-management routers so that an
+# authenticated user WITHOUT service.management gets 403.  Reuses the shared
+# ROLE_PERMISSIONS table — no second permission system.
+require_service_management = require_permission(Permission.SERVICE_MANAGEMENT)
 
 
 async def get_slm_db():

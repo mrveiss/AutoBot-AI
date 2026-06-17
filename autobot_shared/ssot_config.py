@@ -909,6 +909,33 @@ class AuthConfig(BaseSettings):
         description="OAuth client_secret for GitLab connectors.",
     )
 
+    # ------------------------------------------------------------------
+    # Default admin seed credentials (epic #10193 / issue #10199)
+    #
+    # AUTOBOT_ADMIN_PASSWORD is set by the installer/wizard alongside
+    # SLM_ADMIN_PASSWORD.  When present at startup, autobot-backend seeds
+    # a real admin account into autobot_users (idempotent, Postgres-gated).
+    # Leave blank to skip seeding — do NOT ship a hard-coded default.
+    # ------------------------------------------------------------------
+
+    admin_username: str = Field(
+        default="admin",
+        alias="AUTOBOT_ADMIN_USERNAME",
+        description=(
+            "Username for the default admin account seeded at startup (#10199). "
+            "Defaults to 'admin'. Override via AUTOBOT_ADMIN_USERNAME."
+        ),
+    )
+    admin_password: str = Field(
+        default="",
+        alias="AUTOBOT_ADMIN_PASSWORD",
+        description=(
+            "Password for the default admin account seeded into autobot_users at "
+            "startup (#10199). Set by the installer/wizard. "
+            "Empty string disables admin seeding — no default password is shipped."
+        ),
+    )
+
 
 class PermissionMode(str, Enum):
     """
@@ -1306,6 +1333,31 @@ class MiscConfig(BaseSettings):
     internal_api_key: str = Field(default="", alias="AUTOBOT_INTERNAL_API_KEY")
     jaeger_endpoint: str = Field(default="", alias="AUTOBOT_JAEGER_ENDPOINT")
     jwt_secret: str = Field(default="", alias="AUTOBOT_JWT_SECRET")
+    jwt_private_key: str = Field(
+        default="",
+        alias="AUTOBOT_JWT_PRIVATE_KEY",
+        description=(
+            "PEM-encoded RSA private key for signing RS256 user JWTs (#10196). "
+            "When absent, autobot-backend auto-generates and persists a 2048-bit keypair. "
+            "Supply this to use an externally-managed key (e.g. from a secrets manager). "
+            "NEVER share with consumer services; they use the public key from JWKS."
+        ),
+    )
+    jwt_public_key: str = Field(
+        default="",
+        alias="AUTOBOT_JWT_PUBLIC_KEY",
+        description=(
+            "PEM-encoded RSA public key corresponding to AUTOBOT_JWT_PRIVATE_KEY (#10196). "
+            "Optional: derived from the private key at startup when absent. "
+            "Useful when you want to distribute the public key via env without "
+            "embedding the private key on consumer hosts."
+        ),
+    )
+    jwt_kid: str = Field(
+        default="autobot-1",
+        alias="AUTOBOT_JWT_KID",
+        description="Key ID (kid) embedded in RS256 JWT headers and published in the JWKS (#10196).",
+    )
     llm_key_rotation_grace_secs: str = Field(default="", alias="AUTOBOT_LLM_KEY_ROTATION_GRACE_SECS")
     llm_key_rotation_interval_minutes: str = Field(default="", alias="AUTOBOT_LLM_KEY_ROTATION_INTERVAL_MINUTES")
     llm_models_yaml: str = Field(default="", alias="AUTOBOT_LLM_MODELS_YAML")

@@ -34,6 +34,7 @@ import os
 import shutil
 import time
 import uuid
+from dataclasses import replace
 from typing import Optional
 
 from autobot_shared.logging_manager import get_logger
@@ -46,6 +47,7 @@ from .subprocess_base import SIGTERM_GRACE_SECONDS as _SIGTERM_GRACE_SECONDS
 from .subprocess_base import SubprocessLifecycleAdapter
 from .subprocess_base import resolve_timeout as _resolve_timeout
 from .subprocess_support import (
+    extract_usage,
     final_result_event,
     inject_agent_credentials,
     is_rate_limit_output,
@@ -260,8 +262,10 @@ class ClaudeCodeAdapter(SubprocessLifecycleAdapter):
         # Clean success: skip keyword scan entirely to avoid false-positive
         # reclassification of completed runs whose transcript mentions rate-limit
         # terms incidentally (e.g. in tool output, issue numbers, SHAs).
+        # GH#10220: attach parsed token usage so the scheduler can bill it.
         if result_event is not None and not result_event.get("is_error") and result_event.get("subtype") == "success":
-            return base
+            tokens_in, tokens_out = extract_usage(result_event)
+            return replace(base, tokens_in=tokens_in, tokens_out=tokens_out)
 
         # Either no result event (mid-stream kill) or an error/non-success result:
         # scan the stdout tail AND the stderr sidecar for rate-limit markers —

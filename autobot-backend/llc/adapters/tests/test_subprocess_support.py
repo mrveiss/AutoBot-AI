@@ -12,6 +12,7 @@ import pytest
 
 from llc.adapters.subprocess_support import (
     AGENT_API_KEY_PLACEHOLDER,
+    extract_usage,
     inject_agent_credentials,
     probe_pid,
     render_context_markdown,
@@ -191,3 +192,34 @@ class TestTerminatePid:
 
         assert result is False
         assert sigkill_count[0] == 1  # SIGKILL was attempted once
+
+
+class TestExtractUsage:
+    """Token-usage parsing from the stream-json result event (GH#10220)."""
+
+    def test_sums_input_plus_cache(self) -> None:
+        ev = {
+            "type": "result",
+            "usage": {
+                "input_tokens": 100,
+                "output_tokens": 50,
+                "cache_read_input_tokens": 20,
+                "cache_creation_input_tokens": 5,
+            },
+        }
+        assert extract_usage(ev) == (125, 50)
+
+    def test_basic_input_output(self) -> None:
+        assert extract_usage({"usage": {"input_tokens": 10, "output_tokens": 3}}) == (10, 3)
+
+    def test_missing_usage_returns_none(self) -> None:
+        assert extract_usage({"type": "result"}) == (None, None)
+        assert extract_usage({}) == (None, None)
+        assert extract_usage(None) == (None, None)
+
+    def test_all_zero_returns_none(self) -> None:
+        assert extract_usage({"usage": {"input_tokens": 0, "output_tokens": 0}}) == (None, None)
+
+    def test_non_int_values_ignored(self) -> None:
+        # input_tokens "x" is non-int → counted as 0; output 7 still recorded.
+        assert extract_usage({"usage": {"input_tokens": "x", "output_tokens": 7}}) == (0, 7)
