@@ -313,8 +313,9 @@ async def test_resolution_order_falls_back_to_auto_when_no_user():
 @pytest.mark.asyncio
 async def test_resolution_order_redis_error_falls_back_to_auto():
     """Redis error during user-default lookup → 'auto' (safe fallback)."""
-    from chat_workflow.manager import _resolve_reasoning_effort
     from redis.exceptions import RedisError
+
+    from chat_workflow.manager import _resolve_reasoning_effort
 
     context = {"user_id": "u-3"}
 
