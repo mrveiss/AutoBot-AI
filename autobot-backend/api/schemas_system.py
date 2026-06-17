@@ -3977,6 +3977,25 @@ class TelegramBotConfigResponse(BaseModel):
     webhook_url: Optional[str] = None
 
 
+class WhatsAppConfigRequest(BaseModel):
+    """Request to configure the WhatsApp Business API channel (GH#9007)."""
+
+    access_token: str = Field(..., description="Meta WhatsApp Business API access token")
+    phone_number_id: str = Field(..., description="WhatsApp Business phone number ID")
+    app_secret: str = Field(..., description="Meta app secret for webhook signature verification")
+    verify_token: str = Field(..., description="Token echoed during Meta webhook subscription challenge")
+    business_account_id: Optional[str] = Field(None, description="WhatsApp Business Account ID (optional)")
+    base_url: Optional[str] = Field(None, description="Override API base URL for self-hosted deployments")
+
+
+class WhatsAppConfigResponse(BaseModel):
+    """Response for WhatsApp Business API configuration (GH#9007)."""
+
+    status: str
+    message: str
+    phone_number: Optional[str] = None
+
+
 # ---------------------------------------------------------------------------
 # Execution Snapshot schemas (GH#4458, MVA-2227)
 # ---------------------------------------------------------------------------
