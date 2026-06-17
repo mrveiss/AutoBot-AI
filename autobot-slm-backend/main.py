@@ -200,6 +200,7 @@ async def lifespan(app: FastAPI):
 
     try:
         await _ensure_admin_user()
+        await _ensure_internal_api_key()
         await _seed_default_roles()
         await _seed_default_agents()
         await _ensure_local_node()
@@ -417,6 +418,36 @@ async def _ensure_admin_user():
             logger.warning("Created default admin user (username: admin)")
         except DuplicateUserError:
             logger.info("Admin user already exists (race condition avoided)")
+
+
+async def _ensure_internal_api_key() -> None:
+    """Ensure the shared internal API key exists (#10263).
+
+    The SLM personality/voice proxies authenticate to the main backend with an
+    X-Internal-API-Key header; the value must match on both sides. It is
+    distributed to deploys via fetch_deploy_secrets() -> the
+    autobot_internal_api_key extra_var -> slm-secrets.env + backend.env.
+
+    Historically the value was only present if an admin manually created the
+    secret in the SLM UI, so a fresh deployment left it empty and every
+    personality/voice request 503'd. Generate a strong key once and store it;
+    idempotent thereafter (never overwrites an existing value).
+    """
+    import secrets as _secrets
+
+    from sqlalchemy import select
+
+    from models.database import SystemSecret
+    from services.encryption import encrypt_data
+
+    key_name = "autobot_internal_api_key"  # nosec B105 - secret-store key name, not a credential
+    async with db_service.session() as db:
+        result = await db.execute(select(SystemSecret).where(SystemSecret.key == key_name))
+        if result.scalar_one_or_none() is not None:
+            return
+        db.add(SystemSecret(key=key_name, encrypted_value=encrypt_data(_secrets.token_hex(32))))
+        await db.commit()
+        logger.info("Generated shared internal API key — personality/voice proxies enabled (#10263)")
 
 
 async def _seed_default_roles():
