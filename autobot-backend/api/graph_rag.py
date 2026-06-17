@@ -29,8 +29,8 @@ from fastapi.responses import JSONResponse
 
 from api.schemas_common import DataResponse
 from api.schemas_knowledge import (
-    GraphRagMetricsData,
     GraphRAGHealthResponse,
+    GraphRagMetricsData,
     GraphRAGSearchRequest,
     GraphRAGSearchResponse,
 )
