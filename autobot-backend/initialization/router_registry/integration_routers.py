@@ -86,6 +86,13 @@ INTEGRATION_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         ["telegram-bot"],
         "telegram_bot",
     ),
+    # WhatsApp Business API channel (GH#9007)
+    (
+        "api.whatsapp",
+        "",  # No prefix - endpoints are /whatsapp/webhook and /whatsapp/config
+        ["whatsapp"],
+        "whatsapp",
+    ),
 ]
 
 

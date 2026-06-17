@@ -258,8 +258,9 @@ def _render_dataclass(cls: type, known_names: Set[str], source: str) -> str:
 # Driver
 # ---------------------------------------------------------------------------
 
-HEADER = """// AutoBot - AI-Powered Automation Platform
-// Copyright (c) 2025 mrveiss
+HEADER = """// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
+// AutoBot - AI-Powered Automation Platform
 // Author: mrveiss
 //
 // AUTO-GENERATED — DO NOT EDIT
