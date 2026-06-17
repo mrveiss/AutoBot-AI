@@ -553,19 +553,25 @@ def _build_llm_context(
 
 
 async def _generate_ai_response(
-    llm_service, llm_context: List[Dict], session_id: str, request_id: str
+    llm_service,
+    llm_context: List[Dict],
+    session_id: str,
+    request_id: str,
+    reasoning_effort: str | None = None,
 ) -> tuple[Dict, Any]:
     """
     Generate AI response using LLM service with fallback handling.
 
     Issue #281: Extracted helper for AI response generation.
     Issue #9043: Returns full LLMResponse for token tracking.
+    Issue #9017: reasoning_effort threaded to provider via metadata["api_kwargs"].
 
     Args:
         llm_service: LLM service instance
         llm_context: Context messages for LLM
         session_id: Session ID
         request_id: Request ID
+        reasoning_effort: Optional effort level; None/'auto' → no change (#9017)
 
     Returns:
         Tuple of (AI response dict with content and role, LLMResponse object or None)
@@ -574,10 +580,14 @@ async def _generate_ai_response(
         # LLMService.chat() accepts OpenAI-format messages and uses
         # conversation_id for per-conversation provider/model overrides.
         # request_id flows through via **kwargs for tracing.
+        extra_kwargs: Dict[str, Any] = {}
+        if reasoning_effort and reasoning_effort != "auto":
+            extra_kwargs["metadata"] = {"api_kwargs": {"reasoning_effort": reasoning_effort}}
         response = await llm_service.chat(
             messages=llm_context,
             conversation_id=session_id,
             request_id=request_id,
+            **extra_kwargs,
         )
         if response.error:
             logger.warning("LLM returned error for request %s: %s", request_id, response.error)
@@ -650,6 +660,25 @@ async def _store_and_log_ai_response(
     return ai_message_id
 
 
+async def _resolve_chat_reasoning_effort(message: "ChatMessage", user_id: str | None) -> str:
+    """Resolve reasoning effort for /chat endpoint (#9017).
+
+    Priority: per-message field > user-default from Redis > 'auto'.
+    'auto' and None are both treated as inert (no extra params).
+    """
+    if message.reasoning_effort and message.reasoning_effort != "auto":
+        return message.reasoning_effort
+    if user_id:
+        try:
+            from api.users import _get_user_preferences_from_redis
+
+            prefs = await _get_user_preferences_from_redis(user_id)
+            return prefs.reasoning_effort
+        except Exception as exc:
+            logger.warning("[#9017] Failed to load user reasoning_effort pref: %s", exc)
+    return "auto"
+
+
 async def process_chat_message(
     message: ChatMessage,
     chat_history_manager,
@@ -677,8 +706,13 @@ async def process_chat_message(
     # Build LLM context (Issue #281: uses helper)
     llm_context = _build_llm_context(chat_context, message, chat_history_manager, model_name)
 
+    # #9017: Resolve reasoning effort: per-message > user-default > 'auto' (inert).
+    resolved_effort = await _resolve_chat_reasoning_effort(message, author_id)
+
     # Generate AI response (Issue #281: uses helper, Issue #9043: returns LLMResponse for token tracking)
-    ai_response, llm_response = await _generate_ai_response(llm_service, llm_context, session_id, request_id)
+    ai_response, llm_response = await _generate_ai_response(
+        llm_service, llm_context, session_id, request_id, reasoning_effort=resolved_effort
+    )
 
     # Store AI response (Issue #281: uses helper)
     ai_message_id = await _store_and_log_ai_response(ai_response, session_id, request_id, chat_history_manager)
@@ -1235,6 +1269,11 @@ async def send_chat_message_by_id(
         context["thinking_mode_enabled"] = thinking_mode_enabled
     if thinking_budget_tokens is not None:
         context["thinking_budget_tokens"] = thinking_budget_tokens
+
+    # #9017: per-conversation reasoning effort — inject into context for workflow resolution.
+    reasoning_effort = request_data.get("reasoning_effort")
+    if reasoning_effort is not None:
+        context["reasoning_effort"] = reasoning_effort
 
     return _create_streaming_response(
         _stream_chat_workflow_messages(
