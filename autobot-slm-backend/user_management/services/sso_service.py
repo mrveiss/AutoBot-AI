@@ -256,9 +256,9 @@ class SSOService(BaseService):
         )
 
     async def _get_oauth_authorize_url(self, provider: SSOProvider, callback_url: str) -> tuple[str, str]:
-        """Generate OAuth2 authorization URL."""
+        """Generate OAuth2 authorization URL with PKCE (S256)."""
         client = await self._build_oauth_client(provider)
-        state = await self._generate_oauth_state(provider.id)
+        state, code_verifier = await self._generate_oauth_state(provider.id)
         authorize_url = provider.config.get("authorize_url")
         scope = provider.config.get("scope", "openid email profile")
         url, _ = await client.create_authorization_url(
@@ -266,19 +266,21 @@ class SSOService(BaseService):
             redirect_uri=callback_url,
             scope=scope,
             state=state,
+            code_challenge=_pkce_challenge_s256(code_verifier),
+            code_challenge_method="S256",
         )
         return url, state
 
-    async def _exchange_oauth_code(self, provider: SSOProvider, code: str, callback_url: str) -> dict[str, Any]:
-        """Exchange OAuth2 authorization code for access token."""
+    async def _exchange_oauth_code(
+        self, provider: SSOProvider, code: str, callback_url: str, code_verifier: str | None = None
+    ) -> dict[str, Any]:
+        """Exchange OAuth2 authorization code for access token (PKCE verifier when present)."""
         client = await self._build_oauth_client(provider)
         token_url = provider.config.get("token_url")
-        token = await client.fetch_token(
-            token_url,
-            code=code,
-            redirect_uri=callback_url,
-        )
-        return token
+        kwargs: dict[str, Any] = {"code": code, "redirect_uri": callback_url}
+        if code_verifier:
+            kwargs["code_verifier"] = code_verifier
+        return await client.fetch_token(token_url, **kwargs)
 
     async def _get_oauth_userinfo(self, provider: SSOProvider, token: dict[str, Any]) -> dict[str, Any]:
         """Fetch user info from OAuth2 provider."""
@@ -301,12 +303,12 @@ class SSOService(BaseService):
     ) -> User:
         """Complete OAuth2 login flow and return authenticated user."""
         # Always validate state to prevent CSRF attacks
-        state_provider_id = await self._validate_oauth_state(state)
+        state_provider_id, code_verifier = await self._validate_oauth_state(state)
         if provider_id is not None and provider_id != state_provider_id:
             raise SSOAuthenticationError("State/provider mismatch")
         provider_id = state_provider_id
         provider = await self.get_provider(provider_id)
-        token = await self._exchange_oauth_code(provider, code, callback_url)
+        token = await self._exchange_oauth_code(provider, code, callback_url, code_verifier=code_verifier)
         userinfo = await self._get_oauth_userinfo(provider, token)
         external_id = userinfo.get("sub") or userinfo.get("id")
         user_data = self._extract_oauth_user_data(userinfo, provider)

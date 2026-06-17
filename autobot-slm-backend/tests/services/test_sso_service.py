@@ -238,7 +238,7 @@ class TestPkceStateStorage:
 
         redis, store = _mock_redis()
         verifier = "v" * 64
-        store[f"sso:state:abc"] = json.dumps({"provider_id": str(_PROVIDER_ID), "code_verifier": verifier})
+        store["sso:state:abc"] = json.dumps({"provider_id": str(_PROVIDER_ID), "code_verifier": verifier})
         service = _make_service()
         with patch.object(_sso_mod, "get_redis_client", return_value=redis):
             got_pid, got_verifier = await service._validate_oauth_state("abc")
@@ -249,7 +249,7 @@ class TestPkceStateStorage:
     async def test_validate_state_legacy_plain_uuid(self):
         """Legacy plain-UUID values (pre-PKCE deploys) decode to code_verifier=None."""
         redis, store = _mock_redis()
-        store[f"sso:state:abc"] = str(_PROVIDER_ID)
+        store["sso:state:abc"] = str(_PROVIDER_ID)
         service = _make_service()
         with patch.object(_sso_mod, "get_redis_client", return_value=redis):
             got_pid, got_verifier = await service._validate_oauth_state("abc")
@@ -264,6 +264,70 @@ class TestPkceStateStorage:
         with patch.object(_sso_mod, "get_redis_client", return_value=redis):
             with pytest.raises(SSOAuthenticationError):
                 await service._validate_oauth_state("nonexistent")
+
+
+# ---------------------------------------------------------------------------
+# PKCE authorize URL + token exchange (Task 3)
+# ---------------------------------------------------------------------------
+
+
+def _make_oauth_provider() -> MagicMock:
+    """Return a minimal OAuth provider mock."""
+    p = MagicMock()
+    p.id = _PROVIDER_ID
+    p.is_active = True
+    p.config = {
+        "client_id": "cid",
+        "authorize_url": "https://idp/authorize",
+        "token_url": "https://idp/token",
+        "scope": "openid email",
+    }
+    return p
+
+
+class TestPkceAuthorizeAndExchange:
+    @pytest.mark.asyncio
+    async def test_authorize_url_sends_s256_challenge(self):
+        """_get_oauth_authorize_url must pass code_challenge + S256 method to authlib."""
+        service = _make_service()
+        provider = _make_oauth_provider()
+        client = AsyncMock()
+        client.create_authorization_url.return_value = ("https://idp/authorize?x=1", "ignored")
+
+        with patch.object(service, "_build_oauth_client", AsyncMock(return_value=client)):
+            with patch.object(service, "_generate_oauth_state", AsyncMock(return_value=("st", "ver123"))):
+                url, state = await service._get_oauth_authorize_url(provider, "https://app/cb")
+
+        kwargs = client.create_authorization_url.call_args.kwargs
+        assert kwargs["code_challenge_method"] == "S256"
+        assert kwargs["code_challenge"] == _pkce_challenge_s256("ver123")
+        assert state == "st"
+
+    @pytest.mark.asyncio
+    async def test_exchange_forwards_code_verifier(self):
+        """_exchange_oauth_code must pass code_verifier to fetch_token when present."""
+        service = _make_service()
+        provider = _make_oauth_provider()
+        client = AsyncMock()
+        client.fetch_token.return_value = {"access_token": "t"}
+
+        with patch.object(service, "_build_oauth_client", AsyncMock(return_value=client)):
+            await service._exchange_oauth_code(provider, "code1", "https://app/cb", code_verifier="ver123")
+
+        assert client.fetch_token.call_args.kwargs["code_verifier"] == "ver123"
+
+    @pytest.mark.asyncio
+    async def test_exchange_omits_verifier_when_none(self):
+        """_exchange_oauth_code must NOT send code_verifier when it is None (legacy SAML)."""
+        service = _make_service()
+        provider = _make_oauth_provider()
+        client = AsyncMock()
+        client.fetch_token.return_value = {"access_token": "t"}
+
+        with patch.object(service, "_build_oauth_client", AsyncMock(return_value=client)):
+            await service._exchange_oauth_code(provider, "code1", "https://app/cb", code_verifier=None)
+
+        assert "code_verifier" not in client.fetch_token.call_args.kwargs
 
 
 # ---------------------------------------------------------------------------
