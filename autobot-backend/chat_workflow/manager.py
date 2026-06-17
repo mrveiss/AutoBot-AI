@@ -24,6 +24,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client as get_redis_manager
 from constants.model_constants import ModelConfig
 from constants.ttl_constants import TIMEOUT_HTTP_DEFAULT, TTL_24_HOURS
+from llm_shared.providers.reasoning_effort import map_effort_to_provider_params
 from services.tool_output_filter import get_tool_output_filter
 from slash_command_handler import get_slash_command_handler
 
@@ -64,6 +65,33 @@ _INTERNAL_PROMPT_PATTERNS = [
     ),
     re.compile(r"\*\*IF MORE STEPS NEEDED\*\*.*?`<TOOL_CALL", re.DOTALL),
 ]
+
+
+async def _resolve_reasoning_effort(context: Dict[str, Any]) -> str:
+    """Resolve reasoning effort with priority: per-request > user-default > 'auto'.
+
+    Resolution order (#9017):
+      1. context["reasoning_effort"] — per-conversation value from the request
+      2. Redis user:{id}:preferences:reasoning_effort — account-level default
+      3. 'auto' — no extra params, provider decides
+
+    Invalid or missing values are returned as 'auto' (inert).
+    """
+    effort: str | None = context.get("reasoning_effort")
+    if effort:
+        return effort
+
+    user_id: str | None = context.get("user_id")
+    if user_id:
+        try:
+            from api.users import _get_user_preferences_from_redis
+
+            prefs = await _get_user_preferences_from_redis(user_id)
+            return prefs.reasoning_effort
+        except Exception as exc:
+            logger.warning("[#9017] Failed to load user reasoning_effort pref: %s", exc)
+
+    return "auto"
 
 
 class ChatWorkflowManager(
@@ -2115,6 +2143,30 @@ before summarizing.
                 ctx.selected_model,
                 budget_tokens,
             )
+
+        # #9017: Reasoning effort — per-conversation override > user-default > 'auto'.
+        # Only applied when thinking_mode is NOT already set (avoid double-config).
+        if api_kwargs is None:
+            effort = await _resolve_reasoning_effort(ctx.context)
+            if effort and effort != "auto":
+                effort_params = map_effort_to_provider_params(effort, ctx.selected_model)
+                if effort_params:
+                    thinking_tokens = effort_params.get("thinking_tokens")
+                    if thinking_tokens and "claude" in ctx.selected_model.lower():
+                        api_kwargs = {
+                            "thinking": {"type": "enabled", "budget_tokens": thinking_tokens},
+                            "max_tokens": max(thinking_tokens + 1000, 8192),
+                            "temperature": 1,
+                            "betas": ["interleaved-thinking-2025-05-14"],
+                        }
+                    else:
+                        api_kwargs = effort_params
+                    logger.info(
+                        "[#9017] Reasoning effort=%s applied for model=%s params=%s",
+                        effort,
+                        ctx.selected_model,
+                        list(effort_params),
+                    )
         async for item in self._process_single_llm_iteration(
             http_client,
             ctx.ollama_endpoint,

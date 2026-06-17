@@ -5422,7 +5422,13 @@
       "contextOverflowDescription": "Choose how to handle conversations approaching the context limit",
       "contextOverflowAuto": "Auto-summarize",
       "contextOverflowWarn": "Warn only",
-      "contextOverflowDisabled": "Disabled"
+      "contextOverflowDisabled": "Disabled",
+      "reasoningEffortLabel": "Reasoning Effort",
+      "reasoningEffortDescription": "Set how much reasoning effort the model uses by default for new messages",
+      "reasoningEffortAuto": "Auto",
+      "reasoningEffortLow": "Low",
+      "reasoningEffortMedium": "Medium",
+      "reasoningEffortHigh": "High"
     },
     "folders": {
       "folders": "Folders",

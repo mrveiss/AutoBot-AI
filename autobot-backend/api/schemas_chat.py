@@ -487,6 +487,13 @@ class ChatMessage(BaseModel):
         description="Thinking budget in tokens (e.g., 1000, 5000, 10000, 63000). "
         "Only used when thinking_mode_enabled=True. Limits the amount of reasoning tokens.",
     )
+    reasoning_effort: str | None = Field(
+        None,
+        pattern="^(low|medium|high|auto)$",
+        description="Per-conversation reasoning effort override (low, medium, high, auto). "
+        "Overrides the user's account-level default. Omit to use the user default. "
+        "When 'auto' or absent the provider's own defaults are used (#9017).",
+    )
 
 
 class ChatResponse(BaseModel):
