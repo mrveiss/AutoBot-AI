@@ -215,6 +215,7 @@ def _make_app(
             obj.status = "active"
         if not getattr(obj, "created_at", None):
             from datetime import datetime, timezone  # noqa: PLC0415
+
             obj.created_at = datetime.now(timezone.utc)
             obj.updated_at = datetime.now(timezone.utc)
         # Sprint-specific fields
