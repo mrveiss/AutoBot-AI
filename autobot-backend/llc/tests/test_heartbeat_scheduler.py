@@ -20,7 +20,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from llc.adapters.base import AdapterRunStatus
-from llc.exceptions import AdapterRunFailed, HeartbeatDispatchSkipped
+from llc.exceptions import AdapterRunFailed, HeartbeatDispatchSkipped, SubscriptionQuotaExhausted
 from llc.models.enums import LLCRunStatus
 from llc.models.heartbeat_run import LLCHeartbeatRun
 from llc.scheduler.heartbeat_scheduler import (
@@ -860,3 +860,91 @@ class TestIngestAdapterUsage:
             patch(f"{_HBS}.BudgetService.ingest_cost_event", new=AsyncMock(side_effect=RuntimeError("db down"))),
         ):
             await _ingest_adapter_usage(agent, result)  # must not raise
+
+
+@pytest.mark.asyncio
+class TestQuotaExhausted:
+    """GH#10218: subscription quota exhaustion → no-retry, auto-pause, board notify."""
+
+    async def test_dispatch_raises_quota_exhausted(self):
+        agent = _make_agent(adapter_type="claude_code_subscription")
+        key_record = MagicMock()
+        key_record.id = uuid.uuid4()
+        fake_adapter = MagicMock()
+        fake_adapter.invoke = AsyncMock(return_value="9/s")
+
+        with (
+            patch(f"{_HBS}._issue_run_key", new=AsyncMock(return_value=(key_record, "k"))),
+            patch(f"{_HBS}._revoke_run_key", new=AsyncMock()) as mock_revoke,
+            patch(
+                f"{_HBS}._await_adapter_completion",
+                new=AsyncMock(return_value=AdapterRunStatus(status=LLCRunStatus.QUOTA_EXHAUSTED, error="quota")),
+            ),
+            pytest.raises(SubscriptionQuotaExhausted),
+        ):
+            await _dispatch_registry_adapter(fake_adapter, agent, {})
+        # Key still revoked even on the quota path.
+        mock_revoke.assert_awaited_once_with(agent["agent_id"], key_record.id)
+
+    async def test_handle_quota_exhausted_records_and_pauses(self):
+        scheduler = HeartbeatScheduler()
+        agent = _make_agent(adapter_type="claude_code_subscription")
+        run_id = uuid.uuid4()
+        executed: list = []
+
+        class _Session:
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *exc):
+                return False
+
+            async def execute(self, stmt, *a, **k):
+                executed.append(str(stmt))
+                return MagicMock()
+
+            async def commit(self):
+                return None
+
+        mock_pause = AsyncMock()
+        with (
+            patch(f"{_HBS}.get_async_session_factory", return_value=lambda: _Session()),
+            patch(f"{_HBS}.ControlsService.pause_agent", new=mock_pause),
+        ):
+            await scheduler._handle_quota_exhausted(
+                agent, run_id, SubscriptionQuotaExhausted(agent["agent_id"], "quota gone")
+            )
+
+        # Run was updated (status write) and the agent was system-paused.
+        assert any("UPDATE" in s or "llc_heartbeat_runs" in s for s in executed)
+        mock_pause.assert_awaited_once()
+        kwargs = mock_pause.await_args.kwargs
+        assert kwargs.get("actor_type") == "system" and kwargs.get("actor_user_id") is None
+
+    async def test_handle_quota_exhausted_no_company_skips_pause(self):
+        scheduler = HeartbeatScheduler()
+        agent = _make_agent(adapter_type="claude_code_subscription", company_id=None)
+        run_id = uuid.uuid4()
+
+        class _Session:
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *exc):
+                return False
+
+            async def execute(self, stmt, *a, **k):
+                return MagicMock()
+
+            async def commit(self):
+                return None
+
+        mock_pause = AsyncMock()
+        with (
+            patch(f"{_HBS}.get_async_session_factory", return_value=lambda: _Session()),
+            patch(f"{_HBS}.ControlsService.pause_agent", new=mock_pause),
+        ):
+            await scheduler._handle_quota_exhausted(
+                agent, run_id, SubscriptionQuotaExhausted(agent["agent_id"], "quota gone")
+            )
+        mock_pause.assert_not_awaited()

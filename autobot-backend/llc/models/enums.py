@@ -155,6 +155,10 @@ class LLCRunStatus(str, Enum):
     # GH#9951: heartbeat was not dispatched to any adapter (no adapter / CLI
     # absent / no agent_class) — degraded, distinct from COMPLETED or FAILED.
     SKIPPED = "skipped"
+    # GH#10218: subscription quota exhausted — no retry; the agent is auto-paused
+    # and the board is notified. Distinct from RATE_LIMITED (which backs off and
+    # retries the same run when a per-minute API rate limit is hit).
+    QUOTA_EXHAUSTED = "quota_exhausted"
 
     def is_terminal(self) -> bool:
         """True once the run has reached a final state (not queued/running).
