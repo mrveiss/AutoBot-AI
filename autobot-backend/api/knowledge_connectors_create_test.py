@@ -14,10 +14,10 @@ resolved at invocation time via ``get_access_token`` (ADR-007 §10).
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from fastapi import HTTPException
 
 import knowledge.connectors.gdrive  # noqa: F401 — register gdrive
 from api import knowledge_connectors as mod
-from fastapi import HTTPException
 from knowledge.connectors.registry import ConnectorRegistry
 from knowledge.schemas.connectors import CreateConnectorRequest
 
