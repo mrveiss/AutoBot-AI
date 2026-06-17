@@ -17,6 +17,7 @@ import type {
 import { knowledgeRepository } from '@/models/repositories/KnowledgeRepository'
 import BaseModal from '@/components/ui/BaseModal.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
+import ConnectorOAuthButton from '@/components/knowledge/connectors/ConnectorOAuthButton.vue'
 import { createLogger } from '@/utils/debugUtils'
 import { useI18n } from 'vue-i18n'
 
@@ -69,6 +70,18 @@ const dbIdColumn = ref('id')
 const dbContentColumns = ref('')
 const dbTimestampColumn = ref('')
 
+// Google Drive config (Issue #9003)
+const gdSourceType = ref<'mydrive' | 'shared'>('mydrive')
+const gdDriveId = ref('')
+const gdFolderId = ref('')
+const gdSyncSubfolders = ref(true)
+const gdMaxFileSizeMb = ref(100)
+// OAuth secret reference captured from the Connect flow (ADR-007 §10).
+const gdSecretId = ref<string | null>(null)
+const gdOAuthError = ref<string | null>(null)
+// Scopes requested for Google Drive read-only access.
+const GDRIVE_SCOPES = ['https://www.googleapis.com/auth/drive.readonly']
+
 const isEditing = computed(() => props.editConnector !== null)
 
 const modalTitle = computed(() =>
@@ -94,6 +107,11 @@ const typeCards = computed(() => [
     type: 'database' as ConnectorType,
     label: t('knowledge.connectors.config.typeDatabase'),
     description: t('knowledge.connectors.config.typeDatabaseDesc')
+  },
+  {
+    type: 'gdrive' as ConnectorType,
+    label: t('knowledge.connectors.config.typeGdrive'),
+    description: t('knowledge.connectors.config.typeGdriveDesc')
   }
 ])
 
@@ -153,6 +171,13 @@ function populateFromConfig(cfg: ConnectorConfig) {
       dbContentColumns.value = (c.content_columns || []).join(', ')
       dbTimestampColumn.value = c.timestamp_column || ''
       break
+    case 'gdrive':
+      gdSourceType.value = c.source_type === 'shared' ? 'shared' : 'mydrive'
+      gdDriveId.value = c.drive_id || ''
+      gdFolderId.value = c.folder_id || ''
+      gdSyncSubfolders.value = c.sync_subfolders ?? true
+      gdMaxFileSizeMb.value = c.max_file_size_mb ?? 100
+      break
   }
 }
 
@@ -182,14 +207,22 @@ function resetForm() {
   dbIdColumn.value = 'id'
   dbContentColumns.value = ''
   dbTimestampColumn.value = ''
+
+  gdSourceType.value = 'mydrive'
+  gdDriveId.value = ''
+  gdFolderId.value = ''
+  gdSyncSubfolders.value = true
+  gdMaxFileSizeMb.value = 100
+  gdSecretId.value = null
+  gdOAuthError.value = null
 }
 
 // =========================================================================
 // Build Config
 // =========================================================================
 
-function buildPayload(): Partial<ConnectorConfig> {
-  const base: Partial<ConnectorConfig> = {
+function buildPayload(): Partial<ConnectorConfig> & { secret_id?: string } {
+  const base: Partial<ConnectorConfig> & { secret_id?: string } = {
     connector_type: connectorType.value,
     name: connectorName.value,
     verification_mode: verificationMode.value,
@@ -220,6 +253,17 @@ function buildPayload(): Partial<ConnectorConfig> {
         content_columns: splitTags(dbContentColumns.value),
         timestamp_column: dbTimestampColumn.value || undefined
       }
+      break
+    case 'gdrive':
+      base.config = {
+        source_type: gdSourceType.value,
+        drive_id: gdSourceType.value === 'shared' ? gdDriveId.value : undefined,
+        folder_id: gdFolderId.value || undefined,
+        sync_subfolders: gdSyncSubfolders.value,
+        max_file_size_mb: gdMaxFileSizeMb.value
+      }
+      // The token never touches the frontend; attach the OAuth secret by reference.
+      if (gdSecretId.value) base.secret_id = gdSecretId.value
       break
   }
 
@@ -263,6 +307,12 @@ const isConfigValid = computed(() => {
         dbConnectionString.value.trim().length > 0 &&
         dbQuery.value.trim().length > 0
       )
+    case 'gdrive':
+      // Requires a completed OAuth connect; shared drives also need a drive_id.
+      return (
+        gdSecretId.value !== null &&
+        (gdSourceType.value !== 'shared' || gdDriveId.value.trim().length > 0)
+      )
     default:
       return false
   }
@@ -292,6 +342,21 @@ function selectType(type: ConnectorType) {
 function onScheduleChange() {
   const opt = scheduleOptions.value.find(o => o.value === scheduleOption.value)
   scheduleCron.value = opt ? opt.cron : null
+}
+
+// =========================================================================
+// Google Drive OAuth (Issue #9003)
+// =========================================================================
+
+function onGdriveConnected(payload: { secretId: string }) {
+  gdSecretId.value = payload.secretId
+  gdOAuthError.value = null
+  logger.info('Google Drive connected via OAuth')
+}
+
+function onGdriveOAuthError(message: string) {
+  gdOAuthError.value = message
+  logger.error('Google Drive OAuth failed: %s', message)
 }
 
 // =========================================================================
@@ -416,7 +481,7 @@ function closeModal() {
             />
           </svg>
           <svg
-            v-else
+            v-else-if="card.type === 'database'"
             class="type-card-icon"
             fill="none"
             stroke="currentColor"
@@ -427,6 +492,20 @@ function closeModal() {
               stroke-linejoin="round"
               stroke-width="2"
               d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"
+            />
+          </svg>
+          <svg
+            v-else
+            class="type-card-icon"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M12 3v12m0 0l-4-4m4 4l4-4M3 17a2 2 0 002 2h14a2 2 0 002-2"
             />
           </svg>
           <span class="type-card-label">{{ card.label }}</span>
@@ -596,6 +675,99 @@ function closeModal() {
           <span class="form-hint">
             {{ $t('knowledge.connectors.config.commaSeparatedColumns') }}
           </span>
+        </div>
+      </template>
+
+      <!-- Google Drive Fields (Issue #9003) -->
+      <template v-if="connectorType === 'gdrive'">
+        <div class="form-group">
+          <label class="form-label">
+            {{ $t('knowledge.connectors.config.gdriveAccount') }}
+          </label>
+          <ConnectorOAuthButton
+            provider="google"
+            :label="$t('knowledge.connectors.config.gdriveLabel')"
+            :scopes="GDRIVE_SCOPES"
+            @connected="onGdriveConnected"
+            @error="onGdriveOAuthError"
+          />
+          <span v-if="gdSecretId" class="form-hint gdrive-connected">
+            {{ $t('knowledge.connectors.config.gdriveConnected') }}
+          </span>
+          <span v-if="gdOAuthError" class="form-hint gdrive-error">
+            {{ gdOAuthError }}
+          </span>
+        </div>
+        <div class="form-group">
+          <label class="form-label">{{ $t('knowledge.connectors.config.gdriveSourceType') }}</label>
+          <div class="mode-toggle">
+            <button
+              class="mode-btn"
+              :class="{ active: gdSourceType === 'mydrive' }"
+              type="button"
+              @click="gdSourceType = 'mydrive'"
+            >
+              {{ $t('knowledge.connectors.config.gdriveMyDrive') }}
+            </button>
+            <button
+              class="mode-btn"
+              :class="{ active: gdSourceType === 'shared' }"
+              type="button"
+              @click="gdSourceType = 'shared'"
+            >
+              {{ $t('knowledge.connectors.config.gdriveShared') }}
+            </button>
+          </div>
+        </div>
+        <div v-if="gdSourceType === 'shared'" class="form-group">
+          <label class="form-label" for="gd-drive-id">
+            {{ $t('knowledge.connectors.config.gdriveDriveId') }}
+          </label>
+          <input
+            id="gd-drive-id"
+            v-model="gdDriveId"
+            type="text"
+            class="form-input"
+            placeholder="0AB1cDeFgHiJkLmNoPqR"
+          />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="gd-folder-id">
+            {{ $t('knowledge.connectors.config.gdriveFolderId') }}
+          </label>
+          <input
+            id="gd-folder-id"
+            v-model="gdFolderId"
+            type="text"
+            class="form-input"
+            placeholder="1AbCdEfGhIjKlMnOpQrStUv"
+          />
+          <span class="form-hint">
+            {{ $t('knowledge.connectors.config.gdriveFolderHint') }}
+          </span>
+        </div>
+        <div class="form-group">
+          <label class="toggle-row">
+            <input
+              type="checkbox"
+              v-model="gdSyncSubfolders"
+              class="toggle-checkbox"
+            />
+            <span class="toggle-label">{{ $t('knowledge.connectors.config.gdriveSyncSubfolders') }}</span>
+          </label>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="gd-max-size">
+            {{ $t('knowledge.connectors.config.maxFileSize') }}
+          </label>
+          <input
+            id="gd-max-size"
+            v-model.number="gdMaxFileSizeMb"
+            type="number"
+            class="form-input form-input-narrow"
+            min="1"
+            max="500"
+          />
         </div>
       </template>
     </div>
@@ -895,6 +1067,14 @@ function closeModal() {
   color: var(--text-tertiary);
   margin-top: var(--spacing-1);
   font-family: var(--font-sans);
+}
+
+.gdrive-connected {
+  color: var(--color-success);
+}
+
+.gdrive-error {
+  color: var(--color-error);
 }
 
 .form-row {

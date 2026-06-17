@@ -3062,7 +3062,19 @@
         "update": "Mettre à jour",
         "create": "Créer",
         "sqlQueryPlaceholder": "SELECT * FROM documents WHERE updated_at > :last_sync",
-        "connectorNamePlaceholder": "Mon connecteur"
+        "connectorNamePlaceholder": "Mon connecteur",
+        "typeGdrive": "Google Drive",
+        "typeGdriveDesc": "Index documents from a personal or shared Google Drive",
+        "gdriveAccount": "Google Account",
+        "gdriveLabel": "Google Drive",
+        "gdriveConnected": "Google Drive connected.",
+        "gdriveSourceType": "Drive Type",
+        "gdriveMyDrive": "My Drive",
+        "gdriveShared": "Shared Drive",
+        "gdriveDriveId": "Shared Drive ID",
+        "gdriveFolderId": "Folder ID (optional)",
+        "gdriveFolderHint": "Limit the sync to a single folder. Leave blank to sync the whole drive.",
+        "gdriveSyncSubfolders": "Sync subfolders recursively"
       },
       "tier": {
         "ready": "Ready",
