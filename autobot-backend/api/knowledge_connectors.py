@@ -68,7 +68,17 @@ router = APIRouter(
     dependencies=[Depends(check_admin_permission)],
 )
 
-_SUPPORTED_TYPES = ["file_server", "web_crawler", "database", "notion", "gitlab", "gitea", "forgejo", "gdrive"]
+_SUPPORTED_TYPES = [
+    "file_server",
+    "web_crawler",
+    "database",
+    "notion",
+    "gitlab",
+    "gitea",
+    "forgejo",
+    "gdrive",
+    "onedrive",
+]
 
 # Marker auth_type for connectors whose bearer credential is an OAuth bundle
 # stored by the OAuth flow (store_oauth). _cfg_with_credentials resolves these
