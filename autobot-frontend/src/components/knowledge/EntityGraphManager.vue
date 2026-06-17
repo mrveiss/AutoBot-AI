@@ -568,7 +568,8 @@ onMounted(() => {
   color: var(--color-success);
 }
 
-.health-card.degraded .health-status {
+.health-card.degraded .health-status,
+.health-card.unavailable .health-status {
   background: var(--color-warning-bg);
   color: var(--color-warning);
 }

@@ -235,6 +235,7 @@ const healthIcon = computed(() => {
   switch (healthStatus.value.status) {
     case 'healthy': return 'check-circle'
     case 'degraded': return 'exclamation-triangle'
+    case 'unavailable': return 'exclamation-triangle'
     case 'unhealthy': return 'times-circle'
     default: return 'question-circle'
   }
@@ -339,7 +340,8 @@ onMounted(() => {
   color: var(--color-success);
 }
 
-.health-indicator.degraded {
+.health-indicator.degraded,
+.health-indicator.unavailable {
   background: var(--color-warning-bg);
   color: var(--color-warning);
 }
