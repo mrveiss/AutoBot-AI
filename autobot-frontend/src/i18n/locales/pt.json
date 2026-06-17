@@ -208,7 +208,9 @@
       "deletedWithFactsPreserved": "Bate-papos {count} excluídos (fatos preservados na base de conhecimento)",
       "deletedSuccess": "Bate-papos {count} excluídos",
       "deleteFailed": "Falha ao excluir alguns bate-papos",
-      "sharedSuccess": "Bate-papo compartilhado com sucesso"
+      "sharedSuccess": "Bate-papo compartilhado com sucesso",
+      "searchChats": "Search chats",
+      "noSearchResults": "No chats match your search"
     },
     "interface": {
       "loadFailed": "Falha ao carregar a interface de bate-papo",
@@ -691,7 +693,10 @@
       "unpin": "Unpin folder",
       "assignToFolder": "Move to folder",
       "removeFromFolder": "Remove from folder",
-      "confirmDelete": "Delete folder \"{name}\"? Subfolders will be moved to root."
+      "confirmDelete": "Delete folder \"{name}\"? Subfolders will be moved to root.",
+      "archive": "Archive folder",
+      "unarchive": "Unarchive folder",
+      "archived": "Archived"
     },
     "presets": {
       "modalTitle": "Slash Command Presets",

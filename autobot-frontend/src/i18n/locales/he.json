@@ -4911,7 +4911,9 @@
       "noSessions": "No chat sessions yet",
       "showSources": "Show Sources",
       "deletedWithFactsRemoved": "Deleted {count} chats and removed associated facts",
-      "deletedSuccess": "Deleted {count} chats"
+      "deletedSuccess": "Deleted {count} chats",
+      "searchChats": "Search chats",
+      "noSearchResults": "No chats match your search"
     },
     "overseer": {
       "copyCommand": "Copy command",
@@ -5440,7 +5442,10 @@
       "unpin": "Unpin folder",
       "assignToFolder": "Move to folder",
       "removeFromFolder": "Remove from folder",
-      "confirmDelete": "Delete folder \"{name}\"? Subfolders will be moved to root."
+      "confirmDelete": "Delete folder \"{name}\"? Subfolders will be moved to root.",
+      "archive": "Archive folder",
+      "unarchive": "Unarchive folder",
+      "archived": "Archived"
     },
     "presets": {
       "modalTitle": "Slash Command Presets",
