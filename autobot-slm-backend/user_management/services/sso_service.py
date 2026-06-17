@@ -234,7 +234,11 @@ class SSOService(BaseService):
             data = json.loads(raw)
             return uuid.UUID(data["provider_id"]), data.get("code_verifier")
         except (json.JSONDecodeError, TypeError, KeyError):
-            return uuid.UUID(raw), None
+            # Legacy plain-UUID state from a pre-PKCE in-flight login.
+            try:
+                return uuid.UUID(raw), None
+            except ValueError as e:
+                raise SSOAuthenticationError("Malformed OAuth state") from e
 
     async def _build_oauth_client(self, provider: SSOProvider) -> Any:
         """Build OAuth2 client from provider config with decrypted credentials."""

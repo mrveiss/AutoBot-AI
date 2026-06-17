@@ -265,6 +265,16 @@ class TestPkceStateStorage:
             with pytest.raises(SSOAuthenticationError):
                 await service._validate_oauth_state("nonexistent")
 
+    @pytest.mark.asyncio
+    async def test_validate_state_malformed_raises(self):
+        """Garbage (non-JSON, non-UUID) state value raises SSOAuthenticationError."""
+        redis, store = _mock_redis()
+        store["sso:state:abc"] = "{not-valid-json-and-not-a-uuid"
+        service = _make_service()
+        with patch.object(_sso_mod, "get_redis_client", return_value=redis):
+            with pytest.raises(SSOAuthenticationError):
+                await service._validate_oauth_state("abc")
+
 
 # ---------------------------------------------------------------------------
 # PKCE authorize URL + token exchange (Task 3)
