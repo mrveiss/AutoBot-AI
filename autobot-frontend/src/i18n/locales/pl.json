@@ -208,7 +208,9 @@
       "deletedWithFactsPreserved": "Usunięte czaty {count} (fakty zachowane w bazie wiedzy)",
       "deletedSuccess": "Usunięto czaty {count}",
       "deleteFailed": "Nie udało się usunąć niektórych czatów",
-      "sharedSuccess": "Czat został udostępniony"
+      "sharedSuccess": "Czat został udostępniony",
+      "searchChats": "Search chats",
+      "noSearchResults": "No chats match your search"
     },
     "interface": {
       "loadFailed": "Nie udało się załadować interfejsu czatu",
@@ -691,7 +693,10 @@
       "unpin": "Unpin folder",
       "assignToFolder": "Move to folder",
       "removeFromFolder": "Remove from folder",
-      "confirmDelete": "Delete folder \"{name}\"? Subfolders will be moved to root."
+      "confirmDelete": "Delete folder \"{name}\"? Subfolders will be moved to root.",
+      "archive": "Archive folder",
+      "unarchive": "Unarchive folder",
+      "archived": "Archived"
     },
     "presets": {
       "modalTitle": "Slash Command Presets",
