@@ -179,4 +179,5 @@ def test_build_callback_url_case_insensitive():
     request = _make_mock_request("http", "LOCALHOST", {"x-forwarded-proto": "http", "x-forwarded-host": "LOCALHOST"})
 
     result = sso_auth._build_callback_url(request)
-    assert result == "http://LOCALHOST/api/auth/sso/callback"
+    # RFC 3986 §3.2.2: host is case-insensitive; _build_callback_url normalises to lowercase.
+    assert result == "http://localhost/api/auth/sso/callback"
