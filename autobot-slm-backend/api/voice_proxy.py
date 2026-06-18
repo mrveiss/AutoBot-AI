@@ -21,13 +21,17 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import Response
 
+from config import settings
 from services.auth import get_current_user
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/voice", tags=["voice-proxy"])
 
-AUTOBOT_BACKEND_URL = os.getenv("AUTOBOT_BACKEND_URL", "")  # noqa: ssot-fallback
+# Main backend base URL. Reuse the identity-authority base (#10197) so the proxy
+# works co-located (loopback:8001) and distributed with no extra config (#10263);
+# an explicit AUTOBOT_BACKEND_URL still overrides if set.
+AUTOBOT_BACKEND_URL = os.getenv("AUTOBOT_BACKEND_URL", "") or settings.authority_base_url  # noqa: ssot-fallback
 AUTOBOT_INTERNAL_API_KEY = os.getenv("AUTOBOT_INTERNAL_API_KEY", "")
 
 _TIMEOUT = 15.0
