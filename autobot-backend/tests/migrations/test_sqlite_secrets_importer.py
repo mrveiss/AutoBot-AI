@@ -134,3 +134,36 @@ async def test_bad_ciphertext_reported(session, tmp_path):
     conn.close()
     report = await import_sqlite_secrets(session, sqlite_path=db, fernet=_FERNET, root_key=_ROOT)
     assert report.total == 1 and report.imported == 0 and len(report.failed) == 1
+
+
+async def test_oversized_name_reported_not_batch_abort(session, tmp_path):
+    # Dirty legacy data: a name longer than PG name column raises DataError on flush. It must be
+    # reported as one failed row (per-row savepoint + broad SQLAlchemyError), not abort the batch.
+    db = str(tmp_path / "secrets.db")
+    _make_db(
+        db,
+        [
+            {"id": "huge", "name": "x" * 5000, "value": b"v1", "created_by": str(_ALICE)},
+            {"id": "ok", "name": "fine", "value": b"v2", "created_by": str(_ALICE)},
+        ],
+    )
+    report = await import_sqlite_secrets(session, sqlite_path=db, fernet=_FERNET, root_key=_ROOT)
+    await session.commit()
+    assert report.total == 2 and report.imported == 1 and len(report.failed) == 1
+
+
+async def test_null_ciphertext_skipped(session, tmp_path):
+    db = str(tmp_path / "secrets.db")
+    conn = sqlite3.connect(db)
+    conn.execute(
+        "CREATE TABLE secrets (id TEXT PRIMARY KEY, name TEXT, description TEXT, secret_type TEXT, "
+        "encrypted_value TEXT, scope TEXT, chat_id TEXT, created_by TEXT, is_active INTEGER DEFAULT 1)"
+    )
+    conn.execute(
+        "INSERT INTO secrets (id, name, secret_type, encrypted_value, created_by, is_active) VALUES (?,?,?,?,?,1)",
+        ("nul", "k", "password", None, str(_ALICE)),
+    )
+    conn.commit()
+    conn.close()
+    report = await import_sqlite_secrets(session, sqlite_path=db, fernet=_FERNET, root_key=_ROOT)
+    assert report.total == 1 and report.imported == 0 and len(report.failed) == 1

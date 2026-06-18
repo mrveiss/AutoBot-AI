@@ -30,7 +30,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.secrets_envelope import derive_vault_key, seal, wrap_dek
@@ -127,20 +127,25 @@ async def import_sqlite_secrets(
         except ValueError:
             report.failed.append(f"{src}: created_by not a uuid ({owner_raw!r})")
             continue
+        cipher = row.get("encrypted_value")
+        if not cipher:
+            report.failed.append(f"{src}: no encrypted_value")
+            continue
         try:
-            plaintext = fernet.decrypt(row["encrypted_value"].encode("utf-8"))
+            plaintext = fernet.decrypt(cipher.encode("utf-8"))
         except (InvalidToken, ValueError, TypeError) as exc:
             report.failed.append(f"{src}: decrypt failed ({exc})")
             continue
         try:
-            # Per-row SAVEPOINT so one bad row is reported without aborting the batch.
+            # Per-row SAVEPOINT so one bad row (FK/unique violation, or dirty data
+            # that overflows a PG column → DataError) is reported without aborting the batch.
             async with session.begin_nested():
                 secret, grant = _build_unified(row, plaintext, owner, root_key)
                 session.add(secret)
                 session.add(grant)
                 await session.flush()
             report.imported += 1
-        except IntegrityError as exc:
+        except SQLAlchemyError as exc:
             report.failed.append(f"{src}: persist failed ({exc})")
 
     return report
