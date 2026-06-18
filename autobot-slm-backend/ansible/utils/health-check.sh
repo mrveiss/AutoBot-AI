@@ -2,8 +2,8 @@
 # Copyright 2025-2026 mrveiss
 # SPDX-License-Identifier: Apache-2.0
 #
-# AutoBot Hyper-V Deployment Health Check Utility
-# Validates all services across the 5-VM deployment
+# AutoBot Deployment Health Check Utility
+# Validates all services across the deployment (one or more hosts/VMs)
 #
 
 set -euo pipefail
