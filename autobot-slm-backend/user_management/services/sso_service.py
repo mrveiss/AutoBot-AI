@@ -528,15 +528,11 @@ class SSOService(BaseService):
         logger.info("Created SSO link for user %s with provider %s", user.id, provider.id)
         return link
 
-    async def _resolve_managed_roles(
-        self, provider: SSOProvider, managed_names: set[str]
-    ) -> dict[str, Role]:
+    async def _resolve_managed_roles(self, provider: SSOProvider, managed_names: set[str]) -> dict[str, Role]:
         """Return {role_name: Role} for names that exist in provider.org_id scope."""
         name_to_role: dict[str, Role] = {}
         for name in managed_names:
-            result = await self.session.execute(
-                select(Role).where(Role.name == name, Role.org_id == provider.org_id)
-            )
+            result = await self.session.execute(select(Role).where(Role.name == name, Role.org_id == provider.org_id))
             role = result.scalar_one_or_none()
             if role is None:
                 logger.warning("group_mapping references unknown role %r (org_id=%s)", name, provider.org_id)
@@ -544,9 +540,7 @@ class SSOService(BaseService):
                 name_to_role[name] = role
         return name_to_role
 
-    async def _sync_idp_groups_to_roles(
-        self, user: User, provider: SSOProvider, groups: list[str] | None
-    ) -> None:
+    async def _sync_idp_groups_to_roles(self, user: User, provider: SSOProvider, groups: list[str] | None) -> None:
         """Reconcile IdP group membership to managed instance RBAC roles.
 
         Only roles listed in provider.group_mapping.values() are ever touched;
@@ -564,9 +558,7 @@ class SSOService(BaseService):
 
         user_svc = UserService(self.session)
         managed_names: set[str] = set(provider.group_mapping.values())
-        desired_names: set[str] = {
-            provider.group_mapping[g] for g in groups if g in provider.group_mapping
-        }
+        desired_names: set[str] = {provider.group_mapping[g] for g in groups if g in provider.group_mapping}
         name_to_role = await self._resolve_managed_roles(provider, managed_names)
         current_roles = await user_svc.get_user_roles(user.id)
         current_managed = {r.name for r in current_roles if r.name in managed_names}
@@ -578,13 +570,19 @@ class SSOService(BaseService):
                 await user_svc.revoke_role(user.id, role.id)
 
     async def _find_or_provision_user(self, provider: SSOProvider, external_id: str, user_data: dict[str, Any]) -> User:
-        """Find existing user or provision new one via JIT."""
+        """Find existing user or provision new one via JIT.
+
+        Group→role reconciliation runs in both paths so roles re-sync on every
+        login, not only at first JIT provisioning.
+        """
         link = await self._find_existing_sso_link(provider.id, external_id)
         if link:
             link.record_login()
             await self.session.flush()
             result = await self.session.execute(select(User).where(User.id == link.user_id))
-            return result.scalar_one()
+            user = result.scalar_one()
+            await self._sync_idp_groups_to_roles(user, provider, user_data.get("groups"))
+            return user
         if not provider.allow_user_creation:
             raise SSOAuthenticationError("User not found and auto-provisioning is disabled")
         email = user_data.get("email")
@@ -594,4 +592,5 @@ class SSOService(BaseService):
         if not user:
             user = await self._create_sso_user(provider, user_data)
         await self._create_sso_link(user, provider, external_id, user_data)
+        await self._sync_idp_groups_to_roles(user, provider, user_data.get("groups"))
         return user

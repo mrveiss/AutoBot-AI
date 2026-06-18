@@ -815,3 +815,143 @@ class TestSyncIdpGroupsToRoles:
 
         user_svc.assign_role.assert_not_awaited()
         user_svc.revoke_role.assert_not_awaited()
+
+
+# ---------------------------------------------------------------------------
+# Task 3: _find_or_provision_user wires group sync on every login (#10152)
+# ---------------------------------------------------------------------------
+
+
+def _make_full_provider(group_mapping: dict, org_id: uuid.UUID) -> MagicMock:
+    p = MagicMock()
+    p.id = uuid.uuid4()
+    p.group_mapping = group_mapping
+    p.org_id = org_id
+    p.allow_user_creation = True
+    return p
+
+
+class TestFindOrProvisionUserGroupSync:
+    """_find_or_provision_user calls _sync_idp_groups_to_roles in both branches."""
+
+    def _make_session_returning_user(self, user: MagicMock, link: MagicMock | None) -> MagicMock:
+        """Session that returns the given link from the SSO-link query and user from the user query."""
+        call_n = {"n": 0}
+
+        async def _execute(stmt):
+            result = MagicMock()
+            if call_n["n"] == 0:
+                # First call: _find_existing_sso_link
+                result.scalar_one_or_none.return_value = link
+            else:
+                # Second call (existing-link path): fetch user by id
+                result.scalar_one.return_value = user
+                result.scalar_one_or_none.return_value = user
+            call_n["n"] += 1
+            return result
+
+        session = MagicMock()
+        session.execute = AsyncMock(side_effect=_execute)
+        session.flush = AsyncMock()
+        session.add = MagicMock()
+        session.info = {}
+        return session
+
+    def _make_session_new_user(self, user: MagicMock) -> MagicMock:
+        """Session for the new-user path: no existing link, no existing email user."""
+        call_n = {"n": 0}
+
+        async def _execute(stmt):
+            result = MagicMock()
+            if call_n["n"] == 0:
+                result.scalar_one_or_none.return_value = None  # no existing SSO link
+            elif call_n["n"] == 1:
+                result.scalar_one_or_none.return_value = None  # no user by email
+            else:
+                result.scalar_one_or_none.return_value = user
+            call_n["n"] += 1
+            return result
+
+        session = MagicMock()
+        session.execute = AsyncMock(side_effect=_execute)
+        session.flush = AsyncMock()
+        session.add = MagicMock()
+        session.info = {}
+        return session
+
+    @pytest.mark.asyncio
+    async def test_returning_user_login_resyncs_roles(self):
+        """On every login of a returning user, group→role sync is invoked."""
+        org_id = uuid.uuid4()
+        user = _make_user()
+        link = MagicMock()
+        link.user_id = user.id
+        link.record_login = MagicMock()
+
+        provider = _make_full_provider({"eng": "engineer"}, org_id)
+        session = self._make_session_returning_user(user, link)
+        service = SSOService(session=session)
+
+        synced_args: list = []
+
+        async def _fake_sync(u, p, groups):
+            synced_args.append((u, p, groups))
+
+        service._sync_idp_groups_to_roles = _fake_sync  # type: ignore[assignment]
+
+        result = await service._find_or_provision_user(provider, "ext-id", {"email": "a@b.com", "groups": ["eng"]})
+
+        assert result is user
+        assert len(synced_args) == 1
+        _, _, groups = synced_args[0]
+        assert groups == ["eng"]
+
+    @pytest.mark.asyncio
+    async def test_new_user_jit_assigns_roles(self):
+        """On JIT provisioning of a new user, group→role sync runs after link creation."""
+        org_id = uuid.uuid4()
+        user = _make_user()
+        provider = _make_full_provider({"eng": "engineer"}, org_id)
+        session = self._make_session_new_user(user)
+        service = SSOService(session=session)
+
+        synced_args: list = []
+
+        async def _fake_sync(u, p, groups):
+            synced_args.append((u, p, groups))
+
+        service._sync_idp_groups_to_roles = _fake_sync  # type: ignore[assignment]
+        service._create_sso_user = AsyncMock(return_value=user)  # type: ignore[assignment]
+        service._create_sso_link = AsyncMock()  # type: ignore[assignment]
+
+        await service._find_or_provision_user(provider, "new-ext-id", {"email": "new@b.com", "groups": ["eng"]})
+
+        assert len(synced_args) == 1
+        _, _, groups = synced_args[0]
+        assert groups == ["eng"]
+
+    @pytest.mark.asyncio
+    async def test_returning_user_groups_none_does_not_strip_roles(self):
+        """When groups claim is absent (None), no role changes happen for returning user."""
+        org_id = uuid.uuid4()
+        user = _make_user()
+        link = MagicMock()
+        link.user_id = user.id
+        link.record_login = MagicMock()
+
+        provider = _make_full_provider({"eng": "engineer"}, org_id)
+        session = self._make_session_returning_user(user, link)
+        service = SSOService(session=session)
+
+        synced_args: list = []
+
+        async def _fake_sync(u, p, groups):
+            synced_args.append((u, p, groups))
+
+        service._sync_idp_groups_to_roles = _fake_sync  # type: ignore[assignment]
+
+        await service._find_or_provision_user(provider, "ext-id", {"email": "a@b.com"})  # no groups key
+
+        assert len(synced_args) == 1
+        _, _, groups = synced_args[0]
+        assert groups is None
