@@ -485,3 +485,118 @@ class TestSamlRelayStateRedisRoundTrip:
             redirect_url, _ = await service._generate_saml_authn_request(provider)
 
         assert redirect_url == expected_url
+
+
+# ---------------------------------------------------------------------------
+# Task 1: group claim extraction from each IdP type (#10152)
+# ---------------------------------------------------------------------------
+
+
+class TestExtractOauthUserDataGroups:
+    """_extract_oauth_user_data captures the 'groups' claim or leaves it None."""
+
+    def _make_provider(self) -> MagicMock:
+        p = MagicMock()
+        p.config = {}
+        return p
+
+    def test_groups_present_returns_list(self):
+        service = _make_service()
+        userinfo = {"email": "a@b.com", "groups": ["eng", "devops"]}
+        data = service._extract_oauth_user_data(userinfo, self._make_provider())
+        assert data["groups"] == ["eng", "devops"]
+
+    def test_groups_absent_returns_none(self):
+        service = _make_service()
+        userinfo = {"email": "a@b.com"}
+        data = service._extract_oauth_user_data(userinfo, self._make_provider())
+        assert data["groups"] is None
+
+    def test_groups_single_string_normalized_to_list(self):
+        service = _make_service()
+        userinfo = {"email": "a@b.com", "groups": "eng"}
+        data = service._extract_oauth_user_data(userinfo, self._make_provider())
+        assert data["groups"] == ["eng"]
+
+    def test_groups_empty_list_preserved(self):
+        service = _make_service()
+        userinfo = {"email": "a@b.com", "groups": []}
+        data = service._extract_oauth_user_data(userinfo, self._make_provider())
+        assert data["groups"] == []
+
+
+class TestExtractLdapUserDataGroups:
+    """_extract_ldap_user_data captures the memberOf (or custom) attribute."""
+
+    def _make_provider(self, attr_map: dict | None = None) -> MagicMock:
+        p = MagicMock()
+        p.config = {"attribute_mapping": attr_map or {}}
+        return p
+
+    def test_memberof_present_returns_list(self):
+        service = _make_service()
+        entry = {"memberOf": ["cn=eng,dc=example,dc=com", "cn=devops,dc=example,dc=com"]}
+        data = service._extract_ldap_user_data(entry, self._make_provider())
+        assert data["groups"] == ["cn=eng,dc=example,dc=com", "cn=devops,dc=example,dc=com"]
+
+    def test_memberof_absent_returns_none(self):
+        service = _make_service()
+        entry = {"mail": ["a@b.com"]}
+        data = service._extract_ldap_user_data(entry, self._make_provider())
+        assert data["groups"] is None
+
+    def test_custom_groups_attr_via_attr_map(self):
+        service = _make_service()
+        provider = self._make_provider({"groups": "isMemberOf"})
+        entry = {"isMemberOf": ["grp1"]}
+        data = service._extract_ldap_user_data(entry, provider)
+        assert data["groups"] == ["grp1"]
+
+
+class TestExtractSamlUserDataGroups:
+    """_extract_saml_user_data captures the 'groups' SAML attribute."""
+
+    def _make_provider(self, attr_map: dict | None = None) -> MagicMock:
+        p = MagicMock()
+        p.config = {"attribute_mapping": attr_map or {}}
+        return p
+
+    def _make_authn_response(self, ava: dict) -> MagicMock:
+        r = MagicMock()
+        r.ava = ava
+        return r
+
+    def test_groups_present_returns_list(self):
+        service = _make_service()
+        response = self._make_authn_response({"email": ["a@b.com"], "groups": ["admin", "users"]})
+        data = service._extract_saml_user_data(response, self._make_provider())
+        assert data["groups"] == ["admin", "users"]
+
+    def test_groups_absent_returns_none(self):
+        service = _make_service()
+        response = self._make_authn_response({"email": ["a@b.com"]})
+        data = service._extract_saml_user_data(response, self._make_provider())
+        assert data["groups"] is None
+
+    def test_custom_groups_attr_via_attr_map(self):
+        service = _make_service()
+        provider = self._make_provider({"groups": "memberOf"})
+        response = self._make_authn_response({"memberOf": ["cn=grp,dc=example,dc=com"]})
+        data = service._extract_saml_user_data(response, provider)
+        assert data["groups"] == ["cn=grp,dc=example,dc=com"]
+
+
+class TestNormalizeGroups:
+    """_normalize_groups helper covers edge cases."""
+
+    def test_none_returns_none(self):
+        assert SSOService._normalize_groups(None) is None
+
+    def test_list_of_strings_returned_as_is(self):
+        assert SSOService._normalize_groups(["a", "b"]) == ["a", "b"]
+
+    def test_single_string_wrapped(self):
+        assert SSOService._normalize_groups("eng") == ["eng"]
+
+    def test_empty_list_returns_empty_list(self):
+        assert SSOService._normalize_groups([]) == []

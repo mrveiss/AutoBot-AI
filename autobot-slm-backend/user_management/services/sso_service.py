@@ -328,6 +328,20 @@ class SSOService(BaseService):
         user_data = self._extract_oauth_user_data(userinfo, provider)
         return await self._find_or_provision_user(provider, external_id, user_data)
 
+    @staticmethod
+    def _normalize_groups(raw: Any) -> list[str] | None:
+        """Normalize an IdP groups claim to list[str] or None (absent).
+
+        Returns None when the claim is absent so callers can distinguish
+        "IdP did not assert groups" from "IdP asserted an empty group list".
+        """
+        if raw is None:
+            return None
+        if isinstance(raw, list):
+            return [str(g) for g in raw]
+        # Some IdPs return a single string when the user belongs to one group.
+        return [str(raw)]
+
     def _extract_oauth_user_data(self, userinfo: dict[str, Any], provider: SSOProvider) -> dict[str, Any]:
         """Extract user data from OAuth2 userinfo."""
         email = userinfo.get("email")
@@ -338,6 +352,7 @@ class SSOService(BaseService):
             "display_name": name,
             "username": username,
             "avatar_url": userinfo.get("picture"),
+            "groups": self._normalize_groups(userinfo.get("groups")),
         }
 
     def _build_ldap_connection(self, provider: SSOProvider, username: str, password: str) -> Any:
@@ -373,10 +388,13 @@ class SSOService(BaseService):
         attr_map = provider.config.get("attribute_mapping", {})
         email = entry.get(attr_map.get("email", "mail"), [None])[0]
         display_name = entry.get(attr_map.get("display_name", "displayName"), [None])[0]
+        groups_attr = attr_map.get("groups", "memberOf")
+        raw_groups = entry.get(groups_attr)
         return {
             "email": email,
             "display_name": display_name,
             "username": entry.get(attr_map.get("username", "uid"), [None])[0],
+            "groups": self._normalize_groups(raw_groups),
         }
 
     async def authenticate_ldap(self, provider_id: uuid.UUID, username: str, password: str) -> User:
@@ -438,7 +456,13 @@ class SSOService(BaseService):
         email = attrs.get(attr_map.get("email", "email"), [None])[0]
         display_name = attrs.get(attr_map.get("display_name", "displayName"), [None])[0]
         username = attrs.get(attr_map.get("username", "uid"), [None])[0]
-        return {"email": email, "display_name": display_name, "username": username}
+        raw_groups = attrs.get(attr_map.get("groups", "groups"))
+        return {
+            "email": email,
+            "display_name": display_name,
+            "username": username,
+            "groups": self._normalize_groups(raw_groups),
+        }
 
     async def complete_saml_login(self, provider_id: uuid.UUID, saml_response: str) -> User:
         """Complete SAML login flow."""
