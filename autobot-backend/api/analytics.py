@@ -389,7 +389,6 @@ from api import (
     analytics_behavior,
     analytics_code,
     analytics_cost,
-    analytics_engagement,
     analytics_export,
 )
 
@@ -399,7 +398,6 @@ router.include_router(analytics_code.router)
 # Include Issue #59 sub-routers (Advanced Analytics & BI)
 router.include_router(analytics_cost.router)
 router.include_router(analytics_agents.router)
-router.include_router(analytics_engagement.router)
 router.include_router(analytics_export.router)
 router.include_router(analytics_behavior.router)
 

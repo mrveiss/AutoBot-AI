@@ -13,5 +13,11 @@ from autobot_shared.monitoring.prometheus_metrics import (
     PrometheusMetricsManager,
     get_metrics_manager,
 )
+from autobot_shared.monitoring.prometheus_query import query_instant, query_range
 
-__all__ = ["PrometheusMetricsManager", "get_metrics_manager"]
+__all__ = [
+    "PrometheusMetricsManager",
+    "get_metrics_manager",
+    "query_instant",
+    "query_range",
+]
