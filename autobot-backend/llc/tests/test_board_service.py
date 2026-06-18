@@ -123,7 +123,7 @@ async def test_get_or_create_kanban_creates_when_absent(service):
 
         session.refresh.side_effect = _refresh
 
-        board = await service.get_or_create_kanban(session, company_id, project_id)
+        await service.get_or_create_kanban(session, company_id, project_id)
 
         # Flush called twice: once for board PK, once for columns
         assert session.flush.call_count == 2
@@ -388,3 +388,28 @@ def test_wip_limit_exceeded_message():
     assert "3" in str(exc)
     assert exc.wip_limit == 3
     assert exc.current_count == 3
+
+
+# ---------------------------------------------------------------------------
+# list_boards (GH#10219 — board reachability)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_list_boards_returns_company_boards(service):
+    company_id = str(uuid.uuid4())
+    b1 = _make_board(board_type=BoardType.KANBAN)
+    b2 = _make_board(board_type=BoardType.SPRINT)
+    session = _make_session(scalars_all=[b1, b2])
+
+    boards = await service.list_boards(session, company_id)
+
+    assert list(boards) == [b1, b2]
+    session.execute.assert_awaited()
+
+
+@pytest.mark.asyncio
+async def test_list_boards_empty(service):
+    session = _make_session(scalars_all=[])
+    boards = await service.list_boards(session, str(uuid.uuid4()))
+    assert list(boards) == []

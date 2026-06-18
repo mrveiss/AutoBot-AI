@@ -9,6 +9,7 @@ import { createLogger } from '@/utils/debugUtils'
 import { useLlcCompanyContext } from '@/composables/llc/useLlcCompanyContext'
 import OrgTreeNode from './OrgTreeNode.vue'
 import type { OrgNode } from './OrgTreeNode.vue'
+import HireAgentModal from '@/components/llc/HireAgentModal.vue'
 
 const logger = createLogger('OrgChart')
 const api = useApiClient()
@@ -19,6 +20,7 @@ const isLoading = ref(false)
 const error = ref<string | null>(null)
 const selectedNode = ref<OrgNode | null>(null)
 const drawerOpen = ref(false)
+const showHire = ref(false) // GH#10219
 
 async function fetchTree() {
   isLoading.value = true
@@ -79,7 +81,23 @@ onMounted(fetchTree)
 
 <template>
   <div class="p-4 max-w-7xl mx-auto">
-    <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-6">Org Chart</h1>
+    <div class="flex items-center justify-between mb-6">
+      <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100">Org Chart</h1>
+      <button
+        v-if="companyId"
+        class="px-3 py-1.5 rounded-md bg-indigo-600 text-white text-sm hover:bg-indigo-700"
+        @click="showHire = true"
+      >
+        Hire Agent
+      </button>
+    </div>
+
+    <HireAgentModal
+      v-if="showHire && companyId"
+      :company-id="companyId"
+      @close="showHire = false"
+      @hired="fetchTree"
+    />
 
     <div v-if="error" class="rounded-lg bg-red-50 border border-red-200 p-4 text-red-700 text-sm mb-4">
       {{ error }}
