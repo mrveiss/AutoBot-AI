@@ -321,6 +321,12 @@ if "llm_shared" not in sys.modules:
     _load_real_mod("llm_shared.optimization.rate_limiter", _llm_root / "optimization" / "rate_limiter.py")
     _load_real_mod("llm_shared.fallback_chain", _llm_root / "fallback_chain.py")
     _load_real_mod("llm_shared.model_fallback_coordinator", _llm_root / "model_fallback_coordinator.py")
+    # #9017: reasoning_effort utility is imported by chat_workflow.manager at module level;
+    # load the real file so tests that import manager don't hit the providers MagicMock stub.
+    _load_real_mod(
+        "llm_shared.providers.reasoning_effort",
+        _llm_root / "providers" / "reasoning_effort.py",
+    )
 
     # Stub llm_shared.optimization.model_inspector so complexity_router.py can
     # load without the full optimization stack (inspect_model is only called in

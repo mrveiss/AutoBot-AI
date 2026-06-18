@@ -2212,7 +2212,21 @@
         "gdriveDriveId": "Shared Drive ID",
         "gdriveFolderId": "Folder ID (optional)",
         "gdriveFolderHint": "Limit the sync to a single folder. Leave blank to sync the whole drive.",
-        "gdriveSyncSubfolders": "Sync subfolders recursively"
+        "gdriveSyncSubfolders": "Sync subfolders recursively",
+        "typeOnedrive": "OneDrive / SharePoint",
+        "typeOnedriveDesc": "Index documents from OneDrive or a SharePoint library",
+        "onedriveAccount": "Microsoft Account",
+        "onedriveLabel": "OneDrive",
+        "onedriveConnected": "OneDrive connected.",
+        "onedriveSourceType": "Source Type",
+        "onedriveOneDrive": "OneDrive",
+        "onedriveSharePoint": "SharePoint",
+        "onedriveSiteId": "SharePoint Site ID",
+        "onedriveDriveId": "Drive ID (optional)",
+        "onedriveDriveIdHint": "Specific drive to sync. Leave blank to use the default drive.",
+        "onedriveFolderPath": "Folder Path (optional)",
+        "onedriveFolderHint": "Limit the sync to a single folder path. Leave blank to sync the whole drive.",
+        "onedriveSyncSubfolders": "Sync subfolders recursively"
       },
       "loadingConnectors": "Loading connectors...",
       "status": {
@@ -4897,7 +4911,9 @@
       "noSessions": "No chat sessions yet",
       "showSources": "Show Sources",
       "deletedWithFactsRemoved": "Deleted {count} chats and removed associated facts",
-      "deletedSuccess": "Deleted {count} chats"
+      "deletedSuccess": "Deleted {count} chats",
+      "searchChats": "Search chats",
+      "noSearchResults": "No chats match your search"
     },
     "overseer": {
       "copyCommand": "Copy command",
@@ -5408,7 +5424,13 @@
       "contextOverflowDescription": "Choose how to handle conversations approaching the context limit",
       "contextOverflowAuto": "Auto-summarize",
       "contextOverflowWarn": "Warn only",
-      "contextOverflowDisabled": "Disabled"
+      "contextOverflowDisabled": "Disabled",
+      "reasoningEffortLabel": "Reasoning Effort",
+      "reasoningEffortDescription": "Set how much reasoning effort the model uses by default for new messages",
+      "reasoningEffortAuto": "Auto",
+      "reasoningEffortLow": "Low",
+      "reasoningEffortMedium": "Medium",
+      "reasoningEffortHigh": "High"
     },
     "folders": {
       "folders": "Folders",
@@ -5420,7 +5442,10 @@
       "unpin": "Unpin folder",
       "assignToFolder": "Move to folder",
       "removeFromFolder": "Remove from folder",
-      "confirmDelete": "Delete folder \"{name}\"? Subfolders will be moved to root."
+      "confirmDelete": "Delete folder \"{name}\"? Subfolders will be moved to root.",
+      "archive": "Archive folder",
+      "unarchive": "Unarchive folder",
+      "archived": "Archived"
     },
     "presets": {
       "modalTitle": "Slash Command Presets",

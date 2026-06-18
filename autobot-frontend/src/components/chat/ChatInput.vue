@@ -448,6 +448,7 @@ import { useSlashCommands } from '@/composables/useSlashCommands'
 import type { SlashCommandPreset } from '@/types/api'
 import { useImageGeneration } from '@/composables/useImageGeneration'
 import { useThinkingMode, BUDGET_STEPS, BUDGET_STEP_LABELS } from '@/composables/useThinkingMode'
+import { usePreferences } from '@/composables/usePreferences'
 
 const { t } = useI18n()
 const logger = createLogger('ChatInput')
@@ -530,6 +531,8 @@ const { generating: imageGenerating, generateImage } = useImageGeneration()
 
 // GH#8993: Thinking mode
 const { enabled: thinkingEnabled, budgetTokens: thinkingBudget, load: loadThinkingPrefs, toggle: toggleThinking, setBudget: setThinkingBudget } = useThinkingMode(() => store.currentSessionId)
+// #9460/#9471: per-user reasoning-effort default, passed per-conversation
+const { reasoningEffort } = usePreferences()
 const showImageGenModal = ref(false)
 const imagePrompt = ref('')
 const imageProvider = ref<'dalle' | 'flux' | 'stable_diffusion'>('dalle')
@@ -731,6 +734,8 @@ const sendMessage = async () => {
         use_knowledge: useKnowledge.value,  // Issue #249: RAG toggle
         // GH#8993: extended thinking parameters
         ...(thinkingEnabled.value ? { thinking_enabled: true, thinking_budget_tokens: thinkingBudget.value } : {}),
+        // #9460/#9471: per-conversation reasoning effort (omit 'auto' so request stays inert)
+        ...(reasoningEffort.value !== 'auto' ? { reasoning_effort: reasoningEffort.value } : {}),
       })
     }
 

@@ -298,7 +298,7 @@ export interface PendingSource {
 // ============================================================================
 
 /** Supported connector types for external data sources */
-export type ConnectorType = 'file_server' | 'web_crawler' | 'database' | 'gdrive'
+export type ConnectorType = 'file_server' | 'web_crawler' | 'database' | 'gdrive' | 'onedrive'
 
 /**
  * Connector configuration as stored by the backend.

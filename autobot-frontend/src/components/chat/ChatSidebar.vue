@@ -52,10 +52,32 @@
         </div>
         <ChatFolderTree
           v-if="showFolders"
-          :sessions="store.sessions"
+          :sessions="filteredSessions"
           :current-session-id="store.currentSessionId"
           @session-click="(id) => controller.switchToSession(id)"
         />
+
+        <!-- GH#8987: Archived folders (hidden by default, chats remain searchable) -->
+        <div v-if="folderStore.archivedFolders.length > 0" class="mt-2 pt-2 border-t border-autobot-border">
+          <button
+            class="flex items-center gap-1 text-xs font-semibold text-autobot-text-muted hover:text-autobot-text-secondary transition-colors"
+            @click="showArchived = !showArchived"
+          >
+            <Icon :name="showArchived ? 'chevron-down' : 'chevron-right'" class="text-xs" />
+            {{ $t('chat.folders.archived') }}
+            <span class="font-normal">({{ folderStore.archivedFolders.length }})</span>
+          </button>
+          <FolderNode
+            v-for="folder in folderStore.archivedFolders"
+            v-show="showArchived"
+            :key="folder.id"
+            :folder="folder"
+            :depth="0"
+            :sessions="filteredSessions"
+            :current-session-id="store.currentSessionId"
+            @session-click="(id) => controller.switchToSession(id)"
+          />
+        </div>
       </section>
 
       <!-- Chat History Section - FIXED: Scrollable area with multi-select -->
@@ -85,10 +107,32 @@
           </div>
         </div>
 
+        <!-- GH#8987: Search / filter chats by title (across folders) -->
+        <div class="relative mb-2 shrink-0">
+          <Icon name="search" class="absolute start-2 top-1/2 -translate-y-1/2 text-xs text-autobot-text-muted pointer-events-none" />
+          <input
+            id="chat-search"
+            v-model="searchQuery"
+            type="search"
+            class="w-full text-xs ps-7 pe-7 py-1.5 border border-autobot-border rounded bg-autobot-bg-card focus:outline-none focus:ring-1 focus:ring-electric-500"
+            :placeholder="$t('chat.sidebar.searchChats')"
+            :aria-label="$t('chat.sidebar.searchChats')"
+          />
+          <button
+            v-if="searchQuery"
+            type="button"
+            class="absolute end-2 top-1/2 -translate-y-1/2 text-autobot-text-muted hover:text-autobot-text-primary"
+            :aria-label="$t('common.clear')"
+            @click="clearSearch"
+          >
+            <Icon name="times" class="text-xs" />
+          </button>
+        </div>
+
         <!-- FIXED: Scrollable chat history container -->
         <div class="flex-1 overflow-y-auto space-y-1.5 pe-1 mb-3" style="scrollbar-width: thin;">
           <div
-            v-for="(session, index) in store.sessions"
+            v-for="(session, index) in filteredSessions"
             :key="session.id"
             :ref="el => setSessionRef(el as HTMLElement | null, index)"
             class="p-2.5 rounded-lg transition-all duration-150 group relative"
@@ -200,6 +244,12 @@
             v-if="store.sessions.length === 0"
             icon="comments"
             :message="$t('chat.sidebar.noSessions')"
+          />
+          <!-- GH#8987: No search results -->
+          <EmptyState
+            v-else-if="filteredSessions.length === 0"
+            icon="search"
+            :message="$t('chat.sidebar.noSearchResults')"
           />
         </div>
 
@@ -371,6 +421,7 @@ import { useChatStore } from '@/stores/useChatStore'
 import { useChatController } from '@/models/controllers'
 import { useDisplaySettings, type DisplaySettings } from '@/composables/useDisplaySettings'
 import ChatFolderTree from './ChatFolderTree.vue'
+import FolderNode from './ChatFolderNode.vue'
 import { useFolderStore } from '@/stores/useFolderStore'
 import { useBatchSelection } from '@/composables/useBatchSelection'
 import type { ChatSession } from '@/stores/useChatStore'
@@ -397,7 +448,22 @@ const folderStore = useFolderStore()
 
 // GH#8987: state for folder section
 const showFolders = ref(true)
+const showArchived = ref(false)
 const folderAssignTarget = ref<string | null>(null)
+
+// GH#8987: in-folder / chat-list search. Client-side filter by title over
+// the already-loaded sessions; archived folders' chats stay searchable.
+const searchQuery = ref('')
+const filteredSessions = computed(() => {
+  const q = searchQuery.value.trim().toLowerCase()
+  if (!q) return store.sessions
+  return store.sessions.filter((s) =>
+    (s.title || getSessionPreview(s)).toLowerCase().includes(q)
+  )
+})
+const clearSearch = () => {
+  searchQuery.value = ''
+}
 
 onMounted(() => {
   folderStore.fetchFolders()
@@ -447,7 +513,7 @@ const handleSessionKeydown = (event: KeyboardEvent, session: ChatSession, index:
   switch (event.key) {
     case 'ArrowDown':
       event.preventDefault()
-      if (index < store.sessions.length - 1) {
+      if (index < filteredSessions.value.length - 1) {
         focusedIndex.value = index + 1
         nextTick(() => {
           sessionRefs.value[index + 1]?.focus()
@@ -475,9 +541,9 @@ const handleSessionKeydown = (event: KeyboardEvent, session: ChatSession, index:
 
     case 'End':
       event.preventDefault()
-      focusedIndex.value = store.sessions.length - 1
+      focusedIndex.value = filteredSessions.value.length - 1
       nextTick(() => {
-        sessionRefs.value[store.sessions.length - 1]?.focus()
+        sessionRefs.value[filteredSessions.value.length - 1]?.focus()
       })
       break
 
