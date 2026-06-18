@@ -613,6 +613,128 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/auth/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Validate Token
+         * @description Token introspection for trusted callers (#10195).
+         *
+         *     Accepts the token via the request body ``{"token": "..."}`` or as a
+         *     ``Bearer`` header on the **same** request.  The endpoint itself is gated
+         *     by ``check_admin_permission`` which requires either:
+         *     - ``X-Internal-API-Key`` matching ``AUTOBOT_INTERNAL_API_KEY`` (SLM / service), or
+         *     - an authenticated user with the ``admin`` role.
+         *
+         *     Returns whether the token is valid, its public claims, and whether it was
+         *     explicitly revoked (session invalidated) regardless of expiry.
+         */
+        post: operations["validate_token_api_auth_validate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/roles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Roles
+         * @description Return all roles with their associated permissions (#10195).
+         *
+         *     Serialised directly from the canonical ``ROLE_PERMISSIONS`` mapping in
+         *     ``autobot_shared.auth.permissions`` — no database access required.
+         *     Gated by ``get_current_user`` (any authenticated caller).
+         */
+        get: operations["list_roles_api_auth_roles_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/all-permissions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Permissions
+         * @description Return all defined Permission values (#10195).
+         *
+         *     No database access — data is read directly from the ``Permission`` enum.
+         *     Gated by ``get_current_user`` (any authenticated caller).
+         */
+        get: operations["list_permissions_api_auth_all_permissions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/roles/{role}/permissions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Role Permissions
+         * @description Return the permissions assigned to a single role (#10195).
+         *
+         *     Returns 404 when *role* does not match any known ``Role`` enum value.
+         *     Gated by ``get_current_user`` (any authenticated caller).
+         */
+        get: operations["get_role_permissions_api_auth_roles__role__permissions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/jwks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Jwks Auth
+         * @description Return the JWKS at the /api/auth/jwks convenience path.
+         *
+         *     Alias of the well-known endpoint — same response, same cache headers.
+         *     Unauthenticated (public key distribution, RFC 7517).
+         */
+        get: operations["get_jwks_auth_api_auth_jwks_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/service-messages/latest": {
         parameters: {
             query?: never;
@@ -2482,7 +2604,10 @@ export interface paths {
          *     is disabled, the AnalyticsMiddleware and VoiceRealtimeTelemetry
          *     services skip data collection.
          *
-         *     Requires admin permission.
+         *     Requires admin permission.  Works in single_user mode (no Postgres
+         *     required): the consent state is persisted to settings.json via
+         *     ConfigService; the DB audit trail is skipped when Postgres is
+         *     unavailable (Issue #10000).
          *
          *     Args:
          *         request: New telemetry settings
@@ -8297,6 +8422,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/knowledge_base/connectors/oauth/{provider}/authorize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start Oauth
+         * @description Begin a connector OAuth flow; return the provider authorization URL.
+         */
+        post: operations["start_oauth_api_knowledge_base_connectors_oauth__provider__authorize_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/knowledge_base/connectors/oauth/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Oauth Callback
+         * @description Handle the provider redirect: exchange code → store tokens → hand back secret_id.
+         */
+        get: operations["oauth_callback_api_knowledge_base_connectors_oauth_callback_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/knowledge_base/populate_system_commands": {
         parameters: {
             query?: never;
@@ -11174,6 +11339,38 @@ export interface paths {
         patch: operations["update_project_api_transcriber_projects__project_id__patch"];
         trace?: never;
     };
+    "/api/transcriber/providers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Providers
+         * @description List all cloud ASR providers and the currently active selection.
+         *
+         *     Only shows metadata (id, name, configured, languages) — never returns keys.
+         */
+        get: operations["list_providers_api_transcriber_providers_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Set Provider
+         * @description Set the active cloud ASR provider.
+         *
+         *     Persistence limitation: this is in-process only and is lost on restart.
+         *     For persistence across restarts, set TRANSCRIBER_ASR_PROVIDER in the
+         *     backend environment before starting the service.
+         *
+         *     Pass {"provider": null} to clear the selection (fall back to local providers).
+         */
+        patch: operations["set_provider_api_transcriber_providers_patch"];
+        trace?: never;
+    };
     "/api/transcriber/projects/{project_id}/recordings": {
         parameters: {
             query?: never;
@@ -11205,6 +11402,46 @@ export interface paths {
         post?: never;
         /** Delete Recording */
         delete: operations["delete_recording_api_transcriber_recordings__recording_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/transcriber/recordings/{recording_id}/audio/chunks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Audio Chunks
+         * @description Stream audio file with HTTP Range support (RFC 7233).
+         */
+        get: operations["audio_chunks_api_transcriber_recordings__recording_id__audio_chunks_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/transcriber/recordings/{recording_id}/audio/waveform": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Audio Waveform
+         * @description Return waveform peak data and speaker segments for timeline visualization.
+         */
+        get: operations["audio_waveform_api_transcriber_recordings__recording_id__audio_waveform_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -18465,26 +18702,6 @@ export interface paths {
          *     Issue #744: Requires admin authentication.
          */
         post: operations["track_task_complete_api_analytics_agents_tasks_complete_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/analytics/engagement-metrics": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Decorator
-         * @description Inner decorator that wraps function with API error handling.
-         */
-        get: operations["decorator_api_analytics_engagement_metrics_get"];
-        put?: never;
-        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -29185,6 +29402,62 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/whatsapp/webhook": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Whatsapp Webhook Verify
+         * @description Answer Meta's webhook subscription challenge.
+         *
+         *     Meta sends ``hub.mode=subscribe`` with ``hub.verify_token`` and
+         *     ``hub.challenge``; echo the challenge only when the token matches.
+         */
+        get: operations["whatsapp_webhook_verify_api_whatsapp_webhook_get"];
+        put?: never;
+        /**
+         * Whatsapp Webhook
+         * @description Receive WhatsApp webhook deliveries and route messages to chat.
+         *
+         *     Security: verifies the ``X-Hub-Signature-256`` HMAC over the raw body using
+         *     the stored app secret (Meta security requirement). Fails closed.
+         */
+        post: operations["whatsapp_webhook_api_whatsapp_webhook_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/whatsapp/config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Whatsapp Config
+         * @description Return current WhatsApp channel status. Requires admin permission.
+         */
+        get: operations["get_whatsapp_config_api_whatsapp_config_get"];
+        put?: never;
+        /**
+         * Configure Whatsapp
+         * @description Configure WhatsApp Business API credentials. Requires admin permission.
+         *
+         *     Verifies the access token against the Meta API before persisting.
+         */
+        post: operations["configure_whatsapp_api_whatsapp_config_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/workflow/workflows": {
         parameters: {
             query?: never;
@@ -30800,6 +31073,77 @@ export interface paths {
          * @description Delete secrets for a specific chat (Issue #744: requires admin authentication)
          */
         delete: operations["delete_chat_secrets_api_secrets_chat__chat_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/secrets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Secrets */
+        get: operations["list_secrets_api_v2_secrets_get"];
+        put?: never;
+        /** Create Secret */
+        post: operations["create_secret_api_v2_secrets_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/secrets/{secret_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read Secret */
+        get: operations["read_secret_api_v2_secrets__secret_id__get"];
+        /** Rotate Secret */
+        put: operations["rotate_secret_api_v2_secrets__secret_id__put"];
+        post?: never;
+        /** Delete Secret */
+        delete: operations["delete_secret_api_v2_secrets__secret_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/secrets/{secret_id}/share": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Share Secret */
+        post: operations["share_secret_api_v2_secrets__secret_id__share_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/secrets/{secret_id}/share/{grantee}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Revoke Share */
+        delete: operations["revoke_share_api_v2_secrets__secret_id__share__grantee__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -42868,6 +43212,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/graph-rag/health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Graph Rag Health
+         * @description Check Graph-RAG service health (#10011: route declared in docstring but missing).
+         *
+         *     Reuses _check_component_health / _determine_overall_status helpers.
+         *     Issue #744: Requires authenticated user.
+         */
+        get: operations["graph_rag_health_api_graph_rag_health_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/graph-rag/metrics": {
         parameters: {
             query?: never;
@@ -43564,6 +43931,39 @@ export interface paths {
         get: operations["get_entity_history_api_knowledge_base_rag_entity__entity_id__history_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/knowledge_base/rag/context": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Retrieval Context
+         * @description Strategy-dispatched context retrieval (RAG / CAG).
+         *
+         *     Issue #9018 Phase 1.
+         *
+         *     **Parameters:**
+         *     - **query**: Generation query string.
+         *     - **collection_id**: Optional collection to target (future: per-collection mode lookup).
+         *     - **mode**: Retrieval mode — 'auto' | 'rag' | 'cag' | 'kag'.
+         *     - **model**: Active model name for token-budget calculation (CAG only).
+         *
+         *     **Returns:**
+         *     - **context**: Assembled context string for LLM injection.
+         *     - **strategy**: Actual strategy used ('rag' or 'cag').
+         *     - **metrics**: Timing and result-count metrics.
+         */
+        post: operations["retrieval_context_api_knowledge_base_rag_context_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -45828,110 +46228,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/transcripts/{transcript_id}/export/docx": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Export Docx
-         * @description Export transcript as DOCX (Microsoft Word) file.
-         *
-         *     Args:
-         *         transcript_id: Transcript UUID
-         *
-         *     Returns:
-         *         Response: DOCX file download
-         */
-        get: operations["export_docx_api_transcripts__transcript_id__export_docx_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/transcripts/{transcript_id}/export/pdf": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Export Pdf
-         * @description Export transcript as PDF file.
-         *
-         *     Args:
-         *         transcript_id: Transcript UUID
-         *
-         *     Returns:
-         *         Response: PDF file download
-         */
-        get: operations["export_pdf_api_transcripts__transcript_id__export_pdf_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/transcripts/{transcript_id}/export/srt": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Export Srt
-         * @description Export transcript as SRT (SubRip) subtitle file.
-         *
-         *     Args:
-         *         transcript_id: Transcript UUID
-         *
-         *     Returns:
-         *         Response: SRT file download
-         */
-        get: operations["export_srt_api_transcripts__transcript_id__export_srt_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/transcripts/{transcript_id}/export/vtt": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Export Vtt
-         * @description Export transcript as VTT (WebVTT) subtitle file.
-         *
-         *     Args:
-         *         transcript_id: Transcript UUID
-         *
-         *     Returns:
-         *         Response: VTT file download
-         */
-        get: operations["export_vtt_api_transcripts__transcript_id__export_vtt_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/slm/deployments/docker": {
         parameters: {
             query?: never;
@@ -46619,6 +46915,26 @@ export interface paths {
          * @description List all active shared links for a session (GH#8996).
          */
         get: operations["list_shared_links_api_chat_sessions__session_id__share_links_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/chat/shared-links/admin": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List all active shared links across all users (admin)
+         * @description Return every active (non-expired) shared link with its owner (GH#8996, AC4).
+         */
+        get: operations["list_all_shared_links_admin_api_chat_shared_links_admin_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -47360,6 +47676,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/llc/companies/{company_id}/backlog/reorder": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reorder Backlog
+         * @description Assign ``backlog_position`` 0..n-1 to the supplied ordered work item ids.
+         *
+         *     Tenant access is enforced the same way as ``get_org_chart``: the caller's
+         *     org must match *company_id* unless they are a platform admin.  Unknown or
+         *     cross-tenant ids within the payload are counted in ``unknown_count`` and
+         *     silently skipped (not an error, so that a stale UI with a partially-loaded
+         *     backlog can still submit a reorder without receiving a 400).  A 400 is only
+         *     raised when the entire list is empty (caught by pydantic min_length=1).
+         */
+        post: operations["reorder_backlog_api_llc_companies__company_id__backlog_reorder_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/llc/companies/{company_id}/org-chart": {
         parameters: {
             query?: never;
@@ -47744,6 +48087,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/llc/companies/{company_id}/projects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Company Projects
+         * @description Flat list of all projects in a company (GH#9020 — drives the timeline
+         *     project picker; also reused by the project browser).
+         */
+        get: operations["list_company_projects_api_llc_companies__company_id__projects_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/llc/projects/{project_id}": {
         parameters: {
             query?: never;
@@ -47858,6 +48222,27 @@ export interface paths {
          * @description Return velocity history for the last N closed sprints in a project.
          */
         get: operations["get_project_velocity_api_llc_projects__project_id__velocity_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/projects/{project_id}/timeline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Project Timeline
+         * @description Return the project's work items with blocked-by dependency edges and
+         *     critical-path flags for the Gantt/timeline view (GH#9020).
+         */
+        get: operations["get_project_timeline_api_llc_projects__project_id__timeline_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -48013,6 +48398,28 @@ export interface paths {
         put?: never;
         /** Transition Work Item */
         post: operations["transition_work_item_api_llc_work_items__work_item_id__transition_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/work-items/{work_item_id}/link-pr": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Link Pr
+         * @description Link a GitHub PR URL to a work item (GH#9625).
+         *
+         *     Called by LLC adapters/agents after opening a PR for the work item.
+         */
+        post: operations["link_pr_api_llc_work_items__work_item_id__link_pr_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -48261,6 +48668,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/llc/work-items/suggest-ac": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Suggest Acceptance Criteria
+         * @description Suggest acceptance criteria for a work item using the RAG-backed AcSuggester.
+         *
+         *     The company scope is derived from the authenticated org context — never
+         *     from the request body.  Provide ``work_item_id`` to resolve title/description
+         *     from the DB (with tenant check), or supply ``title`` directly.  Returns an
+         *     empty list on LLM failure so the caller can degrade gracefully without
+         *     surfacing a 500 error.
+         */
+        post: operations["suggest_acceptance_criteria_api_llc_work_items_suggest_ac_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/llc/work-items/{work_item_id}/attachments": {
         parameters: {
             query?: never;
@@ -48325,6 +48758,33 @@ export interface paths {
         post?: never;
         /** Delete Attachment */
         delete: operations["delete_attachment_api_llc_work_items__work_item_id__attachments__attachment_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/webhooks/github": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Handle Github Webhook
+         * @description Handle GitHub ``pull_request`` webhook events for PR auto-linking.
+         *
+         *     Auto-links the PR to a work item resolved from:
+         *     1. Branch name: ``llc/{work_item_id}`` (and variants)
+         *     2. PR body: ``Closes #llc-{work_item_id}``
+         *
+         *     On PR merge → transition the work item to ``in_review``.
+         *     On PR close without merge → add a comment to the work item.
+         */
+        post: operations["handle_github_webhook_api_llc_webhooks_github_post"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -48766,6 +49226,100 @@ export interface paths {
          * @description List heartbeat runs across the whole org, newest first (GH#9851).
          */
         get: operations["list_org_heartbeat_runs_api_llc_heartbeat_runs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/agents/{agent_id}/runs/{run_id}/replay": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Trigger Replay
+         * @description Replay a run — re-executes stored inputs, creating a new run record.
+         *
+         *     Returns the new (QUEUED) run.  Dispatch is asynchronous; poll
+         *     ``GET /agents/{agent_id}/runs/{new_run_id}`` for completion status.
+         */
+        post: operations["trigger_replay_api_llc_agents__agent_id__runs__run_id__replay_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/agents/{agent_id}/runs/{run_id}/replay-log": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Replay Log
+         * @description Return the recorded timeline for a run (for step-browser).
+         *
+         *     Raw inputs are stored in the DB; use ``?redact_pii=true`` to have
+         *     credentials stripped from the response on read.  Emails are NOT
+         *     separately redacted (the credential_redaction module covers API keys
+         *     and bearer tokens; email redaction would require regex patterns not
+         *     currently present in that module).
+         */
+        get: operations["get_replay_log_api_llc_agents__agent_id__runs__run_id__replay_log_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/agents/{agent_id}/runs/{run_id}/diff/{other_run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Diff Runs
+         * @description Unified text diff of output_text between two runs.
+         */
+        get: operations["diff_runs_api_llc_agents__agent_id__runs__run_id__diff__other_run_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/agents/{agent_id}/runs/{run_id}/fixture": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Fixture
+         * @description Export run as a JSON test fixture (inputs + expected output shape).
+         *
+         *     Always applies PII redaction to the exported payload.
+         *     In-process runs record inputs only (no output file exists for autobot_agent
+         *     adapter runs); the ``recorded_events`` and ``output_text`` fields will be
+         *     null for those runs.
+         */
+        get: operations["export_fixture_api_llc_agents__agent_id__runs__run_id__fixture_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -49783,6 +50337,29 @@ export interface paths {
          *     Virtual keys enforce per-key monthly budget and model whitelist.
          */
         post: operations["messages_v1_messages_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/.well-known/jwks.json": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Jwks Well Known
+         * @description Return the JWKS at the RFC 8414 well-known discovery path.
+         *
+         *     This endpoint is **unauthenticated** — the public key is intentionally
+         *     readable by any client that needs to verify JWTs.
+         */
+        get: operations["get_jwks_well_known__well_known_jwks_json_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -54688,6 +55265,18 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * AuthRoleEntry
+         * @description Single role entry for GET /auth/roles (#10195).
+         */
+        AuthRoleEntry: {
+            /** Name */
+            name: string;
+            /** Permissions */
+            permissions: string[];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * AuthUserInfoResponse
          * @description Response for GET /auth/me.
          */
@@ -54708,11 +55297,85 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * AuthValidateClaims
+         * @description Claims block nested inside AuthValidateResponse.
+         */
+        AuthValidateClaims: {
+            /** Username */
+            username?: string | null;
+            /** Role */
+            role?: string | null;
+            /** User Id */
+            user_id?: string | null;
+            /** Org Id */
+            org_id?: string | null;
+            /** Email */
+            email?: string | null;
+            /** Exp */
+            exp?: number | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * AuthValidateRequest
+         * @description Optional body for POST /auth/validate — token may also come from Bearer header.
+         */
+        AuthValidateRequest: {
+            /** Token */
+            token?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * AuthValidateResponse
+         * @description Response for POST /auth/validate (#10195).
+         */
+        AuthValidateResponse: {
+            /** Valid */
+            valid: boolean;
+            claims?: components["schemas"]["AuthValidateClaims"] | null;
+            /**
+             * Expired
+             * @default false
+             */
+            expired: boolean;
+            /**
+             * Revoked
+             * @default false
+             */
+            revoked: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * AuthorTypeEnum
          * @description Valid author types for approval comments.
          * @enum {string}
          */
         AuthorTypeEnum: "human" | "agent" | "system";
+        /**
+         * AuthorizeRequest
+         * @description Body for starting a connector OAuth flow.
+         */
+        AuthorizeRequest: {
+            /** Redirect Uri */
+            redirect_uri: string;
+            /** Scopes */
+            scopes?: string[] | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** AuthorizeResponse */
+        AuthorizeResponse: {
+            /** Authorize Url */
+            authorize_url: string;
+            /** State */
+            state: string;
+            /** Connector Id */
+            connector_id: string;
+        } & {
+            [key: string]: unknown;
+        };
         /**
          * AutoApplySuggestionsRequest
          * @description Request model for auto-applying suggestions to a fact (Issue #413).
@@ -54785,6 +55448,34 @@ export interface components {
             last_run: string | null;
             /** Is Running */
             is_running: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * BacklogReorderRequest
+         * @description Bulk-reorder request — ordered list of work item UUIDs.
+         *
+         *     Positions are assigned 0..n-1 (deduplicated, preserving first occurrence)
+         *     in the order items appear in the list.  Items belonging to a different
+         *     company are silently skipped (tenant isolation: callers should only submit
+         *     ids they already fetched from this company's backlog).
+         *
+         *     ``work_item_ids`` is typed as ``List[uuid.UUID]`` so Pydantic validates
+         *     each entry and returns a 422 for any malformed id — no manual parsing
+         *     needed in the service.
+         */
+        BacklogReorderRequest: {
+            /** Work Item Ids */
+            work_item_ids: string[];
+        } & {
+            [key: string]: unknown;
+        };
+        /** BacklogReorderResponse */
+        BacklogReorderResponse: {
+            /** Updated */
+            updated: number;
+            /** Unknown Count */
+            unknown_count: number;
         } & {
             [key: string]: unknown;
         };
@@ -58973,7 +59664,7 @@ export interface components {
             /**
              * Codebase Path
              * @description Path to codebase to index
-             * @default /home/martins/AutoBot-Ai/AutoBot-AI/.worktrees/issue-9864
+             * @default /home/martins/AutoBot-Ai/AutoBot-AI/.worktrees/issue-9959
              */
             codebase_path: string;
             /**
@@ -61454,6 +62145,8 @@ export interface components {
             exclude_patterns?: string[];
             /** Max Concurrency */
             max_concurrency?: number | null;
+            /** Secret Id */
+            secret_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -61591,6 +62284,19 @@ export interface components {
             metadata?: {
                 [key: string]: unknown;
             } | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** CreateSecretBody */
+        CreateSecretBody: {
+            /** Owner Vault */
+            owner_vault: string;
+            /** Name */
+            name: string;
+            /** Secret Type */
+            secret_type: string;
+            /** Value */
+            value: string;
         } & {
             [key: string]: unknown;
         };
@@ -63890,21 +64596,6 @@ export interface components {
              */
             success: boolean;
             data?: components["schemas"]["EmbeddingUpdateData"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** DataResponse[EngagementMetricsResponse] */
-        DataResponse_EngagementMetricsResponse_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["EngagementMetricsResponse"] | null;
             /** Message */
             message?: string | null;
             /** Timestamp */
@@ -68040,24 +68731,6 @@ export interface components {
             [key: string]: unknown;
         };
         /**
-         * EngagementMetricsResponse
-         * @description Response model for engagement metrics.
-         */
-        EngagementMetricsResponse: {
-            /** Timestamp */
-            timestamp: string;
-            /** Metrics */
-            metrics: {
-                [key: string]: unknown;
-            };
-            /** Feature Popularity */
-            feature_popularity: unknown[];
-            /** Most Popular Feature */
-            most_popular_feature: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /**
          * EnhancedChatCapabilitiesData
          * @description data payload for GET /capabilities.
          *
@@ -71416,6 +72089,31 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * GraphRAGHealthResponse
+         * @description Response model for health check.
+         */
+        GraphRAGHealthResponse: {
+            /**
+             * Status
+             * @description Service status (healthy, degraded, unhealthy)
+             */
+            status: string;
+            /**
+             * Components
+             * @description Component health status
+             */
+            components: {
+                [key: string]: string;
+            };
+            /**
+             * Timestamp
+             * @description Timestamp of health check
+             */
+            timestamp: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * GraphRAGSearchRequest
          * @description Request model for graph-aware RAG search.
          */
@@ -73401,7 +74099,7 @@ export interface components {
              * Source Paths
              * @description Paths to populate from
              * @default [
-             *       "/home/martins/AutoBot-Ai/AutoBot-AI/.worktrees/issue-9864"
+             *       "/home/martins/AutoBot-Ai/AutoBot-AI/.worktrees/issue-9959"
              *     ]
              */
             source_paths: string[];
@@ -76561,6 +77259,20 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * LinkPrRequest
+         * @description Link a GitHub PR to a work item (GH#9625).
+         */
+        LinkPrRequest: {
+            /** Pr Url */
+            pr_url: string;
+            /** Pr Number */
+            pr_number?: number | null;
+            /** Repo */
+            repo?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * ListBackupsResponse
          * @description Shape of ``GET /backups``.
          */
@@ -78503,9 +79215,14 @@ export interface components {
         /**
          * MembershipRole
          * @description Role of a human user within an LLC company (GH#8223).
+         *
+         *     Member order matches the deployed (migration-built) enum label order so a
+         *     create_all-built ``membershiprole`` sorts identically to a migration-built
+         *     one (GH#10076): migration 031 created ('owner','admin','member','guest') and
+         *     043 appended 'lead' at the end via ALTER TYPE ADD VALUE.
          * @enum {string}
          */
-        MembershipRole: "owner" | "admin" | "lead" | "member" | "guest";
+        MembershipRole: "owner" | "admin" | "member" | "guest" | "lead";
         /** MembershipUpdate */
         MembershipUpdate: {
             /**
@@ -81450,7 +82167,7 @@ export interface components {
             /**
              * Path
              * @description Path to analyze (defaults to project root)
-             * @default /home/martins/AutoBot-Ai/AutoBot-AI/.worktrees/issue-9864
+             * @default /home/martins/AutoBot-Ai/AutoBot-AI/.worktrees/issue-9959
              */
             path: string;
             /**
@@ -83715,6 +84432,20 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** ProjectTimelineResponse */
+        ProjectTimelineResponse: {
+            /**
+             * Project Id
+             * Format: uuid
+             */
+            project_id: string;
+            /** Items */
+            items: components["schemas"]["TimelineItem"][];
+            /** Edges */
+            edges: components["schemas"]["TimelineEdge"][];
+        } & {
+            [key: string]: unknown;
+        };
         /**
          * PrometheusMCPExecuteResponse
          * @description Response for POST /prometheus/mcp/{tool_name}.
@@ -83898,26 +84629,6 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /**
-         * ProviderInfo
-         * @description Information about a supported provider.
-         */
-        ProviderInfo: {
-            /** Provider */
-            provider: string;
-            /** Name */
-            name: string;
-            /** Description */
-            description: string;
-            /** Auth Type */
-            auth_type: string;
-            /** Base Url Required */
-            base_url_required: boolean;
-            /** Documentation Url */
-            documentation_url: string;
-        } & {
-            [key: string]: unknown;
-        };
         /** ProviderStatus */
         ProviderStatus: {
             /** Name */
@@ -83926,13 +84637,6 @@ export interface components {
             available: boolean;
             /** Reason */
             reason?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** ProvidersResponse */
-        ProvidersResponse: {
-            /** Providers */
-            providers: components["schemas"]["ProviderStatus"][];
         } & {
             [key: string]: unknown;
         };
@@ -85676,6 +86380,51 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * RetrievalContextRequest
+         * @description Request body for POST /context — strategy-dispatched context retrieval.
+         */
+        RetrievalContextRequest: {
+            /**
+             * Query
+             * @description Generation query
+             */
+            query: string;
+            /**
+             * Collection Id
+             * @description Target collection identifier
+             */
+            collection_id?: string | null;
+            /**
+             * Mode
+             * @description Retrieval mode
+             * @default auto
+             */
+            mode: string;
+            /**
+             * Model
+             * @description Active model name for budget calculation
+             */
+            model?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * RetrievalContextResponse
+         * @description Response from POST /context.
+         */
+        RetrievalContextResponse: {
+            /** Context */
+            context: string;
+            /** Strategy */
+            strategy: string;
+            /** Metrics */
+            metrics?: {
+                [key: string]: unknown;
+            };
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * RetryJobResponse
          * @description Response for POST /vectorize_jobs/{job_id}/retry.
          */
@@ -85863,6 +86612,13 @@ export interface components {
             username: string;
             /** Role */
             role: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /** RotateBody */
+        RotateBody: {
+            /** Value */
+            value: string;
         } & {
             [key: string]: unknown;
         };
@@ -87498,6 +88254,24 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** SecretMetadata */
+        SecretMetadata: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Type */
+            type: string;
+            /** Owner Vault */
+            owner_vault: string | null;
+            /** Version */
+            version: number;
+        } & {
+            [key: string]: unknown;
+        };
         /**
          * SecretScope
          * @description Secret scope enumeration.
@@ -87620,6 +88394,13 @@ export interface components {
             metadata?: {
                 [key: string]: unknown;
             } | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** SecretValue */
+        SecretValue: {
+            /** Value */
+            value: string;
         } & {
             [key: string]: unknown;
         };
@@ -87797,7 +88578,7 @@ export interface components {
              * Scan Paths
              * @description Paths to scan
              * @default [
-             *       "/home/martins/AutoBot-Ai/AutoBot-AI/.worktrees/issue-9864"
+             *       "/home/martins/AutoBot-Ai/AutoBot-AI/.worktrees/issue-9959"
              *     ]
              */
             scan_paths: string[];
@@ -88868,6 +89649,13 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** SetProviderRequest */
+        SetProviderRequest: {
+            /** Provider */
+            provider: string | null;
+        } & {
+            [key: string]: unknown;
+        };
         /** SettingsTaskQueuedResponse */
         SettingsTaskQueuedResponse: {
             /** Task Id */
@@ -88938,6 +89726,13 @@ export interface components {
              * @default 0
              */
             low: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /** ShareBody */
+        ShareBody: {
+            /** Grantee */
+            grantee: string;
         } & {
             [key: string]: unknown;
         };
@@ -90705,6 +91500,36 @@ export interface components {
             enable_llm_pass?: boolean | null;
             /** Llm Timeout */
             llm_timeout?: number | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * SuggestAcRequest
+         * @description Request body for the acceptance-criteria suggestion endpoint.
+         *
+         *     ``company_id`` is intentionally absent — the tenant is derived from the
+         *     authenticated session's org context (H2 fix: client-supplied company_id
+         *     was a cross-tenant KB read vector via the ChromaDB ``company:{id}``
+         *     collection name).
+         */
+        SuggestAcRequest: {
+            /** Work Item Id */
+            work_item_id?: string | null;
+            /** Title */
+            title?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Project Id */
+            project_id?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** SuggestAcResponse */
+        SuggestAcResponse: {
+            /** Suggestions */
+            suggestions: string[];
+            /** Sources */
+            sources: string[];
         } & {
             [key: string]: unknown;
         };
@@ -92740,7 +93565,7 @@ export interface components {
             /**
              * Test Path
              * @description Path to test directory
-             * @default /home/martins/AutoBot-Ai/AutoBot-AI/.worktrees/issue-9864/autobot-backend
+             * @default /home/martins/AutoBot-Ai/AutoBot-AI/.worktrees/issue-9959/autobot-backend
              */
             test_path: string;
             /**
@@ -92985,6 +93810,53 @@ export interface components {
             comparison: string;
             /** Old Value */
             old_value?: number | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** TimelineEdge */
+        TimelineEdge: {
+            /**
+             * From Id
+             * Format: uuid
+             */
+            from_id: string;
+            /**
+             * To Id
+             * Format: uuid
+             */
+            to_id: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /** TimelineItem */
+        TimelineItem: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Identifier */
+            identifier: string;
+            /** Title */
+            title: string;
+            /** Type */
+            type: string;
+            /** Status */
+            status: string;
+            /** Assignee Agent Id */
+            assignee_agent_id: string | null;
+            /** Assignee User Id */
+            assignee_user_id: string | null;
+            /** Scheduled Start */
+            scheduled_start: string | null;
+            /** Scheduled End */
+            scheduled_end: string | null;
+            /** Started At */
+            started_at: string | null;
+            /** Completed At */
+            completed_at: string | null;
+            /** On Critical Path */
+            on_critical_path: boolean;
         } & {
             [key: string]: unknown;
         };
@@ -95034,24 +95906,44 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * VisionStatusFeaturesResponse
+         * @description Nested features dict in VisionStatusResponse.
+         */
+        VisionStatusFeaturesResponse: {
+            /** Screen Analysis */
+            screen_analysis: boolean;
+            /** Element Detection */
+            element_detection: boolean;
+            /** Ocr Extraction */
+            ocr_extraction: boolean;
+            /** Template Matching */
+            template_matching: boolean;
+            /** Multimodal Processing */
+            multimodal_processing: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * VisionStatusResponse
-         * @description Response for GET /vision/status.
+         * @description Response for GET /vision/status (api/vision.py::get_vision_status).
          *
-         *     Error path returns only service+status+error — extra fields allowed.
+         *     Success path: service, status, features, supported_element_types,
+         *                   supported_interaction_types.
+         *     Error path:   service, status, error  (features/counts absent).
+         *     All success-only fields are Optional so the model validates both shapes.
          */
         VisionStatusResponse: {
-            /** Timestamp */
-            timestamp?: number | null;
-            /** Overall Status */
-            overall_status?: string | null;
-            /** Total Services */
-            total_services?: number | null;
-            /** Healthy Services */
-            healthy_services?: number | null;
-            /** Degraded Services */
-            degraded_services?: number | null;
-            /** Critical Services */
-            critical_services?: number | null;
+            /** Service */
+            service: string;
+            /** Status */
+            status: string;
+            features?: components["schemas"]["VisionStatusFeaturesResponse"] | null;
+            /** Supported Element Types */
+            supported_element_types?: number | null;
+            /** Supported Interaction Types */
+            supported_interaction_types?: number | null;
+            /** Error */
+            error?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -96060,6 +96952,58 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /**
+         * WhatsAppConfigRequest
+         * @description Request to configure the WhatsApp Business API channel (GH#9007).
+         */
+        WhatsAppConfigRequest: {
+            /**
+             * Access Token
+             * @description Meta WhatsApp Business API access token
+             */
+            access_token: string;
+            /**
+             * Phone Number Id
+             * @description WhatsApp Business phone number ID
+             */
+            phone_number_id: string;
+            /**
+             * App Secret
+             * @description Meta app secret for webhook signature verification
+             */
+            app_secret: string;
+            /**
+             * Verify Token
+             * @description Token echoed during Meta webhook subscription challenge
+             */
+            verify_token: string;
+            /**
+             * Business Account Id
+             * @description WhatsApp Business Account ID (optional)
+             */
+            business_account_id?: string | null;
+            /**
+             * Base Url
+             * @description Override API base URL for self-hosted deployments
+             */
+            base_url?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * WhatsAppConfigResponse
+         * @description Response for WhatsApp Business API configuration (GH#9007).
+         */
+        WhatsAppConfigResponse: {
+            /** Status */
+            status: string;
+            /** Message */
+            message: string;
+            /** Phone Number */
+            phone_number?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
         /** WikiEntryCreate */
         WikiEntryCreate: {
             /**
@@ -96238,6 +97182,10 @@ export interface components {
             assignee_agent_id?: string | null;
             /** Assignee User Id */
             assignee_user_id?: string | null;
+            /** Scheduled Start */
+            scheduled_start?: string | null;
+            /** Scheduled End */
+            scheduled_end?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -96897,6 +97845,13 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** ProvidersResponse */
+        api__image_generation__ProvidersResponse: {
+            /** Providers */
+            providers: components["schemas"]["ProviderStatus"][];
+        } & {
+            [key: string]: unknown;
+        };
         /**
          * SearchResponse
          * @description Response for similarity search.
@@ -97081,6 +98036,26 @@ export interface components {
              * @default builtin
              */
             source_id: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * ProviderInfo
+         * @description Information about a supported provider.
+         */
+        api__schemas_workflows__ProviderInfo: {
+            /** Provider */
+            provider: string;
+            /** Name */
+            name: string;
+            /** Description */
+            description: string;
+            /** Auth Type */
+            auth_type: string;
+            /** Base Url Required */
+            base_url_required: boolean;
+            /** Documentation Url */
+            documentation_url: string;
         } & {
             [key: string]: unknown;
         };
@@ -97380,6 +98355,28 @@ export interface components {
              * @default
              */
             description: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /** ProviderInfo */
+        transcriber__routes__providers__ProviderInfo: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Configured */
+            configured: boolean;
+            /** Languages */
+            languages: string[];
+        } & {
+            [key: string]: unknown;
+        };
+        /** ProvidersResponse */
+        transcriber__routes__providers__ProvidersResponse: {
+            /** Selected */
+            selected: string | null;
+            /** Providers */
+            providers: components["schemas"]["transcriber__routes__providers__ProviderInfo"][];
         } & {
             [key: string]: unknown;
         };
@@ -98222,6 +99219,130 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DataResponse_AuthRefreshData_"];
+                };
+            };
+        };
+    };
+    validate_token_api_auth_validate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["AuthValidateRequest"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthValidateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_roles_api_auth_roles_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthRoleEntry"][];
+                };
+            };
+        };
+    };
+    list_permissions_api_auth_all_permissions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string[];
+                };
+            };
+        };
+    };
+    get_role_permissions_api_auth_roles__role__permissions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                role: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string[];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_jwks_auth_api_auth_jwks_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
         };
@@ -108152,6 +109273,74 @@ export interface operations {
             };
         };
     };
+    start_oauth_api_knowledge_base_connectors_oauth__provider__authorize_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                provider: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuthorizeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthorizeResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    oauth_callback_api_knowledge_base_connectors_oauth_callback_get: {
+        parameters: {
+            query: {
+                state: string;
+                code?: string | null;
+                error?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": string;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     populate_system_commands_api_knowledge_base_populate_system_commands_post: {
         parameters: {
             query?: never;
@@ -111746,6 +112935,61 @@ export interface operations {
             };
         };
     };
+    list_providers_api_transcriber_providers_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["transcriber__routes__providers__ProvidersResponse"];
+                };
+            };
+        };
+    };
+    set_provider_api_transcriber_providers_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetProviderRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_recordings_api_transcriber_projects__project_id__recordings_get: {
         parameters: {
             query?: {
@@ -111863,6 +113107,70 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    audio_chunks_api_transcriber_recordings__recording_id__audio_chunks_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                recording_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    audio_waveform_api_transcriber_recordings__recording_id__audio_waveform_get: {
+        parameters: {
+            query?: {
+                width?: number;
+            };
+            header?: never;
+            path: {
+                recording_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
             };
             /** @description Validation Error */
             422: {
@@ -121191,37 +122499,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AgentTaskCompleteResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    decorator_api_analytics_engagement_metrics_get: {
-        parameters: {
-            query: {
-                func: unknown;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DataResponse_EngagementMetricsResponse_"];
                 };
             };
             /** @description Validation Error */
@@ -133488,7 +134765,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ProviderInfo"][];
+                    "application/json": components["schemas"]["api__schemas_workflows__ProviderInfo"][];
                 };
             };
         };
@@ -134848,6 +136125,99 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["VCSProviderInfo"][];
+                };
+            };
+        };
+    };
+    whatsapp_webhook_verify_api_whatsapp_webhook_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    whatsapp_webhook_api_whatsapp_webhook_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    get_whatsapp_config_api_whatsapp_config_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WhatsAppConfigResponse"];
+                };
+            };
+        };
+    };
+    configure_whatsapp_api_whatsapp_config_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WhatsAppConfigRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WhatsAppConfigResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -137237,6 +138607,221 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["DataResponse_ChatSecretsDeleteData_"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_secrets_api_v2_secrets_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretMetadata"][];
+                };
+            };
+        };
+    };
+    create_secret_api_v2_secrets_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSecretBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretMetadata"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_secret_api_v2_secrets__secret_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                secret_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretValue"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rotate_secret_api_v2_secrets__secret_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                secret_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RotateBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretMetadata"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_secret_api_v2_secrets__secret_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                secret_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    share_secret_api_v2_secrets__secret_id__share_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                secret_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ShareBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_share_api_v2_secrets__secret_id__share__grantee__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                secret_id: string;
+                grantee: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -139684,7 +141269,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ProvidersResponse"];
+                    "application/json": components["schemas"]["api__image_generation__ProvidersResponse"];
                 };
             };
         };
@@ -152761,6 +154346,26 @@ export interface operations {
             };
         };
     };
+    graph_rag_health_api_graph_rag_health_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GraphRAGHealthResponse"];
+                };
+            };
+        };
+    };
     graph_rag_metrics_api_graph_rag_metrics_get: {
         parameters: {
             query?: never;
@@ -153546,6 +155151,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EntityHistoryResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    retrieval_context_api_knowledge_base_rag_context_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetrievalContextRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetrievalContextResponse"];
                 };
             };
             /** @description Validation Error */
@@ -156832,130 +158470,6 @@ export interface operations {
             };
         };
     };
-    export_docx_api_transcripts__transcript_id__export_docx_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                transcript_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    export_pdf_api_transcripts__transcript_id__export_pdf_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                transcript_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    export_srt_api_transcripts__transcript_id__export_srt_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                transcript_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    export_vtt_api_transcripts__transcript_id__export_vtt_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                transcript_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     deploy_docker_api_slm_deployments_docker_post: {
         parameters: {
             query?: never;
@@ -158065,6 +159579,28 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_all_shared_links_admin_api_chat_shared_links_admin_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
         };
@@ -159422,6 +160958,41 @@ export interface operations {
             };
         };
     };
+    reorder_backlog_api_llc_companies__company_id__backlog_reorder_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BacklogReorderRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BacklogReorderResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_org_chart_api_llc_companies__company_id__org_chart_get: {
         parameters: {
             query?: never;
@@ -160410,6 +161981,37 @@ export interface operations {
             };
         };
     };
+    list_company_projects_api_llc_companies__company_id__projects_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_project_api_llc_projects__project_id__get: {
         parameters: {
             query?: never;
@@ -160759,6 +162361,37 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_project_timeline_api_llc_projects__project_id__timeline_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectTimelineResponse"];
                 };
             };
             /** @description Validation Error */
@@ -161137,6 +162770,43 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["TransitionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    link_pr_api_llc_work_items__work_item_id__link_pr_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                work_item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LinkPrRequest"];
             };
         };
         responses: {
@@ -161632,6 +163302,39 @@ export interface operations {
             };
         };
     };
+    suggest_acceptance_criteria_api_llc_work_items_suggest_ac_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SuggestAcRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuggestAcResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_attachments_api_llc_work_items__work_item_id__attachments_get: {
         parameters: {
             query: {
@@ -161798,6 +163501,40 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    handle_github_webhook_api_llc_webhooks_github_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-github-event"?: string | null;
+                "x-hub-signature-256"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
             };
             /** @description Validation Error */
             422: {
@@ -162677,6 +164414,146 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     }[];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    trigger_replay_api_llc_agents__agent_id__runs__run_id__replay_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: string;
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_replay_log_api_llc_agents__agent_id__runs__run_id__replay_log_get: {
+        parameters: {
+            query?: {
+                /** @description Redact credentials/PII from the returned payload */
+                redact_pii?: boolean;
+            };
+            header?: never;
+            path: {
+                agent_id: string;
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    diff_runs_api_llc_agents__agent_id__runs__run_id__diff__other_run_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: string;
+                run_id: string;
+                other_run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_fixture_api_llc_agents__agent_id__runs__run_id__fixture_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: string;
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Validation Error */
@@ -164652,6 +166529,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_jwks_well_known__well_known_jwks_json_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
         };
