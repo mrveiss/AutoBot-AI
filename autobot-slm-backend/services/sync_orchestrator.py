@@ -337,7 +337,6 @@ class SyncOrchestrator:
             "-o",
             "StrictHostKeyChecking=accept-new",
             "-o",
-            "-o",
             "ConnectTimeout=10",
         ]
         if Path(SSH_KEY_PATH).exists():
