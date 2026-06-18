@@ -35,7 +35,7 @@ RUN grep -v -E "(autobot.shared|^-r |^torch==|^torchvision==)" /tmp/requirements
         > /app/requirements-filtered.txt \
     && python3 -m pip install --no-cache-dir -r /app/requirements-root.txt \
     && python3 -m pip install --no-cache-dir \
-        torch==2.12.0 torchvision==0.27.0 \
+        torch==2.12.1 torchvision==0.27.1 \
         --index-url https://download.pytorch.org/whl/cpu \
     && python3 -m pip install --no-cache-dir -r /app/requirements-filtered.txt
 
