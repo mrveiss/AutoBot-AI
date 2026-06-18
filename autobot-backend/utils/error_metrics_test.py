@@ -326,6 +326,23 @@ class TestGetErrorTimeline:
         assert "component=" not in called_promql
 
     @pytest.mark.asyncio
+    async def test_timeline_component_promql_injection_escaped(self, collector):
+        """#9983 security: a malicious component param cannot break out of the
+        quoted PromQL label value to inject arbitrary PromQL."""
+        with patch(
+            "autobot_shared.monitoring.prometheus_query.query_range",
+            new_callable=AsyncMock,
+            return_value=[],
+        ) as mock_qr:
+            await collector.get_error_timeline(hours=6, component='x"} or up{job="y')
+
+        called_promql = mock_qr.call_args[0][0]
+        # the injected quote is escaped (\") so it cannot terminate the label
+        # value early; the raw break-out sequence x"} must NOT appear.
+        assert 'x\\"}' in called_promql
+        assert 'x"}' not in called_promql
+
+    @pytest.mark.asyncio
     async def test_timeline_prometheus_unreachable(self, collector):
         with patch(
             "autobot_shared.monitoring.prometheus_query.query_range",

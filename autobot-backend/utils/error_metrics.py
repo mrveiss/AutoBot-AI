@@ -82,6 +82,17 @@ _ERROR_RESOLVED_TTL: int = _resolve_error_resolved_ttl()
 _REDIS_RESOLVED_KEY = "errors:resolved"
 
 
+def _escape_promql_label_value(value: str) -> str:
+    """Escape a string for safe interpolation inside a PromQL double-quoted
+    label value (#9983 review — prevents PromQL injection via request params).
+
+    Per Prometheus rules, backslash and double-quote are the only characters
+    that can terminate or escape within a quoted label value, so escaping them
+    fully contains the value. Length is capped as defence-in-depth.
+    """
+    return value[:128].replace("\\", "\\\\").replace('"', '\\"')
+
+
 @dataclass
 class ErrorMetric:
     """
@@ -395,7 +406,11 @@ class ErrorMetricsCollector:
             return []
 
         if component:
-            promql = f'sum(rate(autobot_errors_total{{component="{component}"}}[5m]))'
+            # Security (#9983 review): the component label value comes from a
+            # request query param — escape per Prometheus rules so it cannot
+            # break out of the quoted label and inject arbitrary PromQL.
+            safe_component = _escape_promql_label_value(component)
+            promql = f'sum(rate(autobot_errors_total{{component="{safe_component}"}}[5m]))'
         else:
             promql = "sum(rate(autobot_errors_total[5m]))"
 
