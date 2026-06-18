@@ -7738,6 +7738,13 @@
     "placeholder": "Placeholder",
     "viewFull": "View full"
   },
+  "videoCell": {
+    "copyUrl": "کپی نشانی",
+    "download": "دانلود",
+    "failed": "تولید ویدیو ناموفق بود",
+    "generating": "در حال تولید ویدیو…",
+    "placeholder": "ویدیو"
+  },
   "plugins": {
     "capabilities": {
       "approvalDescription": "Approval description",

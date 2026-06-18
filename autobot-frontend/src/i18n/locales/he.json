@@ -7738,6 +7738,13 @@
     "placeholder": "Placeholder",
     "viewFull": "View full"
   },
+  "videoCell": {
+    "copyUrl": "העתק כתובת",
+    "download": "הורדה",
+    "failed": "יצירת הווידאו נכשלה",
+    "generating": "יוצר וידאו…",
+    "placeholder": "וידאו"
+  },
   "plugins": {
     "capabilities": {
       "approvalDescription": "Approval description",
