@@ -20,6 +20,7 @@ from typing import Any
 from sqlalchemy import select
 
 from autobot_shared.redis_client import get_redis_client
+from user_management.models.role import Role
 from user_management.models.sso import SSOProvider, SSOProviderType, UserSSOLink
 from user_management.models.user import User
 from user_management.schemas.sso import SSOProviderCreate, SSOProviderUpdate
@@ -526,6 +527,55 @@ class SSOService(BaseService):
         await self.session.flush()
         logger.info("Created SSO link for user %s with provider %s", user.id, provider.id)
         return link
+
+    async def _resolve_managed_roles(
+        self, provider: SSOProvider, managed_names: set[str]
+    ) -> dict[str, Role]:
+        """Return {role_name: Role} for names that exist in provider.org_id scope."""
+        name_to_role: dict[str, Role] = {}
+        for name in managed_names:
+            result = await self.session.execute(
+                select(Role).where(Role.name == name, Role.org_id == provider.org_id)
+            )
+            role = result.scalar_one_or_none()
+            if role is None:
+                logger.warning("group_mapping references unknown role %r (org_id=%s)", name, provider.org_id)
+            else:
+                name_to_role[name] = role
+        return name_to_role
+
+    async def _sync_idp_groups_to_roles(
+        self, user: User, provider: SSOProvider, groups: list[str] | None
+    ) -> None:
+        """Reconcile IdP group membership to managed instance RBAC roles.
+
+        Only roles listed in provider.group_mapping.values() are ever touched;
+        all other roles (including manual grants) are left completely unchanged.
+        If groups is None the IdP did not assert the claim — skip silently to
+        avoid stripping roles when the scope/claim is temporarily missing.
+        """
+        if not provider.group_mapping:
+            return
+        if groups is None:
+            logger.debug("IdP did not assert groups for user %s — skipping role sync", user.id)
+            return
+
+        from user_management.services.user_service import UserService  # noqa: PLC0415
+
+        user_svc = UserService(self.session)
+        managed_names: set[str] = set(provider.group_mapping.values())
+        desired_names: set[str] = {
+            provider.group_mapping[g] for g in groups if g in provider.group_mapping
+        }
+        name_to_role = await self._resolve_managed_roles(provider, managed_names)
+        current_roles = await user_svc.get_user_roles(user.id)
+        current_managed = {r.name for r in current_roles if r.name in managed_names}
+
+        for name, role in name_to_role.items():
+            if name in desired_names and name not in current_managed:
+                await user_svc.assign_role(user.id, role.id)
+            elif name not in desired_names and name in current_managed:
+                await user_svc.revoke_role(user.id, role.id)
 
     async def _find_or_provision_user(self, provider: SSOProvider, external_id: str, user_data: dict[str, Any]) -> User:
         """Find existing user or provision new one via JIT."""

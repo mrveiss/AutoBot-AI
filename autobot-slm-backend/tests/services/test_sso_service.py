@@ -32,11 +32,22 @@ _MODELS_SSO = "user_management.models.sso"
 if _MODELS_SSO not in sys.modules:
     sys.modules[_MODELS_SSO] = MagicMock()
 
+# sso_service.py imports Role from user_management.models.role; stub it.
+_MODELS_ROLE = "user_management.models.role"
+if _MODELS_ROLE not in sys.modules:
+    sys.modules[_MODELS_ROLE] = MagicMock()
+
 # sso_service.py imports SSOSecretsManager from sso_secrets; stub it so the
 # module loads without the real SQLAlchemy/encryption stack.
 _SSO_SECRETS = "user_management.services.sso_secrets"
 if _SSO_SECRETS not in sys.modules:
     sys.modules[_SSO_SECRETS] = MagicMock()
+
+# sso_service.py lazy-imports UserService from user_management.services.user_service;
+# pre-populate so tests can control it via patch.
+_USER_SVC_MOD = "user_management.services.user_service"
+if _USER_SVC_MOD not in sys.modules:
+    sys.modules[_USER_SVC_MOD] = MagicMock()
 
 # Provide a minimal real BaseService so `class SSOService(BaseService)` compiles
 # and SSOService(session=...) is constructable.
@@ -600,3 +611,207 @@ class TestNormalizeGroups:
 
     def test_empty_list_returns_empty_list(self):
         assert SSOService._normalize_groups([]) == []
+
+
+# ---------------------------------------------------------------------------
+# Task 2: _sync_idp_groups_to_roles (#10152)
+# ---------------------------------------------------------------------------
+
+
+def _make_role(name: str, org_id: uuid.UUID | None = None) -> MagicMock:
+    """Return a lightweight Role-like mock."""
+    r = MagicMock()
+    r.id = uuid.uuid4()
+    r.name = name
+    r.org_id = org_id
+    return r
+
+
+def _make_user(uid: uuid.UUID | None = None) -> MagicMock:
+    u = MagicMock()
+    u.id = uid or uuid.uuid4()
+    return u
+
+
+def _make_sso_provider(group_mapping: dict, org_id: uuid.UUID | None = None) -> MagicMock:
+    p = MagicMock()
+    p.group_mapping = group_mapping
+    p.org_id = org_id or uuid.uuid4()
+    return p
+
+
+def _make_async_session(roles_by_name: dict) -> MagicMock:
+    """Return a mock AsyncSession whose execute() resolves Role lookups by name."""
+
+    async def _execute(stmt):
+        # Extract the name filter value from the WHERE clause args.
+        # We rely on the fact that the compiled string contains the role name.
+        # Simpler: capture via side_effect with a closure over roles_by_name.
+        result = MagicMock()
+        # We'll override this per-call in the test when needed.
+        result.scalar_one_or_none.return_value = None
+        return result
+
+    session = MagicMock()
+    session.execute = AsyncMock(side_effect=_execute)
+    session.info = {}
+    return session
+
+
+class TestSyncIdpGroupsToRoles:
+    """_sync_idp_groups_to_roles reconciles group membership to RBAC roles."""
+
+    def _make_session_with_role_lookup(self, roles_by_name: dict) -> MagicMock:
+        """Session whose execute returns the role matching the name in the WHERE clause."""
+        call_count = {"n": 0}
+        name_sequence = list(roles_by_name.keys())
+
+        async def _execute(stmt):
+            result = MagicMock()
+            # Resolve by cycling through requested names in insertion order.
+            # Each call corresponds to one name being resolved.
+            idx = call_count["n"]
+            call_count["n"] += 1
+            if idx < len(name_sequence):
+                result.scalar_one_or_none.return_value = roles_by_name[name_sequence[idx]]
+            else:
+                result.scalar_one_or_none.return_value = None
+            return result
+
+        session = MagicMock()
+        session.execute = AsyncMock(side_effect=_execute)
+        session.info = {}
+        return session
+
+    def _make_user_service(self, current_roles: list) -> MagicMock:
+        """Return a UserService mock with controllable get_user_roles / assign / revoke."""
+        svc = MagicMock()
+        svc.get_user_roles = AsyncMock(return_value=current_roles)
+        svc.assign_role = AsyncMock(return_value=True)
+        svc.revoke_role = AsyncMock(return_value=True)
+        return svc
+
+    @pytest.mark.asyncio
+    async def test_empty_group_mapping_returns_immediately(self):
+        """No DB access when group_mapping is empty."""
+        service = _make_service()
+        provider = _make_sso_provider({})
+        user = _make_user()
+        service.session = MagicMock()
+        service.session.execute = AsyncMock()
+
+        await service._sync_idp_groups_to_roles(user, provider, ["eng"])
+
+        service.session.execute.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_groups_none_returns_immediately_no_changes(self):
+        """When groups is None the IdP omitted the claim — roles must not be touched."""
+        service = _make_service()
+        provider = _make_sso_provider({"eng": "engineer"})
+        user = _make_user()
+        service.session = MagicMock()
+        service.session.execute = AsyncMock()
+
+        await service._sync_idp_groups_to_roles(user, provider, None)
+
+        service.session.execute.assert_not_called()
+
+    def _patch_user_service(self, user_svc: MagicMock):
+        """Context manager that makes UserService(session) return user_svc."""
+        # The lazy import in _sync_idp_groups_to_roles does:
+        #   from user_management.services.user_service import UserService
+        # which reads sys.modules[_USER_SVC_MOD].UserService.
+        # We patch that attribute so UserService(...) returns our prepared mock.
+        cls_mock = MagicMock(return_value=user_svc)
+        return patch.object(sys.modules[_USER_SVC_MOD], "UserService", cls_mock)
+
+    @pytest.mark.asyncio
+    async def test_jit_assigns_mapped_role(self):
+        """User in mapped IdP group gets the corresponding role assigned."""
+        org_id = uuid.uuid4()
+        eng_role = _make_role("engineer", org_id)
+        provider = _make_sso_provider({"eng": "engineer"}, org_id)
+        user = _make_user()
+        session = self._make_session_with_role_lookup({"engineer": eng_role})
+        user_svc = self._make_user_service(current_roles=[])
+
+        service = SSOService(session=session)
+        with self._patch_user_service(user_svc):
+            await service._sync_idp_groups_to_roles(user, provider, ["eng"])
+
+        user_svc.assign_role.assert_awaited_once_with(user.id, eng_role.id)
+        user_svc.revoke_role.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_unmapped_group_grants_nothing(self):
+        """A group not in group_mapping does not result in any role assignment."""
+        org_id = uuid.uuid4()
+        eng_role = _make_role("engineer", org_id)
+        provider = _make_sso_provider({"eng": "engineer"}, org_id)
+        user = _make_user()
+        session = self._make_session_with_role_lookup({"engineer": eng_role})
+        user_svc = self._make_user_service(current_roles=[])
+
+        service = SSOService(session=session)
+        with self._patch_user_service(user_svc):
+            await service._sync_idp_groups_to_roles(user, provider, ["random_unknown_group"])
+
+        user_svc.assign_role.assert_not_awaited()
+        user_svc.revoke_role.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_manual_role_outside_mapping_preserved(self):
+        """A manually granted role whose name is NOT in group_mapping.values() is never revoked."""
+        org_id = uuid.uuid4()
+        eng_role = _make_role("engineer", org_id)
+        admin_role = _make_role("admin", org_id)  # manually granted, NOT in mapping
+        provider = _make_sso_provider({"eng": "engineer"}, org_id)
+        user = _make_user()
+        # User currently has both engineer AND admin; only "engineer" is managed
+        session = self._make_session_with_role_lookup({"engineer": eng_role})
+        # engineer already assigned, admin is manual
+        user_svc = self._make_user_service(current_roles=[eng_role, admin_role])
+
+        service = SSOService(session=session)
+        with self._patch_user_service(user_svc):
+            # Still in "eng" group → engineer stays; admin is NOT in managed set → untouched
+            await service._sync_idp_groups_to_roles(user, provider, ["eng"])
+
+        user_svc.assign_role.assert_not_awaited()  # already has engineer
+        user_svc.revoke_role.assert_not_awaited()  # admin not managed
+
+    @pytest.mark.asyncio
+    async def test_removing_from_idp_group_revokes_managed_role(self):
+        """User removed from IdP group loses only that managed role."""
+        org_id = uuid.uuid4()
+        eng_role = _make_role("engineer", org_id)
+        provider = _make_sso_provider({"eng": "engineer"}, org_id)
+        user = _make_user()
+        session = self._make_session_with_role_lookup({"engineer": eng_role})
+        # User currently has engineer but is no longer in "eng" group
+        user_svc = self._make_user_service(current_roles=[eng_role])
+
+        service = SSOService(session=session)
+        with self._patch_user_service(user_svc):
+            await service._sync_idp_groups_to_roles(user, provider, [])  # empty groups list
+
+        user_svc.revoke_role.assert_awaited_once_with(user.id, eng_role.id)
+        user_svc.assign_role.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_idempotent_already_assigned(self):
+        """assign_role is NOT called when user already has the managed role."""
+        org_id = uuid.uuid4()
+        eng_role = _make_role("engineer", org_id)
+        provider = _make_sso_provider({"eng": "engineer"}, org_id)
+        user = _make_user()
+        session = self._make_session_with_role_lookup({"engineer": eng_role})
+        user_svc = self._make_user_service(current_roles=[eng_role])
+
+        service = SSOService(session=session)
+        with self._patch_user_service(user_svc):
+            await service._sync_idp_groups_to_roles(user, provider, ["eng"])
+
+        user_svc.assign_role.assert_not_awaited()
+        user_svc.revoke_role.assert_not_awaited()
