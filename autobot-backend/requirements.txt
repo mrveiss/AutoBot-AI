@@ -35,7 +35,7 @@ boto3>=1.43.25                       # GH#9010: AWS Bedrock provider
 chromadb>=1.5.9,<2.0.0             # upper bound guards against breaking API changes; 1.5.5+ uses regenerated protos compatible with protobuf 5.x (#4053)
 protobuf>=5.29.6,<8.0.0           # required floor for chromadb 1.5.5+ opentelemetry exporter; resolves googleapis-common-protos conflict (#4061)
 sentence-transformers>=5.4.1
-torch==2.12.0  # MVA-3684: Pinned to match vllm 0.22.0 exact requirement
+torch==2.12.1  # MVA-3684: Pinned to match vllm 0.22.0 exact requirement
 torchvision==0.27.0  # MVA-3684: Pinned to match vllm 0.22.0 exact requirement
 torchaudio==2.11.0  # MVA-3684: Pinned to match vllm 0.22.0 exact requirement
 torchmetrics>=1.9.0  # Issue #904: Training metrics
