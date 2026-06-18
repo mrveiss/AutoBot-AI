@@ -56,6 +56,7 @@ else:  # pragma: no cover - import guard
     def provider_names():  # type: ignore[no-redef]
         return ["runway", "sora", "kling"]
 
+
 router = APIRouter(tags=["video-generation", "media"])
 
 # Job records are short-lived; TTL is env-tunable (no hard-coded magic number).
@@ -198,9 +199,7 @@ async def generate_video(request: VideoGenerationRequest, current_user=Depends(g
 
 
 @router.get("/status/{job_id}", response_model=VideoStatusResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR, operation="video_job_status", error_code_prefix="VIDEO_GEN"
-)
+@with_error_handling(category=ErrorCategory.SERVER_ERROR, operation="video_job_status", error_code_prefix="VIDEO_GEN")
 async def get_status(job_id: str, current_user=Depends(get_current_user)):
     """Poll a submitted job for progress and the final video URL."""
     record = await _load_job(job_id)
@@ -213,8 +212,12 @@ async def get_status(job_id: str, current_user=Depends(get_current_user)):
     except ProviderError as exc:
         logger.warning("video poll failed (job=%s): %s", job_id, exc)
         return VideoStatusResponse(
-            success=False, job_id=job_id, status="failed", provider=record.get("provider", ""),
-            prompt=record.get("prompt", ""), error=str(exc),
+            success=False,
+            job_id=job_id,
+            status="failed",
+            provider=record.get("provider", ""),
+            prompt=record.get("prompt", ""),
+            error=str(exc),
         )
 
     return VideoStatusResponse(
