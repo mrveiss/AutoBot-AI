@@ -208,7 +208,9 @@
       "deletedWithFactsPreserved": "Izdzēstas {count} tērzēšanas sarunas (fakti saglabāti zināšanu bāzē)",
       "deletedSuccess": "Izdzēstas {count} tērzēšanas sarunas",
       "deleteFailed": "Neizdevās izdzēst dažas tērzēšanas sarunas",
-      "sharedSuccess": "Tērzēšana veiksmīgi kopīgota"
+      "sharedSuccess": "Tērzēšana veiksmīgi kopīgota",
+      "searchChats": "Search chats",
+      "noSearchResults": "No chats match your search"
     },
     "interface": {
       "loadFailed": "Neizdevās ielādēt tērzēšanas saskarni",
@@ -691,7 +693,10 @@
       "unpin": "Unpin folder",
       "assignToFolder": "Move to folder",
       "removeFromFolder": "Remove from folder",
-      "confirmDelete": "Delete folder \"{name}\"? Subfolders will be moved to root."
+      "confirmDelete": "Delete folder \"{name}\"? Subfolders will be moved to root.",
+      "archive": "Archive folder",
+      "unarchive": "Unarchive folder",
+      "archived": "Archived"
     },
     "presets": {
       "modalTitle": "Slash Command Presets",

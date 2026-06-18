@@ -232,7 +232,9 @@
       "deletedWithFactsPreserved": "Deleted {count} chats (facts preserved in knowledge base)",
       "deletedSuccess": "Deleted {count} chats",
       "deleteFailed": "Failed to delete some chats",
-      "sharedSuccess": "Chat shared successfully"
+      "sharedSuccess": "Chat shared successfully",
+      "searchChats": "Search chats",
+      "noSearchResults": "No chats match your search"
     },
     "folders": {
       "folders": "Folders",
@@ -244,7 +246,10 @@
       "unpin": "Unpin folder",
       "assignToFolder": "Move to folder",
       "removeFromFolder": "Remove from folder",
-      "confirmDelete": "Delete folder \"{name}\"? Subfolders will be moved to root."
+      "confirmDelete": "Delete folder \"{name}\"? Subfolders will be moved to root.",
+      "archive": "Archive folder",
+      "unarchive": "Unarchive folder",
+      "archived": "Archived"
     },
     "interface": {
       "loadFailed": "Failed to load chat interface",

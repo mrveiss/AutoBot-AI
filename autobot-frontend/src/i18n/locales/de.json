@@ -208,7 +208,9 @@
       "deletedWithFactsPreserved": "Gelöschte {count}-Chats (Fakten bleiben in der Wissensdatenbank erhalten)",
       "deletedSuccess": "Gelöschte {count}-Chats",
       "deleteFailed": "Einige Chats konnten nicht gelöscht werden",
-      "sharedSuccess": "Chat erfolgreich geteilt"
+      "sharedSuccess": "Chat erfolgreich geteilt",
+      "searchChats": "Search chats",
+      "noSearchResults": "No chats match your search"
     },
     "interface": {
       "loadFailed": "Die Chat-Oberfläche konnte nicht geladen werden",
@@ -691,7 +693,10 @@
       "unpin": "Unpin folder",
       "assignToFolder": "Move to folder",
       "removeFromFolder": "Remove from folder",
-      "confirmDelete": "Delete folder \"{name}\"? Subfolders will be moved to root."
+      "confirmDelete": "Delete folder \"{name}\"? Subfolders will be moved to root.",
+      "archive": "Archive folder",
+      "unarchive": "Unarchive folder",
+      "archived": "Archived"
     },
     "presets": {
       "modalTitle": "Slash Command Presets",
