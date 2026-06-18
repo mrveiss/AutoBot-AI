@@ -11,7 +11,7 @@ and distributed system optimization.
 import asyncio
 import json
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List
 
 import aiohttp
@@ -19,6 +19,7 @@ from fastapi import (
     APIRouter,
     BackgroundTasks,
     Depends,
+    HTTPException,
     Query,
     WebSocket,
     WebSocketDisconnect,
@@ -180,6 +181,26 @@ async def _query_prometheus_range(
         logger.error("Error parsing Prometheus range response: %s", e)
         return []
 
+
+# #10264: PromQL per resource-heatmap metric, grouped by node-exporter `instance`
+# so each returned series maps to one machine (job 'node', :9100). cpu/disk/network
+# are rates over 5m; values are percent except network (bytes/s, rendered relative).
+_HEATMAP_PROMQL: Dict[str, str] = {
+    "cpu": '100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)',
+    "memory": "(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100",
+    "disk": 'avg by (instance) ((1 - (node_filesystem_avail_bytes{fstype!="tmpfs"} '
+    '/ node_filesystem_size_bytes{fstype!="tmpfs"})) * 100)',
+    "network": "sum by (instance) (rate(node_network_receive_bytes_total[5m]) "
+    "+ rate(node_network_transmit_bytes_total[5m]))",
+}
+
+# Maps the heatmap time-range selector to (window, Prometheus step).
+_HEATMAP_RANGE: Dict[str, tuple] = {
+    "1h": (timedelta(hours=1), "1m"),
+    "6h": (timedelta(hours=6), "5m"),
+    "24h": (timedelta(hours=24), "15m"),
+    "7d": (timedelta(days=7), "1h"),
+}
 
 # Issue #474: AlertManager API timeout and cache
 _ALERTMANAGER_TIMEOUT = 5.0  # seconds
@@ -513,6 +534,50 @@ async def get_services_health():
     summary = _compute_overall_status(svc_list)
     summary["services"] = svc_list
     return summary
+
+
+@router.get("/metrics/history")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_resource_metrics_history",
+    error_code_prefix="MONITORING",
+)
+async def get_resource_metrics_history(
+    metric: str = Query("cpu", description="cpu | memory | disk | network"),
+    range: str = Query("1h", description="1h | 6h | 24h | 7d"),
+    machine: str = Query("", description="Optional substring filter on the node instance label"),
+):
+    """Per-machine resource-utilization history for the dashboard heatmap (#10264).
+
+    Queries Prometheus node-exporter range data and groups the series by the
+    ``instance`` label so each machine becomes one heatmap row. Shapes the result
+    as ``{machines: [{name, metrics: [{time, value}]}]}`` — the contract
+    ``useResourceMetrics.processData`` expects.
+    """
+    promql = _HEATMAP_PROMQL.get(metric)
+    if promql is None:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid metric '{metric}'. Must be one of: {sorted(_HEATMAP_PROMQL)}",
+        )
+    delta, step = _HEATMAP_RANGE.get(range, (timedelta(hours=1), "1m"))
+    end = datetime.now(timezone.utc)
+    start = end - delta
+
+    points = await _query_prometheus_range(promql, start, end, step)
+
+    machines: Dict[str, List[Dict[str, Any]]] = {}
+    for point in points:
+        instance = point.get("labels", {}).get("instance", "unknown")
+        if machine and machine not in instance:
+            continue
+        machines.setdefault(instance, []).append({"time": point["timestamp"], "value": round(point["value"], 2)})
+
+    return {
+        "metric": metric,
+        "range": range,
+        "machines": [{"name": name, "metrics": series} for name, series in sorted(machines.items())],
+    }
 
 
 @router.get("/status", response_model=MonitoringStatus)
