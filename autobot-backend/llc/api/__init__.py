@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends
 from llc.deps import postgres_required
 
 from .activity import router as activity_router
+from .adapters import router as adapters_router
 from .agent_api import router as agent_router
 from .agent_hires import router as agent_hires_router
 from .agent_wiki import router as agent_wiki_router
@@ -44,6 +45,7 @@ from .work_items import router as work_items_router
 router = APIRouter(prefix="/llc", tags=["llc"], dependencies=[Depends(postgres_required)])
 router.include_router(activity_router)
 router.include_router(boards_router)
+router.include_router(adapters_router)
 router.include_router(approvals_router)
 router.include_router(backlog_router)
 router.include_router(budget_router)
