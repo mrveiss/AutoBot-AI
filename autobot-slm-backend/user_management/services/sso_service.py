@@ -17,7 +17,7 @@ import secrets
 import uuid
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 
 from autobot_shared.redis_client import get_redis_client
 from user_management.models.role import Role
@@ -529,16 +529,34 @@ class SSOService(BaseService):
         return link
 
     async def _resolve_managed_roles(self, provider: SSOProvider, managed_names: set[str]) -> dict[str, Role]:
-        """Return {role_name: Role} for names that exist in provider.org_id scope."""
-        name_to_role: dict[str, Role] = {}
+        """Return {role_name: Role} for names resolvable in provider.org_id scope or as system roles.
+
+        A single query fetches all candidates (org-scoped + system).  When both exist for the
+        same name the org-specific row is preferred over the system role (org_id IS NULL).
+        Names with no matching row are warned and omitted from the result.
+        """
+        if not managed_names:
+            return {}
+        result = await self.session.execute(
+            select(Role).where(
+                Role.name.in_(managed_names),
+                or_(Role.org_id == provider.org_id, Role.org_id.is_(None)),
+            )
+        )
+        rows = list(result.scalars().all())
+
+        # prefer org-specific row over a system role of the same name
+        by_name: dict[str, Role] = {}
+        for r in rows:
+            existing = by_name.get(r.name)
+            if existing is None or (existing.org_id is None and r.org_id is not None):
+                by_name[r.name] = r
+
         for name in managed_names:
-            result = await self.session.execute(select(Role).where(Role.name == name, Role.org_id == provider.org_id))
-            role = result.scalar_one_or_none()
-            if role is None:
+            if name not in by_name:
                 logger.warning("group_mapping references unknown role %r (org_id=%s)", name, provider.org_id)
-            else:
-                name_to_role[name] = role
-        return name_to_role
+
+        return by_name
 
     async def _sync_idp_groups_to_roles(self, user: User, provider: SSOProvider, groups: list[str] | None) -> None:
         """Reconcile IdP group membership to managed instance RBAC roles.
@@ -581,7 +599,14 @@ class SSOService(BaseService):
             await self.session.flush()
             result = await self.session.execute(select(User).where(User.id == link.user_id))
             user = result.scalar_one()
-            await self._sync_idp_groups_to_roles(user, provider, user_data.get("groups"))
+            try:
+                await self._sync_idp_groups_to_roles(user, provider, user_data.get("groups"))
+            except Exception:
+                logger.warning(
+                    "IdP group->role sync failed for user %s; proceeding with login",
+                    user.id,
+                    exc_info=True,
+                )
             return user
         if not provider.allow_user_creation:
             raise SSOAuthenticationError("User not found and auto-provisioning is disabled")
@@ -592,5 +617,12 @@ class SSOService(BaseService):
         if not user:
             user = await self._create_sso_user(provider, user_data)
         await self._create_sso_link(user, provider, external_id, user_data)
-        await self._sync_idp_groups_to_roles(user, provider, user_data.get("groups"))
+        try:
+            await self._sync_idp_groups_to_roles(user, provider, user_data.get("groups"))
+        except Exception:
+            logger.warning(
+                "IdP group->role sync failed for user %s; proceeding with login",
+                user.id,
+                exc_info=True,
+            )
         return user

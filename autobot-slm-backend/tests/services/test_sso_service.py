@@ -644,12 +644,9 @@ def _make_async_session(roles_by_name: dict) -> MagicMock:
     """Return a mock AsyncSession whose execute() resolves Role lookups by name."""
 
     async def _execute(stmt):
-        # Extract the name filter value from the WHERE clause args.
-        # We rely on the fact that the compiled string contains the role name.
-        # Simpler: capture via side_effect with a closure over roles_by_name.
         result = MagicMock()
-        # We'll override this per-call in the test when needed.
         result.scalar_one_or_none.return_value = None
+        result.scalars.return_value.all.return_value = []
         return result
 
     session = MagicMock()
@@ -662,20 +659,16 @@ class TestSyncIdpGroupsToRoles:
     """_sync_idp_groups_to_roles reconciles group membership to RBAC roles."""
 
     def _make_session_with_role_lookup(self, roles_by_name: dict) -> MagicMock:
-        """Session whose execute returns the role matching the name in the WHERE clause."""
-        call_count = {"n": 0}
-        name_sequence = list(roles_by_name.keys())
+        """Session whose single execute() returns all matching Role rows via scalars().all().
+
+        _resolve_managed_roles now issues ONE query for all managed names and
+        calls result.scalars().all() — so we return the full list in one shot.
+        """
+        role_list = list(roles_by_name.values())
 
         async def _execute(stmt):
             result = MagicMock()
-            # Resolve by cycling through requested names in insertion order.
-            # Each call corresponds to one name being resolved.
-            idx = call_count["n"]
-            call_count["n"] += 1
-            if idx < len(name_sequence):
-                result.scalar_one_or_none.return_value = roles_by_name[name_sequence[idx]]
-            else:
-                result.scalar_one_or_none.return_value = None
+            result.scalars.return_value.all.return_value = role_list
             return result
 
         session = MagicMock()
@@ -815,6 +808,205 @@ class TestSyncIdpGroupsToRoles:
 
         user_svc.assign_role.assert_not_awaited()
         user_svc.revoke_role.assert_not_awaited()
+
+
+# ---------------------------------------------------------------------------
+# I1: system roles (org_id=None) resolve via group_mapping (#10152)
+# ---------------------------------------------------------------------------
+
+
+class TestResolveSystemRoles:
+    """_resolve_managed_roles must find org_id=None system roles.
+
+    The test session mock returns only what each test puts in its role_list,
+    so we can verify the OLD code (== provider.org_id) would NOT have found
+    a system role — by checking that the result is non-empty only when the
+    implementation uses the or_(org_id==X, org_id.is_(None)) clause.
+    """
+
+    def _patch_user_service(self, user_svc: MagicMock):
+        cls_mock = MagicMock(return_value=user_svc)
+        return patch.object(sys.modules[_USER_SVC_MOD], "UserService", cls_mock)
+
+    def _make_user_service(self, current_roles: list) -> MagicMock:
+        svc = MagicMock()
+        svc.get_user_roles = AsyncMock(return_value=current_roles)
+        svc.assign_role = AsyncMock(return_value=True)
+        svc.revoke_role = AsyncMock(return_value=True)
+        return svc
+
+    def _make_session_returning_roles(self, role_list: list) -> MagicMock:
+        """Session that returns *role_list* from a single scalars().all() call."""
+
+        async def _execute(stmt):
+            result = MagicMock()
+            result.scalars.return_value.all.return_value = role_list
+            return result
+
+        session = MagicMock()
+        session.execute = AsyncMock(side_effect=_execute)
+        session.info = {}
+        return session
+
+    @pytest.mark.asyncio
+    async def test_system_role_resolves_and_is_assigned(self):
+        """A system role (org_id=None) referenced by group_mapping is assigned.
+
+        This test is a regression lock for fix I1.  It would FAIL against the
+        old ``Role.org_id == provider.org_id`` query because that clause
+        silently drops rows where org_id IS NULL.
+        """
+        org_id = uuid.uuid4()
+        # System role: org_id is None
+        system_role = _make_role("admin", org_id=None)
+        provider = _make_sso_provider({"admins": "admin"}, org_id)
+        user = _make_user()
+
+        session = self._make_session_returning_roles([system_role])
+        user_svc = self._make_user_service(current_roles=[])
+
+        service = SSOService(session=session)
+        with self._patch_user_service(user_svc):
+            await service._sync_idp_groups_to_roles(user, provider, ["admins"])
+
+        user_svc.assign_role.assert_awaited_once_with(user.id, system_role.id)
+
+    @pytest.mark.asyncio
+    async def test_org_specific_role_preferred_over_system_role(self):
+        """When both an org-scoped and a system role share the same name, the org-scoped one wins."""
+        org_id = uuid.uuid4()
+        system_role = _make_role("engineer", org_id=None)
+        org_role = _make_role("engineer", org_id=org_id)
+        provider = _make_sso_provider({"eng": "engineer"}, org_id)
+        user = _make_user()
+
+        # Both rows are returned from the single batched query.
+        session = self._make_session_returning_roles([system_role, org_role])
+        user_svc = self._make_user_service(current_roles=[])
+
+        service = SSOService(session=session)
+        with self._patch_user_service(user_svc):
+            await service._sync_idp_groups_to_roles(user, provider, ["eng"])
+
+        # Must assign the org-specific role, not the system one.
+        user_svc.assign_role.assert_awaited_once_with(user.id, org_role.id)
+
+    @pytest.mark.asyncio
+    async def test_system_role_preferred_when_only_system_role_exists(self):
+        """When only the system role exists (no org override), it resolves and is used."""
+        org_id = uuid.uuid4()
+        system_role = _make_role("viewer", org_id=None)
+        provider = _make_sso_provider({"viewers": "viewer"}, org_id)
+        user = _make_user()
+
+        session = self._make_session_returning_roles([system_role])
+        user_svc = self._make_user_service(current_roles=[system_role])
+
+        service = SSOService(session=session)
+        with self._patch_user_service(user_svc):
+            # user already has the role — idempotent, no assign/revoke
+            await service._sync_idp_groups_to_roles(user, provider, ["viewers"])
+
+        user_svc.assign_role.assert_not_awaited()
+        user_svc.revoke_role.assert_not_awaited()
+
+
+# ---------------------------------------------------------------------------
+# I2: sync failure must not block login (#10152)
+# ---------------------------------------------------------------------------
+
+
+class TestSyncFailureDoesNotBlockLogin:
+    """A reconciliation error inside _sync_idp_groups_to_roles must not propagate.
+
+    _find_or_provision_user wraps the call in try/except so authentication
+    always succeeds even when role-sync throws.  The test covers both the
+    returning-user path and the JIT-provisioning path.
+    """
+
+    def _make_session_returning_user(self, user: MagicMock, link: MagicMock) -> MagicMock:
+        call_n = {"n": 0}
+
+        async def _execute(stmt):
+            result = MagicMock()
+            if call_n["n"] == 0:
+                result.scalar_one_or_none.return_value = link
+            else:
+                result.scalar_one.return_value = user
+                result.scalar_one_or_none.return_value = user
+            call_n["n"] += 1
+            return result
+
+        session = MagicMock()
+        session.execute = AsyncMock(side_effect=_execute)
+        session.flush = AsyncMock()
+        session.add = MagicMock()
+        session.info = {}
+        return session
+
+    def _make_session_new_user(self, user: MagicMock) -> MagicMock:
+        call_n = {"n": 0}
+
+        async def _execute(stmt):
+            result = MagicMock()
+            if call_n["n"] == 0:
+                result.scalar_one_or_none.return_value = None  # no existing SSO link
+            elif call_n["n"] == 1:
+                result.scalar_one_or_none.return_value = None  # no user by email
+            else:
+                result.scalar_one_or_none.return_value = user
+            call_n["n"] += 1
+            return result
+
+        session = MagicMock()
+        session.execute = AsyncMock(side_effect=_execute)
+        session.flush = AsyncMock()
+        session.add = MagicMock()
+        session.info = {}
+        return session
+
+    @pytest.mark.asyncio
+    async def test_returning_user_sync_error_does_not_raise(self):
+        """A sync failure on the returning-user path still returns the user."""
+        org_id = uuid.uuid4()
+        user = _make_user()
+        link = MagicMock()
+        link.user_id = user.id
+        link.record_login = MagicMock()
+
+        provider = _make_full_provider({"eng": "engineer"}, org_id)
+        session = self._make_session_returning_user(user, link)
+        service = SSOService(session=session)
+
+        async def _boom(u, p, groups):
+            raise RuntimeError("RBAC cache exploded")
+
+        service._sync_idp_groups_to_roles = _boom  # type: ignore[assignment]
+
+        result = await service._find_or_provision_user(provider, "ext-id", {"email": "a@b.com", "groups": ["eng"]})
+
+        assert result is user  # login still succeeded
+
+    @pytest.mark.asyncio
+    async def test_jit_user_sync_error_does_not_raise(self):
+        """A sync failure on the JIT path still returns the newly provisioned user."""
+        org_id = uuid.uuid4()
+        user = _make_user()
+
+        provider = _make_full_provider({"eng": "engineer"}, org_id)
+        session = self._make_session_new_user(user)
+        service = SSOService(session=session)
+
+        async def _boom(u, p, groups):
+            raise RuntimeError("role lookup failed")
+
+        service._sync_idp_groups_to_roles = _boom  # type: ignore[assignment]
+        service._create_sso_user = AsyncMock(return_value=user)  # type: ignore[assignment]
+        service._create_sso_link = AsyncMock()  # type: ignore[assignment]
+
+        result = await service._find_or_provision_user(provider, "new-ext", {"email": "x@b.com", "groups": ["eng"]})
+
+        assert result is user
 
 
 # ---------------------------------------------------------------------------
