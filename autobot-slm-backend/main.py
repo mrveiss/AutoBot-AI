@@ -200,13 +200,20 @@ async def lifespan(app: FastAPI):
 
     try:
         await _ensure_admin_user()
-        await _ensure_internal_api_key()
         await _seed_default_roles()
         await _seed_default_agents()
         await _ensure_local_node()
     except Exception as e:
         logger.error("Data seeding failed: %s", e, exc_info=True)
         raise
+
+    # Internal API key seeding is an enhancement (enables personality/voice
+    # proxies) — a failure here must never abort SLM startup; the proxies just
+    # degrade to 503 until the key exists, as they did before (#10263).
+    try:
+        await _ensure_internal_api_key()
+    except Exception:
+        logger.exception("Internal API key seeding failed (non-fatal) (#10263)")
 
     # Compose fleet-node surfacing is best-effort cosmetic — a seeding failure here
     # must never abort SLM startup (it previously rode the re-raising block above).
@@ -436,6 +443,7 @@ async def _ensure_internal_api_key() -> None:
     import secrets as _secrets
 
     from sqlalchemy import select
+    from sqlalchemy.exc import IntegrityError
 
     from models.database import SystemSecret
     from services.encryption import encrypt_data
@@ -446,7 +454,13 @@ async def _ensure_internal_api_key() -> None:
         if result.scalar_one_or_none() is not None:
             return
         db.add(SystemSecret(key=key_name, encrypted_value=encrypt_data(_secrets.token_hex(32))))
-        await db.commit()
+        try:
+            await db.commit()
+        except IntegrityError:
+            # Concurrent startup seeded it first (unique key) — keep theirs.
+            await db.rollback()
+            logger.info("Internal API key already created concurrently — keeping existing (#10263)")
+            return
         logger.info("Generated shared internal API key — personality/voice proxies enabled (#10263)")
 
 
