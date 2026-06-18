@@ -1,9 +1,14 @@
-# 🔄 AutoBot Hyper-V Migration Plan
+# 🔄 AutoBot VM Migration Plan (legacy)
+
+> **Deprecation notice:** This plan documents the obsolete separated multi-VM
+> topology. AutoBot now deploys co-located, orchestrated by the SLM, onto one or
+> more hosts (co-located or distributed) and is hypervisor-agnostic — it requires
+> only a supported OS + hardware. Retained for historical reference.
 
 **GitHub Issue:** [#257](https://github.com/mrveiss/AutoBot-AI/issues/257)
 **Migration Date:** Post P0 Critical Tasks Completion
-**Current Architecture:** 8 Docker Containers → 5 Hyper-V VMs
-**Target Infrastructure:** Hyper-V with SSH-enabled VMs
+**Current Architecture:** 8 Docker Containers → 5 target VMs
+**Target Infrastructure:** SSH-enabled hosts/VMs (hypervisor-agnostic)
 
 ---
 

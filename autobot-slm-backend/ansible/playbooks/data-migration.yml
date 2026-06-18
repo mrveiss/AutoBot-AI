@@ -2,9 +2,15 @@
 # SPDX-License-Identifier: Apache-2.0
 ---
 # Data Migration Playbook
-# Migrates data from Docker containers to Hyper-V VMs
+# Migrates data from Docker containers to target hosts/VMs.
+#
+# DEPRECATION NOTICE: This playbook encodes the obsolete separated multi-VM
+# topology (one role per VM). AutoBot now deploys co-located, orchestrated by
+# the SLM, onto one or more hosts (co-located or distributed). Requirements are
+# a supported OS + hardware; the deployment is hypervisor-agnostic. Retained for
+# reference and legacy migrations — do not delete.
 
-- name: "AutoBot Data Migration - Docker to Hyper-V"
+- name: "AutoBot Data Migration - Docker to VM"
   hosts: localhost
   gather_facts: false
   vars:
@@ -18,7 +24,7 @@
         msg:
           - "📦 AutoBot Data Migration Starting"
           - "Source: Docker Containers"
-          - "Target: 5 Hyper-V VMs"
+          - "Target: one or more hosts (co-located or distributed)"
           - "Migration ID: {{ migration_timestamp }}"
           - "Backup Directory: {{ migration_backup_dir }}"
 
@@ -435,7 +441,7 @@
           Date: {{ ansible_facts['date_time'].iso8601 }}
 
           Source: Docker Containers
-          Target: 5 Hyper-V VMs
+          Target: one or more hosts (co-located or distributed)
 
           Migrated Components:
           - Redis Database: {{ 'Yes' if hostvars[groups['database'][0]]['redis_dbsize'] is defined else 'No' }}
@@ -459,7 +465,7 @@
           - "🎉 AutoBot Data Migration Completed!"
           - "=================================="
           - ""
-          - "✅ Migration successful from Docker containers to 5 Hyper-V VMs"
+          - "✅ Migration successful from Docker containers to target hosts/VMs"
           - "📁 Backup preserved at: {{ migration_backup_dir }}"
           - "📝 Summary available at: {{ migration_backup_dir }}/migration-summary.txt"
           - ""

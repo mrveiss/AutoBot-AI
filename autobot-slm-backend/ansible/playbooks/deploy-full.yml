@@ -17,9 +17,15 @@
   tags: ['pre-deployment', 'validation']
 
 # AutoBot Full Deployment Playbook
-# Orchestrates complete migration from Docker to Hyper-V VMs
+# Orchestrates complete migration from Docker containers to target hosts/VMs.
+#
+# DEPRECATION NOTICE: This playbook encodes the obsolete separated multi-VM
+# topology (one role per VM). AutoBot now deploys co-located, orchestrated by
+# the SLM, onto one or more hosts (co-located or distributed). Requirements are
+# a supported OS + hardware; the deployment is hypervisor-agnostic. Retained for
+# reference and legacy migrations — do not delete.
 
-- name: "AutoBot Full Deployment - Docker to Hyper-V Migration"
+- name: "AutoBot Full Deployment - Docker to VM Migration"
   hosts: localhost
   gather_facts: false
   vars:
@@ -30,10 +36,10 @@
     - name: Display deployment information
       debug:
         msg:
-          - "🤖 AutoBot Hyper-V Deployment Starting"
+          - "🤖 AutoBot Deployment Starting"
           - "Deployment ID: {{ deployment_id }}"
           - "Timestamp: {{ ansible_facts['date_time'].iso8601 }}"
-          - "Target Infrastructure: 5 Hyper-V VMs"
+          - "Target Infrastructure: one or more hosts (co-located or distributed)"
           - "Migration: Docker Containers → Virtual Machines"
 
     - name: Create deployment log directory
@@ -48,7 +54,7 @@
         content: |
           Deployment ID: {{ deployment_id }}
           Start Time: {{ ansible_facts['date_time'].iso8601 }}
-          Infrastructure: 5 Hyper-V VMs
+          Infrastructure: one or more hosts (co-located or distributed)
           Migration: Docker → VM
         dest: "/var/log/autobot/deployment/{{ deployment_id }}.log"
         mode: '0644'
@@ -253,7 +259,7 @@
     - name: Display deployment summary
       debug:
         msg:
-          - "🎉 AutoBot Hyper-V Deployment Completed Successfully!"
+          - "🎉 AutoBot Deployment Completed Successfully!"
           - "======================================================"
           - ""
           - "⏱️  Deployment Duration: {{ deployment_duration }} seconds ({{ (deployment_duration | int / 60) | round(1) }} minutes)"
@@ -277,7 +283,7 @@
           - "   AI/ML:        ssh autobot@{{ _aiml_ip }}"
           - "   Browser:      ssh autobot@{{ _browser_ip }}"
           - ""
-          - "✅ Migration Status: Docker Containers → Hyper-V VMs Complete"
+          - "✅ Migration Status: Docker Containers → VMs Complete"
           - "📊 Performance: Dedicated resources, native VM performance"
           - "🔒 Security: Internal network isolation, firewall protection"
           - "📈 Scalability: Independent VM scaling and resource allocation"
@@ -307,7 +313,7 @@
           - Browser: http://{{ _browser_ip }}:{{ _browser_port }}
           - VNC: vnc://{{ _browser_ip }}:{{ _vnc_port }}
 
-          Migration: Docker Containers → 5 Hyper-V VMs
+          Migration: Docker Containers → VMs
           Infrastructure: Production-ready with monitoring and backups
         dest: "/var/log/autobot/deployment/{{ deployment_id }}-complete.log"
         mode: '0644'

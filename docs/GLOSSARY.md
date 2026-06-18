@@ -271,7 +271,7 @@ Frontend build tool and development server. Only runs on VM1.
 Virtual Network Computing - desktop streaming protocol. AutoBot exposes VNC at port 6080.
 
 ### VM (Virtual Machine)
-Isolated computing environments running on Hyper-V. AutoBot uses 6 VMs.
+Isolated computing environments. AutoBot is hypervisor-agnostic and can deploy onto one or more hosts or VMs (co-located or distributed); it requires only a supported OS and hardware.
 
 ### Vue
 Frontend JavaScript framework (Vue 3) used for the AutoBot web interface.

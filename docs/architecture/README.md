@@ -80,7 +80,7 @@ Key architectural decisions are documented in ADRs. See [docs/adr/](../adr/READM
 - **Intel NPU** - Hardware acceleration
 
 ### Infrastructure
-- **Hyper-V** - VM hypervisor
+- **Hypervisor-agnostic** - runs on any supported hypervisor or bare metal (VirtualBox, VMware, Hyper-V, KVM, WSL2); requires only a supported OS + hardware
 - **Docker** - Containerization (optional)
 - **Playwright** - Browser automation
 - **noVNC** - Desktop streaming
