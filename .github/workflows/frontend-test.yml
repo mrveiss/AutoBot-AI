@@ -57,6 +57,12 @@ jobs:
     needs: changes
     if: needs.changes.outputs.frontend == 'true'
     runs-on: [self-hosted, Linux, X64]
+    # vue-tsc (the `type-check` and `check-ts-delta` steps) is near the default
+    # V8 old-space ceiling on this project and intermittently OOMs
+    # ("Reached heap limit … JavaScript heap out of memory"), flaking this
+    # required check (#10298). Give Node enough heap.
+    env:
+      NODE_OPTIONS: --max-old-space-size=4096
 
     steps:
       - name: Checkout code
