@@ -310,6 +310,21 @@ class ErrorMetricsCollector:
         except Exception:
             return False
 
+    async def get_resolved_ids(self) -> set[str]:
+        """Return the full set of resolved error/trace ids (one Redis call).
+
+        Lets async callers annotate a batch of recent errors with their
+        ``resolved`` status without an N+1 of ``is_resolved`` (#9983).
+        """
+        redis = self._get_redis()
+        if redis is None:
+            return set()
+        try:
+            members = await asyncio.to_thread(redis.smembers, _REDIS_RESOLVED_KEY)
+            return {m.decode() if isinstance(m, bytes) else str(m) for m in (members or [])}
+        except Exception:
+            return set()
+
     async def get_summary(self) -> Dict[str, Any]:
         """
         Return a comprehensive error metrics summary from Prometheus.

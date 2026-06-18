@@ -109,6 +109,12 @@ async def get_recent_errors(limit: int = 20):
         # Sort by timestamp (most recent first)
         recent_errors.sort(key=lambda x: x.get("timestamp", 0), reverse=True)
 
+        # #9983: annotate each error with its resolved status (one Redis call)
+        # so the UI reflects POST /metrics/resolve/{trace_id} (trace_id == error_id).
+        resolved_ids = await get_metrics_collector().get_resolved_ids()
+        for err in recent_errors:
+            err["resolved"] = err.get("error_id") in resolved_ids
+
         return {
             "status": "success",
             "data": {
