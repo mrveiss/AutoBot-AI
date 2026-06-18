@@ -83,6 +83,15 @@
           <Icon name="edit" class="text-xs" />
         </button>
 
+        <!-- Archive / Unarchive -->
+        <button
+          class="p-0.5 rounded hover:bg-autobot-bg-card text-autobot-text-muted hover:text-autobot-text-secondary"
+          :title="folder.archived ? $t('chat.folders.unarchive') : $t('chat.folders.archive')"
+          @click="folderStore.toggleArchive(folder.id)"
+        >
+          <Icon :name="folder.archived ? 'box-open' : 'archive'" class="text-xs" />
+        </button>
+
         <!-- Delete -->
         <button
           class="p-0.5 rounded hover:bg-autobot-bg-card text-red-400 hover:text-red-500"

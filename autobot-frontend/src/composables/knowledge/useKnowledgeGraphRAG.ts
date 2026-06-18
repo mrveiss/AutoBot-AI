@@ -51,7 +51,7 @@ export interface GraphRAGSearchResponse {
 }
 
 export interface GraphRAGHealthStatus {
-  status: 'healthy' | 'degraded' | 'unhealthy'
+  status: 'healthy' | 'degraded' | 'unhealthy' | 'unavailable'
   components: Record<string, string>
   timestamp: string
 }
@@ -134,15 +134,27 @@ export function useKnowledgeGraphRAG(): UseKnowledgeGraphRAGReturn {
       try {
         const parsed = await apiClient.get<Record<string, unknown>>(
           `${getApiBase()}/graph-rag/health`,
+          { maxRetries: 1 },
         )
         healthStatus.value = ((parsed as Record<string, unknown>)?.data ?? parsed) as unknown as GraphRAGHealthStatus
         logger.info(`Health check: ${healthStatus.value?.status}`)
       } catch (error) {
-        logger.error('Health check failed:', error)
-        healthStatus.value = {
-          status: 'unhealthy',
-          components: {},
-          timestamp: new Date().toISOString(),
+        // #10011: a 503 means the service is legitimately unavailable — treat it
+        // as a calm degraded state (no retry spam, no red "unhealthy" alarm).
+        if (error instanceof Error && error.message.includes('HTTP 503')) {
+          logger.info('Graph-RAG service unavailable (503) — degraded mode')
+          healthStatus.value = {
+            status: 'unavailable',
+            components: {},
+            timestamp: new Date().toISOString(),
+          }
+        } else {
+          logger.error('Health check failed:', error)
+          healthStatus.value = {
+            status: 'unhealthy',
+            components: {},
+            timestamp: new Date().toISOString(),
+          }
         }
       }
     })
