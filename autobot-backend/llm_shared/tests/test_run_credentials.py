@@ -76,3 +76,71 @@ async def test_context_cleared():
 
     set_run_credentials(None)
     assert get_run_credentials() is None
+
+
+def test_inject_runtime_credentials_sets_context():
+    """inject_runtime_credentials installs a RunCredentialContext (GH#9037)."""
+    from llm_shared.run_credential_loader import inject_runtime_credentials
+
+    try:
+        inject_runtime_credentials({"anthropic": {"api_key": "sk-run-only"}})
+        ctx = get_run_credentials()
+        assert ctx is not None
+        assert ctx.get_credentials("anthropic") == {"api_key": "sk-run-only"}
+    finally:
+        set_run_credentials(None)
+
+
+@pytest.mark.asyncio
+async def test_per_run_override_beats_registered_provider():
+    """A per-run credential builds an ephemeral provider instead of the registered one (GH#9037)."""
+    from llm_shared.provider_registry import ProviderRegistry
+
+    registry = ProviderRegistry()
+
+    class _Registered:
+        provider_name = "anthropic"
+
+        async def is_available(self) -> bool:
+            return True
+
+    registry._providers["anthropic"] = _Registered()
+
+    sentinel = object()
+    ephemeral_args: dict = {}
+
+    def _fake_ephemeral(name, creds):
+        ephemeral_args["name"] = name
+        ephemeral_args["creds"] = creds
+        return sentinel
+
+    registry._create_ephemeral_provider = _fake_ephemeral  # type: ignore[assignment]
+
+    try:
+        set_run_credentials(RunCredentialContext(provider_credentials={"anthropic": {"api_key": "sk-run"}}))
+        provider = await registry.get_provider("anthropic")
+        assert provider is sentinel  # ephemeral, NOT the registered instance
+        assert ephemeral_args["creds"] == {"api_key": "sk-run"}
+    finally:
+        set_run_credentials(None)
+
+
+@pytest.mark.asyncio
+async def test_absent_override_falls_back_to_registered_provider():
+    """With no per-run credentials, the registered provider is used (GH#9037)."""
+    from llm_shared.provider_registry import ProviderRegistry
+
+    registry = ProviderRegistry()
+
+    class _Registered:
+        provider_name = "anthropic"
+
+        async def is_available(self) -> bool:
+            return True
+
+    registered = _Registered()
+    registry._providers["anthropic"] = registered
+
+    set_run_credentials(None)
+    provider = await registry.get_provider("anthropic")
+    assert provider is registered

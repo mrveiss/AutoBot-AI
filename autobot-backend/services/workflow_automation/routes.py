@@ -29,6 +29,7 @@ from .models import (
     PlanApprovalResponse,
     PlanPresentationRequest,
     WorkflowControlRequest,
+    WorkflowStartRequest,
     WorkflowStep,
 )
 from .persistence import load_notification_config, save_notification_config
@@ -92,8 +93,25 @@ async def create_workflow(
     error_code_prefix="WORKFLOW_AUTOMATION",
 )
 @router.post("/start_workflow/{workflow_id}")
-async def start_workflow(workflow_id: str, current_user: dict = Depends(get_current_user)):
-    """Start executing automated workflow"""
+async def start_workflow(
+    workflow_id: str,
+    request: WorkflowStartRequest | None = None,
+    current_user: dict = Depends(get_current_user),
+):
+    """Start executing automated workflow.
+
+    Accepts an optional ``provider_credentials`` map (GH#9037) so each run can
+    bring its own per-provider API keys. The credentials are scoped to the
+    current async task via ``inject_runtime_credentials`` — they override the
+    stored/global provider config for this invocation only, are never
+    persisted, and are redacted from all logs.
+    """
+    injected_credentials = bool(request and request.provider_credentials)
+    if injected_credentials:
+        from llm_shared.run_credential_loader import inject_runtime_credentials
+
+        inject_runtime_credentials(request.provider_credentials)
+
     try:
         success = await get_workflow_manager().start_workflow_execution(workflow_id)
 
@@ -105,9 +123,18 @@ async def start_workflow(workflow_id: str, current_user: dict = Depends(get_curr
         else:
             raise HTTPException(status_code=404, detail=ERR_WORKFLOW_NOT_FOUND)
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Failed to start workflow: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
+    finally:
+        # Clear the per-run credential context so keys never leak into a
+        # later request that reuses this async task (GH#9037).
+        if injected_credentials:
+            from llm_shared.provider_registry import set_run_credentials
+
+            set_run_credentials(None)
 
 
 @with_error_handling(

@@ -327,6 +327,11 @@ if "llm_shared" not in sys.modules:
         "llm_shared.providers.reasoning_effort",
         _llm_root / "providers" / "reasoning_effort.py",
     )
+    # #9037: per-run credential primitives (ContextVar + RunCredentialContext) are
+    # lightweight; load the real module so tests importing them don't hit the
+    # llm_shared MagicMock stub.
+    _load_real_mod("llm_shared.provider_registry", _llm_root / "provider_registry.py")
+    _load_real_mod("llm_shared.run_credential_loader", _llm_root / "run_credential_loader.py")
 
     # Stub llm_shared.optimization.model_inspector so complexity_router.py can
     # load without the full optimization stack (inspect_model is only called in
