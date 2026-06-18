@@ -5,8 +5,8 @@
 """
 AutoBot Native VM Deployment Validation Script
 
-Tests connectivity and health of all services across 6 machines:
-- 5 Hyper-V VMs (10.0.0.2-25)
+Tests connectivity and health of all services across the deployment hosts:
+- One or more target hosts/VMs (hypervisor-agnostic; e.g. 10.0.0.2-25)
 - 1 WSL machine (10.0.0.1) running backend + terminal + noVNC
 All services run natively (no Docker containers).
 """

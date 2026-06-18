@@ -221,6 +221,13 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         ["image-generation", "media"],
         "image_generation",
     ),
+    # GH#9016: Video generation — Runway ML (baseline), Sora, Kling (async submit/poll)
+    (
+        "api.video_generation",
+        "/video-generation",
+        ["video-generation", "media"],
+        "video_generation",
+    ),
     (
         "api.web_research_settings",
         "/web-research-settings",

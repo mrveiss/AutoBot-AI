@@ -67,6 +67,12 @@ ALLOWED_COMPONENTS = frozenset(
         "autobot-slm-frontend",
         "autobot-backend",
         "autobot-frontend",
+        # #10248: the shared library is its own syncable component. Without this,
+        # component code could be advanced past the autobot_shared it imports
+        # (e.g. a new symbol) with no way to sync the lib and no drift signal,
+        # crash-looping every backend that imports it. Resolving it restarts all
+        # dependent services (see _COMPONENT_SERVICES in api/code_sync.py).
+        "autobot_shared",
     }
 )
 

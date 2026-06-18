@@ -144,6 +144,13 @@ class BoardService(LLCServiceBase):
         result = await session.execute(select(LLCBoard).where(LLCBoard.id == uuid.UUID(board_id)))
         return result.scalar_one_or_none()
 
+    async def list_boards(self, session: AsyncSession, company_id: str) -> Sequence[LLCBoard]:
+        """All boards for a company, newest first (GH#10219 — board reachability)."""
+        result = await session.execute(
+            select(LLCBoard).where(LLCBoard.company_id == uuid.UUID(company_id)).order_by(LLCBoard.created_at.desc())
+        )
+        return result.scalars().all()
+
     async def get_board_items(self, session: AsyncSession, board_id: str) -> Dict[str, Any]:
         """Return board columns with work items grouped per column.
 

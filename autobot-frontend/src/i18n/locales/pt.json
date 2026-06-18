@@ -208,7 +208,9 @@
       "deletedWithFactsPreserved": "Bate-papos {count} excluídos (fatos preservados na base de conhecimento)",
       "deletedSuccess": "Bate-papos {count} excluídos",
       "deleteFailed": "Falha ao excluir alguns bate-papos",
-      "sharedSuccess": "Bate-papo compartilhado com sucesso"
+      "sharedSuccess": "Bate-papo compartilhado com sucesso",
+      "searchChats": "Search chats",
+      "noSearchResults": "No chats match your search"
     },
     "interface": {
       "loadFailed": "Falha ao carregar a interface de bate-papo",
@@ -673,7 +675,13 @@
       "contextOverflowDescription": "Choose how to handle conversations approaching the context limit",
       "contextOverflowAuto": "Auto-summarize",
       "contextOverflowWarn": "Warn only",
-      "contextOverflowDisabled": "Disabled"
+      "contextOverflowDisabled": "Disabled",
+      "reasoningEffortLabel": "Reasoning Effort",
+      "reasoningEffortDescription": "Set how much reasoning effort the model uses by default for new messages",
+      "reasoningEffortAuto": "Auto",
+      "reasoningEffortLow": "Low",
+      "reasoningEffortMedium": "Medium",
+      "reasoningEffortHigh": "High"
     },
     "folders": {
       "folders": "Folders",
@@ -685,7 +693,10 @@
       "unpin": "Unpin folder",
       "assignToFolder": "Move to folder",
       "removeFromFolder": "Remove from folder",
-      "confirmDelete": "Delete folder \"{name}\"? Subfolders will be moved to root."
+      "confirmDelete": "Delete folder \"{name}\"? Subfolders will be moved to root.",
+      "archive": "Archive folder",
+      "unarchive": "Unarchive folder",
+      "archived": "Archived"
     },
     "presets": {
       "modalTitle": "Slash Command Presets",
@@ -3088,7 +3099,24 @@
         "onedriveDriveIdHint": "Specific drive to sync. Leave blank to use the default drive.",
         "onedriveFolderPath": "Folder Path (optional)",
         "onedriveFolderHint": "Limit the sync to a single folder path. Leave blank to sync the whole drive.",
-        "onedriveSyncSubfolders": "Sync subfolders recursively"
+        "onedriveSyncSubfolders": "Sync subfolders recursively",
+        "typeGitlab": "GitLab",
+        "typeGitlabDesc": "Index issues, merge requests, and files from GitLab",
+        "typeGitea": "Gitea",
+        "typeGiteaDesc": "Index issues, pull requests, and files from Gitea",
+        "typeForgejo": "Forgejo",
+        "typeForgejoDesc": "Index issues, pull requests, and files from Forgejo",
+        "gitToken": "Personal Access Token",
+        "gitTokenHint": "Token with read access to repositories and issues.",
+        "gitlabUrl": "GitLab URL",
+        "gitlabProjectIds": "Project IDs (optional)",
+        "gitlabProjectIdsHint": "Comma-separated project IDs or paths. Leave blank to sync all accessible projects.",
+        "giteaUrl": "Instance URL",
+        "giteaRepos": "Repositories",
+        "giteaReposHint": "Comma-separated \"owner/repo\" entries.",
+        "gitSyncIssues": "Sync issues",
+        "gitSyncMergeRequests": "Sync merge / pull requests",
+        "gitSyncFiles": "Sync repository files"
       },
       "tier": {
         "ready": "Ready",
@@ -7531,6 +7559,7 @@
     "llcGoals": "Goals",
     "llcCompanies": "Companies",
     "llcBacklog": "Backlog",
+    "llcBoards": "Boards",
     "llcPortfolios": "Portfolios",
     "llcTimeline": "Timeline",
     "llcApprovals": "Approvals",
@@ -7708,6 +7737,13 @@
     "loadError": "Load error",
     "placeholder": "Placeholder",
     "viewFull": "View full"
+  },
+  "videoCell": {
+    "copyUrl": "Copiar URL",
+    "download": "Baixar",
+    "failed": "Falha ao gerar o vídeo",
+    "generating": "Gerando vídeo…",
+    "placeholder": "Vídeo"
   },
   "plugins": {
     "capabilities": {

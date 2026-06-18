@@ -35,7 +35,7 @@ from datetime import date, datetime
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -85,8 +85,7 @@ class PortfolioResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ProgramCreate(BaseModel):
@@ -113,8 +112,7 @@ class ProgramResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ProjectCreate(BaseModel):
@@ -156,8 +154,7 @@ class ProjectResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class SprintCreate(BaseModel):
@@ -202,8 +199,7 @@ class SprintResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class SprintCloseRequest(BaseModel):
@@ -328,7 +324,8 @@ async def create_program(
     if pf_row is None or str(pf_row.company_id) != str(ctx.org_id):
         raise HTTPException(status_code=404, detail="Portfolio not found")
     program = LLCProgram(
-        company_id=body.company_id,
+        # #10261: derive tenant from the validated parent, never trust body.company_id.
+        company_id=pf_row.company_id,
         portfolio_id=portfolio_id,
         name=body.name,
         description=body.description,
@@ -439,7 +436,8 @@ async def create_project(
     if prog is None or str(prog.company_id) != str(ctx.org_id):
         raise HTTPException(status_code=404, detail="Program not found")
     project = LLCProject(
-        company_id=body.company_id,
+        # #10261: derive tenant from the validated parent, never trust body.company_id.
+        company_id=prog.company_id,
         program_id=program_id,
         goal_id=body.goal_id,
         name=body.name,
@@ -543,7 +541,8 @@ async def create_sprint(
     if proj is None or str(proj.company_id) != str(ctx.org_id):
         raise HTTPException(status_code=404, detail="Project not found")
     sprint = LLCSprint(
-        company_id=body.company_id,
+        # #10261: derive tenant from the validated parent, never trust body.company_id.
+        company_id=proj.company_id,
         project_id=project_id,
         name=body.name,
         goal_description=body.goal_description,

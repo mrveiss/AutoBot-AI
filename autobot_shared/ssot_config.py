@@ -207,6 +207,15 @@ class LLMConfig(BaseSettings):
     openai_api_key: str = Field(default="", alias="OPENAI_API_KEY")
     anthropic_api_key: str = Field(default="", alias="ANTHROPIC_API_KEY")
 
+    # Web-search providers (#9022 SearXNG, #9023 Brave). Empty = disabled.
+    # SearXNG needs no API key — only the self-hosted instance URL. Optional
+    # HTTP Basic / token auth for instances behind a reverse proxy.
+    searxng_instance_url: str = Field(default="", alias="SEARXNG_INSTANCE_URL")
+    searxng_basic_auth_user: str = Field(default="", alias="SEARXNG_BASIC_AUTH_USER")
+    searxng_basic_auth_pass: str = Field(default="", alias="SEARXNG_BASIC_AUTH_PASS")
+    searxng_token: str = Field(default="", alias="SEARXNG_TOKEN")
+    brave_search_api_key: str = Field(default="", alias="BRAVE_SEARCH_API_KEY")
+
     # Claude escalation feature flag (#8171): disabled by default so local LLM
     # path is unchanged unless AUTOBOT_CLAUDE_ESCALATION_ENABLED=true is set.
     claude_escalation_enabled: bool = Field(default=False, alias="AUTOBOT_CLAUDE_ESCALATION_ENABLED")

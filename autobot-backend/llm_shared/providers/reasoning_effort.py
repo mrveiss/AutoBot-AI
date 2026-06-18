@@ -72,4 +72,18 @@ def _map_effort_to_provider_params(effort: str, provider: str) -> Dict[str, Any]
     return {}
 
 
-__all__ = ["_map_effort_to_provider_params"]
+_VALID_EFFORT_LEVELS = frozenset({"low", "medium", "high", "auto"})
+
+
+def map_effort_to_provider_params(effort: str | None, provider: str) -> Dict[str, Any]:
+    """Public alias for _map_effort_to_provider_params with invalid-effort guard.
+
+    Invalid effort values (not in low/medium/high/auto) are silently treated as
+    'auto' so callers never get a 500 from an unexpected string.
+    """
+    if effort not in _VALID_EFFORT_LEVELS:
+        effort = "auto"
+    return _map_effort_to_provider_params(effort, provider)
+
+
+__all__ = ["_map_effort_to_provider_params", "map_effort_to_provider_params", "_VALID_EFFORT_LEVELS"]

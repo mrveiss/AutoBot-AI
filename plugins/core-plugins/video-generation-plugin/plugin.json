@@ -1,0 +1,79 @@
+{
+  "name": "video-generation-plugin",
+  "version": "1.0.0",
+  "display_name": "Video Generation Plugin",
+  "description": "Adds AI video generation to chat and agent workflows via Runway ML (baseline), with OpenAI Sora and Kling AI registered behind credential gates. Registers the generate_video tool callable from LLC agent tasks. Generation is async (submit then poll).",
+  "author": "mrveiss",
+  "entry_point": "plugins.core_plugins.video_generation_plugin.main",
+  "capabilities": ["llm:call", "network:outbound", "system:env"],
+  "trust_tier": "official",
+  "dependencies": [],
+  "config_schema": {
+    "type": "object",
+    "properties": {
+      "default_provider": {
+        "type": "string",
+        "enum": ["runway", "sora", "kling"],
+        "default": "runway",
+        "description": "Default provider used when none is specified in the tool call"
+      },
+      "default_duration": {
+        "type": "integer",
+        "default": 5,
+        "minimum": 1,
+        "maximum": 20,
+        "description": "Default clip duration in seconds"
+      },
+      "default_resolution": {
+        "type": "string",
+        "default": "1280x720",
+        "description": "Default output resolution (provider-specific values apply)"
+      },
+      "default_aspect_ratio": {
+        "type": "string",
+        "enum": ["16:9", "9:16", "1:1"],
+        "default": "16:9",
+        "description": "Default aspect ratio"
+      }
+    }
+  },
+  "hooks": [],
+  "required_env": [
+    {
+      "name": "RUNWAY_API_KEY",
+      "secret": true,
+      "required": false,
+      "description": "Runway ML API key for video generation (Gen-3/Gen-4 via the developer API)",
+      "docs_url": "https://docs.dev.runwayml.com",
+      "obtain_steps": [
+        "Go to https://dev.runwayml.com",
+        "Create a developer account and generate an API key",
+        "Set RUNWAY_API_KEY to the generated key"
+      ]
+    },
+    {
+      "name": "SORA_API_KEY",
+      "secret": true,
+      "required": false,
+      "description": "OpenAI Sora API key for video generation (credential-gated; enabled when the key is set)",
+      "docs_url": "https://platform.openai.com/api-keys",
+      "obtain_steps": [
+        "Go to https://platform.openai.com/api-keys",
+        "Create an API key with Sora video access",
+        "Set SORA_API_KEY to the generated key"
+      ]
+    },
+    {
+      "name": "KLING_API_KEY",
+      "secret": true,
+      "required": false,
+      "description": "Kling AI API key for video generation (credential-gated; enabled when the key is set)",
+      "docs_url": "https://klingai.com",
+      "obtain_steps": [
+        "Go to https://klingai.com and obtain API access",
+        "Generate an API key",
+        "Set KLING_API_KEY to the generated key"
+      ]
+    }
+  ]
+}
