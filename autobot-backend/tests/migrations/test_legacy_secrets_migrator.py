@@ -149,3 +149,32 @@ async def test_atomic_on_bad_grant_vault(session):
     await session.commit()
     assert report.total_legacy == 1 and report.migrated == 0 and len(report.failed) == 1
     assert row.sealed_value is None and row.owner_vault is None  # nothing persisted
+
+
+async def test_org_without_org_id_demoted_with_warning(session):
+    # An organization secret missing org_id is migrated to the creator's user vault,
+    # and the demotion is surfaced in the report for operator reconciliation.
+    row = _legacy("organization", b"o-val")  # no org_id
+    session.add(row)
+    await session.commit()
+    report = await migrate_pg_legacy_secrets(session, fernet=_FERNET, root_key=_ROOT)
+    await session.commit()
+    assert report.migrated == 1 and len(report.warnings) == 1
+    assert row.owner_vault == f"user:{_OWNER}"
+    svc = UnifiedSecretsService(root_key=_ROOT)
+    assert (
+        await svc.read(session, secret_id=row.id, accessible_vaults={VaultRef(VaultKind.USER, str(_OWNER))}) == b"o-val"
+    )
+
+
+async def test_dirty_non_list_shared_with_fails_row(session):
+    # Legacy dirty data: shared_with stored as a bare string would iterate characters and
+    # silently mis-grant — instead the row must fail and be left untouched.
+    row = _legacy("shared", b"s-val")
+    row.shared_with = "not-a-list"
+    session.add(row)
+    await session.commit()
+    report = await migrate_pg_legacy_secrets(session, fernet=_FERNET, root_key=_ROOT)
+    await session.commit()
+    assert report.migrated == 0 and len(report.failed) == 1
+    assert row.sealed_value is None
