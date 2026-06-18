@@ -379,7 +379,7 @@ async def get_metrics_summary():
     """
     try:
         collector = get_metrics_collector()
-        summary = collector.get_summary()
+        summary = await collector.get_summary()
 
         return {"status": "success", "data": summary}
     except Exception as e:
@@ -408,14 +408,12 @@ async def get_error_timeline_endpoint(hours: int = 24, component: str | None = N
         hours = min(max(hours, 1), 168)  # Clamp to 1-168 hours
 
         collector = get_metrics_collector()
-        timeline = collector.get_error_timeline(hours=hours, component=component)
+        points = await collector.get_error_timeline(hours=hours, component=component)
 
         return {
             "status": "success",
             "data": {
-                "timeline": [
-                    {"hour": hour, "error_count": len(errors), "errors": errors} for hour, errors in timeline.items()
-                ],
+                "timeline": points,
                 "hours": hours,
                 "component": component,
             },
@@ -445,11 +443,11 @@ async def get_top_errors_endpoint(limit: int = 10):
         limit = min(max(limit, 1), 50)  # Clamp to 1-50
 
         collector = get_metrics_collector()
-        top_errors = collector.get_top_errors(limit=limit)
+        top_errors = await collector.get_top_errors(limit=limit)
 
         return {
             "status": "success",
-            "data": {"top_errors": [stats.to_dict() for stats in top_errors]},
+            "data": {"top_errors": top_errors},
         }
     except Exception as e:
         logger.error("Failed to get top errors: %s", e)
