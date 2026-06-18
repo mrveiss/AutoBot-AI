@@ -73,6 +73,7 @@ def _serialize_folder(f: Dict) -> Dict:
         "parent_id": f.get("parent_id"),
         "owner": f.get("owner", ""),
         "pinned": f.get("pinned", False),
+        "archived": f.get("archived", False),
         "created_at": f.get("created_at", ""),
         "session_ids": session_ids,
         "session_count": len(session_ids),
@@ -141,6 +142,7 @@ async def create_folder(
         "parent_id": body.parent_id,
         "owner": username,
         "pinned": False,
+        "archived": False,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "session_ids": [],
     }
@@ -182,6 +184,8 @@ async def update_folder(
         folder["name"] = body.name
     if body.pinned is not None:
         folder["pinned"] = body.pinned
+    if body.archived is not None:
+        folder["archived"] = body.archived
     if "parent_id" in body.model_fields_set:
         if body.parent_id is not None:
             if body.parent_id == folder_id:

@@ -150,7 +150,8 @@ class SecretService(LLCServiceBase):
                 after={"name": name, "version": secret.version},
             )
 
-        logger.info(
+        # Logs secret *name* (metadata key) and audit fields only — the encrypted value is never logged.
+        logger.info(  # nosemgrep: python.lang.security.audit.logging.logger-credential-leak.python-logger-credential-disclosure  # noqa: E501
             "Secret '%s' set for company %s (version=%d, actor=%s)",
             name,
             company_id,
@@ -196,7 +197,8 @@ class SecretService(LLCServiceBase):
                 after={"name": name, "revoked_at": secret.revoked_at.isoformat()},
             )
 
-        logger.info(
+        # Logs secret *name* (metadata key) and audit fields only — the encrypted value is never logged.
+        logger.info(  # nosemgrep: python.lang.security.audit.logging.logger-credential-leak.python-logger-credential-disclosure  # noqa: E501
             "Secret '%s' revoked for company %s (actor=%s)",
             name,
             company_id,

@@ -266,8 +266,8 @@ function handleViewGraph(): void {
 function getStatusIcon(status: string): IconName {
   switch (status) {
     case 'healthy': return 'check-circle'
-    case 'degraded': return 'exclamation-triangle'
-    case 'unavailable':
+    case 'degraded':
+    case 'unavailable': return 'exclamation-triangle'
     case 'unhealthy': return 'times-circle'
     default: return 'question-circle'
   }
@@ -532,7 +532,8 @@ onMounted(() => {
   border-left-color: var(--color-success);
 }
 
-.health-card.degraded {
+.health-card.degraded,
+.health-card.unavailable {
   border-left-color: var(--color-warning);
 }
 
@@ -567,7 +568,8 @@ onMounted(() => {
   color: var(--color-success);
 }
 
-.health-card.degraded .health-status {
+.health-card.degraded .health-status,
+.health-card.unavailable .health-status {
   background: var(--color-warning-bg);
   color: var(--color-warning);
 }

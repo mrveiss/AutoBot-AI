@@ -20,6 +20,7 @@ export interface ChatFolder {
   parent_id: string | null
   owner: string
   pinned: boolean
+  archived: boolean
   created_at: string
   session_ids: string[]
   session_count: number
@@ -34,6 +35,7 @@ export interface FolderUpdate {
   name?: string
   parent_id?: string | null
   pinned?: boolean
+  archived?: boolean
 }
 
 export const useFolderStore = defineStore('chatFolders', () => {
@@ -41,17 +43,24 @@ export const useFolderStore = defineStore('chatFolders', () => {
   const isLoading = ref(false)
   const error = ref<string | null>(null)
 
-  // Folders that have no parent (root level)
+  // Root-level folders shown in the main tree (archived folders excluded).
   const rootFolders = computed(() =>
-    folders.value.filter((f) => !f.parent_id).sort((a, b) => {
+    folders.value.filter((f) => !f.parent_id && !f.archived).sort((a, b) => {
       if (a.pinned !== b.pinned) return a.pinned ? -1 : 1
       return a.name.localeCompare(b.name)
     })
   )
 
+  // Archived root-level folders, shown only in the dedicated "Archived" section.
+  const archivedFolders = computed(() =>
+    folders.value
+      .filter((f) => !f.parent_id && f.archived)
+      .sort((a, b) => a.name.localeCompare(b.name))
+  )
+
   function childrenOf(parentId: string): ChatFolder[] {
     return folders.value
-      .filter((f) => f.parent_id === parentId)
+      .filter((f) => f.parent_id === parentId && !f.archived)
       .sort((a, b) => a.name.localeCompare(b.name))
   }
 
@@ -153,9 +162,16 @@ export const useFolderStore = defineStore('chatFolders', () => {
     await updateFolder(id, { pinned: !folder.pinned })
   }
 
+  async function toggleArchive(id: string): Promise<void> {
+    const folder = folders.value.find((f) => f.id === id)
+    if (!folder) return
+    await updateFolder(id, { archived: !folder.archived })
+  }
+
   return {
     folders,
     rootFolders,
+    archivedFolders,
     isLoading,
     error,
     childrenOf,
@@ -166,5 +182,6 @@ export const useFolderStore = defineStore('chatFolders', () => {
     deleteFolder,
     assignSessionToFolder,
     togglePin,
+    toggleArchive,
   }
 })
