@@ -7739,6 +7739,13 @@
     "cards": {
       "totalErrors": "Total Errors"
     },
+    "summary": {
+      "totalErrors": "Total errors",
+      "uniqueTypes": "Unique types",
+      "thresholds": "Alert thresholds",
+      "prometheusOn": "Prometheus metrics live",
+      "prometheusOff": "Prometheus metrics unavailable"
+    },
     "filters": {
       "category": "Category",
       "component": "Component",
@@ -7747,11 +7754,26 @@
     "sections": {
       "recentErrors": "Recent Errors",
       "categories": "Errors by Category",
-      "components": "Errors by Component"
+      "components": "Errors by Component",
+      "timeline": "Error Timeline",
+      "topErrors": "Top Errors"
+    },
+    "timeline": {
+      "peak": "peak {n}"
+    },
+    "topErrors": {
+      "component": "Component",
+      "errorCode": "Error code",
+      "count": "Count"
+    },
+    "resolve": {
+      "action": "Resolve",
+      "resolved": "Resolved"
     },
     "empty": {
       "noErrors": "No errors recorded",
-      "noData": "No data available"
+      "noData": "No data",
+      "metricsUnavailable": "Metrics unavailable"
     }
   }
 }
