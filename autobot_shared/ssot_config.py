@@ -1311,6 +1311,16 @@ class MiscConfig(BaseSettings):
     dev_mode: str = Field(default="", alias="AUTOBOT_DEV_MODE")
     encryption_key: str = Field(default="", alias="AUTOBOT_ENCRYPTION_KEY")
     env: str = Field(default="", alias="AUTOBOT_ENV")
+    error_resolved_ttl_seconds: str = Field(
+        default="",
+        alias="AUTOBOT_ERROR_RESOLVED_TTL_SECONDS",
+        description=(
+            "TTL in seconds for the errors:resolved Redis set entries. "
+            "Defaults to 604800 (7 days) when empty or unset. "
+            "Controls how long a mark_resolved() call is remembered. "
+            "See utils/error_metrics.py."
+        ),
+    )
     feature_routers_strict: str = Field(default="1", alias="AUTOBOT_FEATURE_ROUTERS_STRICT")
     gc_threshold_0: int = Field(default=0, alias="AUTOBOT_GC_THRESHOLD_0")
     gc_threshold_1: int = Field(default=0, alias="AUTOBOT_GC_THRESHOLD_1")
