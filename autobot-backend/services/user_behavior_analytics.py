@@ -472,9 +472,7 @@ class UserBehaviorAnalytics(AsyncRedisClientLockedMixin):
                     "pages_per_session": round(pages_per_session, 2),
                     "total_features_tracked": total_features_tracked,
                     "total_interactions": total_views,
-                    "average_interactions_per_feature": round(
-                        total_views / max(total_features_tracked, 1), 2
-                    ),
+                    "average_interactions_per_feature": round(total_views / max(total_features_tracked, 1), 2),
                 },
                 "feature_popularity": popularity,
                 "most_popular_feature": (popularity[0]["feature"] if popularity else None),

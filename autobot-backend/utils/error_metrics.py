@@ -47,6 +47,7 @@ logger = get_logger(__name__)
 # Module-level TTL constant (env-var backed, never hard-coded)
 # ---------------------------------------------------------------------------
 
+
 def _resolve_error_resolved_ttl() -> int:
     """Return TTL seconds for errors:resolved Redis set membership.
 
@@ -62,15 +63,13 @@ def _resolve_error_resolved_ttl() -> int:
         value = int(raw)
     except (ValueError, TypeError):
         logger.warning(
-            "AUTOBOT_ERROR_RESOLVED_TTL_SECONDS=%r is not an integer; "
-            "falling back to 7 days",
+            "AUTOBOT_ERROR_RESOLVED_TTL_SECONDS=%r is not an integer; " "falling back to 7 days",
             raw,
         )
         return TTL_7_DAYS
     if value <= 0:
         logger.warning(
-            "AUTOBOT_ERROR_RESOLVED_TTL_SECONDS=%d must be positive; "
-            "falling back to 7 days",
+            "AUTOBOT_ERROR_RESOLVED_TTL_SECONDS=%d must be positive; " "falling back to 7 days",
             value,
         )
         return TTL_7_DAYS
@@ -168,8 +167,7 @@ class ErrorMetricsCollector:
         """
         if redis_client is not None:
             logger.warning(
-                "redis_client parameter is deprecated and ignored. "
-                "Prometheus is now the primary metrics store."
+                "redis_client parameter is deprecated and ignored. " "Prometheus is now the primary metrics store."
             )
 
         self._alert_thresholds: Dict[str, int] = {}
@@ -401,9 +399,7 @@ class ErrorMetricsCollector:
             )
         return results
 
-    async def get_error_timeline(
-        self, hours: int = 24, component: str | None = None
-    ) -> List[Dict[str, Any]]:
+    async def get_error_timeline(self, hours: int = 24, component: str | None = None) -> List[Dict[str, Any]]:
         """
         Return time-bucketed error rate points from Prometheus.
 
@@ -447,16 +443,14 @@ class ErrorMetricsCollector:
     def get_category_breakdown(self) -> Dict[str, int]:
         """DEPRECATED (Phase 5, Issue #348): returns empty dict."""
         logger.warning(
-            "get_category_breakdown() is deprecated. Query Prometheus:\n"
-            "  sum(autobot_errors_total) by (category)"
+            "get_category_breakdown() is deprecated. Query Prometheus:\n" "  sum(autobot_errors_total) by (category)"
         )
         return {}
 
     def get_component_breakdown(self) -> Dict[str, int]:
         """DEPRECATED (Phase 5, Issue #348): returns empty dict."""
         logger.warning(
-            "get_component_breakdown() is deprecated. Query Prometheus:\n"
-            "  sum(autobot_errors_total) by (component)"
+            "get_component_breakdown() is deprecated. Query Prometheus:\n" "  sum(autobot_errors_total) by (component)"
         )
         return {}
 
@@ -469,8 +463,7 @@ class ErrorMetricsCollector:
     async def cleanup_old_metrics(self) -> int:
         """DEPRECATED (Phase 5, Issue #348): no-op; Prometheus handles retention."""
         logger.warning(
-            "cleanup_old_metrics() is deprecated. "
-            "Configure Prometheus retention in prometheus.yml instead."
+            "cleanup_old_metrics() is deprecated. " "Configure Prometheus retention in prometheus.yml instead."
         )
         return 0
 
@@ -490,6 +483,7 @@ class ErrorMetricsCollector:
 # ---------------------------------------------------------------------------
 # Private helpers
 # ---------------------------------------------------------------------------
+
 
 def _empty_summary() -> Dict[str, Any]:
     """Return a zero-valued summary when Prometheus is unavailable."""

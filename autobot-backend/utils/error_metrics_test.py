@@ -17,10 +17,10 @@ import pytest
 from utils.error_boundaries import ErrorCategory
 from utils.error_metrics import ErrorMetricsCollector, get_metrics_collector
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _instant_response(results):
     """Build a fake Prometheus instant query data dict."""
@@ -52,9 +52,7 @@ class TestRecordError:
             function="search",
             message="Search failed",
         )
-        collector.prometheus.record_error.assert_called_once_with(
-            "server_error", "knowledge_base", "KB_0001"
-        )
+        collector.prometheus.record_error.assert_called_once_with("server_error", "knowledge_base", "KB_0001")
 
     @pytest.mark.asyncio
     async def test_record_error_no_prometheus(self):
@@ -206,7 +204,8 @@ class TestGetSummary:
     async def test_summary_import_error(self, collector):
         with patch.dict("sys.modules", {"autobot_shared.monitoring.prometheus_query": None}):
             # Import error path — returns empty summary
-            import importlib
+            pass
+
             import utils.error_metrics as em
 
             with patch.object(em, "__builtins__", {}):
