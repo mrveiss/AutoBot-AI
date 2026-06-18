@@ -17,8 +17,9 @@ import { useTheme, type Theme, type ThemePreset, type AccentColor as ThemeAccent
 
 const logger = createLogger('usePreferences')
 
-/** Shape of the appearance prefs persisted per user account (#8988). */
+/** Shape of the prefs persisted per user account (#8988, #9460/#9471). */
 interface AccountAppearance {
+  reasoning_effort: ReasoningEffort
   theme: Theme
   accent_color: ThemeAccentColor
   layout_density: LayoutDensity
@@ -32,6 +33,8 @@ export type AccentColor = 'teal' | 'emerald' | 'blue' | 'purple' | 'orange'
 export type LayoutDensity = 'compact' | 'comfortable' | 'spacious'
 export type VoiceDisplayMode = 'modal' | 'sidepanel'
 export type ContextOverflowMode = 'auto' | 'warn' | 'disabled'
+// Reasoning effort default (#9460/#9471) — matches backend UserPreferences pattern.
+export type ReasoningEffort = 'auto' | 'low' | 'medium' | 'high'
 
 export interface UserPreferences {
   fontSize: FontSize
@@ -40,6 +43,7 @@ export interface UserPreferences {
   voiceDisplayMode: VoiceDisplayMode
   language: string
   contextOverflowMode: ContextOverflowMode
+  reasoningEffort: ReasoningEffort
 }
 
 // Default preferences (Issue #9040: aligned with design-tokens.css electric blue default)
@@ -49,7 +53,8 @@ const DEFAULT_PREFERENCES: UserPreferences = {
   layoutDensity: 'comfortable',
   voiceDisplayMode: 'modal',
   language: 'en',
-  contextOverflowMode: 'auto'
+  contextOverflowMode: 'auto',
+  reasoningEffort: 'auto'
 }
 
 // Reactive preferences state
@@ -59,6 +64,7 @@ const layoutDensity = ref<LayoutDensity>('comfortable')
 const voiceDisplayMode = ref<VoiceDisplayMode>('modal')
 const language = ref<string>('en')
 const contextOverflowMode = ref<ContextOverflowMode>('auto')
+const reasoningEffort = ref<ReasoningEffort>('auto')
 
 // Local storage key
 const STORAGE_KEY = 'autobot-preferences'
@@ -83,6 +89,7 @@ function loadPreferences(): void {
       voiceDisplayMode.value = parsed.voiceDisplayMode || DEFAULT_PREFERENCES.voiceDisplayMode
       language.value = parsed.language || localStorage.getItem('autobot-language') || DEFAULT_PREFERENCES.language
       contextOverflowMode.value = parsed.contextOverflowMode || DEFAULT_PREFERENCES.contextOverflowMode
+      reasoningEffort.value = parsed.reasoningEffort || DEFAULT_PREFERENCES.reasoningEffort
 
       logger.debug('Preferences loaded from localStorage', {
         fontSize: fontSize.value,
@@ -108,7 +115,8 @@ function savePreferences(): void {
       layoutDensity: layoutDensity.value,
       voiceDisplayMode: voiceDisplayMode.value,
       language: language.value,
-      contextOverflowMode: contextOverflowMode.value
+      contextOverflowMode: contextOverflowMode.value,
+      reasoningEffort: reasoningEffort.value
     }
     localStorage.setItem(STORAGE_KEY, JSON.stringify(preferences))
     logger.debug('Preferences saved to localStorage', preferences)
@@ -192,6 +200,7 @@ export function usePreferences() {
   async function saveAppearanceToBackend(): Promise<void> {
     try {
       const payload: AccountAppearance = {
+        reasoning_effort: reasoningEffort.value,
         theme: theme.theme.value,
         accent_color: theme.accentColor.value,
         layout_density: layoutDensity.value,
@@ -225,6 +234,7 @@ export function usePreferences() {
       }
       if (prefs.layout_density) setLayoutDensity(prefs.layout_density)
       if (prefs.font_size) setFontSize(prefs.font_size)
+      if (prefs.reasoning_effort) setReasoningEffort(prefs.reasoning_effort)
       logger.debug('Appearance prefs loaded from account', prefs)
     } catch (error) {
       logger.warn('Could not load appearance prefs from account', error)
@@ -282,6 +292,12 @@ export function usePreferences() {
     watch(contextOverflowMode, () => {
       savePreferences()
     })
+
+    // Reasoning effort default follows the user across devices (#9460/#9471)
+    watch(reasoningEffort, () => {
+      savePreferences()
+      _scheduleAppearanceSync()
+    })
   }
 
   /**
@@ -313,6 +329,10 @@ export function usePreferences() {
     contextOverflowMode.value = mode
   }
 
+  function setReasoningEffort(effort: ReasoningEffort): void {
+    reasoningEffort.value = effort
+  }
+
   async function setLanguage(code: string): Promise<void> {
     language.value = code
     await setLocale(code)
@@ -330,6 +350,7 @@ export function usePreferences() {
     voiceDisplayMode.value = DEFAULT_PREFERENCES.voiceDisplayMode
     language.value = DEFAULT_PREFERENCES.language
     contextOverflowMode.value = DEFAULT_PREFERENCES.contextOverflowMode
+    reasoningEffort.value = DEFAULT_PREFERENCES.reasoningEffort
     setLocale(DEFAULT_PREFERENCES.language)
     logger.debug('Preferences reset to defaults')
   }
@@ -343,6 +364,7 @@ export function usePreferences() {
     voiceDisplayMode,
     language,
     contextOverflowMode,
+    reasoningEffort,
 
     // Actions
     setFontSize,
@@ -351,6 +373,7 @@ export function usePreferences() {
     setVoiceDisplayMode,
     setLanguage,
     setContextOverflowMode,
+    setReasoningEffort,
     loadLanguageFromBackend,
     loadAppearanceFromBackend,
     saveAppearanceToBackend,

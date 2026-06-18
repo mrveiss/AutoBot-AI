@@ -11,13 +11,14 @@
       <div class="settings-body">
         <!-- Context Overflow Protection Setting -->
         <div class="setting-group">
-          <label class="setting-label">
+          <label class="setting-label" for="context-overflow-select">
             {{ $t('chat.settings.contextOverflowLabel') }}
           </label>
           <p class="setting-description">
             {{ $t('chat.settings.contextOverflowDescription') }}
           </p>
           <select
+            id="context-overflow-select"
             v-model="localMode"
             @change="updateMode"
             class="setting-select"
@@ -25,6 +26,27 @@
             <option value="auto">{{ $t('chat.settings.contextOverflowAuto') }}</option>
             <option value="warn">{{ $t('chat.settings.contextOverflowWarn') }}</option>
             <option value="disabled">{{ $t('chat.settings.contextOverflowDisabled') }}</option>
+          </select>
+        </div>
+
+        <!-- Reasoning Effort Setting (#9460/#9471) -->
+        <div class="setting-group">
+          <label class="setting-label" for="reasoning-effort-select">
+            {{ $t('chat.settings.reasoningEffortLabel') }}
+          </label>
+          <p class="setting-description">
+            {{ $t('chat.settings.reasoningEffortDescription') }}
+          </p>
+          <select
+            id="reasoning-effort-select"
+            v-model="localEffort"
+            @change="updateEffort"
+            class="setting-select"
+          >
+            <option value="auto">{{ $t('chat.settings.reasoningEffortAuto') }}</option>
+            <option value="low">{{ $t('chat.settings.reasoningEffortLow') }}</option>
+            <option value="medium">{{ $t('chat.settings.reasoningEffortMedium') }}</option>
+            <option value="high">{{ $t('chat.settings.reasoningEffortHigh') }}</option>
           </select>
         </div>
       </div>
@@ -48,17 +70,23 @@ interface Emits {
 const props = defineProps<Props>()
 defineEmits<Emits>()
 
-const { contextOverflowMode, setContextOverflowMode } = usePreferences()
+const { contextOverflowMode, setContextOverflowMode, reasoningEffort, setReasoningEffort } = usePreferences()
 const localMode = ref(contextOverflowMode.value)
+const localEffort = ref(reasoningEffort.value)
 
 watch(() => props.show, (isShown) => {
   if (isShown) {
     localMode.value = contextOverflowMode.value
+    localEffort.value = reasoningEffort.value
   }
 })
 
 function updateMode() {
   setContextOverflowMode(localMode.value)
+}
+
+function updateEffort() {
+  setReasoningEffort(localEffort.value)
 }
 </script>
 

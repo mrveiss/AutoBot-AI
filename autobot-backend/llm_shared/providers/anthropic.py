@@ -212,7 +212,14 @@ class AnthropicProvider(BaseProvider):
             if request.tool_choice:
                 kwargs["tool_choice"] = {"type": request.tool_choice}
 
-        api_kwargs: Dict[str, Any] = request.metadata.get("api_kwargs") or {}
+        api_kwargs: Dict[str, Any] = dict(request.metadata.get("api_kwargs") or {})
+        # #9017: expand thinking_tokens (from reasoning_effort mapping) into the
+        # Anthropic extended-thinking dict if not already fully specified.
+        thinking_tokens: int | None = api_kwargs.pop("thinking_tokens", None)
+        if thinking_tokens and "thinking" not in api_kwargs:
+            api_kwargs["thinking"] = {"type": "enabled", "budget_tokens": thinking_tokens}
+            api_kwargs.setdefault("max_tokens", max(thinking_tokens + 1000, 8192))
+            api_kwargs.setdefault("betas", ["interleaved-thinking-2025-05-14"])
         preserve_reasoning: bool = bool(api_kwargs.get("preserve_reasoning", False))
         kwargs, extra_headers = _build_api_kwargs(kwargs, api_kwargs)
 

@@ -37,6 +37,7 @@ from llm_shared.types import ProviderType
 
 from ..base_provider import BaseProvider
 from .cache_utils import sorted_for_cache
+from .reasoning_effort import map_effort_to_provider_params
 
 logger = get_logger(__name__)
 
@@ -138,6 +139,11 @@ class OpenAIProvider(BaseProvider):
                 ]
                 if request.tool_choice:
                     params["tool_choice"] = request.tool_choice
+            # #9017: merge reasoning_effort params (e.g. {"reasoning_effort": "high"} for o1/o3).
+            api_kwargs: Dict[str, Any] = request.metadata.get("api_kwargs") or {}
+            effort_params = map_effort_to_provider_params(api_kwargs.get("reasoning_effort"), self.provider_name)
+            if effort_params:
+                params.update(effort_params)
             params = sorted_for_cache(params)
             response = await client.chat.completions.create(**params)
             choice = response.choices[0]
