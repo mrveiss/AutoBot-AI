@@ -318,3 +318,17 @@ def test_shared_lib_post_steps_noop():
 def _run_async_return(value):
     """Backward-compat alias for _async_return."""
     return _async_return(value)
+
+
+def test_autobot_shared_is_syncable_and_restarts_dependents():
+    """#10248: autobot_shared is a first-class syncable component whose resolve
+    restarts every dependent service (so component code can't outrun the lib)."""
+    from api.code_sync import _COMPONENT_SERVICES
+    from services.drift_checker import ALLOWED_COMPONENTS
+
+    assert "autobot_shared" in ALLOWED_COMPONENTS
+    deps = _COMPONENT_SERVICES.get("autobot_shared", [])
+    # Must restart the core Python services that import autobot_shared.
+    assert "autobot-backend" in deps
+    assert "autobot-slm-backend" in deps
+    assert len(deps) >= 2

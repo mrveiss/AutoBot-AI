@@ -5,7 +5,7 @@
 
 ## Overview
 
-Migrating AutoBot from current Hyper-V + WSL architecture to Kubernetes would provide enhanced scalability, resilience, and native centralized logging capabilities. Our current modular architecture is well-positioned for this transition.
+Migrating AutoBot from the current host/VM-based architecture to Kubernetes would provide enhanced scalability, resilience, and native centralized logging capabilities. Our current modular architecture is well-positioned for this transition.
 
 ## Current Architecture Benefits for K8s Migration
 

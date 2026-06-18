@@ -447,7 +447,8 @@ async def resolve_drift(
     (#9982) so that the synced code is immediately live:
       - Python backend components: pip install -r requirements.txt + service restart
       - Frontend components: npm ci + npm run build + nginx restart
-      - Library components (autobot_shared): no-op (no service to restart)
+      - Library components (autobot_shared): restart every dependent service so
+        the new shared code is loaded (#10248)
 
     Body:
         component: Sub-directory under /opt/autobot/. Must be in ALLOWED_COMPONENTS.
@@ -743,6 +744,18 @@ _COMPONENT_SERVICES: Dict[str, List[str]] = {
     "autobot-slm-backend": ["autobot-slm-backend"],
     "autobot-frontend": ["nginx"],
     "autobot-slm-frontend": ["nginx"],
+    # #10248: autobot_shared is imported by every Python service, so syncing it
+    # must restart them all (else they keep running the old shared code and may
+    # ImportError on a newly-referenced symbol). Restarts tolerate absent units
+    # (distributed nodes won't have every service) — failures are logged, not fatal.
+    "autobot_shared": [
+        "autobot-slm-backend",
+        "autobot-backend",
+        "autobot-ai-stack",
+        "autobot-celery",
+        "autobot-celery-beat",
+        "autobot-npu-worker",
+    ],
 }
 
 
@@ -899,8 +912,11 @@ async def _run_post_sync_steps(
     elif component in _COMPONENT_FRONTEND_DIRS:
         await _build_npm_frontend_for_component(component, steps)
         await _restart_component_services(component, steps)
+    elif component in _COMPONENT_SERVICES:
+        # Library component (autobot_shared): no build step, but every service
+        # that imports it must restart so the new shared code is loaded (#10248).
+        await _restart_component_services(component, steps)
     else:
-        # autobot_shared and any future library-only components — no services
         steps.append(f"post-sync: no service or build step for {component}")
 
     return deps_changed, steps

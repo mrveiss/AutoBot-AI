@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # AutoBot Backup Utility
-# Comprehensive backup solution for the Hyper-V deployment
+# Comprehensive backup solution for the AutoBot deployment (hypervisor-agnostic)
 #
 
 set -euo pipefail

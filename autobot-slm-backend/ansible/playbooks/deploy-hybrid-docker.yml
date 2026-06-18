@@ -2,8 +2,14 @@
 # SPDX-License-Identifier: Apache-2.0
 ---
 # Hybrid Deployment: Docker Containers on VMs
-# Deploys AutoBot services as Docker containers on Hyper-V VMs
-# Backend remains on host machine
+# Deploys AutoBot services as Docker containers on target hosts/VMs.
+# Backend remains on host machine.
+#
+# DEPRECATION NOTICE: This playbook encodes the obsolete separated multi-VM
+# topology. AutoBot now deploys co-located, orchestrated by the SLM, onto one
+# or more hosts (co-located or distributed). Requirements are a supported OS +
+# hardware; the deployment is hypervisor-agnostic. Retained for reference and
+# legacy migrations — do not delete.
 
 - name: Deploy Docker Containers to VMs
   hosts: all
