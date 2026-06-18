@@ -29,9 +29,7 @@ _WEB_SAMPLE = {
 }
 
 _NEWS_SAMPLE = {
-    "results": [
-        {"title": "News One", "url": "https://news.example/1", "description": "News snippet", "page_age": "1h"}
-    ]
+    "results": [{"title": "News One", "url": "https://news.example/1", "description": "News snippet", "page_age": "1h"}]
 }
 
 

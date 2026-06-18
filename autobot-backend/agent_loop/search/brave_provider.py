@@ -75,9 +75,7 @@ class BraveSearchProvider(WebSearchProvider):
         params = {"q": query, "count": str(count)}
         timeout = aiohttp.ClientTimeout(total=_REQUEST_TIMEOUT_S)
         client = get_http_client()
-        async with await client.get(
-            endpoint, params=params, headers=self._build_headers(), timeout=timeout
-        ) as resp:
+        async with await client.get(endpoint, params=params, headers=self._build_headers(), timeout=timeout) as resp:
             if resp.status == 429:
                 raise RuntimeError("Brave Search rate-limited (HTTP 429)")
             if resp.status != 200:

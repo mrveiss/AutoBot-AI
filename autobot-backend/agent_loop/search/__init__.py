@@ -14,8 +14,8 @@ from agent_loop.search.base import SearchResult, WebSearchProvider
 from agent_loop.search.registry import (
     SearchProviderRegistry,
     get_search_registry,
-    search as registry_search,
 )
+from agent_loop.search.registry import search as registry_search
 
 __all__ = [
     "SearchResult",
