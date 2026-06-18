@@ -25,12 +25,17 @@ RUN python3 -m pip install --no-cache-dir /app/autobot_shared
 # Copy root requirements (referenced by backend via -r ../requirements.txt)
 COPY requirements.txt /app/requirements-root.txt
 
-# Install backend dependencies (filter out local refs, install root deps separately)
+# Install backend dependencies (filter out local refs, install root deps separately).
+# torch/torchvision are excluded from the filtered list and installed explicitly from
+# the CPU index, so the default-PyPI CUDA build (libtorch_cuda.so) is never pulled into
+# this CPU image (#10251). vLLM + its CUDA stack are no longer default deps; GPU
+# deployments add them via requirements-gpu.txt.
 COPY autobot-backend/requirements.txt /tmp/requirements.txt
-RUN grep -v -E "(autobot.shared|^-r )" /tmp/requirements.txt > /app/requirements-filtered.txt \
+RUN grep -v -E "(autobot.shared|^-r |^torch==|^torchvision==)" /tmp/requirements.txt \
+        > /app/requirements-filtered.txt \
     && python3 -m pip install --no-cache-dir -r /app/requirements-root.txt \
     && python3 -m pip install --no-cache-dir \
-        "torch>=2.11.0" "torchvision>=0.26.0" \
+        torch==2.12.0 torchvision==0.27.0 \
         --index-url https://download.pytorch.org/whl/cpu \
     && python3 -m pip install --no-cache-dir -r /app/requirements-filtered.txt
 

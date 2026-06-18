@@ -95,6 +95,22 @@ const odOAuthError = ref<string | null>(null)
 // Scopes requested for Microsoft Graph read-only access.
 const ONEDRIVE_SCOPES = ['offline_access', 'Files.Read.All', 'Sites.Read.All']
 
+// GitLab config (Issue #9011) — self-hosted, direct personal-access-token auth.
+const glUrl = ref('https://gitlab.com')
+const glToken = ref('')
+const glProjectIds = ref('')
+const glSyncIssues = ref(true)
+const glSyncMergeRequests = ref(true)
+const glSyncFiles = ref(false)
+
+// Gitea / Forgejo config (Issue #9011) — identical API, direct token auth.
+const gtUrl = ref('')
+const gtToken = ref('')
+const gtRepos = ref('')
+const gtSyncIssues = ref(true)
+const gtSyncMergeRequests = ref(true)
+const gtSyncFiles = ref(false)
+
 const isEditing = computed(() => props.editConnector !== null)
 
 const modalTitle = computed(() =>
@@ -130,6 +146,21 @@ const typeCards = computed(() => [
     type: 'onedrive' as ConnectorType,
     label: t('knowledge.connectors.config.typeOnedrive'),
     description: t('knowledge.connectors.config.typeOnedriveDesc')
+  },
+  {
+    type: 'gitlab' as ConnectorType,
+    label: t('knowledge.connectors.config.typeGitlab'),
+    description: t('knowledge.connectors.config.typeGitlabDesc')
+  },
+  {
+    type: 'gitea' as ConnectorType,
+    label: t('knowledge.connectors.config.typeGitea'),
+    description: t('knowledge.connectors.config.typeGiteaDesc')
+  },
+  {
+    type: 'forgejo' as ConnectorType,
+    label: t('knowledge.connectors.config.typeForgejo'),
+    description: t('knowledge.connectors.config.typeForgejoDesc')
   }
 ])
 
@@ -204,6 +235,23 @@ function populateFromConfig(cfg: ConnectorConfig) {
       odSyncSubfolders.value = c.sync_subfolders ?? true
       odMaxFileSizeMb.value = c.max_file_size_mb ?? 100
       break
+    case 'gitlab':
+      glUrl.value = c.gitlab_url || 'https://gitlab.com'
+      glToken.value = c.token || ''
+      glProjectIds.value = (c.project_ids || []).join(', ')
+      glSyncIssues.value = c.sync_issues ?? true
+      glSyncMergeRequests.value = c.sync_merge_requests ?? true
+      glSyncFiles.value = c.sync_files ?? false
+      break
+    case 'gitea':
+    case 'forgejo':
+      gtUrl.value = c.gitea_url || ''
+      gtToken.value = c.token || ''
+      gtRepos.value = (c.repos || []).join(', ')
+      gtSyncIssues.value = c.sync_issues ?? true
+      gtSyncMergeRequests.value = c.sync_merge_requests ?? true
+      gtSyncFiles.value = c.sync_files ?? false
+      break
   }
 }
 
@@ -250,6 +298,20 @@ function resetForm() {
   odMaxFileSizeMb.value = 100
   odSecretId.value = null
   odOAuthError.value = null
+
+  glUrl.value = 'https://gitlab.com'
+  glToken.value = ''
+  glProjectIds.value = ''
+  glSyncIssues.value = true
+  glSyncMergeRequests.value = true
+  glSyncFiles.value = false
+
+  gtUrl.value = ''
+  gtToken.value = ''
+  gtRepos.value = ''
+  gtSyncIssues.value = true
+  gtSyncMergeRequests.value = true
+  gtSyncFiles.value = false
 }
 
 // =========================================================================
@@ -312,6 +374,29 @@ function buildPayload(): Partial<ConnectorConfig> & { secret_id?: string } {
       // The token never touches the frontend; attach the OAuth secret by reference.
       if (odSecretId.value) base.secret_id = odSecretId.value
       break
+    case 'gitlab':
+      // Self-hosted token connectors send the PAT in config; the backend create
+      // path persists it via the credential store (no secret_id / OAuth flow).
+      base.config = {
+        gitlab_url: glUrl.value.trim() || 'https://gitlab.com',
+        token: glToken.value,
+        project_ids: splitTags(glProjectIds.value),
+        sync_issues: glSyncIssues.value,
+        sync_merge_requests: glSyncMergeRequests.value,
+        sync_files: glSyncFiles.value
+      }
+      break
+    case 'gitea':
+    case 'forgejo':
+      base.config = {
+        gitea_url: gtUrl.value.trim(),
+        token: gtToken.value,
+        repos: splitTags(gtRepos.value),
+        sync_issues: gtSyncIssues.value,
+        sync_merge_requests: gtSyncMergeRequests.value,
+        sync_files: gtSyncFiles.value
+      }
+      break
   }
 
   return base
@@ -366,6 +451,13 @@ const isConfigValid = computed(() => {
         odSecretId.value !== null &&
         (odSourceType.value !== 'sharepoint' || odSiteId.value.trim().length > 0)
       )
+    case 'gitlab':
+      // GitLab has a default URL, so only the token is strictly required.
+      return glToken.value.trim().length > 0 && glUrl.value.trim().length > 0
+    case 'gitea':
+    case 'forgejo':
+      // Gitea/Forgejo have no default host — require both URL and token.
+      return gtToken.value.trim().length > 0 && gtUrl.value.trim().length > 0
     default:
       return false
   }
@@ -944,6 +1036,128 @@ function closeModal() {
             min="1"
             max="500"
           />
+        </div>
+      </template>
+
+      <!-- GitLab Fields (Issue #9011) -->
+      <template v-if="connectorType === 'gitlab'">
+        <div class="form-group">
+          <label class="form-label" for="gl-url">
+            {{ $t('knowledge.connectors.config.gitlabUrl') }}
+          </label>
+          <input
+            id="gl-url"
+            v-model="glUrl"
+            type="text"
+            class="form-input"
+            placeholder="https://gitlab.com"
+          />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="gl-token">
+            {{ $t('knowledge.connectors.config.gitToken') }}
+          </label>
+          <input
+            id="gl-token"
+            v-model="glToken"
+            type="password"
+            class="form-input"
+            autocomplete="off"
+            placeholder="glpat-xxxxxxxxxxxxxxxxxxxx"
+          />
+          <span class="form-hint">{{ $t('knowledge.connectors.config.gitTokenHint') }}</span>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="gl-projects">
+            {{ $t('knowledge.connectors.config.gitlabProjectIds') }}
+          </label>
+          <input
+            id="gl-projects"
+            v-model="glProjectIds"
+            type="text"
+            class="form-input"
+            placeholder="42, group/project"
+          />
+          <span class="form-hint">{{ $t('knowledge.connectors.config.gitlabProjectIdsHint') }}</span>
+        </div>
+        <div class="form-group">
+          <label class="toggle-row">
+            <input type="checkbox" v-model="glSyncIssues" class="toggle-checkbox" />
+            <span class="toggle-label">{{ $t('knowledge.connectors.config.gitSyncIssues') }}</span>
+          </label>
+        </div>
+        <div class="form-group">
+          <label class="toggle-row">
+            <input type="checkbox" v-model="glSyncMergeRequests" class="toggle-checkbox" />
+            <span class="toggle-label">{{ $t('knowledge.connectors.config.gitSyncMergeRequests') }}</span>
+          </label>
+        </div>
+        <div class="form-group">
+          <label class="toggle-row">
+            <input type="checkbox" v-model="glSyncFiles" class="toggle-checkbox" />
+            <span class="toggle-label">{{ $t('knowledge.connectors.config.gitSyncFiles') }}</span>
+          </label>
+        </div>
+      </template>
+
+      <!-- Gitea / Forgejo Fields (Issue #9011) -->
+      <template v-if="connectorType === 'gitea' || connectorType === 'forgejo'">
+        <div class="form-group">
+          <label class="form-label" for="gt-url">
+            {{ $t('knowledge.connectors.config.giteaUrl') }}
+          </label>
+          <input
+            id="gt-url"
+            v-model="gtUrl"
+            type="text"
+            class="form-input"
+            placeholder="https://git.example.com"
+          />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="gt-token">
+            {{ $t('knowledge.connectors.config.gitToken') }}
+          </label>
+          <input
+            id="gt-token"
+            v-model="gtToken"
+            type="password"
+            class="form-input"
+            autocomplete="off"
+            placeholder="xxxxxxxxxxxxxxxxxxxx"
+          />
+          <span class="form-hint">{{ $t('knowledge.connectors.config.gitTokenHint') }}</span>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="gt-repos">
+            {{ $t('knowledge.connectors.config.giteaRepos') }}
+          </label>
+          <input
+            id="gt-repos"
+            v-model="gtRepos"
+            type="text"
+            class="form-input"
+            placeholder="owner/repo, org/other"
+          />
+          <span class="form-hint">{{ $t('knowledge.connectors.config.giteaReposHint') }}</span>
+        </div>
+        <div class="form-group">
+          <label class="toggle-row">
+            <input type="checkbox" v-model="gtSyncIssues" class="toggle-checkbox" />
+            <span class="toggle-label">{{ $t('knowledge.connectors.config.gitSyncIssues') }}</span>
+          </label>
+        </div>
+        <div class="form-group">
+          <label class="toggle-row">
+            <input type="checkbox" v-model="gtSyncMergeRequests" class="toggle-checkbox" />
+            <span class="toggle-label">{{ $t('knowledge.connectors.config.gitSyncMergeRequests') }}</span>
+          </label>
+        </div>
+        <div class="form-group">
+          <label class="toggle-row">
+            <input type="checkbox" v-model="gtSyncFiles" class="toggle-checkbox" />
+            <span class="toggle-label">{{ $t('knowledge.connectors.config.gitSyncFiles') }}</span>
+          </label>
         </div>
       </template>
     </div>
