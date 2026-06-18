@@ -2201,10 +2201,14 @@ class ToolHandlerMixin:
     async def _web_search_structured_entries(self, query: str, max_pages: int) -> list[dict]:
         """Return raw search result entries [{title, url, snippet}]. Issue #7404.
 
-        Delegates to the Playwright search backend (the same backend used by
-        _web_search_via_playwright) and returns up to max_pages raw dicts.
-        Returns [] when the Playwright service is unavailable.
+        Routes through the pluggable search-provider registry first (#9022
+        SearXNG / #9023 Brave, credential-gated with graceful fallback). When no
+        provider is configured (or all fail) it falls back to the Playwright
+        search backend. Returns [] when every backend is unavailable.
         """
+        provider_entries = await self._web_search_via_registry(query, max_pages)
+        if provider_entries:
+            return provider_entries
         try:
             from services.playwright_service import search_web_embedded
 
@@ -2216,20 +2220,26 @@ class ToolHandlerMixin:
             logger.debug("[Issue #7404] Playwright structured search unavailable: %s", exc)
             return []
 
+    async def _web_search_via_registry(self, query: str, max_pages: int) -> list[dict]:
+        """Search via the provider registry. Returns [] when none configured. #9022/#9023."""
+        try:
+            from agent_loop.search import registry_search
+
+            results = await registry_search(query, count=max_pages)
+            return [r.to_dict() for r in results]
+        except Exception as exc:
+            logger.debug("[#9022/#9023] Search provider registry unavailable: %s", exc)
+            return []
+
     async def _web_search_via_playwright(self, query: str, max_results: int = 5) -> str:
-        """Search via Playwright service. Returns formatted text or empty string. Issue #2306.
+        """Search via the provider registry / Playwright service. Issue #2306.
 
-        ``max_results`` (#7479): caller-requested result count, threaded into
-        ``search_web_embedded`` and the post-fetch slice. Default 5 preserves
-        the historical behavior for any callers that don't pass it.
+        ``max_results`` (#7479): caller-requested result count. Now sourced from
+        ``_web_search_structured_entries`` so a configured search provider
+        (#9022 SearXNG / #9023 Brave) is used first, with graceful fallback to
+        the Playwright backend. Returns formatted text or empty string.
         """
-        from services.playwright_service import search_web_embedded
-
-        result = await search_web_embedded(query, max_results=max_results)
-        if not result.get("success", False):
-            return ""
-
-        entries = result.get("results", [])
+        entries = await self._web_search_structured_entries(query, max_results)
         if not entries:
             return ""
 
