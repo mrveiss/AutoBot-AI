@@ -7737,6 +7737,13 @@
     "placeholder": "Placeholder",
     "viewFull": "View full"
   },
+  "videoCell": {
+    "copyUrl": "نسخ الرابط",
+    "download": "تنزيل",
+    "failed": "فشل إنشاء الفيديو",
+    "generating": "جارٍ إنشاء الفيديو…",
+    "placeholder": "فيديو"
+  },
   "plugins": {
     "capabilities": {
       "approvalDescription": "Approval description",

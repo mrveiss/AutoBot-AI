@@ -152,6 +152,12 @@
           :rich-payload="(message.metadata.image_payload as Record<string, unknown>)"
         />
 
+        <!-- GH#9016: AI-generated video message -->
+        <VideoCell
+          v-else-if="(message.type === 'video' || message.metadata?.display_type === 'video') && message.metadata?.video_payload"
+          :rich-payload="(message.metadata.video_payload as Record<string, unknown>)"
+        />
+
         <!-- MVA-2006: Context summary message -->
         <div
           v-else-if="message.type === 'summary' || message.metadata?.is_summary"
@@ -570,6 +576,7 @@ import OverseerPlanMessage from '@/components/chat/OverseerPlanMessage.vue'
 import OverseerStepMessage from '@/components/chat/OverseerStepMessage.vue'
 import CitationsDisplay from '@/components/chat/CitationsDisplay.vue'
 import ImageCell from '@/components/artifact-cells/ImageCell.vue'
+import VideoCell from '@/components/artifact-cells/VideoCell.vue'
 import { formatFileSize, formatTime } from '@/utils/formatHelpers'
 import { createLogger } from '@/utils/debugUtils'
 import { useCommandApproval } from '@/composables/useCommandApproval'

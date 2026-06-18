@@ -7737,6 +7737,13 @@
     "placeholder": "Placeholder",
     "viewFull": "View full"
   },
+  "videoCell": {
+    "copyUrl": "یو آر ایل کاپی کریں",
+    "download": "ڈاؤن لوڈ",
+    "failed": "ویڈیو بنانے میں ناکامی",
+    "generating": "ویڈیو بنائی جا رہی ہے…",
+    "placeholder": "ویڈیو"
+  },
   "plugins": {
     "capabilities": {
       "approvalDescription": "Approval description",

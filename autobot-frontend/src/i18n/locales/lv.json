@@ -7737,6 +7737,13 @@
     "placeholder": "Placeholder",
     "viewFull": "View full"
   },
+  "videoCell": {
+    "copyUrl": "Kopēt URL",
+    "download": "Lejupielādēt",
+    "failed": "Video ģenerēšana neizdevās",
+    "generating": "Ģenerē video…",
+    "placeholder": "Video"
+  },
   "plugins": {
     "capabilities": {
       "approvalDescription": "Approval description",

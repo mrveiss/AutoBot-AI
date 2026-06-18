@@ -7737,6 +7737,13 @@
     "placeholder": "Placeholder",
     "viewFull": "View full"
   },
+  "videoCell": {
+    "copyUrl": "Kopiuj URL",
+    "download": "Pobierz",
+    "failed": "Generowanie wideo nie powiodło się",
+    "generating": "Generowanie wideo…",
+    "placeholder": "Wideo"
+  },
   "plugins": {
     "capabilities": {
       "approvalDescription": "Approval description",
