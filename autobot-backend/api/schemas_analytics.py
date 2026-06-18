@@ -2499,13 +2499,9 @@ class UserJourneyResponse(BaseModel):
     features_visited: list
 
 
-class EngagementMetricsResponse(BaseModel):
-    """Response model for engagement metrics."""
-
-    timestamp: str
-    metrics: dict
-    feature_popularity: list
-    most_popular_feature: str | None
+# EngagementMetricsResponse retired in #9959 — the /analytics/engagement-metrics
+# endpoint it served was a dead duplicate over a never-written keyspace; the
+# canonical /analytics/behavior/engagement surface absorbs its functionality.
 
 
 # ---------------------------------------------------------------------------

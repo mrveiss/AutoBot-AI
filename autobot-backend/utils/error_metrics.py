@@ -7,6 +7,27 @@ Error Metrics Collection and Monitoring
 
 Tracks error occurrences, aggregates statistics, and provides monitoring data
 for the error handling system. Integrates with error_boundaries and error_catalog.
+
+Phase 5 (Issue #348 / #9983):
+  WRITE path — boundary_manager → record_error_metric → ErrorMetricsCollector.record_error
+               → prometheus.record_error(category, component, error_code)
+               → autobot_errors_total{category, component, error_code} counter
+
+  READ  path — implemented here: instant/range PromQL via the shared
+               autobot_shared.monitoring.prometheus_query helper.
+
+NOTE on labels:
+  ``autobot_errors_total`` carries labels: category / component / error_code.
+  There is NO ``severity`` label on this counter — severity lives only in the
+  per-event Redis records written by boundary_manager (``autobot:errors:*``).
+
+Resolution state:
+  Prometheus is aggregate-only and cannot resolve individual traces.
+  ``mark_resolved`` stores the trace_id in a Redis set (``errors:resolved``)
+  with a configurable TTL (env var AUTOBOT_ERROR_RESOLVED_TTL_SECONDS,
+  default 7 days).  ``_fetch_recent_errors_from_redis`` in boundary_manager
+  annotates each error dict with ``resolved=True`` when its trace_id is present
+  in that set.
 """
 
 import asyncio
@@ -17,10 +38,58 @@ from typing import Any, Dict, List
 from autobot_shared.error_boundaries import ErrorCategory
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
+from autobot_shared.ssot_config import config
 
 logger = get_logger(__name__)
 
-# Thread-safe imports
+
+# ---------------------------------------------------------------------------
+# Module-level TTL constant (env-var backed, never hard-coded)
+# ---------------------------------------------------------------------------
+
+
+def _resolve_error_resolved_ttl() -> int:
+    """Return TTL seconds for errors:resolved Redis set membership.
+
+    Reads AUTOBOT_ERROR_RESOLVED_TTL_SECONDS via config.misc (str field,
+    empty = default).  Falls back to 7 days.
+    """
+    from autobot_shared.ssot_constants import TTL_7_DAYS
+
+    raw = getattr(config.misc, "error_resolved_ttl_seconds", "")
+    if not raw:
+        return TTL_7_DAYS
+    try:
+        value = int(raw)
+    except (ValueError, TypeError):
+        logger.warning(
+            "AUTOBOT_ERROR_RESOLVED_TTL_SECONDS=%r is not an integer; " "falling back to 7 days",
+            raw,
+        )
+        return TTL_7_DAYS
+    if value <= 0:
+        logger.warning(
+            "AUTOBOT_ERROR_RESOLVED_TTL_SECONDS=%d must be positive; " "falling back to 7 days",
+            value,
+        )
+        return TTL_7_DAYS
+    return value
+
+
+_ERROR_RESOLVED_TTL: int = _resolve_error_resolved_ttl()
+
+_REDIS_RESOLVED_KEY = "errors:resolved"
+
+
+def _escape_promql_label_value(value: str) -> str:
+    """Escape a string for safe interpolation inside a PromQL double-quoted
+    label value (#9983 review — prevents PromQL injection via request params).
+
+    Per Prometheus rules, backslash and double-quote are the only characters
+    that can terminate or escape within a quoted label value, so escaping them
+    fully contains the value. Length is capped as defence-in-depth.
+    """
+    return value[:128].replace("\\", "\\\\").replace('"', '\\"')
 
 
 @dataclass
@@ -75,15 +144,18 @@ class ErrorStats:
 
 class ErrorMetricsCollector:
     """
-    Collects and aggregates error metrics
+    Collects and aggregates error metrics.
 
-    Phase 5 (Issue #348): Refactored to use Prometheus as the single source of truth.
-    All metrics are stored in Prometheus only. In-memory buffers have been removed.
+    Phase 5 (Issue #348 / #9983): Prometheus is the write target; PromQL is
+    the read source.  Resolution state is tracked in Redis only (Prometheus
+    cannot address individual traces).
 
     Features:
     - Error recording to Prometheus
+    - Instant-query summary / top-errors via PromQL
+    - Range-query timeline via PromQL
+    - Redis-backed per-trace resolution state
     - Alerting threshold detection
-    - Integration with monitoring alerts system
     """
 
     def __init__(self, redis_client=None):
@@ -91,22 +163,18 @@ class ErrorMetricsCollector:
         Initialize error metrics collector
 
         Args:
-            redis_client: DEPRECATED - no longer used (kept for API compatibility)
+            redis_client: DEPRECATED - no longer used (kept for API compat)
         """
-        # Phase 5 (Issue #348): Redis persistence removed, arg kept for API compat
         if redis_client is not None:
             logger.warning(
                 "redis_client parameter is deprecated and ignored. " "Prometheus is now the primary metrics store."
             )
 
-        # Phase 5 (Issue #348): Keep only alert thresholds and lock
         self._alert_thresholds: Dict[str, int] = {}
         self._lock = asyncio.Lock()
-
-        # Track last error count per component for threshold checking
         self._last_error_counts: Dict[str, int] = defaultdict(int)
 
-        # Phase 2 (Issue #345): Prometheus integration - primary metrics store
+        # Prometheus write client (local counter only)
         try:
             from monitoring.prometheus_metrics import get_metrics_manager
 
@@ -114,6 +182,24 @@ class ErrorMetricsCollector:
         except (ImportError, Exception) as e:
             logger.warning("Prometheus metrics not available: %s", e)
             self.prometheus = None
+
+        # Lazy Redis client for resolution-state set
+        self._redis = None
+
+    def _get_redis(self):
+        """Return the shared Redis client, initialising it on first call."""
+        if self._redis is None:
+            try:
+                from autobot_shared.redis_client import get_redis_client
+
+                self._redis = get_redis_client()
+            except Exception as exc:
+                logger.warning("Redis client unavailable for error resolution: %s", exc)
+        return self._redis
+
+    # ------------------------------------------------------------------
+    # WRITE PATH
+    # ------------------------------------------------------------------
 
     async def record_error(
         self,
@@ -127,53 +213,33 @@ class ErrorMetricsCollector:
         retry_attempted: bool = False,
     ) -> None:
         """
-        Record an error occurrence
+        Record an error occurrence to Prometheus.
 
-        Phase 5 (Issue #348): Records to Prometheus only, no in-memory storage.
-
-        Args:
-            error_code: Error code from catalog (if applicable)
-            category: Error category
-            component: Component name
-            function: Function name
-            message: Error message
-            trace_id: Optional trace ID
-            user_id: Optional user ID
-            retry_attempted: Whether retry was attempted
+        Phase 5 (Issue #348): Records to Prometheus only.
         """
-        # Phase 5 (Issue #348): Record to Prometheus (single source of truth)
         if self.prometheus:
             self.prometheus.record_error(category.value, component, error_code or "unknown")
 
-        # Check alert thresholds (increment count for threshold checking)
         async with self._lock:
             threshold_key = f"{component}:{error_code or category.value}"
             self._last_error_counts[threshold_key] += 1
             current_count = self._last_error_counts[threshold_key]
 
-        # Check if threshold exceeded
         await self._check_alerts(component, error_code, current_count)
-
-        logger.debug(f"Recorded error metric to Prometheus: {component}/{error_code or category.value}")
+        logger.debug("Recorded error metric to Prometheus: %s/%s", component, error_code or category.value)
 
     async def _check_alerts(self, component: str, error_code: str | None, current_count: int) -> None:
-        """
-        Check if error count exceeds alert thresholds and send notifications
-
-        Phase 5 (Issue #348): Uses simple error count instead of ErrorStats object.
-        """
+        """Check if error count exceeds alert thresholds and send notifications."""
         threshold_key = f"{component}:{error_code or 'any'}"
         threshold = self._alert_thresholds.get(threshold_key, 0)
-
         if threshold > 0 and current_count >= threshold:
-            logger.warning(f"⚠️ Error alert threshold exceeded: {threshold_key} " f"({current_count} >= {threshold})")
-            # Send alert notification via monitoring_alerts system
-            await self._send_alert_notification(
-                component=component,
-                error_code=error_code,
-                current_count=current_count,
-                threshold=threshold,
+            logger.warning(
+                "Error alert threshold exceeded: %s (%d >= %d)",
+                threshold_key,
+                current_count,
+                threshold,
             )
+            await self._send_alert_notification(component, error_code, current_count, threshold)
 
     async def _send_alert_notification(
         self,
@@ -182,17 +248,7 @@ class ErrorMetricsCollector:
         current_count: int,
         threshold: int,
     ) -> None:
-        """
-        Log alert threshold exceeded.
-
-        Issue #69: Alerting is now handled by Prometheus AlertManager.
-        Errors recorded to Prometheus will trigger AlertManager rules defined in
-        config/prometheus/alertmanager_rules.yml which send notifications via
-        the webhook at backend/api/alertmanager_webhook.py.
-
-        This method now only logs the threshold breach for debugging purposes.
-        """
-        # Determine severity for logging
+        """Log alert threshold exceeded (AlertManager handles actual notifications)."""
         ratio = current_count / threshold if threshold > 0 else 1
         if ratio >= 3:
             severity = "critical"
@@ -204,179 +260,218 @@ class ErrorMetricsCollector:
             severity = "low"
 
         logger.warning(
-            f"Error threshold exceeded [{severity.upper()}] {component}/{error_code or 'any'}: "
-            f"{current_count} errors (threshold: {threshold}). "
-            f"AlertManager will handle notifications based on Prometheus metrics."
+            "Error threshold exceeded [%s] %s/%s: %d errors (threshold: %d). "
+            "AlertManager will handle notifications based on Prometheus metrics.",
+            severity.upper(),
+            component,
+            error_code or "any",
+            current_count,
+            threshold,
         )
+
+    # ------------------------------------------------------------------
+    # READ PATH — Prometheus-backed
+    # ------------------------------------------------------------------
 
     async def mark_resolved(self, trace_id: str) -> bool:
         """
-        DEPRECATED (Phase 5, Issue #348): No longer supported.
+        Mark an error trace as resolved via Redis set membership.
 
-        Resolution tracking should be done via Prometheus labels or external systems.
-
-        Args:
-            trace_id: Trace ID of the error
+        Prometheus is aggregate-only and cannot address individual traces;
+        resolution state is therefore stored in Redis set ``errors:resolved``
+        with TTL ``_ERROR_RESOLVED_TTL`` (env AUTOBOT_ERROR_RESOLVED_TTL_SECONDS,
+        default 7 days).
 
         Returns:
-            False (not supported)
+            True on success, False if Redis is unavailable.
         """
-        logger.warning("mark_resolved() is deprecated. Use Prometheus labels or external tracking.")
-        return False
+        redis = self._get_redis()
+        if redis is None:
+            logger.warning("mark_resolved: Redis unavailable, cannot persist resolution for %s", trace_id)
+            return False
+        try:
+            await asyncio.to_thread(redis.sadd, _REDIS_RESOLVED_KEY, trace_id)
+            await asyncio.to_thread(redis.expire, _REDIS_RESOLVED_KEY, _ERROR_RESOLVED_TTL)
+            logger.info("Error trace %s marked as resolved (TTL=%ds)", trace_id, _ERROR_RESOLVED_TTL)
+            return True
+        except Exception as exc:
+            logger.error("Failed to mark trace %s as resolved: %s", trace_id, exc)
+            return False
+
+    async def is_resolved(self, trace_id: str) -> bool:
+        """Return True if *trace_id* is in the resolved set."""
+        redis = self._get_redis()
+        if redis is None:
+            return False
+        try:
+            return bool(await asyncio.to_thread(redis.sismember, _REDIS_RESOLVED_KEY, trace_id))
+        except Exception:
+            return False
+
+    async def get_resolved_ids(self) -> set[str]:
+        """Return the full set of resolved error/trace ids (one Redis call).
+
+        Lets async callers annotate a batch of recent errors with their
+        ``resolved`` status without an N+1 of ``is_resolved`` (#9983).
+        """
+        redis = self._get_redis()
+        if redis is None:
+            return set()
+        try:
+            members = await asyncio.to_thread(redis.smembers, _REDIS_RESOLVED_KEY)
+            return {m.decode() if isinstance(m, bytes) else str(m) for m in (members or [])}
+        except Exception:
+            return set()
+
+    async def get_summary(self) -> Dict[str, Any]:
+        """
+        Return a comprehensive error metrics summary from Prometheus.
+
+        PromQL queries:
+          total        = ``sum(autobot_errors_total)``
+          by_category  = ``sum by (category)(autobot_errors_total)``
+          by_component = ``sum by (component)(autobot_errors_total)``
+          unique count = ``count(sum by (component, error_code)(autobot_errors_total))``
+
+        NOTE: ``autobot_errors_total`` has no ``severity`` label — severity is
+        only available in the per-event Redis records (``autobot:errors:*``).
+
+        Returns empty/zero dict when Prometheus is unreachable.
+        """
+        try:
+            from autobot_shared.monitoring.prometheus_query import query_instant
+        except ImportError:
+            logger.warning("prometheus_query helper unavailable")
+            return _empty_summary()
+
+        total_data, cat_data, comp_data, uniq_data = await asyncio.gather(
+            query_instant("sum(autobot_errors_total)"),
+            query_instant("sum by (category)(autobot_errors_total)"),
+            query_instant("sum by (component)(autobot_errors_total)"),
+            query_instant("count(sum by (component, error_code)(autobot_errors_total))"),
+        )
+
+        total = _scalar_from_instant(total_data)
+        category_breakdown = _label_map_from_instant(cat_data, "category")
+        component_breakdown = _label_map_from_instant(comp_data, "component")
+        distinct_error_types = int(_scalar_from_instant(uniq_data))
+
+        return {
+            "total_errors": int(total),
+            "unique_error_types": distinct_error_types,
+            "category_breakdown": category_breakdown,
+            "component_breakdown": component_breakdown,
+            "alert_thresholds_configured": len(self._alert_thresholds),
+            "prometheus_available": True,
+        }
+
+    async def get_top_errors(self, limit: int = 10) -> List[Dict[str, Any]]:
+        """
+        Return the top-N most frequent errors from Prometheus.
+
+        PromQL: ``topk(<limit>, sum by (component, error_code)(autobot_errors_total))``
+
+        Returns a list of dicts:
+          ``{"component": str, "error_code": str, "count": int}``
+
+        Empty list when Prometheus is unreachable.
+        """
+        try:
+            from autobot_shared.monitoring.prometheus_query import query_instant
+        except ImportError:
+            logger.warning("prometheus_query helper unavailable")
+            return []
+
+        promql = f"topk({limit}, sum by (component, error_code)(autobot_errors_total))"
+        data = await query_instant(promql)
+        if data is None:
+            return []
+        results = []
+        for item in data.get("result", []):
+            metric = item.get("metric", {})
+            _, val = item.get("value", [None, "0"])
+            results.append(
+                {
+                    "component": metric.get("component", "unknown"),
+                    "error_code": metric.get("error_code", "unknown"),
+                    "count": int(float(val)),
+                }
+            )
+        return results
+
+    async def get_error_timeline(self, hours: int = 24, component: str | None = None) -> List[Dict[str, Any]]:
+        """
+        Return time-bucketed error rate points from Prometheus.
+
+        PromQL:
+          no filter  → ``sum(rate(autobot_errors_total[5m]))``
+          with filter→ ``sum(rate(autobot_errors_total{component="<c>"}[5m]))``
+
+        Returns a list of ``{"timestamp": ISO-str, "value": float}`` dicts,
+        or ``[]`` when Prometheus is unreachable.
+        """
+        try:
+            from autobot_shared.monitoring.prometheus_query import query_range
+        except ImportError:
+            logger.warning("prometheus_query helper unavailable")
+            return []
+
+        if component:
+            # Security (#9983 review): the component label value comes from a
+            # request query param — escape per Prometheus rules so it cannot
+            # break out of the quoted label and inject arbitrary PromQL.
+            safe_component = _escape_promql_label_value(component)
+            promql = f'sum(rate(autobot_errors_total{{component="{safe_component}"}}[5m]))'
+        else:
+            promql = "sum(rate(autobot_errors_total[5m]))"
+
+        points = await query_range(promql, hours=hours, step="5m")
+        return [{"timestamp": p["timestamp"], "value": p["value"]} for p in points]
+
+    # ------------------------------------------------------------------
+    # Deprecated / legacy stubs kept for API compatibility
+    # ------------------------------------------------------------------
 
     def get_stats(self, component: str | None = None) -> List[ErrorStats]:
-        """
-        DEPRECATED (Phase 5, Issue #348): No in-memory stats available.
-
-        Use Prometheus PromQL queries instead:
-        - Total errors: sum(autobot_errors_total)
-        - By component: sum(autobot_errors_total) by (component)
-
-        Args:
-            component: Optional component filter (ignored)
-
-        Returns:
-            Empty list (not supported)
-        """
+        """DEPRECATED (Phase 5, Issue #348): returns empty list."""
         logger.warning(
             "get_stats() is deprecated. Query Prometheus directly:\n"
             "  sum(autobot_errors_total) by (component, category, error_code)"
         )
         return []
 
-    def get_error_timeline(self, hours: int = 24, component: str | None = None) -> Dict[str, List[Dict[str, Any]]]:
-        """
-        DEPRECATED (Phase 5, Issue #348): No in-memory timeline available.
-
-        Use Prometheus PromQL queries instead:
-        - rate(autobot_errors_total[1h])
-        - increase(autobot_errors_total[24h])
-
-        Args:
-            hours: Number of hours to include (ignored)
-            component: Optional component filter (ignored)
-
-        Returns:
-            Empty dict (not supported)
-        """
-        logger.warning(
-            "get_error_timeline() is deprecated. Query Prometheus:\n"
-            f"  rate(autobot_errors_total[{hours}h]) or increase(autobot_errors_total[{hours}h])"
-        )
-        return {}
-
     def get_category_breakdown(self) -> Dict[str, int]:
-        """
-        DEPRECATED (Phase 5, Issue #348): No in-memory breakdown available.
-
-        Use Prometheus PromQL query:
-        - sum(autobot_errors_total) by (category)
-
-        Returns:
-            Empty dict (not supported)
-        """
+        """DEPRECATED (Phase 5, Issue #348): returns empty dict."""
         logger.warning(
             "get_category_breakdown() is deprecated. Query Prometheus:\n" "  sum(autobot_errors_total) by (category)"
         )
         return {}
 
     def get_component_breakdown(self) -> Dict[str, int]:
-        """
-        DEPRECATED (Phase 5, Issue #348): No in-memory breakdown available.
-
-        Use Prometheus PromQL query:
-        - sum(autobot_errors_total) by (component)
-
-        Returns:
-            Empty dict (not supported)
-        """
+        """DEPRECATED (Phase 5, Issue #348): returns empty dict."""
         logger.warning(
             "get_component_breakdown() is deprecated. Query Prometheus:\n" "  sum(autobot_errors_total) by (component)"
         )
         return {}
 
-    def get_top_errors(self, limit: int = 10) -> List[ErrorStats]:
-        """
-        DEPRECATED (Phase 5, Issue #348): No in-memory stats available.
-
-        Use Prometheus PromQL query:
-        - topk(10, sum(autobot_errors_total) by (error_code, component))
-
-        Args:
-            limit: Number of top errors to return (ignored)
-
-        Returns:
-            Empty list (not supported)
-        """
-        logger.warning(
-            f"get_top_errors() is deprecated. Query Prometheus:\n"
-            f"  topk({limit}, sum(autobot_errors_total) by (error_code, component))"
-        )
-        return []
-
     def set_alert_threshold(self, component: str, error_code: str | None, threshold: int) -> None:
-        """
-        Set alert threshold for a component/error combination
-
-        Args:
-            component: Component name
-            error_code: Error code (or None for any error in component)
-            threshold: Error count threshold for alerts
-        """
+        """Set alert threshold for a component/error combination."""
         threshold_key = f"{component}:{error_code or 'any'}"
         self._alert_thresholds[threshold_key] = threshold
         logger.info("Set alert threshold: %s = %s", threshold_key, threshold)
 
     async def cleanup_old_metrics(self) -> int:
-        """
-        DEPRECATED (Phase 5, Issue #348): No in-memory metrics to clean up.
-
-        Prometheus handles retention automatically via its configuration.
-
-        Returns:
-            0 (not supported)
-        """
+        """DEPRECATED (Phase 5, Issue #348): no-op; Prometheus handles retention."""
         logger.warning(
             "cleanup_old_metrics() is deprecated. " "Configure Prometheus retention in prometheus.yml instead."
         )
         return 0
 
-    def get_summary(self) -> Dict[str, Any]:
-        """
-        DEPRECATED (Phase 5, Issue #348): No in-memory summary available.
-
-        Use Prometheus PromQL queries for comprehensive metrics:
-        - Total errors: sum(autobot_errors_total)
-        - By category: sum(autobot_errors_total) by (category)
-        - By component: sum(autobot_errors_total) by (component)
-        - Top errors: topk(5, sum(autobot_errors_total) by (error_code))
-
-        Returns:
-            Minimal summary indicating deprecated status
-        """
-        logger.warning("get_summary() is deprecated. Query Prometheus for comprehensive metrics.")
-        return {
-            "status": "deprecated",
-            "message": "Use Prometheus PromQL queries for error metrics",
-            "prometheus_available": self.prometheus is not None,
-            "alert_thresholds_configured": len(self._alert_thresholds),
-        }
-
     async def reset_stats(self, component: str | None = None) -> None:
-        """
-        DEPRECATED (Phase 5, Issue #348): No in-memory stats to reset.
-
-        To reset Prometheus metrics, restart the application or use Prometheus
-        administrative APIs.
-
-        Args:
-            component: Optional component to reset (ignored)
-        """
-        logger.warning("reset_stats() is deprecated. Restart application or use Prometheus admin APIs.")
-        # Only reset local counter for threshold checking
+        """Reset local threshold counters only (Prometheus counters are immutable)."""
         async with self._lock:
             if component:
-                keys_to_remove = [key for key in self._last_error_counts.keys() if key.startswith(f"{component}:")]
+                keys_to_remove = [k for k in self._last_error_counts if k.startswith(f"{component}:")]
                 for key in keys_to_remove:
                     del self._last_error_counts[key]
                 logger.info("Reset threshold counters for component: %s", component)
@@ -385,16 +480,62 @@ class ErrorMetricsCollector:
                 logger.info("Reset all threshold counters")
 
 
-# Global metrics collector instance (thread-safe)
+# ---------------------------------------------------------------------------
+# Private helpers
+# ---------------------------------------------------------------------------
+
+
+def _empty_summary() -> Dict[str, Any]:
+    """Return a zero-valued summary when Prometheus is unavailable."""
+    return {
+        "total_errors": 0,
+        "unique_error_types": 0,
+        "category_breakdown": {},
+        "component_breakdown": {},
+        "alert_thresholds_configured": 0,
+        "prometheus_available": False,
+    }
+
+
+def _scalar_from_instant(data: Dict[str, Any] | None) -> float:
+    """Extract scalar value from a Prometheus instant query result."""
+    if data is None:
+        return 0.0
+    results = data.get("result", [])
+    if not results:
+        return 0.0
+    _, val = results[0].get("value", [None, "0"])
+    try:
+        return float(val)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _label_map_from_instant(data: Dict[str, Any] | None, label_key: str) -> Dict[str, int]:
+    """Build {label_value: count} from a by-label instant query."""
+    if data is None:
+        return {}
+    out: Dict[str, int] = {}
+    for item in data.get("result", []):
+        label_val = item.get("metric", {}).get(label_key, "unknown")
+        _, val = item.get("value", [None, "0"])
+        try:
+            out[label_val] = int(float(val))
+        except (TypeError, ValueError):
+            out[label_val] = 0
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Global singleton
+# ---------------------------------------------------------------------------
+
 _metrics_collector = lazy_singleton(ErrorMetricsCollector)
 
 
 def get_metrics_collector(redis_client=None) -> ErrorMetricsCollector:
     """
-    Get global metrics collector instance (thread-safe).
-
-    `_metrics_collector` is a `lazy_singleton(ErrorMetricsCollector)` —
-    calling it returns the cached instance, threadsafe by construction.
+    Return the global metrics collector instance (thread-safe singleton).
     """
     return _metrics_collector(redis_client)
 
@@ -407,16 +548,6 @@ async def record_error_metric(
     message: str,
     **kwargs,
 ) -> None:
-    """
-    Convenience function to record error metric
-
-    Args:
-        error_code: Error code from catalog
-        category: Error category
-        component: Component name
-        function: Function name
-        message: Error message
-        **kwargs: Additional metric fields
-    """
+    """Convenience function to record an error metric."""
     collector = get_metrics_collector()
     await collector.record_error(error_code, category, component, function, message, **kwargs)

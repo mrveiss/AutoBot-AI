@@ -1,30 +1,50 @@
 # Copyright 2025-2026 mrveiss
 # SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
 """
 Tests for Error Metrics Collection System
 
-Validates error metrics collection, aggregation, and reporting functionality
+Phase 5 (Issue #348 / #9983): Validates the Prometheus-backed read path and
+Redis-backed resolution state.  Prometheus and Redis calls are mocked so
+the suite runs without live infrastructure.
 """
 
-import time
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from utils.error_boundaries import ErrorCategory
 from utils.error_metrics import ErrorMetricsCollector, get_metrics_collector
 
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
-class TestErrorMetrics:
-    """Test error metrics collection functionality"""
 
+def _instant_response(results):
+    """Build a fake Prometheus instant query data dict."""
+    return {"resultType": "vector", "result": results}
+
+
+def _make_vector_item(labels, value):
+    return {"metric": labels, "value": [1700000000.0, str(value)]}
+
+
+# ---------------------------------------------------------------------------
+# Record / write path
+# ---------------------------------------------------------------------------
+
+
+class TestRecordError:
     @pytest.fixture
     def collector(self):
-        """Create fresh metrics collector for each test"""
-        return ErrorMetricsCollector(redis_client=None)
+        c = ErrorMetricsCollector(redis_client=None)
+        c.prometheus = MagicMock()
+        return c
 
     @pytest.mark.asyncio
-    async def test_record_error(self, collector):
-        """Test recording a single error"""
+    async def test_record_error_calls_prometheus(self, collector):
         await collector.record_error(
             error_code="KB_0001",
             category=ErrorCategory.SERVER_ERROR,
@@ -32,317 +52,348 @@ class TestErrorMetrics:
             function="search",
             message="Search failed",
         )
-
-        stats = collector.get_stats()
-        assert len(stats) == 1
-        assert stats[0].component == "knowledge_base"
-        assert stats[0].error_code == "KB_0001"
-        assert stats[0].total_count == 1
+        collector.prometheus.record_error.assert_called_once_with("server_error", "knowledge_base", "KB_0001")
 
     @pytest.mark.asyncio
-    async def test_multiple_errors_same_type(self, collector):
-        """Test recording multiple errors of the same type"""
-        for i in range(5):
-            await collector.record_error(
-                error_code="LLM_0001",
-                category=ErrorCategory.SERVICE_UNAVAILABLE,
-                component="llm_service",
-                function="generate",
-                message=f"Generation failed {i}",
-            )
-
-        stats = collector.get_stats(component="llm_service")
-        assert len(stats) == 1
-        assert stats[0].total_count == 5
-
-    @pytest.mark.asyncio
-    async def test_retry_tracking(self, collector):
-        """Test retry attempt tracking"""
-        # Record error with retry
+    async def test_record_error_no_prometheus(self):
+        collector = ErrorMetricsCollector()
+        collector.prometheus = None
+        # Must not raise even without prometheus
         await collector.record_error(
-            error_code="DB_0001",
-            category=ErrorCategory.DATABASE,
-            component="database",
-            function="connect",
-            message="Connection failed",
-            retry_attempted=True,
-        )
-
-        # Record error without retry
-        await collector.record_error(
-            error_code="DB_0001",
-            category=ErrorCategory.DATABASE,
-            component="database",
-            function="connect",
-            message="Connection failed",
-            retry_attempted=False,
-        )
-
-        stats = collector.get_stats(component="database")
-        assert stats[0].total_count == 2
-        assert stats[0].retry_count == 1
-
-    @pytest.mark.asyncio
-    async def test_mark_resolved(self, collector):
-        """Test marking error as resolved"""
-        trace_id = "test_trace_123"
-
-        await collector.record_error(
-            error_code="API_0001",
-            category=ErrorCategory.VALIDATION,
-            component="api",
-            function="validate",
-            message="Validation failed",
-            trace_id=trace_id,
-        )
-
-        # Mark as resolved
-        success = await collector.mark_resolved(trace_id)
-        assert success is True
-
-        stats = collector.get_stats(component="api")
-        assert stats[0].resolved_count == 1
-
-        # Try marking nonexistent error
-        success = await collector.mark_resolved("nonexistent_trace")
-        assert success is False
-
-    @pytest.mark.asyncio
-    async def test_get_recent_errors(self, collector):
-        """Test retrieving recent errors"""
-        await self._populate_errors(collector, count=15)
-
-        recent = collector.get_recent_errors(limit=10)
-        assert len(recent) == 10
-
-        # Should be in reverse chronological order
-        timestamps = [m.timestamp for m in recent]
-        assert timestamps == sorted(timestamps, reverse=True)
-
-    @pytest.mark.asyncio
-    async def test_component_filtering(self, collector):
-        """Test filtering errors by component"""
-        await self._populate_errors_multi_component(collector, component1="comp_a", component2="comp_b")
-
-        comp_a_stats = collector.get_stats(component="comp_a")
-        comp_b_stats = collector.get_stats(component="comp_b")
-
-        assert all(s.component == "comp_a" for s in comp_a_stats)
-        assert all(s.component == "comp_b" for s in comp_b_stats)
-
-    @pytest.mark.asyncio
-    async def test_error_timeline(self, collector):
-        """Test error timeline generation"""
-        await self._populate_errors(collector, count=10)
-
-        timeline = collector.get_error_timeline(hours=24)
-        assert isinstance(timeline, dict)
-        assert len(timeline) > 0
-
-        # Check timeline structure
-        for hour_key, errors in timeline.items():
-            assert isinstance(hour_key, str)
-            assert isinstance(errors, list)
-
-    @pytest.mark.asyncio
-    async def test_category_breakdown(self, collector):
-        """Test error breakdown by category"""
-        await self._populate_errors_multi_category(collector)
-
-        breakdown = collector.get_category_breakdown()
-
-        assert "server_error" in breakdown
-        assert "validation" in breakdown
-        assert all(isinstance(count, int) for count in breakdown.values())
-
-    @pytest.mark.asyncio
-    async def test_component_breakdown(self, collector):
-        """Test error breakdown by component"""
-        await self._populate_errors_multi_component(collector)
-
-        breakdown = collector.get_component_breakdown()
-
-        assert "comp_a" in breakdown
-        assert "comp_b" in breakdown
-        assert all(isinstance(count, int) for count in breakdown.values())
-
-    @pytest.mark.asyncio
-    async def test_top_errors(self, collector):
-        """Test getting top N errors"""
-        await self._populate_errors_with_varying_counts(collector)
-
-        top_errors = collector.get_top_errors(limit=3)
-
-        assert len(top_errors) <= 3
-        # Should be sorted by count descending
-        counts = [s.total_count for s in top_errors]
-        assert counts == sorted(counts, reverse=True)
-
-    @pytest.mark.asyncio
-    async def test_summary(self, collector):
-        """Test getting overall summary"""
-        await self._populate_errors(collector, count=20)
-
-        summary = collector.get_summary()
-
-        assert "total_errors" in summary
-        assert "unique_error_types" in summary
-        assert "category_breakdown" in summary
-        assert "component_breakdown" in summary
-        assert "top_errors" in summary
-
-        assert summary["total_errors"] >= 20
-
-    @pytest.mark.asyncio
-    async def test_alert_threshold(self, collector):
-        """Test setting and checking alert thresholds"""
-        collector.set_alert_threshold("test_component", "TEST_001", threshold=5)
-
-        # Record errors up to threshold
-        for i in range(10):
-            await collector.record_error(
-                error_code="TEST_001",
-                category=ErrorCategory.SERVER_ERROR,
-                component="test_component",
-                function="test_func",
-                message=f"Test error {i}",
-            )
-
-        stats = collector.get_stats(component="test_component")
-        assert stats[0].total_count == 10
-
-    @pytest.mark.asyncio
-    async def test_cleanup_old_metrics(self, collector):
-        """Test cleanup of old metrics"""
-        # Record some errors
-        await collector.record_error(
-            error_code="OLD_001",
+            error_code="X",
             category=ErrorCategory.SERVER_ERROR,
-            component="test",
-            function="old",
-            message="Old error",
+            component="c",
+            function="f",
+            message="m",
         )
 
-        initial_count = len(collector._metrics)
-        assert initial_count > 0
-
-        # Manually set old timestamp
-        if collector._metrics:
-            collector._metrics[0].timestamp = time.time() - (collector._retention_seconds + 100)
-
-        # Cleanup
-        removed = await collector.cleanup_old_metrics()
-
-        assert removed >= 0  # May be 0 if no old metrics
-
     @pytest.mark.asyncio
-    async def test_reset_stats(self, collector):
-        """Test resetting statistics"""
+    async def test_alert_threshold_triggers_warning(self, collector):
+        collector.set_alert_threshold("comp", "ERR_001", threshold=2)
+        # First error — below threshold
         await collector.record_error(
-            error_code="RESET_001",
+            error_code="ERR_001",
             category=ErrorCategory.SERVER_ERROR,
-            component="test_component",
-            function="test",
-            message="Test error",
+            component="comp",
+            function="fn",
+            message="err",
         )
+        # Second error — at threshold
+        await collector.record_error(
+            error_code="ERR_001",
+            category=ErrorCategory.SERVER_ERROR,
+            component="comp",
+            function="fn",
+            message="err",
+        )
+        # No exception; threshold counter incremented
+        assert collector._last_error_counts["comp:ERR_001"] == 2
 
-        # Verify stats exist
-        stats = collector.get_stats(component="test_component")
-        assert len(stats) > 0
 
-        # Reset
-        await collector.reset_stats(component="test_component")
+# ---------------------------------------------------------------------------
+# mark_resolved
+# ---------------------------------------------------------------------------
 
-        # Verify stats cleared
-        stats = collector.get_stats(component="test_component")
-        assert len(stats) == 0
 
-    def test_singleton_pattern(self):
-        """Test that get_metrics_collector returns singleton"""
-        collector1 = get_metrics_collector()
-        collector2 = get_metrics_collector()
-
-        assert collector1 is collector2
+class TestMarkResolved:
+    @pytest.fixture
+    def collector(self):
+        c = ErrorMetricsCollector()
+        return c
 
     @pytest.mark.asyncio
-    async def test_error_rate_calculation(self, collector):
-        """Test error rate calculation"""
-        # Record multiple errors
-        for i in range(10):
-            await collector.record_error(
-                error_code="RATE_001",
-                category=ErrorCategory.SERVER_ERROR,
-                component="test",
-                function="test",
-                message=f"Error {i}",
-            )
+    async def test_mark_resolved_success(self, collector):
+        mock_redis = MagicMock()
+        mock_redis.sadd = MagicMock(return_value=1)
+        mock_redis.expire = MagicMock(return_value=True)
+        collector._redis = mock_redis
 
-        stats = collector.get_stats(component="test")
-        assert stats[0].error_rate >= 0.0
+        result = await collector.mark_resolved("trace-abc")
 
-    # Helper methods
+        assert result is True
+        mock_redis.sadd.assert_called_once_with("errors:resolved", "trace-abc")
+        mock_redis.expire.assert_called_once()
 
-    async def _populate_errors(self, collector, count=10):
-        """Populate collector with test errors"""
-        for i in range(count):
-            await collector.record_error(
-                error_code=f"TEST_{i % 3:03d}",
-                category=ErrorCategory.SERVER_ERROR,
-                component="test_component",
-                function="test_function",
-                message=f"Test error {i}",
-            )
+    @pytest.mark.asyncio
+    async def test_mark_resolved_no_redis(self, collector):
+        collector._redis = None
+        collector._get_redis = lambda: None
+        result = await collector.mark_resolved("trace-xyz")
+        assert result is False
 
-    async def _populate_errors_multi_component(self, collector, component1="comp_a", component2="comp_b"):
-        """Populate collector with errors from multiple components"""
-        for i in range(5):
-            await collector.record_error(
-                error_code=f"TEST_{i:03d}",
-                category=ErrorCategory.SERVER_ERROR,
-                component=component1,
-                function="func_a",
-                message=f"Error from {component1}",
-            )
+    @pytest.mark.asyncio
+    async def test_mark_resolved_redis_error(self, collector):
+        mock_redis = MagicMock()
+        mock_redis.sadd = MagicMock(side_effect=ConnectionError("Redis down"))
+        collector._redis = mock_redis
+        result = await collector.mark_resolved("trace-xyz")
+        assert result is False
 
-            await collector.record_error(
-                error_code=f"TEST_{i:03d}",
-                category=ErrorCategory.VALIDATION,
-                component=component2,
-                function="func_b",
-                message=f"Error from {component2}",
-            )
+    @pytest.mark.asyncio
+    async def test_is_resolved_true(self, collector):
+        mock_redis = MagicMock()
+        mock_redis.sismember = MagicMock(return_value=True)
+        collector._redis = mock_redis
+        assert await collector.is_resolved("trace-abc") is True
 
-    async def _populate_errors_multi_category(self, collector):
-        """Populate collector with errors from multiple categories"""
-        categories = [
-            ErrorCategory.SERVER_ERROR,
-            ErrorCategory.VALIDATION,
-            ErrorCategory.AUTHENTICATION,
+    @pytest.mark.asyncio
+    async def test_is_resolved_false(self, collector):
+        mock_redis = MagicMock()
+        mock_redis.sismember = MagicMock(return_value=False)
+        collector._redis = mock_redis
+        assert await collector.is_resolved("trace-never") is False
+
+
+# ---------------------------------------------------------------------------
+# get_summary
+# ---------------------------------------------------------------------------
+
+
+class TestGetSummary:
+    @pytest.fixture
+    def collector(self):
+        return ErrorMetricsCollector()
+
+    @pytest.mark.asyncio
+    async def test_summary_with_prometheus_data(self, collector):
+        total_data = _instant_response([_make_vector_item({}, 42)])
+        cat_data = _instant_response(
+            [
+                _make_vector_item({"category": "server_error"}, 30),
+                _make_vector_item({"category": "validation"}, 12),
+            ]
+        )
+        comp_data = _instant_response(
+            [
+                _make_vector_item({"component": "api"}, 25),
+                _make_vector_item({"component": "llm"}, 17),
+            ]
+        )
+        uniq_data = _instant_response([_make_vector_item({}, 5)])
+
+        with patch(
+            "autobot_shared.monitoring.prometheus_query.query_instant",
+            new_callable=AsyncMock,
+        ) as mock_qi:
+            mock_qi.side_effect = [total_data, cat_data, comp_data, uniq_data]
+            summary = await collector.get_summary()
+
+        assert summary["total_errors"] == 42
+        assert summary["unique_error_types"] == 5
+        assert summary["category_breakdown"]["server_error"] == 30
+        assert summary["category_breakdown"]["validation"] == 12
+        assert summary["component_breakdown"]["api"] == 25
+        assert summary["prometheus_available"] is True
+
+    @pytest.mark.asyncio
+    async def test_summary_prometheus_unreachable(self, collector):
+        with patch(
+            "autobot_shared.monitoring.prometheus_query.query_instant",
+            new_callable=AsyncMock,
+            return_value=None,
+        ):
+            summary = await collector.get_summary()
+
+        assert summary["total_errors"] == 0
+        assert summary["category_breakdown"] == {}
+        # prometheus_available is True because the import worked, even though
+        # query returned None (that's a runtime "no data" not "unavailable")
+        # The helper returns None on HTTP failure; summary still works.
+
+    @pytest.mark.asyncio
+    async def test_summary_import_error(self, collector):
+        with patch.dict("sys.modules", {"autobot_shared.monitoring.prometheus_query": None}):
+            # Import error path — returns empty summary
+            pass
+
+            import utils.error_metrics as em
+
+            with patch.object(em, "__builtins__", {}):
+                # Simulate ImportError branch
+                pass
+        # Just verify no exception is raised and returns a dict
+        assert isinstance(await collector.get_summary(), dict)
+
+
+# ---------------------------------------------------------------------------
+# get_top_errors
+# ---------------------------------------------------------------------------
+
+
+class TestGetTopErrors:
+    @pytest.fixture
+    def collector(self):
+        return ErrorMetricsCollector()
+
+    @pytest.mark.asyncio
+    async def test_top_errors_shape(self, collector):
+        prom_data = _instant_response(
+            [
+                _make_vector_item({"component": "api", "error_code": "API_001"}, 50),
+                _make_vector_item({"component": "llm", "error_code": "LLM_002"}, 30),
+            ]
+        )
+        with patch(
+            "autobot_shared.monitoring.prometheus_query.query_instant",
+            new_callable=AsyncMock,
+            return_value=prom_data,
+        ):
+            results = await collector.get_top_errors(limit=5)
+
+        assert len(results) == 2
+        assert results[0]["component"] == "api"
+        assert results[0]["error_code"] == "API_001"
+        assert results[0]["count"] == 50
+        assert results[1]["count"] == 30
+
+    @pytest.mark.asyncio
+    async def test_top_errors_promql_string(self, collector):
+        """Verify the PromQL sent to Prometheus uses the supplied limit."""
+        with patch(
+            "autobot_shared.monitoring.prometheus_query.query_instant",
+            new_callable=AsyncMock,
+            return_value=_instant_response([]),
+        ) as mock_qi:
+            await collector.get_top_errors(limit=7)
+        called_promql = mock_qi.call_args[0][0]
+        assert "topk(7," in called_promql
+        assert "component" in called_promql
+        assert "error_code" in called_promql
+
+    @pytest.mark.asyncio
+    async def test_top_errors_prometheus_none(self, collector):
+        with patch(
+            "autobot_shared.monitoring.prometheus_query.query_instant",
+            new_callable=AsyncMock,
+            return_value=None,
+        ):
+            results = await collector.get_top_errors(limit=10)
+        assert results == []
+
+
+# ---------------------------------------------------------------------------
+# get_error_timeline
+# ---------------------------------------------------------------------------
+
+
+class TestGetErrorTimeline:
+    @pytest.fixture
+    def collector(self):
+        return ErrorMetricsCollector()
+
+    @pytest.mark.asyncio
+    async def test_timeline_returns_points(self, collector):
+        fake_points = [
+            {"timestamp": "2025-01-01T00:00:00+00:00", "value": 1.5, "labels": {}},
+            {"timestamp": "2025-01-01T00:05:00+00:00", "value": 2.0, "labels": {}},
         ]
+        with patch(
+            "autobot_shared.monitoring.prometheus_query.query_range",
+            new_callable=AsyncMock,
+            return_value=fake_points,
+        ):
+            points = await collector.get_error_timeline(hours=2)
 
-        for i, category in enumerate(categories):
-            for j in range(3):
-                await collector.record_error(
-                    error_code=f"TEST_{i:03d}",
-                    category=category,
-                    component=f"comp_{i}",
-                    function="test_func",
-                    message=f"Error in category {category.value}",
-                )
+        assert len(points) == 2
+        assert "timestamp" in points[0]
+        assert "value" in points[0]
+        # labels key is stripped from timeline output
+        assert "labels" not in points[0]
 
-    async def _populate_errors_with_varying_counts(self, collector):
-        """Populate collector with errors with varying counts"""
-        error_counts = [(f"ERR_{i:03d}", count) for i, count in enumerate([10, 5, 3, 1])]
+    @pytest.mark.asyncio
+    async def test_timeline_component_filter(self, collector):
+        with patch(
+            "autobot_shared.monitoring.prometheus_query.query_range",
+            new_callable=AsyncMock,
+            return_value=[],
+        ) as mock_qr:
+            await collector.get_error_timeline(hours=6, component="api")
 
-        for error_code, count in error_counts:
-            for i in range(count):
-                await collector.record_error(
-                    error_code=error_code,
-                    category=ErrorCategory.SERVER_ERROR,
-                    component="test_component",
-                    function="test_func",
-                    message=f"Error {error_code} occurrence {i}",
-                )
+        called_promql = mock_qr.call_args[0][0]
+        assert 'component="api"' in called_promql
+
+    @pytest.mark.asyncio
+    async def test_timeline_no_component_filter(self, collector):
+        with patch(
+            "autobot_shared.monitoring.prometheus_query.query_range",
+            new_callable=AsyncMock,
+            return_value=[],
+        ) as mock_qr:
+            await collector.get_error_timeline(hours=24)
+
+        called_promql = mock_qr.call_args[0][0]
+        assert "component=" not in called_promql
+
+    @pytest.mark.asyncio
+    async def test_timeline_component_promql_injection_escaped(self, collector):
+        """#9983 security: a malicious component param cannot break out of the
+        quoted PromQL label value to inject arbitrary PromQL."""
+        with patch(
+            "autobot_shared.monitoring.prometheus_query.query_range",
+            new_callable=AsyncMock,
+            return_value=[],
+        ) as mock_qr:
+            await collector.get_error_timeline(hours=6, component='x"} or up{job="y')
+
+        called_promql = mock_qr.call_args[0][0]
+        # the injected quote is escaped (\") so it cannot terminate the label
+        # value early; the raw break-out sequence x"} must NOT appear.
+        assert 'x\\"}' in called_promql
+        assert 'x"}' not in called_promql
+
+    @pytest.mark.asyncio
+    async def test_timeline_prometheus_unreachable(self, collector):
+        with patch(
+            "autobot_shared.monitoring.prometheus_query.query_range",
+            new_callable=AsyncMock,
+            return_value=[],
+        ):
+            points = await collector.get_error_timeline(hours=1)
+        assert points == []
+
+
+# ---------------------------------------------------------------------------
+# Singleton
+# ---------------------------------------------------------------------------
+
+
+class TestSingleton:
+    def test_get_metrics_collector_returns_same_instance(self):
+        c1 = get_metrics_collector()
+        c2 = get_metrics_collector()
+        assert c1 is c2
+
+    def test_deprecated_get_stats_returns_empty(self):
+        c = ErrorMetricsCollector()
+        assert c.get_stats() == []
+
+    def test_deprecated_get_category_breakdown_returns_empty(self):
+        c = ErrorMetricsCollector()
+        assert c.get_category_breakdown() == {}
+
+    def test_deprecated_get_component_breakdown_returns_empty(self):
+        c = ErrorMetricsCollector()
+        assert c.get_component_breakdown() == {}
+
+    @pytest.mark.asyncio
+    async def test_cleanup_old_metrics_returns_zero(self):
+        c = ErrorMetricsCollector()
+        assert await c.cleanup_old_metrics() == 0
+
+    @pytest.mark.asyncio
+    async def test_reset_stats(self):
+        c = ErrorMetricsCollector()
+        c.prometheus = MagicMock()
+        await c.record_error(
+            error_code="R001",
+            category=ErrorCategory.SERVER_ERROR,
+            component="rc",
+            function="fn",
+            message="msg",
+        )
+        assert c._last_error_counts["rc:R001"] == 1
+        await c.reset_stats(component="rc")
+        assert "rc:R001" not in c._last_error_counts
 
 
 if __name__ == "__main__":

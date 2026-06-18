@@ -6,6 +6,8 @@
 
   Error Monitoring Dashboard
   Issue #9891 - Wire error-monitoring UI to backend /api/errors/* endpoints
+  Issue #9983 - Restore timeline / top-errors / summary / resolve UI on the
+                reimplemented (Prometheus + Redis) /api/errors/metrics/* endpoints
 -->
 <template>
   <div class="error-monitoring-view">
@@ -56,6 +58,90 @@
       </template>
     </div>
 
+    <!-- Metrics summary strip (#9983) -->
+    <div v-if="summary" class="em-summary-strip">
+      <div class="em-strip-item">
+        <span class="em-strip-value">{{ summary.total_errors }}</span>
+        <span class="em-strip-label">{{ $t('errorMonitoring.summary.totalErrors') }}</span>
+      </div>
+      <div class="em-strip-item">
+        <span class="em-strip-value">{{ summary.unique_error_types }}</span>
+        <span class="em-strip-label">{{ $t('errorMonitoring.summary.uniqueTypes') }}</span>
+      </div>
+      <div class="em-strip-item">
+        <span class="em-strip-value">{{ summary.alert_thresholds_configured }}</span>
+        <span class="em-strip-label">{{ $t('errorMonitoring.summary.thresholds') }}</span>
+      </div>
+      <div class="em-strip-item em-strip-prom">
+        <span
+          class="em-prom-dot"
+          :class="prometheusAvailable ? 'em-prom-on' : 'em-prom-off'"
+          aria-hidden="true"
+        />
+        <span class="em-strip-label">
+          {{
+            prometheusAvailable
+              ? $t('errorMonitoring.summary.prometheusOn')
+              : $t('errorMonitoring.summary.prometheusOff')
+          }}
+        </span>
+      </div>
+    </div>
+
+    <!-- Metrics row: timeline + top errors (#9983) -->
+    <div class="em-metrics-row">
+      <!-- Timeline -->
+      <section class="em-section">
+        <h3 class="em-section-title">{{ $t('errorMonitoring.sections.timeline') }}</h3>
+        <div v-if="!prometheusAvailable" class="em-empty em-empty-quiet">
+          {{ $t('errorMonitoring.empty.metricsUnavailable') }}
+        </div>
+        <div v-else-if="timeline.length === 0" class="em-empty em-empty-quiet">
+          {{ $t('errorMonitoring.empty.noData') }}
+        </div>
+        <div v-else class="em-sparkline-wrap">
+          <svg
+            class="em-sparkline"
+            :viewBox="`0 0 ${SPARK_WIDTH} ${SPARK_HEIGHT}`"
+            preserveAspectRatio="none"
+            role="img"
+            :aria-label="$t('errorMonitoring.sections.timeline')"
+          >
+            <polyline class="em-sparkline-line" :points="sparklinePoints" />
+          </svg>
+          <div class="em-sparkline-axis">
+            <span>{{ timelineRange.start }}</span>
+            <span>{{ $t('errorMonitoring.timeline.peak', { n: timelineMax }) }}</span>
+            <span>{{ timelineRange.end }}</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Top errors -->
+      <section class="em-section">
+        <h3 class="em-section-title">{{ $t('errorMonitoring.sections.topErrors') }}</h3>
+        <div v-if="topErrors.length === 0" class="em-empty em-empty-quiet">
+          {{ $t('errorMonitoring.empty.noData') }}
+        </div>
+        <table v-else class="em-top-table">
+          <thead>
+            <tr>
+              <th>{{ $t('errorMonitoring.topErrors.component') }}</th>
+              <th>{{ $t('errorMonitoring.topErrors.errorCode') }}</th>
+              <th class="em-top-count-col">{{ $t('errorMonitoring.topErrors.count') }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="(row, idx) in topErrors" :key="`${row.component}-${row.error_code}-${idx}`">
+              <td>{{ row.component }}</td>
+              <td><code class="em-code">{{ row.error_code }}</code></td>
+              <td class="em-top-count-col">{{ row.count }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+    </div>
+
     <!-- Filter row -->
     <div class="em-filters">
       <label class="em-filter-label" :for="'em-cat-filter'">
@@ -96,6 +182,7 @@
               v-for="(err, idx) in filteredRecentErrors"
               :key="err.error_id ?? idx"
               class="em-error-item"
+              :class="{ 'em-error-resolved': err.resolved }"
             >
               <div class="em-error-meta">
                 <span class="em-badge em-badge-category">{{ err.category ?? '—' }}</span>
@@ -103,10 +190,23 @@
                 <span class="em-badge" :class="`em-sev-${err.severity ?? 'unknown'}`">
                   {{ err.severity ?? '—' }}
                 </span>
+                <span v-if="err.resolved" class="em-badge em-badge-resolved">
+                  <Icon name="check" />
+                  {{ $t('errorMonitoring.resolve.resolved') }}
+                </span>
               </div>
               <div class="em-error-message">{{ err.message ?? $t('errorMonitoring.noMessage') }}</div>
               <div class="em-error-footer">
                 <span class="em-error-time">{{ formatTimestamp(err.timestamp) }}</span>
+                <button
+                  v-if="!err.resolved && err.error_id"
+                  class="em-btn-resolve"
+                  :disabled="resolvingIds.has(err.error_id)"
+                  @click="onResolve(err.error_id)"
+                >
+                  <Icon name="check" :spin="resolvingIds.has(err.error_id)" />
+                  {{ $t('errorMonitoring.resolve.action') }}
+                </button>
               </div>
             </li>
           </ul>
@@ -169,7 +269,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import Icon from '@/components/ui/Icon.vue'
 import { useErrorMonitoring } from '@/composables/useErrorMonitoring'
 
@@ -177,6 +277,9 @@ const {
   statistics,
   categories,
   components,
+  summary,
+  timeline,
+  topErrors,
   isLoading,
   error,
   lastUpdate,
@@ -185,8 +288,17 @@ const {
   totalErrors,
   healthStatus,
   filteredRecentErrors,
+  prometheusAvailable,
+  resolveError,
   refresh,
 } = useErrorMonitoring({ autoFetch: true, pollInterval: 60_000 })
+
+// ── Sparkline geometry (viewBox units; scaled by CSS) ───────────────────────
+const SPARK_WIDTH = 300
+const SPARK_HEIGHT = 48
+
+// In-flight resolve calls, to disable the per-row button while pending
+const resolvingIds = ref<Set<string>>(new Set())
 
 // ── Computed helpers ───────────────────────────────────────────────────────
 
@@ -211,6 +323,36 @@ const maxComponentCount = computed(() => {
   return Math.max(...vals, 1)
 })
 
+// ── Timeline (sparkline) ────────────────────────────────────────────────────
+
+const timelineMax = computed(() => {
+  if (timeline.value.length === 0) return 0
+  return Math.max(...timeline.value.map((p) => p.value), 0)
+})
+
+const sparklinePoints = computed(() => {
+  const pts = timeline.value
+  if (pts.length === 0) return ''
+  const max = Math.max(timelineMax.value, 1)
+  const stepX = pts.length > 1 ? SPARK_WIDTH / (pts.length - 1) : 0
+  return pts
+    .map((p, i) => {
+      const x = i * stepX
+      const y = SPARK_HEIGHT - (p.value / max) * SPARK_HEIGHT
+      return `${x.toFixed(1)},${y.toFixed(1)}`
+    })
+    .join(' ')
+})
+
+const timelineRange = computed(() => {
+  const pts = timeline.value
+  if (pts.length === 0) return { start: '', end: '' }
+  return {
+    start: formatTimestamp(pts[0].timestamp),
+    end: formatTimestamp(pts[pts.length - 1].timestamp),
+  }
+})
+
 // ── Helper functions ───────────────────────────────────────────────────────
 
 function componentBarWidth(count: number): number {
@@ -222,6 +364,19 @@ function formatTimestamp(ts: number | string | undefined): string {
   const d = typeof ts === 'number' ? new Date(ts * 1000) : new Date(ts as string)
   if (isNaN(d.getTime())) return String(ts)
   return d.toLocaleString()
+}
+
+async function onResolve(errorId: string): Promise<void> {
+  const pending = new Set(resolvingIds.value)
+  pending.add(errorId)
+  resolvingIds.value = pending
+  try {
+    await resolveError(errorId)
+  } finally {
+    const next = new Set(resolvingIds.value)
+    next.delete(errorId)
+    resolvingIds.value = next
+  }
 }
 
 </script>
@@ -373,6 +528,121 @@ function formatTimestamp(ts: number | string | undefined): string {
 .em-sev-critical .em-card-value { color: var(--color-error, #dc2626); }
 .em-sev-high .em-card-value { color: var(--color-warning, #d97706); }
 
+/* Metrics summary strip */
+.em-summary-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--spacing-6, 1.5rem);
+  padding: var(--spacing-3, 0.75rem) var(--spacing-5, 1.25rem);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg, 0.5rem);
+  background: var(--bg-secondary);
+}
+
+.em-strip-item {
+  display: flex;
+  align-items: baseline;
+  gap: var(--spacing-2, 0.5rem);
+}
+
+.em-strip-value {
+  font-size: var(--text-lg, 1.125rem);
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.em-strip-label {
+  font-size: var(--text-xs, 0.75rem);
+  color: var(--text-secondary);
+}
+
+.em-strip-prom {
+  margin-left: auto;
+  align-items: center;
+}
+
+.em-prom-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 9999px;
+  display: inline-block;
+}
+
+.em-prom-on { background: var(--color-success, #16a34a); }
+.em-prom-off { background: var(--text-tertiary, #9ca3af); }
+
+/* Metrics row (timeline + top errors) */
+.em-metrics-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--spacing-6, 1.5rem);
+}
+
+@media (max-width: 1024px) {
+  .em-metrics-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Sparkline */
+.em-sparkline-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2, 0.5rem);
+}
+
+.em-sparkline {
+  width: 100%;
+  height: 3rem;
+}
+
+.em-sparkline-line {
+  fill: none;
+  stroke: var(--color-primary, #2563eb);
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+
+.em-sparkline-axis {
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--text-xs, 0.75rem);
+  color: var(--text-tertiary, var(--text-secondary));
+}
+
+/* Top-errors table */
+.em-top-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm, 0.875rem);
+}
+
+.em-top-table th {
+  text-align: left;
+  font-weight: 600;
+  color: var(--text-secondary);
+  padding: var(--spacing-1, 0.25rem) var(--spacing-2, 0.5rem);
+  border-bottom: 1px solid var(--border-default);
+}
+
+.em-top-table td {
+  padding: var(--spacing-1, 0.25rem) var(--spacing-2, 0.5rem);
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border-subtle, var(--border-default));
+}
+
+.em-top-count-col {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.em-code {
+  font-family: var(--font-mono, monospace);
+  font-size: var(--text-xs, 0.75rem);
+  color: var(--text-secondary);
+}
+
 /* Filters */
 .em-filters {
   display: flex;
@@ -443,6 +713,11 @@ function formatTimestamp(ts: number | string | undefined): string {
   text-align: center;
 }
 
+.em-empty-quiet {
+  color: var(--text-tertiary, var(--text-secondary));
+  font-style: italic;
+}
+
 /* Error list */
 .em-error-list {
   list-style: none;
@@ -465,6 +740,10 @@ function formatTimestamp(ts: number | string | undefined): string {
   gap: var(--spacing-1, 0.25rem);
 }
 
+.em-error-resolved {
+  opacity: 0.65;
+}
+
 .em-error-meta {
   display: flex;
   flex-wrap: wrap;
@@ -481,6 +760,13 @@ function formatTimestamp(ts: number | string | undefined): string {
 
 .em-badge-category { background: var(--color-blue-100, #dbeafe); color: var(--color-blue-700, #1d4ed8); }
 .em-badge-component { background: var(--color-purple-100, #ede9fe); color: var(--color-purple-700, #6d28d9); }
+.em-badge-resolved {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  background: var(--color-green-100, #dcfce7);
+  color: var(--color-green-700, #15803d);
+}
 .em-sev-critical { background: var(--color-red-100, #fee2e2); color: var(--color-red-700, #b91c1c); }
 .em-sev-high { background: var(--color-orange-100, #ffedd5); color: var(--color-orange-700, #c2410c); }
 .em-sev-warning { background: var(--color-yellow-100, #fef9c3); color: var(--color-yellow-700, #a16207); }
@@ -495,11 +781,36 @@ function formatTimestamp(ts: number | string | undefined): string {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: var(--spacing-2, 0.5rem);
 }
 
 .em-error-time {
   font-size: var(--text-xs, 0.75rem);
   color: var(--text-tertiary, var(--text-secondary));
+}
+
+.em-btn-resolve {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-1, 0.25rem);
+  padding: 0.125rem var(--spacing-2, 0.5rem);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md, 0.375rem);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-size: var(--text-xs, 0.75rem);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.em-btn-resolve:hover:not(:disabled) {
+  background: var(--bg-hover, var(--bg-tertiary));
+  color: var(--text-primary);
+}
+
+.em-btn-resolve:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* Breakdown list */
