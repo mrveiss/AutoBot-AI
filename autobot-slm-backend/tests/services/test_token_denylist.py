@@ -128,25 +128,32 @@ class TestRevokeJti:
     @pytest.mark.asyncio
     async def test_stores_key_with_ttl(self):
         redis_mock = _make_redis_mock()
-        with patch.object(_dl_mod, "get_redis_client", return_value=redis_mock):
+        get_client = AsyncMock(return_value=redis_mock)
+        with patch.object(_dl_mod, "get_redis_client", get_client):
             await revoke_jti("jti-001", ttl_seconds=600)
 
+        get_client.assert_called_once_with(async_client=True)
         redis_mock.set.assert_awaited_once_with("slm:jwt:denylist:jti-001", "1", ex=600)
 
     @pytest.mark.asyncio
     async def test_ttl_clamped_to_minimum_1(self):
         redis_mock = _make_redis_mock()
-        with patch.object(_dl_mod, "get_redis_client", return_value=redis_mock):
+        get_client = AsyncMock(return_value=redis_mock)
+        with patch.object(_dl_mod, "get_redis_client", get_client):
             await revoke_jti("jti-002", ttl_seconds=-5)
 
+        get_client.assert_called_once_with(async_client=True)
         _, kwargs = redis_mock.set.call_args
         assert kwargs["ex"] >= 1
 
     @pytest.mark.asyncio
     async def test_noop_when_redis_unavailable(self):
         """revoke_jti must not raise when get_redis_client returns None."""
-        with patch.object(_dl_mod, "get_redis_client", return_value=None):
+        get_client = AsyncMock(return_value=None)
+        with patch.object(_dl_mod, "get_redis_client", get_client):
             await revoke_jti("jti-003", ttl_seconds=60)  # must not raise
+
+        get_client.assert_called_once_with(async_client=True)
 
 
 # ---------------------------------------------------------------------------
@@ -158,26 +165,32 @@ class TestIsJtiRevoked:
     @pytest.mark.asyncio
     async def test_returns_true_when_key_exists(self):
         redis_mock = _make_redis_mock(exists_return=1)
-        with patch.object(_dl_mod, "get_redis_client", return_value=redis_mock):
+        get_client = AsyncMock(return_value=redis_mock)
+        with patch.object(_dl_mod, "get_redis_client", get_client):
             result = await is_jti_revoked("jti-exists")
 
+        get_client.assert_called_once_with(async_client=True)
         assert result is True
         redis_mock.exists.assert_awaited_once_with("slm:jwt:denylist:jti-exists")
 
     @pytest.mark.asyncio
     async def test_returns_false_when_key_absent(self):
         redis_mock = _make_redis_mock(exists_return=0)
-        with patch.object(_dl_mod, "get_redis_client", return_value=redis_mock):
+        get_client = AsyncMock(return_value=redis_mock)
+        with patch.object(_dl_mod, "get_redis_client", get_client):
             result = await is_jti_revoked("jti-absent")
 
+        get_client.assert_called_once_with(async_client=True)
         assert result is False
 
     @pytest.mark.asyncio
     async def test_returns_false_when_redis_unavailable(self):
         """Fail-open: no crash, returns False."""
-        with patch.object(_dl_mod, "get_redis_client", return_value=None):
+        get_client = AsyncMock(return_value=None)
+        with patch.object(_dl_mod, "get_redis_client", get_client):
             result = await is_jti_revoked("jti-no-redis")
 
+        get_client.assert_called_once_with(async_client=True)
         assert result is False
 
 
@@ -249,3 +262,15 @@ class TestDecodeTokenAsyncRevocation:
 
         assert result is not None
         assert result["sub"] == "dave"
+
+    @pytest.mark.asyncio
+    async def test_denylist_exception_treated_as_fail_open(self):
+        """When is_jti_revoked raises, decode_token_async returns claims (fail-open)."""
+        service = AuthService()
+        token = service.create_access_token(data={"sub": "eve", "admin": False, "role": "user"})
+
+        with patch.object(_auth_mod, "is_jti_revoked", new=AsyncMock(side_effect=RuntimeError("redis down"))):
+            result = await service.decode_token_async(token)
+
+        assert result is not None
+        assert result["sub"] == "eve"

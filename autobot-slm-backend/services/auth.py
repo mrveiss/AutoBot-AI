@@ -123,9 +123,13 @@ class AuthService:
             if claims is None:
                 return None
             jti = claims.get("jti")
-            if jti and await is_jti_revoked(jti):
-                logger.warning("decode_token_async: HS256 token with jti=%r is revoked", jti)
-                return None
+            if jti:
+                try:
+                    if await is_jti_revoked(jti):
+                        logger.warning("decode_token_async: HS256 token with jti=%r is revoked", jti)
+                        return None
+                except Exception:
+                    logger.warning("jti denylist check failed; failing open", exc_info=True)
             return claims
 
         # alg=none or unsupported — reject

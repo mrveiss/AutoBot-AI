@@ -165,7 +165,9 @@ class TestBuildEndSessionUrl:
         )
         result = _build_end_session_url(link)
         assert result is not None
-        assert "post_logout_redirect_uri=https://app.example.com/loggedout" in result
+        # urlencode percent-encodes the value; check the key is present and value is encoded
+        assert "post_logout_redirect_uri=" in result
+        assert "app.example.com" in result
 
     def test_appends_id_token_hint_when_present(self):
         link = _mock_sso_link(
@@ -184,6 +186,18 @@ class TestBuildEndSessionUrl:
         result = _build_end_session_url(link)
         assert result is not None
         assert "&post_logout_redirect_uri=" in result
+
+    def test_post_logout_uri_with_special_chars_is_percent_encoded(self):
+        """A post_logout_redirect_uri containing '&' and '=' must be percent-encoded."""
+        link = _mock_sso_link(
+            end_session="https://idp.example.com/logout",
+            post_logout="https://app.example.com/done?foo=bar&baz=qux",
+        )
+        result = _build_end_session_url(link)
+        assert result is not None
+        # Raw '&' and '=' from the redirect URI must NOT appear unencoded in params
+        assert "post_logout_redirect_uri=https%3A" in result
+        assert "foo%3D" in result or "%26" in result
 
 
 # ---------------------------------------------------------------------------
@@ -232,10 +246,12 @@ class TestRevokeTtlFromToken:
 
         redis_mock = AsyncMock()
         redis_mock.set = AsyncMock(return_value=True)
+        get_client = AsyncMock(return_value=redis_mock)
 
-        with patch.object(_dl_mod, "get_redis_client", return_value=redis_mock):
+        with patch.object(_dl_mod, "get_redis_client", get_client):
             await _dl_mod.revoke_jti(jti, ttl_seconds=expected_ttl)
 
+        get_client.assert_called_once_with(async_client=True)
         redis_mock.set.assert_awaited_once()
         _, kwargs = redis_mock.set.call_args
         assert kwargs["ex"] >= 1

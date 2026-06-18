@@ -13,6 +13,7 @@ Consolidated from legacy auth.py and slm_auth.py in Issue #1922.
 import logging
 import time
 from datetime import timedelta
+from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -185,16 +186,17 @@ def _build_end_session_url(link: "UserSSOLink") -> str | None:
     endpoint = link.provider.config.get("end_session_endpoint") if link and link.provider else None
     if not endpoint:
         return None
-    parts = [endpoint]
+    params: dict[str, str] = {}
     post_logout = link.provider.config.get("post_logout_redirect_uri")
     if post_logout:
-        parts.append(f"post_logout_redirect_uri={post_logout}")
+        params["post_logout_redirect_uri"] = post_logout
     id_token = (link.sso_metadata or {}).get("id_token")
     if id_token:
-        parts.append(f"id_token_hint={id_token}")
+        params["id_token_hint"] = id_token
+    if not params:
+        return endpoint
     separator = "&" if "?" in endpoint else "?"
-    params = "&".join(parts[1:])
-    return f"{endpoint}{separator}{params}" if params else endpoint
+    return f"{endpoint}{separator}{urlencode(params)}"
 
 
 async def _get_user_sso_link(db: AsyncSession, username: str) -> "UserSSOLink | None":

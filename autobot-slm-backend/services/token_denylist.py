@@ -39,7 +39,7 @@ async def revoke_jti(jti: str, ttl_seconds: int) -> None:
     so no background cleanup is needed.  Silently no-ops if Redis is
     unavailable (logs a warning).
     """
-    redis = get_redis_client()
+    redis = await get_redis_client(async_client=True)
     if redis is None:
         logger.warning("revoke_jti: Redis unavailable; jti=%r NOT revoked", jti)
         return
@@ -54,7 +54,7 @@ async def is_jti_revoked(jti: str) -> bool:
     Fail-open: returns ``False`` when Redis is unavailable.  The token's own
     TTL still provides a time-bounded guard in that case.
     """
-    redis = get_redis_client()
+    redis = await get_redis_client(async_client=True)
     if redis is None:
         logger.warning("is_jti_revoked: Redis unavailable; treating jti=%r as NOT revoked (fail-open)", jti)
         return False
