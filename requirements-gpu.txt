@@ -1,0 +1,23 @@
+# GPU / vLLM inference — OPTIONAL extra (#10251)
+#
+# NOT installed by the default backend image. vLLM provides high-performance
+# in-process LLM inference (3-4x throughput, prefix caching) but requires a
+# CUDA-compatible GPU and pulls the full CUDA toolkit (cuda-toolkit, nvidia-*,
+# flashinfer, CUDA-built torch) — several GB. Installing it into the default
+# CPU image was the cause of image bloat and intermittent CI disk-full failures.
+#
+# Install ONLY on GPU deployments that enable vLLM (config: llm.vllm.enabled = true):
+#     pip install -r requirements-gpu.txt
+#
+# The vLLM provider (llm_shared/providers/vllm.py, vllm_base.py) lazy-/guard-imports
+# vllm, so the backend runs normally without this file; the provider only activates
+# when explicitly enabled and installed.
+#
+# Requires: CUDA-compatible GPU, Python 3.12.
+
+vllm>=0.21.0
+
+# vLLM pins these exact torch builds (CUDA). They intentionally override the
+# CPU torch installed in the default image when this GPU extra is used.
+torch==2.12.0
+torchvision==0.27.0
