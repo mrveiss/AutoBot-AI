@@ -223,6 +223,10 @@ def _make_app(
             obj.committed_points = 0
         if not getattr(obj, "actual_points", None):
             obj.actual_points = 0
+        if getattr(obj, "capacity_points", None) is None:
+            obj.capacity_points = 0
+        if getattr(obj, "velocity_actual", None) is None:
+            obj.velocity_actual = 0
         if not getattr(obj, "pending_close_approval_id", None):
             obj.pending_close_approval_id = None
 
@@ -239,6 +243,11 @@ def _make_app(
     patch(
         "llc.services.work_product_service.WorkProductService.list_indexed_by_project",
         new=AsyncMock(return_value=[]),
+    ).start()
+    # create_project / create_sprint provision a per-entity KB collection (ChromaDB).
+    patch(
+        "llc.kb.collections.KbCollectionManager.ensure_collection",
+        new=AsyncMock(return_value=None),
     ).start()
 
     return TestClient(app, raise_server_exceptions=True)
@@ -334,3 +343,47 @@ class TestSprintsIdorTimeline:
         client = _make_app(caller_org_id=org, project_exists=False)
         resp = client.get(f"/projects/{uuid.uuid4()}/timeline")
         assert resp.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Tests: create endpoints ignore body.company_id (#10261 — defence-in-depth)
+# A caller may only create under a parent it owns; the child's company_id must
+# come from that validated parent, never from a caller-supplied body field.
+# ---------------------------------------------------------------------------
+
+
+class TestSprintsCreateIgnoresBodyCompanyId:
+    """#10261: body.company_id must not override the validated parent's tenant."""
+
+    def test_create_program_uses_parent_company_not_body(self):
+        caller = str(uuid.uuid4())
+        attacker = str(uuid.uuid4())
+        client = _make_app(caller_org_id=caller)  # parent portfolio owned by caller
+        resp = client.post(
+            f"/portfolios/{uuid.uuid4()}/programs",
+            json={"company_id": attacker, "name": "Injected"},
+        )
+        assert resp.status_code == 201
+        assert resp.json()["company_id"] == caller  # not attacker
+
+    def test_create_project_uses_parent_company_not_body(self):
+        caller = str(uuid.uuid4())
+        attacker = str(uuid.uuid4())
+        client = _make_app(caller_org_id=caller)  # parent program owned by caller
+        resp = client.post(
+            f"/programs/{uuid.uuid4()}/projects",
+            json={"company_id": attacker, "name": "Injected"},
+        )
+        assert resp.status_code == 201
+        assert resp.json()["company_id"] == caller
+
+    def test_create_sprint_uses_parent_company_not_body(self):
+        caller = str(uuid.uuid4())
+        attacker = str(uuid.uuid4())
+        client = _make_app(caller_org_id=caller)  # parent project owned by caller
+        resp = client.post(
+            f"/projects/{uuid.uuid4()}/sprints",
+            json={"company_id": attacker, "name": "Injected"},
+        )
+        assert resp.status_code == 201
+        assert resp.json()["company_id"] == caller
