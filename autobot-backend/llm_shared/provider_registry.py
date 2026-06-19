@@ -32,7 +32,6 @@ from __future__ import annotations
 import asyncio
 import os
 import time
-from contextvars import ContextVar
 from typing import Any, Dict, List, Optional
 
 from autobot_shared.env_utils import env_float
