@@ -375,6 +375,8 @@ onMounted(async () => {
 })
 </script>
 
+<style scoped src="@/design-system/styles/marketplace-plugins-shared.css"></style>
+
 <style scoped>
 /* ============================================
  * MARKETPLACE VIEW
@@ -396,19 +398,6 @@ onMounted(async () => {
   margin-bottom: var(--spacing-xl);
 }
 
-.page-title {
-  font-size: var(--text-2xl);
-  font-weight: 700;
-  color: var(--text-primary);
-  margin: 0 0 var(--spacing-xs) 0;
-}
-
-.page-subtitle {
-  font-size: var(--text-sm);
-  color: var(--text-secondary);
-  margin: var(--spacing-0);
-}
-
 .btn-refresh {
   background: transparent;
   border: 1px solid var(--border-default);
@@ -419,45 +408,6 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   transition: background var(--duration-150) var(--ease-in-out), color var(--duration-150) var(--ease-in-out);
-}
-
-.btn-refresh:hover:not(:disabled) {
-  background: var(--bg-tertiary);
-  color: var(--text-primary);
-}
-
-.btn-refresh:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.refresh-icon {
-  width: 16px;
-  height: 16px;
-}
-
-.refresh-icon.spinning {
-  animation: spin 1s linear infinite;
-}
-
-/* ---- Error Banner ---- */
-.error-banner {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-sm);
-  background: var(--color-error-bg);
-  border: 1px solid var(--color-error-border);
-  border-radius: var(--radius-md);
-  padding: var(--spacing-sm) var(--spacing-md);
-  margin-bottom: var(--spacing-lg);
-  color: var(--color-error);
-  font-size: var(--text-sm);
-}
-
-.error-icon {
-  width: 16px;
-  height: 16px;
-  flex-shrink: 0;
 }
 
 /* ---- Filters ---- */
@@ -501,6 +451,7 @@ onMounted(async () => {
   outline: none;
   border-color: var(--color-primary);
 }
+
 .search-input:focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
@@ -520,6 +471,7 @@ onMounted(async () => {
   outline: none;
   border-color: var(--color-primary);
 }
+
 .filter-select:focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
@@ -608,33 +560,6 @@ onMounted(async () => {
   gap: var(--spacing-md);
 }
 
-.spinner {
-  width: 32px;
-  height: 32px;
-  animation: spin 1s linear infinite;
-  color: var(--color-primary);
-}
-
-.empty-icon {
-  width: 48px;
-  height: 48px;
-  opacity: 0.4;
-}
-
-.empty-title {
-  font-size: var(--text-base);
-  font-weight: 600;
-  color: var(--text-primary);
-  margin: var(--spacing-0);
-}
-
-.empty-subtitle {
-  font-size: var(--text-sm);
-  text-align: center;
-  max-width: 380px;
-  margin: var(--spacing-0);
-}
-
 /* ---- Grid ---- */
 .plugin-grid {
   display: grid;
@@ -651,34 +576,6 @@ onMounted(async () => {
   flex-direction: column;
   gap: var(--spacing-sm);
   transition: border-color var(--duration-150) var(--ease-in-out), box-shadow var(--duration-150) var(--ease-in-out);
-}
-
-.plugin-card:hover {
-  border-color: var(--color-primary);
-  box-shadow: 0 0 0 1px var(--color-primary), 0 2px 8px rgba(0, 0, 0, 0.15);
-}
-
-.card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.plugin-icon {
-  width: 36px;
-  height: 36px;
-  background: var(--color-primary);
-  border-radius: var(--radius-md);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-  flex-shrink: 0;
-}
-
-.plugin-icon svg {
-  width: 20px;
-  height: 20px;
 }
 
 .status-badge {
@@ -698,38 +595,6 @@ onMounted(async () => {
 .status-available {
   background: var(--bg-tertiary);
   color: var(--text-secondary);
-}
-
-/* ---- Card Body ---- */
-.card-body {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-xs);
-}
-
-.plugin-name {
-  font-size: var(--text-base);
-  font-weight: 600;
-  color: var(--text-primary);
-  margin: var(--spacing-0);
-}
-
-.plugin-desc {
-  font-size: var(--text-sm);
-  color: var(--text-secondary);
-  margin: var(--spacing-0);
-  line-height: var(--leading-relaxed);
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.plugin-meta {
-  font-size: var(--text-xs);
-  color: var(--text-tertiary, var(--text-secondary));
-  margin: var(--spacing-0);
 }
 
 .plugin-stats {
@@ -784,13 +649,6 @@ onMounted(async () => {
   background: transparent;
 }
 
-/* ---- Card Actions ---- */
-.card-actions {
-  display: flex;
-  gap: var(--spacing-xs);
-  flex-wrap: wrap;
-}
-
 .action-btn {
   display: inline-flex;
   align-items: center;
@@ -805,24 +663,9 @@ onMounted(async () => {
   transition: opacity var(--duration-150) var(--ease-in-out);
 }
 
-.action-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
 .btn-icon {
   width: 14px;
   height: 14px;
-}
-
-.action-install {
-  background: var(--color-primary);
-  color: white;
-  border-color: var(--color-primary);
-}
-
-.action-install:hover:not(:disabled) {
-  opacity: 0.9;
 }
 
 .action-uninstall {
@@ -844,12 +687,6 @@ onMounted(async () => {
 .action-source:hover {
   background: var(--bg-secondary);
   color: var(--text-primary);
-}
-
-/* ---- Animations ---- */
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
 }
 
 /* ---- Responsive ---- */
