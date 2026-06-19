@@ -250,30 +250,22 @@ celery_app.conf.beat_schedule = {
     # Schedules are configurable via AUTOBOT_*_RETENTION_SCHEDULE env vars (5-field cron).
     "data-retention-chats-nightly": {
         "task": "tasks.cleanup_expired_chats",
-        "schedule": _crontab_from_string(
-            getattr(ssot_config.misc, "chat_retention_schedule", None) or "0 1 * * *"
-        ),
+        "schedule": _crontab_from_string(getattr(ssot_config.misc, "chat_retention_schedule", None) or "0 1 * * *"),
         "kwargs": {"dry_run": False},
     },
     "data-retention-files-nightly": {
         "task": "tasks.cleanup_expired_files",
-        "schedule": _crontab_from_string(
-            getattr(ssot_config.misc, "file_retention_schedule", None) or "15 1 * * *"
-        ),
+        "schedule": _crontab_from_string(getattr(ssot_config.misc, "file_retention_schedule", None) or "15 1 * * *"),
         "kwargs": {"dry_run": False},
     },
     "data-retention-audit-nightly": {
         "task": "tasks.cleanup_expired_audit_logs",
-        "schedule": _crontab_from_string(
-            getattr(ssot_config.misc, "audit_retention_schedule", None) or "30 1 * * *"
-        ),
+        "schedule": _crontab_from_string(getattr(ssot_config.misc, "audit_retention_schedule", None) or "30 1 * * *"),
         "kwargs": {"dry_run": False},
     },
     "data-retention-kb-nightly": {
         "task": "tasks.cleanup_expired_kb_entries",
-        "schedule": _crontab_from_string(
-            getattr(ssot_config.misc, "kb_retention_schedule", None) or "45 1 * * *"
-        ),
+        "schedule": _crontab_from_string(getattr(ssot_config.misc, "kb_retention_schedule", None) or "45 1 * * *"),
         "kwargs": {"dry_run": False},
     },
 }
