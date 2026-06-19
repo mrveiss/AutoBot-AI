@@ -11,13 +11,26 @@ Bridges ConnectorConfig ↔ SecretsService so that sensitive auth fields
 
 import asyncio
 import json
+import os
 from datetime import timedelta
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.time_utils import now_utc, parse_utc_iso
+from services.unified_credential_read import load_imported_credential
 
 logger = get_logger(__name__)
+
+# Feature flag (expand/contract cutover — #10088 Task 3c-2). When enabled, credential
+# READS try the unified envelope store first (matching the legacy id via the
+# ``imported_from_sqlite`` marker the 3c-1 import stamped) and fall back to the legacy
+# SQLite store. Default off → behaviour is byte-identical to before. Writes are unchanged.
+UNIFIED_READ_ENV = "AUTOBOT_SECRETS_UNIFIED_READ"
+
+
+def _unified_read_enabled() -> bool:
+    return os.environ.get(UNIFIED_READ_ENV, "false").strip().lower() in ("1", "true", "yes")
+
 
 _AUTH_TYPE_TO_SECRET_TYPE: dict = {
     "OAuthRefreshAuth": "connector_oauth_token",
@@ -89,15 +102,22 @@ class ConnectorCredentialStore:
 
         Raises PermissionError when owner_id does not match the stored secret.
         Raises LookupError when secret_id is not found or has expired.
+
+        When the unified-read flag is on, the unified envelope store is tried first
+        (by the legacy-id marker) and the SQLite store is the fallback.
         """
-        secret = await asyncio.get_running_loop().run_in_executor(
-            None,
-            lambda: self._svc.get_secret(
-                secret_id=secret_id,
-                include_value=True,
-                accessed_by=owner_id,
-            ),
-        )
+        secret = None
+        if _unified_read_enabled():
+            secret = await load_imported_credential(secret_id, owner_id)
+        if secret is None:
+            secret = await asyncio.get_running_loop().run_in_executor(
+                None,
+                lambda: self._svc.get_secret(
+                    secret_id=secret_id,
+                    include_value=True,
+                    accessed_by=owner_id,
+                ),
+            )
         if secret is None:
             raise LookupError(f"Credential secret {secret_id!r} not found or expired")
 
