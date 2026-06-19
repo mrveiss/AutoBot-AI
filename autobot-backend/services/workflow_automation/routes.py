@@ -132,7 +132,7 @@ async def start_workflow(
         # Clear the per-run credential context so keys never leak into a
         # later request that reuses this async task (GH#9037).
         if injected_credentials:
-            from llm_shared.provider_registry import set_run_credentials
+            from llm_shared.run_credentials import set_run_credentials
 
             set_run_credentials(None)
 

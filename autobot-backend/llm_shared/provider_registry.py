@@ -46,8 +46,13 @@ from .base_provider import BaseProvider
 
 logger = get_logger(__name__)
 
-# Context variable for per-run credential overrides (GH#9037)
-_run_credentials: ContextVar[Optional["RunCredentialContext"]] = ContextVar("run_credentials", default=None)
+# Per-run credential primitives live in the lightweight run_credentials module
+# (GH#9037); re-exported here for backward compatibility.
+from .run_credentials import (  # noqa: E402,F401
+    RunCredentialContext,
+    get_run_credentials,
+    set_run_credentials,
+)
 
 # Cache health results for 30 s to avoid a health check on every request.
 _HEALTH_CACHE_TTL = 30.0
@@ -58,69 +63,6 @@ _NPU_PIPELINE_MAX_LATENCY_MULTIPLIER: float = env_float("NPU_PIPELINE_MAX_LATENC
 
 # Provider name used for the NPU worker pool.
 _NPU_POOL_PROVIDER_NAME = "npu_pool"
-
-
-class RunCredentialContext:
-    """Per-run provider credentials for multi-tenant deployments (GH#9037).
-
-    Allows each workflow or task invocation to inject provider API keys at
-    runtime, scoped to the single request. Credentials never persist beyond
-    the invocation and are redacted from all logs.
-
-    Attributes:
-        provider_credentials: Dict mapping provider names to their settings.
-                              Example: {"anthropic": {"api_key": "sk-..."}}
-    """
-
-    def __init__(self, provider_credentials: Dict[str, Dict[str, Any]] | None = None) -> None:
-        """Initialize the credential context.
-
-        Args:
-            provider_credentials: Mapping of provider name → settings dict.
-                                  Keys match provider names (anthropic, openai, etc).
-                                  Values are dicts with provider-specific settings
-                                  (api_key, base_url, etc).
-        """
-        self.provider_credentials = provider_credentials or {}
-
-    def get_credentials(self, provider_name: str) -> Dict[str, Any] | None:
-        """Get runtime credentials for a provider.
-
-        Args:
-            provider_name: Provider identifier (anthropic, openai, etc)
-
-        Returns:
-            Settings dict with runtime credentials, or None if not provided.
-        """
-        return self.provider_credentials.get(provider_name)
-
-    def __repr__(self) -> str:
-        """Redacted string representation for logging."""
-        # Never log actual credentials
-        providers = list(self.provider_credentials.keys())
-        return f"<RunCredentialContext providers={providers}>"
-
-
-def set_run_credentials(context: RunCredentialContext | None) -> None:
-    """Set the credential context for the current async task (GH#9037).
-
-    This should be called at the start of a request handler to inject
-    per-user or per-run credentials. The context is automatically scoped
-    to the current async task and will not leak to concurrent requests.
-
-    Args:
-        context: RunCredentialContext with provider credentials, or None to clear.
-    """
-    _run_credentials.set(context)
-
-
-def get_run_credentials() -> RunCredentialContext | None:
-    """Get the current credential context for this async task.
-
-    Returns:
-        The active RunCredentialContext, or None if not set.
-    """
-    return _run_credentials.get()
 
 
 class ProviderRegistry:

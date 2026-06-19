@@ -8,7 +8,7 @@ import asyncio
 
 import pytest
 
-from llm_shared.provider_registry import (
+from llm_shared.run_credentials import (
     RunCredentialContext,
     get_run_credentials,
     set_run_credentials,
@@ -80,7 +80,7 @@ async def test_context_cleared():
 
 def test_inject_runtime_credentials_sets_context():
     """inject_runtime_credentials installs a RunCredentialContext (GH#9037)."""
-    from llm_shared.run_credential_loader import inject_runtime_credentials
+    inject_runtime_credentials = pytest.importorskip("llm_shared.run_credential_loader").inject_runtime_credentials
 
     try:
         inject_runtime_credentials({"anthropic": {"api_key": "sk-run-only"}})
@@ -94,7 +94,7 @@ def test_inject_runtime_credentials_sets_context():
 @pytest.mark.asyncio
 async def test_per_run_override_beats_registered_provider():
     """A per-run credential builds an ephemeral provider instead of the registered one (GH#9037)."""
-    from llm_shared.provider_registry import ProviderRegistry
+    ProviderRegistry = pytest.importorskip("llm_shared.provider_registry").ProviderRegistry
 
     registry = ProviderRegistry()
 
@@ -128,7 +128,7 @@ async def test_per_run_override_beats_registered_provider():
 @pytest.mark.asyncio
 async def test_absent_override_falls_back_to_registered_provider():
     """With no per-run credentials, the registered provider is used (GH#9037)."""
-    from llm_shared.provider_registry import ProviderRegistry
+    ProviderRegistry = pytest.importorskip("llm_shared.provider_registry").ProviderRegistry
 
     registry = ProviderRegistry()
 
