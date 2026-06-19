@@ -220,6 +220,14 @@ def _build_hostvars(node: Any, local_ip_check: Any) -> dict:
         "ansible_user": node.ssh_user or "autobot",
         "ansible_port": node.ssh_port or 22,
         "slm_node_id": node.node_id,
+        # #9965: stamp the node's assigned role tokens so role_active_facts can
+        # activate roles via node_roles, not group membership alone. Group-based
+        # activation silently skips roles whose inventory group isn't the one
+        # role_*_active checks (e.g. tts-worker -> npu_worker group, but
+        # role_tts_worker_active checks node_roles only; browser-service ->
+        # browser_automation group, but role_browser_active checks browser/
+        # browser_worker) — so optional assigned roles never deploy.
+        "node_roles": _union_roles(node),
     }
     if local_ip_check(node.ip_address):
         hostvars["ansible_connection"] = "local"
