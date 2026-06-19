@@ -77,11 +77,31 @@ async def test_admin_permission_sets_is_admin(session):
 
 
 async def test_unknown_user_has_empty_memberships(session):
+    # An absent user_id (a non-User principal) keeps permission-only behaviour, stays active.
     facts = await resolve_principal_facts(session, uuid.uuid4(), {"secrets:user:read"})
+    assert facts.active is True
     assert facts.team_ids == frozenset()
     assert facts.role_names == frozenset()
     assert facts.company_roles == {}
     assert facts.granted_permissions == frozenset({"secrets:user:read"})
+
+
+async def test_deactivated_user_reaches_no_vault(session):
+    # A soft-deleted/deactivated user (exists, is_active=False) gets inactive facts → no access,
+    # even holding admin permission (residual access from a still-valid session is denied). #10346
+    from autobot_shared.secrets_vault import VaultKind, VaultRef
+    from services.secrets_authz import authorize
+    from user_management.models.user import User
+
+    dead = uuid.uuid4()
+    session.add(User(id=dead, email="dead@example.com", username="dead", is_active=False))
+    await session.commit()
+
+    facts = await resolve_principal_facts(session, dead, {"admin:access"})
+    assert facts.active is False
+    assert facts.accessible_vaults() == set()  # not even their own user vault
+    assert authorize(facts, "read", VaultRef(VaultKind.USER, str(dead))) is False
+    assert authorize(facts, "read", VaultRef(VaultKind.SYSTEM)) is False
 
 
 async def test_accessible_vaults_compose_from_resolved_facts(session):

@@ -112,3 +112,17 @@ class TestAuthorizeNode:
     def test_admin_only(self) -> None:
         assert authorize(_facts(is_admin=True), "read", VaultRef(VaultKind.NODE, "node1"))
         assert not authorize(_facts(), "read", VaultRef(VaultKind.NODE, "node1"))
+
+
+class TestInactivePrincipal:
+    def test_inactive_reaches_no_vault(self) -> None:
+        # active=False (deactivated/soft-deleted) → empty accessible vaults, denied everywhere (#10346)
+        facts = _facts(is_admin=True, team_ids=frozenset({"t1"}), active=False)
+        assert facts.accessible_vaults() == set()
+        assert not authorize(facts, "read", VaultRef(VaultKind.USER, "alice"))
+        assert not authorize(facts, "read", VaultRef(VaultKind.SYSTEM))
+        assert not authorize(facts, "read", VaultRef(VaultKind.TEAM, "t1"))
+
+    def test_active_default_unchanged(self) -> None:
+        assert _facts().active is True
+        assert VaultRef(VaultKind.USER, "alice") in _facts().accessible_vaults()

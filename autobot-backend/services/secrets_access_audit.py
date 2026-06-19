@@ -111,6 +111,27 @@ async def describe_secret_access(session, secret_id) -> SecretAccessReport | Non
         members = await _members_of(session, ref)
         report.grants.append(VaultAccess(vault=grant.grantee, kind=ref.kind.value, id=ref.id, members=members))
         effective.update(members)
+
+    # Drop known-inactive/soft-deleted users — they no longer reach the vault (#10346), so the
+    # audit must not claim they have access. Unknown ids (non-user principals) are kept.
+    inactive = await _inactive_users(session, effective)
+    if inactive:
+        for grant_access in report.grants:
+            grant_access.members = [m for m in grant_access.members if m not in inactive]
+        effective -= inactive
     report.grants.sort(key=lambda v: v.vault)
     report.effective_users = sorted(effective)
     return report
+
+
+async def _inactive_users(session, ids: set[str]) -> set[str]:
+    """Subset of *ids* that are known, deactivated/soft-deleted users (``is_active = False``)."""
+    from sqlalchemy import select
+
+    from user_management.models.user import User
+
+    uuids = [u for u in (_as_uuid(i) for i in ids) if u is not None]
+    if not uuids:
+        return set()
+    rows = await session.execute(select(User.id).where(User.id.in_(uuids), User.is_active.is_(False)))
+    return {str(u) for u in rows.scalars()}

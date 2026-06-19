@@ -92,6 +92,36 @@ async def test_describe_missing_secret_returns_none(session):
     assert await describe_secret_access(session, uuid.uuid4()) is None
 
 
+async def test_audit_excludes_inactive_members(session):
+    # A deactivated user in a granted role must not be listed as having access (#10346); unknown
+    # ids (the owner here, not seeded as a User row) are kept.
+    from user_management.models.role import Role, UserRole
+    from user_management.models.user import User
+
+    dead = uuid.uuid4()
+    role_id = uuid.uuid4()
+    session.add(User(id=dead, email="dead@example.com", username="dead", is_active=False))
+    session.add(Role(id=role_id, name="ops"))
+    await session.flush()
+    session.add(UserRole(user_id=dead, role_id=role_id))
+
+    svc = UnifiedSecretsService(root_key=_ROOT)
+    owner = VaultRef(VaultKind.USER, str(_OWNER))
+    secret = await svc.create(
+        session, owner_vault=owner, name="x", secret_type="password", plaintext=b"v", created_by=_OWNER
+    )
+    await svc.share(
+        session, secret_id=secret.id, actor_vaults={owner}, grantee=VaultRef(VaultKind.ROLE, "ops"), created_by=_OWNER
+    )
+    await session.commit()
+
+    report = await describe_secret_access(session, secret.id)
+    by_vault = {g.vault: g for g in report.grants}
+    assert by_vault["role:ops"].members == []  # inactive role member excluded
+    assert str(dead) not in report.effective_users
+    assert str(_OWNER) in report.effective_users  # owner (unknown id) kept
+
+
 async def test_describe_unshared_secret_lists_only_owner(session):
     svc = UnifiedSecretsService(root_key=_ROOT)
     owner = VaultRef(VaultKind.USER, str(_OWNER))
