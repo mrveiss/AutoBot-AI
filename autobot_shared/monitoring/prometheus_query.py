@@ -13,9 +13,9 @@ Both helpers degrade gracefully: any network / parse error returns an empty
 result rather than raising so callers can return empty data to the frontend.
 
 Prometheus host: ``ssot_config.vm.main`` (the backend VM, which is where the
-``autobot-prometheus`` container runs per docker-compose.yml).  The earlier
-``prometheus_mcp.py`` used ``vm.redis`` by mistake; that is a separate bug
-(#10309 follow-up).
+``autobot-prometheus`` container runs per docker-compose.yml).  ``prometheus_mcp.py``
+previously used ``vm.redis`` by mistake; that fork was retired and migrated onto
+this client in #10303.
 """
 
 from __future__ import annotations
@@ -127,4 +127,30 @@ async def query_range(
         return []
     except Exception as exc:
         logger.error("Unexpected error in query_range: %s", exc)
+        return []
+
+
+async def list_metric_names() -> List[str]:
+    """Return all metric names known to Prometheus (``__name__`` label values).
+
+    Degrades to ``[]`` on any failure, like the query helpers.
+    """
+    try:
+        http_client = get_http_client()
+        async with await http_client.get(
+            f"{_PROMETHEUS_BASE}/api/v1/label/__name__/values",
+            timeout=_INSTANT_TIMEOUT,
+        ) as resp:
+            if resp.status != 200:
+                logger.warning("Prometheus label-values HTTP %s", resp.status)
+                return []
+            body = await resp.json()
+            if body.get("status") != "success":
+                return []
+            return body.get("data", [])
+    except aiohttp.ClientError as exc:
+        logger.warning("Prometheus unreachable (label-values): %s", exc)
+        return []
+    except Exception as exc:
+        logger.error("Unexpected error in list_metric_names: %s", exc)
         return []
