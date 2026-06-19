@@ -17,7 +17,7 @@ sentence-transformers>=5.3.0
 
 # Model and Tokenization
 transformers>=5.10.2
-tokenizers>=0.23.1
+tokenizers>=0.22.0,<0.24  # #10331: transformers 5.12.x caps tokenizers<=0.23.0; >=0.23.1 (was #9424) is unsatisfiable
 huggingface-hub>=1.8.0
 tiktoken>=0.12.0
 
