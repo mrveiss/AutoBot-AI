@@ -122,7 +122,12 @@ async def mirror_credential_to_unified(
 
 
 async def delete_credential_from_unified(sqlite_id: str, owner_id: str) -> None:
-    """Best-effort delete of a credential's unified copy by marker. Never raises."""
+    """Best-effort delete of a credential's unified copy by marker. Never raises.
+
+    Logged at ERROR (not WARNING): a swallowed delete leaves an active unified copy of a
+    credential already revoked in SQLite, which read-first would serve — see #10088 (the
+    revoke-resurrection gate that must be closed before the unified read flag is enabled).
+    """
     try:
         root_key = _root_key_or_none()
         if root_key is None:
@@ -132,5 +137,5 @@ async def delete_credential_from_unified(sqlite_id: str, owner_id: str) -> None:
         async with get_async_session_factory()() as session:
             await delete_in_session(session, sqlite_id, owner_id, root_key)
             await session.commit()
-    except Exception as exc:  # best-effort — a stale unified copy degrades to SQLite fallback
-        logger.warning("Unified delete failed for credential %s (owner %s): %s", sqlite_id, owner_id, exc)
+    except Exception as exc:  # never break the canonical revoke; surface loudly for reconciliation
+        logger.error("Unified delete failed for credential %s (owner %s): %s", sqlite_id, owner_id, exc)

@@ -86,20 +86,19 @@ class ConnectorCredentialStore:
         name = f"connector:{connector_id}:auth"
         secret_type = _AUTH_TYPE_TO_SECRET_TYPE.get(auth_cls.__name__, "connector_api_key")
 
+        value = json.dumps(creds, ensure_ascii=False)
         result = await asyncio.get_running_loop().run_in_executor(
             None,
             lambda: self._svc.create_secret(
                 name=name,
                 secret_type=secret_type,
-                value=json.dumps(creds, ensure_ascii=False),
+                value=value,
                 scope="user",
                 created_by=owner_id,
             ),
         )
         if _unified_write_enabled():
-            await mirror_credential_to_unified(
-                result["id"], owner_id, json.dumps(creds, ensure_ascii=False), name=name, secret_type=secret_type
-            )
+            await mirror_credential_to_unified(result["id"], owner_id, value, name=name, secret_type=secret_type)
         return result["id"], sanitized
 
     async def load(
@@ -206,12 +205,13 @@ class ConnectorCredentialStore:
         """
         creds = self._oauth_bundle(token_response, client_id, client_secret, token_url, scopes, provider)
         name = f"connector:{connector_id}:auth"
+        value = json.dumps(creds, ensure_ascii=False)
         result = await asyncio.get_running_loop().run_in_executor(
             None,
             lambda: self._svc.create_secret(
                 name=name,
                 secret_type="connector_oauth_token",  # nosec B106 - SecretType label, not a credential
-                value=json.dumps(creds, ensure_ascii=False),
+                value=value,
                 scope="user",
                 created_by=owner_id,
                 metadata={"provider": provider, "connector_id": connector_id},
@@ -221,7 +221,7 @@ class ConnectorCredentialStore:
             await mirror_credential_to_unified(
                 result["id"],
                 owner_id,
-                json.dumps(creds, ensure_ascii=False),
+                value,
                 name=name,
                 secret_type="connector_oauth_token",  # nosec B106 - SecretType label, not a credential
             )
@@ -266,16 +266,17 @@ class ConnectorCredentialStore:
             # Providers like GitLab rotate the refresh token on each use.
             creds["refresh_token"] = token_response["refresh_token"]
 
+        value = json.dumps(creds, ensure_ascii=False)
         await asyncio.get_running_loop().run_in_executor(
             None,
             lambda: self._svc.update_secret(
                 secret_id=secret_id,
-                value=json.dumps(creds, ensure_ascii=False),
+                value=value,
                 updated_by=owner_id,
             ),
         )
         if _unified_write_enabled():
-            await mirror_credential_to_unified(secret_id, owner_id, json.dumps(creds, ensure_ascii=False))
+            await mirror_credential_to_unified(secret_id, owner_id, value)
         return creds["access_token"]
 
     # ------------------------------------------------------------------
