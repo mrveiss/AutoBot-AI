@@ -35,8 +35,8 @@ boto3>=1.43.25                       # GH#9010: AWS Bedrock provider
 chromadb>=1.5.9,<2.0.0             # upper bound guards against breaking API changes; 1.5.5+ uses regenerated protos compatible with protobuf 5.x (#4053)
 protobuf>=5.29.6,<8.0.0           # required floor for chromadb 1.5.5+ opentelemetry exporter; resolves googleapis-common-protos conflict (#4061)
 sentence-transformers>=5.4.1
-torch==2.12.0  # embeddings/transcriber/multimodal; installed CPU-only in the default image (#10251). GPU build via requirements-gpu.txt
-torchvision==0.27.0  # paired with torch 2.12.0; CPU-only by default (#10251)
+torch==2.12.1  # embeddings/transcriber/multimodal; installed CPU-only in the default image (#10251). GPU build via requirements-gpu.txt
+torchvision==0.27.1  # paired with torch 2.12.1; CPU-only by default (#10251)
 # torchaudio removed (#10251): not imported anywhere in the backend, and its 2.11.0 pin mismatched torch 2.12.0
 torchmetrics>=1.9.0  # Issue #904: Training metrics
 opencv-python-headless>=4.10.0,<4.11  # MVA-3684: <4.11 avoids numpy>=2 requirement (compatible with vllm's numpy 1.x)
