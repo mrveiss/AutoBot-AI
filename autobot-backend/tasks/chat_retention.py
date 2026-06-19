@@ -3,136 +3,169 @@
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
 """
-Celery beat task: chat history retention cleanup (GH#8995, MVA-3044).
+Celery beat task: chat history retention cleanup (GH#8995).
 
-Removes chat sessions and conversations older than the configured TTL to prevent
-unbounded storage growth in long-running deployments.
+Removes chat sessions older than the configured TTL.  Sessions with
+``keep_forever=true`` in their stored JSON are always exempt.
+
+Safe defaults: period=0 → task is a no-op.  Nothing is deleted unless
+AUTOBOT_CHAT_RETENTION_DAYS is set to a positive integer.
 """
 
-import os
+import json
 from datetime import datetime, timedelta, timezone
-from typing import Dict
+from typing import Any, Dict
 
 from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
+from autobot_shared.ssot_config import config as ssot_config
 from celery_app import celery_app
+from services.audit.unified_audit import AuditCategory, AuditEvent, emit as audit_emit
 
 logger = get_logger(__name__)
 
-_DEFAULT_CHAT_RETENTION_DAYS = 90
+# Module-level constant — reads env at import time (cache.py pattern)
+_CHAT_RETENTION_DAYS = ssot_config.chat_retention_days
+
+# Redis sorted-set that maps session_id → last-update timestamp
+_RECENT_KEY = "chat:recent"
+# Prefix for individual session JSON blobs
+_SESSION_PREFIX = "chat:session:"
+_CONVERSATION_PREFIX = "chat:conversation:"
+
+
+def _is_keep_forever(raw: bytes) -> bool:
+    """Return True if the stored session JSON has keep_forever set."""
+    try:
+        data = json.loads(raw)
+        return bool(data.get("keep_forever") or data.get("keepForever"))
+    except Exception:
+        return False
+
+
+def _parse_created_at(raw: bytes) -> datetime | None:
+    """Extract createdAt timestamp from stored session JSON.
+
+    Returns a timezone-aware datetime or None when unavailable/unparseable.
+    """
+    try:
+        data = json.loads(raw)
+        raw_ts = data.get("createdAt") or data.get("createdTime")
+        if not raw_ts:
+            return None
+        if isinstance(raw_ts, (int, float)):
+            return datetime.fromtimestamp(float(raw_ts), tz=timezone.utc)
+        dt = datetime.fromisoformat(str(raw_ts))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+    except Exception:
+        return None
+
+
+def _emit_deletion_audit(resource_id: str, resource_type: str, extra: Dict[str, Any]) -> None:
+    """Fire-and-forget audit event for a retention deletion."""
+    audit_emit(
+        AuditEvent(
+            category=AuditCategory.SECURITY,
+            action="retention_purge",
+            actor_id="system:retention_worker",
+            resource_type=resource_type,
+            resource_id=resource_id,
+            metadata=extra,
+        )
+    )
 
 
 async def _async_cleanup_expired_chats(retention_days: int, dry_run: bool = False) -> Dict[str, int]:
-    """Remove chat sessions older than retention_days (async helper for Celery task).
+    """Remove chat sessions/conversations older than retention_days.
 
-    Args:
-        retention_days: Number of days to retain chat sessions
-        dry_run: If True, log what would be deleted without actually deleting
-
-    Returns:
-        Dict with "deleted_sessions", "deleted_conversations", and "errors" counts
+    Idempotent: re-running against already-deleted keys is safe.
+    Returns counts for deleted_sessions, deleted_conversations, skipped, errors.
     """
+    if retention_days <= 0:
+        logger.info("Chat retention disabled (retention_days=%d), skipping.", retention_days)
+        return {"deleted_sessions": 0, "deleted_conversations": 0, "skipped": 0, "errors": 0}
+
     redis_client = get_redis_client()
     if not redis_client:
-        logger.warning("Redis client not available, skipping chat retention cleanup")
-        return {"deleted_sessions": 0, "deleted_conversations": 0, "errors": 0}
+        logger.warning("Redis client unavailable — skipping chat retention cleanup.")
+        return {"deleted_sessions": 0, "deleted_conversations": 0, "skipped": 0, "errors": 0}
 
     cutoff = datetime.now(timezone.utc) - timedelta(days=retention_days)
-    cutoff_timestamp = cutoff.timestamp()
-
     deleted_sessions = 0
     deleted_conversations = 0
+    skipped = 0
     errors = 0
 
+    # Prune chat:recent sorted set entries older than cutoff
+    cutoff_ts = cutoff.timestamp()
     try:
-        # Cleanup chat:recent sorted set - remove entries older than retention window
-        # ZREMRANGEBYSCORE chat:recent -inf <cutoff_timestamp>
-        recent_key = "chat:recent"
         if dry_run:
-            old_count = redis_client.zcount(recent_key, "-inf", cutoff_timestamp)
-            logger.info(
-                "[DRY RUN] Would remove %d old entries from %s (older than %s)",
-                old_count,
-                recent_key,
-                cutoff.isoformat(),
-            )
+            count = redis_client.zcount(_RECENT_KEY, "-inf", cutoff_ts)
+            logger.info("[DRY RUN] Would prune %d entries from %s older than %s", count, _RECENT_KEY, cutoff)
         else:
-            removed = redis_client.zremrangebyscore(recent_key, "-inf", cutoff_timestamp)
+            removed = redis_client.zremrangebyscore(_RECENT_KEY, "-inf", cutoff_ts)
             deleted_sessions += removed
-            logger.info(
-                "Removed %d old entries from %s (older than %s)",
-                removed,
-                recent_key,
-                cutoff.isoformat(),
-            )
-
-        # Cleanup individual chat:session:* keys
-        # Scan for keys and check their creation time via OBJECT IDLETIME
-        session_pattern = "chat:session:*"
-        cursor = 0
-        while True:
-            cursor, keys = redis_client.scan(cursor, match=session_pattern, count=100)
-            for key in keys:
-                try:
-                    # OBJECT IDLETIME returns seconds since last access
-                    idle_time = redis_client.object("IDLETIME", key)
-                    if idle_time is None:
-                        continue
-
-                    # Convert idle time to age and compare with retention window
-                    idle_days = idle_time / 86400
-                    if idle_days > retention_days:
-                        if dry_run:
-                            logger.info("[DRY RUN] Would delete session key: %s (idle: %.1f days)", key, idle_days)
-                        else:
-                            redis_client.delete(key)
-                            deleted_sessions += 1
-                            if deleted_sessions % 100 == 0:
-                                logger.info("Deleted %d session keys so far...", deleted_sessions)
-                except Exception as exc:
-                    errors += 1
-                    logger.error("Failed to process session key %s: %s", key, exc)
-
-            if cursor == 0:
-                break
-
-        # Cleanup chat:conversation:* keys
-        conversation_pattern = "chat:conversation:*"
-        cursor = 0
-        while True:
-            cursor, keys = redis_client.scan(cursor, match=conversation_pattern, count=100)
-            for key in keys:
-                try:
-                    idle_time = redis_client.object("IDLETIME", key)
-                    if idle_time is None:
-                        continue
-
-                    idle_days = idle_time / 86400
-                    if idle_days > retention_days:
-                        if dry_run:
-                            logger.info("[DRY RUN] Would delete conversation key: %s (idle: %.1f days)", key, idle_days)
-                        else:
-                            redis_client.delete(key)
-                            deleted_conversations += 1
-                            if deleted_conversations % 100 == 0:
-                                logger.info("Deleted %d conversation keys so far...", deleted_conversations)
-                except Exception as exc:
-                    errors += 1
-                    logger.error("Failed to process conversation key %s: %s", key, exc)
-
-            if cursor == 0:
-                break
-
+            if removed:
+                logger.info("Pruned %d entries from %s (older than %s)", removed, _RECENT_KEY, cutoff)
     except Exception as exc:
         errors += 1
-        logger.error("Chat retention cleanup failed: %s", exc)
+        logger.error("Failed to prune %s: %s", _RECENT_KEY, exc)
+
+    # Scan and delete individual session keys
+    for prefix, counter_attr in ((_SESSION_PREFIX, "sessions"), (_CONVERSATION_PREFIX, "conversations")):
+        cursor: int = 0
+        while True:
+            cursor, keys = redis_client.scan(cursor, match=f"{prefix}*", count=200)
+            for key in keys:
+                try:
+                    raw = redis_client.get(key)
+                    if raw is None:
+                        continue  # Already gone — idempotent
+
+                    if _is_keep_forever(raw):
+                        skipped += 1
+                        continue
+
+                    created_at = _parse_created_at(raw)
+                    if created_at is None or created_at >= cutoff:
+                        continue
+
+                    age_days = (datetime.now(timezone.utc) - created_at).days
+                    key_str = key.decode() if isinstance(key, bytes) else key
+
+                    if dry_run:
+                        logger.info("[DRY RUN] Would delete %s (age=%dd)", key_str, age_days)
+                        if counter_attr == "sessions":
+                            deleted_sessions += 1
+                        else:
+                            deleted_conversations += 1
+                    else:
+                        redis_client.delete(key)
+                        _emit_deletion_audit(
+                            resource_id=key_str,
+                            resource_type=f"chat:{counter_attr[:-1]}",
+                            extra={"age_days": age_days, "retention_days": retention_days},
+                        )
+                        if counter_attr == "sessions":
+                            deleted_sessions += 1
+                        else:
+                            deleted_conversations += 1
+                        logger.debug("Deleted %s (age=%dd)", key_str, age_days)
+                except Exception as exc:
+                    errors += 1
+                    logger.error("Error processing key %s: %s", key, exc)
+            if cursor == 0:
+                break
 
     logger.info(
-        "Chat retention cleanup: deleted_sessions=%d, deleted_conversations=%d, errors=%d, retention_days=%d, "
-        "dry_run=%s",
+        "Chat retention: deleted_sessions=%d deleted_conversations=%d skipped=%d errors=%d "
+        "retention_days=%d dry_run=%s",
         deleted_sessions,
         deleted_conversations,
+        skipped,
         errors,
         retention_days,
         dry_run,
@@ -140,23 +173,18 @@ async def _async_cleanup_expired_chats(retention_days: int, dry_run: bool = Fals
     return {
         "deleted_sessions": deleted_sessions,
         "deleted_conversations": deleted_conversations,
+        "skipped": skipped,
         "errors": errors,
     }
 
 
 @celery_app.task(bind=True, name="tasks.cleanup_expired_chats")
 def cleanup_expired_chats(self, retention_days: int = None, dry_run: bool = False) -> Dict[str, int]:
-    """Remove chat sessions and conversations older than retention_days (GH#8995, MVA-3044).
+    """Remove chat sessions older than retention_days (GH#8995).
 
-    Args:
-        retention_days: Number of days to retain chats. Defaults to
-                        AUTOBOT_CHAT_RETENTION_DAYS env var or 90 days.
-        dry_run: If True, log what would be deleted without actually deleting.
-
-    Returns:
-        Dict with "deleted_sessions", "deleted_conversations", and "errors" counts.
+    retention_days defaults to AUTOBOT_CHAT_RETENTION_DAYS (0 = disabled).
+    dry_run=True logs what would be deleted without making changes.
     """
     if retention_days is None:
-        retention_days = int(os.getenv("AUTOBOT_CHAT_RETENTION_DAYS", _DEFAULT_CHAT_RETENTION_DAYS))
-
+        retention_days = _CHAT_RETENTION_DAYS
     return run_or_schedule(_async_cleanup_expired_chats(retention_days, dry_run))

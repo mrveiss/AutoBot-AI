@@ -20,6 +20,10 @@ from .analytics_tasks import (
     run_pattern_analysis,
     run_security_analysis,
 )
+from .audit_log_retention import cleanup_expired_audit_logs
+from .chat_retention import cleanup_expired_chats
+from .file_retention import cleanup_expired_files
+from .knowledge_retention import cleanup_expired_kb_entries
 from .knowledge_tasks import (
     cleanup_generated_files,
     cleanup_orphan_documents,
@@ -66,4 +70,9 @@ __all__ = [
     "extract_facts_task",
     "update_graph_task",
     "compact_snapshot_task",
+    # GH#8995: data-hygiene retention tasks
+    "cleanup_expired_chats",
+    "cleanup_expired_files",
+    "cleanup_expired_audit_logs",
+    "cleanup_expired_kb_entries",
 ]
