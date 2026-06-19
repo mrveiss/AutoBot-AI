@@ -13,16 +13,14 @@ Issue #379: Optimized sequential awaits with asyncio.gather for concurrent queri
 import asyncio
 from typing import List
 
-import aiohttp
 from fastapi import APIRouter, Depends
 
 from api.schemas_code import PrometheusMCPExecuteResponse
 from api.schemas_system import PrometheusMCPTool
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.ssot_config import get_config
+from autobot_shared.monitoring.prometheus_query import list_metric_names, query_instant
 from services.mcp_bridge_manifest import MCPBridgeManifest
 from type_defs.common import Metadata
 
@@ -47,9 +45,10 @@ router = APIRouter(
     dependencies=[Depends(check_admin_permission)],
 )
 
-# Prometheus configuration - use SSOT config
-_ssot = get_config()
-PROMETHEUS_URL = f"http://{_ssot.vm.redis}:{_ssot.port.prometheus}"
+# Prometheus access is delegated to the canonical async client
+# (autobot_shared.monitoring.prometheus_query), which uses the correct
+# vm.main host. The old local PROMETHEUS_URL here used vm.redis — that bug
+# is retired by this consolidation (#10303).
 
 
 # Issue #281: MCP tool definitions extracted from get_prometheus_mcp_tools
@@ -160,24 +159,8 @@ async def get_prometheus_mcp_tools() -> List[PrometheusMCPTool]:
 
 
 async def prometheus_query(query: str) -> Metadata:
-    """Execute instant Prometheus query."""
-    try:
-        http_client = get_http_client()
-        params = {"query": query}
-        async with await http_client.get(
-            f"{PROMETHEUS_URL}/api/v1/query",
-            params=params,
-            timeout=aiohttp.ClientTimeout(total=10),
-        ) as response:
-            if response.status != 200:
-                return None
-            data = await response.json()
-            if data.get("status") != "success":
-                return None
-            return data.get("data", {})
-    except Exception as e:
-        logger.error("Prometheus query failed: %s", e)
-        return None
+    """Execute instant Prometheus query via the canonical client (#10303)."""
+    return await query_instant(query)
 
 
 # Tool handler functions (Issue #315 - extracted to reduce nesting)
@@ -323,18 +306,12 @@ async def _handle_get_vm_metrics(request: Metadata) -> Metadata:
 
 
 async def _fetch_metrics_list() -> tuple:
-    """Fetch metrics list from Prometheus (Issue #315 - extracted)."""
-    http_client = get_http_client()
-    async with await http_client.get(
-        f"{PROMETHEUS_URL}/api/v1/label/__name__/values",
-        timeout=aiohttp.ClientTimeout(total=10),
-    ) as response:
-        if response.status != 200:
-            return None, "Failed to fetch metrics list"
-        data = await response.json()
-        if data.get("status") != "success":
-            return None, "Failed to fetch metrics list"
-        return data.get("data", []), None
+    """Fetch metrics list via the canonical client (Issue #315, #10303).
+
+    Degrades to an empty list (rendered as "no metrics") when Prometheus is
+    unreachable, consistent with the shared client's graceful-degrade contract.
+    """
+    return await list_metric_names(), None
 
 
 def _format_metrics_output(metrics: list, filter_pattern: str) -> str:
