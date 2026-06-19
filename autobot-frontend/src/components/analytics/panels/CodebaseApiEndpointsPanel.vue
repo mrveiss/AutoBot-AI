@@ -304,277 +304,9 @@ function formatTimestamp(timestamp: string | number | Date | undefined): string 
 }
 </script>
 
+<style scoped src="@/design-system/styles/panel-api-cross-shared.css"></style>
+
 <style scoped>
-.accordion-groups {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-2);
-}
-
-.accordion-group {
-  background: var(--bg-card);
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--bg-tertiary);
-  overflow: hidden;
-}
-
-.accordion-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: var(--spacing-3-5) var(--spacing-4);
-  cursor: pointer;
-  background: var(--bg-secondary);
-  transition: background var(--duration-200) var(--ease-out);
-}
-
-.accordion-header:hover {
-  background: var(--bg-tertiary);
-}
-
-.header-info {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-2-5);
-}
-
-.header-info i {
-  color: var(--text-muted);
-  font-size: 0.75em;
-  transition: transform var(--duration-200) var(--ease-out);
-}
-
-.header-name {
-  font-weight: 600;
-  color: var(--text-secondary);
-}
-
-.header-count {
-  color: var(--text-muted);
-  font-size: 0.9em;
-}
-
-.header-badges {
-  display: flex;
-  gap: var(--spacing-2);
-  flex-wrap: wrap;
-}
-
-/* Unified Severity Badges */
-.severity-badge {
-  font-size: 0.7em;
-  padding: var(--spacing-0-5) var(--spacing-2);
-  border-radius: var(--radius-xl);
-  font-weight: 500;
-}
-
-.severity-badge.critical { background: var(--color-error-bg); color: var(--color-error-light); }
-.severity-badge.high { background: var(--color-warning-bg); color: var(--chart-orange-light); }
-.severity-badge.medium { background: var(--color-warning-bg); color: var(--color-warning-light); }
-.severity-badge.low { background: var(--color-success-bg); color: var(--color-success-light); }
-
-
-
-/* Accordion Items Container */
-.accordion-items {
-  padding: var(--spacing-3);
-  background: var(--bg-primary);
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-2-5);
-}
-
-/* Accordion Transition */
-.accordion-enter-active,
-.accordion-leave-active {
-  transition: all var(--duration-300) var(--ease-out);
-  overflow: hidden;
-}
-
-.accordion-enter-from,
-.accordion-leave-to {
-  opacity: 0;
-  max-height: 0;
-}
-
-.accordion-enter-to,
-.accordion-leave-from {
-  opacity: 1;
-  max-height: 2000px;
-}
-
-/* Unified List Items */
-.list-item {
-  background: var(--bg-card);
-  border-radius: var(--radius-lg);
-  padding: var(--spacing-3-5) var(--spacing-4);
-  border-left: 4px solid var(--text-tertiary);
-  transition: all var(--duration-200) var(--ease-out);
-}
-
-.list-item:hover {
-  transform: translateX(4px);
-  background: var(--bg-secondary);
-}
-
-/* List Item Severity Variants */
-.list-item.item-critical { border-left-color: var(--color-error); }
-.list-item.item-high { border-left-color: var(--chart-orange); }
-.list-item.item-medium { border-left-color: var(--color-warning); }
-.list-item.item-low { border-left-color: var(--chart-green); }
-.list-item.item-info { border-left-color: var(--chart-blue); }
-
-/* Show More / Muted Utilities */
-.show-more {
-  text-align: center;
-  padding: var(--spacing-3);
-  background: var(--bg-secondary);
-  border-radius: var(--radius-md);
-  margin-top: var(--spacing-2);
-}
-
-.muted {
-  color: var(--text-tertiary);
-  font-style: italic;
-}
-
-/* Item Header */
-.item-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: var(--spacing-2);
-}
-
-.item-name {
-  font-weight: 600;
-  color: var(--text-secondary);
-  font-family: 'JetBrains Mono', monospace;
-}
-
-.item-severity {
-  font-size: 0.75em;
-  padding: var(--spacing-0-5) var(--spacing-2);
-  border-radius: var(--radius-default);
-  font-weight: 600;
-  text-transform: uppercase;
-}
-
-.item-severity.critical { background: var(--color-error-bg); color: var(--color-error-light); }
-.item-severity.high { background: var(--color-warning-bg); color: var(--chart-orange-light); }
-.item-severity.medium { background: var(--color-warning-bg); color: var(--color-warning-light); }
-.item-severity.low { background: var(--color-success-bg); color: var(--color-success-light); }
-.item-severity.info { background: var(--color-info-dark); color: var(--color-info-light); }
-
-/* Item Content */
-.item-description {
-  color: var(--text-secondary);
-  font-size: 0.9em;
-  margin-bottom: var(--spacing-2);
-}
-
-.item-location {
-  color: var(--text-muted);
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 0.8em;
-  margin-bottom: var(--spacing-1);
-}
-
-.item-suggestion {
-  color: var(--chart-green);
-  font-size: 0.85em;
-  padding: var(--spacing-2);
-  background: rgba(34, 197, 94, 0.1);
-  border-radius: var(--radius-default);
-  margin-top: var(--spacing-2);
-}
-
-/* Duplicate-specific Styles */
-.item-similarity {
-  font-size: 0.75em;
-  padding: var(--spacing-0-5) var(--spacing-2);
-  border-radius: var(--radius-default);
-  font-weight: 600;
-}
-
-.item-similarity.high { background: var(--color-error-bg); color: var(--color-error-light); }
-.item-similarity.medium { background: var(--color-warning-bg); color: var(--color-warning-light); }
-.item-similarity.low { background: var(--color-success-bg); color: var(--color-success-light); }
-
-.item-lines {
-  color: var(--text-muted);
-  font-size: 0.8em;
-}
-
-.item-files {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-1);
-}
-
-.item-file {
-  color: var(--text-muted);
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 0.8em;
-}
-
-/* Responsive Design */
-@media (max-width: 768px) {
-  .codebase-analytics {
-    padding: var(--spacing-3);
-  }
-
-  .header-controls {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .path-input {
-    min-width: unset;
-    width: 100%;
-  }
-
-  .debug-controls {
-    flex-direction: column;
-    gap: var(--spacing-2);
-  }
-
-  .btn-debug {
-    width: 100%;
-    justify-content: center;
-  }
-
-  .enhanced-analytics-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .metrics-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .real-time-controls {
-    flex-direction: column;
-    gap: var(--spacing-3);
-    align-items: stretch;
-  }
-
-  .stats-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
-@media (max-width: 480px) {
-  .stats-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .problem-header, .duplicate-header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: var(--spacing-1);
-  }
-}
-
 /* Charts Section Styles */
 
 .api-endpoints-section {
@@ -643,8 +375,11 @@ function formatTimestamp(timestamp: string | number | Date | undefined): string 
 }
 
 .coverage-value.success { color: var(--chart-green); }
+
 .coverage-value.info { color: var(--chart-blue); }
+
 .coverage-value.warning { color: var(--color-warning); }
+
 .coverage-value.critical { color: var(--color-error); }
 
 .coverage-bar {
@@ -661,8 +396,11 @@ function formatTimestamp(timestamp: string | number | Date | undefined): string 
 }
 
 .coverage-fill.success { background: var(--color-success); }
+
 .coverage-fill.info { background: var(--color-primary); }
+
 .coverage-fill.warning { background: var(--color-warning); }
+
 .coverage-fill.critical { background: var(--color-error); }
 
 /* HTTP Method Badges */
@@ -677,10 +415,15 @@ function formatTimestamp(timestamp: string | number | Date | undefined): string 
 }
 
 .method-badge.get { background: var(--chart-green)20; color: var(--chart-green); border: 1px solid var(--chart-green)40; }
+
 .method-badge.post { background: var(--chart-blue)20; color: var(--chart-blue); border: 1px solid var(--chart-blue)40; }
+
 .method-badge.put { background: var(--color-warning)20; color: var(--color-warning); border: 1px solid var(--color-warning)40; }
+
 .method-badge.patch { background: var(--chart-purple)20; color: var(--chart-purple); border: 1px solid var(--chart-purple)40; }
+
 .method-badge.delete { background: var(--color-error)20; color: var(--color-error); border: 1px solid var(--color-error)40; }
+
 .method-badge.unknown { background: var(--text-tertiary)20; color: var(--text-tertiary); border: 1px solid var(--text-tertiary)40; }
 
 /* API Path Display */
@@ -786,7 +529,4 @@ function formatTimestamp(timestamp: string | number | Date | undefined): string 
 .scan-timestamp i {
   color: var(--text-muted);
 }
-
-/* Issue #244: Cross-Language Pattern Analysis Section */
-
 </style>
