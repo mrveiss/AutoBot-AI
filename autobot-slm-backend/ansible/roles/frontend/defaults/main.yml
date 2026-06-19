@@ -28,7 +28,14 @@ nginx_http_port: 80
 # Backend runs on HTTPS port 8443 with SSL certificates
 # backend_host and backend_port are set dynamically by
 # _build_infra_vars() in setup_wizard.py at provisioning time
-frontend_backend_url: "{{ backend_protocol | default('https') }}://{{ backend_host | default(ansible_facts['default_ipv4'].address | default(ansible_host)) }}:{{ backend_port | default(8443) }}"
+#
+# #10348: default to EMPTY = relative same-origin /api. nginx serves the SPA and
+# proxies /api to the backend, so the browser must call the SAME origin it loaded
+# from — an absolute base (esp. one built from backend_host, which is the 0.0.0.0
+# BIND address) is a different origin that CSP `connect-src 'self'` blocks, making
+# the whole GUI unusable. Only set an absolute URL when the frontend is genuinely
+# served from a different origin than the backend (and add it to CSP connect-src).
+frontend_backend_url: ""
 
 # Issue #1098: Backend upstream health tracking
 backend_max_fails: 3
