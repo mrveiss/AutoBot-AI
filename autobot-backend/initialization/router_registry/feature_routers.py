@@ -663,6 +663,13 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         ["voice", "realtime", "webrtc"],
         "realtime_session",
     ),
+    # GH#8995: data-hygiene retention policy CRUD + settings/stats
+    (
+        "api.admin_retention_policies",
+        "",
+        ["admin", "retention", "data-hygiene"],
+        "admin_retention_policies",
+    ),
     # GH#8605: Per-user voice bundle assignment (admin + user endpoints)
     (
         "api.voice_bundle_admin",
