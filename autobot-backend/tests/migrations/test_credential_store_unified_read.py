@@ -27,9 +27,7 @@ _OWNER = uuid.uuid4()
 
 
 @pytest.fixture()
-async def session(fresh_db_url, monkeypatch):
-    # _read_unified_in_session builds UnifiedSecretsService() which reads the root key from env.
-    monkeypatch.setenv("AUTOBOT_SECRETS_ROOT_KEY", base64.urlsafe_b64encode(_ROOT).decode("utf-8"))
+async def session(fresh_db_url):
     assert run_alembic(["upgrade", "head"], fresh_db_url).returncode == 0
     engine = create_async_engine(fresh_db_url)
     maker = async_sessionmaker(engine, expire_on_commit=False)
@@ -56,18 +54,28 @@ async def _seed(session, legacy_id: str, value: bytes, owner=_OWNER):
 async def test_reads_imported_by_marker(session):
     await _seed(session, "legacy-1", b'{"token":"abc"}')
     await session.commit()
-    out = await _read_unified_in_session(session, "legacy-1", str(_OWNER))
+    out = await _read_unified_in_session(session, "legacy-1", str(_OWNER), _ROOT)
     assert out == {"created_by": str(_OWNER), "value": '{"token":"abc"}'}
 
 
 async def test_returns_none_when_not_imported(session):
     await _seed(session, "legacy-1", b'{"token":"abc"}')
     await session.commit()
-    assert await _read_unified_in_session(session, "no-such-id", str(_OWNER)) is None
+    assert await _read_unified_in_session(session, "no-such-id", str(_OWNER), _ROOT) is None
 
 
 async def test_returns_none_on_owner_mismatch(session):
     await _seed(session, "legacy-1", b'{"token":"abc"}')
     await session.commit()
-    # A different owner has no grant → SecretAccessError caught → fall back to SQLite.
-    assert await _read_unified_in_session(session, "legacy-1", str(uuid.uuid4())) is None
+    # A different owner has no grant (and no marker+owner match) → fall back to SQLite.
+    assert await _read_unified_in_session(session, "legacy-1", str(uuid.uuid4()), _ROOT) is None
+
+
+async def test_returns_none_on_corrupt_row(session):
+    # A marker-matched row with a malformed sealed_value (e.g. an unsupported format version)
+    # must fall back, not escape an exception that would break a live connector load.
+    secret = await _seed(session, "legacy-1", b'{"token":"abc"}')
+    secret.sealed_value = {"v": 999, "garbage": True}
+    await session.flush()
+    await session.commit()
+    assert await _read_unified_in_session(session, "legacy-1", str(_OWNER), _ROOT) is None

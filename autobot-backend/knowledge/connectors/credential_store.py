@@ -321,34 +321,56 @@ class ConnectorCredentialStore:
 # ---------------------------------------------------------------------------
 
 
-async def _read_unified_in_session(session, secret_id: str, owner_id: str) -> dict | None:
+async def _read_unified_in_session(session, secret_id: str, owner_id: str, root_key: bytes) -> dict | None:
     """Resolve + decrypt an imported credential within *session* (the testable core).
 
     Matches the legacy SQLite id via the ``imported_from_sqlite`` marker the 3c-1 import
-    stamped, then decrypts through the owner's user vault. Returns a SecretsService-shaped
-    dict (``{"created_by", "value"}``), or ``None`` to fall back to SQLite (not imported,
-    or the owner cannot open it).
+    stamped (scoped to *owner_id* for defence in depth), then decrypts through the owner's
+    user vault. Returns a SecretsService-shaped dict (``{"created_by", "value"}``), or
+    ``None`` to fall back to SQLite. Any unified-read failure — not imported, not
+    accessible, or a corrupt/partial row — returns ``None`` so the fallback can never be
+    fatal while SQLite is still authoritative.
     """
+    import uuid
+
     from sqlalchemy import select
 
-    from autobot_shared.secrets_envelope import DecryptionError
+    from autobot_shared.secrets_envelope import DecryptionError, UnsupportedFormatError
     from autobot_shared.secrets_vault import VaultKind, VaultRef
     from models.secret import Secret
-    from services.unified_secrets_service import SecretAccessError, UnifiedSecretsService
+    from services.unified_secrets_service import SecretAccessError, SecretNotFoundError, UnifiedSecretsService
+
+    try:
+        owner_uuid = uuid.UUID(str(owner_id))
+    except ValueError:
+        return None  # connector owner isn't a uuid → cannot match an imported row
 
     marker = Secret.extra_data["imported_from_sqlite"].astext
     row = (
-        (await session.execute(select(Secret).where(marker == str(secret_id), Secret.is_active.is_(True))))
+        (
+            await session.execute(
+                select(Secret).where(
+                    marker == str(secret_id), Secret.owner_id == owner_uuid, Secret.is_active.is_(True)
+                )
+            )
+        )
         .scalars()
         .first()
     )
     if row is None:
         return None  # not yet imported → SQLite fallback
     try:
-        plaintext = await UnifiedSecretsService().read(
+        plaintext = await UnifiedSecretsService(root_key=root_key).read(
             session, secret_id=row.id, accessible_vaults={VaultRef(VaultKind.USER, str(owner_id))}
         )
-    except (SecretAccessError, DecryptionError) as exc:
+    except (
+        SecretAccessError,
+        SecretNotFoundError,
+        DecryptionError,
+        UnsupportedFormatError,
+        KeyError,
+        ValueError,
+    ) as exc:
         logger.warning(
             "Unified read unusable for imported secret %s (owner %s): %s — falling back", secret_id, owner_id, exc
         )
@@ -366,13 +388,13 @@ async def _load_credential_from_unified(secret_id: str, owner_id: str) -> dict |
     from user_management.database import get_async_session_factory
 
     try:
-        load_root_key()
+        root_key = load_root_key()
     except RuntimeError:
         return None  # unified store not configured on this deployment
 
     factory = get_async_session_factory()
     async with factory() as session:
-        return await _read_unified_in_session(session, secret_id, owner_id)
+        return await _read_unified_in_session(session, secret_id, owner_id, root_key)
 
 
 # ---------------------------------------------------------------------------
