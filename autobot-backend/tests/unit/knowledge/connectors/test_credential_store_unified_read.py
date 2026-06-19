@@ -44,7 +44,7 @@ async def test_load_flag_off_uses_sqlite_only(monkeypatch):
     async def _boom(*a, **k):
         raise AssertionError("unified path must not be consulted when flag is off")
 
-    monkeypatch.setattr(cs, "_load_credential_from_unified", _boom)
+    monkeypatch.setattr(cs, "load_imported_credential", _boom)
     svc = _FakeSvc({"created_by": "u1", "value": json.dumps({"token": "sqlite"})})
     out = await ConnectorCredentialStore(svc).load("sid", {"host": "h"}, object, "u1")
     assert out == {"host": "h", "token": "sqlite"} and svc.get_calls == 1
@@ -56,7 +56,7 @@ async def test_load_flag_on_prefers_unified(monkeypatch):
     async def _unified(secret_id, owner_id):
         return {"created_by": owner_id, "value": json.dumps({"token": "unified"})}
 
-    monkeypatch.setattr(cs, "_load_credential_from_unified", _unified)
+    monkeypatch.setattr(cs, "load_imported_credential", _unified)
     svc = _FakeSvc({"created_by": "u1", "value": json.dumps({"token": "sqlite"})})
     out = await ConnectorCredentialStore(svc).load("sid", {"host": "h"}, object, "u1")
     assert out == {"host": "h", "token": "unified"} and svc.get_calls == 0  # SQLite untouched
@@ -68,7 +68,7 @@ async def test_load_flag_on_falls_back_when_not_imported(monkeypatch):
     async def _none(secret_id, owner_id):
         return None
 
-    monkeypatch.setattr(cs, "_load_credential_from_unified", _none)
+    monkeypatch.setattr(cs, "load_imported_credential", _none)
     svc = _FakeSvc({"created_by": "u1", "value": json.dumps({"token": "sqlite"})})
     out = await ConnectorCredentialStore(svc).load("sid", {"host": "h"}, object, "u1")
     assert out == {"host": "h", "token": "sqlite"} and svc.get_calls == 1

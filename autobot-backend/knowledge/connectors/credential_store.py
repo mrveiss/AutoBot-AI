@@ -17,6 +17,7 @@ from datetime import timedelta
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.time_utils import now_utc, parse_utc_iso
+from services.unified_credential_read import load_imported_credential
 
 logger = get_logger(__name__)
 
@@ -107,7 +108,7 @@ class ConnectorCredentialStore:
         """
         secret = None
         if _unified_read_enabled():
-            secret = await _load_credential_from_unified(secret_id, owner_id)
+            secret = await load_imported_credential(secret_id, owner_id)
         if secret is None:
             secret = await asyncio.get_running_loop().run_in_executor(
                 None,
@@ -314,87 +315,6 @@ class ConnectorCredentialStore:
         if fields is None:
             raise ValueError(f"{auth_cls.__name__} has no __sensitive_fields__ — cannot separate credentials")
         return fields
-
-
-# ---------------------------------------------------------------------------
-# Unified envelope store read path (expand phase — #10088 Task 3c-2)
-# ---------------------------------------------------------------------------
-
-
-async def _read_unified_in_session(session, secret_id: str, owner_id: str, root_key: bytes) -> dict | None:
-    """Resolve + decrypt an imported credential within *session* (the testable core).
-
-    Matches the legacy SQLite id via the ``imported_from_sqlite`` marker the 3c-1 import
-    stamped (scoped to *owner_id* for defence in depth), then decrypts through the owner's
-    user vault. Returns a SecretsService-shaped dict (``{"created_by", "value"}``), or
-    ``None`` to fall back to SQLite. Any unified-read failure — not imported, not
-    accessible, or a corrupt/partial row — returns ``None`` so the fallback can never be
-    fatal while SQLite is still authoritative.
-    """
-    import uuid
-
-    from sqlalchemy import select
-
-    from autobot_shared.secrets_envelope import DecryptionError, UnsupportedFormatError
-    from autobot_shared.secrets_vault import VaultKind, VaultRef
-    from models.secret import Secret
-    from services.unified_secrets_service import SecretAccessError, SecretNotFoundError, UnifiedSecretsService
-
-    try:
-        owner_uuid = uuid.UUID(str(owner_id))
-    except ValueError:
-        return None  # connector owner isn't a uuid → cannot match an imported row
-
-    marker = Secret.extra_data["imported_from_sqlite"].astext
-    row = (
-        (
-            await session.execute(
-                select(Secret).where(
-                    marker == str(secret_id), Secret.owner_id == owner_uuid, Secret.is_active.is_(True)
-                )
-            )
-        )
-        .scalars()
-        .first()
-    )
-    if row is None:
-        return None  # not yet imported → SQLite fallback
-    try:
-        plaintext = await UnifiedSecretsService(root_key=root_key).read(
-            session, secret_id=row.id, accessible_vaults={VaultRef(VaultKind.USER, str(owner_id))}
-        )
-    except (
-        SecretAccessError,
-        SecretNotFoundError,
-        DecryptionError,
-        UnsupportedFormatError,
-        KeyError,
-        ValueError,
-    ) as exc:
-        logger.warning(
-            "Unified read unusable for imported secret %s (owner %s): %s — falling back", secret_id, owner_id, exc
-        )
-        return None
-    return {"created_by": str(owner_id), "value": plaintext.decode("utf-8")}
-
-
-async def _load_credential_from_unified(secret_id: str, owner_id: str) -> dict | None:
-    """Acquire a session and read an imported credential from the unified store.
-
-    Returns ``None`` to fall back to SQLite when the unified store is not configured
-    (root key unset) on this deployment. See :func:`_read_unified_in_session`.
-    """
-    from autobot_shared.secrets_envelope import load_root_key
-    from user_management.database import get_async_session_factory
-
-    try:
-        root_key = load_root_key()
-    except RuntimeError:
-        return None  # unified store not configured on this deployment
-
-    factory = get_async_session_factory()
-    async with factory() as session:
-        return await _read_unified_in_session(session, secret_id, owner_id, root_key)
 
 
 # ---------------------------------------------------------------------------

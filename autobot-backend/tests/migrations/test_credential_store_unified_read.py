@@ -16,7 +16,7 @@ import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from autobot_shared.secrets_vault import VaultKind, VaultRef
-from knowledge.connectors.credential_store import _read_unified_in_session
+from services.unified_credential_read import read_imported_credential_in_session
 from services.unified_secrets_service import UnifiedSecretsService
 from tests.migrations.conftest import requires_postgres, run_alembic
 
@@ -54,21 +54,21 @@ async def _seed(session, legacy_id: str, value: bytes, owner=_OWNER):
 async def test_reads_imported_by_marker(session):
     await _seed(session, "legacy-1", b'{"token":"abc"}')
     await session.commit()
-    out = await _read_unified_in_session(session, "legacy-1", str(_OWNER), _ROOT)
+    out = await read_imported_credential_in_session(session, "legacy-1", str(_OWNER), _ROOT)
     assert out == {"created_by": str(_OWNER), "value": '{"token":"abc"}'}
 
 
 async def test_returns_none_when_not_imported(session):
     await _seed(session, "legacy-1", b'{"token":"abc"}')
     await session.commit()
-    assert await _read_unified_in_session(session, "no-such-id", str(_OWNER), _ROOT) is None
+    assert await read_imported_credential_in_session(session, "no-such-id", str(_OWNER), _ROOT) is None
 
 
 async def test_returns_none_on_owner_mismatch(session):
     await _seed(session, "legacy-1", b'{"token":"abc"}')
     await session.commit()
     # A different owner has no grant (and no marker+owner match) → fall back to SQLite.
-    assert await _read_unified_in_session(session, "legacy-1", str(uuid.uuid4()), _ROOT) is None
+    assert await read_imported_credential_in_session(session, "legacy-1", str(uuid.uuid4()), _ROOT) is None
 
 
 async def test_returns_none_on_corrupt_row(session):
@@ -78,4 +78,4 @@ async def test_returns_none_on_corrupt_row(session):
     secret.sealed_value = {"v": 999, "garbage": True}
     await session.flush()
     await session.commit()
-    assert await _read_unified_in_session(session, "legacy-1", str(_OWNER), _ROOT) is None
+    assert await read_imported_credential_in_session(session, "legacy-1", str(_OWNER), _ROOT) is None
