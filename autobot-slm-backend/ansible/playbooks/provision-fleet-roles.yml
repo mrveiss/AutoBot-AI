@@ -662,6 +662,18 @@
   hosts: all
   gather_facts: false
 
+  vars:
+    # #10317: the wizard runs this playbook with a temp inventory that does NOT
+    # load group_vars/all.yml, so slm_manager_inventory_host is undefined here.
+    # hostvars[<undefined>] is a fatal Jinja error evaluated BEFORE failed_when
+    # applies, so it fails the whole provision (failed=1) and blocks the wizard
+    # at the provisioning step. Resolve the SLM API host defensively: use the
+    # manager's ansible_host when that host is known in hostvars, else loopback.
+    _slm_api_host: >-
+      {{ hostvars[slm_manager_inventory_host].ansible_host
+         if (slm_manager_inventory_host | default('')) in (hostvars | default({}))
+         else '127.0.0.1' }}
+
   tasks:
     - name: "Mark-synced | Get deployed commit (once on controller)"
       ansible.builtin.command:
@@ -677,7 +689,7 @@
 
     - name: "Mark-synced | Login to SLM API"
       ansible.builtin.uri:
-        url: "https://{{ hostvars[slm_manager_inventory_host]['ansible_host'] | default('127.0.0.1') }}/slm/api/auth/login"
+        url: "https://{{ _slm_api_host }}/slm/api/auth/login"
         method: POST
         body_format: json
         body:
@@ -705,7 +717,7 @@
 
     - name: "Mark-synced | POST to /api/code-sync/nodes/{{ inventory_hostname }}/mark-synced"
       ansible.builtin.uri:
-        url: "https://{{ hostvars[slm_manager_inventory_host]['ansible_host'] | default('127.0.0.1') }}/slm/api/code-sync/nodes/{{ inventory_hostname }}/mark-synced"
+        url: "https://{{ _slm_api_host }}/slm/api/code-sync/nodes/{{ inventory_hostname }}/mark-synced"
         method: POST
         headers:
           Authorization: "Bearer {{ _slm_login.json.access_token | default('') }}"
