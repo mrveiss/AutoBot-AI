@@ -273,6 +273,18 @@ class WorkflowControlRequest(BaseModel):
     user_input: str | None = None
 
 
+class WorkflowStartRequest(BaseModel):
+    """Optional body for ``POST /start_workflow/{id}`` (GH#9037).
+
+    ``provider_credentials`` maps a provider name (anthropic, openai, ollama,
+    custom_openai, …) to its settings dict (``api_key``, ``base_url``, …). When
+    present, these credentials override the stored/global provider config for
+    this single run only — they are never persisted and are redacted from logs.
+    """
+
+    provider_credentials: Dict[str, Dict[str, Any]] | None = None
+
+
 # Issue #390: Plan Approval API Models
 class PlanApprovalResponse(BaseModel):
     """
