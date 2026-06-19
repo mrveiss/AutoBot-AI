@@ -20,7 +20,7 @@ from autobot_shared.logging_manager import get_logger
 from models.secret import Secret, SecretScope
 from services.secrets_service import SecretsService
 
-from .provider_registry import RunCredentialContext, set_run_credentials
+from .run_credentials import RunCredentialContext, set_run_credentials
 
 logger = get_logger(__name__)
 
