@@ -112,6 +112,29 @@ class SecretValue(BaseModel):
     value: str
 
 
+class VaultAccessOut(BaseModel):
+    vault: str
+    kind: str
+    id: str | None
+    members: list[str]
+
+
+class SecretAccessOut(BaseModel):
+    secret_id: str
+    owner_vault: str
+    grants: list[VaultAccessOut]
+    effective_users: list[str]
+
+    @classmethod
+    def of(cls, report) -> "SecretAccessOut":
+        return cls(
+            secret_id=report.secret_id,
+            owner_vault=report.owner_vault,
+            grants=[VaultAccessOut(vault=g.vault, kind=g.kind, id=g.id, members=g.members) for g in report.grants],
+            effective_users=report.effective_users,
+        )
+
+
 @router.post("", response_model=SecretMetadata, status_code=status.HTTP_201_CREATED)
 async def create_secret(
     body: CreateSecretBody,
@@ -160,6 +183,22 @@ async def read_secret(
     except (SecretAccessError, SecretNotFoundError) as exc:
         raise _mapped(exc)
     return SecretValue(value=value.decode("utf-8"))
+
+
+@router.get("/{secret_id}/access", response_model=SecretAccessOut)
+async def secret_access(
+    secret_id: uuid.UUID,
+    who: tuple[uuid.UUID, set[str]] = Depends(principal),
+    session: AsyncSession = Depends(get_session),
+    coordinator: SecretsCoordinator = Depends(get_coordinator),
+) -> SecretAccessOut:
+    """Who can access this secret: owner + every grantee vault, resolved to member users."""
+    user_id, perms = who
+    try:
+        report = await coordinator.describe_access(session, user_id=user_id, permissions=perms, secret_id=secret_id)
+    except (SecretAccessError, SecretNotFoundError, ValueError) as exc:
+        raise _mapped(exc)
+    return SecretAccessOut.of(report)
 
 
 @router.put("/{secret_id}", response_model=SecretMetadata)

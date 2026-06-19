@@ -39,6 +39,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from autobot_shared.secrets_vault import VaultRef
 from models.secret import Secret
 from models.secret_grant import SecretGrant
+from services.secrets_access_audit import SecretAccessReport, describe_secret_access
 from services.secrets_authz import PrincipalFacts, authorize
 from services.secrets_principal_resolver import resolve_principal_facts
 from services.unified_secrets_service import (
@@ -98,6 +99,16 @@ class SecretsCoordinator:
     async def list(self, session: AsyncSession, *, user_id: uuid.UUID, permissions: set[str]) -> list[Secret]:
         facts = await self._facts(session, user_id, permissions)
         return await self._service.list_for_vaults(session, accessible_vaults=facts.accessible_vaults())
+
+    async def describe_access(
+        self, session: AsyncSession, *, user_id: uuid.UUID, permissions: set[str], secret_id: uuid.UUID
+    ) -> SecretAccessReport:
+        """Who can access *secret_id*. Authorized to callers who may read the owner vault (or admins)."""
+        facts = await self._facts(session, user_id, permissions)
+        owner = await self._owner_vault(session, secret_id)  # raises SecretNotFoundError when absent
+        if not authorize(facts, "read", owner):
+            raise SecretAccessError(f"not authorized to view access for secret {secret_id}")
+        return await describe_secret_access(session, secret_id)
 
     async def share(
         self,
