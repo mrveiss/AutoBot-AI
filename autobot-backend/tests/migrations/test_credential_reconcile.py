@@ -109,3 +109,29 @@ async def test_reconcile_aborts_when_sqlite_missing(session, tmp_path):
     await session.commit()
     assert report.aborted is True and report.deleted == 0
     assert (await _read(session, "keep"))["value"] == "v"
+
+
+async def test_reconcile_aborts_on_empty_canonical_table(session, tmp_path):
+    # Present-but-EMPTY secrets table (e.g. an auto-created secrets.db at a misconfigured path):
+    # a populated mirror against an empty canonical store must abort, never mass-delete.
+    db = str(tmp_path / "secrets.db")
+    _make_db(db, [])  # table exists, zero rows
+    await _seed_unified(session, "keep", "v")
+    await session.commit()
+    report = await reconcile_connector_credentials(session, sqlite_path=db, fernet=_FERNET, root_key=_ROOT)
+    await session.commit()
+    assert report.aborted is True and report.deleted == 0
+    assert (await _read(session, "keep"))["value"] == "v"
+
+
+async def test_reconcile_aborts_on_total_wipe(session, tmp_path):
+    # Canonical has other secrets but every mirrored copy is revoked → "delete all" is suspicious → abort.
+    db = str(tmp_path / "secrets.db")
+    _make_db(db, [{"id": "rev1", "active": 0, "value": "a"}, {"id": "rev2", "active": 0, "value": "b"}])
+    await _seed_unified(session, "rev1", "a")
+    await _seed_unified(session, "rev2", "b")
+    await session.commit()
+    report = await reconcile_connector_credentials(session, sqlite_path=db, fernet=_FERNET, root_key=_ROOT)
+    await session.commit()
+    assert report.aborted is True and report.deleted == 0
+    assert (await _read(session, "rev1"))["value"] == "a"
