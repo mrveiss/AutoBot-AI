@@ -16,6 +16,7 @@ from orchestration.dag_executor import (
     NodeType,
     WorkflowDAG,
     _evaluate_condition,
+    _evaluate_switch,
     build_dag,
     workflow_has_condition_nodes,
 )
@@ -401,3 +402,103 @@ class TestDAGExecutorCriteriaEvaluator:
         executor = DAGExecutor(_noop_executor)
         ctx = await executor.execute(dag, "wf_no_criteria")
         assert ctx.criteria_evaluation == {}
+
+
+# ---------------------------------------------------------------------------
+# _evaluate_switch + DAGExecutor switch-node routing (GH#9036)
+# ---------------------------------------------------------------------------
+
+
+def _make_switch_node(nid: str, switch_on: str) -> Dict[str, Any]:
+    return {"id": nid, "type": "switch", "data": {"switch_on": switch_on}}
+
+
+class TestEvaluateSwitch:
+    def _ctx(self, results: Dict[str, Any]) -> DAGExecutionContext:
+        ctx = DAGExecutionContext(workflow_id="wf")
+        ctx.step_results = results
+        return ctx
+
+    def test_resolves_string_case(self):
+        node = DAGNode("sw", NodeType.SWITCH, {"switch_on": "results['lang']['code']"})
+        ctx = self._ctx({"lang": {"code": "es"}})
+        assert _evaluate_switch(node, ctx) == "es"
+
+    def test_missing_switch_on_routes_default(self):
+        node = DAGNode("sw", NodeType.SWITCH, {"switch_on": ""})
+        assert _evaluate_switch(node, self._ctx({})) == "default"
+
+    def test_eval_error_routes_default(self):
+        node = DAGNode("sw", NodeType.SWITCH, {"switch_on": "results['missing']['x']"})
+        assert _evaluate_switch(node, self._ctx({})) == "default"
+
+
+class TestDAGExecutorSwitch:
+    def _switch_dag(self, switch_on: str) -> WorkflowDAG:
+        """start → switch → (case_es | case_fr | case_default)."""
+        nodes = _make_step_nodes("start", "case_es", "case_fr", "case_default") + [_make_switch_node("sw", switch_on)]
+        edges = [
+            {"source": "start", "target": "sw"},
+            {"source": "sw", "target": "case_es", "label": "es"},
+            {"source": "sw", "target": "case_fr", "label": "fr"},
+            {"source": "sw", "target": "case_default", "label": "default"},
+        ]
+        return WorkflowDAG(nodes, edges)
+
+    async def _run(self, dag: WorkflowDAG) -> tuple[List[str], DAGExecutionContext]:
+        executed: List[str] = []
+
+        async def recording_executor(node: DAGNode, ctx: DAGExecutionContext) -> Dict[str, Any]:
+            executed.append(node.node_id)
+            if node.node_id == "start":
+                # Seed the discriminant the switch expression reads.
+                ctx.step_results["lang"] = {"code": ctx.step_results.get("_seed", "es")}
+            return {"success": True}
+
+        executor = DAGExecutor(recording_executor)
+        ctx = await executor.execute(dag, "wf_switch")
+        return executed, ctx
+
+    @pytest.mark.asyncio
+    async def test_case_match_routes_to_matching_branch(self):
+        dag = self._switch_dag("results['lang']['code']")
+        executed, ctx = await self._run(dag)
+        assert ctx.status == TaskStatus.COMPLETED.value
+        assert "case_es" in executed
+        assert "case_fr" not in executed
+        assert "case_default" not in executed
+        assert ctx.step_results["sw"]["case_value"] == "es"
+
+    @pytest.mark.asyncio
+    async def test_no_case_match_routes_to_default(self):
+        # switch_on resolves to a value with no matching labeled edge.
+        dag = self._switch_dag("'unmatched'")
+        executed, ctx = await self._run(dag)
+        assert "case_default" in executed
+        assert "case_es" not in executed
+        assert "case_fr" not in executed
+
+
+# ---------------------------------------------------------------------------
+# Safe expression evaluation — no eval() escape (GH#9036)
+# ---------------------------------------------------------------------------
+
+
+class TestConditionSafeEvaluation:
+    def _ctx(self) -> DAGExecutionContext:
+        return DAGExecutionContext(workflow_id="wf")
+
+    def test_subclasses_escape_blocked(self):
+        """__class__/__bases__ sandbox escape must NOT evaluate (returns False)."""
+        node = DAGNode("c", NodeType.CONDITION, {"condition": "results.__class__.__bases__"})
+        assert _evaluate_condition(node, self._ctx()) is False
+
+    def test_attribute_access_blocked(self):
+        node = DAGNode("c", NodeType.CONDITION, {"condition": "results.keys"})
+        assert _evaluate_condition(node, self._ctx()) is False
+
+    def test_subscript_comparison_true(self):
+        ctx = self._ctx()
+        ctx.step_results = {"step1": {"exit_code": 0}}
+        node = DAGNode("c", NodeType.CONDITION, {"condition": "results['step1']['exit_code'] == 0"})
+        assert _evaluate_condition(node, ctx) is True
