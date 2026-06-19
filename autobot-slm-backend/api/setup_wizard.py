@@ -505,6 +505,12 @@ async def _generate_dynamic_inventory(
         local_ips,
         injected_ai_stack,
     ) = result
+    # #9965: stamp node_roles (+ deps) onto each host so role_active_facts.yml
+    # activates roles via node_roles. Without this the wizard inventory only
+    # carries group membership, and roles whose mapped group isn't the one
+    # role_*_active checks (tts-worker, browser-service) silently never deploy —
+    # the provision reports failed=0 while optional roles stay inactive.
+    _apply_role_host_vars(hosts, _db_nodes, all_node_roles)
     children, ansible_groups = _build_inventory_children(hosts, all_node_roles, node_id_to_hostname)
     infra_vars = _build_infra_vars(all_active, all_ip_map, local_ips)
     # For co-located ai-stack (injected, no dedicated AI stack VM), _build_infra_vars
