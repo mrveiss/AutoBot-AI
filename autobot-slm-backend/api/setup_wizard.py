@@ -265,7 +265,11 @@ def _apply_role_host_vars(
     for nr in all_node_roles:
         node_id_to_roles.setdefault(nr.node_id, []).append(nr.role_name)
     for node in db_nodes:
-        inv_name = node.ansible_target
+        # #9965: hosts is keyed by the SANITIZED ansible name (_fetch_inventory_data
+        # uses _sanitize_ansible_name), so the raw node.ansible_target never matched
+        # the host key (e.g. '00-SLM-Manager' vs 'node_00_SLM_Manager') and these
+        # per-host vars (node_roles, colocation, etc.) were silently never applied.
+        inv_name = _sanitize_ansible_name(node.ansible_target)
         if inv_name not in hosts:
             continue
         if node.node_id in node_id_to_roles:
@@ -301,7 +305,11 @@ def _apply_colocation_vars(
     _backend_roles = {"backend", "autobot-backend"}
     colocated_frontend_detected = False
     for node in db_nodes:
-        inv_name = node.ansible_target
+        # #9965: hosts is keyed by the SANITIZED ansible name (_fetch_inventory_data
+        # uses _sanitize_ansible_name), so the raw node.ansible_target never matched
+        # the host key (e.g. '00-SLM-Manager' vs 'node_00_SLM_Manager') and these
+        # per-host vars (node_roles, colocation, etc.) were silently never applied.
+        inv_name = _sanitize_ansible_name(node.ansible_target)
         if inv_name not in hosts:
             continue
         roles = set(hosts[inv_name].get("node_roles", []))
@@ -351,7 +359,11 @@ def _inject_co_located_ai_stack(
     injected: list[str] = []
 
     for node in db_nodes:
-        inv_name = node.ansible_target
+        # #9965: hosts is keyed by the SANITIZED ansible name (_fetch_inventory_data
+        # uses _sanitize_ansible_name), so the raw node.ansible_target never matched
+        # the host key (e.g. '00-SLM-Manager' vs 'node_00_SLM_Manager') and these
+        # per-host vars (node_roles, colocation, etc.) were silently never applied.
+        inv_name = _sanitize_ansible_name(node.ansible_target)
         if inv_name not in hosts:
             continue
         roles = hosts[inv_name].get("node_roles", [])
