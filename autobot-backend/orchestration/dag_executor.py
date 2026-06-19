@@ -39,6 +39,7 @@ from typing import Any, Callable, Coroutine, Dict, List, Set
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
 from constants.status_enums import TaskStatus
+from utils.safe_expression_evaluator import safe_evaluator
 
 from .success_criteria import SuccessCriteriaEvaluator
 
@@ -167,7 +168,16 @@ class WorkflowDAG:
                 logger.warning("DAG edge (%s → %s) references unknown node; skipping", src, tgt)
                 continue
             label_raw = raw.get("label")
-            label: bool | None = None if label_raw is None else bool(label_raw)
+            # Preserve bool labels (condition branches) and str labels
+            # (switch-case names) as-is; coerce anything else to bool (GH#9036).
+            # A blanket bool() here used to destroy switch-case string labels,
+            # so case routing silently fell through to the default/unconditional
+            # path.
+            label: bool | str | None
+            if label_raw is None or isinstance(label_raw, (bool, str)):
+                label = label_raw
+            else:
+                label = bool(label_raw)
             edge = DAGEdge(source=src, target=tgt, label=label)
             self._successors[src].append(edge)
             self._predecessors[tgt].append(src)
@@ -336,6 +346,15 @@ def _evaluate_jsonpath_expr(expr: str, ctx: DAGExecutionContext) -> bool:
     return False
 
 
+def _safe_eval_context(ctx: DAGExecutionContext) -> Dict[str, Any]:
+    """Build the read-only namespace passed to ``safe_evaluator`` (GH#9036).
+
+    Exposes ``results`` (step outputs) plus the ``True``/``False`` names so
+    bare-boolean conditions resolve. No callables or builtins are exposed.
+    """
+    return {"results": ctx.step_results, "True": True, "False": False}
+
+
 def _evaluate_condition(node: DAGNode, ctx: DAGExecutionContext) -> bool:
     """
     Evaluate a condition expression stored in *node.data["condition"]*.
@@ -346,16 +365,19 @@ def _evaluate_condition(node: DAGNode, ctx: DAGExecutionContext) -> bool:
        ``$.step1.status == "success"`` — parsed into lhs/op/rhs and the
        lhs path is resolved via jsonpath_ng (or dotted-key fallback).
 
-    2. **Python eval** — any other expression is evaluated against a
-       restricted namespace containing ``results``, ``True``, ``False``,
-       ``len``, ``str``, ``int``, ``float``, ``bool``.
+    2. **Safe expression** — any other expression is evaluated by the
+       canonical AST-based ``SafeExpressionEvaluator`` against a read-only
+       namespace exposing only ``results``, ``True``, and ``False`` (GH#9036).
 
     Returns True if the condition is truthy, False otherwise.  On any
     evaluation error the condition defaults to False and a warning is
     logged.
 
-    Security note: eval is intentionally sandboxed to a read-only namespace
-    and cannot import modules or access builtins beyond the allowed set.
+    Security note: expressions are evaluated via ``safe_evaluator`` (AST walk),
+    NOT ``eval()``. The evaluator supports only comparisons, boolean/arithmetic
+    operators, and dict/list subscripts — it has no ``Attribute`` node support,
+    so the ``__class__``/``__bases__`` sandbox-escape path is structurally
+    impossible.
     """
     expr: str = node.data.get("condition", "")
     if not expr:
@@ -367,20 +389,8 @@ def _evaluate_condition(node: DAGNode, ctx: DAGExecutionContext) -> bool:
         logger.debug("Condition node %s (JSONPath): expr=%r → %s", node.node_id, expr, result)
         return result
 
-    safe_globals: Dict[str, Any] = {"__builtins__": {}}
-    safe_locals: Dict[str, Any] = {
-        "results": ctx.step_results,
-        "True": True,
-        "False": False,
-        "len": len,
-        "str": str,
-        "int": int,
-        "float": float,
-        "bool": bool,
-    }
-
     try:
-        result = eval(expr, safe_globals, safe_locals)  # noqa: S307  # nosec B307
+        result = safe_evaluator.evaluate(expr, _safe_eval_context(ctx))
         logger.debug("Condition node %s: expr=%r → %s", node.node_id, expr, bool(result))
         return bool(result)
     except Exception as exc:
@@ -397,30 +407,18 @@ def _evaluate_switch(node: DAGNode, ctx: DAGExecutionContext) -> str:
     """
     Resolve the switch discriminant for *node* and return it as a string.
 
-    Reads ``node.data["switch_on"]`` — a variable reference compatible with
-    the condition node's safe eval namespace (e.g.
-    ``results["step1"]["output"]`` or a bare key name).  Returns
-    ``"default"`` on any error so routing always has a valid case to match.
+    Reads ``node.data["switch_on"]`` — a variable reference resolved by the
+    canonical ``safe_evaluator`` (e.g. ``results["step1"]["output"]``) (GH#9036).
+    Returns ``"default"`` on any error so routing always has a valid case to
+    match.
     """
     switch_on: str = node.data.get("switch_on", "")
     if not switch_on:
         logger.warning("Switch node %s has no 'switch_on' key; routing to default", node.node_id)
         return "default"
 
-    safe_globals: Dict[str, Any] = {"__builtins__": {}}
-    safe_locals: Dict[str, Any] = {
-        "results": ctx.step_results,
-        "True": True,
-        "False": False,
-        "len": len,
-        "str": str,
-        "int": int,
-        "float": float,
-        "bool": bool,
-    }
-
     try:
-        value = eval(switch_on, safe_globals, safe_locals)  # noqa: S307  # nosec B307
+        value = safe_evaluator.evaluate(switch_on, _safe_eval_context(ctx))
         case_value = str(value)
         logger.debug("Switch node %s: switch_on=%r → %r", node.node_id, switch_on, case_value)
         return case_value
