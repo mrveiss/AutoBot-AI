@@ -643,46 +643,40 @@ describe('useModal composable', () => {
   // Performance Tests
   // ========================================
 
-  describe('useModal - performance', () => {
-    it('should execute quickly for repeated open/close calls', async () => {
+  // #10275: these assert correctness at scale, NOT wall-clock time. Wall-clock
+  // assertions (toBeLessThan(<ms>)) are flaky on shared/loaded CI runners and
+  // catch no real regression — perf belongs in dedicated benchmarks, not here.
+  describe('useModal - bulk operations', () => {
+    it('stays consistent across many repeated open/close calls', async () => {
       const modal = useModal()
-      const startTime = performance.now()
 
       for (let i = 0; i < 100; i++) {
         await modal.open()
+        expect(modal.isOpen.value).toBe(true)
         await modal.close()
+        expect(modal.isOpen.value).toBe(false)
       }
 
-      const duration = performance.now() - startTime
-
-      // 100 open/close cycles should complete in less than 50ms
-      expect(duration).toBeLessThan(50)
+      expect(modal.isOpen.value).toBe(false)
     })
 
-    it('should handle creating many modals efficiently', () => {
-      const startTime = performance.now()
-
+    it('creates many independent modals, each initially closed', () => {
       const names = Array.from({ length: 50 }, (_, i) => `modal${i}`)
       const modals = useModals(names)
 
-      const duration = performance.now() - startTime
-
       expect(Object.keys(modals).length).toBe(50)
-      expect(duration).toBeLessThan(10)
+      expect(Object.values(modals).every((m) => m.isOpen.value === false)).toBe(true)
     })
 
-    it('should handle modal group operations efficiently', async () => {
+    it('opens and closes a whole modal group correctly', async () => {
       const names = Array.from({ length: 20 }, (_, i) => `modal${i}`)
-      const { _modals, closeAll, openAll } = useModalGroup(names)
-
-      const startTime = performance.now()
+      const { hasOpenModal, allClosed, closeAll, openAll } = useModalGroup(names)
 
       await openAll()
+      expect(hasOpenModal.value).toBe(true)
+
       await closeAll()
-
-      const duration = performance.now() - startTime
-
-      expect(duration).toBeLessThan(20)
+      expect(allClosed.value).toBe(true)
     })
   })
 
