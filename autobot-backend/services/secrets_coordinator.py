@@ -103,10 +103,13 @@ class SecretsCoordinator:
     async def describe_access(
         self, session: AsyncSession, *, user_id: uuid.UUID, permissions: set[str], secret_id: uuid.UUID
     ) -> SecretAccessReport:
-        """Who can access *secret_id*. Authorized to callers who may read the owner vault (or admins)."""
+        """Who can access *secret_id*. Gated on **manage** authority (``share``): you may audit who
+        has access only if you may change who has access — i.e. the owner, an admin, or a company
+        OWNER/ADMIN/LEAD — so a mere reader (company guest/member, plain grantee) cannot enumerate
+        the cross-vault roster."""
         facts = await self._facts(session, user_id, permissions)
         owner = await self._owner_vault(session, secret_id)  # raises SecretNotFoundError when absent
-        if not authorize(facts, "read", owner):
+        if not authorize(facts, "share", owner):
             raise SecretAccessError(f"not authorized to view access for secret {secret_id}")
         return await describe_secret_access(session, secret_id)
 

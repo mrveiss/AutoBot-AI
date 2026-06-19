@@ -89,7 +89,13 @@ async def describe_secret_access(session, secret_id) -> SecretAccessReport | Non
     from models.secret import Secret
     from models.secret_grant import SecretGrant
 
-    secret = (await session.execute(select(Secret).where(Secret.id == secret_id))).scalars().first()
+    # Only envelope-backed rows (sealed_value set) are governed here — matches the coordinator's
+    # _owner_vault gate, so a direct call can't report access for a legacy/value-less row.
+    secret = (
+        (await session.execute(select(Secret).where(Secret.id == secret_id, Secret.sealed_value.isnot(None))))
+        .scalars()
+        .first()
+    )
     if secret is None:
         return None
 

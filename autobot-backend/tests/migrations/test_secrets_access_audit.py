@@ -129,3 +129,20 @@ async def test_coordinator_authorizes_owner_denies_stranger(session):
     # missing secret → 404-equivalent
     with pytest.raises(SecretNotFoundError):
         await coord.describe_access(session, user_id=_OWNER, permissions=set(), secret_id=uuid.uuid4())
+
+
+async def test_company_member_cannot_audit(session):
+    # H1: a company MEMBER can read/write company secrets but lacks 'share' authority, so it must
+    # NOT be able to enumerate who-has-access. Only OWNER/ADMIN/LEAD (manage authority) or admins may.
+    from services.secrets_coordinator import SecretsCoordinator
+    from services.unified_secrets_service import SecretAccessError
+
+    await _seed_memberships(session)  # _BOB is a "member" of _COMPANY
+    coord = SecretsCoordinator(service=UnifiedSecretsService(root_key=_ROOT))
+    company = VaultRef(VaultKind.COMPANY, str(_COMPANY))
+    secret = await coord.create(
+        session, user_id=_BOB, permissions=set(), owner_vault=company, name="cs", secret_type="password", plaintext=b"v"
+    )
+    await session.commit()
+    with pytest.raises(SecretAccessError):
+        await coord.describe_access(session, user_id=_BOB, permissions=set(), secret_id=secret.id)
