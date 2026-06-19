@@ -1,0 +1,161 @@
+/* Copyright 2025-2026 mrveiss
+ * SPDX-License-Identifier: Apache-2.0
+ * AutoBot - AI-Powered Automation Platform
+ * Author: mrveiss
+ *
+ * Shared styles for the code-review + performance dashboards (#10301, part of #9859).
+ * Byte-identical scoped-CSS rule blocks; selectors are disjoint from each
+ * including component's remaining rules ⇒ <style scoped src> is order-
+ * independent and identical to inlining.
+ */
+
+.input-group input {
+  padding: var(--spacing-2-5) var(--spacing-3-5);
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+}
+
+.input-group input:focus {
+  outline: none;
+  border-color: var(--accent-color);
+}
+
+.input-group input:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  font-size: var(--text-xl);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+/* Issues List */
+.issues-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3);
+}
+
+.issue-card {
+  padding: var(--spacing-3-5);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-md);
+  border-left: 3px solid;
+  cursor: pointer;
+  transition: all var(--duration-200);
+}
+
+.issue-card:hover {
+  background: var(--bg-quaternary);
+}
+
+.issue-header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  margin-bottom: var(--spacing-2);
+}
+
+.detail-title h4 {
+  margin: var(--spacing-0);
+  font-size: var(--text-base);
+  color: var(--text-primary);
+}
+
+.line-info {
+  color: var(--text-secondary);
+  margin-left: var(--spacing-2);
+}
+
+.description {
+  margin: var(--spacing-0);
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.suggestion-box {
+  display: flex;
+  gap: var(--spacing-3);
+  padding: var(--spacing-3-5);
+  background: rgba(16, 185, 129, 0.1);
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.suggestion-icon {
+  font-size: var(--text-xl);
+}
+
+.suggestion-box p {
+  margin: var(--spacing-0);
+  color: var(--text-primary);
+  line-height: 1.4;
+}
+
+.code-snippet {
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+/* Modal */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: var(--z-modal-backdrop);
+}
+
+.modal {
+  background: var(--bg-secondary);
+  border-radius: var(--radius-xl);
+  width: 90%;
+  max-width: 600px;
+  max-height: 80vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--spacing-4) var(--spacing-5);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.modal-content {
+  padding: var(--spacing-5);
+  overflow-y: auto;
+}
+
+.pattern-category {
+  margin-bottom: var(--spacing-6);
+}
+
+.pattern-category h4 {
+  margin: var(--spacing-0) var(--spacing-0) var(--spacing-3) var(--spacing-0);
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+}
+
+.pattern-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2);
+}
+
+.pattern-item.enabled {
+  opacity: 1;
+}
