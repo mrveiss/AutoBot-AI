@@ -89,24 +89,33 @@ jobs:
         working-directory: autobot-frontend
         run: npm run build-storybook -- --output-dir storybook-static --quiet
 
+      - name: Pre-fetch static file server
+        working-directory: autobot-frontend
+        # #10316: warm the npx cache for http-server in its OWN step. Previously
+        # `npx http-server … &` cold-fetched the package on first run, and that
+        # download ate most of the 30s readiness budget below → false
+        # "Storybook did not become ready" failures (a race, not a real error).
+        run: npx --yes http-server --version
+
       - name: Serve static Storybook on :6006
         working-directory: autobot-frontend
         # Background the server; visual tests connect to it. Run with
         # SKIP_STORYBOOK_START=1 so playwright.visual.config.ts does NOT
-        # try to spawn its own `npm run storybook -- --ci`.
-        run: npx http-server storybook-static -p 6006 --silent &
+        # try to spawn its own `npm run storybook -- --ci`. --no-install uses
+        # the binary warmed above so the server binds immediately (#10316).
+        run: npx --no-install http-server storybook-static -p 6006 --silent &
 
       - name: Wait for Storybook to be ready
         run: |
           set -euo pipefail
-          for i in $(seq 1 30); do
+          for i in $(seq 1 90); do
             if curl -fsS http://localhost:6006/index.json >/dev/null 2>&1; then
               echo "Storybook ready after ${i}s"
               exit 0
             fi
             sleep 1
           done
-          echo "::error::Storybook did not become ready on :6006 within 30s" >&2
+          echo "::error::Storybook did not become ready on :6006 within 90s" >&2
           exit 1
 
       - name: Run visual regression tests
