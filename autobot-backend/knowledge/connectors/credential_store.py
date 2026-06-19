@@ -18,18 +18,25 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.time_utils import now_utc, parse_utc_iso
 from services.unified_credential_read import load_imported_credential
+from services.unified_credential_write import delete_credential_from_unified, mirror_credential_to_unified
 
 logger = get_logger(__name__)
 
-# Feature flag (expand/contract cutover — #10088 Task 3c-2). When enabled, credential
-# READS try the unified envelope store first (matching the legacy id via the
-# ``imported_from_sqlite`` marker the 3c-1 import stamped) and fall back to the legacy
-# SQLite store. Default off → behaviour is byte-identical to before. Writes are unchanged.
+# Feature flags (expand/contract cutover — #10088 Task 3c-2), both default off → behaviour
+# is byte-identical to before. READ: reads try the unified envelope store first (matching the
+# legacy id via the ``imported_from_sqlite`` marker) and fall back to SQLite. WRITE: every
+# write also best-effort mirrors into the unified store (SQLite stays canonical). The two are
+# independent so dual-write can be enabled first to populate the unified store, then read.
 UNIFIED_READ_ENV = "AUTOBOT_SECRETS_UNIFIED_READ"
+UNIFIED_WRITE_ENV = "AUTOBOT_SECRETS_UNIFIED_WRITE"
 
 
 def _unified_read_enabled() -> bool:
     return os.environ.get(UNIFIED_READ_ENV, "false").strip().lower() in ("1", "true", "yes")
+
+
+def _unified_write_enabled() -> bool:
+    return os.environ.get(UNIFIED_WRITE_ENV, "false").strip().lower() in ("1", "true", "yes")
 
 
 _AUTH_TYPE_TO_SECRET_TYPE: dict = {
@@ -89,6 +96,10 @@ class ConnectorCredentialStore:
                 created_by=owner_id,
             ),
         )
+        if _unified_write_enabled():
+            await mirror_credential_to_unified(
+                result["id"], owner_id, json.dumps(creds, ensure_ascii=False), name=name, secret_type=secret_type
+            )
         return result["id"], sanitized
 
     async def load(
@@ -157,6 +168,8 @@ class ConnectorCredentialStore:
                 updated_by=owner_id,
             ),
         )
+        if _unified_write_enabled():
+            await mirror_credential_to_unified(secret_id, owner_id, new_value)
 
     async def revoke(self, secret_id: str, owner_id: str) -> None:
         """Delete the secret. Called on connector delete."""
@@ -167,6 +180,8 @@ class ConnectorCredentialStore:
                 deleted_by=owner_id,
             ),
         )
+        if _unified_write_enabled():
+            await delete_credential_from_unified(secret_id, owner_id)
 
     # ------------------------------------------------------------------
     # OAuth 2.0 authorization-code tokens (ADR-007 §7 / GH#9019)
@@ -202,6 +217,14 @@ class ConnectorCredentialStore:
                 metadata={"provider": provider, "connector_id": connector_id},
             ),
         )
+        if _unified_write_enabled():
+            await mirror_credential_to_unified(
+                result["id"],
+                owner_id,
+                json.dumps(creds, ensure_ascii=False),
+                name=name,
+                secret_type="connector_oauth_token",  # nosec B106 - SecretType label, not a credential
+            )
         return result["id"]
 
     async def get_access_token(self, secret_id: str, owner_id: str) -> str:
@@ -251,6 +274,8 @@ class ConnectorCredentialStore:
                 updated_by=owner_id,
             ),
         )
+        if _unified_write_enabled():
+            await mirror_credential_to_unified(secret_id, owner_id, json.dumps(creds, ensure_ascii=False))
         return creds["access_token"]
 
     # ------------------------------------------------------------------
