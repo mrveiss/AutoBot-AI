@@ -95,6 +95,7 @@ from api.transcripts import router as transcripts_router  # Issue #9863, MVA-217
 from api.usage import router as usage_router  # Issue #1807
 from api.user_management.router import router as user_management_router  # Issue #1801
 from api.user_provider_credentials import router as user_provider_credentials_router  # GH#9037
+from api.users import router as users_router  # GH#10352 — /api/users/* (preferences) was never registered
 from api.vnc_manager import router as vnc_router
 from api.vnc_mcp import router as vnc_mcp_router
 from api.vnc_proxy import router as vnc_proxy_router
@@ -163,6 +164,9 @@ def _get_system_routers() -> list:
             ["user-provider-credentials"],
             "user_provider_credentials",
         ),  # GH#9037
+        # GH#10352 — users_router carries its own prefix="/users" → register with
+        # empty prefix so the loop yields /api/users/* (was never registered → 404)
+        (users_router, "", ["users"], "users"),
         (
             mobile_devices_router,
             "/devices",
