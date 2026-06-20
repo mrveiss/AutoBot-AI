@@ -57,9 +57,12 @@ class PrincipalFacts:
     role_names: frozenset[str] = frozenset()
     company_roles: Mapping[str, MembershipRole] = field(default_factory=dict)
     granted_permissions: frozenset[str] = frozenset()
+    active: bool = True  # False for a deactivated/soft-deleted principal → reaches no vault
 
     def accessible_vaults(self) -> set[VaultRef]:
         """Every vault this principal can reach (feeds ``read`` / ``list_for_vaults``)."""
+        if not self.active:
+            return set()
         vaults: set[VaultRef] = {VaultRef(VaultKind.USER, self.user_id)}
         if self.is_admin:
             vaults.add(VaultRef(VaultKind.SYSTEM))
@@ -74,6 +77,8 @@ class PrincipalFacts:
 
 def authorize(facts: PrincipalFacts, action: str, vault: VaultRef) -> bool:
     """True if *facts* permits *action* on *vault*."""
+    if not facts.active:  # deactivated/soft-deleted principal → denied everywhere
+        return False
     kind = vault.kind
     if kind == VaultKind.SYSTEM:
         return facts.is_admin

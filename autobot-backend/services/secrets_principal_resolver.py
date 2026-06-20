@@ -27,6 +27,7 @@ from llc.models.membership import LLCCompanyMembership
 from services.secrets_authz import PrincipalFacts
 from user_management.models.role import Role, UserRole
 from user_management.models.team import TeamMembership
+from user_management.models.user import User
 
 #: Permission name that marks an instance administrator (grants system vault + any user vault).
 ADMIN_PERMISSION = "admin:access"
@@ -41,7 +42,16 @@ def _company_role(value: str) -> MembershipRole | None:
 
 
 async def resolve_principal_facts(session: AsyncSession, user_id: uuid.UUID, permissions: set[str]) -> PrincipalFacts:
-    """Assemble the principal's vault-access facts from RBAC + membership tables."""
+    """Assemble the principal's vault-access facts from RBAC + membership tables.
+
+    A caller that **exists but is deactivated/soft-deleted** resolves to inactive facts that
+    reach no vault — residual access from a still-valid session is denied (#10346). An absent
+    ``user_id`` (a non-User principal) keeps its existing permission-only behaviour.
+    """
+    is_active = (await session.execute(select(User.is_active).where(User.id == user_id))).scalar_one_or_none()
+    if is_active is False:
+        return PrincipalFacts(user_id=str(user_id), active=False)
+
     is_admin = ADMIN_PERMISSION in permissions
     granted = frozenset(p for p in permissions if p.startswith(_SECRETS_PREFIX))
 
