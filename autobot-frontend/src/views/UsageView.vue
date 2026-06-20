@@ -324,13 +324,13 @@ async function load() {
   loading.value = true
   error.value = null
   try {
-    const personalResult = await api.get<PersonalUsage>('/usage/me')
+    const personalResult = await api.get<PersonalUsage>(`${getApiBase()}/usage/me`)
     personal.value = personalResult
 
     if (isAdmin.value) {
       const [sum, byUser] = await Promise.all([
-        api.get<UsageSummary>(`/usage/summary?days=${days.value}`),
-        api.get<{ users: UserUsage[] }>('/usage/by-user'),
+        api.get<UsageSummary>(`${getApiBase()}/usage/summary?days=${days.value}`),
+        api.get<{ users: UserUsage[] }>(`${getApiBase()}/usage/by-user`),
       ])
       summary.value = sum
       users.value = byUser.users ?? []
