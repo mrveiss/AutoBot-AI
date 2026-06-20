@@ -183,14 +183,16 @@ export function useDocumentChanges() {
 
     try {
       // Issue #552: Fixed path - backend uses /api/knowledge-maintenance/*
-      const response = await ApiClient.post<any>(`${getApiBase()}/knowledge-maintenance/scan_host_changes`, {
-        machine_id: machineId.value,
-        force,
-        scan_type: 'manpages',
-        auto_vectorize: autoVectorize
-      })
-
-      const result: ChangeDetectionResult = await response.json()
+      // ApiClient.post() returns the parsed JSON body directly — no .json()/.data envelope. (#10357)
+      const result = await ApiClient.post<ChangeDetectionResult>(
+        `${getApiBase()}/knowledge-maintenance/scan_host_changes`,
+        {
+          machine_id: machineId.value,
+          force,
+          scan_type: 'manpages',
+          auto_vectorize: autoVectorize
+        }
+      )
 
       if (result.status === 'success') {
         // Update summary
