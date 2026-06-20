@@ -206,7 +206,11 @@ class BoardService(LLCServiceBase):
 
         column_items: Dict[str, List[LLCWorkItem]] = {str(col.id): [] for col in board.columns}
         for item in items:
-            col_id = status_to_column.get(str(item.status) if isinstance(item.status, str) else item.status.value)
+            # WorkItemStatus is a (str, Enum), so str(enum) yields the member NAME
+            # ('WorkItemStatus.READY'), not the value ('ready'). Use .value when
+            # present so enum- and plain-string statuses both map correctly.
+            status_key = item.status.value if hasattr(item.status, "value") else item.status
+            col_id = status_to_column.get(status_key)
             if col_id and col_id in column_items:
                 column_items[col_id].append(item)
 

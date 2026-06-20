@@ -139,8 +139,13 @@ async def create_kanban_board(
     body: KanbanBoardRequest,
     session: AsyncSession = Depends(get_session),
     svc: BoardService = Depends(_service),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
     """Get or create the kanban board for a project."""
+    # GH#10296: never trust the body company_id — bind to the caller's org.
+    if str(body.company_id) != str(ctx.org_id):
+        raise HTTPException(status_code=404, detail="Company not found")
     try:
         board = await svc.get_or_create_kanban(session, body.company_id, body.project_id, name=body.name)
         await session.commit()
@@ -155,8 +160,13 @@ async def create_sprint_board(
     body: SprintBoardRequest,
     session: AsyncSession = Depends(get_session),
     svc: BoardService = Depends(_service),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
     """Get or create the sprint board for a sprint."""
+    # GH#10296: never trust the body company_id — bind to the caller's org.
+    if str(body.company_id) != str(ctx.org_id):
+        raise HTTPException(status_code=404, detail="Company not found")
     try:
         board = await svc.get_or_create_sprint_board(session, body.company_id, body.sprint_id, name=body.name)
         await session.commit()
@@ -171,6 +181,8 @@ async def get_board(
     board_id: str,
     session: AsyncSession = Depends(get_session),
     svc: BoardService = Depends(_service),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
     """Get board metadata and column configuration."""
     try:
@@ -178,7 +190,8 @@ async def get_board(
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid board_id")
     board = await svc.get_board(session, board_id)
-    if board is None:
+    # GH#10296: 404 (not 403) on cross-tenant to avoid existence disclosure.
+    if board is None or str(board.company_id) != str(ctx.org_id):
         raise HTTPException(status_code=404, detail=f"Board {board_id} not found")
     return _board_response(board)
 
@@ -188,12 +201,18 @@ async def get_board_items(
     board_id: str,
     session: AsyncSession = Depends(get_session),
     svc: BoardService = Depends(_service),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
     """Return all work items grouped by board column."""
     try:
         uuid.UUID(board_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid board_id")
+    # GH#10296: verify tenant ownership before exposing any board items.
+    owner = await svc.get_board(session, board_id)
+    if owner is None or str(owner.company_id) != str(ctx.org_id):
+        raise HTTPException(status_code=404, detail=f"Board {board_id} not found")
     try:
         result = await svc.get_board_items(session, board_id)
     except ValueError as exc:
@@ -227,12 +246,19 @@ async def move_item(
     body: MoveItemRequest,
     session: AsyncSession = Depends(get_session),
     svc: BoardService = Depends(_service),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
     """Move a work item to a board column, enforcing WIP limits."""
     try:
         uuid.UUID(board_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid board_id")
+
+    # GH#10296: verify tenant ownership BEFORE any cross-tenant mutation.
+    owner = await svc.get_board(session, board_id)
+    if owner is None or str(owner.company_id) != str(ctx.org_id):
+        raise HTTPException(status_code=404, detail=f"Board {board_id} not found")
 
     try:
         updated_item = await svc.move_item(
