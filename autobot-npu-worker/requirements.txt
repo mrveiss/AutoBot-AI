@@ -2,5 +2,5 @@
 
 # NPU/AI
 openvino>=2026.2.0
-torch>=2.12.0
+torch>=2.12.1
 numpy>=2.4.6,<3.0.0
