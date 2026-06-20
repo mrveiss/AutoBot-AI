@@ -21,13 +21,13 @@ psycopg2-binary>=2.9.12  # Sync PostgreSQL driver for migrations
 
 # Data validation
 pydantic[email]>=2.13.4
-pydantic-settings>=2.14.1
+pydantic-settings>=2.14.2
 typing_extensions>=4.15.0  # For Python 3.8 compatibility
 
 # Authentication
 PyJWT[crypto]>=2.12.1
 bcrypt>=5.0.0  # Direct bcrypt API — passlib removed (#2669)
-python-multipart>=0.0.31          # SECURITY UPDATE - arbitrary file write fix
+python-multipart>=0.0.32          # SECURITY UPDATE - arbitrary file write fix
 
 # Cache (GH #6511: Redis-backed permission cache replaces in-process dict)
 redis[asyncio]>=8.0.0
@@ -60,6 +60,6 @@ pysaml2>=7.5.4  # SAML 2.0 Service Provider
 pyotp>=2.9.0  # TOTP generation and verification
 
 # Security: explicit pins to override vulnerable transitive versions
-cryptography>=48.0.1  # CVE fix — pulled in by PyJWT[crypto] and pysaml2
+cryptography>=49.0.0  # CVE fix — pulled in by PyJWT[crypto] and pysaml2
 # Note: pyopenssl version resolved by pysaml2's dependencies (constraints conflict with >=26.0.0)
-# cryptography>=48.0.1 provides primary security coverage
+# cryptography>=49.0.0 provides primary security coverage
