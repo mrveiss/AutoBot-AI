@@ -311,6 +311,17 @@ class SessionMixin:
 
         return cleaned_messages
 
+    async def get_session(self, session_id: str) -> Dict[str, Any] | None:
+        """Return the full decrypted session document, or None if not found (#10352).
+
+        Unlike :meth:`load_session` (which returns only the messages list), this
+        returns the entire session dict — including the session-level ``metadata``
+        sub-dict — so callers can read settings such as ``thinking_preferences``
+        (#8993). Not a hot path, so it loads from file directly.
+        """
+        self._sanitize_session_id(session_id)
+        return await self._load_session_from_file(session_id)
+
     async def _warm_cache_safe(self, session_id: str, chat_data: Dict[str, Any]) -> None:
         """Warm up Redis cache safely. (Issue #315 - extracted)"""
         if not self.redis_client:
