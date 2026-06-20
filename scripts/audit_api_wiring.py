@@ -57,6 +57,11 @@ INCLUDE_ROUTER_RE = re.compile(
     r"include_router\(\s*([A-Za-z_][\w.]*)[^)]*?prefix\s*=\s*[\'\"]([^\'\"]+)", re.S
 )
 FE_API_RE = re.compile(r"[\'\"`](/api/[A-Za-z0-9_/${}():.\-]+)")
+# #10037: ``${getBackendUrl()}/<path>`` calls. getBackendUrl() is host-level
+# (no /api), so any <path> that omits /api hits a path the backend doesn't
+# serve. We only flag the high-confidence case where /api<path> IS a real
+# route (a forgotten /api, the #10036 class) — never legit non-/api mounts.
+BACKEND_URL_CALL_RE = re.compile(r"\$\{getBackendUrl\(\)\}(/[A-Za-z0-9_/${}():.\-]+)")
 PARAM_RE = re.compile(r"\{[^}]*\}")
 
 
@@ -247,6 +252,30 @@ def frontend_calls() -> dict[str, set[str]]:
     return calls
 
 
+def find_missing_api_prefix(backend: set[str]) -> dict[str, set[str]]:
+    """``${getBackendUrl()}/<path>`` calls that omit ``/api`` but whose
+    ``/api<path>`` form IS a real backend route — a guaranteed 404 from
+    forgetting the prefix (#10037, the #10036 class). High-confidence only:
+    legitimate non-/api mounts (no /api equivalent) are never flagged."""
+    missing: dict[str, set[str]] = defaultdict(set)
+    for ext in ("*.ts", "*.vue", "*.js", "*.tsx"):
+        for f in FRONTEND_SRC.rglob(ext):
+            sp = str(f)
+            if "node_modules" in sp or any(x in sp for x in FE_EXCLUDE_PATTERNS):
+                continue
+            txt = f.read_text(encoding="utf-8", errors="ignore")
+            for line in txt.splitlines():
+                if line.lstrip()[:2] in ("* ", "//", "/*") or line.strip() == "*":
+                    continue
+                for raw in BACKEND_URL_CALL_RE.findall(line):
+                    p = norm_path(raw)
+                    if p.startswith("/api") or p.count("{") != p.count("}"):
+                        continue  # already prefixed, or an extraction artifact
+                    if matches("/api" + p, backend) and not matches(p, backend):
+                        missing[p].add(str(f.relative_to(REPO_ROOT)))
+    return missing
+
+
 # ------------------------------------------------------------------ match ----
 
 def _segments_match(fe: str, b: str) -> bool:
@@ -325,6 +354,17 @@ def main() -> int:
         for f in sorted(files)[:3]:
             print(f"      <- {f}")
 
+    # #10037: getBackendUrl() calls that forgot /api (only when /api<path> is real).
+    missing_api = find_missing_api_prefix(backend) if args.openapi else {}
+    if args.only_prefix:
+        missing_api = {p: f for p, f in missing_api.items()
+                       if ("/api" + p).startswith(args.only_prefix)}
+    print(f"\n== getBackendUrl() CALLS MISSING /api: {len(missing_api)} ==")
+    for p, files in sorted(missing_api.items()):
+        print(f"  {p}  (should be /api{p})")
+        for f in sorted(files)[:3]:
+            print(f"      <- {f}")
+
     unmounted = find_unmounted_routers(backend if args.openapi else None)
     print(f"\n== UNMOUNTED ROUTER MODULES: {len(unmounted)} ==")
     for m in unmounted:
@@ -342,7 +382,7 @@ def main() -> int:
 
     rc = 0
     if args.fail_on_unwired:
-        if unwired:
+        if unwired or missing_api:
             rc |= 1
         # When scoped to a single module, don't fail on repo-wide unmounted
         # routers — those are tracked outside the scoped gate.
