@@ -112,17 +112,15 @@ async def test_get_or_create_kanban_creates_when_absent(service):
     project_id = str(uuid.uuid4())
     session = _make_session(scalar_value=None)
 
-    with patch("llc.services.board.LLCBoard") as MockBoard, patch("llc.services.board.LLCBoardColumn") as MockColumn:
-        MockBoard.return_value = MagicMock()
-        MockBoard.return_value.id = uuid.uuid4()
-        MockBoard.return_value.columns = []
+    # Simulate refresh populating board.columns after the flush.
+    async def _refresh(obj):
+        obj.columns = []
 
-        # Simulate refresh populating board.columns
-        async def _refresh(obj):
-            obj.columns = []
+    session.refresh.side_effect = _refresh
 
-        session.refresh.side_effect = _refresh
-
+    # Patch ONLY the column model — patching LLCBoard would break the real
+    # select(LLCBoard) existence check that runs before creation.
+    with patch("llc.services.board.LLCBoardColumn") as MockColumn:
         await service.get_or_create_kanban(session, company_id, project_id)
 
         # Flush called twice: once for board PK, once for columns
@@ -207,9 +205,8 @@ async def test_move_item_enforces_wip_limit(service):
     board = _make_board(columns=[col])
 
     # Build a session that returns: board on first call, column on second,
-    # then 2 existing items on third (at limit).
-    existing_items = [_make_work_item(WorkItemStatus.IN_PROGRESS), _make_work_item(WorkItemStatus.IN_PROGRESS)]
-
+    # then a WIP count of 2 on third (at limit). The service counts via
+    # func.count(...).scalar_one(), not .scalars().all().
     call_count = 0
 
     session = AsyncMock()
@@ -222,7 +219,7 @@ async def test_move_item_enforces_wip_limit(service):
         elif call_count == 1:
             result.scalar_one_or_none.return_value = col
         else:
-            result.scalars.return_value.all.return_value = existing_items
+            result.scalar_one.return_value = 2  # at WIP limit
         call_count += 1
         return result
 
