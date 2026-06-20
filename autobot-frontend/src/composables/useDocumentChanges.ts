@@ -190,7 +190,8 @@ export function useDocumentChanges() {
         auto_vectorize: autoVectorize
       })
 
-      const result: ChangeDetectionResult = await response.json()
+      // ApiClient.post() returns the parsed JSON body directly — no .json()/.data envelope. (#10357)
+      const result = response as ChangeDetectionResult
 
       if (result.status === 'success') {
         // Update summary
