@@ -17,10 +17,12 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request, Res
 from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.security import create_audit_log
 from autobot_shared.proxy_utils import get_client_ip
 from autobot_shared.rate_limiter import RateLimiter
 from config import settings
 from services.auth import auth_service
+from services.database import get_db
 from user_management.database import get_slm_session
 from user_management.schemas.sso import LDAPLoginRequest, SSOLoginInitResponse
 from user_management.services.base_service import TenantContext
@@ -81,6 +83,12 @@ _ALLOWED_CALLBACK_HOSTS = _get_allowed_callback_hosts()
 async def get_slm_db():
     """Dependency for SLM database session."""
     async with get_slm_session() as session:
+        yield session
+
+
+async def get_audit_db():
+    """Dependency for the audit (main SLM security) database session."""
+    async for session in get_db():
         yield session
 
 
@@ -200,6 +208,7 @@ async def oauth_callback(
     code: str = Query(...),
     state: str = Query(...),
     db: AsyncSession = Depends(get_slm_db),
+    audit_db: AsyncSession = Depends(get_audit_db),
 ) -> RedirectResponse:
     """Handle OAuth2 callback."""
     # Rate limiting (MVA-3397 M-1): prevent callback replay attacks
@@ -223,9 +232,29 @@ async def oauth_callback(
     context = TenantContext(is_platform_admin=False)
     sso_service = SSOService(db, context)
 
+    # Resolve provider_id from the OAuth state token for audit logging.
+    # The state encodes provider_id in sso_service; peek without consuming.
+    from user_management.services.sso_service import _oauth_states
+
+    _pending_provider_id = _oauth_states.get(state, "")
+    provider_id_str = str(_pending_provider_id) if _pending_provider_id else ""
+
     try:
         callback_url = _build_callback_url(request)
         user = await sso_service.complete_oauth_login(code, state, callback_url)
+
+        await create_audit_log(
+            audit_db,
+            category="sso",
+            action="login",
+            user_id=str(user.id),
+            username=user.username,
+            ip_address=client_ip,
+            resource_type="sso_provider",
+            resource_id=provider_id_str,
+            success=True,
+        )
+        await audit_db.commit()
 
         # Convert User ORM object to dict-like structure for auth_service
         user_dict = type(
@@ -244,6 +273,17 @@ async def oauth_callback(
         )
     except (SSOAuthenticationError, SSOProviderNotFoundError) as e:
         logger.error("OAuth callback failed: %s", e)
+        await create_audit_log(
+            audit_db,
+            category="sso",
+            action="login",
+            ip_address=client_ip,
+            resource_type="sso_provider",
+            resource_id=provider_id_str,
+            success=False,
+            error_message=str(e),
+        )
+        await audit_db.commit()
         return RedirectResponse(
             url="/login?error=sso_failed",
             status_code=status.HTTP_302_FOUND,
@@ -255,6 +295,7 @@ async def ldap_login(
     login_data: LDAPLoginRequest,
     response: Response,
     db: AsyncSession = Depends(get_slm_db),
+    audit_db: AsyncSession = Depends(get_audit_db),
 ) -> dict:
     """Authenticate via LDAP/Active Directory."""
     # Rate limiting (MVA-3397 M-1): prevent LDAP bruteforce attacks
@@ -276,6 +317,7 @@ async def ldap_login(
     logger.info("LDAP login attempt for user: %s", login_data.username)
     context = TenantContext(is_platform_admin=False)
     sso_service = SSOService(db, context)
+    provider_id_str = str(login_data.provider_id)
 
     try:
         user = await sso_service.authenticate_ldap(
@@ -283,6 +325,18 @@ async def ldap_login(
             login_data.username,
             login_data.password,
         )
+
+        await create_audit_log(
+            audit_db,
+            category="sso",
+            action="login",
+            user_id=str(user.id),
+            username=user.username,
+            resource_type="sso_provider",
+            resource_id=provider_id_str,
+            success=True,
+        )
+        await audit_db.commit()
 
         # Convert User ORM object to dict-like structure for auth_service
         user_dict = type(
@@ -302,6 +356,17 @@ async def ldap_login(
         }
     except SSOAuthenticationError as e:
         logger.error("LDAP login failed: %s", e)
+        await create_audit_log(
+            audit_db,
+            category="sso",
+            action="login",
+            username=login_data.username,
+            resource_type="sso_provider",
+            resource_id=provider_id_str,
+            success=False,
+            error_message=str(e),
+        )
+        await audit_db.commit()
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Internal server error",
@@ -318,6 +383,7 @@ async def saml_callback(
     SAMLResponse: str = Form(...),
     RelayState: str = Form(None),
     db: AsyncSession = Depends(get_slm_db),
+    audit_db: AsyncSession = Depends(get_audit_db),
 ) -> RedirectResponse:
     """Handle SAML assertion callback."""
     logger.info("Processing SAML callback")
@@ -329,10 +395,23 @@ async def saml_callback(
         from user_management.services.sso_service import _oauth_states
 
         provider_id = _oauth_states.pop(RelayState, None)
+        provider_id_str = str(provider_id) if provider_id else ""
         if not provider_id:
             raise SSOAuthenticationError("Invalid SAML RelayState")
 
         user = await sso_service.complete_saml_login(provider_id, SAMLResponse)
+
+        await create_audit_log(
+            audit_db,
+            category="sso",
+            action="login",
+            user_id=str(user.id),
+            username=user.username,
+            resource_type="sso_provider",
+            resource_id=provider_id_str,
+            success=True,
+        )
+        await audit_db.commit()
 
         # Convert User ORM object to dict-like structure for auth_service
         user_dict = type(
@@ -351,6 +430,17 @@ async def saml_callback(
         )
     except SSOAuthenticationError as e:
         logger.error("SAML callback failed: %s", e)
+        provider_id_str = locals().get("provider_id_str", "")
+        await create_audit_log(
+            audit_db,
+            category="sso",
+            action="login",
+            resource_type="sso_provider",
+            resource_id=provider_id_str,
+            success=False,
+            error_message=str(e),
+        )
+        await audit_db.commit()
         return RedirectResponse(
             url="/login?error=sso_failed",
             status_code=status.HTTP_302_FOUND,

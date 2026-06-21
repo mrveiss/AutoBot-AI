@@ -3,8 +3,8 @@
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
 """
-Unit tests for SSO auth API callback URL validation (MVA-3396 M-2) and
-rate-limit enforcement (Issue #9611).
+Unit tests for SSO auth API callback URL validation (MVA-3396 M-2),
+rate-limit enforcement (Issue #9611), and SSO audit logging (Issue #10156).
 
 Tests the security hardening for OAuth2/OIDC callback URL construction
 to prevent authorization code phishing via X-Forwarded-Host manipulation.
@@ -19,7 +19,7 @@ import unittest.mock
 import uuid
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -265,14 +265,28 @@ def _load_sso_auth_with_real_endpoints() -> object:
     config_stub = MagicMock()
     config_stub.settings = settings_stub
 
+    # ---- api.security stub: create_audit_log as an AsyncMock ----
+    api_security_stub = MagicMock()
+    api_security_stub.create_audit_log = AsyncMock(return_value=None)
+
+    # ---- services.database stub ----
+    services_database_stub = MagicMock()
+
+    async def _fake_get_db():
+        yield MagicMock()
+
+    services_database_stub.get_db = _fake_get_db
+
     stubs = {
         "autobot_shared": MagicMock(),
         "autobot_shared.proxy_utils": proxy_utils_stub,
         "autobot_shared.rate_limiter": rate_limiter_stub,
         "autobot_shared.ssot_config": MagicMock(),
+        "api.security": api_security_stub,
         "config": config_stub,
         "fastapi": fastapi_stub,
         "fastapi.responses": MagicMock(),
+        "services.database": services_database_stub,
         "user_management.database": MagicMock(),
         "user_management.schemas.sso": MagicMock(),
         "user_management.services.base_service": MagicMock(),
@@ -382,3 +396,228 @@ def test_ldap_login_rate_limited_returns_429_with_retry_after():
     assert response_headers.get("Retry-After") == "30"
     mock_limiter.acquire.assert_awaited_once()
     mock_limiter.get_retry_after_seconds.assert_awaited_once()
+
+
+# ---------------------------------------------------------------------------
+# SSO audit-logging tests (Issue #10156)
+# ---------------------------------------------------------------------------
+
+
+def _make_sso_service_stub(*, succeed: bool, provider_id: uuid.UUID | None = None):
+    """Return a module-level sso_service stub for oauth/ldap/saml paths."""
+    stub = MagicMock()
+
+    fake_provider_id = provider_id or uuid.uuid4()
+
+    fake_user = MagicMock()
+    fake_user.id = uuid.uuid4()
+    fake_user.username = "testuser"
+    fake_user.is_platform_admin = False
+
+    sso_service_instance = MagicMock()
+    sso_service_instance.complete_oauth_login = (
+        AsyncMock(return_value=fake_user) if succeed else AsyncMock(side_effect=Exception("auth failed"))
+    )
+    sso_service_instance.authenticate_ldap = (
+        AsyncMock(return_value=fake_user) if succeed else AsyncMock(side_effect=Exception("ldap failed"))
+    )
+    sso_service_instance.complete_saml_login = (
+        AsyncMock(return_value=fake_user) if succeed else AsyncMock(side_effect=Exception("saml failed"))
+    )
+
+    stub.SSOService = MagicMock(return_value=sso_service_instance)
+    stub.SSOAuthenticationError = Exception
+    stub.SSOProviderNotFoundError = Exception
+    stub.SSOServiceError = Exception
+    stub._oauth_states = {"test-state": fake_provider_id}
+
+    return stub, fake_user, fake_provider_id
+
+
+def test_oauth_callback_success_writes_audit_log():
+    """oauth_callback writes audit log with success=True on successful login."""
+    sso_auth, MockHTTPException = _load_sso_auth_with_real_endpoints()
+
+    sso_service_stub, fake_user, fake_provider_id = _make_sso_service_stub(succeed=True)
+    sso_service_stub._oauth_states = {"test-state": fake_provider_id}
+
+    audit_mock = AsyncMock(return_value=None)
+    audit_db = MagicMock()
+    audit_db.commit = AsyncMock()
+
+    auth_service_stub = MagicMock()
+    fake_token = MagicMock()
+    fake_token.access_token = "tok123"
+    auth_service_stub.create_token_response = AsyncMock(return_value=fake_token)
+
+    request = _make_mock_request("http", "localhost", {"x-forwarded-proto": "http", "x-forwarded-host": "localhost"})
+    response = MagicMock()
+    response.headers = {}
+
+    async def _call():
+        return await sso_auth.oauth_callback(
+            request=request,
+            response=response,
+            code="auth-code",
+            state="test-state",
+            db=MagicMock(),
+            audit_db=audit_db,
+        )
+
+    with (
+        patch.object(sso_auth, "create_audit_log", audit_mock),
+        patch.object(sso_auth, "SSOService", sso_service_stub.SSOService),
+        patch.object(sso_auth, "SSOAuthenticationError", sso_service_stub.SSOAuthenticationError),
+        patch.object(sso_auth, "auth_service", auth_service_stub),
+    ):
+        sys.modules["user_management.services.sso_service"] = sso_service_stub
+        asyncio.run(_call())
+
+    audit_mock.assert_awaited_once()
+    call_kwargs = audit_mock.call_args.kwargs
+    assert call_kwargs.get("success") is True
+    assert call_kwargs.get("category") == "sso"
+    assert call_kwargs.get("action") == "login"
+    assert call_kwargs.get("username") == fake_user.username
+
+
+def test_oauth_callback_failure_writes_audit_log():
+    """oauth_callback writes audit log with success=False on authentication error."""
+    sso_auth, MockHTTPException = _load_sso_auth_with_real_endpoints()
+
+    fake_provider_id = uuid.uuid4()
+
+    # Declare a real BaseException subclass so the except tuple is valid.
+    class _FakeSSOAuthError(Exception):
+        pass
+
+    sso_service_instance = MagicMock()
+    sso_service_instance.complete_oauth_login = AsyncMock(side_effect=_FakeSSOAuthError("auth failed"))
+    sso_service_class = MagicMock(return_value=sso_service_instance)
+
+    audit_mock = AsyncMock(return_value=None)
+    audit_db = MagicMock()
+    audit_db.commit = AsyncMock()
+
+    request = _make_mock_request("http", "localhost", {"x-forwarded-proto": "http", "x-forwarded-host": "localhost"})
+    response = MagicMock()
+    response.headers = {}
+
+    sso_states_stub = MagicMock()
+    sso_states_stub._oauth_states = {"test-state": fake_provider_id}
+
+    async def _call():
+        return await sso_auth.oauth_callback(
+            request=request,
+            response=response,
+            code="bad-code",
+            state="test-state",
+            db=MagicMock(),
+            audit_db=audit_db,
+        )
+
+    # Patch both exception classes so the except tuple stays valid and catches
+    # our _FakeSSOAuthError.
+    with (
+        patch.object(sso_auth, "create_audit_log", audit_mock),
+        patch.object(sso_auth, "SSOService", sso_service_class),
+        patch.object(sso_auth, "SSOAuthenticationError", _FakeSSOAuthError),
+        patch.object(sso_auth, "SSOProviderNotFoundError", _FakeSSOAuthError),
+    ):
+        sys.modules["user_management.services.sso_service"] = sso_states_stub
+        asyncio.run(_call())
+
+    audit_mock.assert_awaited_once()
+    call_kwargs = audit_mock.call_args.kwargs
+    assert call_kwargs.get("success") is False
+    assert call_kwargs.get("category") == "sso"
+    assert "error_message" in call_kwargs
+
+
+def test_ldap_login_success_writes_audit_log():
+    """ldap_login writes audit log with success=True on successful authentication."""
+    sso_auth, MockHTTPException = _load_sso_auth_with_real_endpoints()
+
+    sso_service_stub, fake_user, fake_provider_id = _make_sso_service_stub(succeed=True)
+
+    audit_mock = AsyncMock(return_value=None)
+    audit_db = MagicMock()
+    audit_db.commit = AsyncMock()
+
+    auth_service_stub = MagicMock()
+    fake_token = MagicMock()
+    fake_token.access_token = "tok456"
+    fake_token.token_type = "bearer"
+    fake_token.expires_in = 3600
+    auth_service_stub.create_token_response = AsyncMock(return_value=fake_token)
+
+    login_data = MagicMock()
+    login_data.username = "ldapuser"
+    login_data.password = "secret"  # nosec B106
+    login_data.provider_id = fake_provider_id
+
+    response = MagicMock()
+    response.headers = {}
+
+    async def _call():
+        return await sso_auth.ldap_login(
+            login_data=login_data,
+            response=response,
+            db=MagicMock(),
+            audit_db=audit_db,
+        )
+
+    with (
+        patch.object(sso_auth, "create_audit_log", audit_mock),
+        patch.object(sso_auth, "SSOService", sso_service_stub.SSOService),
+        patch.object(sso_auth, "SSOAuthenticationError", sso_service_stub.SSOAuthenticationError),
+        patch.object(sso_auth, "auth_service", auth_service_stub),
+    ):
+        asyncio.run(_call())
+
+    audit_mock.assert_awaited_once()
+    call_kwargs = audit_mock.call_args.kwargs
+    assert call_kwargs.get("success") is True
+    assert call_kwargs.get("username") == fake_user.username
+    assert call_kwargs.get("resource_id") == str(fake_provider_id)
+
+
+def test_ldap_login_failure_writes_audit_log():
+    """ldap_login writes audit log with success=False on authentication failure."""
+    sso_auth, MockHTTPException = _load_sso_auth_with_real_endpoints()
+
+    sso_service_stub, _, fake_provider_id = _make_sso_service_stub(succeed=False)
+
+    audit_mock = AsyncMock(return_value=None)
+    audit_db = MagicMock()
+    audit_db.commit = AsyncMock()
+
+    login_data = MagicMock()
+    login_data.username = "ldapuser"
+    login_data.password = "wrongpass"  # nosec B106
+    login_data.provider_id = fake_provider_id
+
+    response = MagicMock()
+    response.headers = {}
+
+    async def _call():
+        return await sso_auth.ldap_login(
+            login_data=login_data,
+            response=response,
+            db=MagicMock(),
+            audit_db=audit_db,
+        )
+
+    with (
+        patch.object(sso_auth, "create_audit_log", audit_mock),
+        patch.object(sso_auth, "SSOService", sso_service_stub.SSOService),
+        patch.object(sso_auth, "SSOAuthenticationError", sso_service_stub.SSOAuthenticationError),
+    ):
+        with pytest.raises(MockHTTPException) as exc_info:
+            asyncio.run(_call())
+
+    assert exc_info.value.status_code == 401
+    audit_mock.assert_awaited_once()
+    call_kwargs = audit_mock.call_args.kwargs
+    assert call_kwargs.get("success") is False
+    assert "error_message" in call_kwargs
