@@ -2,10 +2,10 @@
 # Includes LangChain, LlamaIndex and related packages with compatible versions
 
 # Core AI Frameworks
-langchain>=1.3.0,<2.0.0          # Issue #2808: upper bound unified; MVA-1330: floor corrected to 1.3.0 — 1.2.24 does not exist on PyPI; PVE-2026-88512 SQL injection fix
-langchain-core>=1.2.22,<2.0.0   # Issue #2808: upper bound unified with backend canonical
-langchain-community>=0.4.1,<0.5.0  # Issue #2808: upper bound unified with backend canonical
-llama-index>=0.14.21,<0.15.0
+langchain>=1.3.10,<2.0.0          # Issue #2808: upper bound unified; MVA-1330: floor corrected to 1.3.0 — 1.2.24 does not exist on PyPI; PVE-2026-88512 SQL injection fix
+langchain-core>=1.4.8,<2.0.0   # Issue #2808: upper bound unified with backend canonical
+langchain-community>=0.4.2,<0.5.0  # Issue #2808: upper bound unified with backend canonical
+llama-index>=0.14.22,<0.15.0
 llama-index-core>=0.14.22,<0.15.0
 llama-index-vector-stores-chroma>=0.5.5,<1.0.0
 llama-index-embeddings-ollama>=0.9.0,<1.0.0
@@ -13,18 +13,18 @@ llama-index-llms-ollama>=0.10.1,<1.0.0
 
 # Vector Database
 chromadb>=1.5.9,<2.0.0           # upper bound guards against breaking API changes; 1.5.5+ uses regenerated protos compatible with protobuf 5.x (#4053)
-sentence-transformers>=5.3.0
+sentence-transformers>=5.6.0
 
 # Model and Tokenization
-transformers>=5.10.2
-tokenizers>=0.22.0,<0.24  # #10331: transformers 5.12.x caps tokenizers<=0.23.0; >=0.23.1 (was #9424) is unsatisfiable
-huggingface-hub>=1.8.0
-tiktoken>=0.12.0
+transformers>=5.12.1
+tokenizers>=0.23.1,<0.24  # #10331: transformers 5.12.x caps tokenizers<=0.23.0; >=0.23.1 (was #9424) is unsatisfiable
+huggingface-hub>=1.20.1
+tiktoken>=0.13.0
 
 # Tensor Operations
-numpy>=2.4.3,<3.0.0
-torch>=2.11.0
-torchvision>=0.27.0
+numpy>=2.4.6,<3.0.0
+torch>=2.12.1
+torchvision>=0.27.1
 torchaudio>=2.11.0
 
 # Text Processing
@@ -32,50 +32,50 @@ nltk>=3.9.4
 spacy>=3.8.14
 
 # HTTP and API
-fastapi>=0.136.3
-uvicorn[standard]>=0.42.0
+fastapi>=0.138.0
+uvicorn[standard]>=0.49.0
 aiohttp>=3.14.1
 httpx>=0.28.1
 httpcore>=1.0.9
-requests>=2.33.0
+requests>=2.34.2
 
 # Data Processing
-pandas>=3.0.1
+pandas>=3.0.3
 pydantic>=2.13.4
 
 # Utilities
 async-timeout>=5.0.1
 packaging>=26.2
-protobuf>=7.35.0,<8.0.0           # floor: opentelemetry-exporter-otlp-proto-grpc>=1.40.0 regenerated protos, C extension compatible (#3973); ceiling: mirrors googleapis-common-protos requirement (#4061)
+protobuf>=7.35.1,<8.0.0           # floor: opentelemetry-exporter-otlp-proto-grpc>=1.40.0 regenerated protos, C extension compatible (#3973); ceiling: mirrors googleapis-common-protos requirement (#4061)
 googleapis-common-protos>=1.75.0,<2.0.0  # required by opentelemetry-exporter-otlp-proto-grpc~=1.57; needs protobuf>=4.25.8 satisfied by floor above (#4061)
 python-dotenv>=1.2.2
 tenacity>=9.1.4
-tqdm>=4.67.3
+tqdm>=4.68.3
 typing-extensions>=4.15.0
 
 # Logging and Monitoring
-structlog>=25.5.0
+structlog>=26.1.0
 python-json-logger>=4.1.0
 
 # Database
-sqlalchemy>=2.0.48
+sqlalchemy>=2.0.51
 aiosqlite>=0.22.1
 
 # Redis client (for communication with host Redis)
-redis>=7.4.0
+redis>=8.0.0
 
 # Optional: ONNX Runtime for model optimization
-onnxruntime>=1.26.0
+onnxruntime>=1.27.0
 
 # vLLM for high-performance HuggingFace model serving (optional)
 # vllm>=0.7.0
-accelerate>=1.13.0
+accelerate>=1.14.0
 # bitsandbytes>=0.46.0
 
 # Document Processing
 python-docx>=1.2.0
-pypdf>=6.9.2
+pypdf>=6.13.3
 
 # Development and Testing
-pytest>=9.0.2
+pytest>=9.1.1
 pytest-asyncio>=1.4.0
