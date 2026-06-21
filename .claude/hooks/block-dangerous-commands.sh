@@ -94,42 +94,56 @@ if echo "$COMMAND_TO_CHECK" | grep -qE '(^|[;&|()]+[[:space:]]*)git[[:space:]]+(
   deny "Blocked: never check out main/master locally (#4113, #6512). Main is read-only; commits flow Dev_new_gui → main via release cycle. If you need to inspect main, use git log origin/main or create a worktree: git worktree add .worktrees/inspect-main main"
 fi
 
-# Block ALL branch checkouts and branch creation from the main working tree (#6512)
-# Subagents running in parallel would trample the shared HEAD for every other session.
-# Any branch work must happen inside an isolated worktree.
-# BUG FIX: previously -b/-B/-c flags bypassed the pattern because [^-] required a
-# non-dash first char after checkout/switch. Now both cases are caught explicitly.
+# Block bare branch *switches* from the main working tree (#6512, #10126)
+# Subagents running in parallel would trample the shared HEAD for every other
+# session if they switched onto an existing shared branch. Only that form is
+# dangerous — the worktree mandate targets branch-switching on the MAIN tree.
+# The following git forms are SAFE and explicitly allowed even on the main tree:
+#   - new-branch creation (-b/-B/-c/--create/--orphan): forks a fresh branch,
+#     does not move HEAD onto a shared one
+#   - file restore: `git checkout -- <path>`, `git checkout .`
+#   - detached / toggle switches: `git switch -`, `git switch --detach`
+#   - SHA / tag / Dev_new_gui checkouts
 if echo "$COMMAND_TO_CHECK" | grep -qE '(^|[;&|()]+[[:space:]]*)git[[:space:]]+(checkout|switch)[[:space:]]'; then
   CURRENT_DIR=$(pwd)
   if [[ ! "$CURRENT_DIR" =~ \.worktrees/ ]]; then
-    # Detect -b/-B/-c/--create/--orphan flags — new-branch creation always denied on main tree
-    # because it still moves HEAD away from Dev_new_gui.
-    HAS_NEW_BRANCH_FLAG=0
-    if echo "$COMMAND_TO_CHECK" | grep -qE 'git[[:space:]]+(checkout|switch)[[:space:]]+(-b|-B|-c|--create|--orphan)([[:space:]]|$)' || \
-       echo "$COMMAND_TO_CHECK" | grep -qE 'git[[:space:]]+(checkout|switch)[[:space:]]+.*[[:space:]](-b|-B|-c|--create|--orphan)([[:space:]]|$)'; then
-      HAS_NEW_BRANCH_FLAG=1
+    # New-branch creation (-b/-B/-c/--create/--orphan) anywhere in the args.
+    IS_NEW_BRANCH=0
+    if echo "$COMMAND_TO_CHECK" | grep -qE 'git[[:space:]]+(checkout|switch)[[:space:]]+(.*[[:space:]])?(-b|-B|-c|--create|--orphan)([[:space:]]|$)'; then
+      IS_NEW_BRANCH=1
     fi
 
-    BRANCH_ARG=$(echo "$COMMAND_TO_CHECK" | awk '{
-      found=0
-      for(i=1;i<=NF;i++) {
-        if ($i=="checkout" || $i=="switch") { found=i; break }
-      }
-      if (found) {
-        for(j=found+1;j<=NF;j++) {
-          if (substr($j,1,1)!="-") { print $j; break }
-        }
-      }
-    }')
+    # Explicit file restore: `git checkout -- <path>` (the `--` separator).
+    IS_FILE_RESTORE=0
+    if echo "$COMMAND_TO_CHECK" | grep -qE 'git[[:space:]]+checkout[[:space:]]+--([[:space:]]|$)'; then
+      IS_FILE_RESTORE=1
+    fi
 
-    if [[ "$HAS_NEW_BRANCH_FLAG" -eq 1 ]]; then
-      deny "Blocked: creating a branch on the main working tree moves HEAD away from Dev_new_gui and tramples parallel sessions (#6512). Use a worktree instead: git worktree add .worktrees/<name> -b <branch> Dev_new_gui && cd .worktrees/<name>"
-    elif [[ "$BRANCH_ARG" != "Dev_new_gui" ]] && \
+    if [[ "$IS_NEW_BRANCH" -eq 0 && "$IS_FILE_RESTORE" -eq 0 ]]; then
+      # First non-dash positional after checkout/switch (the branch/ref/path arg).
+      BRANCH_ARG=$(echo "$COMMAND_TO_CHECK" | awk '{
+        found=0
+        for(i=1;i<=NF;i++) {
+          if ($i=="checkout" || $i=="switch") { found=i; break }
+        }
+        if (found) {
+          for(j=found+1;j<=NF;j++) {
+            if (substr($j,1,1)!="-") { print $j; break }
+          }
+        }
+      }')
+
+      # Block only when a concrete branch-name arg is present and is not one of
+      # the safe targets (base branch, file restore, detached HEAD, SHA, tag, path).
+      if [[ -n "$BRANCH_ARG" ]] && \
+         [[ "$BRANCH_ARG" != "Dev_new_gui" ]] && \
          [[ "$BRANCH_ARG" != "." ]] && \
+         [[ "$BRANCH_ARG" != "HEAD" ]] && \
          ! [[ "$BRANCH_ARG" =~ ^[0-9a-f]{7,40}$ ]] && \
          ! [[ "$BRANCH_ARG" =~ ^v[0-9]+\.[0-9]+ ]] && \
          ! [[ "$BRANCH_ARG" =~ ^/ ]]; then
-      deny "Blocked: switching branches on the main working tree tramples HEAD for parallel sessions (#6512). Use a worktree instead: git worktree add .worktrees/<name> <branch> && cd .worktrees/<name>. Then do your work and remove with: git worktree remove .worktrees/<name>"
+        deny "Blocked: switching branches on the main working tree tramples HEAD for parallel sessions (#6512). Use a worktree instead: git worktree add .worktrees/<name> <branch> && cd .worktrees/<name>. Then do your work and remove with: git worktree remove .worktrees/<name>"
+      fi
     fi
   fi
 fi

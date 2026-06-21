@@ -9,10 +9,17 @@ HOOK="$(cd "$(dirname "$0")" && pwd)/block-dangerous-commands.sh"
 PASS=0
 FAIL=0
 
+# The branch-switch protections only apply on the MAIN working tree (the hook
+# skips them under .worktrees/). To keep the suite deterministic regardless of
+# where it is launched from (#10126), run every case from a temp dir that is
+# guaranteed not to be under .worktrees/ — i.e. always assert main-tree semantics.
+TEST_CWD=$(mktemp -d)
+trap 'rm -rf "$TEST_CWD"' EXIT
+
 hook_exit() {
   local input
   input=$(echo '{}' | /usr/bin/jq --arg c "$1" '.tool_input.command=$c')
-  bash "$HOOK" <<<"$input" >/dev/null 2>/dev/null
+  (cd "$TEST_CWD" && bash "$HOOK" <<<"$input") >/dev/null 2>/dev/null
   echo $?
 }
 
