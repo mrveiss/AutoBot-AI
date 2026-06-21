@@ -18,8 +18,10 @@ import logging
 import uuid
 from typing import Optional
 
-from sqlalchemy import select, text
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from models.agent_org import AgentOrgNode
 
 from ..models.enums import HeartbeatInvocationSource, LLCRunStatus
 from ..models.heartbeat_run import LLCHeartbeatRun
@@ -55,47 +57,52 @@ class CommentWakeService:
             logger.debug("Work item %s has no agent assignee — skipping comment wake", work_item_id)
             return None
 
-        assignee_agent_id = str(row.assignee_agent_id)
+        # GH#10032: assignee_agent_id is the AgentOrgNode UUID PK. Resolve the
+        # node by PK (via the ORM, so the UUID binds correctly across dialects)
+        # and use its agent_id slug — the keyspace heartbeat runs / scheduler
+        # dispatch are keyed on (LLCHeartbeatRun.agent_id).
+        assignee_node_pk = row.assignee_agent_id
         company_id = row.company_id
 
         # Check if assignee is a claude_code agent
         agent_result = await session.execute(
-            text("""
-                SELECT aon.adapter_type, aon.adapter_config, aon.context_mode,
-                       aon.heartbeat_enabled
-                FROM agent_org_nodes aon
-                WHERE aon.agent_id = :agent_id
-            """),
-            {"agent_id": assignee_agent_id},
+            select(
+                AgentOrgNode.agent_id,
+                AgentOrgNode.adapter_type,
+                AgentOrgNode.adapter_config,
+                AgentOrgNode.context_mode,
+                AgentOrgNode.heartbeat_enabled,
+            ).where(AgentOrgNode.id == assignee_node_pk)
         )
         agent_row = agent_result.mappings().first()
         if not agent_row:
-            logger.debug("Agent %s not found — skipping comment wake", assignee_agent_id)
+            logger.debug("Agent node %s not found — skipping comment wake", assignee_node_pk)
             return None
+
+        agent_slug = agent_row.get("agent_id")
 
         adapter_type = agent_row.get("adapter_type")
         if adapter_type != "claude_code":
             logger.debug(
                 "Agent %s adapter type is %s (not claude_code) — skipping comment wake",
-                assignee_agent_id,
+                agent_slug,
                 adapter_type,
             )
             return None
 
         if not agent_row.get("heartbeat_enabled"):
-            logger.debug("Agent %s heartbeat disabled — skipping comment wake", assignee_agent_id)
+            logger.debug("Agent %s heartbeat disabled — skipping comment wake", agent_slug)
             return None
 
         # Dedup: check for active runs
-        active_run = await self._find_active_run(session, assignee_agent_id)
+        active_run = await self._find_active_run(session, agent_slug)
         if active_run:
             logger.info(
                 "Agent %s already has active run %s — queuing comment %s for next heartbeat",
-                assignee_agent_id,
+                agent_slug,
                 active_run.id,
                 comment_id,
             )
-            # TODO: Queue comment for delivery at next heartbeat
             return None
 
         # Fetch comment body for context
@@ -122,7 +129,7 @@ class CommentWakeService:
         run = LLCHeartbeatRun(
             id=uuid.uuid4(),
             company_id=company_id,
-            agent_id=assignee_agent_id,
+            agent_id=agent_slug,
             invocation_source=HeartbeatInvocationSource.WORK_ITEM_COMMENTED.value,
             status=LLCRunStatus.QUEUED.value,
             context_snapshot=context,
@@ -133,14 +140,14 @@ class CommentWakeService:
         logger.info(
             "Created comment-triggered run %s for agent %s (work_item=%s, comment=%s)",
             run.id,
-            assignee_agent_id,
+            agent_slug,
             work_item_id,
             comment_id,
         )
 
         # Build agent config for dispatch
         agent_config = {
-            "agent_id": assignee_agent_id,
+            "agent_id": agent_slug,
             "adapter_type": adapter_type,
             "adapter_config": agent_row.get("adapter_config") or {},
             "context_mode": agent_row.get("context_mode"),

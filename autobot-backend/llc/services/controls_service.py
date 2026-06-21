@@ -358,23 +358,33 @@ class ControlsService:
         return {"id": str(row[0])} if row else None
 
     async def _agents_in_sprint(self, session: AsyncSession, company_id: str, sprint_id: str) -> list:
-        """Agent IDs with in_progress work items in this sprint."""
+        """Agent slugs with in_progress work items in this sprint.
+
+        ``llc_work_items.assignee_agent_id`` holds the AgentOrgNode UUID PK
+        (#10032); resolve it to the ``agent_id`` slug that pause_agent keys on.
+        """
         result = await session.execute(
             text(
-                "SELECT DISTINCT assignee_agent_id FROM llc_work_items"
-                " WHERE sprint_id = :sprint_id AND company_id = :company_id"
-                "  AND status = 'in_progress' AND assignee_agent_id IS NOT NULL"
+                "SELECT DISTINCT a.agent_id FROM llc_work_items wi"
+                " JOIN agent_org_nodes a ON a.id = wi.assignee_agent_id"
+                "  AND a.company_id = wi.company_id"
+                " WHERE wi.sprint_id = :sprint_id AND wi.company_id = :company_id"
+                "  AND wi.status = 'in_progress' AND wi.assignee_agent_id IS NOT NULL"
             ),
             {"sprint_id": sprint_id, "company_id": company_id},
         )
         return [str(row[0]) for row in result.fetchall()]
 
     async def _paused_agents_in_sprint(self, session: AsyncSession, company_id: str, sprint_id: str) -> list:
-        """Agent IDs paused due to this sprint."""
+        """Agent slugs paused due to this sprint.
+
+        Join on the AgentOrgNode UUID PK (#10032: ``assignee_agent_id`` is the PK,
+        NOT the ``agent_id`` slug) and return the slug that resume_agent keys on.
+        """
         result = await session.execute(
             text(
-                "SELECT DISTINCT wi.assignee_agent_id FROM llc_work_items wi"
-                " JOIN agent_org_nodes a ON a.agent_id = wi.assignee_agent_id"
+                "SELECT DISTINCT a.agent_id FROM llc_work_items wi"
+                " JOIN agent_org_nodes a ON a.id = wi.assignee_agent_id"
                 "  AND a.company_id = wi.company_id"
                 " WHERE wi.sprint_id = :sprint_id AND wi.company_id = :company_id"
                 "  AND a.status = 'paused'"

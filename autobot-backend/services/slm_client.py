@@ -657,8 +657,26 @@ class SLMClient:
             else:
                 logger.warning("WebSocket connection closed: %s", exc)
         except WebSocketException as e:
-            logger.error("WebSocket error: %s", e)
             self._ws_connected = False
+            # A handshake-level rejection (e.g. HTTP 403 from the SLM/nginx when
+            # the service token is not accepted) otherwise logs at ERROR on every
+            # retry and floods the log. Apply the same consecutive-failure guard
+            # as the 4001 path: log once on crossing the threshold and pin the
+            # reconnect delay to the maximum interval; stay quiet thereafter.
+            self._ws_auth_fail_count += 1
+            if self._ws_auth_fail_count >= _WS_AUTH_FAIL_THRESHOLD:
+                if self._ws_auth_fail_count == _WS_AUTH_FAIL_THRESHOLD:
+                    logger.warning(
+                        "SLM WebSocket handshake rejected %d consecutive times (%s). "
+                        "Check SLM reachability and that AUTOBOT_JWT_SECRET on the backend "
+                        "matches SLM_SECRET_KEY on the SLM host. "
+                        "Backing off to maximum reconnect interval.",
+                        self._ws_auth_fail_count,
+                        e,
+                    )
+                self._reconnect_delay = self._max_reconnect_delay
+            else:
+                logger.warning("WebSocket error (handshake rejected): %s", e)
         except Exception as e:
             logger.error("Unexpected WebSocket error: %s", e)
             self._ws_connected = False
