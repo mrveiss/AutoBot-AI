@@ -14,6 +14,7 @@ from __future__ import annotations
 import uuid
 
 from sqlalchemy import delete, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.secret_dependency import DEPENDENT_KINDS, SecretDependency
@@ -31,11 +32,30 @@ class SecretDependencyService:
         dependent_id: str,
         company_id: uuid.UUID | None = None,
         created_by: uuid.UUID | None = None,
-    ) -> SecretDependency:
-        """Idempotently record that ``dependent_kind:dependent_id`` depends on *secret_id*."""
+    ) -> SecretDependency | None:
+        """Record that ``dependent_kind:dependent_id`` depends on *secret_id*.
+
+        Idempotent and concurrency-safe: a same-key insert hits ``ON CONFLICT DO NOTHING``
+        on the ``(secret_id, dependent_kind, dependent_id)`` unique constraint rather than
+        raising, and the existing-or-new row is returned (``None`` only if a concurrent
+        ``unregister`` deleted it between the insert and the read-back).
+        """
         if dependent_kind not in DEPENDENT_KINDS:
             raise ValueError(f"unknown dependent_kind {dependent_kind!r}; expected one of {DEPENDENT_KINDS}")
-        existing = (
+        await session.execute(
+            pg_insert(SecretDependency)
+            .values(
+                id=uuid.uuid4(),
+                secret_id=secret_id,
+                dependent_kind=dependent_kind,
+                dependent_id=dependent_id,
+                company_id=company_id,
+                created_by=created_by,
+            )
+            .on_conflict_do_nothing(constraint="uq_secret_dependencies_secret_dependent")
+        )
+        await session.flush()
+        return (
             await session.execute(
                 select(SecretDependency).where(
                     SecretDependency.secret_id == secret_id,
@@ -44,18 +64,6 @@ class SecretDependencyService:
                 )
             )
         ).scalar_one_or_none()
-        if existing is not None:
-            return existing
-        dep = SecretDependency(
-            secret_id=secret_id,
-            dependent_kind=dependent_kind,
-            dependent_id=dependent_id,
-            company_id=company_id,
-            created_by=created_by,
-        )
-        session.add(dep)
-        await session.flush()
-        return dep
 
     async def what_depends_on(self, session: AsyncSession, *, secret_id: uuid.UUID) -> list[SecretDependency]:
         """Every consumer of *secret_id* — the rotation/revocation impact list."""
