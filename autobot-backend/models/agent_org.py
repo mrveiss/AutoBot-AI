@@ -34,6 +34,23 @@ class AgentOrgNode(Base):
 
     agent_id is a String FK to the logical agent registry (no SQL agents table).
     reports_to is a self-referencing String pointing to another agent_id.
+
+    DUAL-KEYSPACE CONVENTION (#10032) — two columns identify an agent; using the
+    wrong one in a join compiles fine and silently returns 0 rows in Postgres
+    (and is masked in SQLite tests that seed ``agent_id = str(uuid4())``):
+
+    * ``id``       — UUID PK. FK target for *work-item* assignment:
+                     ``llc_work_items.assignee_agent_id`` (and routines) hold THIS.
+                     Join: ``AgentOrgNode.id == LLCWorkItem.assignee_agent_id``.
+    * ``agent_id`` — String(255) logical slug (hire flow mints e.g.
+                     ``assistant-...-<hex8>``). The keyspace for everything keyed
+                     by the *logical* agent: ``llc_agent_budgets.agent_id``,
+                     ``llc_heartbeat_runs.agent_id``, ``llc_api_keys.agent_id``,
+                     scheduler dispatch, and controls pause/resume.
+
+    Crossing the two requires an explicit resolve: load the node by ``id`` from a
+    work-item assignee, then use its ``agent_id`` slug for any heartbeat/budget/
+    controls lookup (see comment_wake_service / controls_service).
     """
 
     __tablename__ = "agent_org_nodes"
