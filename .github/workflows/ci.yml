@@ -65,7 +65,7 @@ jobs:
         python -m pip install -r requirements-ci.txt --prefer-binary
 
         echo "Installing testing dependencies..."
-        python -m pip install pytest pytest-asyncio pytest-cov flake8 black isort mypy bandit
+        python -m pip install pytest pytest-asyncio pytest-cov pytest-xdist==3.8.0 flake8 black isort mypy bandit
 
     - name: Create necessary directories and config files
       run: |
@@ -146,7 +146,11 @@ jobs:
         echo "Running unit tests with 70% coverage gate (#3285)..."
         # Run all unit tests excluding slow/integration/distributed/performance markers.
         # --cov-fail-under=70 enforces the minimum 70% coverage threshold.
+        # -n auto --dist loadscope parallelizes across workers (#10398); pytest-cov
+        # auto-combines per-worker coverage, and loadscope keeps same-module tests
+        # on one worker so shared-fixture/ordering behaviour matches serial.
         python -m pytest \
+          -n auto --dist loadscope \
           -m "not integration and not slow and not distributed and not performance" \
           --cov=autobot-backend \
           --cov=autobot-slm-backend \
