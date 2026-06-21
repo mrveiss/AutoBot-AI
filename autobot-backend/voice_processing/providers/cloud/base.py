@@ -41,7 +41,7 @@ class CloudSpeechProvider(SpeechProvider):
     def __init__(self) -> None:
         self._api_key: Optional[str] = os.environ.get(self._api_key_env) if self._api_key_env else None
         if not self._api_key:
-            logger.warning(
+            logger.debug(
                 "%s: %s not set — provider unconfigured. " "Set the env var to enable this cloud ASR provider.",
                 self.__class__.__name__,
                 self._api_key_env,

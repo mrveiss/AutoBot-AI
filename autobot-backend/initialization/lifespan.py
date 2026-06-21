@@ -1297,6 +1297,21 @@ async def _seed_default_admin() -> None:
         logger.warning("Default admin seeding failed (non-critical): %s", e)
 
 
+async def _init_long_running_operations() -> None:
+    """Initialize the long-running operations manager (#10385).
+
+    Without this, ``operation_integration_manager.operation_manager`` stays None
+    and every ``GET /api/long-running`` 500s. initialize() is idempotent and
+    Redis-guarded; non-fatal so a failure never blocks startup.
+    """
+    try:
+        from utils.operation_timeout_integration import operation_integration_manager
+
+        await operation_integration_manager.initialize()
+    except Exception as e:
+        logger.warning("Long-running operations init failed (non-critical): %s", e)
+
+
 async def _init_process_adapter(app: FastAPI) -> None:
     """Start ProcessAdapterService queue dispatcher (#1748).
 
@@ -1789,6 +1804,7 @@ async def initialize_background_services(app: FastAPI):
         await _seed_agent_registry()
         await _wire_npu_task_queue()
         await _wire_scheduler_executor()
+        await _init_long_running_operations()
         await _init_voice_interface(app)
         await _init_web_researcher(app)
         await _init_plugin_manager(app)

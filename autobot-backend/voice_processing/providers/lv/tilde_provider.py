@@ -39,7 +39,7 @@ class TildeProvider(SpeechProvider):
         self.api_url = api_url or os.getenv("TILDE_API_URL", "https://api.tilde.com/v1/asr")
 
         if not self.api_key:
-            logger.warning(
+            logger.debug(
                 "TILDE_API_KEY not set - Tilde provider will not work. " "Set TILDE_API_KEY environment variable."
             )
 
