@@ -19,7 +19,30 @@ from services.llm_api_key_service import get_llm_api_key_service
 
 logger = get_logger(__name__)
 
-_ROTATION_INTERVAL_MINUTES = int(config.llm_key_rotation_interval_minutes)
+_DEFAULT_ROTATION_INTERVAL_MINUTES = 60
+
+
+def _resolve_rotation_interval_minutes() -> int:
+    """Resolve the rotation interval, defaulting when unset/invalid.
+
+    AUTOBOT_LLM_KEY_ROTATION_INTERVAL_MINUTES defaults to "" in ssot_config, so
+    int("") raised ValueError at import time and silently disabled the scheduler
+    on every startup. Default to hourly (#6590) instead of crashing the import.
+    """
+    raw = (config.llm_key_rotation_interval_minutes or "").strip()
+    try:
+        minutes = int(raw)
+    except ValueError:
+        logger.warning(
+            "Invalid AUTOBOT_LLM_KEY_ROTATION_INTERVAL_MINUTES=%r; defaulting to %dm",
+            raw,
+            _DEFAULT_ROTATION_INTERVAL_MINUTES,
+        )
+        return _DEFAULT_ROTATION_INTERVAL_MINUTES
+    return minutes if minutes > 0 else _DEFAULT_ROTATION_INTERVAL_MINUTES
+
+
+_ROTATION_INTERVAL_MINUTES = _resolve_rotation_interval_minutes()
 
 
 class LLMKeyRotationScheduler:
