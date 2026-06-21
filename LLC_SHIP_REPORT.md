@@ -45,17 +45,14 @@ from `GET /api/llc/companies/`** — mirroring the backend, which scopes to the
 caller's org when `company_id` is omitted. Used by OrgChart, GoalTree, and
 CompanyDashboard. No routes were moved (lower risk; no nav regressions).
 
-## Flagged-off features (no backend exists — no dead buttons)
-Gated behind `import.meta.env` flags, **off by default** (`BacklogView.vue`, commit 3d4f81b):
+## Formerly flagged-off features — now LIVE (#9861 backends + #10040 wiring)
+Both backends shipped in #9861 (PR #10034) and were wired up in #10040; the
+`import.meta.env` feature flags were removed (features are unconditionally on).
 
-| Feature | Missing backend | Flag | UI when off |
-|---|---|---|---|
-| Backlog drag-reorder persistence | `POST /api/llc/companies/{id}/backlog/reorder` | `VITE_FEATURE_LLC_BACKLOG_REORDER` | rows non-draggable; no call emitted |
-| AC suggestion | `POST /api/llc/work-items/suggest-ac` (needs an LLM-backed service) | `VITE_FEATURE_LLC_SUGGEST_AC` | "Suggest ACs" button hidden |
-
-The unreachable calls to the missing endpoints were removed (documented
-placeholders) so the wiring audit stays clean and no button 404s. Both await a
-backend (tracked in #9861).
+| Feature | Backend | Behaviour |
+|---|---|---|
+| Backlog drag-reorder persistence | `POST /api/llc/companies/{id}/backlog/reorder` | rows draggable; full desired order POSTed, reverts on failure |
+| AC suggestion | `POST /api/llc/work-items/suggest-ac` | "Suggest ACs" button populates advisory ACs; empty on LLM-down |
 
 ## PHASE 2 — e2e proof (definition of "working")
 `autobot-backend/llc/tests/test_llc_e2e_loop.py` (+ `_e2e_harness.py`), commit 6022b27.
