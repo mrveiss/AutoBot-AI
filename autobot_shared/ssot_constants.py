@@ -382,6 +382,8 @@ class PathConstants:
     STATIC_DIR: Path = PROJECT_ROOT / "autobot-backend" / "static"
     FRONTEND_DIR: Path = PROJECT_ROOT / "autobot-frontend"
     TESTS_DIR: Path = PROJECT_ROOT / "autobot-backend"
+    # Temp/generated-files dir cleaned by tasks.cleanup_generated_files (#10385-adjacent)
+    TEMP_DIR: Path = DATA_DIR / "temp"
 
 
 PATH = PathConstants()
@@ -430,6 +432,9 @@ class SecurityConstants:
         "224.0.0.0/4",
         "240.0.0.0/4",
     ]
+
+    # Web ports permitted for outbound/domain network validation (#10384).
+    ALLOWED_WEB_PORTS: List[int] = [80, 443, 8080, 8443]
 
     USER_AGENT_POOL: List[str] = [
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",  # noqa: E501
