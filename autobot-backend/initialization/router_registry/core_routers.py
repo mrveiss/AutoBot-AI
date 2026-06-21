@@ -30,6 +30,7 @@ from api.chat import router as chat_router
 from api.chat_compare import router as chat_compare_router  # Issue #4414
 from api.chat_embed import router as chat_embed_router  # GH#9047
 from api.chat_presets import router as chat_presets_router  # GH#8595
+from api.benchmarks import router as benchmarks_router  # Issue #9024
 from api.collaboration import router as collaboration_router
 from api.config_revisions import router as config_revisions_router  # #1404
 from api.data_storage import router as data_storage_router
@@ -142,6 +143,7 @@ def _get_system_routers() -> list:
         (chat_compare_router, "", ["chat", "compare"], "chat_compare"),  # Issue #4414
         (chat_embed_router, "", ["chat", "embed"], "chat_embed"),  # GH#9047
         (chat_presets_router, "", ["chat"], "chat_presets"),  # GH#8595
+        (benchmarks_router, "", ["benchmarks"], "benchmarks"),  # Issue #9024
         (collaboration_router, "", ["collaboration"], "collaboration"),
         (
             telegram_bot_router,
