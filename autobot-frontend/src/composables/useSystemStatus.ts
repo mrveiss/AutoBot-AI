@@ -78,6 +78,7 @@ export interface UseSystemStatusReturn {
 
   // Computed-like getters
   getSystemStatusTooltip: () => string
+  getSystemStatusAriaLabel: () => string
   getSystemStatusText: () => string
   getSystemStatusDescription: () => string
 
@@ -99,6 +100,10 @@ const SERVICE_DISPLAY_NAMES: Record<string, string> = {
   frontend: 'Frontend',
   npu_worker: 'NPU Worker',
   browser: 'Browser Service',
+  // #10285: /service-monitor/services reports this under key `chromadb` while
+  // /service-monitor/vms/status reports the same health as 'AI Stack (ChromaDB)'.
+  // Map both to one display name so deduplicateServices() collapses the pair.
+  chromadb: 'AI Stack (ChromaDB)',
 }
 
 const DEFAULT_SERVICES: SystemService[] = [

@@ -99,6 +99,9 @@ class Permission(str, Enum):
     SANDBOX_EXECUTE = "sandbox.execute"
     SANDBOX_MANAGE = "sandbox.manage"
 
+    # === Service Lifecycle Manager ===
+    SERVICE_MANAGEMENT = "service.management"
+
     # === Shell Execution (dangerous — no single-user bypass allowed) ===
     SHELL_EXECUTE = "allow_shell_execute"
 
@@ -152,6 +155,19 @@ SYSTEM_PERMISSIONS: List[tuple] = [
     # Audit (Issue #683: Role-Based Access Control)
     ("audit:read", "audit", "read", "View audit logs"),
     ("audit:write", "audit", "write", "Manage audit logs (cleanup)"),
+    # Unified secrets — team/role vault access (#10088). The system/user/company/
+    # node vaults are gated by admin / ownership / LLC-membership, so only the
+    # team and role vaults consult these RBAC permissions (services/secrets_authz).
+    ("secrets:team:read", "secrets", "team:read", "Read team-vault secrets"),
+    ("secrets:team:write", "secrets", "team:write", "Write team-vault secrets"),
+    ("secrets:team:share", "secrets", "team:share", "Share team-vault secrets"),
+    ("secrets:team:revoke", "secrets", "team:revoke", "Revoke team-vault secret grants"),
+    ("secrets:role:read", "secrets", "role:read", "Read role-vault secrets"),
+    ("secrets:role:write", "secrets", "role:write", "Write role-vault secrets"),
+    ("secrets:role:share", "secrets", "role:share", "Share role-vault secrets"),
+    ("secrets:role:revoke", "secrets", "role:revoke", "Revoke role-vault secret grants"),
+    # Service management (#10198) — gates the SLM/service-management surface.
+    ("service.management", "service", "management", "Manage services / SLM administrative surface"),
 ]
 
 # Default system roles with their permissions for database seeding.
@@ -184,6 +200,16 @@ SYSTEM_ROLES: Dict[str, Dict] = {
             "admin:organization",
             "audit:read",
             "audit:write",
+            # Unified secrets (#10088): full team/role vault control.
+            "secrets:team:read",
+            "secrets:team:write",
+            "secrets:team:share",
+            "secrets:team:revoke",
+            "secrets:role:read",
+            "secrets:role:write",
+            "secrets:role:share",
+            "secrets:role:revoke",
+            "service.management",
         ],
     },
     "user": {
@@ -200,6 +226,12 @@ SYSTEM_ROLES: Dict[str, Dict] = {
             "files:upload",
             "files:download",
             "settings:read",
+            # Unified secrets (#10088): members read/write their team/role vault
+            # secrets; sharing/revoking grants stays admin-only.
+            "secrets:team:read",
+            "secrets:team:write",
+            "secrets:role:read",
+            "secrets:role:write",
         ],
     },
     "readonly": {
@@ -263,6 +295,7 @@ ROLE_PERMISSIONS: Dict[Role, List[Permission]] = {
         Permission.SANDBOX_VIEW,
         Permission.SANDBOX_EXECUTE,
         Permission.SANDBOX_MANAGE,
+        Permission.SERVICE_MANAGEMENT,
         Permission.SHELL_EXECUTE,
     ],
     Role.OPERATOR: [
@@ -287,6 +320,7 @@ ROLE_PERMISSIONS: Dict[Role, List[Permission]] = {
         Permission.BATCH_EXECUTE,
         Permission.SANDBOX_VIEW,
         Permission.SANDBOX_EXECUTE,
+        Permission.SERVICE_MANAGEMENT,
     ],
     Role.ANALYST: [
         Permission.API_READ,

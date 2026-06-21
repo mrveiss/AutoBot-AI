@@ -63,10 +63,16 @@ class ControlsService:
         session: AsyncSession,
         company_id: str,
         agent_id: str,
-        actor_user_id: str,
+        actor_user_id: Optional[str] = None,
         reason: Optional[str] = None,
+        actor_type: str = "user",
     ) -> dict:
-        """Set agent status=paused and set Redis pause flag."""
+        """Set agent status=paused and set Redis pause flag.
+
+        ``actor_type="system"`` (with ``actor_user_id=None``) records the pause
+        as a system-initiated board event — used by the auto-pause on
+        subscription-quota exhaustion (GH#10218).
+        """
         row = await self._get_agent_row(session, company_id, agent_id)
         if row is None:
             raise AgentNotFoundError(agent_id)
@@ -94,7 +100,7 @@ class ControlsService:
         await self._activity_log.record(
             session=session,
             company_id=company_id,
-            actor_type="user",
+            actor_type=actor_type,
             actor_id=actor_user_id,
             event_type=ActivityEventType.CONTROL_AGENT_PAUSED,
             entity_type="agent",
@@ -352,23 +358,33 @@ class ControlsService:
         return {"id": str(row[0])} if row else None
 
     async def _agents_in_sprint(self, session: AsyncSession, company_id: str, sprint_id: str) -> list:
-        """Agent IDs with in_progress work items in this sprint."""
+        """Agent slugs with in_progress work items in this sprint.
+
+        ``llc_work_items.assignee_agent_id`` holds the AgentOrgNode UUID PK
+        (#10032); resolve it to the ``agent_id`` slug that pause_agent keys on.
+        """
         result = await session.execute(
             text(
-                "SELECT DISTINCT assignee_agent_id FROM llc_work_items"
-                " WHERE sprint_id = :sprint_id AND company_id = :company_id"
-                "  AND status = 'in_progress' AND assignee_agent_id IS NOT NULL"
+                "SELECT DISTINCT a.agent_id FROM llc_work_items wi"
+                " JOIN agent_org_nodes a ON a.id = wi.assignee_agent_id"
+                "  AND a.company_id = wi.company_id"
+                " WHERE wi.sprint_id = :sprint_id AND wi.company_id = :company_id"
+                "  AND wi.status = 'in_progress' AND wi.assignee_agent_id IS NOT NULL"
             ),
             {"sprint_id": sprint_id, "company_id": company_id},
         )
         return [str(row[0]) for row in result.fetchall()]
 
     async def _paused_agents_in_sprint(self, session: AsyncSession, company_id: str, sprint_id: str) -> list:
-        """Agent IDs paused due to this sprint."""
+        """Agent slugs paused due to this sprint.
+
+        Join on the AgentOrgNode UUID PK (#10032: ``assignee_agent_id`` is the PK,
+        NOT the ``agent_id`` slug) and return the slug that resume_agent keys on.
+        """
         result = await session.execute(
             text(
-                "SELECT DISTINCT wi.assignee_agent_id FROM llc_work_items wi"
-                " JOIN agent_org_nodes a ON a.agent_id = wi.assignee_agent_id"
+                "SELECT DISTINCT a.agent_id FROM llc_work_items wi"
+                " JOIN agent_org_nodes a ON a.id = wi.assignee_agent_id"
                 "  AND a.company_id = wi.company_id"
                 " WHERE wi.sprint_id = :sprint_id AND wi.company_id = :company_id"
                 "  AND a.status = 'paused'"

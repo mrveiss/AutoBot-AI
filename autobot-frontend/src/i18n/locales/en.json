@@ -126,7 +126,13 @@
       "contextOverflowDescription": "Choose how to handle conversations approaching the context limit",
       "contextOverflowAuto": "Auto-summarize",
       "contextOverflowWarn": "Warn only",
-      "contextOverflowDisabled": "Disabled"
+      "contextOverflowDisabled": "Disabled",
+      "reasoningEffortLabel": "Reasoning Effort",
+      "reasoningEffortDescription": "Set how much reasoning effort the model uses by default for new messages",
+      "reasoningEffortAuto": "Auto",
+      "reasoningEffortLow": "Low",
+      "reasoningEffortMedium": "Medium",
+      "reasoningEffortHigh": "High"
     },
     "editName": "Edit Name",
     "copyMessage": "Copy message",
@@ -226,7 +232,9 @@
       "deletedWithFactsPreserved": "Deleted {count} chats (facts preserved in knowledge base)",
       "deletedSuccess": "Deleted {count} chats",
       "deleteFailed": "Failed to delete some chats",
-      "sharedSuccess": "Chat shared successfully"
+      "sharedSuccess": "Chat shared successfully",
+      "searchChats": "Search chats",
+      "noSearchResults": "No chats match your search"
     },
     "folders": {
       "folders": "Folders",
@@ -238,7 +246,10 @@
       "unpin": "Unpin folder",
       "assignToFolder": "Move to folder",
       "removeFromFolder": "Remove from folder",
-      "confirmDelete": "Delete folder \"{name}\"? Subfolders will be moved to root."
+      "confirmDelete": "Delete folder \"{name}\"? Subfolders will be moved to root.",
+      "archive": "Archive folder",
+      "unarchive": "Unarchive folder",
+      "archived": "Archived"
     },
     "interface": {
       "loadFailed": "Failed to load chat interface",
@@ -1392,7 +1403,11 @@
         "usage": "Usage",
         "usageAria": "Usage & Costs",
         "operations": "Operations",
-        "operationsAria": "Long-running operations"
+        "operationsAria": "Long-running operations",
+        "errors": "Errors",
+        "errorsAria": "Error monitoring",
+        "diagnostics": "Diagnostics",
+        "diagnosticsAria": "Failure analysis and causal inference"
       }
     },
     "header": {
@@ -2336,6 +2351,38 @@
         "scanning": "Scanning...",
         "scanFile": "Scan File"
       }
+    },
+    "failureAnalysis": {
+      "title": "Failure Analysis",
+      "subtitle": "Root-cause analysis powered by the causal inference engine",
+      "empty": "Enter a task ID above to run a failure analysis.",
+      "form": {
+        "title": "Analyze a Failure",
+        "taskId": "Task ID",
+        "taskIdPlaceholder": "e.g. task-abc123",
+        "errorDescription": "Error Description",
+        "errorDescriptionPlaceholder": "Optional: describe the error or paste a stack trace",
+        "analyze": "Analyze",
+        "analyzing": "Analyzing...",
+        "clear": "Clear"
+      },
+      "result": {
+        "taskId": "Task ID",
+        "confidence": "Confidence",
+        "status": "Status",
+        "duration": "Duration",
+        "rootCause": "Root Cause",
+        "causalChain": "Causal Chain",
+        "interventions": "Interventions",
+        "confounders": "Confounders",
+        "recommendations": "Recommendations",
+        "participants": "Participants",
+        "mechanism": "Mechanism",
+        "successRate": "Success Rate",
+        "cost": "Cost",
+        "risk": "Risk",
+        "confoundingStrength": "Confounding Strength"
+      }
     }
   },
   "knowledge": {
@@ -3059,6 +3106,49 @@
         "typeWebCrawlerDesc": "Crawl and index web pages by URL",
         "typeDatabase": "Database",
         "typeDatabaseDesc": "Query a database and index result rows",
+        "typeGdrive": "Google Drive",
+        "typeGdriveDesc": "Index documents from a personal or shared Google Drive",
+        "gdriveAccount": "Google Account",
+        "gdriveLabel": "Google Drive",
+        "gdriveConnected": "Google Drive connected.",
+        "gdriveSourceType": "Drive Type",
+        "gdriveMyDrive": "My Drive",
+        "gdriveShared": "Shared Drive",
+        "gdriveDriveId": "Shared Drive ID",
+        "gdriveFolderId": "Folder ID (optional)",
+        "gdriveFolderHint": "Limit the sync to a single folder. Leave blank to sync the whole drive.",
+        "gdriveSyncSubfolders": "Sync subfolders recursively",
+        "typeOnedrive": "OneDrive / SharePoint",
+        "typeOnedriveDesc": "Index documents from OneDrive or a SharePoint library",
+        "onedriveAccount": "Microsoft Account",
+        "onedriveLabel": "OneDrive",
+        "onedriveConnected": "OneDrive connected.",
+        "onedriveSourceType": "Source Type",
+        "onedriveOneDrive": "OneDrive",
+        "onedriveSharePoint": "SharePoint",
+        "onedriveSiteId": "SharePoint Site ID",
+        "onedriveDriveId": "Drive ID (optional)",
+        "onedriveDriveIdHint": "Specific drive to sync. Leave blank to use the default drive.",
+        "onedriveFolderPath": "Folder Path (optional)",
+        "onedriveFolderHint": "Limit the sync to a single folder path. Leave blank to sync the whole drive.",
+        "onedriveSyncSubfolders": "Sync subfolders recursively",
+        "typeGitlab": "GitLab",
+        "typeGitlabDesc": "Index issues, merge requests, and files from GitLab",
+        "typeGitea": "Gitea",
+        "typeGiteaDesc": "Index issues, pull requests, and files from Gitea",
+        "typeForgejo": "Forgejo",
+        "typeForgejoDesc": "Index issues, pull requests, and files from Forgejo",
+        "gitToken": "Personal Access Token",
+        "gitTokenHint": "Token with read access to repositories and issues.",
+        "gitlabUrl": "GitLab URL",
+        "gitlabProjectIds": "Project IDs (optional)",
+        "gitlabProjectIdsHint": "Comma-separated project IDs or paths. Leave blank to sync all accessible projects.",
+        "giteaUrl": "Instance URL",
+        "giteaRepos": "Repositories",
+        "giteaReposHint": "Comma-separated \"owner/repo\" entries.",
+        "gitSyncIssues": "Sync issues",
+        "gitSyncMergeRequests": "Sync merge / pull requests",
+        "gitSyncFiles": "Sync repository files",
         "scheduleManual": "Manual only",
         "schedule15min": "Every 15 minutes",
         "scheduleHourly": "Every hour",
@@ -4163,6 +4253,7 @@
       "switch": "Switch",
       "switchDefaultHint": "Switch default hint",
       "switchLabel": "switch",
+      "loopLabel": "Loop",
       "switchOnPlaceholder": "Enter switch on..."
     },
     "editStep": {
@@ -6653,6 +6744,65 @@
       "toastSavedToGallery": "Saved to gallery",
       "errorNoFrames": "No frames could be processed",
       "errorInvalidFile": "Please drop a valid video file"
+    },
+    "visionAutomation": {
+      "title": "Vision Automation",
+      "subtitle": "Screen analysis, UI element detection, OCR, and automation opportunity discovery",
+      "serviceStatus": "Service",
+      "sessionContext": "Session Context (optional)",
+      "sessionIdPlaceholder": "Session ID for context",
+      "tabsAriaLabel": "Vision automation tabs",
+      "analyzing": "Analyzing...",
+      "detecting": "Detecting...",
+      "extracting": "Extracting...",
+      "scanning": "Scanning...",
+      "errorLabel": "Error",
+      "tabs": {
+        "analysis": "Screen Analysis",
+        "elements": "Element Detection",
+        "ocr": "OCR",
+        "opportunities": "Automation Opportunities"
+      },
+      "columns": {
+        "id": "ID",
+        "type": "Type",
+        "confidence": "Confidence",
+        "text": "Text",
+        "interactions": "Interactions",
+        "position": "Center"
+      },
+      "analysis": {
+        "cardTitle": "Capture & Analyze Screen",
+        "trigger": "Capture & Analyze",
+        "elementsFound": "Elements",
+        "textRegions": "Text Regions",
+        "confidence": "Confidence",
+        "automationOpps": "Opportunities",
+        "detectedElements": "Detected UI Elements",
+        "empty": "Press Capture and Analyze to analyze the current screen"
+      },
+      "elements": {
+        "cardTitle": "Detect UI Elements",
+        "trigger": "Detect Elements",
+        "typePlaceholder": "Filter by element type (e.g. button)",
+        "minConfidence": "Min Confidence",
+        "results": "{filtered} of {total} elements",
+        "empty": "No elements match the current filter"
+      },
+      "ocr": {
+        "cardTitle": "OCR Text Extraction",
+        "trigger": "Extract Text",
+        "regionsFound": "{count} text region(s) found",
+        "noRegions": "No text regions detected",
+        "empty": "Press Extract Text to run OCR on the current screen"
+      },
+      "opportunities": {
+        "cardTitle": "Automation Opportunities",
+        "trigger": "Scan for Opportunities",
+        "total": "Total Opportunities",
+        "empty": "No automation opportunities found",
+        "emptyHint": "Press Scan for Opportunities to discover interactive elements"
+      }
     }
   },
   "visualizations": {
@@ -7414,6 +7564,7 @@
     "preferences": "Preferences",
     "llmConfig": "LLM Config",
     "browserAutomation": "Browser",
+    "visionAutomation": "Vision",
     "devSpeedup": "Dev Tools",
     "desktop": "Desktop",
     "customDashboard": "Custom Dashboard",
@@ -7422,6 +7573,7 @@
     "agentActivity": "Agent Activity",
     "experiments": "Experiments",
     "llmApiKeys": "LLM API Keys",
+    "llmProviders": "LLM Providers",
     "slmAdmin": "SLM Admin",
     "slmAdminTitle": "SLM Admin — opens in new tab",
     "profileSettings": "Profile Settings",
@@ -7445,12 +7597,25 @@
     "adminHosts": "Host Inventory",
     "adminSandbox": "Sandbox",
     "budgetPolicies": "Budget Policies",
+    "sharedLinks": "Shared Chat Links",
     "companyOs": "Company OS",
     "llcDashboard": "Dashboard",
     "llcOrgChart": "Org Chart",
     "llcGoals": "Goals",
     "llcCompanies": "Companies",
     "llcPortability": "Portability",
+    "llcBacklog": "Backlog",
+    "llcBoards": "Boards",
+    "llcPortfolios": "Portfolios",
+    "llcTimeline": "Timeline",
+    "llcApprovals": "Approvals",
+    "llcCosts": "Costs & Budget",
+    "llcHeartbeat": "Heartbeat",
+    "llcCeoChat": "CEO Chat",
+    "llcSelectCompany": "Switch Company",
+    "llcSelectCompanyPrompt": "Select a company to open its dashboard, backlog, and tools.",
+    "llcNoCompanies": "No companies yet.",
+    "llcCreateCompany": "Create a company",
     "settingsAndTools": "Settings & Tools",
     "adminPanel": "Admin Panel",
     "documents": "AI Documents"
@@ -7573,6 +7738,13 @@
     "placeholder": "Placeholder",
     "viewFull": "View full"
   },
+  "videoCell": {
+    "copyUrl": "Copy url",
+    "download": "Download",
+    "failed": "Video generation failed",
+    "generating": "Generating video…",
+    "placeholder": "Video"
+  },
   "plugins": {
     "capabilities": {
       "approvalDescription": "Approval description",
@@ -7593,6 +7765,51 @@
       "plugin": "Plugin",
       "status": "Status",
       "timestamp": "Timestamp"
+    }
+  },
+  "errorMonitoring": {
+    "title": "Error Monitoring",
+    "subtitle": "System-wide error statistics, recent errors, and component breakdown",
+    "lastUpdate": "Last updated",
+    "noMessage": "(no message)",
+    "cards": {
+      "totalErrors": "Total Errors"
+    },
+    "summary": {
+      "totalErrors": "Total errors",
+      "uniqueTypes": "Unique types",
+      "thresholds": "Alert thresholds",
+      "prometheusOn": "Prometheus metrics live",
+      "prometheusOff": "Prometheus metrics unavailable"
+    },
+    "filters": {
+      "category": "Category",
+      "component": "Component",
+      "all": "All"
+    },
+    "sections": {
+      "recentErrors": "Recent Errors",
+      "categories": "Errors by Category",
+      "components": "Errors by Component",
+      "timeline": "Error Timeline",
+      "topErrors": "Top Errors"
+    },
+    "timeline": {
+      "peak": "peak {n}"
+    },
+    "topErrors": {
+      "component": "Component",
+      "errorCode": "Error code",
+      "count": "Count"
+    },
+    "resolve": {
+      "action": "Resolve",
+      "resolved": "Resolved"
+    },
+    "empty": {
+      "noErrors": "No errors recorded",
+      "noData": "No data",
+      "metricsUnavailable": "Metrics unavailable"
     }
   }
 }

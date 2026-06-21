@@ -36,7 +36,7 @@ class LateProvider(SpeechProvider):
     def _check_availability(self):
         """Check if LATE binary is available."""
         try:
-            result = subprocess.run(
+            result = subprocess.run(  # nosec B603 - fixed argv [binary, "--version"]; binary path is from env var
                 [self.late_binary, "--version"],
                 capture_output=True,
                 text=True,
@@ -48,7 +48,7 @@ class LateProvider(SpeechProvider):
             else:
                 logger.warning(f"LATE binary check failed: {result.stderr}")
         except FileNotFoundError:
-            logger.warning(
+            logger.debug(
                 f"LATE binary not found at: {self.late_binary}. "
                 "Install LATE or set LATE_BINARY_PATH environment variable."
             )
@@ -110,7 +110,7 @@ class LateProvider(SpeechProvider):
             JSON output string or None on failure
         """
         try:
-            result = subprocess.run(
+            result = subprocess.run(  # nosec B603 - cmd is [late_binary + fixed flags]; callers construct argv, no user
                 cmd,
                 capture_output=True,
                 text=True,

@@ -1,4 +1,7 @@
-# AutoBot Hyper-V Deployment Configuration
+# AutoBot Deployment Configuration (target hosts/VMs, hypervisor-agnostic)
+# Legacy separated multi-VM topology layout; retained for reference. AutoBot
+# now deploys co-located via the SLM onto one or more hosts (co-located or
+# distributed). Requirements are a supported OS + hardware.
 network:
   subnet: "192.168.65.0/24"
   gateway: "192.168.65.1"

@@ -458,6 +458,11 @@ class UserBehaviorAnalytics(AsyncRedisClientLockedMixin):
                 reverse=True,
             )
 
+            # #9959: absorb the feature-centric aggregates from the retired
+            # /analytics/engagement-metrics endpoint so this canonical surface
+            # is a strict superset (those fields are derived from real
+            # feature_stats data, unlike the never-written legacy keyspace).
+            total_features_tracked = len(feature_data)
             return {
                 "timestamp": utc_timestamp(),
                 "metrics": {
@@ -465,6 +470,9 @@ class UserBehaviorAnalytics(AsyncRedisClientLockedMixin):
                     "total_page_views": total_views,
                     "avg_session_duration_ms": round(avg_session_duration, 2),
                     "pages_per_session": round(pages_per_session, 2),
+                    "total_features_tracked": total_features_tracked,
+                    "total_interactions": total_views,
+                    "average_interactions_per_feature": round(total_views / max(total_features_tracked, 1), 2),
                 },
                 "feature_popularity": popularity,
                 "most_popular_feature": (popularity[0]["feature"] if popularity else None),

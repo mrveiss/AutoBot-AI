@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 import { globalIgnores } from 'eslint/config'
 import { defineConfigWithVueTs, vueTsConfigs } from '@vue/eslint-config-typescript'
 import pluginVue from 'eslint-plugin-vue'
@@ -23,6 +25,13 @@ export default defineConfigWithVueTs(
     '**/dist/**',
     '**/dist-ssr/**',
     '**/coverage/**',
+    // #9693: Storybook build output is an untracked artifact (gitignored);
+    // ignore it here too so local `npm run lint` matches CI.
+    '**/storybook-static/**',
+    // #9693: generated code is not hand-maintained; eslint --fix strips the
+    // generator's /* eslint-disable */ banner, breaking the
+    // frontend-codegen-drift sync check (#7122).
+    'src/types/_generated/**',
     // Issue #6784: ESLint rule fixtures contain intentional rule violations
     // (deny.test.ts) and counter-examples (allow.test.ts). Excluded from
     // production lint; verify manually with `npx eslint --no-ignore eslint-tests/`.
@@ -85,6 +94,26 @@ export default defineConfigWithVueTs(
       // and any other literal/template containing the deployment range.
       // Use SSOT (window.location.hostname / VITE_*_HOST env vars) instead.
       // See docs/developer/HARDCODING_PREVENTION.md.
+      //
+      // Issue #10025: guard against ApiClient envelope misuse. The canonical
+      // ApiClient (`ApiClient.*` / the `useApiClient()` result, conventionally
+      // named `api` or `apiClient`) returns PARSED JSON directly — it is NOT a
+      // fetch `Response` and NOT an axios envelope. Calling `.json()` on the
+      // result throws `TypeError: .json is not a function`; reading `.data`
+      // yields `undefined`. This class has caused 40+ runtime bugs (latest
+      // #10013). See docs feedback "ApiClient.X returns parsed JSON directly".
+      //
+      // We flag the INLINE awaited-then-membered forms only:
+      //   (await ApiClient.get(...)).json()   and   (await ApiClient.get(...)).data
+      // (and the same for `api.*` / `apiClient.*`). The TWO-STATEMENT form
+      //   const r = await ApiClient.get(...); r.json()
+      // cannot be caught syntactically without type information and is NOT
+      // covered here — a typed rule would be required (tracked for follow-up if
+      // it recurs). The selectors are deliberately tight (callee identifier must
+      // be `api`/`apiClient`/`ApiClient`, method must be an HTTP verb) so they
+      // never fire on a real `fetch`/`rawRequest` Response `.json()`, nor on
+      // legitimate `.data` of Pinia state, refs, chart configs, or event
+      // payloads, nor on the two-statement `payload.data` pattern.
       'no-restricted-syntax': [
         'error',
         {
@@ -94,6 +123,20 @@ export default defineConfigWithVueTs(
         {
           selector: "TemplateElement[value.cooked=/172\\.16\\.168\\.[0-9]+/]",
           message: 'Hardcoded AutoBot VM IP in template literal — use window.location.hostname or VITE_*_HOST env var (#6784).',
+        },
+        {
+          // (await ApiClient.<verb>(...)).json()  — `.json()` on a parsed result.
+          selector:
+            "CallExpression[callee.property.name='json'][callee.object.type='AwaitExpression'][callee.object.argument.type='CallExpression'][callee.object.argument.callee.type='MemberExpression'][callee.object.argument.callee.property.name=/^(get|post|put|delete|patch)$/][callee.object.argument.callee.object.name=/^([aA]pi|[aA]piClient)$/]",
+          message:
+            'ApiClient already returns parsed JSON — do not call .json() on its result (#10025). Use `const data = await ApiClient.get<T>(...)` directly.',
+        },
+        {
+          // (await ApiClient.<verb>(...)).data  — axios-envelope `.data` access.
+          selector:
+            "MemberExpression[property.name='data'][object.type='AwaitExpression'][object.argument.type='CallExpression'][object.argument.callee.type='MemberExpression'][object.argument.callee.property.name=/^(get|post|put|delete|patch)$/][object.argument.callee.object.name=/^([aA]pi|[aA]piClient)$/]",
+          message:
+            'ApiClient returns parsed JSON, not an axios envelope — do not read .data on its result (#10025). The awaited value IS the payload.',
         },
       ],
       // Issue #7085: forbid console.* in production code — use createLogger from @/utils/debugUtils instead.

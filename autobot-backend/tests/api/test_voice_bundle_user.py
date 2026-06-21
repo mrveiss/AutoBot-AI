@@ -18,6 +18,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.voice_bundle_helpers import _require_admin
 from api.voice_bundle_user import (
     _check_self_or_admin,
     _get_user_id,
@@ -25,6 +26,7 @@ from api.voice_bundle_user import (
     router,
 )
 from auth_middleware import get_current_user
+from utils.catalog_http_exceptions import raise_auth_error
 
 # Test users
 _USER_ALICE = {"user_id": "alice", "username": "alice", "role": "user"}
@@ -33,14 +35,26 @@ _ADMIN = {"user_id": "admin-user", "username": "admin", "role": "admin"}
 
 
 def _make_client(user: dict) -> TestClient:
-    """Create a TestClient with dependency_overrides for get_current_user."""
+    """Create a TestClient with dependency_overrides for get_current_user.
+
+    Admin-gated routes depend on ``_require_admin`` (a Request-based middleware
+    check, GH#9450) rather than ``get_current_user``, so override it too —
+    role-gated against the injected user so admin routes 200 for admins and
+    403 for non-admins (GH#8977).
+    """
     app = FastAPI()
     app.include_router(router, prefix="/api/voice")
 
     async def _override():
         return user
 
+    def _override_require_admin() -> dict:
+        if user.get("role") != "admin":
+            raise_auth_error("AUTH_0003", "Admin permission required")
+        return user
+
     app.dependency_overrides[get_current_user] = _override
+    app.dependency_overrides[_require_admin] = _override_require_admin
     return TestClient(app)
 
 
@@ -111,7 +125,7 @@ class TestCheckSelfOrAdmin:
 class TestCountToolsForBundle:
     @pytest.mark.asyncio
     async def test_count_tools_returns_integer(self):
-        from api.voice_bundle_user import _count_tools_for_bundle, _tool_count_cache
+        from api.voice_bundle_helpers import _count_tools_for_bundle, _tool_count_cache
 
         _tool_count_cache.clear()
 
@@ -130,7 +144,7 @@ class TestCountToolsForBundle:
 
     @pytest.mark.asyncio
     async def test_count_tools_result_cached(self):
-        from api.voice_bundle_user import _count_tools_for_bundle, _tool_count_cache
+        from api.voice_bundle_helpers import _count_tools_for_bundle, _tool_count_cache
 
         _tool_count_cache.clear()
         call_count = 0

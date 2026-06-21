@@ -116,7 +116,6 @@ class SyncOrchestrator:
             "ssh",
             "-o",
             "StrictHostKeyChecking=accept-new",
-            "-o",
             "-p",
             str(port),
         ]
@@ -337,7 +336,6 @@ class SyncOrchestrator:
             "ssh",
             "-o",
             "StrictHostKeyChecking=accept-new",
-            "-o",
             "-o",
             "ConnectTimeout=10",
         ]

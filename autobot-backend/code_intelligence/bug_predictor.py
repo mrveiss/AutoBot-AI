@@ -761,7 +761,7 @@ class BugPredictor(_BaseClass):
         self._change_freq_cache = {}
         self._change_freq_cache_time = time.monotonic()
         try:
-            result = subprocess.run(  # nosec B607 - git is safe
+            result = subprocess.run(  # nosec B603 B607 - fixed git argv, no user input
                 [
                     "git",
                     "log",
@@ -833,7 +833,7 @@ class BugPredictor(_BaseClass):
             for kw in self.bug_keywords:
                 grep_args.extend(["--grep", kw])
 
-            result = subprocess.run(  # nosec B607 - git is safe
+            result = subprocess.run(  # nosec B603 B607 - fixed git argv, no user input
                 [
                     "git",
                     "log",

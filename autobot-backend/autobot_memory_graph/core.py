@@ -82,7 +82,7 @@ class Config:
     def __init__(self):
         self.redis_host = _ssot_config.vm.redis  # (#1148)
         self.redis_port = 6379
-        self.redis_db = DATABASE_MAPPING["knowledge"]  # (#2670)
+        self.redis_db = DATABASE_MAPPING["memory"]  # DB 0 — required for RediSearch FT.* (#9943)
         self.index_prefix = "autobot:entities"
         self.relations_prefix = "autobot:relations"
         self.embedding_model = "nomic-embed-text"
@@ -150,7 +150,13 @@ class AutoBotMemoryGraphCore:
 
             try:
                 # Initialize Redis client
-                self.redis_client = get_redis_client(async_client=True, database="knowledge")
+                # RediSearch FT.CREATE only operates on Redis logical DB 0.
+                # Both the FT indexes (memory_entity_idx, memory_fulltext_idx) and
+                # the data keys (memory:entity:*, memory:relations:*) must live on
+                # the same DB.  The "memory" alias maps to DB 0 for exactly this
+                # purpose — see autobot_shared/redis_management/types.py _ALIASES.
+                # Fixed by #9943 (same root cause as #9904).
+                self.redis_client = get_redis_client(async_client=True, database="memory")
 
                 # Create search indexes if they don't exist
                 await self._create_search_indexes()
@@ -176,29 +182,24 @@ class AutoBotMemoryGraphCore:
 
     async def _create_search_indexes(self) -> None:
         """
-        Create Redis search indexes for entities if they don't exist.
+        Create the RediSearch FT indexes for entity/full-text search.
 
-        Issue #665: Helper for initialize()
+        Delegates to the canonical ``ensure_indexes`` coroutine in
+        ``semantic_search`` (the single source of the FT.CREATE schema for
+        ``memory_entity_idx`` / ``memory_fulltext_idx`` over ``memory:entity:*``
+        JSON keys).  Without this call the production init path created no
+        index, so FT.SEARCH always degraded to the slow SCAN fallback (#9943).
+
+        Imported lazily because ``semantic_search`` imports from this module
+        at import time (circular-import guard).
+
+        Issue #665 / #9943: Helper for initialize().
         """
-        try:
-            # Check if index exists
-            exists = await self._check_index_exists(self.index_name)
-            if exists:
-                logger.debug(f"Search index {self.index_name} already exists")
-                return
+        from .semantic_search import ensure_indexes
 
-            # Create index for entity search
-            # Note: This is a simplified version. Full implementation
-            # would include FT.CREATE with proper schema
-            logger.info(f"Creating search index: {self.index_name}")
-
-            # Index creation would go here
-            # Actual implementation depends on RedisSearch version and schema
-
-        except Exception as e:
-            logger.warning(f"Error creating search indexes: {e}")
-            # Don't fail initialization if index creation fails
-            # Index may already exist or be created manually
+        # ensure_indexes performs its own per-index existence check and swallows
+        # creation errors with a warning, so initialization is never blocked.
+        await ensure_indexes(self.redis_client)
 
     async def _check_index_exists(self, index_name: str) -> bool:
         """

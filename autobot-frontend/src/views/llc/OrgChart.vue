@@ -6,24 +6,33 @@
 import { ref, onMounted } from 'vue'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
+import { useLlcCompanyContext } from '@/composables/llc/useLlcCompanyContext'
 import OrgTreeNode from './OrgTreeNode.vue'
 import type { OrgNode } from './OrgTreeNode.vue'
+import HireAgentModal from '@/components/llc/HireAgentModal.vue'
 
 const logger = createLogger('OrgChart')
 const api = useApiClient()
+const { companyId, resolveCompanyId } = useLlcCompanyContext()
 
 const tree = ref<OrgNode[]>([])
 const isLoading = ref(false)
 const error = ref<string | null>(null)
 const selectedNode = ref<OrgNode | null>(null)
 const drawerOpen = ref(false)
+const showHire = ref(false) // GH#10219
 
 async function fetchTree() {
   isLoading.value = true
   error.value = null
   try {
-    const resp = await api.get<{ data: { nodes: OrgNode[] } }>('/api/llc/org-chart')
-    tree.value = (resp as { data: { nodes: OrgNode[] } }).data?.nodes ?? []
+    const cid = await resolveCompanyId()
+    if (!cid) {
+      tree.value = []
+      return
+    }
+    const resp = await api.get<{ nodes: OrgNode[] }>(`/api/llc/companies/${cid}/org-chart`)
+    tree.value = resp?.nodes ?? []
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)
     logger.error('Failed to fetch org chart:', msg)
@@ -34,10 +43,18 @@ async function fetchTree() {
 }
 
 async function toggleAgentPause(node: OrgNode) {
-  const action = node.status === 'paused' ? 'resume' : 'pause'
+  if (!companyId.value) return
+  const willPause = node.status !== 'paused'
+  const cid = companyId.value
   try {
-    await api.post(`/api/llc/agents/${node.id}/${action}`, {})
-    node.status = action === 'pause' ? 'paused' : 'idle'
+    // Explicit literal paths (not a template action) so each resolves to the
+    // canonical /controls/agents/{id}/pause | /resume endpoint.
+    if (willPause) {
+      await api.post(`/api/llc/companies/${cid}/controls/agents/${node.id}/pause`, {})
+    } else {
+      await api.post(`/api/llc/companies/${cid}/controls/agents/${node.id}/resume`, {})
+    }
+    node.status = willPause ? 'paused' : 'idle'
     if (selectedNode.value?.id === node.id) selectedNode.value = { ...node }
   } catch (err: unknown) {
     logger.error('Toggle pause failed', err)
@@ -64,7 +81,23 @@ onMounted(fetchTree)
 
 <template>
   <div class="p-4 max-w-7xl mx-auto">
-    <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-6">Org Chart</h1>
+    <div class="flex items-center justify-between mb-6">
+      <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100">Org Chart</h1>
+      <button
+        v-if="companyId"
+        class="px-3 py-1.5 rounded-md bg-indigo-600 text-white text-sm hover:bg-indigo-700"
+        @click="showHire = true"
+      >
+        Hire Agent
+      </button>
+    </div>
+
+    <HireAgentModal
+      v-if="showHire && companyId"
+      :company-id="companyId"
+      @close="showHire = false"
+      @hired="fetchTree"
+    />
 
     <div v-if="error" class="rounded-lg bg-red-50 border border-red-200 p-4 text-red-700 text-sm mb-4">
       {{ error }}

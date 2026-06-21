@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """Add merged_count to agent_wakeup_requests for wakeup coalescing observability.
 
 Revision ID: 20260522_021

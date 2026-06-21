@@ -49,10 +49,22 @@ jobs:
 
       - name: Check if release needed
         id: check
+        env:
+          # The action's `version` output is broken for `--bumped-version` args:
+          # its run.sh re-runs git-cliff with `--context`, which then emits the
+          # plain version string instead of JSON, so its internal
+          # `jq -r '.[0].version'` fails and `version` is always empty (#9870).
+          # The bumped version is the output FILE content -> `content` output.
+          CLIFF_CONTENT: ${{ steps.version.outputs.content }}
         run: |
-          NEXT_VERSION="${{ steps.version.outputs.version }}"
-          if [ -z "$NEXT_VERSION" ]; then
-            echo "No version bump needed (no conventional commits since last tag)"
+          NEXT_VERSION="$(tr -d '[:space:]' <<<"$CLIFF_CONTENT")"
+          if [[ ! "$NEXT_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "No version bump needed (git-cliff returned: '$NEXT_VERSION')"
+            echo "release_needed=false" >> "$GITHUB_OUTPUT"
+          elif git rev-parse -q --verify "refs/tags/$NEXT_VERSION" >/dev/null; then
+            # --bumped-version returns the CURRENT version when there is
+            # nothing to bump - never re-tag an existing release
+            echo "Tag $NEXT_VERSION already exists - no release needed"
             echo "release_needed=false" >> "$GITHUB_OUTPUT"
           else
             echo "Next version: $NEXT_VERSION"

@@ -13,6 +13,7 @@
  * - Change history and statistics
  */
 
+import type { IconName } from '@/components/ui/Icon.vue'
 import { ref, computed, onScopeDispose, getCurrentScope } from 'vue'
 import { useI18n } from 'vue-i18n'
 import ApiClient from '@/utils/ApiClient'
@@ -182,14 +183,16 @@ export function useDocumentChanges() {
 
     try {
       // Issue #552: Fixed path - backend uses /api/knowledge-maintenance/*
-      const response = await ApiClient.post<any>(`${getApiBase()}/knowledge-maintenance/scan_host_changes`, {
-        machine_id: machineId.value,
-        force,
-        scan_type: 'manpages',
-        auto_vectorize: autoVectorize
-      })
-
-      const result: ChangeDetectionResult = await response.json()
+      // ApiClient.post() returns the parsed JSON body directly — no .json()/.data envelope. (#10357)
+      const result = await ApiClient.post<ChangeDetectionResult>(
+        `${getApiBase()}/knowledge-maintenance/scan_host_changes`,
+        {
+          machine_id: machineId.value,
+          force,
+          scan_type: 'manpages',
+          auto_vectorize: autoVectorize
+        }
+      )
 
       if (result.status === 'success') {
         // Update summary
@@ -229,16 +232,18 @@ export function useDocumentChanges() {
   /**
    * Get change icon based on change type
    */
-  const getChangeIcon = (changeType: string): string => {
+  // #9724: consumed by <Icon :name="..."> (DocumentChangeFeed) — must return
+  // an SVG IconName; the previous FA class strings rendered empty SVGs.
+  const getChangeIcon = (changeType: string): IconName => {
     switch (changeType) {
       case 'added':
-        return 'fas fa-plus-circle text-green-500'
+        return 'plus-circle'
       case 'updated':
-        return 'fas fa-sync-alt text-blue-500'
+        return 'sync-alt'
       case 'removed':
-        return 'fas fa-minus-circle text-red-500'
+        return 'minus-circle'
       default:
-        return 'fas fa-info-circle text-gray-500'
+        return 'info-circle'
     }
   }
 

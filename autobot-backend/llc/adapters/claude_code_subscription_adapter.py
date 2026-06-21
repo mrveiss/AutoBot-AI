@@ -5,9 +5,12 @@
 """ClaudeCodeSubscriptionAdapter — runs Claude Code CLI with subscription auth (GH#9033).
 
 Like ClaudeCodeAdapter but enforces subscription-only mode:
-- No API key in environment (uses browser OAuth)
-- Token usage parsed from CLI output
-- Quota exhaustion triggers auto-pause + board notification
+- No API key in environment — the Claude Code CLI authenticates via its own
+  one-time browser login (``claude login``, stored in ~/.claude), so there is
+  no token to inject from secrets here (GH#10217); this adapter only strips the
+  API-key env vars so the CLI falls back to that subscription session.
+- Token usage parsed from CLI output (GH#10220)
+- Quota exhaustion triggers auto-pause + board notification (GH#10218)
 
 adapter_config schema::
 
@@ -180,10 +183,19 @@ class ClaudeCodeSubscriptionAdapter(ClaudeCodeAdapter):
         return env
 
     async def status(self, agent_config: dict, run_id: str) -> AdapterRunStatus:
-        """Check status and parse token usage from output."""
+        """Check status and parse token usage from output.
+
+        Quota-exhaustion (subscription limit) takes precedence over RATE_LIMITED
+        (per-minute API rate limit) when both could apply.  ``_check_quota_exhaustion``
+        is evaluated first on any terminal state so that a subscription-limit hit
+        always returns FAILED (no retry loop) rather than RATE_LIMITED (backoff loop).
+        """
         base_status = await super().status(agent_config, run_id)
 
         # On any terminal state, check the output for quota exhaustion (GH#9777).
+        # This check runs BEFORE honoring an inherited RATE_LIMITED so that a
+        # subscription-quota hit (→ FAILED, no retry) beats a transient rate-limit
+        # (→ RATE_LIMITED, exponential backoff) when both patterns match (M2).
         if base_status.status.is_terminal():
             cfg = agent_config.get("adapter_config", {})
             output_dir: str = cfg.get("output_dir", "/tmp")  # nosec B108
@@ -198,10 +210,10 @@ class ClaudeCodeSubscriptionAdapter(ClaudeCodeAdapter):
                     run_id,
                 )
 
-                # TODO: Implement auto-pause + board notification (depends on GH#8225)
-                # For now, just return FAILED status with clear error
+                # GH#10218: signal QUOTA_EXHAUSTED so the scheduler auto-pauses
+                # the agent and logs a board-visible pause event (no retry).
                 return AdapterRunStatus(
-                    status=LLCRunStatus.FAILED,
+                    status=LLCRunStatus.QUOTA_EXHAUSTED,
                     error="Subscription quota exhausted. Please check your Claude Max subscription limits.",
                 )
 

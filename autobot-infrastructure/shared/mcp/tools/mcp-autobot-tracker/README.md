@@ -296,3 +296,13 @@ Part of the AutoBot project. See main project license.
    - "Analyze patterns and generate knowledge insights"
 
 The MCP tracker will begin monitoring AutoBot immediately and will have useful insights within minutes of operation.
+
+---
+
+## Documentation
+
+- [CLAUDE_DESKTOP_SETUP.md](CLAUDE_DESKTOP_SETUP.md) — Step-by-step Claude Desktop integration guide
+- [USAGE_EXAMPLES.md](USAGE_EXAMPLES.md) — Example queries and MCP tool usage
+- [PRODUCTION_DEPLOYMENT.md](PRODUCTION_DEPLOYMENT.md) — Production deployment guide
+- [IMPLEMENTATION_COMPLETE.md](IMPLEMENTATION_COMPLETE.md) — Implementation record
+- [UNFINISHED_TASKS_CORRELATION_REPORT.md](UNFINISHED_TASKS_CORRELATION_REPORT.md) — Task correlation analysis report

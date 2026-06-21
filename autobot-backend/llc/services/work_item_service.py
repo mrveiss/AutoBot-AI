@@ -24,6 +24,7 @@ Co-working (GH#8230):
   the checkout lock. Co-workers may read, comment, and create subtasks freely.
 """
 
+import asyncio
 import logging
 import uuid
 from datetime import datetime, timezone
@@ -42,6 +43,11 @@ from ..models.work_item import LLCWorkItem, LLCWorkItemComment
 from .base import LLCServiceBase
 
 logger = logging.getLogger(__name__)
+
+# Module-level set that holds references to fire-and-forget background tasks
+# so the GC cannot collect them before they complete.  Each task removes itself
+# via add_done_callback.  (GH#9532)
+_bg_tasks: set = set()
 
 _CHECKOUT_TTL = 1800  # seconds
 
@@ -139,6 +145,81 @@ async def resolve_actor_role(session: AsyncSession, actor_id: Optional[str], com
     return "member"
 
 
+async def _run_intent_similarity(work_intent: str, item_title: str, work_item_id: str) -> None:
+    """Fire-and-forget similarity check — never raises (GH#9532).
+
+    Accepts plain strings only; no session reference is passed so this coroutine
+    is safe to run after the request-scoped session has been closed.
+    """
+    try:
+        from .work_intent_similarity import check_similarity
+
+        await check_similarity(work_intent, item_title, work_item_id)
+    except Exception as exc:
+        logger.debug("_run_intent_similarity: non-critical failure: %s", exc)
+
+
+def _schedule_intent_similarity(work_intent: str, item_title: str, work_item_id: str) -> None:
+    """Schedule *_run_intent_similarity* as a background asyncio task (GH#9532).
+
+    The task is anchored in the module-level ``_bg_tasks`` set so the GC cannot
+    collect it before it completes.  The task MUST NOT receive a request-scoped
+    session — only plain strings are passed.
+    """
+    task = asyncio.create_task(_run_intent_similarity(work_intent, item_title, work_item_id))
+    _bg_tasks.add(task)
+    task.add_done_callback(_bg_tasks.discard)
+
+
+async def _post_checkout_comment(
+    session: AsyncSession,
+    item: LLCWorkItem,
+    work_intent: str,
+    agent_id: str,
+    service: Optional["WorkItemService"] = None,
+) -> None:
+    """Add the audit comment 'Starting <id>: <intent>' — never raises (GH#9532).
+
+    A flush failure inside the SAVEPOINT rolls back only the nested transaction;
+    the outer checkout transaction is unaffected.  CommentWakeService is
+    intentionally not triggered here — the "Starting …" note is a self-authored
+    audit entry, not a human-initiated comment.
+    """
+    try:
+        comment_body = f"Starting {item.identifier}: {work_intent}"
+        async with session.begin_nested():
+            # Reuse WorkItemService.add_comment to avoid re-implementing comment
+            # insertion logic.  add_comment calls session.flush() internally;
+            # wrapping the whole block in begin_nested() ensures a flush failure
+            # rolls back only this savepoint and leaves the session committable.
+            if service is not None:
+                await service.add_comment(
+                    session,
+                    str(item.id),
+                    str(item.company_id),
+                    comment_body,
+                    author_agent_id=agent_id,
+                )
+            else:
+                comment = LLCWorkItemComment(
+                    id=uuid.uuid4(),
+                    company_id=item.company_id,
+                    work_item_id=item.id,
+                    body=comment_body,
+                    author_agent_id=uuid.UUID(agent_id) if agent_id else None,
+                    author_user_id=None,
+                )
+                session.add(comment)
+                await session.flush()
+        logger.debug(
+            "_post_checkout_comment: posted comment for work_item=%s agent=%s",
+            item.id,
+            agent_id,
+        )
+    except Exception as exc:
+        logger.warning("_post_checkout_comment: failed (non-critical): %s", exc)
+
+
 class WorkItemService(LLCServiceBase):
     """Service for LLC work item lifecycle management."""
 
@@ -225,6 +306,8 @@ class WorkItemService(LLCServiceBase):
             "assignee_agent_id",
             "assignee_user_id",
             "assignee_type",
+            "scheduled_start",
+            "scheduled_end",
         }
         for key, val in fields.items():
             if key not in allowed:
@@ -291,14 +374,18 @@ class WorkItemService(LLCServiceBase):
         work_item_id: str,
         agent_id: str,
         run_id: Optional[str] = None,
+        work_intent: Optional[str] = None,
     ) -> LLCWorkItem:
         """Atomically claim a work item for an agent.
 
         Step 1: Redis SET NX EX as fast-path fence.
         Step 2: SELECT FOR UPDATE to prevent race across DB workers.
         Step 3: Write checkout fields + transition to IN_PROGRESS.
+        Step 4: (non-blocking) intent similarity check vs. title.
+        Step 5: Auto-post audit comment when work_intent is supplied.
 
         Raises CheckoutConflict if another agent holds the lock.
+        The work_intent parameter is optional; omitting it preserves existing behaviour exactly.
         """
         redis_key = f"llc:checkout:{work_item_id}"
         redis = await get_async_redis_client()
@@ -329,12 +416,30 @@ class WorkItemService(LLCServiceBase):
         item.checkout_locked_at = datetime.now(timezone.utc)
         item.assignee_agent_id = uuid.UUID(agent_id)
         item.assignee_type = "agent"
+        # GH#9532 — persist intent for audit trail.  Clearing prior intent when
+        # work_intent is absent is deliberate: stale intent must not survive a
+        # new checkout.
+        item.checkout_intent = work_intent
         item.version += 1
         if item.status in (WorkItemStatus.BACKLOG, WorkItemStatus.READY):
             item.status = WorkItemStatus.IN_PROGRESS
             item.started_at = item.started_at or datetime.now(timezone.utc)
 
         await session.flush()
+
+        # GH#9532: non-blocking advisory checks — never block or fail the checkout.
+        # Similarity runs as a fire-and-forget background task (no row lock held).
+        # Comment uses a SAVEPOINT so a flush failure cannot poison the outer txn.
+        if work_intent:
+            try:
+                _schedule_intent_similarity(work_intent, item.title, work_item_id)
+            except Exception as _exc:
+                logger.debug("checkout: similarity schedule skipped (non-critical): %s", _exc)
+            try:
+                await _post_checkout_comment(session, item, work_intent, agent_id, service=self)
+            except Exception as _exc:
+                logger.debug("checkout: comment post skipped (non-critical): %s", _exc)
+
         return item
 
     async def release(

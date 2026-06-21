@@ -20,8 +20,8 @@ aliases:
 
 | Document | Description |
 | --- | --- |
-| [CLAUDE_RULES](CLAUDE_RULES.md) | Core development rules (check before writing, reuse, verify) |
-| [CLAUDE_WORKFLOW](CLAUDE_WORKFLOW.md) | Full development workflow |
+| [CODE_REVIEW_HARDENING](CODE_REVIEW_HARDENING.md) | Code review hardening guidance |
+| [doc-management](doc-management.md) | Documentation management, zones, and tagging |
 | [AUTOBOT_REFERENCE](AUTOBOT_REFERENCE.md) | IPs, playbooks, quick reference |
 | [DEVELOPER_SETUP](DEVELOPER_SETUP.md) | Developer onboarding |
 | [HARDCODING_PREVENTION](HARDCODING_PREVENTION.md) | Rules against hardcoded values |
@@ -31,6 +31,7 @@ aliases:
 | Document | Description |
 | --- | --- |
 | [01-architecture](01-architecture.md) | System architecture overview |
+| [CODEGEN_MANIFEST](CODEGEN_MANIFEST.md) | Codegen MANIFEST — canonical enum/dataclass → TS generation |
 | [02-process-flow](02-process-flow.md) | Request handling flow |
 | [03-api-reference](03-api-reference.md) | API documentation |
 | [04-configuration](04-configuration.md) | Configuration options |
@@ -93,6 +94,7 @@ aliases:
 | Document | Description |
 | --- | --- |
 | [INFRASTRUCTURE_DEPLOYMENT](INFRASTRUCTURE_DEPLOYMENT.md) | Deployment guide |
+| [RELEASE_WORKFLOW](RELEASE_WORKFLOW.md) | Release tagging + changelog generation (git-cliff, fragments, release.yml) |
 | [SERVICE_MANAGEMENT](SERVICE_MANAGEMENT.md) | Service management |
 | [ANSIBLE_CREDENTIAL_SECURITY](ANSIBLE_CREDENTIAL_SECURITY.md) | Ansible credential security |
 | [OPENVINO_SETUP](OPENVINO_SETUP.md) | OpenVINO setup |

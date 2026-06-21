@@ -9,6 +9,9 @@ Handles SSO provider configuration and authentication flows.
 Supports OAuth2 (Google, GitHub, Facebook), LDAP/AD, and SAML.
 """
 
+import base64
+import hashlib
+import json
 import logging
 import secrets
 import uuid
@@ -41,6 +44,14 @@ except ImportError:
     Saml2Client = Saml2Config = None  # type: ignore
 
 logger = logging.getLogger(__name__)
+
+OAUTH_STATE_TTL_SECONDS = 600
+
+
+def _pkce_challenge_s256(verifier: str) -> str:
+    """Derive the RFC 7636 S256 code_challenge from a code_verifier."""
+    digest = hashlib.sha256(verifier.encode("ascii")).digest()
+    return base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
 
 
 class SSOServiceError(Exception):
@@ -76,13 +87,13 @@ class SSOService(BaseService):
             },
             SSOProviderType.GOOGLE_WORKSPACE.value: {
                 "authorize_url": "https://accounts.google.com/o/oauth2/v2/auth",
-                "token_url": "https://oauth2.googleapis.com/token",
+                "token_url": "https://oauth2.googleapis.com/token",  # nosec B105 - OAuth2 public token endpoint URL,
                 "userinfo_url": "https://openidconnect.googleapis.com/v1/userinfo",
                 "scope": "openid email profile",
             },
             SSOProviderType.GITHUB.value: {
                 "authorize_url": "https://github.com/login/oauth/authorize",
-                "token_url": "https://github.com/login/oauth/access_token",
+                "token_url": "https://github.com/login/oauth/access_token",  # nosec B105 - OAuth2 public token endpoint
                 "userinfo_url": "https://api.github.com/user",
                 "scope": "user:email read:user",
             },
@@ -201,23 +212,33 @@ class SSOService(BaseService):
             logger.error("LDAP connection test failed: %s", e)
             return {"success": False, "message": "LDAP connection test failed"}
 
-    async def _generate_oauth_state(self, provider_id: uuid.UUID) -> str:
-        """Generate OAuth2 state token and store provider mapping in Redis with 10-min TTL."""
+    async def _generate_oauth_state(self, provider_id: uuid.UUID) -> tuple[str, str]:
+        """Generate OAuth2 state + PKCE verifier; store both in Redis with TTL."""
         state = secrets.token_urlsafe(32)
+        code_verifier = secrets.token_urlsafe(64)
         redis = get_redis_client()
         if redis:
-            await redis.set(f"sso:state:{state}", str(provider_id), ex=600)
-        return state
+            payload = json.dumps({"provider_id": str(provider_id), "code_verifier": code_verifier})
+            await redis.set(f"sso:state:{state}", payload, ex=OAUTH_STATE_TTL_SECONDS)
+        return state, code_verifier
 
-    async def _validate_oauth_state(self, state: str) -> uuid.UUID:
-        """Validate OAuth2 state token via atomic GETDEL (single-use, replay-safe)."""
+    async def _validate_oauth_state(self, state: str) -> tuple[uuid.UUID, str | None]:
+        """Validate state via atomic GETDEL (single-use). Returns (provider_id, code_verifier)."""
         redis = get_redis_client()
-        if redis:
-            provider_id_str = await redis.getdel(f"sso:state:{state}")
-            if not provider_id_str:
-                raise SSOAuthenticationError("Invalid or expired OAuth state")
-            return uuid.UUID(provider_id_str)
-        raise SSOAuthenticationError("Redis unavailable for state validation")
+        if not redis:
+            raise SSOAuthenticationError("Redis unavailable for state validation")
+        raw = await redis.getdel(f"sso:state:{state}")
+        if not raw:
+            raise SSOAuthenticationError("Invalid or expired OAuth state")
+        try:
+            data = json.loads(raw)
+            return uuid.UUID(data["provider_id"]), data.get("code_verifier")
+        except (json.JSONDecodeError, TypeError, KeyError):
+            # Legacy plain-UUID state from a pre-PKCE in-flight login.
+            try:
+                return uuid.UUID(raw), None
+            except ValueError as e:
+                raise SSOAuthenticationError("Malformed OAuth state") from e
 
     async def _build_oauth_client(self, provider: SSOProvider) -> Any:
         """Build OAuth2 client from provider config with decrypted credentials."""
@@ -239,9 +260,9 @@ class SSOService(BaseService):
         )
 
     async def _get_oauth_authorize_url(self, provider: SSOProvider, callback_url: str) -> tuple[str, str]:
-        """Generate OAuth2 authorization URL."""
+        """Generate OAuth2 authorization URL with PKCE (S256)."""
         client = await self._build_oauth_client(provider)
-        state = await self._generate_oauth_state(provider.id)
+        state, code_verifier = await self._generate_oauth_state(provider.id)
         authorize_url = provider.config.get("authorize_url")
         scope = provider.config.get("scope", "openid email profile")
         url, _ = await client.create_authorization_url(
@@ -249,19 +270,21 @@ class SSOService(BaseService):
             redirect_uri=callback_url,
             scope=scope,
             state=state,
+            code_challenge=_pkce_challenge_s256(code_verifier),
+            code_challenge_method="S256",
         )
         return url, state
 
-    async def _exchange_oauth_code(self, provider: SSOProvider, code: str, callback_url: str) -> dict[str, Any]:
-        """Exchange OAuth2 authorization code for access token."""
+    async def _exchange_oauth_code(
+        self, provider: SSOProvider, code: str, callback_url: str, code_verifier: str | None = None
+    ) -> dict[str, Any]:
+        """Exchange OAuth2 authorization code for access token (PKCE verifier when present)."""
         client = await self._build_oauth_client(provider)
         token_url = provider.config.get("token_url")
-        token = await client.fetch_token(
-            token_url,
-            code=code,
-            redirect_uri=callback_url,
-        )
-        return token
+        kwargs: dict[str, Any] = {"code": code, "redirect_uri": callback_url}
+        if code_verifier:
+            kwargs["code_verifier"] = code_verifier
+        return await client.fetch_token(token_url, **kwargs)
 
     async def _get_oauth_userinfo(self, provider: SSOProvider, token: dict[str, Any]) -> dict[str, Any]:
         """Fetch user info from OAuth2 provider."""
@@ -284,12 +307,12 @@ class SSOService(BaseService):
     ) -> User:
         """Complete OAuth2 login flow and return authenticated user."""
         # Always validate state to prevent CSRF attacks
-        state_provider_id = await self._validate_oauth_state(state)
+        state_provider_id, code_verifier = await self._validate_oauth_state(state)
         if provider_id is not None and provider_id != state_provider_id:
             raise SSOAuthenticationError("State/provider mismatch")
         provider_id = state_provider_id
         provider = await self.get_provider(provider_id)
-        token = await self._exchange_oauth_code(provider, code, callback_url)
+        token = await self._exchange_oauth_code(provider, code, callback_url, code_verifier=code_verifier)
         userinfo = await self._get_oauth_userinfo(provider, token)
         external_id = userinfo.get("sub") or userinfo.get("id")
         user_data = self._extract_oauth_user_data(userinfo, provider)

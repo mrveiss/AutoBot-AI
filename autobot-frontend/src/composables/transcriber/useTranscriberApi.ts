@@ -3,6 +3,7 @@
 // AutoBot - AI-Powered Automation Platform
 // Author: mrveiss
 import { useApiClient } from '@/plugins/api'
+import { getBackendUrl } from '@/config/ssot-config'
 
 export interface Project {
   id: number
@@ -12,12 +13,14 @@ export interface Project {
   user_id: string
 }
 
+export type RecordingStatus = 'pending' | 'processing' | 'complete' | 'error'
+
 export interface Recording {
   id: number
   project_id: number
   filename: string
   duration: number | null
-  status: 'pending' | 'processing' | 'complete' | 'error'
+  status: RecordingStatus
   speaker_count: number
   process_seconds: number | null
   engine_used: string | null
@@ -53,11 +56,39 @@ export interface TranscriptResponse {
   segments: Segment[]
 }
 
+export interface WaveformSegmentMarker {
+  start_time: number
+  end_time: number
+  speaker_id: number | null
+}
+
+export interface WaveformResponse {
+  recording_id: number
+  duration: number
+  peaks: number[]
+  width: number
+  segments: WaveformSegmentMarker[]
+}
+
 export interface KbPushStatus {
   pushed: boolean
   pushed_at: string | null
   kb_collection_id: string | null
   pushed_by: string | null
+}
+
+// Cloud ASR (speech-to-text) provider selection (#10147). The backend never
+// returns API keys; `configured` reflects whether a server-side key is present.
+export interface AsrProvider {
+  id: string
+  name: string
+  configured: boolean
+  languages: string[]
+}
+
+export interface AsrProvidersResponse {
+  selected: string | null
+  providers: AsrProvider[]
 }
 
 export function useTranscriberApi() {
@@ -96,6 +127,13 @@ export function useTranscriberApi() {
       api.post(`${base}/segments/${segmentId}/notes`, { content }),
     deleteNote: (noteId: number) => api.delete(`${base}/notes/${noteId}`),
 
+    // Audio playback (#9466)
+    // Absolute URL streamed directly by the <audio>/wavesurfer element via HTTP Range.
+    audioChunksUrl: (recordingId: number) =>
+      `${getBackendUrl()}${base}/recordings/${recordingId}/audio/chunks`,
+    getWaveform: (recordingId: number) =>
+      api.get<WaveformResponse>(`${base}/recordings/${recordingId}/audio/waveform`),
+
     // Export
     exportRecording: (recordingId: number, format: 'docx' | 'pdf' | 'srt' | 'vtt', options = {}) =>
       api.rawRequest(`${base}/recordings/${recordingId}/export`, {
@@ -112,5 +150,9 @@ export function useTranscriberApi() {
       api.post(`${base}/recordings/${recordingId}/kb/push`, { collection_id: collectionId }),
     kbStatus: (recordingId: number) =>
       api.get<KbPushStatus>(`${base}/recordings/${recordingId}/kb/status`),
+
+    // Cloud ASR provider selection (#10147)
+    listAsrProviders: () => api.get<AsrProvidersResponse>(`${base}/providers`),
+    setAsrProvider: (id: string) => api.patch(`${base}/providers`, { provider: id }),
   }
 }

@@ -39,7 +39,7 @@ def _require_user(request: Request) -> Dict[str, Any]:
 
 
 @router.get("/verbatim-memory/search")
-@with_error_handling
+@with_error_handling()
 async def verbatim_search(
     request: Request,
     q: str = Query(..., description="Search query"),
@@ -79,7 +79,7 @@ async def verbatim_search(
 
 
 @router.delete("/verbatim-memory/session/{session_id}")
-@with_error_handling
+@with_error_handling()
 async def delete_session_verbatim(
     session_id: str,
     request: Request,

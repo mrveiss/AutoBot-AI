@@ -68,7 +68,22 @@ router = APIRouter(
     dependencies=[Depends(check_admin_permission)],
 )
 
-_SUPPORTED_TYPES = ["file_server", "web_crawler", "database", "notion", "gitlab", "gitea", "forgejo"]
+_SUPPORTED_TYPES = [
+    "file_server",
+    "web_crawler",
+    "database",
+    "notion",
+    "gitlab",
+    "gitea",
+    "forgejo",
+    "gdrive",
+    "onedrive",
+]
+
+# Marker auth_type for connectors whose bearer credential is an OAuth bundle
+# stored by the OAuth flow (store_oauth). _cfg_with_credentials resolves these
+# via get_access_token() (auto-refresh) instead of load() (ADR-007 §10).
+_OAUTH_AUTH_TYPE = "OAuthRefreshAuth"
 
 
 # ---------------------------------------------------------------------------
@@ -218,20 +233,44 @@ async def _cfg_with_credentials(cfg: ConnectorConfig, auth_cls: type | None) -> 
     """Return a ConnectorConfig with sensitive credentials merged back in (ADR-007).
 
     When cfg.secret_id is set, loads the secret and merges credentials into a
-    copy of cfg.config.  Returns cfg unchanged when there is no secret_id or
+    copy of cfg.config.  OAuth-managed connectors (auth_type OAuthRefreshAuth)
+    resolve a fresh bearer token via get_access_token() (auto-refresh, §10)
+    instead of load().  Returns cfg unchanged when there is no secret_id or
     no auth_cls with __sensitive_fields__.
     """
     if not cfg.secret_id or auth_cls is None or not hasattr(auth_cls, "__sensitive_fields__"):
         return cfg
     owner_id = cfg.owner_id or "system"
+    import dataclasses
+
+    if getattr(cfg, "auth_type", None) == _OAUTH_AUTH_TYPE:
+        full_config = await _oauth_full_config(cfg, auth_cls, owner_id)
+        return dataclasses.replace(cfg, config=full_config)
+
     try:
         full_config = await get_credential_store().load(cfg.secret_id, cfg.config, auth_cls, owner_id)
     except (LookupError, PermissionError) as exc:
         logger.error("Failed to load credentials for connector %s: %s", cfg.connector_id, exc, exc_info=True)
         raise HTTPException(status_code=403, detail="Internal server error") from exc
-    import dataclasses
 
     return dataclasses.replace(cfg, config=full_config)
+
+
+async def _oauth_full_config(cfg: ConnectorConfig, auth_cls: type, owner_id: str) -> Dict[str, Any]:
+    """Resolve an OAuth access token and inject it into the auth field (ADR-007 §10).
+
+    The OAuth flow stored an access/refresh bundle via store_oauth; the bearer
+    connector expects its single sensitive field (e.g. BearerAuth.token) filled
+    with a live access token.  get_access_token auto-refreshes + rotates.
+    """
+    try:
+        access_token = await get_credential_store().get_access_token(cfg.secret_id, owner_id)
+    except (LookupError, PermissionError) as exc:
+        logger.error("Failed to resolve OAuth token for connector %s: %s", cfg.connector_id, exc, exc_info=True)
+        raise HTTPException(status_code=403, detail="Internal server error") from exc
+    sensitive = sorted(auth_cls.__sensitive_fields__)
+    token_field = sensitive[0] if sensitive else "token"
+    return {**cfg.config, token_field: access_token}
 
 
 async def _load_or_create_instance(cfg: ConnectorConfig):
@@ -368,22 +407,30 @@ async def create_connector(request: CreateConnectorRequest):
             detail="connector_type '%s' is not registered" % request.connector_type,
         )
     # Issue #8145: validate config against the connector's declared auth schema.
+    # Skip when a secret_id is supplied: the OAuth flow already obtained and
+    # stored the credential, so it is intentionally absent from the config.
     auth_cls = klass.auth_schema()
     auth_type: str | None = None
     if auth_cls is not None:
         auth_type = auth_cls.__name__
-        errors = validate_config_against_schema(auth_cls, request.config)
-        if errors:
-            raise HTTPException(
-                status_code=422,
-                detail="Auth config invalid for %s: %s" % (auth_type, "; ".join(errors)),
-            )
+        if not request.secret_id:
+            errors = validate_config_against_schema(auth_cls, request.config)
+            if errors:
+                raise HTTPException(
+                    status_code=422,
+                    detail="Auth config invalid for %s: %s" % (auth_type, "; ".join(errors)),
+                )
 
     # ADR-007: extract sensitive credential fields and store encrypted.
     owner_id = getattr(request, "owner_id", None) or "system"
     safe_config = request.config
     secret_id: str | None = None
-    if auth_cls is not None and hasattr(auth_cls, "__sensitive_fields__"):
+    # OAuth flow already stored the token bundle (store_oauth) and handed back a
+    # secret_id; attach it by reference and mark it OAuth-managed — never re-store.
+    if request.secret_id:
+        secret_id = request.secret_id
+        auth_type = _OAUTH_AUTH_TYPE
+    elif auth_cls is not None and hasattr(auth_cls, "__sensitive_fields__"):
         credential_store = get_credential_store()
         secret_id, safe_config = await credential_store.store(
             connector_id=connector_id,

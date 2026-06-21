@@ -2,8 +2,9 @@
 # Copyright 2025-2026 mrveiss
 # SPDX-License-Identifier: Apache-2.0
 #
-# AutoBot Hyper-V Deployment Script
-# Comprehensive deployment orchestration for migrating AutoBot from Docker to 5 VMs
+# AutoBot Deployment Script (hypervisor-agnostic)
+# Comprehensive deployment orchestration for migrating AutoBot from Docker to
+# one or more target hosts/VMs (co-located or distributed)
 #
 
 set -euo pipefail
@@ -464,7 +465,7 @@ setup_passwordless_sudo() {
 # Usage information
 show_usage() {
     cat << EOF
-AutoBot Hyper-V Deployment Script
+AutoBot Deployment Script
 
 USAGE:
   $0 [OPTIONS]
@@ -552,7 +553,7 @@ main() {
     # Record start time
     START_TIME=$(date +%s)
 
-    log "INFO" "🤖 AutoBot Hyper-V Deployment Script Starting..."
+    log "INFO" "🤖 AutoBot Deployment Script Starting..."
     log "INFO" "Timestamp: $(date)"
     log "INFO" "Log file: $LOG_FILE"
 

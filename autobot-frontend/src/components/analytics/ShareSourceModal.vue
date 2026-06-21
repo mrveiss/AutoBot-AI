@@ -169,19 +169,19 @@ const accessLevels = computed(() => [
   {
     value: 'private' as const,
     label: t('analytics.sources.access.private'),
-    icon: 'lock',
+    icon: 'lock' as const,
     description: t('analytics.sources.access.onlyYou')
   },
   {
     value: 'shared' as const,
     label: t('analytics.sources.access.shared'),
-    icon: 'users',
+    icon: 'users' as const,
     description: t('analytics.sources.access.specificUsers')
   },
   {
     value: 'public' as const,
     label: t('analytics.sources.access.public'),
-    icon: 'globe',
+    icon: 'globe' as const,
     description: t('analytics.sources.access.allUsers')
   }
 ])
@@ -249,6 +249,8 @@ watch(() => props.source, (source) => {
 })
 </script>
 
+<style scoped src="@/design-system/styles/source-modal-shared.css"></style>
+
 <style scoped>
 /* Issue #1133: Share Source Modal */
 
@@ -275,56 +277,8 @@ watch(() => props.source, (source) => {
   overflow: hidden;
 }
 
-/* Header */
-.modal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--spacing-5) var(--spacing-6);
-  border-bottom: 1px solid var(--border-default);
-  flex-shrink: 0;
-}
-
-.modal-header h3 {
-  font-size: var(--text-lg);
-  font-weight: var(--font-semibold);
-  color: var(--text-primary);
-  margin: var(--spacing-0);
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-2-5);
-}
-
 .modal-header h3 i {
   color: var(--color-success);
-}
-
-.close-btn {
-  width: 2rem;
-  height: 2rem;
-  border: none;
-  background: var(--bg-tertiary);
-  border-radius: var(--radius-md);
-  color: var(--text-secondary);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.close-btn:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-}
-
-/* Body */
-.modal-body {
-  flex: 1;
-  overflow-y: auto;
-  padding: var(--spacing-6);
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-5);
 }
 
 /* Source info bar */
@@ -354,13 +308,6 @@ watch(() => props.source, (source) => {
   font-size: var(--text-xs);
   color: var(--text-muted);
   font-family: var(--font-mono, monospace);
-}
-
-/* Form Groups */
-.form-group {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-1-5);
 }
 
 .form-label {
@@ -396,79 +343,10 @@ watch(() => props.source, (source) => {
   border-color: var(--color-info);
   box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
 }
+
 .form-textarea:focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
-}
-
-.form-hint {
-  font-size: var(--text-xs);
-  color: var(--text-muted);
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-1);
-}
-
-/* Access Selector */
-.access-selector {
-  display: flex;
-  gap: var(--spacing-2-5);
-}
-
-.access-option {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--spacing-1);
-  padding: var(--spacing-3) var(--spacing-2);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg);
-  cursor: pointer;
-  text-align: center;
-  transition: all var(--duration-200);
-  background: var(--bg-tertiary);
-}
-
-.access-option:hover {
-  border-color: var(--border-default);
-}
-
-.access-option--active {
-  border-color: var(--color-info);
-  background: rgba(59, 130, 246, 0.08);
-}
-
-.access-option i {
-  font-size: var(--text-lg);
-  color: var(--text-muted);
-}
-
-.access-option--active i {
-  color: var(--color-info);
-}
-
-.access-option span {
-  font-size: var(--text-sm);
-  font-weight: var(--font-medium);
-  color: var(--text-primary);
-}
-
-.access-option small {
-  font-size: var(--text-xs);
-  color: var(--text-muted);
-}
-
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: var(--spacing-0);
-  margin: var(--spacing-neg-px);
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border-width: 0;
 }
 
 /* Shared-with section */
@@ -495,46 +373,6 @@ watch(() => props.source, (source) => {
   border-radius: var(--radius-full);
 }
 
-/* Submit error */
-.submit-error {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--spacing-2);
-  padding: var(--spacing-3) var(--spacing-4);
-  background: rgba(239, 68, 68, 0.1);
-  border: 1px solid rgba(239, 68, 68, 0.3);
-  border-radius: var(--radius-lg);
-  font-size: var(--text-sm);
-  color: var(--color-error);
-}
-
-/* Footer */
-.modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--spacing-3);
-  padding: var(--spacing-5) var(--spacing-6);
-  border-top: 1px solid var(--border-default);
-  flex-shrink: 0;
-}
-
-.btn-cancel {
-  padding: var(--spacing-2-5) var(--spacing-5);
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg);
-  color: var(--text-secondary);
-  font-size: var(--text-sm);
-  font-weight: var(--font-medium);
-  cursor: pointer;
-  transition: all var(--duration-200);
-}
-
-.btn-cancel:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-}
-
 .btn-submit {
   padding: var(--spacing-2-5) var(--spacing-5);
   background: var(--color-success);
@@ -552,31 +390,5 @@ watch(() => props.source, (source) => {
 
 .btn-submit:hover:not(:disabled) {
   opacity: 0.85;
-}
-
-.btn-submit:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-/* Transitions */
-.modal-fade-enter-active,
-.modal-fade-leave-active {
-  transition: opacity var(--duration-300);
-}
-
-.modal-fade-enter-active .modal-dialog,
-.modal-fade-leave-active .modal-dialog {
-  transition: all var(--duration-300);
-}
-
-.modal-fade-enter-from,
-.modal-fade-leave-to {
-  opacity: 0;
-}
-
-.modal-fade-enter-from .modal-dialog,
-.modal-fade-leave-to .modal-dialog {
-  transform: scale(0.95);
 }
 </style>

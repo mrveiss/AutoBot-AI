@@ -81,6 +81,7 @@ class SafeExpressionEvaluator:
             ast.BinOp: self._eval_binop,
             ast.UnaryOp: self._eval_unaryop,
             ast.BoolOp: self._eval_boolop,
+            ast.Subscript: self._eval_subscript,
             # Backwards compatibility with older Python AST
             ast.Num: self._eval_num,
             ast.Str: self._eval_str,
@@ -91,6 +92,25 @@ class SafeExpressionEvaluator:
             return handler(node, context)
 
         raise ValueError(f"Unsupported node type: {type(node).__name__}")
+
+    def _eval_subscript(self, node: ast.Subscript, context: Dict[str, Any]) -> Any:
+        """Evaluate ``value[key]`` subscript access (GH#9036).
+
+        Supports indexing dicts/lists by a constant or name key, e.g.
+        ``results['step1']['exit_code']``. ``ast.Attribute`` is intentionally
+        NOT a supported node type, which blocks the ``__class__``/``__bases__``
+        sandbox-escape path that a raw ``eval()`` would allow.
+        """
+        container = self._eval_node(node.value, context)
+        # Python <3.9 wraps the key in ast.Index; 3.9+ exposes it directly.
+        key_node = node.slice
+        if isinstance(key_node, ast.Index):  # pragma: no cover - legacy Python
+            key_node = key_node.value
+        key = self._eval_node(key_node, context)
+        try:
+            return container[key]
+        except (KeyError, IndexError, TypeError) as exc:
+            raise ValueError(f"Subscript lookup failed for key {key!r}: {exc}")
 
     def _eval_name(self, node: ast.Name, context: Dict[str, Any]) -> Any:
         """Evaluate variable name (Issue #315 - extracted method)"""

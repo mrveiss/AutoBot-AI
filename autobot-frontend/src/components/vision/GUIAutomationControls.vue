@@ -167,6 +167,7 @@
 </template>
 
 <script setup lang="ts">
+import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue';
 import BaseAlert from '@/components/ui/BaseAlert.vue';
 import { ref, onMounted } from 'vue';
@@ -284,8 +285,8 @@ const getTypeColor = (elementType: string): string => {
   return colors[elementType.toLowerCase()] || '#7f8c8d';
 };
 
-const getTypeIcon = (elementType: string): string => {
-  const icons: Record<string, string> = {
+const getTypeIcon = (elementType: string): IconName => {
+  const icons: Record<string, IconName> = {
     button: 'square',
     input: 'i-cursor',
     text: 'font',
@@ -294,24 +295,27 @@ const getTypeIcon = (elementType: string): string => {
     checkbox: 'check-square',
     dropdown: 'caret-down',
     menu: 'bars',
-    icon: 'icons',
+    // #9724: 'icons' is not an SVG IconName (rendered empty)
+    icon: 'th-large',
     window: 'window-maximize',
   };
   return icons[elementType.toLowerCase()] || 'cube';
 };
 
-const getInteractionIcon = (interactionType: string): string => {
-  const icons: Record<string, string> = {
+// #9724: hand-pointer/hand-point-right/arrows-alt-v/arrows-alt/hand-point-up
+// are not SVG IconNames (rendered empty) — mapped to registry icons.
+const getInteractionIcon = (interactionType: string): IconName => {
+  const icons: Record<string, IconName> = {
     click: 'mouse-pointer',
-    double_click: 'hand-pointer',
-    right_click: 'hand-point-right',
+    double_click: 'mouse-pointer',
+    right_click: 'mouse-pointer',
     type: 'keyboard',
-    scroll: 'arrows-alt-v',
+    scroll: 'sort',
     hover: 'hand-paper',
-    drag: 'arrows-alt',
+    drag: 'expand-arrows-alt',
     select: 'check',
   };
-  return icons[interactionType.toLowerCase()] || 'hand-point-up';
+  return icons[interactionType.toLowerCase()] || 'hand-paper';
 };
 
 const getConfidenceClass = (confidence: number): string => {

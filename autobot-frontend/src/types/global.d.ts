@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 // Global type declarations for AutoBot frontend
 
 // Replace NodeJS namespace with browser-compatible timer types

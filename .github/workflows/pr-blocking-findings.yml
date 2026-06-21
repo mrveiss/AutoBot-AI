@@ -1,0 +1,61 @@
+# Merge-blocking findings gate (#10024)
+#
+# Closes the review-to-merge race: a reviewer who files an issue describing a
+# problem in an open PR (e.g. a security finding) can label that issue
+# `blocks-merge`, and this required check goes red until the issue is
+# resolved/closed or the label is removed. Prevents a caught-in-review finding
+# from being merged anyway (the #9968 / PR #9955 timeline).
+#
+# An issue "references" a PR by mentioning `#<pr-number>` (or `/pull/<n>`) in
+# its body. To make this enforce the merge button, add it as a required status
+# check on Dev_new_gui/main (repo owner; not code).
+
+name: PR Blocking Findings
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+    branches: [Dev_new_gui, main]
+
+permissions:
+  issues: read
+  pull-requests: read
+
+jobs:
+  blocking-findings:
+    name: No open blocks-merge issues reference this PR
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check blocks-merge issues
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Candidate open issues labeled blocks-merge that mention this PR
+          # number somewhere. A missing label / no matches yields an empty list
+          # (fail-safe: the gate stays green).
+          mapfile -t candidates < <(gh issue list --repo "$REPO" --state open \
+            --label "blocks-merge" --search "$PR_NUMBER in:body" \
+            --json number --jq '.[].number' 2>/dev/null || true)
+
+          blocking=()
+          for n in "${candidates[@]:-}"; do
+            [ -z "$n" ] && continue
+            body=$(gh issue view "$n" --repo "$REPO" --json body --jq '.body' 2>/dev/null || echo "")
+            # Require an EXACT reference (#NNNN / pull/NNNN), word-bounded so
+            # #1234 does not match #12340.
+            if printf '%s' "$body" | grep -qE "(#${PR_NUMBER}([^0-9]|$)|/pull/${PR_NUMBER}([^0-9]|$))"; then
+              blocking+=("$n")
+            fi
+          done
+
+          if [ "${#blocking[@]}" -gt 0 ]; then
+            echo "::error::Merge blocked by open \`blocks-merge\` issue(s): ${blocking[*]}"
+            echo "Resolve/close the issue(s) or remove the blocks-merge label, then re-run this check."
+            exit 1
+          fi
+          echo "No open blocks-merge issues reference PR #${PR_NUMBER}. OK to merge."

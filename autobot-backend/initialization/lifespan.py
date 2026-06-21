@@ -11,6 +11,7 @@ Handles application startup and shutdown with 2-phase initialization:
 """
 
 import asyncio
+import functools
 import json
 import logging
 from concurrent.futures import ThreadPoolExecutor
@@ -76,6 +77,36 @@ async def update_app_state_multi(**kwargs) -> None:
         app_state.update(kwargs)
 
 
+def _llc_postgres_available() -> bool:
+    """LLC persistence requires Postgres (single_company+). In single_user mode
+    it is intentionally unavailable, so callers skip rather than error (#9713)."""
+    try:
+        from user_management.config import get_deployment_config
+
+        return get_deployment_config().postgres_enabled
+    except Exception:
+        return False
+
+
+def requires_postgres(feature: str):
+    """Decorator: skip the wrapped async function with one INFO line when Postgres
+    is disabled (single_user mode).  Apply to startup helpers that have no
+    app.state side-effect on skip; for functions that must also set
+    app.state.X = None on skip keep an explicit guard instead (#9913 #9765)."""
+
+    def deco(fn):
+        @functools.wraps(fn)
+        async def wrapper(*args, **kwargs):
+            if not _llc_postgres_available():
+                logger.info("%s: skipped (Postgres disabled — single_user mode)", feature)
+                return None
+            return await fn(*args, **kwargs)
+
+        return wrapper
+
+    return deco
+
+
 def configure_logging():
     """Configure logging level from environment variable"""
     from autobot_shared.ssot_config import config as _ssot_cfg
@@ -131,11 +162,20 @@ async def _init_cache_coordinator() -> None:
 
 
 async def _init_skills_tables() -> None:
-    """Create skills system tables if they don't exist."""
+    """Create skills system tables if they don't exist.
+
+    The skills database is a local SQLite data file (skills/db.py), which the
+    app owns — Alembic does not manage it. The guard keeps this call from
+    ever building schema on a migration-managed database (#10001 Phase C):
+    if the skills engine moves off SQLite, schema must come from migrations
+    or an explicit AUTOBOT_DB_CREATE_ALL=true development opt-in.
+    """
+    from migrations.schema_bootstrap import ensure_create_all_allowed
     from skills.db import get_skills_engine
     from skills.models import SkillsBase
 
     engine = get_skills_engine()
+    ensure_create_all_allowed(engine.dialect.name)
     async with engine.begin() as conn:
         await conn.run_sync(SkillsBase.metadata.create_all)
     logger.info("Skills tables initialized")
@@ -384,7 +424,7 @@ async def _init_builtin_extensions(app: FastAPI) -> None:
 
 
 async def _init_transcriber_db(app: FastAPI) -> None:
-    """Initialize the transcriber SQLite database (GH#9044).
+    """Initialize the transcriber SQLite database and speech providers (GH#9044, #10128).
 
     Non-critical: a failure logs a warning but does not block startup.
     Skipped entirely when TRANSCRIBER_ENABLED != true.
@@ -415,6 +455,16 @@ async def _init_transcriber_db(app: FastAPI) -> None:
         logger.info("Transcriber DB initialized")
     except Exception as _tc_err:
         logger.warning("Transcriber DB init failed (non-critical): %s", _tc_err)
+
+    # Register speech providers (GH#10128 F3).  Non-critical — a single bad
+    # provider must not abort startup.
+    try:
+        from voice_processing.providers.registry_init import initialize_providers
+
+        initialize_providers()
+        logger.info("Speech provider registry initialized")
+    except Exception as _prov_err:
+        logger.warning("Speech provider registry init failed (non-critical): %s", _prov_err)
 
 
 async def initialize_critical_services(app: FastAPI):
@@ -791,6 +841,7 @@ async def _init_llc_outbound_sync(app: FastAPI) -> None:
         app.state.llc_outbound_sync = None
 
 
+@requires_postgres("LLC Routine Scheduler")
 async def _init_llc_routine_scheduler(app: FastAPI) -> None:
     """Start the LLC RoutineScheduler that fires cron-based routines (GH#8229)."""
     logger.info("LLC Routine Scheduler: Starting...")
@@ -814,6 +865,12 @@ async def _init_heartbeat_scheduler(app: FastAPI) -> None:
     GH#8225: Prefers the LLC HeartbeatScheduler; falls back to legacy when
     the LLC package is unavailable, preventing duplicate sorted-set writes.
     """
+    # Both the LLC and legacy paths need the Postgres-backed agent DB; in
+    # single_user mode get_async_session_factory() hard-raises (#9783).
+    if not _llc_postgres_available():
+        logger.info("Heartbeat scheduler: skipped (Postgres disabled — single_user mode)")
+        app.state.heartbeat_scheduler = None
+        return
     # GH#8225: Try LLC scheduler first; it owns llc:heartbeat:schedule.
     # Use get_heartbeat_scheduler() — same lazy_singleton instance used by API routes —
     # so cleanup_services.stop() drains tasks from both startup-fired and API-triggered runs.
@@ -945,66 +1002,70 @@ async def _init_graph_rag_service(app: FastAPI, memory_graph):
             # Build mesh brain components and register them so every RAGService.initialize()
             # can construct its OWN NeuralMeshRetriever with closures bound to its own
             # optimizer — eliminating the shared-singleton coupling (#4765).
-            try:
-                from autobot_shared.redis_client import get_async_redis_client
-                from knowledge.search_components.query_classifier import QueryClassifier
-                from knowledge.search_components.reranking import ResultReranker
-                from services.mesh_brain.edge_learner import EdgeLearner
-                from services.mesh_brain.mesh_db_adapter import create_mesh_db_adapter
-                from services.mesh_brain.ppr import PersonalizedPageRank
-                from user_management.database import get_async_engine
+            # NeuralMesh requires the Postgres-backed engine; skip cleanly in single_user (#9765).
+            if not _llc_postgres_available():
+                logger.info("Neural Mesh RAG: skipped (Postgres disabled — single_user mode)")
+            else:
+                try:
+                    from autobot_shared.redis_client import get_async_redis_client
+                    from knowledge.search_components.query_classifier import QueryClassifier
+                    from knowledge.search_components.reranking import ResultReranker
+                    from services.mesh_brain.edge_learner import EdgeLearner
+                    from services.mesh_brain.mesh_db_adapter import create_mesh_db_adapter
+                    from services.mesh_brain.ppr import PersonalizedPageRank
+                    from user_management.database import get_async_engine
 
-                _mesh_db = create_mesh_db_adapter(get_async_engine())
-                _redis = get_async_redis_client()
-                _ppr = PersonalizedPageRank(db=_mesh_db)
-                _edge_learner = EdgeLearner(db=_mesh_db, redis=_redis)
+                    _mesh_db = create_mesh_db_adapter(get_async_engine())
+                    _redis = get_async_redis_client()
+                    _ppr = PersonalizedPageRank(db=_mesh_db)
+                    _edge_learner = EdgeLearner(db=_mesh_db, redis=_redis)
 
-                _mesh_components = {
-                    "mesh_db": _mesh_db,
-                    "ppr": _ppr,
-                    "edge_learner": _edge_learner,
-                    "reranker": ResultReranker(),
-                    "classifier": QueryClassifier(),
-                    "llm": None,
-                }
+                    _mesh_components = {
+                        "mesh_db": _mesh_db,
+                        "ppr": _ppr,
+                        "edge_learner": _edge_learner,
+                        "reranker": ResultReranker(),
+                        "classifier": QueryClassifier(),
+                        "llm": None,
+                    }
 
-                # Store on app.state for introspection / health checks.
-                app.state.mesh_components = _mesh_components
+                    # Store on app.state for introspection / health checks.
+                    app.state.mesh_components = _mesh_components
 
-                # Expose mesh_db on app.state so _start_community_clustering_loop can use it (#4834).
-                app.state.mesh_db = _mesh_db
+                    # Expose mesh_db on app.state so _start_community_clustering_loop can use it (#4834).
+                    app.state.mesh_db = _mesh_db
 
-                # Register components; each future RAGService.initialize() builds its own
-                # retriever from these, binding closures to its own optimizer (#4765).
-                register_shared_mesh_components(_mesh_components)
+                    # Register components; each future RAGService.initialize() builds its own
+                    # retriever from these, binding closures to its own optimizer (#4765).
+                    register_shared_mesh_components(_mesh_components)
 
-                # Trigger re-initialization for already-created RAGService instances so they
-                # also build per-instance retrievers (covers chat_workflow_manager and the
-                # get_rag_service() singleton that were created before this point).
-                import services.rag_service as _rag_mod
+                    # Trigger re-initialization for already-created RAGService instances so they
+                    # also build per-instance retrievers (covers chat_workflow_manager and the
+                    # get_rag_service() singleton that were created before this point).
+                    import services.rag_service as _rag_mod
 
-                for _existing in [
-                    _rag_mod._rag_service_instance,
-                    getattr(
+                    for _existing in [
+                        _rag_mod._rag_service_instance,
                         getattr(
-                            getattr(app.state, "chat_workflow_manager", None),
-                            "knowledge_service",
+                            getattr(
+                                getattr(app.state, "chat_workflow_manager", None),
+                                "knowledge_service",
+                                None,
+                            ),
+                            "rag_service",
                             None,
                         ),
-                        "rag_service",
-                        None,
-                    ),
-                ]:
-                    if _existing is not None and _existing._mesh_retriever is None:
-                        _existing._initialized = False  # force re-init on next call
-                        logger.info("Queued per-instance NeuralMeshRetriever build for existing RAGService (#4765)")
+                    ]:
+                        if _existing is not None and _existing._mesh_retriever is None:
+                            _existing._initialized = False  # force re-init on next call
+                            logger.info("Queued per-instance NeuralMeshRetriever build for existing RAGService (#4765)")
 
-                logger.info(
-                    "✅ [ 87%] Neural Mesh RAG: mesh components registered; "
-                    "per-instance NeuralMeshRetriever will build on next initialize() (#4765)"
-                )
-            except Exception as _mesh_wire_err:
-                logger.warning("Neural Mesh RAG wiring skipped (non-fatal): %s", _mesh_wire_err)
+                    logger.info(
+                        "✅ [ 87%] Neural Mesh RAG: mesh components registered; "
+                        "per-instance NeuralMeshRetriever will build on next initialize() (#4765)"
+                    )
+                except Exception as _mesh_wire_err:
+                    logger.warning("Neural Mesh RAG wiring skipped (non-fatal): %s", _mesh_wire_err)
 
             graph_rag_service = GraphRAGService(
                 rag_service=rag_service,
@@ -1099,9 +1160,10 @@ async def _init_slm_client():
         slm_url = get_config().slm_url
         slm_token = get_config().slm_auth_token
         if not slm_token:
-            logger.warning(
-                "SLM_AUTH_TOKEN is unset — SLM WebSocket will connect without auth header. "
-                "Set SERVICE_AUTH_ENFORCEMENT_MODE=false or configure the token to avoid 403 errors."
+            logger.debug(
+                "SLM_AUTH_TOKEN is unset — a short-lived service JWT will be minted "
+                "from AUTOBOT_JWT_SECRET / SECRET_KEY at each WebSocket connection "
+                "attempt (GH#9852). Set SLM_AUTH_TOKEN explicitly to override."
             )
 
         await init_slm_client(slm_url, slm_token)
@@ -1201,6 +1263,7 @@ async def _init_background_llm_sync(app: FastAPI):
         logger.warning("Background LLM sync initialization failed: %s", sync_error)
 
 
+@requires_postgres("Agent Registry")
 async def _seed_agent_registry() -> None:
     """Populate agents table from DEFAULT_AGENT_CONFIGS (#1754)."""
     logger.info("[ 97%%] Agent Registry: Seeding agents table...")
@@ -1215,11 +1278,49 @@ async def _seed_agent_registry() -> None:
         logger.warning("Agent registry seeding failed: %s", e)
 
 
+@requires_postgres("Default Admin Seed")
+async def _seed_default_admin() -> None:
+    """Seed the default platform-admin into autobot_users (#10199).
+
+    Idempotent — skips if any admin user already exists or if
+    AUTOBOT_ADMIN_PASSWORD is not configured.  Non-fatal: errors are
+    logged and swallowed so a seed failure never blocks startup.
+    """
+    logger.info("[ 97%%] Admin Seed: seeding default admin user...")
+    try:
+        from user_management.database import get_async_session_factory
+        from user_management.services.seed import seed_default_admin
+
+        async with get_async_session_factory()() as session:
+            await seed_default_admin(session)
+    except Exception as e:
+        logger.warning("Default admin seeding failed (non-critical): %s", e)
+
+
+async def _init_long_running_operations() -> None:
+    """Initialize the long-running operations manager (#10385).
+
+    Without this, ``operation_integration_manager.operation_manager`` stays None
+    and every ``GET /api/long-running`` 500s. initialize() is idempotent and
+    Redis-guarded; non-fatal so a failure never blocks startup.
+    """
+    try:
+        from utils.operation_timeout_integration import operation_integration_manager
+
+        await operation_integration_manager.initialize()
+    except Exception as e:
+        logger.warning("Long-running operations init failed (non-critical): %s", e)
+
+
 async def _init_process_adapter(app: FastAPI) -> None:
     """Start ProcessAdapterService queue dispatcher (#1748).
 
     NON-CRITICAL: process management endpoints return 503 until this completes.
     """
+    if not _llc_postgres_available():
+        logger.info("[ 96%%] Process Adapter: skipped (Postgres disabled — single_user mode)")
+        app.state.process_adapter_service = None
+        return
     logger.info("[ 96%%] Process Adapter: Initializing...")
     try:
         from api.process_management import set_process_adapter_service
@@ -1258,8 +1359,12 @@ async def _ensure_agent_memory_index() -> None:
 
     Idempotent — safe to call on every startup. If the index already exists,
     handle_redis_vector_create_index returns immediately without error.
-    Uses the vectors database (Redis DB 8) with default agent-memory schema:
-    HNSW, FLOAT32, 1536 dimensions, COSINE distance.
+
+    RediSearch FT.CREATE only operates on Redis logical DB 0.  Agent memory
+    data keys (autobot:agent:memory:*) are written to DB 0 ("main") by the
+    MCP data-access layer, so the index must live on the same DB.  The
+    "memory" database alias resolves to DB 0 and documents this constraint
+    explicitly (see autobot_shared/redis_management/types.py _ALIASES).
     """
     logger.info("[ 93%%] Agent Memory Index: Ensuring idx:agent_memory exists...")
     try:
@@ -1271,7 +1376,7 @@ async def _ensure_agent_memory_index() -> None:
             vector_field="embedding",
             dimensions=1536,
             distance_metric="COSINE",
-            database="vectors",
+            database="memory",
         )
         if result.get("message") == "Index already exists":
             logger.info("[ 93%%] Agent Memory Index: idx:agent_memory already exists")
@@ -1540,22 +1645,9 @@ async def _init_budget_watchdog(app: FastAPI) -> None:
         app.state.llc_budget_watchdog = None
 
 
-def _llc_postgres_available() -> bool:
-    """LLC persistence requires Postgres (single_company+). In single_user mode
-    it is intentionally unavailable, so callers skip rather than error (#9713)."""
-    try:
-        from user_management.config import get_deployment_config
-
-        return get_deployment_config().postgres_enabled
-    except Exception:
-        return False
-
-
+@requires_postgres("LLC SessionCheckpointer")
 async def _recover_agent_sessions(app: FastAPI) -> None:
     """Re-queue runs that were interrupted by a previous server crash (GH#9026)."""
-    if not _llc_postgres_available():
-        logger.info("LLC SessionCheckpointer: skipped (Postgres disabled — single_user mode)")
-        return
     logger.info("LLC SessionCheckpointer: recovering incomplete runs...")
     try:
         from llc.scheduler.session_checkpointer import recover_incomplete_runs
@@ -1708,9 +1800,11 @@ async def initialize_background_services(app: FastAPI):
         await _ensure_agent_memory_index()
         await _init_process_adapter(app)
         await _init_orchestrator(app)
+        await _seed_default_admin()
         await _seed_agent_registry()
         await _wire_npu_task_queue()
         await _wire_scheduler_executor()
+        await _init_long_running_operations()
         await _init_voice_interface(app)
         await _init_web_researcher(app)
         await _init_plugin_manager(app)

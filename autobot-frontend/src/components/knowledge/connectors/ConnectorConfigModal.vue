@@ -17,6 +17,7 @@ import type {
 import { knowledgeRepository } from '@/models/repositories/KnowledgeRepository'
 import BaseModal from '@/components/ui/BaseModal.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
+import ConnectorOAuthButton from '@/components/knowledge/connectors/ConnectorOAuthButton.vue'
 import { createLogger } from '@/utils/debugUtils'
 import { useI18n } from 'vue-i18n'
 
@@ -69,6 +70,47 @@ const dbIdColumn = ref('id')
 const dbContentColumns = ref('')
 const dbTimestampColumn = ref('')
 
+// Google Drive config (Issue #9003)
+const gdSourceType = ref<'mydrive' | 'shared'>('mydrive')
+const gdDriveId = ref('')
+const gdFolderId = ref('')
+const gdSyncSubfolders = ref(true)
+const gdMaxFileSizeMb = ref(100)
+// OAuth secret reference captured from the Connect flow (ADR-007 §10).
+const gdSecretId = ref<string | null>(null)
+const gdOAuthError = ref<string | null>(null)
+// Scopes requested for Google Drive read-only access.
+const GDRIVE_SCOPES = ['https://www.googleapis.com/auth/drive.readonly']
+
+// OneDrive / SharePoint config (Issue #9004)
+const odSourceType = ref<'onedrive' | 'sharepoint'>('onedrive')
+const odSiteId = ref('')
+const odDriveId = ref('')
+const odFolderPath = ref('')
+const odSyncSubfolders = ref(true)
+const odMaxFileSizeMb = ref(100)
+// OAuth secret reference captured from the Microsoft Connect flow (ADR-007 §10).
+const odSecretId = ref<string | null>(null)
+const odOAuthError = ref<string | null>(null)
+// Scopes requested for Microsoft Graph read-only access.
+const ONEDRIVE_SCOPES = ['offline_access', 'Files.Read.All', 'Sites.Read.All']
+
+// GitLab config (Issue #9011) — self-hosted, direct personal-access-token auth.
+const glUrl = ref('https://gitlab.com')
+const glToken = ref('')
+const glProjectIds = ref('')
+const glSyncIssues = ref(true)
+const glSyncMergeRequests = ref(true)
+const glSyncFiles = ref(false)
+
+// Gitea / Forgejo config (Issue #9011) — identical API, direct token auth.
+const gtUrl = ref('')
+const gtToken = ref('')
+const gtRepos = ref('')
+const gtSyncIssues = ref(true)
+const gtSyncMergeRequests = ref(true)
+const gtSyncFiles = ref(false)
+
 const isEditing = computed(() => props.editConnector !== null)
 
 const modalTitle = computed(() =>
@@ -94,6 +136,31 @@ const typeCards = computed(() => [
     type: 'database' as ConnectorType,
     label: t('knowledge.connectors.config.typeDatabase'),
     description: t('knowledge.connectors.config.typeDatabaseDesc')
+  },
+  {
+    type: 'gdrive' as ConnectorType,
+    label: t('knowledge.connectors.config.typeGdrive'),
+    description: t('knowledge.connectors.config.typeGdriveDesc')
+  },
+  {
+    type: 'onedrive' as ConnectorType,
+    label: t('knowledge.connectors.config.typeOnedrive'),
+    description: t('knowledge.connectors.config.typeOnedriveDesc')
+  },
+  {
+    type: 'gitlab' as ConnectorType,
+    label: t('knowledge.connectors.config.typeGitlab'),
+    description: t('knowledge.connectors.config.typeGitlabDesc')
+  },
+  {
+    type: 'gitea' as ConnectorType,
+    label: t('knowledge.connectors.config.typeGitea'),
+    description: t('knowledge.connectors.config.typeGiteaDesc')
+  },
+  {
+    type: 'forgejo' as ConnectorType,
+    label: t('knowledge.connectors.config.typeForgejo'),
+    description: t('knowledge.connectors.config.typeForgejoDesc')
   }
 ])
 
@@ -153,6 +220,38 @@ function populateFromConfig(cfg: ConnectorConfig) {
       dbContentColumns.value = (c.content_columns || []).join(', ')
       dbTimestampColumn.value = c.timestamp_column || ''
       break
+    case 'gdrive':
+      gdSourceType.value = c.source_type === 'shared' ? 'shared' : 'mydrive'
+      gdDriveId.value = c.drive_id || ''
+      gdFolderId.value = c.folder_id || ''
+      gdSyncSubfolders.value = c.sync_subfolders ?? true
+      gdMaxFileSizeMb.value = c.max_file_size_mb ?? 100
+      break
+    case 'onedrive':
+      odSourceType.value = c.source_type === 'sharepoint' ? 'sharepoint' : 'onedrive'
+      odSiteId.value = c.site_id || ''
+      odDriveId.value = c.drive_id || ''
+      odFolderPath.value = c.folder_path || ''
+      odSyncSubfolders.value = c.sync_subfolders ?? true
+      odMaxFileSizeMb.value = c.max_file_size_mb ?? 100
+      break
+    case 'gitlab':
+      glUrl.value = c.gitlab_url || 'https://gitlab.com'
+      glToken.value = c.token || ''
+      glProjectIds.value = (c.project_ids || []).join(', ')
+      glSyncIssues.value = c.sync_issues ?? true
+      glSyncMergeRequests.value = c.sync_merge_requests ?? true
+      glSyncFiles.value = c.sync_files ?? false
+      break
+    case 'gitea':
+    case 'forgejo':
+      gtUrl.value = c.gitea_url || ''
+      gtToken.value = c.token || ''
+      gtRepos.value = (c.repos || []).join(', ')
+      gtSyncIssues.value = c.sync_issues ?? true
+      gtSyncMergeRequests.value = c.sync_merge_requests ?? true
+      gtSyncFiles.value = c.sync_files ?? false
+      break
   }
 }
 
@@ -182,14 +281,45 @@ function resetForm() {
   dbIdColumn.value = 'id'
   dbContentColumns.value = ''
   dbTimestampColumn.value = ''
+
+  gdSourceType.value = 'mydrive'
+  gdDriveId.value = ''
+  gdFolderId.value = ''
+  gdSyncSubfolders.value = true
+  gdMaxFileSizeMb.value = 100
+  gdSecretId.value = null
+  gdOAuthError.value = null
+
+  odSourceType.value = 'onedrive'
+  odSiteId.value = ''
+  odDriveId.value = ''
+  odFolderPath.value = ''
+  odSyncSubfolders.value = true
+  odMaxFileSizeMb.value = 100
+  odSecretId.value = null
+  odOAuthError.value = null
+
+  glUrl.value = 'https://gitlab.com'
+  glToken.value = ''
+  glProjectIds.value = ''
+  glSyncIssues.value = true
+  glSyncMergeRequests.value = true
+  glSyncFiles.value = false
+
+  gtUrl.value = ''
+  gtToken.value = ''
+  gtRepos.value = ''
+  gtSyncIssues.value = true
+  gtSyncMergeRequests.value = true
+  gtSyncFiles.value = false
 }
 
 // =========================================================================
 // Build Config
 // =========================================================================
 
-function buildPayload(): Partial<ConnectorConfig> {
-  const base: Partial<ConnectorConfig> = {
+function buildPayload(): Partial<ConnectorConfig> & { secret_id?: string } {
+  const base: Partial<ConnectorConfig> & { secret_id?: string } = {
     connector_type: connectorType.value,
     name: connectorName.value,
     verification_mode: verificationMode.value,
@@ -219,6 +349,52 @@ function buildPayload(): Partial<ConnectorConfig> {
         id_column: dbIdColumn.value,
         content_columns: splitTags(dbContentColumns.value),
         timestamp_column: dbTimestampColumn.value || undefined
+      }
+      break
+    case 'gdrive':
+      base.config = {
+        source_type: gdSourceType.value,
+        drive_id: gdSourceType.value === 'shared' ? gdDriveId.value : undefined,
+        folder_id: gdFolderId.value || undefined,
+        sync_subfolders: gdSyncSubfolders.value,
+        max_file_size_mb: gdMaxFileSizeMb.value
+      }
+      // The token never touches the frontend; attach the OAuth secret by reference.
+      if (gdSecretId.value) base.secret_id = gdSecretId.value
+      break
+    case 'onedrive':
+      base.config = {
+        source_type: odSourceType.value,
+        site_id: odSourceType.value === 'sharepoint' ? odSiteId.value : undefined,
+        drive_id: odDriveId.value || undefined,
+        folder_path: odFolderPath.value || undefined,
+        sync_subfolders: odSyncSubfolders.value,
+        max_file_size_mb: odMaxFileSizeMb.value
+      }
+      // The token never touches the frontend; attach the OAuth secret by reference.
+      if (odSecretId.value) base.secret_id = odSecretId.value
+      break
+    case 'gitlab':
+      // Self-hosted token connectors send the PAT in config; the backend create
+      // path persists it via the credential store (no secret_id / OAuth flow).
+      base.config = {
+        gitlab_url: glUrl.value.trim() || 'https://gitlab.com',
+        token: glToken.value,
+        project_ids: splitTags(glProjectIds.value),
+        sync_issues: glSyncIssues.value,
+        sync_merge_requests: glSyncMergeRequests.value,
+        sync_files: glSyncFiles.value
+      }
+      break
+    case 'gitea':
+    case 'forgejo':
+      base.config = {
+        gitea_url: gtUrl.value.trim(),
+        token: gtToken.value,
+        repos: splitTags(gtRepos.value),
+        sync_issues: gtSyncIssues.value,
+        sync_merge_requests: gtSyncMergeRequests.value,
+        sync_files: gtSyncFiles.value
       }
       break
   }
@@ -263,6 +439,25 @@ const isConfigValid = computed(() => {
         dbConnectionString.value.trim().length > 0 &&
         dbQuery.value.trim().length > 0
       )
+    case 'gdrive':
+      // Requires a completed OAuth connect; shared drives also need a drive_id.
+      return (
+        gdSecretId.value !== null &&
+        (gdSourceType.value !== 'shared' || gdDriveId.value.trim().length > 0)
+      )
+    case 'onedrive':
+      // Requires a completed OAuth connect; SharePoint also needs a site_id.
+      return (
+        odSecretId.value !== null &&
+        (odSourceType.value !== 'sharepoint' || odSiteId.value.trim().length > 0)
+      )
+    case 'gitlab':
+      // GitLab has a default URL, so only the token is strictly required.
+      return glToken.value.trim().length > 0 && glUrl.value.trim().length > 0
+    case 'gitea':
+    case 'forgejo':
+      // Gitea/Forgejo have no default host — require both URL and token.
+      return gtToken.value.trim().length > 0 && gtUrl.value.trim().length > 0
     default:
       return false
   }
@@ -292,6 +487,36 @@ function selectType(type: ConnectorType) {
 function onScheduleChange() {
   const opt = scheduleOptions.value.find(o => o.value === scheduleOption.value)
   scheduleCron.value = opt ? opt.cron : null
+}
+
+// =========================================================================
+// Google Drive OAuth (Issue #9003)
+// =========================================================================
+
+function onGdriveConnected(payload: { secretId: string }) {
+  gdSecretId.value = payload.secretId
+  gdOAuthError.value = null
+  logger.info('Google Drive connected via OAuth')
+}
+
+function onGdriveOAuthError(message: string) {
+  gdOAuthError.value = message
+  logger.error('Google Drive OAuth failed: %s', message)
+}
+
+// =========================================================================
+// OneDrive / SharePoint OAuth (Issue #9004)
+// =========================================================================
+
+function onOnedriveConnected(payload: { secretId: string }) {
+  odSecretId.value = payload.secretId
+  odOAuthError.value = null
+  logger.info('OneDrive connected via OAuth')
+}
+
+function onOnedriveOAuthError(message: string) {
+  odOAuthError.value = message
+  logger.error('OneDrive OAuth failed: %s', message)
 }
 
 // =========================================================================
@@ -416,7 +641,7 @@ function closeModal() {
             />
           </svg>
           <svg
-            v-else
+            v-else-if="card.type === 'database'"
             class="type-card-icon"
             fill="none"
             stroke="currentColor"
@@ -427,6 +652,20 @@ function closeModal() {
               stroke-linejoin="round"
               stroke-width="2"
               d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"
+            />
+          </svg>
+          <svg
+            v-else
+            class="type-card-icon"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M12 3v12m0 0l-4-4m4 4l4-4M3 17a2 2 0 002 2h14a2 2 0 002-2"
             />
           </svg>
           <span class="type-card-label">{{ card.label }}</span>
@@ -596,6 +835,329 @@ function closeModal() {
           <span class="form-hint">
             {{ $t('knowledge.connectors.config.commaSeparatedColumns') }}
           </span>
+        </div>
+      </template>
+
+      <!-- Google Drive Fields (Issue #9003) -->
+      <template v-if="connectorType === 'gdrive'">
+        <div class="form-group">
+          <label class="form-label">
+            {{ $t('knowledge.connectors.config.gdriveAccount') }}
+          </label>
+          <ConnectorOAuthButton
+            provider="google"
+            :label="$t('knowledge.connectors.config.gdriveLabel')"
+            :scopes="GDRIVE_SCOPES"
+            @connected="onGdriveConnected"
+            @error="onGdriveOAuthError"
+          />
+          <span v-if="gdSecretId" class="form-hint gdrive-connected">
+            {{ $t('knowledge.connectors.config.gdriveConnected') }}
+          </span>
+          <span v-if="gdOAuthError" class="form-hint gdrive-error">
+            {{ gdOAuthError }}
+          </span>
+        </div>
+        <div class="form-group">
+          <label class="form-label">{{ $t('knowledge.connectors.config.gdriveSourceType') }}</label>
+          <div class="mode-toggle">
+            <button
+              class="mode-btn"
+              :class="{ active: gdSourceType === 'mydrive' }"
+              type="button"
+              @click="gdSourceType = 'mydrive'"
+            >
+              {{ $t('knowledge.connectors.config.gdriveMyDrive') }}
+            </button>
+            <button
+              class="mode-btn"
+              :class="{ active: gdSourceType === 'shared' }"
+              type="button"
+              @click="gdSourceType = 'shared'"
+            >
+              {{ $t('knowledge.connectors.config.gdriveShared') }}
+            </button>
+          </div>
+        </div>
+        <div v-if="gdSourceType === 'shared'" class="form-group">
+          <label class="form-label" for="gd-drive-id">
+            {{ $t('knowledge.connectors.config.gdriveDriveId') }}
+          </label>
+          <input
+            id="gd-drive-id"
+            v-model="gdDriveId"
+            type="text"
+            class="form-input"
+            placeholder="0AB1cDeFgHiJkLmNoPqR"
+          />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="gd-folder-id">
+            {{ $t('knowledge.connectors.config.gdriveFolderId') }}
+          </label>
+          <input
+            id="gd-folder-id"
+            v-model="gdFolderId"
+            type="text"
+            class="form-input"
+            placeholder="1AbCdEfGhIjKlMnOpQrStUv"
+          />
+          <span class="form-hint">
+            {{ $t('knowledge.connectors.config.gdriveFolderHint') }}
+          </span>
+        </div>
+        <div class="form-group">
+          <label class="toggle-row">
+            <input
+              type="checkbox"
+              v-model="gdSyncSubfolders"
+              class="toggle-checkbox"
+            />
+            <span class="toggle-label">{{ $t('knowledge.connectors.config.gdriveSyncSubfolders') }}</span>
+          </label>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="gd-max-size">
+            {{ $t('knowledge.connectors.config.maxFileSize') }}
+          </label>
+          <input
+            id="gd-max-size"
+            v-model.number="gdMaxFileSizeMb"
+            type="number"
+            class="form-input form-input-narrow"
+            min="1"
+            max="500"
+          />
+        </div>
+      </template>
+
+      <!-- OneDrive / SharePoint Fields (Issue #9004) -->
+      <template v-if="connectorType === 'onedrive'">
+        <div class="form-group">
+          <label class="form-label">
+            {{ $t('knowledge.connectors.config.onedriveAccount') }}
+          </label>
+          <ConnectorOAuthButton
+            provider="microsoft"
+            :label="$t('knowledge.connectors.config.onedriveLabel')"
+            :scopes="ONEDRIVE_SCOPES"
+            @connected="onOnedriveConnected"
+            @error="onOnedriveOAuthError"
+          />
+          <span v-if="odSecretId" class="form-hint onedrive-connected">
+            {{ $t('knowledge.connectors.config.onedriveConnected') }}
+          </span>
+          <span v-if="odOAuthError" class="form-hint onedrive-error">
+            {{ odOAuthError }}
+          </span>
+        </div>
+        <div class="form-group">
+          <label class="form-label">{{ $t('knowledge.connectors.config.onedriveSourceType') }}</label>
+          <div class="mode-toggle">
+            <button
+              class="mode-btn"
+              :class="{ active: odSourceType === 'onedrive' }"
+              type="button"
+              @click="odSourceType = 'onedrive'"
+            >
+              {{ $t('knowledge.connectors.config.onedriveOneDrive') }}
+            </button>
+            <button
+              class="mode-btn"
+              :class="{ active: odSourceType === 'sharepoint' }"
+              type="button"
+              @click="odSourceType = 'sharepoint'"
+            >
+              {{ $t('knowledge.connectors.config.onedriveSharePoint') }}
+            </button>
+          </div>
+        </div>
+        <div v-if="odSourceType === 'sharepoint'" class="form-group">
+          <label class="form-label" for="od-site-id">
+            {{ $t('knowledge.connectors.config.onedriveSiteId') }}
+          </label>
+          <input
+            id="od-site-id"
+            v-model="odSiteId"
+            type="text"
+            class="form-input"
+            placeholder="contoso.sharepoint.com,abc123,def456"
+          />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="od-drive-id">
+            {{ $t('knowledge.connectors.config.onedriveDriveId') }}
+          </label>
+          <input
+            id="od-drive-id"
+            v-model="odDriveId"
+            type="text"
+            class="form-input"
+            placeholder="b!aBcDeFgHiJkLmNoPqRsTuVwXyZ"
+          />
+          <span class="form-hint">
+            {{ $t('knowledge.connectors.config.onedriveDriveIdHint') }}
+          </span>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="od-folder-path">
+            {{ $t('knowledge.connectors.config.onedriveFolderPath') }}
+          </label>
+          <input
+            id="od-folder-path"
+            v-model="odFolderPath"
+            type="text"
+            class="form-input"
+            placeholder="/Documents"
+          />
+          <span class="form-hint">
+            {{ $t('knowledge.connectors.config.onedriveFolderHint') }}
+          </span>
+        </div>
+        <div class="form-group">
+          <label class="toggle-row">
+            <input
+              type="checkbox"
+              v-model="odSyncSubfolders"
+              class="toggle-checkbox"
+            />
+            <span class="toggle-label">{{ $t('knowledge.connectors.config.onedriveSyncSubfolders') }}</span>
+          </label>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="od-max-size">
+            {{ $t('knowledge.connectors.config.maxFileSize') }}
+          </label>
+          <input
+            id="od-max-size"
+            v-model.number="odMaxFileSizeMb"
+            type="number"
+            class="form-input form-input-narrow"
+            min="1"
+            max="500"
+          />
+        </div>
+      </template>
+
+      <!-- GitLab Fields (Issue #9011) -->
+      <template v-if="connectorType === 'gitlab'">
+        <div class="form-group">
+          <label class="form-label" for="gl-url">
+            {{ $t('knowledge.connectors.config.gitlabUrl') }}
+          </label>
+          <input
+            id="gl-url"
+            v-model="glUrl"
+            type="text"
+            class="form-input"
+            placeholder="https://gitlab.com"
+          />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="gl-token">
+            {{ $t('knowledge.connectors.config.gitToken') }}
+          </label>
+          <input
+            id="gl-token"
+            v-model="glToken"
+            type="password"
+            class="form-input"
+            autocomplete="off"
+            placeholder="glpat-xxxxxxxxxxxxxxxxxxxx"
+          />
+          <span class="form-hint">{{ $t('knowledge.connectors.config.gitTokenHint') }}</span>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="gl-projects">
+            {{ $t('knowledge.connectors.config.gitlabProjectIds') }}
+          </label>
+          <input
+            id="gl-projects"
+            v-model="glProjectIds"
+            type="text"
+            class="form-input"
+            placeholder="42, group/project"
+          />
+          <span class="form-hint">{{ $t('knowledge.connectors.config.gitlabProjectIdsHint') }}</span>
+        </div>
+        <div class="form-group">
+          <label class="toggle-row">
+            <input type="checkbox" v-model="glSyncIssues" class="toggle-checkbox" />
+            <span class="toggle-label">{{ $t('knowledge.connectors.config.gitSyncIssues') }}</span>
+          </label>
+        </div>
+        <div class="form-group">
+          <label class="toggle-row">
+            <input type="checkbox" v-model="glSyncMergeRequests" class="toggle-checkbox" />
+            <span class="toggle-label">{{ $t('knowledge.connectors.config.gitSyncMergeRequests') }}</span>
+          </label>
+        </div>
+        <div class="form-group">
+          <label class="toggle-row">
+            <input type="checkbox" v-model="glSyncFiles" class="toggle-checkbox" />
+            <span class="toggle-label">{{ $t('knowledge.connectors.config.gitSyncFiles') }}</span>
+          </label>
+        </div>
+      </template>
+
+      <!-- Gitea / Forgejo Fields (Issue #9011) -->
+      <template v-if="connectorType === 'gitea' || connectorType === 'forgejo'">
+        <div class="form-group">
+          <label class="form-label" for="gt-url">
+            {{ $t('knowledge.connectors.config.giteaUrl') }}
+          </label>
+          <input
+            id="gt-url"
+            v-model="gtUrl"
+            type="text"
+            class="form-input"
+            placeholder="https://git.example.com"
+          />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="gt-token">
+            {{ $t('knowledge.connectors.config.gitToken') }}
+          </label>
+          <input
+            id="gt-token"
+            v-model="gtToken"
+            type="password"
+            class="form-input"
+            autocomplete="off"
+            placeholder="xxxxxxxxxxxxxxxxxxxx"
+          />
+          <span class="form-hint">{{ $t('knowledge.connectors.config.gitTokenHint') }}</span>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="gt-repos">
+            {{ $t('knowledge.connectors.config.giteaRepos') }}
+          </label>
+          <input
+            id="gt-repos"
+            v-model="gtRepos"
+            type="text"
+            class="form-input"
+            placeholder="owner/repo, org/other"
+          />
+          <span class="form-hint">{{ $t('knowledge.connectors.config.giteaReposHint') }}</span>
+        </div>
+        <div class="form-group">
+          <label class="toggle-row">
+            <input type="checkbox" v-model="gtSyncIssues" class="toggle-checkbox" />
+            <span class="toggle-label">{{ $t('knowledge.connectors.config.gitSyncIssues') }}</span>
+          </label>
+        </div>
+        <div class="form-group">
+          <label class="toggle-row">
+            <input type="checkbox" v-model="gtSyncMergeRequests" class="toggle-checkbox" />
+            <span class="toggle-label">{{ $t('knowledge.connectors.config.gitSyncMergeRequests') }}</span>
+          </label>
+        </div>
+        <div class="form-group">
+          <label class="toggle-row">
+            <input type="checkbox" v-model="gtSyncFiles" class="toggle-checkbox" />
+            <span class="toggle-label">{{ $t('knowledge.connectors.config.gitSyncFiles') }}</span>
+          </label>
         </div>
       </template>
     </div>
@@ -895,6 +1457,16 @@ function closeModal() {
   color: var(--text-tertiary);
   margin-top: var(--spacing-1);
   font-family: var(--font-sans);
+}
+
+.gdrive-connected,
+.onedrive-connected {
+  color: var(--color-success);
+}
+
+.gdrive-error,
+.onedrive-error {
+  color: var(--color-error);
 }
 
 .form-row {

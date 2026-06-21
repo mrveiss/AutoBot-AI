@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """
 Terminal Output Capture Utility for AutoBot
 Captures and logs all output from AutoBot processes

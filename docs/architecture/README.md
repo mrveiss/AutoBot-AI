@@ -80,7 +80,7 @@ Key architectural decisions are documented in ADRs. See [docs/adr/](../adr/READM
 - **Intel NPU** - Hardware acceleration
 
 ### Infrastructure
-- **Hyper-V** - VM hypervisor
+- **Hypervisor-agnostic** - runs on any supported hypervisor or bare metal (VirtualBox, VMware, Hyper-V, KVM, WSL2); requires only a supported OS + hardware
 - **Docker** - Containerization (optional)
 - **Playwright** - Browser automation
 - **noVNC** - Desktop streaming
@@ -104,12 +104,17 @@ Key architectural decisions are documented in ADRs. See [docs/adr/](../adr/READM
 | [AUTOBOT_MEMORY_GRAPH_ARCHITECTURE.md](AUTOBOT_MEMORY_GRAPH_ARCHITECTURE.md) | Memory graph system |
 | [VECTOR_STORE_MIGRATION.md](VECTOR_STORE_MIGRATION.md) | Vector store design |
 
+### Auth & Security
+| Document | Description |
+|----------|-------------|
+| [auth.md](auth.md) | Authentication and RBAC architecture |
+| [SECURITY_ASSESSMENT_WORKFLOW.md](SECURITY_ASSESSMENT_WORKFLOW.md) | Security assessment workflow |
+
 ### Features
 | Document | Description |
 |----------|-------------|
 | [TERMINAL_ARCHITECTURE_DISTRIBUTED.md](TERMINAL_ARCHITECTURE_DISTRIBUTED.md) | Terminal integration |
 | [LONG_RUNNING_OPERATIONS_ARCHITECTURE.md](LONG_RUNNING_OPERATIONS_ARCHITECTURE.md) | Long-running tasks |
-| [SECURITY_ASSESSMENT_WORKFLOW.md](SECURITY_ASSESSMENT_WORKFLOW.md) | Security workflows |
 
 ### Code Analysis
 | Document | Description |

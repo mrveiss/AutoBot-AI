@@ -258,4 +258,26 @@ describe('useTranscriberApi', () => {
       await expect(api.kbPush(1, 'collection-123')).rejects.toThrow('KB not available')
     })
   })
+
+  describe('ASR providers (#10147)', () => {
+    it('listAsrProviders calls GET /api/transcriber/providers', async () => {
+      mockGet.mockResolvedValue({ selected: null, providers: [] })
+      const api = useTranscriberApi()
+      await api.listAsrProviders()
+      expect(mockGet).toHaveBeenCalledWith('/api/transcriber/providers')
+    })
+
+    it('setAsrProvider calls PATCH /api/transcriber/providers with provider id', async () => {
+      mockPatch.mockResolvedValue(undefined)
+      const api = useTranscriberApi()
+      await api.setAsrProvider('deepgram')
+      expect(mockPatch).toHaveBeenCalledWith('/api/transcriber/providers', { provider: 'deepgram' })
+    })
+
+    it('listAsrProviders propagates API errors', async () => {
+      mockGet.mockRejectedValue(new Error('Provider list unavailable'))
+      const api = useTranscriberApi()
+      await expect(api.listAsrProviders()).rejects.toThrow('Provider list unavailable')
+    })
+  })
 })

@@ -289,7 +289,8 @@ export function usePrometheusMetrics(
       logger.error('WebSocket error:', event)
       error.value = 'WebSocket connection error'
     },
-    onMessage: (data: string) => {
+    onMessage: (data: unknown) => {
+      if (typeof data !== 'string') return
       try {
         const msg = JSON.parse(data)
         if (msg.type === 'performance_update' && msg.data) {

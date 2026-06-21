@@ -117,7 +117,9 @@ class OperationIntegrationManager:
         self._setup_routes()
 
     async def initialize(self):
-        """Initialize the integration manager"""
+        """Initialize the integration manager (idempotent)."""
+        if self.operation_manager is not None:
+            return
         try:
             self.redis_client = redis.from_url(self.redis_url)
             await self.redis_client.ping()

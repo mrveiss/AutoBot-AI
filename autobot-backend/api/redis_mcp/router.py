@@ -312,7 +312,7 @@ async def _wrap_vector_create_index(args: dict) -> Metadata:
         dimensions=args.get("dimensions", 1536),
         distance_metric=args.get("distance_metric", "COSINE"),
         extra_fields=args.get("extra_fields"),
-        database=args.get("database", "vectors"),
+        database=args.get("database", "memory"),
     )
 
 
@@ -323,7 +323,7 @@ async def _wrap_vector_search(args: dict) -> Metadata:
         index_name=args.get("index_name", "idx:agent_memory"),
         top_k=args.get("top_k", 10),
         return_fields=args.get("return_fields"),
-        database=args.get("database", "vectors"),
+        database=args.get("database", "memory"),
     )
 
 
@@ -335,14 +335,14 @@ async def _wrap_hybrid_search(args: dict) -> Metadata:
         index_name=args.get("index_name", "idx:agent_memory"),
         top_k=args.get("top_k", 10),
         return_fields=args.get("return_fields"),
-        database=args.get("database", "vectors"),
+        database=args.get("database", "memory"),
     )
 
 
 async def _wrap_vector_index_info(args: dict) -> Metadata:
     return await handle_redis_vector_index_info(
         index_name=args.get("index_name", "idx:agent_memory"),
-        database=args.get("database", "vectors"),
+        database=args.get("database", "memory"),
     )
 
 

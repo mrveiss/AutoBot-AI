@@ -83,7 +83,8 @@ describe('DeclarationsSection (#5369)', () => {
       const w = mountSection([], true)
       expect(w.find('.section-loading').exists()).toBe(true)
       expect(w.find('.empty-state').exists()).toBe(false)
-      expect(w.find('.fa-spinner').exists()).toBe(true)
+      // Icon.vue renders an SVG with `icon-spin` (no FontAwesome classes)
+      expect(w.find('.icon-spin').exists()).toBe(true)
     })
 
     it('renders spinner (not empty-state) with declarations when loading=true', () => {

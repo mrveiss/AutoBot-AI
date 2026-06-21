@@ -1,0 +1,73 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+#
+# API Wiring Audit (GH#9851)
+# Cross-references every /api/ path the frontend calls against the backend's
+# actual route table and flags router modules that exist but are never mounted.
+#
+# Authoritative mode builds the app and dumps app.openapi(); if the build fails
+# in CI it falls back to static (regex) mode so the job still reports.
+#
+# BLOCKING gate since #9864: the audit's false-positive classes were fixed
+# (segment-wise template matching, base-URL strings, websocket routes via
+# x-websocket-paths, include_router aggregation chains, comment-line doc
+# examples) and the two real drift bugs they masked were fixed with them.
+# If this gate goes red, the diff genuinely broke the frontend/backend
+# contract — fix the wiring, do not re-add continue-on-error.
+
+name: API Wiring Audit
+
+on:
+  push:
+    branches: [ main, Dev_new_gui ]
+    paths: &paths
+      - 'autobot-backend/**/*.py'
+      - 'autobot-frontend/src/**'
+      - 'scripts/audit_api_wiring.py'
+      - 'requirements*.txt'
+      - '.github/workflows/api-wiring.yml'
+  pull_request:
+    branches: [ main, Dev_new_gui ]
+    paths: *paths
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  api-wiring:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: |
+            requirements*.txt
+            autobot-backend/requirements*.txt
+
+      - name: Install backend dependencies (best-effort)
+        continue-on-error: true
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install -r requirements-ci.txt --prefer-binary || true
+
+      - name: Run API wiring audit
+        run: |
+          set -o pipefail
+          export PYTHONPATH="$PWD:$PWD/autobot-backend:${PYTHONPATH:-}"
+          mkdir -p data logs static config
+          if python scripts/audit_api_wiring.py --dump-openapi openapi.json; then
+            echo "::notice::Authoritative OpenAPI dump succeeded — auditing against real route table."
+            python scripts/audit_api_wiring.py --openapi openapi.json --fail-on-unwired
+          else
+            echo "::warning::App build failed in CI — falling back to static (heuristic) audit."
+            python scripts/audit_api_wiring.py
+          fi

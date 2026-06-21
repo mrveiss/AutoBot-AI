@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """Add code_patterns table for pattern extraction
 
 Revision ID: 20260216_003

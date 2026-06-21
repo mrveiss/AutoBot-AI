@@ -1,9 +1,17 @@
 ---
 title: Glossary
 nav_order: 5
+tags:
+  - reference
+  - glossary
+aliases:
+  - Glossary
+  - Terminology
+  - Terms and Definitions
+status: current
 ---
 
-This glossary defines terms, acronyms, and concepts used throughout AutoBot documentation and codebase.
+This glossary defines terms, acronyms, and concepts used throughout AutoBot documentation and codebase. For how the platform-level terms fit together, see [The AutoBot Platform Model](architecture/PLATFORM_MODEL.md).
 
 ---
 
@@ -77,6 +85,9 @@ The Python web framework used for the backend API. Provides async support, autom
 ### Feature Envy
 A code smell where a method accesses data from another object more than its own. Indicates misplaced logic.
 
+### Fleet
+The set of nodes (machines or containers) that AutoBot's [Service Lifecycle Manager (SLM)](#service-lifecycle-manager-slm) deploys, operates, and scales — vector DB, cache, database, inference, and workers across one or more hosts.
+
 ### Frontend VM
 VM1 (`<frontend-ip>:5173`) - the **only** machine allowed to run the Vite frontend server.
 
@@ -86,6 +97,9 @@ VM1 (`<frontend-ip>:5173`) - the **only** machine allowed to run the Vite fronte
 
 ### God Class
 A code smell where a class has too many responsibilities. Should be refactored into smaller, focused classes.
+
+### Governance
+The platform-core controls that every layer above inherits: role-based access control (RBAC), review/approval gates, and budgets. Modules such as [AutoBot LLC](llc/_index.md) rely on this rather than implementing their own.
 
 ### Graceful Degradation
 The ability to continue operating at reduced functionality when components fail.
@@ -97,12 +111,18 @@ The ability to continue operating at reduced functionality when components fail.
 ### HMR (Hot Module Replacement)
 Vite's ability to update modules in the browser without full page reload during development.
 
+### Hooks
+The platform's extension points — places where modules and plugins attach behavior to core events and workflows. Part of how a [module](#module) is built on the platform's bones.
+
 ### Horizontal Scaling
 Adding more instances of a service to handle increased load. Contrast with vertical scaling.
 
 ---
 
 ## I
+
+### Institutional Memory
+The platform's persistent, shared knowledge: the [RAG](#rag-retrieval-augmented-generation) knowledge base plus the memory/knowledge graph. It survives across sessions and is shared by everything running on the core, so [modules](#module) and agents start with organizational context instead of a blank slate.
 
 ### Intel NPU
 Neural Processing Unit - dedicated AI acceleration hardware in Intel CPUs. Used for local embedding generation.
@@ -124,8 +144,14 @@ The agent responsible for maintaining the knowledge base, indexing documents, an
 ### LlamaIndex
 The RAG (Retrieval-Augmented Generation) framework used for knowledge base queries and document indexing.
 
+### LLC (AutoBot LLC Module)
+AutoBot's flagship [module](#module): an autonomous *agent-company* you install on the platform. It adds companies, org charts, goals, backlogs, sprints, heartbeat scheduling, and board governance, while its agents inherit [institutional memory](#institutional-memory), local inference, [hooks](#hooks), and [governance](#governance) from the core. Here "LLC" names the module — not a legal "limited liability company." See [AutoBot LLC](llc/_index.md).
+
 ### LLM (Large Language Model)
-AI models like GPT-4, Claude, and Llama that generate text responses. AutoBot supports multiple providers.
+AI models that generate text responses (run locally or via a provider). AutoBot routes all of them through one LLM gateway with provider fallback. **Note:** an LLM is *not* the SLM — see [Service Lifecycle Manager (SLM)](#service-lifecycle-manager-slm).
+
+### Local Inference
+Running model inference on hardware you own (CPU, GPU, or NPU) instead of a remote API. A platform-core capability that gives modules and agents inference at **zero marginal cost per request**.
 
 ### Long-Running Operations
 Tasks that exceed normal request timeouts. Managed by the async task framework with progress tracking.
@@ -136,6 +162,9 @@ Tasks that exceed normal request timeouts. Managed by the async task framework w
 
 ### MCP (Memory Context Protocol)
 The system for storing and retrieving context, decisions, and findings across sessions.
+
+### Module
+An installable capability built on the AutoBot [platform core](#platform-core). A module inherits the core's primitives — [institutional memory](#institutional-memory), [local inference](#local-inference), [hooks](#hooks), and [governance](#governance) — so it stays small relative to what it delivers. [AutoBot LLC](#llc-autobot-llc-module) is the flagship module. See [The AutoBot Platform Model](architecture/PLATFORM_MODEL.md).
 
 ### Multi-Modal
 AI capabilities that span multiple modalities: text, image, voice, and desktop interaction.
@@ -163,6 +192,9 @@ Intel's toolkit for optimizing AI models for Intel hardware including NPUs.
 ---
 
 ## P
+
+### Platform Core
+AutoBot's small, stable core — chat/streaming, the knowledge base ([RAG](#rag-retrieval-augmented-generation) + memory graph), the LLM gateway, [local inference](#local-inference), [hooks](#hooks), and [governance](#governance). It changes slowly so the [SLM](#service-lifecycle-manager-slm) and [modules](#module) can depend on it. Embodies the platform's promise: your data stays on your machines and the AI stays yours.
 
 ### Playwright
 Browser automation framework running on VM5. Used for web scraping and UI testing.
@@ -192,6 +224,9 @@ Maximum acceptable data loss measured in time.
 ---
 
 ## S
+
+### Service Lifecycle Manager (SLM)
+AutoBot's management layer. It deploys, operates, and scales the infrastructure behind private AI — vector DB, cache, database, inference server, and workers — across a [fleet](#fleet): **deploy** (stand up the stack, via Ansible) → **operate** (upgrade, monitor, recover, rotate certs) → **scale** (add nodes, add NPU workers, assign roles). **SLM always means *Service Lifecycle Manager* — never "small language model"** (for on-device models, see [Local Inference](#local-inference) and [LLM](#llm-large-language-model)). See [The AutoBot Platform Model](architecture/PLATFORM_MODEL.md).
 
 ### Session
 A user's conversation context including message history and state. Persisted in Redis.
@@ -236,7 +271,7 @@ Frontend build tool and development server. Only runs on VM1.
 Virtual Network Computing - desktop streaming protocol. AutoBot exposes VNC at port 6080.
 
 ### VM (Virtual Machine)
-Isolated computing environments running on Hyper-V. AutoBot uses 6 VMs.
+Isolated computing environments. AutoBot is hypervisor-agnostic and can deploy onto one or more hosts or VMs (co-located or distributed); it requires only a supported OS and hardware.
 
 ### Vue
 Frontend JavaScript framework (Vue 3) used for the AutoBot web interface.
@@ -265,12 +300,14 @@ Windows Subsystem for Linux - where the main AutoBot backend runs.
 | DR | Disaster Recovery |
 | HMR | Hot Module Replacement |
 | KB | Knowledge Base |
+| LLC | AutoBot LLC (autonomous agent-company module) |
 | LLM | Large Language Model |
 | MCP | Memory Context Protocol |
 | NPU | Neural Processing Unit |
 | RAG | Retrieval-Augmented Generation |
 | RTO | Recovery Time Objective |
 | RPO | Recovery Point Objective |
+| SLM | Service Lifecycle Manager (**not** small language model) |
 | VM | Virtual Machine |
 | VNC | Virtual Network Computing |
 | WSL | Windows Subsystem for Linux |

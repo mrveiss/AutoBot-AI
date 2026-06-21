@@ -35,7 +35,7 @@
   hosts: localhost
   gather_facts: false
   vars:
-    slm_admin_url: "{{ lookup('env', 'AUTOBOT_SLM_URL') | default('https://' ~ {{ slm_host | default(hostvars[groups.get('slm_manager', groups.get('slm', ['localhost']))[0]]['ansible_host'] | default('127.0.0.1')) }}, true) }}"
+    slm_admin_url: "{{ lookup('env', 'AUTOBOT_SLM_URL') | default('https://' ~ (slm_host | default(hostvars[groups.get('slm_manager', groups.get('slm', ['localhost']))[0]]['ansible_host'] | default('127.0.0.1'))) ~ '/slm', true) }}"
 
   tasks:
     - name: "Login to SLM API"
@@ -216,7 +216,7 @@
   hosts: localhost
   gather_facts: false
   vars:
-    slm_admin_url: "{{ lookup('env', 'AUTOBOT_SLM_URL') | default('https://' ~ {{ slm_host | default(hostvars[groups.get('slm_manager', groups.get('slm', ['localhost']))[0]]['ansible_host'] | default('127.0.0.1')) }}, true) }}"
+    slm_admin_url: "{{ lookup('env', 'AUTOBOT_SLM_URL') | default('https://' ~ (slm_host | default(hostvars[groups.get('slm_manager', groups.get('slm', ['localhost']))[0]]['ansible_host'] | default('127.0.0.1'))) ~ '/slm', true) }}"
 
   tasks:
     - name: "Pause for services to stabilise"

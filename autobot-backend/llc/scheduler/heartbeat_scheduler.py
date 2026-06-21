@@ -29,7 +29,6 @@ Rate-limit recovery (GH#8204):
 
 import asyncio
 import logging
-import os
 import time
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -42,16 +41,27 @@ except ImportError:
 from sqlalchemy import select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.env_utils import env_float
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
 from user_management.database import get_async_session_factory
 
-from ..adapters import AutoBotAgentAdapter, get_adapter
+from ..adapters import AdapterRunStatus, AutoBotAgentAdapter, get_adapter
+from ..adapters.subprocess_base import is_subprocess_adapter
 from ..config import AGENT_API_BASE_URL
-from ..exceptions import AdapterRunFailed, ProviderRateLimited
+from ..exceptions import (
+    AdapterRunFailed,
+    BudgetExhausted,
+    HeartbeatDispatchSkipped,
+    ProviderRateLimited,
+    SubscriptionQuotaExhausted,
+)
 from ..models.enums import HeartbeatInvocationSource, LLCRunStatus
 from ..models.heartbeat_run import LLCHeartbeatRun
 from ..services.api_key import ApiKeyService
+from ..services.budget import BudgetService
+from ..services.controls_service import ControlsService
+from ..services.replay_service import RunReplayService, parse_jsonl_events
 
 logger = logging.getLogger(__name__)
 
@@ -64,24 +74,12 @@ _RL_MAX_SECONDS = 14400  # cap at 4 hours
 _MAX_RATE_LIMIT_RETRIES = 10  # demote to failed after this many consecutive retries
 
 
-def _env_float(name: str, default: float) -> float:
-    """Parse a float env var, falling back to *default* on absence or bad value."""
-    raw = os.environ.get(name)
-    if not raw:
-        return default
-    try:
-        return float(raw)
-    except ValueError:
-        logger.warning("Invalid %s=%r — using default %s", name, raw, default)
-        return default
-
-
 # Registry-adapter (e.g. claude_code) completion polling (GH#9622, GH#9623).
-_ADAPTER_POLL_INTERVAL = _env_float("LLC_ADAPTER_POLL_INTERVAL_SECONDS", 5.0)
-_ADAPTER_MAX_WAIT_SECONDS = _env_float("LLC_ADAPTER_MAX_WAIT_SECONDS", 7200.0)
+_ADAPTER_POLL_INTERVAL = env_float("LLC_ADAPTER_POLL_INTERVAL_SECONDS", 5.0)
+_ADAPTER_MAX_WAIT_SECONDS = env_float("LLC_ADAPTER_MAX_WAIT_SECONDS", 7200.0)
 # Ephemeral run-key TTL backstop — must exceed the max wait so a key never
 # expires mid-run; revocation still happens promptly when the run finishes.
-_RUN_KEY_TTL_SECONDS = _env_float("LLC_RUN_KEY_TTL_SECONDS", _ADAPTER_MAX_WAIT_SECONDS + 600.0)
+_RUN_KEY_TTL_SECONDS = env_float("LLC_RUN_KEY_TTL_SECONDS", _ADAPTER_MAX_WAIT_SECONDS + 600.0)
 
 
 class HeartbeatScheduler:
@@ -495,11 +493,20 @@ class HeartbeatScheduler:
         error_msg: Optional[str] = None
         final_status = LLCRunStatus.COMPLETED.value
         rate_limited_exc: Optional[ProviderRateLimited] = None
+        quota_exc: Optional[SubscriptionQuotaExhausted] = None
+        external_run_id: Optional[str] = None
 
         try:
-            await _dispatch_adapter(agent, context)
+            external_run_id = await _dispatch_adapter(agent, context)
         except ProviderRateLimited as exc:
             rate_limited_exc = exc
+        except SubscriptionQuotaExhausted as exc:
+            quota_exc = exc
+        except HeartbeatDispatchSkipped as exc:
+            # GH#9951: not dispatched → record SKIPPED, do NOT bump last_heartbeat_at.
+            logger.info("Heartbeat skipped for run %s: %s", run_id, exc.reason)
+            final_status = LLCRunStatus.SKIPPED.value
+            error_msg = exc.reason
         except Exception as exc:
             logger.exception("Adapter error for run %s", run_id)
             error_msg = str(exc)
@@ -507,6 +514,10 @@ class HeartbeatScheduler:
 
         if rate_limited_exc is not None:
             await self._handle_rate_limited(agent, run_id, retry_count, rate_limited_exc)
+            return
+
+        if quota_exc is not None:
+            await self._handle_quota_exhausted(agent, run_id, quota_exc)
             return
 
         try:
@@ -528,6 +539,17 @@ class HeartbeatScheduler:
                 await session.commit()
         except Exception:
             logger.exception("Could not write final status for run %s", run_id)
+
+        # GH#9034: fire-and-forget replay recording — must never affect run status.
+        # Pass external_run_id so the recording locates the exact output file (H1).
+        # GH#9951: a SKIPPED run never dispatched, so there is nothing to record.
+        if final_status != LLCRunStatus.SKIPPED.value:
+            _record_task = asyncio.create_task(
+                _record_run_for_replay(agent, run_id, context, final_status, external_run_id=external_run_id),
+                name=f"replay-record-{run_id}",
+            )
+            self._tasks.add(_record_task)
+            _record_task.add_done_callback(self._tasks.discard)
 
     async def _handle_rate_limited(
         self,
@@ -622,6 +644,49 @@ class HeartbeatScheduler:
         except Exception:
             logger.exception("Could not re-queue rate-limited agent %s in Redis for run %s", agent_id, run_id)
 
+    async def _handle_quota_exhausted(
+        self,
+        agent: Dict[str, Any],
+        run_id: uuid.UUID,
+        exc: SubscriptionQuotaExhausted,
+    ) -> None:
+        """Record the run ``quota_exhausted`` and auto-pause the agent (GH#10218).
+
+        A subscription quota is spent for the billing window, so — unlike
+        RATE_LIMITED — retrying is futile. ``ControlsService.pause_agent`` flips
+        the agent to ``paused`` AND logs a board-visible ``CONTROL_AGENT_PAUSED``
+        event (the board notification), so a human resumes it after topping up.
+        """
+        agent_id = agent["agent_id"]
+        company_id = str(agent.get("company_id") or "")
+        factory = get_async_session_factory()
+        try:
+            async with factory() as session:
+                await session.execute(
+                    update(LLCHeartbeatRun)
+                    .where(LLCHeartbeatRun.id == run_id)
+                    .values(
+                        status=LLCRunStatus.QUOTA_EXHAUSTED.value,
+                        finished_at=datetime.now(tz=timezone.utc),
+                        error=exc.reason,
+                    )
+                )
+                if company_id:
+                    await ControlsService().pause_agent(
+                        session,
+                        company_id,
+                        agent_id,
+                        actor_user_id=None,
+                        reason=f"subscription quota exhausted (run {run_id})",
+                        actor_type="system",
+                    )
+                else:
+                    logger.warning("Agent %s quota-exhausted but has no company_id — not auto-paused", agent_id)
+                await session.commit()
+            logger.warning("Agent %s auto-paused: %s (run %s)", agent_id, exc.reason, run_id)
+        except Exception:
+            logger.exception("Could not record quota-exhausted / pause agent %s for run %s", agent_id, run_id)
+
 
 # ------------------------------------------------------------------
 # Module-level singleton (shared between lifespan startup and API routes)
@@ -643,6 +708,72 @@ def get_heartbeat_scheduler() -> HeartbeatScheduler:
 # ------------------------------------------------------------------
 
 
+async def _record_run_for_replay(
+    agent: Dict[str, Any],
+    run_id: uuid.UUID,
+    context: Dict[str, Any],
+    final_status: str,
+    *,
+    external_run_id: Optional[str] = None,
+) -> None:
+    """Best-effort replay recording fired after a run reaches terminal status (GH#9034).
+
+    For subprocess adapters the JSONL output file is resolved via the adapter's
+    ``_output_path`` helper using the exact ``external_run_id`` returned by
+    ``adapter.invoke`` — no mtime glob, no concurrent-run collision (H1 fix).
+    For in-process agents there is no file; recorded_events is stored as None.
+    Any exception is swallowed so the scheduler is never blocked.
+    """
+    import asyncio as _asyncio
+    import os as _os
+
+    try:
+        output_text: Optional[str] = None
+        recorded_events = None
+
+        adapter_type = agent.get("adapter_type") or "autobot_agent"
+        if adapter_type != "autobot_agent" and external_run_id is not None:
+            # Resolve the exact output file via the adapter's own path helper.
+            cfg = agent.get("adapter_config") or {}
+            output_dir: str = cfg.get("output_dir", "/tmp")  # nosec B108
+            agent_id_str = str(agent.get("agent_id", ""))
+            output_file: Optional[str] = None
+            try:
+                from ..adapters.claude_code_adapter import _output_path as _cc_output_path
+
+                output_file = _cc_output_path(output_dir, agent_id_str, external_run_id)
+            except ImportError:
+                pass
+
+            if output_file and _os.path.exists(output_file):
+                try:
+                    raw: str = await _asyncio.to_thread(_read_file_text, output_file)
+                    from ..services.replay_service import _REPLAY_OUTPUT_CAP
+
+                    output_text = raw[-_REPLAY_OUTPUT_CAP:] if len(raw) > _REPLAY_OUTPUT_CAP else raw
+                    recorded_events = parse_jsonl_events(raw)
+                except OSError:
+                    pass
+
+        svc = RunReplayService()
+        await svc.record_run(
+            run_id=run_id,
+            agent=agent,
+            context=context,
+            final_status=final_status,
+            output_text=output_text,
+            recorded_events=recorded_events,
+        )
+    except Exception:
+        logger.exception("_record_run_for_replay: unexpected error for run %s", run_id)
+
+
+def _read_file_text(path: str) -> str:
+    """Read a file as text — runs in a thread via asyncio.to_thread (M4)."""
+    with open(path, encoding="utf-8", errors="replace") as fh:
+        return fh.read()
+
+
 def _next_fire(cron_expr: str, base_ts: float) -> float:
     """Return the next scheduled epoch (float) after *base_ts*."""
     if _croniter_cls is None:
@@ -652,8 +783,11 @@ def _next_fire(cron_expr: str, base_ts: float) -> float:
     return itr.get_next(float)
 
 
-async def _dispatch_adapter(agent: Dict[str, Any], context: Dict[str, Any]) -> None:
+async def _dispatch_adapter(agent: Dict[str, Any], context: Dict[str, Any]) -> Optional[str]:
     """Route the heartbeat to the adapter configured for this agent.
+
+    Returns the external_run_id produced by the adapter (for subprocess adapters),
+    or None for in-process / skipped dispatches.
 
     ``autobot_agent`` agents run in-process via :class:`AutoBotAgentAdapter`
     (GH#8490).  Every other ``adapter_type`` resolves through the adapter
@@ -672,31 +806,38 @@ async def _dispatch_adapter(agent: Dict[str, Any], context: Dict[str, Any]) -> N
 
     if adapter_type == "autobot_agent":
         await _dispatch_autobot_agent(agent, context)
-        return
+        return None
 
     try:
         adapter = get_adapter(adapter_type)
     except KeyError:
-        logger.warning(
-            "agent %s: no LLC adapter registered for type %r — skipping dispatch",
-            agent["agent_id"],
-            adapter_type,
-        )
-        return
+        # GH#9951: signal a skip (not a phantom COMPLETED) so the run is
+        # recorded as SKIPPED and last_heartbeat_at is not advanced.
+        raise HeartbeatDispatchSkipped(
+            agent["agent_id"], f"no LLC adapter registered for type {adapter_type!r}"
+        ) from None
 
-    await _dispatch_registry_adapter(adapter, agent, context)
+    # GH#9793: skip dispatch when the required CLI binary is absent from PATH.
+    # Converts every-heartbeat FAILED runs into a clean degraded state (GH#9951).
+    if is_subprocess_adapter(adapter) and not adapter.is_cli_available():  # type: ignore[union-attr]
+        raise HeartbeatDispatchSkipped(
+            agent["agent_id"],
+            f"adapter {adapter_type!r} requires CLI "
+            f"{adapter._required_cli!r} which is not on PATH",  # type: ignore[union-attr]
+        )
+
+    return await _dispatch_registry_adapter(adapter, agent, context)
 
 
 async def _dispatch_autobot_agent(agent: Dict[str, Any], context: Dict[str, Any]) -> None:
     """Dispatch an in-process AutoBot agent via :class:`AutoBotAgentAdapter`."""
     adapter_config = agent.get("adapter_config") or {}
     if not adapter_config.get("agent_class"):
-        # No agent_class configured — log and return (graceful degradation).
-        logger.warning(
-            "agent %s has no adapter_config.agent_class — skipping dispatch (configure agent_class to enable)",
+        # No agent_class configured — degraded skip, not a phantom success (GH#9951).
+        raise HeartbeatDispatchSkipped(
             agent["agent_id"],
+            "no adapter_config.agent_class configured",
         )
-        return
 
     # GH#8502: use run_blocking() so ProviderRateLimited propagates to _run_adapter
     # and triggers exponential-backoff recovery.  _run_adapter is already a
@@ -705,17 +846,23 @@ async def _dispatch_autobot_agent(agent: Dict[str, Any], context: Dict[str, Any]
     await adapter.run_blocking(dict(context, agent_id=agent["agent_id"]))
 
 
-async def _dispatch_registry_adapter(adapter: Any, agent: Dict[str, Any], context: Dict[str, Any]) -> None:
+async def _dispatch_registry_adapter(adapter: Any, agent: Dict[str, Any], context: Dict[str, Any]) -> Optional[str]:
     """Invoke a registry adapter, manage its run-scoped key, await completion.
+
+    Returns the external_run_id string produced by ``adapter.invoke`` so callers
+    can resolve the exact output file (H1 fix — no mtime glob needed).
 
     Issues an ephemeral LLC API key scoped to this agent (GH#9623), injects it
     plus the API base URL into the context so the adapter forwards them to the
     subprocess, blocks until the external run reaches a terminal state, then
     revokes the key — so the credential lives only for the duration of the run.
 
-    Note: registry adapters (e.g. claude_code) do NOT participate in the
-    ``ProviderRateLimited`` exponential-backoff recovery path — provider rate
-    limits surface as a non-success terminal status, recorded as a failed run.
+    RATE_LIMITED terminal state (GH#9773): when the adapter signals that the
+    external run hit a provider rate limit, this function raises
+    ``ProviderRateLimited`` so ``_run_adapter``'s existing exponential-backoff
+    path (GH#8204) applies uniformly for registry adapters — the run is not
+    recorded as FAILED, the checkout is preserved, and the agent is re-queued
+    at the computed retry-after time.
     """
     agent_id: str = agent["agent_id"]
     company_id = str(agent.get("company_id") or "")
@@ -730,11 +877,18 @@ async def _dispatch_registry_adapter(adapter: Any, agent: Dict[str, Any], contex
     else:
         logger.warning("agent %s has no company_id — dispatching without an LLC API key", agent_id)
 
-    agent_config = {"agent_id": agent_id, "adapter_config": agent.get("adapter_config") or {}}
+    # GH#10217: include company_id so subscription adapters can resolve
+    # company-scoped credential secrets (e.g. gh_token_secret) at invoke time.
+    agent_config = {
+        "agent_id": agent_id,
+        "company_id": company_id,
+        "adapter_config": agent.get("adapter_config") or {},
+    }
     external_run_id: Optional[str] = None
     try:
         external_run_id = await adapter.invoke(agent_config, enriched)
-        final_status = await _await_adapter_completion(adapter, agent_config, external_run_id)
+        result = await _await_adapter_completion(adapter, agent_config, external_run_id)
+        final_status = result.status
     except asyncio.CancelledError:
         # Shutdown / task cancellation — kill the external run so it does not
         # outlive its about-to-be-revoked key, then propagate.
@@ -745,10 +899,58 @@ async def _dispatch_registry_adapter(adapter: Any, agent: Dict[str, Any], contex
         if key_record is not None:
             await _revoke_run_key(agent_id, key_record.id)
 
+    # GH#9773: RATE_LIMITED is scheduler-internal — translate to ProviderRateLimited
+    # so the GH#8204 backoff path applies uniformly for registry adapters.
+    # This exception is caught by _run_adapter which then calls _handle_rate_limited.
+    # It never reaches the DB as a RATE_LIMITED terminal adapter status.
+    if final_status == LLCRunStatus.RATE_LIMITED:
+        logger.warning(
+            "agent %s: registry adapter signalled RATE_LIMITED for run %s — raising ProviderRateLimited",
+            agent_id,
+            external_run_id,
+        )
+        raise ProviderRateLimited(provider=agent.get("adapter_type") or "registry", retry_after_seconds=0)
+
+    # GH#10218: subscription quota exhausted is terminal-with-no-retry — surface
+    # it so _run_adapter auto-pauses the agent + notifies the board rather than
+    # recording a generic FAILED that the liveness monitor would try to recover.
+    if final_status == LLCRunStatus.QUOTA_EXHAUSTED:
+        raise SubscriptionQuotaExhausted(agent_id, str(result.error or "subscription quota exhausted"))
+
     # GH#9622: surface non-success terminal states so _run_adapter records the
     # run as FAILED (and the liveness monitor can act) instead of COMPLETED.
     if final_status != LLCRunStatus.COMPLETED:
         raise AdapterRunFailed(agent.get("adapter_type") or "", str(external_run_id), final_status)
+
+    # GH#10220: forward parsed token usage to the agent's budget. BudgetExhausted
+    # is re-raised (GH#8215 hard-stop → run marked FAILED); other cost errors are
+    # best-effort and never fail an otherwise-successful run.
+    await _ingest_adapter_usage(agent, result)
+
+    return external_run_id
+
+
+async def _ingest_adapter_usage(agent: Dict[str, Any], result: AdapterRunStatus) -> None:
+    """Record a completed registry run's token usage against the agent budget."""
+    if result.tokens_in is None and result.tokens_out is None:
+        return  # adapter did not report usage (e.g. CLI without stream-json result)
+    agent_id: str = agent["agent_id"]
+    model = (agent.get("adapter_config") or {}).get("model") or agent.get("model") or ""
+    try:
+        factory = get_async_session_factory()
+        async with factory() as session:
+            await BudgetService().ingest_cost_event(
+                session,
+                agent_id,
+                int(result.tokens_in or 0),
+                int(result.tokens_out or 0),
+                model,
+            )
+            await session.commit()
+    except BudgetExhausted:
+        raise  # GH#8215 hard-stop — propagate so the run is recorded FAILED
+    except Exception:
+        logger.warning("Budget ingest failed for agent %s (best-effort)", agent_id)
 
 
 async def _safe_cancel(adapter: Any, agent_config: Dict[str, Any], run_id: str) -> None:
@@ -791,22 +993,23 @@ async def _revoke_run_key(agent_id: str, key_id: uuid.UUID) -> None:
         logger.exception("Failed to revoke ephemeral heartbeat key %s for agent %s", key_id, agent_id)
 
 
-async def _await_adapter_completion(adapter: Any, agent_config: Dict[str, Any], run_id: str) -> LLCRunStatus:
+async def _await_adapter_completion(adapter: Any, agent_config: Dict[str, Any], run_id: str) -> AdapterRunStatus:
     """Poll ``adapter.status`` until the run is terminal or the max wait elapses.
 
-    Cancels the run if it overruns ``_ADAPTER_MAX_WAIT_SECONDS`` so the
-    ephemeral key is never left live indefinitely.
+    Returns the full terminal :class:`AdapterRunStatus` (carrying token usage for
+    billing, GH#10220). Cancels the run if it overruns
+    ``_ADAPTER_MAX_WAIT_SECONDS`` so the ephemeral key is never left live forever.
     """
     started = time.monotonic()
     while time.monotonic() - started < _ADAPTER_MAX_WAIT_SECONDS:
         result = await adapter.status(agent_config, run_id)
         if result.status.is_terminal():
-            return result.status
+            return result
         await asyncio.sleep(_ADAPTER_POLL_INTERVAL)
 
     logger.warning("Adapter run %s exceeded max wait — cancelling", run_id)
     await adapter.cancel(agent_config, run_id)
-    return LLCRunStatus.TIMEOUT
+    return AdapterRunStatus(status=LLCRunStatus.TIMEOUT)
 
 
 async def _fetch_recent_decisions(company_id: str, n: int = 5) -> list[Dict[str, Any]]:

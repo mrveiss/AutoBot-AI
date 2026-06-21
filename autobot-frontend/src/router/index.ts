@@ -23,12 +23,13 @@
  * - /tls-certificates - TLS Certificates
  */
 
-import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
+import { createRouter, createWebHistory, type RouteLocationNormalized, type RouteRecordRaw } from 'vue-router'
 import { useAppStore } from '@/stores/useAppStore'
 import { useUserStore } from '@/stores/useUserStore'
 import { setupAsyncComponentErrorHandler } from '@/utils/asyncComponentHelpers'
 import { createLogger } from '@/utils/debugUtils'
 import { getBackendUrl, getSLMAdminUrl } from '@/config/ssot-config'
+import { llcCompanyParamGuard } from './llcGuards'
 
 const logger = createLogger('Router');
 
@@ -211,6 +212,17 @@ export const routes: RouteRecordRaw[] = [
         }
       },
       {
+        // #8999: ChromaDB / vector-store explorer — browse collections,
+        // inspect documents, run similarity search (backend: api/knowledge_chroma.py)
+        path: 'vector-store',
+        name: 'knowledge-vector-store',
+        component: () => import('@/components/knowledge/ChromaDBExplorer.vue'),
+        meta: {
+          title: 'Vector Store',
+          parent: 'knowledge'
+        }
+      },
+      {
         path: 'connectors',
         name: 'knowledge-connectors',
         component: () => import('@/components/knowledge/connectors/ConnectorManager.vue'),
@@ -372,6 +384,17 @@ export const routes: RouteRecordRaw[] = [
           title: 'Browser Automation',
           icon: 'fas fa-globe',
           description: 'Control browser workers and automate web tasks',
+          requiresAuth: true
+        }
+      },
+      // Issue #9890: Vision Automation panel — dedicated component route
+      {
+        path: 'vision-automation',
+        name: 'vision-automation',
+        component: () => import('@/views/VisionAutomationView.vue'),
+        meta: {
+          title: 'Vision Automation',
+          description: 'Screen analysis, element detection, OCR, and automation opportunities',
           requiresAuth: true
         }
       },
@@ -590,6 +613,26 @@ export const routes: RouteRecordRaw[] = [
           parent: 'analytics'
         }
       },
+      // Issue #9891: Error monitoring dashboard wired to /api/errors/* endpoints
+      {
+        path: 'errors',
+        name: 'analytics-errors',
+        component: () => import('@/views/ErrorMonitoringView.vue'),
+        meta: {
+          title: 'Error Monitoring',
+          parent: 'analytics'
+        }
+      },
+      // Issue #9892: Failure Analysis — causal inference engine diagnostics UI
+      {
+        path: 'diagnostics',
+        name: 'analytics-diagnostics',
+        component: () => import('@/views/FailureAnalysisDashboard.vue'),
+        meta: {
+          title: 'Failure Analysis',
+          parent: 'analytics'
+        }
+      },
     ]
   },
   // Issue #753: User preferences (appearance, font size, colors, etc.)
@@ -780,7 +823,8 @@ export const routes: RouteRecordRaw[] = [
       description: 'View LLM provider fallback chains and active fallback status',
       requiresAuth: true,
       admin: true,
-      hideInNav: false,
+      // hideInNav (GH#9627 drive-by): admin views live in adminMenuItems, not main nav
+      hideInNav: true,
     },
   },
   // Issue #1801: Admin User Management
@@ -817,6 +861,19 @@ export const routes: RouteRecordRaw[] = [
     meta: {
       title: 'Host Inventory',
       description: 'Manage multi-host role deployment',
+      requiresAuth: true,
+      admin: true,
+      hideInNav: true,
+    },
+  },
+  // GH#8996: Admin cross-user view of all active shared chat links (AC4)
+  {
+    path: '/admin/shared-links',
+    name: 'admin-shared-links',
+    component: () => import('@/views/Admin/SharedLinksAdminView.vue'),
+    meta: {
+      title: 'Shared Chat Links',
+      description: 'View all active shared chat links across users',
       requiresAuth: true,
       admin: true,
       hideInNav: true,
@@ -973,11 +1030,19 @@ export const routes: RouteRecordRaw[] = [
     ]
   },
   // Issue #8247: LLC Phase 6 — Company Dashboard, Org Chart, Goal Tree, Sub-Company Tree
+  // GH#9627: Company selector — entry point for the Company OS nav item
+  {
+    path: '/llc/select-company',
+    name: 'llc-company-select',
+    component: () => import('@/views/llc/CompanySelectorView.vue'),
+    meta: { title: 'Select Company', requiresAuth: true, llcScope: true },
+  },
   {
     path: '/llc/dashboard',
     name: 'llc-dashboard',
     component: () => import('@/views/llc/CompanyDashboard.vue'),
-    meta: { title: 'Company Dashboard', requiresAuth: true, llcScope: true },
+    // hideInNav (GH#9627): reached from the company selector / LLC sidebar
+    meta: { title: 'Company Dashboard', requiresAuth: true, llcScope: true, hideInNav: true },
   },
   {
     path: '/llc/org-chart',
@@ -1017,42 +1082,70 @@ export const routes: RouteRecordRaw[] = [
       isPublic: true
     }
   },
-  // GH#8248: LLC Frontend — Backlog, Sprint Board, Kanban Board, Work Item Detail
+  // GH#9627: company-scoped LLC routes share the LlcCompanyLayout (contextual
+  // sidebar) and the llcCompanyParamGuard (missing companyId → selector).
+  // Children: GH#8248 (backlog/sprint/kanban) + GH#8249/GH#8550 (modules).
   {
-    path: '/llc/companies/:companyId/backlog',
-    name: 'llc-backlog',
-    component: () => import('@/views/llc/BacklogView.vue'),
-    meta: {
-      title: 'Backlog',
-      requiresAuth: true,
-      hideInNav: true,
-    }
+    path: '/llc/companies/:companyId',
+    component: () => import('@/views/llc/LlcCompanyLayout.vue'),
+    beforeEnter: llcCompanyParamGuard,
+    meta: { requiresAuth: true, llcScope: true, hideInNav: true },
+    children: [
+      { path: '', redirect: { name: 'llc-backlog' } },
+      {
+        path: 'backlog',
+        name: 'llc-backlog',
+        component: () => import('@/views/llc/BacklogView.vue'),
+        meta: { title: 'Backlog', requiresAuth: true, hideInNav: true },
+      },
+      {
+        path: 'boards/:boardId/sprint',
+        name: 'llc-sprint-board',
+        component: () => import('@/views/llc/SprintBoardView.vue'),
+        meta: { title: 'Sprint Board', requiresAuth: true, hideInNav: true },
+      },
+      {
+        path: 'boards/:boardId/kanban',
+        name: 'llc-kanban-board',
+        component: () => import('@/views/llc/KanbanBoardView.vue'),
+        meta: { title: 'Kanban Board', requiresAuth: true, hideInNav: true },
+      },
+      {
+        path: 'timeline',
+        name: 'llc-timeline',
+        component: () => import('@/views/llc/GanttTimelineView.vue'),
+        meta: { title: 'Timeline', requiresAuth: true, hideInNav: true },
+      },
+      {
+        path: 'boards',
+        name: 'llc-boards',
+        component: () => import('@/views/llc/BoardsView.vue'),
+        meta: { title: 'Boards', requiresAuth: true, hideInNav: true },
+      },
+      {
+        path: 'portfolios',
+        name: 'llc-portfolios',
+        component: () => import('@/views/llc/PortfolioBrowserView.vue'),
+        meta: { title: 'Portfolios', requiresAuth: true, hideInNav: true },
+      },
+      {
+        path: 'portfolios/:portfolioId/programs',
+        name: 'llc-programs',
+        component: () => import('@/views/llc/ProgramBrowserView.vue'),
+        meta: { title: 'Programs', requiresAuth: true, hideInNav: true },
+      },
+      {
+        path: 'programs/:programId/projects',
+        name: 'llc-projects',
+        component: () => import('@/views/llc/ProjectBrowserView.vue'),
+        meta: { title: 'Projects', requiresAuth: true, hideInNav: true },
+      },
+      { path: 'approvals', name: 'llc-approvals', component: () => import('@/views/llc/ApprovalsInbox.vue'), props: true, meta: { title: 'Approvals Inbox', requiresAuth: true } },
+      { path: 'costs', name: 'llc-costs', component: () => import('@/views/llc/CostDashboard.vue'), props: true, meta: { title: 'Cost Dashboard', requiresAuth: true } },
+      { path: 'heartbeat', name: 'llc-heartbeat', component: () => import('@/views/llc/HeartbeatMonitor.vue'), props: true, meta: { title: 'Heartbeat Monitor', requiresAuth: true } },
+      { path: 'ceo-chat', name: 'llc-ceo-chat', component: () => import('@/views/llc/CeoChatView.vue'), props: true, meta: { title: 'CEO Chat', requiresAuth: true } },
+    ],
   },
-  {
-    path: '/llc/companies/:companyId/boards/:boardId/sprint',
-    name: 'llc-sprint-board',
-    component: () => import('@/views/llc/SprintBoardView.vue'),
-    meta: {
-      title: 'Sprint Board',
-      requiresAuth: true,
-      hideInNav: true,
-    }
-  },
-  {
-    path: '/llc/companies/:companyId/boards/:boardId/kanban',
-    name: 'llc-kanban-board',
-    component: () => import('@/views/llc/KanbanBoardView.vue'),
-    meta: {
-      title: 'Kanban Board',
-      requiresAuth: true,
-      hideInNav: true,
-    }
-  },
-  // LLC module routes — GH#8249 (companyId added via GH#8550)
-  { path: '/llc/companies/:companyId/approvals', name: 'llc-approvals', component: () => import('@/views/llc/ApprovalsInbox.vue'), props: true, meta: { title: 'Approvals Inbox', requiresAuth: true } },
-  { path: '/llc/companies/:companyId/costs', name: 'llc-costs', component: () => import('@/views/llc/CostDashboard.vue'), props: true, meta: { title: 'Cost Dashboard', requiresAuth: true } },
-  { path: '/llc/companies/:companyId/heartbeat', name: 'llc-heartbeat', component: () => import('@/views/llc/HeartbeatMonitor.vue'), props: true, meta: { title: 'Heartbeat Monitor', requiresAuth: true } },
-  { path: '/llc/companies/:companyId/ceo-chat', name: 'llc-ceo-chat', component: () => import('@/views/llc/CeoChatView.vue'), props: true, meta: { title: 'CEO Chat', requiresAuth: true } },
   // Issue #9044: Transcriber — audio/video transcription module
   {
     path: '/transcriber',
@@ -1373,7 +1466,7 @@ export const getMainRoutes = () => {
   )
 }
 
-export const getBreadcrumbs = (route: any) => {
+export const getBreadcrumbs = (route: RouteLocationNormalized) => {
   const breadcrumbs = []
 
   if (route.meta?.parent) {

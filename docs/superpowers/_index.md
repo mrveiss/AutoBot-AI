@@ -6,18 +6,6 @@ aliases:
   - Superpowers Index
 ---
 
-<<<<<<< HEAD
-# Superpowers
-
-Implementation plans and design specifications for AutoBot-AI features.
-
-## Sub-sections
-
-| Section | Description |
-| --- | --- |
-| [[plans/_index\|Plans]] | Feature implementation plans |
-| [[specs/_index\|Specs]] | Feature design specifications |
-=======
 # Superpowers Documentation
 
 Implementation plans and design specifications for AutoBot feature development.
@@ -63,9 +51,15 @@ Implementation plans and design specifications for AutoBot feature development.
 | [[specs/2026-05-29-resource-policy-design]] | Resource policy design spec |
 | [[specs/2026-05-30-transcriber-module-design]] | Transcriber module design spec |
 
+## Sub-sections
+
+| Section | Description |
+| --- | --- |
+| [[plans/_index\|Plans]] | Feature implementation plans |
+| [[specs/_index\|Specs]] | Feature design specifications |
+
 ## Related Sections
 
 - [[../design/_index\|Design]] — Technical design documents
 - [[../project/_index\|Project]] — Project-level plans
 - [[../releases/_index\|Releases]] — Releases resulting from these plans
->>>>>>> origin/Dev_new_gui

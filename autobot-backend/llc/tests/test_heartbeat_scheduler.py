@@ -9,6 +9,8 @@ Covers:
   4. handle_due_agent creates a run record and advances the sorted-set score.
   5. trigger_manual creates a QUEUED run and returns it.
   6. Removed/disabled agent is dropped from the sorted set on next tick.
+  7. H1 — _record_run_for_replay uses exact file path via _output_path.
+  8. H3 — replay=True context flag suppresses session resume in ClaudeCodeAdapter.
 """
 
 import uuid
@@ -18,7 +20,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from llc.adapters.base import AdapterRunStatus
-from llc.exceptions import AdapterRunFailed
+from llc.exceptions import AdapterRunFailed, HeartbeatDispatchSkipped, SubscriptionQuotaExhausted
 from llc.models.enums import LLCRunStatus
 from llc.models.heartbeat_run import LLCHeartbeatRun
 from llc.scheduler.heartbeat_scheduler import (
@@ -28,6 +30,7 @@ from llc.scheduler.heartbeat_scheduler import (
     _dispatch_adapter,
     _dispatch_autobot_agent,
     _dispatch_registry_adapter,
+    _ingest_adapter_usage,
     _next_fire,
 )
 
@@ -323,10 +326,13 @@ class TestDispatchAdapterRouting:
         mock_reg.assert_awaited_once()
 
     async def test_unknown_adapter_type_skipped(self):
+        # GH#9951: an unregistered adapter type is a degraded SKIP, signalled by
+        # HeartbeatDispatchSkipped (not a silent return → phantom COMPLETED).
         agent = _make_agent(adapter_type="does-not-exist")
         with (
             patch(f"{_HBS}.get_adapter", side_effect=KeyError("nope")),
             patch(f"{_HBS}._dispatch_registry_adapter", new=AsyncMock()) as mock_reg,
+            pytest.raises(HeartbeatDispatchSkipped),
         ):
             await _dispatch_adapter(agent, {})
         mock_reg.assert_not_awaited()
@@ -350,7 +356,10 @@ class TestRegistryAdapterKeyLifecycle:
         with (
             patch(f"{_HBS}._issue_run_key", new=AsyncMock(return_value=(key_record, "llc_rawkey"))),
             patch(f"{_HBS}._revoke_run_key", new=AsyncMock()) as mock_revoke,
-            patch(f"{_HBS}._await_adapter_completion", new=AsyncMock(return_value=LLCRunStatus.COMPLETED)),
+            patch(
+                f"{_HBS}._await_adapter_completion",
+                new=AsyncMock(return_value=AdapterRunStatus(status=LLCRunStatus.COMPLETED)),
+            ),
         ):
             await _dispatch_registry_adapter(fake_adapter, agent, {"recent_decisions": []})
 
@@ -392,7 +401,10 @@ class TestRegistryAdapterKeyLifecycle:
         with (
             patch(f"{_HBS}._issue_run_key", new=AsyncMock()) as mock_issue,
             patch(f"{_HBS}._revoke_run_key", new=AsyncMock()) as mock_revoke,
-            patch(f"{_HBS}._await_adapter_completion", new=AsyncMock(return_value=LLCRunStatus.COMPLETED)),
+            patch(
+                f"{_HBS}._await_adapter_completion",
+                new=AsyncMock(return_value=AdapterRunStatus(status=LLCRunStatus.COMPLETED)),
+            ),
         ):
             await _dispatch_registry_adapter(fake_adapter, agent, {})
 
@@ -413,7 +425,7 @@ class TestAwaitAdapterCompletion:
         )
         with patch(f"{_HBS}.asyncio.sleep", new=AsyncMock()):
             result = await _await_adapter_completion(fake_adapter, {"agent_id": "a"}, "1/s")
-        assert result == LLCRunStatus.COMPLETED
+        assert result.status == LLCRunStatus.COMPLETED
         assert fake_adapter.status.await_count == 2
 
     async def test_cancels_on_max_wait(self):
@@ -422,7 +434,7 @@ class TestAwaitAdapterCompletion:
         fake_adapter.cancel = AsyncMock()
         with patch(f"{_HBS}._ADAPTER_MAX_WAIT_SECONDS", 0):
             result = await _await_adapter_completion(fake_adapter, {"agent_id": "a"}, "1/s")
-        assert result == LLCRunStatus.TIMEOUT
+        assert result.status == LLCRunStatus.TIMEOUT
         fake_adapter.cancel.assert_awaited_once()
 
 
@@ -438,7 +450,10 @@ class TestRegistryAdapterTerminalStatus:
         with (
             patch(f"{_HBS}._issue_run_key", new=AsyncMock(return_value=(key_record, "llc_k"))),
             patch(f"{_HBS}._revoke_run_key", new=AsyncMock()) as mock_revoke,
-            patch(f"{_HBS}._await_adapter_completion", new=AsyncMock(return_value=LLCRunStatus.FAILED)),
+            patch(
+                f"{_HBS}._await_adapter_completion",
+                new=AsyncMock(return_value=AdapterRunStatus(status=LLCRunStatus.FAILED)),
+            ),
         ):
             with pytest.raises(AdapterRunFailed):
                 await _dispatch_registry_adapter(fake_adapter, agent, {})
@@ -452,7 +467,10 @@ class TestRegistryAdapterTerminalStatus:
         with (
             patch(f"{_HBS}._issue_run_key", new=AsyncMock(return_value=(None, None))),
             patch(f"{_HBS}._revoke_run_key", new=AsyncMock()),
-            patch(f"{_HBS}._await_adapter_completion", new=AsyncMock(return_value=LLCRunStatus.COMPLETED)),
+            patch(
+                f"{_HBS}._await_adapter_completion",
+                new=AsyncMock(return_value=AdapterRunStatus(status=LLCRunStatus.COMPLETED)),
+            ),
         ):
             await _dispatch_registry_adapter(fake_adapter, agent, {})  # no raise
 
@@ -482,8 +500,11 @@ class TestRegistryAdapterTerminalStatus:
 class TestDispatchAutobotAgent:
     async def test_skips_when_no_agent_class(self):
         agent = _make_agent(adapter_type="autobot_agent", adapter_config={})
-        # No agent_class → graceful skip, no adapter instantiated.
-        with patch(f"{_HBS}.AutoBotAgentAdapter") as mock_cls:
+        # No agent_class → degraded SKIP (GH#9951), no adapter instantiated.
+        with (
+            patch(f"{_HBS}.AutoBotAgentAdapter") as mock_cls,
+            pytest.raises(HeartbeatDispatchSkipped),
+        ):
             await _dispatch_autobot_agent(agent, {})
         mock_cls.assert_not_called()
 
@@ -494,3 +515,436 @@ class TestDispatchAutobotAgent:
         with patch(f"{_HBS}.AutoBotAgentAdapter", return_value=mock_adapter):
             await _dispatch_autobot_agent(agent, {})
         mock_adapter.run_blocking.assert_awaited_once()
+
+
+# ---------------------------------------------------------------------------
+# GH#9793: CLI-availability gate — subprocess adapters skip when CLI absent
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+class TestCliAvailabilityGate:
+    """Heartbeat dispatch skips subprocess adapters whose CLI is not on PATH."""
+
+    async def test_skips_dispatch_when_cli_absent(self):
+        """When is_cli_available() returns False, _dispatch_registry_adapter is
+        never called and HeartbeatDispatchSkipped is raised so the run is
+        recorded as SKIPPED rather than phantom-COMPLETED (GH#9793, GH#9951).
+        """
+        agent = _make_agent(adapter_type="claude_code")
+        fake_adapter = MagicMock()
+        fake_adapter.is_cli_available = MagicMock(return_value=False)
+        fake_adapter._required_cli = "claude"
+
+        with (
+            patch(f"{_HBS}.get_adapter", return_value=fake_adapter),
+            patch(f"{_HBS}.is_subprocess_adapter", return_value=True),
+            patch(f"{_HBS}._dispatch_registry_adapter", new=AsyncMock()) as mock_reg,
+            pytest.raises(HeartbeatDispatchSkipped),
+        ):
+            await _dispatch_adapter(agent, {})
+
+        mock_reg.assert_not_awaited()
+
+    async def test_dispatches_when_cli_present(self):
+        """When is_cli_available() returns True, dispatch proceeds normally."""
+        agent = _make_agent(adapter_type="claude_code")
+        fake_adapter = MagicMock()
+        fake_adapter.is_cli_available = MagicMock(return_value=True)
+        fake_adapter._required_cli = "claude"
+
+        with (
+            patch(f"{_HBS}.get_adapter", return_value=fake_adapter),
+            patch(f"{_HBS}.is_subprocess_adapter", return_value=True),
+            patch(f"{_HBS}._dispatch_registry_adapter", new=AsyncMock()) as mock_reg,
+        ):
+            await _dispatch_adapter(agent, {})
+
+        mock_reg.assert_awaited_once()
+
+    async def test_non_subprocess_adapter_bypasses_cli_gate(self):
+        """Non-subprocess adapters (is_subprocess_adapter=False) are not gated."""
+        agent = _make_agent(adapter_type="http_adapter")
+        fake_adapter = MagicMock()
+
+        with (
+            patch(f"{_HBS}.get_adapter", return_value=fake_adapter),
+            patch(f"{_HBS}.is_subprocess_adapter", return_value=False),
+            patch(f"{_HBS}._dispatch_registry_adapter", new=AsyncMock()) as mock_reg,
+        ):
+            await _dispatch_adapter(agent, {})
+
+        mock_reg.assert_awaited_once()
+
+    async def test_cli_gate_skips_copilot_when_gh_absent(self):
+        """Gate works for copilot_local adapter when gh binary is absent."""
+        agent = _make_agent(adapter_type="copilot_local")
+        fake_adapter = MagicMock()
+        fake_adapter.is_cli_available = MagicMock(return_value=False)
+        fake_adapter._required_cli = "gh"
+
+        with (
+            patch(f"{_HBS}.get_adapter", return_value=fake_adapter),
+            patch(f"{_HBS}.is_subprocess_adapter", return_value=True),
+            patch(f"{_HBS}._dispatch_registry_adapter", new=AsyncMock()) as mock_reg,
+            pytest.raises(HeartbeatDispatchSkipped),
+        ):
+            await _dispatch_adapter(agent, {})
+
+        mock_reg.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+class TestRunAdapterSkipped:
+    """GH#9951: a skipped dispatch records SKIPPED and never bumps last_heartbeat_at."""
+
+    async def test_skip_records_skipped_and_no_heartbeat_bump(self):
+        scheduler = HeartbeatScheduler()
+        agent = _make_agent(adapter_type="claude_code")
+        run_id = uuid.uuid4()
+
+        sql_text: list = []
+        params: list = []
+
+        class _Session:
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *exc):
+                return False
+
+            async def execute(self, stmt, *args, **kwargs):
+                sql_text.append(str(stmt))
+                try:
+                    params.append(dict(stmt.compile().params))
+                except Exception:
+                    params.append({})
+                result = MagicMock()
+                result.scalar_one_or_none.return_value = 0
+                return result
+
+            async def commit(self):
+                return None
+
+        with (
+            patch(f"{_HBS}.get_async_session_factory", return_value=lambda: _Session()),
+            patch(
+                f"{_HBS}._dispatch_adapter",
+                new=AsyncMock(side_effect=HeartbeatDispatchSkipped("agent-1", "CLI absent")),
+            ),
+        ):
+            await scheduler._run_adapter(agent, run_id, {})
+
+        # No phantom health: the last_heartbeat_at bump is never issued.
+        assert not any("agent_org_nodes" in s for s in sql_text)
+        # The run's final status is written as SKIPPED.
+        assert any(p.get("status") == LLCRunStatus.SKIPPED.value for p in params)
+
+
+# ---------------------------------------------------------------------------
+# H1 — _record_run_for_replay uses exact file path, not mtime glob
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+class TestRecordRunForReplayH1:
+    async def test_uses_exact_output_path_from_external_run_id(self):
+        """_record_run_for_replay resolves the exact file via _output_path(external_run_id).
+
+        No glob, no mtime ordering — the external_run_id returned by adapter.invoke
+        uniquely determines the file.
+        """
+        import os
+        import tempfile
+        import time
+
+        from llc.scheduler.heartbeat_scheduler import _record_run_for_replay
+
+        agent = _make_agent(adapter_type="claude_code", adapter_config={"output_dir": "/tmp/dummy"})
+        agent_id = agent["agent_id"]
+        external_run_id = "12345/session-abc"
+        expected_filename = f"llc_agent_{agent_id}_12345_session-abc.jsonl"
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            agent["adapter_config"]["output_dir"] = tmpdir
+            exact_path = os.path.join(tmpdir, expected_filename)
+            with open(exact_path, "w", encoding="utf-8") as fh:
+                fh.write('{"type": "result", "is_error": false}\n')
+
+            # Decoy file with later mtime — mtime-glob would pick this first.
+            time.sleep(0.01)
+            decoy_path = os.path.join(tmpdir, f"llc_agent_{agent_id}_99999_decoy.jsonl")
+            with open(decoy_path, "w", encoding="utf-8") as fh:
+                fh.write('{"type": "decoy"}\n')
+
+            captured: dict = {}
+            mock_svc = MagicMock()
+            mock_svc.record_run = AsyncMock(side_effect=lambda **kw: captured.update(kw))
+
+            with patch(f"{_HBS}.RunReplayService", return_value=mock_svc):
+                await _record_run_for_replay(
+                    agent,
+                    uuid.uuid4(),
+                    {},
+                    "completed",
+                    external_run_id=external_run_id,
+                )
+
+        output_text = captured.get("output_text") or ""
+        assert "result" in output_text, "Expected content from exact file, not decoy"
+        assert "decoy" not in output_text, "Decoy file content should not be present"
+
+    async def test_no_external_run_id_stores_no_events(self):
+        """When external_run_id is None, recorded_events is None."""
+        from llc.scheduler.heartbeat_scheduler import _record_run_for_replay
+
+        agent = _make_agent(adapter_type="claude_code", adapter_config={"output_dir": "/tmp"})
+        captured: dict = {}
+        mock_svc = MagicMock()
+        mock_svc.record_run = AsyncMock(side_effect=lambda **kw: captured.update(kw))
+
+        with patch(f"{_HBS}.RunReplayService", return_value=mock_svc):
+            await _record_run_for_replay(agent, uuid.uuid4(), {}, "completed", external_run_id=None)
+
+        assert captured.get("recorded_events") is None
+        assert captured.get("output_text") is None
+
+
+# ---------------------------------------------------------------------------
+# H3 — ClaudeCodeAdapter skips session resume when context["replay"] is True
+# ---------------------------------------------------------------------------
+
+
+class TestClaudeCodeAdapterNoResume:
+    @pytest.mark.asyncio
+    async def test_replay_flag_skips_get_resumable_session(self):
+        """When context["replay"]=True, _get_resumable_session is never called."""
+        from llc.adapters.claude_code_adapter import ClaudeCodeAdapter
+
+        adapter = ClaudeCodeAdapter()
+        resume_called = []
+
+        async def fake_get_resumable(agent_id: str):
+            resume_called.append(agent_id)
+            return "session-old"
+
+        adapter._get_resumable_session = fake_get_resumable  # type: ignore[method-assign]
+
+        agent_config = {
+            "agent_id": "agent-abc",
+            "adapter_config": {"output_dir": "/tmp", "timeout_seconds": 60},
+        }
+        context = {"replay": True, "title": "test task"}
+
+        with (
+            patch("llc.adapters.claude_code_adapter._resolve_claude_cli", return_value="/usr/bin/claude"),
+            patch("llc.adapters.claude_code_adapter.asyncio.create_subprocess_exec") as mock_exec,
+            patch("builtins.open", create=True),
+            patch("llc.adapters.claude_code_adapter.os.makedirs"),
+            patch.object(adapter, "_build_prompt", return_value="prompt text"),
+            patch.object(adapter, "_store_session", new=AsyncMock()),
+            patch("llc.adapters.claude_code_adapter.json.dump"),
+        ):
+            mock_proc = MagicMock()
+            mock_proc.pid = 999
+            mock_exec.return_value = mock_proc
+            try:
+                await adapter._invoke(agent_config, context)
+            except Exception:
+                pass
+
+        assert resume_called == [], "resume should NOT be called for replay runs"
+
+    @pytest.mark.asyncio
+    async def test_normal_run_calls_get_resumable_session(self):
+        """Without replay flag, _get_resumable_session IS called."""
+        from llc.adapters.claude_code_adapter import ClaudeCodeAdapter
+
+        adapter = ClaudeCodeAdapter()
+        resume_called = []
+
+        async def fake_get_resumable(agent_id: str):
+            resume_called.append(agent_id)
+            return None
+
+        adapter._get_resumable_session = fake_get_resumable  # type: ignore[method-assign]
+
+        agent_config = {
+            "agent_id": "agent-abc",
+            "adapter_config": {"output_dir": "/tmp", "timeout_seconds": 60},
+        }
+        context = {"title": "normal run"}
+
+        with (
+            patch("llc.adapters.claude_code_adapter._resolve_claude_cli", return_value="/usr/bin/claude"),
+            patch("llc.adapters.claude_code_adapter.asyncio.create_subprocess_exec") as mock_exec,
+            patch("builtins.open", create=True),
+            patch("llc.adapters.claude_code_adapter.os.makedirs"),
+            patch.object(adapter, "_build_prompt", return_value="prompt text"),
+            patch.object(adapter, "_store_session", new=AsyncMock()),
+            patch("llc.adapters.claude_code_adapter.json.dump"),
+        ):
+            mock_proc = MagicMock()
+            mock_proc.pid = 999
+            mock_exec.return_value = mock_proc
+            try:
+                await adapter._invoke(agent_config, context)
+            except Exception:
+                pass
+
+        assert len(resume_called) == 1, "resume SHOULD be called for normal runs"
+
+
+@pytest.mark.asyncio
+class TestIngestAdapterUsage:
+    """GH#10220: completed registry runs forward token usage to the budget."""
+
+    async def test_ingests_tokens_with_model(self):
+        agent = _make_agent(adapter_type="claude_code", adapter_config={"model": "claude-x"})
+        result = AdapterRunStatus(status=LLCRunStatus.COMPLETED, tokens_in=120, tokens_out=40)
+
+        session = AsyncMock()
+        session.commit = AsyncMock()
+        factory = MagicMock()
+        factory.return_value.__aenter__ = AsyncMock(return_value=session)
+        factory.return_value.__aexit__ = AsyncMock(return_value=False)
+        mock_ingest = AsyncMock()
+
+        with (
+            patch(f"{_HBS}.get_async_session_factory", return_value=factory),
+            patch(f"{_HBS}.BudgetService.ingest_cost_event", new=mock_ingest),
+        ):
+            await _ingest_adapter_usage(agent, result)
+
+        mock_ingest.assert_awaited_once()
+        args = mock_ingest.await_args.args
+        assert args[1] == agent["agent_id"] and args[2] == 120 and args[3] == 40 and args[4] == "claude-x"
+
+    async def test_noop_when_usage_unknown(self):
+        agent = _make_agent(adapter_type="claude_code")
+        result = AdapterRunStatus(status=LLCRunStatus.COMPLETED)  # tokens None
+        mock_ingest = AsyncMock()
+        with patch(f"{_HBS}.BudgetService.ingest_cost_event", new=mock_ingest):
+            await _ingest_adapter_usage(agent, result)
+        mock_ingest.assert_not_awaited()
+
+    async def test_budget_exhausted_propagates(self):
+        from llc.exceptions import BudgetExhausted
+
+        agent = _make_agent(adapter_type="claude_code", adapter_config={"model": "m"})
+        result = AdapterRunStatus(status=LLCRunStatus.COMPLETED, tokens_in=10, tokens_out=5)
+        session = AsyncMock()
+        factory = MagicMock()
+        factory.return_value.__aenter__ = AsyncMock(return_value=session)
+        factory.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        with (
+            patch(f"{_HBS}.get_async_session_factory", return_value=factory),
+            patch(
+                f"{_HBS}.BudgetService.ingest_cost_event",
+                new=AsyncMock(side_effect=BudgetExhausted("agent", 100.0, 50.0)),
+            ),
+            pytest.raises(BudgetExhausted),
+        ):
+            await _ingest_adapter_usage(agent, result)
+
+    async def test_other_errors_best_effort(self):
+        agent = _make_agent(adapter_type="claude_code", adapter_config={"model": "m"})
+        result = AdapterRunStatus(status=LLCRunStatus.COMPLETED, tokens_in=10, tokens_out=5)
+        session = AsyncMock()
+        factory = MagicMock()
+        factory.return_value.__aenter__ = AsyncMock(return_value=session)
+        factory.return_value.__aexit__ = AsyncMock(return_value=False)
+        with (
+            patch(f"{_HBS}.get_async_session_factory", return_value=factory),
+            patch(f"{_HBS}.BudgetService.ingest_cost_event", new=AsyncMock(side_effect=RuntimeError("db down"))),
+        ):
+            await _ingest_adapter_usage(agent, result)  # must not raise
+
+
+@pytest.mark.asyncio
+class TestQuotaExhausted:
+    """GH#10218: subscription quota exhaustion → no-retry, auto-pause, board notify."""
+
+    async def test_dispatch_raises_quota_exhausted(self):
+        agent = _make_agent(adapter_type="claude_code_subscription")
+        key_record = MagicMock()
+        key_record.id = uuid.uuid4()
+        fake_adapter = MagicMock()
+        fake_adapter.invoke = AsyncMock(return_value="9/s")
+
+        with (
+            patch(f"{_HBS}._issue_run_key", new=AsyncMock(return_value=(key_record, "k"))),
+            patch(f"{_HBS}._revoke_run_key", new=AsyncMock()) as mock_revoke,
+            patch(
+                f"{_HBS}._await_adapter_completion",
+                new=AsyncMock(return_value=AdapterRunStatus(status=LLCRunStatus.QUOTA_EXHAUSTED, error="quota")),
+            ),
+            pytest.raises(SubscriptionQuotaExhausted),
+        ):
+            await _dispatch_registry_adapter(fake_adapter, agent, {})
+        # Key still revoked even on the quota path.
+        mock_revoke.assert_awaited_once_with(agent["agent_id"], key_record.id)
+
+    async def test_handle_quota_exhausted_records_and_pauses(self):
+        scheduler = HeartbeatScheduler()
+        agent = _make_agent(adapter_type="claude_code_subscription")
+        run_id = uuid.uuid4()
+        executed: list = []
+
+        class _Session:
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *exc):
+                return False
+
+            async def execute(self, stmt, *a, **k):
+                executed.append(str(stmt))
+                return MagicMock()
+
+            async def commit(self):
+                return None
+
+        mock_pause = AsyncMock()
+        with (
+            patch(f"{_HBS}.get_async_session_factory", return_value=lambda: _Session()),
+            patch(f"{_HBS}.ControlsService.pause_agent", new=mock_pause),
+        ):
+            await scheduler._handle_quota_exhausted(
+                agent, run_id, SubscriptionQuotaExhausted(agent["agent_id"], "quota gone")
+            )
+
+        # Run was updated (status write) and the agent was system-paused.
+        assert any("UPDATE" in s or "llc_heartbeat_runs" in s for s in executed)
+        mock_pause.assert_awaited_once()
+        kwargs = mock_pause.await_args.kwargs
+        assert kwargs.get("actor_type") == "system" and kwargs.get("actor_user_id") is None
+
+    async def test_handle_quota_exhausted_no_company_skips_pause(self):
+        scheduler = HeartbeatScheduler()
+        agent = _make_agent(adapter_type="claude_code_subscription", company_id=None)
+        run_id = uuid.uuid4()
+
+        class _Session:
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *exc):
+                return False
+
+            async def execute(self, stmt, *a, **k):
+                return MagicMock()
+
+            async def commit(self):
+                return None
+
+        mock_pause = AsyncMock()
+        with (
+            patch(f"{_HBS}.get_async_session_factory", return_value=lambda: _Session()),
+            patch(f"{_HBS}.ControlsService.pause_agent", new=mock_pause),
+        ):
+            await scheduler._handle_quota_exhausted(
+                agent, run_id, SubscriptionQuotaExhausted(agent["agent_id"], "quota gone")
+            )
+        mock_pause.assert_not_awaited()

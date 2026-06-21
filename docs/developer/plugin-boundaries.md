@@ -11,7 +11,7 @@ AutoBot has three distinct plugin layers:
 
 | Layer | Path | Loader | Purpose |
 |---|---|---|---|
-| **Extensions** | `autobot-backend/extensions/builtin/` | `extensions.manager` | Lifecycle middleware hooks (`BEFORE_MESSAGE_PROCESS`, etc.) |
+| **Extensions** | `autobot-backend/middleware/builtin/` | `middleware.manager` | Lifecycle middleware hooks (`BEFORE_MESSAGE_PROCESS`, etc.) |
 | **Skills** | `autobot-backend/skills/builtin/` | `skills.manager` | User-facing capabilities (calendar, code-review, web-fetch…) |
 | **Core-plugins** | `plugins/core-plugins/` | `autobot_shared.plugin_sdk.loader` | Standalone manifest-driven packages |
 
@@ -27,7 +27,7 @@ breaks silently when core is refactored. This is the same root cause as
 
 ### Rule 1 — No core-backend imports (`extension-no-core-internals`)
 
-Files under `extensions/builtin/`, `skills/builtin/`, and `plugins/core-plugins/`
+Files under `middleware/builtin/`, `skills/builtin/`, and `plugins/core-plugins/`
 **must not** import from autobot-backend core packages:
 
 ```python
@@ -49,10 +49,10 @@ Extensions must not import other extensions except through `__init__.py`
 
 ```python
 # ❌ VIOLATION — coupling two extensions together
-from extensions.builtin.permission_enforcement import PermissionEnforcementExtension
+from middleware.builtin.permission_enforcement import PermissionEnforcementExtension
 
 # ✅ ALLOWED in __init__.py only (package re-export)
-from extensions.builtin.logging_extension import LoggingExtension
+from middleware.builtin.logging_extension import LoggingExtension
 ```
 
 ### Rule 3 — No sibling skill imports (`skill-no-sibling-import`)
@@ -72,7 +72,7 @@ files in the covered paths.
 To run manually on specific files:
 ```bash
 python tools/lint/check_extension_import_boundaries.py \
-  autobot-backend/extensions/builtin/my_extension.py
+  autobot-backend/middleware/builtin/my_extension.py
 ```
 
 Exit code 0 = clean, exit code 1 = violations.
@@ -91,7 +91,7 @@ If a violation is **genuinely intentional** (rare), add an inline waiver with
 a mandatory reason comment:
 
 ```python
-from extensions.builtin.permission_enforcement import check  # nosemgrep: extension-no-sibling-import — shared audit helper, not yet moved to autobot_shared
+from middleware.builtin.permission_enforcement import check  # nosemgrep: extension-no-sibling-import — shared audit helper, not yet moved to autobot_shared
 ```
 
 **Waivers without a reason comment are not accepted.**  File an issue to

@@ -152,6 +152,12 @@
           :rich-payload="(message.metadata.image_payload as Record<string, unknown>)"
         />
 
+        <!-- GH#9016: AI-generated video message -->
+        <VideoCell
+          v-else-if="(message.type === 'video' || message.metadata?.display_type === 'video') && message.metadata?.video_payload"
+          :rich-payload="(message.metadata.video_payload as Record<string, unknown>)"
+        />
+
         <!-- MVA-2006: Context summary message -->
         <div
           v-else-if="message.type === 'summary' || message.metadata?.is_summary"
@@ -352,8 +358,8 @@
                 class="comment-textarea"
                 :placeholder="$t('chat.approval.commentPlaceholder')"
                 rows="2"
-                @keydown.ctrl.enter="submitApprovalWithComment(message.metadata.terminal_session_id, pendingApprovalDecision)"
-                @keydown.meta.enter="submitApprovalWithComment(message.metadata.terminal_session_id, pendingApprovalDecision)"
+                @keydown.ctrl.enter="submitApprovalWithComment(message.metadata.terminal_session_id as string, pendingApprovalDecision)"
+                @keydown.meta.enter="submitApprovalWithComment(message.metadata.terminal_session_id as string, pendingApprovalDecision)"
               ></textarea>
               <div class="comment-actions">
                 <BaseButton
@@ -369,7 +375,7 @@
                 <BaseButton
                   variant="primary"
                   size="sm"
-                  @click="submitApprovalWithComment(message.metadata.terminal_session_id, pendingApprovalDecision)"
+                  @click="submitApprovalWithComment(message.metadata.terminal_session_id as string, pendingApprovalDecision)"
                   :disabled="!approvalComment.trim()"
                   class="submit-comment-btn"
                   :aria-label="$t('chat.approval.submitWithComment', { action: pendingApprovalDecision ? $t('chat.approval.approval') : $t('chat.approval.denial') })"
@@ -548,6 +554,7 @@
 </template>
 
 <script setup lang="ts">
+import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, nextTick, watch, onMounted } from 'vue'
 import { useExpansion } from '@/composables/useExpansion'
@@ -569,6 +576,7 @@ import OverseerPlanMessage from '@/components/chat/OverseerPlanMessage.vue'
 import OverseerStepMessage from '@/components/chat/OverseerStepMessage.vue'
 import CitationsDisplay from '@/components/chat/CitationsDisplay.vue'
 import ImageCell from '@/components/artifact-cells/ImageCell.vue'
+import VideoCell from '@/components/artifact-cells/VideoCell.vue'
 import { formatFileSize, formatTime } from '@/utils/formatHelpers'
 import { createLogger } from '@/utils/debugUtils'
 import { useCommandApproval } from '@/composables/useCommandApproval'
@@ -1047,7 +1055,7 @@ const deleteMessage = (message: ChatMessage) => {
   }
 }
 
-const getAttachmentIcon = (type: string): string => {
+const getAttachmentIcon = (type: string): IconName => {
   if (type.startsWith('image/')) return 'image'
   if (type.startsWith('video/')) return 'video'
   if (type.startsWith('audio/')) return 'music'
@@ -1211,30 +1219,15 @@ onMounted(async () => {
 })
 </script>
 
+<style scoped src="@/design-system/styles/chat-message-shared.css"></style>
+
 <style scoped>
 @reference "../../assets/tailwind.css";
+
 .message-wrapper {
   @apply rounded-lg shadow-sm border transition-all duration-200 relative;
   max-width: 85%;
   padding: var(--spacing-1-5) var(--spacing-2-5);
-}
-
-.message-wrapper:hover {
-  @apply shadow-md;
-}
-
-/* USER MESSAGES - Right side, blue theme */
-.message-wrapper.user-message {
-  @apply ml-auto mr-0;
-  background: var(--color-primary);
-  color: var(--text-inverse);
-  border-color: var(--color-primary);
-  border-radius: 18px 18px 4px 18px;
-}
-
-.message-wrapper.user-message .sender-name,
-.message-wrapper.user-message .message-time {
-  color: rgba(255, 255, 255, 0.85);
 }
 
 .message-wrapper.user-message .message-content {
@@ -1245,25 +1238,6 @@ onMounted(async () => {
 .message-wrapper.assistant-message {
   @apply bg-autobot-bg-tertiary text-autobot-text-primary border-autobot-border mr-auto ml-0;
   border-radius: 18px 18px 18px 4px;
-}
-
-.message-wrapper.assistant-message .sender-name {
-  @apply text-autobot-text-primary;
-}
-
-.message-wrapper.assistant-message .message-time {
-  @apply text-autobot-text-secondary;
-}
-
-.message-wrapper.assistant-message .message-content {
-  @apply text-autobot-text-primary;
-}
-
-/* SYSTEM MESSAGES - Centered, subtle */
-.message-wrapper.system-message {
-  @apply bg-autobot-bg-tertiary border-autobot-border mx-auto text-autobot-text-secondary;
-  max-width: 70%;
-  border-radius: var(--radius-xl);
 }
 
 /* MVA-2006: SUMMARY MESSAGES - Context compression indicator */
@@ -1571,40 +1545,12 @@ onMounted(async () => {
   color: var(--color-error);
 }
 
-.message-wrapper.sending {
-  @apply opacity-70;
-}
-
-.message-header {
-  @apply flex items-start justify-between mb-1;
-}
-
-.message-avatar {
-  @apply w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-semibold;
-}
-
-.message-avatar.user {
-  background: var(--color-primary);
-}
-
 .message-avatar.assistant {
   @apply bg-autobot-bg-secondary;
 }
 
 .message-avatar.system {
   @apply bg-autobot-bg-secondary;
-}
-
-.message-info {
-  @apply flex flex-col ml-1.5;
-}
-
-.sender-name {
-  @apply font-semibold text-xs;
-}
-
-.model-name {
-  @apply font-normal text-xs opacity-80 ml-1;
 }
 
 /* Issue #1310: Type badges for clear message identification */
@@ -1644,27 +1590,10 @@ onMounted(async () => {
   border: 1px solid rgba(20, 184, 166, 0.3);
 }
 
-.message-time {
-  @apply text-xs leading-tight;
-}
-
-.message-actions {
-  @apply flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity;
-}
-
 /* Button styling handled by BaseButton component */
 
 .message-status {
   @apply flex items-center gap-1.5 mb-1.5 text-xs;
-}
-
-.message-content {
-  @apply leading-snug text-sm;
-}
-
-.message-text {
-  @apply break-words;
-  line-height: 1.4;
 }
 
 /* User message code styling - lighter for blue background */
@@ -1674,32 +1603,16 @@ onMounted(async () => {
   color: var(--text-inverse);
 }
 
-.user-message .message-text :deep(pre) {
-  @apply p-3 rounded-lg overflow-x-auto my-1.5;
-  background: rgba(0, 0, 0, 0.2);
-  color: var(--text-inverse);
-}
-
-.user-message .message-text :deep(a) {
-  @apply hover:text-white underline;
-  color: rgba(255, 255, 255, 0.85);
-}
-
 /* Assistant message code styling - standard colors for light background */
 .assistant-message .message-text :deep(code) {
   @apply bg-autobot-bg-tertiary text-autobot-text-primary px-1.5 py-0.5 rounded text-xs font-mono;
-}
-
-.assistant-message .message-text :deep(pre) {
-  @apply p-3 rounded-lg overflow-x-auto my-1.5;
-  background: var(--code-bg);
-  color: var(--code-text);
 }
 
 .assistant-message .message-text :deep(a) {
   color: var(--text-link);
   text-decoration: underline;
 }
+
 .assistant-message .message-text :deep(a):hover {
   color: var(--text-link-hover);
 }
@@ -1710,22 +1623,9 @@ onMounted(async () => {
   border-color: rgba(255, 255, 255, 0.3);
 }
 
-.user-message .metadata-items {
-  @apply flex flex-wrap gap-1.5 text-xs;
-  color: rgba(255, 255, 255, 0.85);
-}
-
 /* Assistant message metadata - standard styling */
 .assistant-message .message-metadata {
   @apply mt-1.5 pt-1 border-t border-autobot-border;
-}
-
-.assistant-message .metadata-items {
-  @apply flex flex-wrap gap-1.5 text-xs text-autobot-text-secondary;
-}
-
-.metadata-item {
-  @apply flex items-center gap-1;
 }
 
 /* GH#8993: Thinking used badge */
@@ -1757,33 +1657,18 @@ onMounted(async () => {
   @apply text-xs text-autobot-text-muted;
 }
 
-.typing-indicator {
-  @apply flex items-center gap-1.5;
-}
-
 .typing-indicator.large {
   @apply py-3;
 }
 
-.typing-dots {
-  @apply flex gap-1;
-}
-
-.typing-dots span {
-  @apply w-1.5 h-1.5 bg-autobot-text-muted rounded-full animate-pulse;
-  animation-delay: calc(var(--index) * 0.2s);
-}
-
 .typing-dots span:nth-child(1) { --index: 0; }
+
 .typing-dots span:nth-child(2) { --index: 1; }
+
 .typing-dots span:nth-child(3) { --index: 2; }
 
 .typing-text {
   @apply text-xs text-autobot-text-muted;
-}
-
-.streaming-content {
-  @apply space-y-1.5;
 }
 
 /* Enhanced Typing Indicator */
@@ -1810,8 +1695,11 @@ onMounted(async () => {
 }
 
 .typing-dots-enhanced span:nth-child(1) { animation-delay: -0.32s; }
+
 .typing-dots-enhanced span:nth-child(2) { animation-delay: -0.16s; }
+
 .typing-dots-enhanced span:nth-child(3) { animation-delay: 0s; }
+
 .typing-dots-enhanced span:nth-child(4) { animation-delay: 0.16s; }
 
 @keyframes typingBounce {

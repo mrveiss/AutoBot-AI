@@ -193,6 +193,7 @@
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
 
+import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -213,7 +214,7 @@ const router = useRouter()
 interface Tab {
   id: string
   label: string
-  icon: string
+  icon: IconName
 }
 
 interface ExtractionResult {
@@ -262,11 +263,11 @@ function handleViewGraph(): void {
   router.push('/knowledge/graph')
 }
 
-function getStatusIcon(status: string): string {
+function getStatusIcon(status: string): IconName {
   switch (status) {
     case 'healthy': return 'check-circle'
-    case 'degraded': return 'exclamation-triangle'
-    case 'unavailable':
+    case 'degraded':
+    case 'unavailable': return 'exclamation-triangle'
     case 'unhealthy': return 'times-circle'
     default: return 'question-circle'
   }
@@ -531,7 +532,8 @@ onMounted(() => {
   border-left-color: var(--color-success);
 }
 
-.health-card.degraded {
+.health-card.degraded,
+.health-card.unavailable {
   border-left-color: var(--color-warning);
 }
 
@@ -566,7 +568,8 @@ onMounted(() => {
   color: var(--color-success);
 }
 
-.health-card.degraded .health-status {
+.health-card.degraded .health-status,
+.health-card.unavailable .health-status {
   background: var(--color-warning-bg);
   color: var(--color-warning);
 }

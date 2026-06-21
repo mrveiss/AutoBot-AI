@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
 Pre-commit hook: block imports that violate the extension/skill/plugin
@@ -52,7 +53,7 @@ _CORE_BACKEND_PACKAGES = {
     "prompt_manager",
     "secure_command_executor",
     "skills",  # top-level skills pkg from another extension is a violation
-    "extensions",  # sibling cross-import — covered by dedicated rules below
+    "middleware",  # sibling cross-import — covered by dedicated rules below
     "services",
     "tasks",
     "utils",
@@ -63,7 +64,7 @@ _CORE_BACKEND_PACKAGES = {
 def _is_in_scope(path: Path) -> tuple[bool, str]:
     """Return (in_scope, layer_name) for a given file path."""
     parts = path.parts
-    if "extensions" in parts and "builtin" in parts:
+    if "middleware" in parts and "builtin" in parts:
         return True, "extension"
     if "skills" in parts and "builtin" in parts:
         return True, "skill"
@@ -99,7 +100,7 @@ def _check_file(path: Path, source: str) -> list[str]:
             top = module.split(".")[0] if module else ""
 
             # Rule: no core-backend internals
-            if top in _CORE_BACKEND_PACKAGES and top not in ("extensions", "skills"):
+            if top in _CORE_BACKEND_PACKAGES and top not in ("middleware", "skills"):
                 rule = "extension-no-core-internals"
                 if not _is_waived(raw_line, rule):
                     violations.append(
@@ -109,7 +110,7 @@ def _check_file(path: Path, source: str) -> list[str]:
                     )
 
             # Rule: no sibling extension imports (skip __init__.py)
-            if not is_init and layer == "extension" and module.startswith("extensions.builtin."):
+            if not is_init and layer == "extension" and module.startswith("middleware.builtin."):
                 rule = "extension-no-sibling-import"
                 if not _is_waived(raw_line, rule):
                     violations.append(

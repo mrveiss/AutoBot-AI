@@ -150,10 +150,13 @@ export function useContextOverflowProtection(
       })
 
       // Create summary message
+      const summaryMessageId = `summary_${Date.now()}`
       const summaryMessage: ChatMessage = {
+        id: summaryMessageId,
+        sender: 'system',
         role: 'system',
         content: `[Context Summary] The following summarizes the conversation from ${oldestMessages[0].timestamp || 'earlier'}:\n\n${response.summary}`,
-        message_id: `summary_${Date.now()}`,
+        message_id: summaryMessageId,
         timestamp: response.timestamp,
         metadata: {
           is_summary: true,

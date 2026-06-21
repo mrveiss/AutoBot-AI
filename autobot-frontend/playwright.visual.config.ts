@@ -1,5 +1,6 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 // AutoBot - AI-Powered Automation Platform
-// Copyright (c) 2025 mrveiss
 // Author: mrveiss
 
 /**
@@ -29,9 +30,18 @@ export default defineConfig({
   reporter: process.env.CI ? 'github' : [['html', { open: 'never' }]],
 
   // The single test in storybook-stories.spec.ts loops through every
-  // discovered story (one iframe load + screenshot per story). With 1154 stories
-  // at ~3-5s each = ~3462-5770s, we budget 150 minutes per project for headroom.
-  timeout: 9_000_000,
+  // discovered story (one iframe load + screenshot per story). With ~1175
+  // stories at ~3-5s each (~60-100 min worst case across both projects) we
+  // budget 30 min per test. Per-story navigation is bounded in the spec
+  // (#10038) so one stuck story fails fast and is named rather than burning
+  // the whole budget — the old 150 min budget let a single hung iframe run
+  // for hours (#10038).
+  timeout: 30 * 60 * 1000,
+
+  // Hard ceiling on the entire run (all projects). Backstop below the 45-min
+  // job timeout so a pathological hang fails inside Playwright (naming the
+  // offending story) before the runner kills the job opaquely.
+  globalTimeout: 40 * 60 * 1000,
 
   // Snapshot baselines live next to the tests, organized per project (light/dark)
   // and OS to avoid cross-platform rendering noise and theme conflicts.
@@ -55,6 +65,11 @@ export default defineConfig({
   use: {
     baseURL: STORYBOOK_URL,
     trace: 'on-first-retry',
+    // Bound per-story navigation/actions so a single story whose iframe never
+    // settles fails in seconds (caught + named by the spec's soft-collect
+    // loop) instead of hanging on the whole-test budget (#10038).
+    navigationTimeout: 30_000,
+    actionTimeout: 30_000,
     // Disable animations globally so transitions don't cause flaky diffs.
     contextOptions: {
       reducedMotion: 'reduce',

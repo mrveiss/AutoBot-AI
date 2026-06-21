@@ -1,6 +1,6 @@
 <template>
-  <div v-if="visible" class="dialog-overlay" @click="closeDialog" tabindex="0" @keyup.enter="$event.target?.click()" @keyup.space="$event.target?.click()">
-    <div class="knowledge-dialog" @click.stop tabindex="0" @keyup.enter="$event.target?.click()" @keyup.space="$event.target?.click()">
+  <div v-if="visible" class="dialog-overlay" @click="closeDialog" tabindex="0" @keyup.enter="($event.target as HTMLElement | null)?.click()" @keyup.space="($event.target as HTMLElement | null)?.click()">
+    <div class="knowledge-dialog" @click.stop tabindex="0" @keyup.enter="($event.target as HTMLElement | null)?.click()" @keyup.space="($event.target as HTMLElement | null)?.click()">
       <!-- Header -->
       <div class="dialog-header">
         <h3 class="dialog-title">{{ $t('knowledge.persistence.title') }}</h3>

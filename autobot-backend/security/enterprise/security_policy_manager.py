@@ -35,7 +35,7 @@ class PolicyType(Enum):
     """Types of security policies"""
 
     ACCESS_CONTROL = "access_control"
-    PASSWORD_POLICY = "password_policy"
+    PASSWORD_POLICY = "password_policy"  # nosec B105 - enum value for security policy type, not a password
     SESSION_MANAGEMENT = "session_management"
     DATA_PROTECTION = "data_protection"
     NETWORK_SECURITY = "network_security"

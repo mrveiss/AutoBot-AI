@@ -392,7 +392,9 @@ ansible all -m apt -a "upgrade=yes update_cache=yes" --become
 ansible database -m command -a "redis-cli CONFIG SET save '60 1000'"
 
 # Adjust service resource limits
-# Edit files in templates/systemd/ and redeploy
+# Edit the unit templates and redeploy. The backend unit's single source of
+# truth is roles/backend/templates/autobot-backend.service.j2 (#10005);
+# other units live in templates/systemd/ and roles/*/templates/.
 ```
 
 ## Migration Timeline

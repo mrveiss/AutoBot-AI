@@ -12,62 +12,33 @@ Covers:
 
 from __future__ import annotations
 
-import importlib
-import importlib.util
-import sys
-import types
+from types import ModuleType
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-# ---------------------------------------------------------------------------
-# Stub modules that would cause import failures in unit test context
-# ---------------------------------------------------------------------------
-for _stub in (
-    "llc.services",
-    "llc.services.budget",
-    "llc.services.approval",
-    "llc.services.activity_log",
-    "llc.services.work_item_service",
-    "llc.scheduler.budget_watchdog",
-    "autobot_shared",
-    "autobot_shared.logging_manager",
-    "user_management",
-    "user_management.database",
-):
-    sys.modules.setdefault(_stub, MagicMock())
-
-# Provide a real logger via the stub
-_asl = types.ModuleType("autobot_shared.logging_manager")
-_asl.get_logger = lambda name: __import__("logging").getLogger(name)  # type: ignore[attr-defined]
-sys.modules["autobot_shared.logging_manager"] = _asl
-
-# Pre-stub the llc.api package so its __init__ is NOT executed when loading
-# submodules directly (the __init__ triggers a deep import chain that requires
-# a live database + deployment config).
-if "llc.api" not in sys.modules:
-    sys.modules["llc.api"] = types.ModuleType("llc.api")
+# GH#9995 / GH#10140: ``llc.api.agent_hires`` and ``llc.api.budget`` import
+# cleanly in the test environment, so import them normally. The previous
+# implementation installed module-level ``sys.modules`` MagicMock stubs for
+# llc.services / autobot_shared / user_management and loaded these modules from
+# file to bypass package __init__ chains. Those global stubs LEAKED into every
+# test module collected after this one — turning real packages into MagicMocks
+# (e.g. ``llc.services`` "is not a package") and failing ~30 llc.api route tests
+# in suite order while masking genuine regressions. The stubs also broke this
+# file's own tests (the real ``llc.services.model_tiers`` could not import). A
+# normal import fixes both.
 
 
-def _load_module_file(dotted_name: str, rel_path: str) -> types.ModuleType:
-    """Load a module directly from its file, bypassing package __init__ chains."""
-    if dotted_name in sys.modules:
-        return sys.modules[dotted_name]
-    spec = importlib.util.spec_from_file_location(dotted_name, rel_path)
-    mod = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
-    sys.modules[dotted_name] = mod
-    spec.loader.exec_module(mod)  # type: ignore[union-attr]
+def _get_agent_hires_mod() -> ModuleType:
+    import llc.api.agent_hires as mod
+
     return mod
 
 
-def _get_agent_hires_mod() -> types.ModuleType:
-    return _load_module_file("llc.api.agent_hires", "llc/api/agent_hires.py")
+def _get_budget_mod() -> ModuleType:
+    import llc.api.budget as mod
 
-
-def _get_budget_mod() -> types.ModuleType:
-    for stub in ("llc.exceptions", "llc.models.budget", "llc.services.budget"):
-        sys.modules.setdefault(stub, MagicMock())
-    return _load_module_file("llc.api.budget", "llc/api/budget.py")
+    return mod
 
 
 # ===========================================================================
@@ -269,6 +240,7 @@ class TestAgentsMissingInstructions:
         metrics = {
             "heartbeat_scheduler_running": True,
             "liveness_monitor_running": True,
+            "session_checkpointer_running": True,
             "scheduler_last_tick_age_seconds": 5.0,
             "agents_overdue_degraded": 0,
             "agents_overdue_critical": 0,
@@ -285,6 +257,7 @@ class TestAgentsMissingInstructions:
         metrics = {
             "heartbeat_scheduler_running": True,
             "liveness_monitor_running": True,
+            "session_checkpointer_running": True,
             "scheduler_last_tick_age_seconds": 5.0,
             "agents_overdue_degraded": 0,
             "agents_overdue_critical": 0,
@@ -302,6 +275,7 @@ class TestAgentsMissingInstructions:
         metrics = {
             "heartbeat_scheduler_running": True,
             "liveness_monitor_running": True,
+            "session_checkpointer_running": True,
             "scheduler_last_tick_age_seconds": 5.0,
             "agents_overdue_degraded": 0,
             "agents_overdue_critical": 0,

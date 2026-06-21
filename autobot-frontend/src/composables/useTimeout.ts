@@ -179,8 +179,9 @@ export function useDebounce<T extends (...args: any[]) => any>(
   let timeoutId: ReturnType<typeof setTimeout> | null = null
   let maxWaitTimeoutId: ReturnType<typeof setTimeout> | null = null
   let lastCallTime: number | null = null
-  let lastArgs: Parameters<T> | null = null
-  let lastThis: unknown = null
+  // Pending trailing-edge invocation: args + caller context bundled in one
+  // record (avoids aliasing `this` into a standalone variable).
+  let pending: { args: Parameters<T>; ctx: unknown } | null = null
 
   const cancel = (): void => {
     if (timeoutId) {
@@ -192,21 +193,20 @@ export function useDebounce<T extends (...args: any[]) => any>(
       maxWaitTimeoutId = null
     }
     lastCallTime = null
-    lastArgs = null
-    lastThis = null
+    pending = null
   }
 
   const invokeFunction = (): void => {
-    if (lastArgs) {
+    if (pending) {
+      const { args, ctx } = pending
       try {
-        fn.apply(lastThis, lastArgs)
+        fn.apply(ctx, args)
       } catch (error) {
         logger.error('Callback error:', error)
         throw error // Re-throw to preserve error behavior
       } finally {
-        lastArgs = null
+        pending = null
         lastCallTime = null
-        lastThis = null
       }
     }
   }
@@ -234,11 +234,9 @@ export function useDebounce<T extends (...args: any[]) => any>(
       }
       // Don't save args/this - no trailing edge in leading-only mode
     } else if (!leading) {
-      // Only save args for trailing edge execution (not in leading mode)
-      lastArgs = args
-
-      // eslint-disable-next-line @typescript-eslint/no-this-alias -- Intentional: preserving 'this' context for debounced callback
-      lastThis = this
+      // Only save args + caller context for trailing edge execution
+      // (not in leading mode)
+      pending = { args, ctx: this }
     }
 
     // Cancel previous timeout

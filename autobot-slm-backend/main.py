@@ -14,7 +14,7 @@ import os
 import sys
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from api import (
@@ -70,6 +70,13 @@ from api.voice_proxy import router as voice_proxy_router
 from config import settings
 from middleware import SecurityHeadersMiddleware
 from services.a2a_card_fetcher import start_card_refresh_task
+from services.auth import require_service_management
+from services.compose_fleet import (
+    _SLM_MGMT_IP,
+    _compose_nodes_enabled,
+    seed_compose_nodes,
+    start_compose_heartbeat,
+)
 from services.database import db_service
 from services.git_tracker import start_version_checker
 from services.reconciler import reconciler_service
@@ -200,10 +207,18 @@ async def lifespan(app: FastAPI):
         logger.error("Data seeding failed: %s", e, exc_info=True)
         raise
 
+    # Internal API key seeding is an enhancement (enables personality/voice
+    # proxies) — a failure here must never abort SLM startup; the proxies just
+    # degrade to 503 until the key exists, as they did before (#10263).
+    try:
+        await _ensure_internal_api_key()
+    except Exception:
+        logger.exception("Internal API key seeding failed (non-fatal) (#10263)")
+
     # Compose fleet-node surfacing is best-effort cosmetic — a seeding failure here
     # must never abort SLM startup (it previously rode the re-raising block above).
     try:
-        await _ensure_compose_nodes()
+        await seed_compose_nodes()
     except Exception:
         logger.exception("Compose fleet node seeding failed (non-fatal)")
 
@@ -217,6 +232,14 @@ async def lifespan(app: FastAPI):
     except Exception:
         logger.exception("Failed to reconcile stale fleet sync jobs")
 
+    # Resume any update-all fleet stage interrupted by SLM self-update restart (#9971)
+    try:
+        from api.code_sync import resume_update_all_orchestration
+
+        await resume_update_all_orchestration()
+    except Exception:
+        logger.exception("Failed to resume update-all orchestration")
+
     # Initialize manifest loader singleton (Issue #926 Phase 3)
     from services.manifest_loader import init_manifest_loader
 
@@ -226,7 +249,7 @@ async def lifespan(app: FastAPI):
 
     # Heartbeat the SLM's own (and compose-colocated) nodes so they stay online
     # via the same path VM-node agents use (#9761).
-    self_heartbeat_task = asyncio.create_task(_heartbeat_self_managed_nodes())
+    self_heartbeat_task = start_compose_heartbeat()
     logger.info("Self-managed node heartbeat started")
 
     # Start version checker background task (Issue #741)
@@ -286,7 +309,7 @@ async def _ensure_local_node() -> None:
 
     from models.database import Node, NodeRole, NodeStatus
 
-    _SLM_NODE_ID = "00-SLM-Manager"
+    _SLM_NODE_ID = settings.slm_node_id  # #9956: env-driven, not hardcoded
     _SLM_ROLES = ["slm-backend", "slm-frontend", "slm-database", "slm-monitoring"]
 
     # Derive IP from SLM_EXTERNAL_URL (written by install.sh) or fall back to probe.
@@ -354,223 +377,6 @@ async def _ensure_local_node() -> None:
         logger.info("Auto-registered SLM manager node (%s / %s)", hostname, local_ip)
 
 
-# Nodes the SLM hosts itself and must heartbeat locally (no external agent).
-_SELF_MANAGED_NODE_IDS: set[str] = {"00-SLM-Manager"}
-
-
-async def _heartbeat_self_managed_nodes() -> None:
-    """Drive heartbeats for nodes the SLM hosts itself (no external agent).
-
-    VM nodes stay online because their autobot-slm-agent POSTs
-    ``/api/nodes/{id}/heartbeat`` -> ``reconciler_service.update_node_heartbeat``.
-    The SLM's own node (and, in compose, the colocated service nodes registered
-    in ``_SELF_MANAGED_NODE_IDS``) have no external agent, so ``last_heartbeat``
-    never updates and the reconciler flips them OFFLINE after
-    ``heartbeat_interval * unhealthy_threshold``. This loop feeds the SAME
-    heartbeat path locally so they stay online — uniform with VM nodes, only the
-    heartbeat source differs (#9761).
-    """
-    import psutil
-
-    from services.database import db_service
-
-    while True:
-        try:
-            cpu = psutil.cpu_percent(interval=None)
-            mem = psutil.virtual_memory().percent
-            disk = psutil.disk_usage("/").percent
-            async with db_service.session() as db:
-                for node_id in sorted(_SELF_MANAGED_NODE_IDS):
-                    # Only heartbeat reachable nodes; unreachable container nodes
-                    # are left to the reconciler's offline path (same as VM nodes).
-                    if not await _node_reachable(node_id):
-                        continue
-                    await reconciler_service.update_node_heartbeat(
-                        db, node_id, cpu, mem, disk, agent_version="slm-local"
-                    )
-        except Exception:
-            logger.exception("Self-managed node heartbeat failed (non-fatal)")
-        await asyncio.sleep(settings.heartbeat_interval)
-
-
-# Compose fleet nodes (#9761): in a single-host docker compose stack each service
-# container is surfaced as a fleet node, using the SAME Node model + heartbeat path
-# as VM nodes. Gated by SLM_COMPOSE_NODES so production (Ansible/VM) fleets are
-# unaffected. port=None => liveness can't be TCP-probed, so it's assumed up.
-# Every mandatory AutoBot role (all canonical roles except optional vnc/docker) is
-# assigned to exactly one node — roles are single-node, so the fleet wizard hides a
-# role duplicated across nodes. "running" = the role has a live container here
-# (detected_roles -> green); "assigned" = a mandatory role with no container in
-# compose, parked on a node so it shows as assigned (yellow) and no node is empty.
-# Placement of the container-less roles is by affinity (backend->ai-stack/none here,
-# worker->browser, etc.); postgres/celery-beat take the leftovers since the taxonomy
-# has no postgres/scheduler role (#9761).
-# ip MUST match the ipv4_address in docker-compose.yml (docker DNS only returns the
-# app-tier IP, so the static value is authoritative).
-_SLM_MGMT_IP = "172.30.0.16"  # autobot-slm on autobot-mgmt (matches docker-compose.yml)
-_COMPOSE_NODE_SPECS: list[dict] = [
-    {
-        "id": "autobot-backend",
-        "running": ["backend"],
-        "assigned": ["ai-stack"],
-        "ip": "172.30.0.13",
-        "port": 8001,
-        "protocol": "http",
-        "path": "/api/health",
-    },
-    {
-        "id": "autobot-worker",
-        "running": ["celery"],
-        "assigned": ["browser-service"],
-        "ip": "172.30.0.14",
-        "port": None,
-        "protocol": "tcp",
-        "path": None,
-    },
-    {
-        "id": "autobot-celery-beat",
-        "running": [],
-        "assigned": ["autobot-llm-cpu", "autobot-llm-gpu"],
-        "ip": "172.30.0.15",
-        "port": None,
-        "protocol": "tcp",
-        "path": None,
-    },
-    {
-        "id": "autobot-frontend",
-        "running": ["frontend"],
-        "assigned": ["tts-worker"],
-        "ip": "172.30.0.17",
-        "port": 80,
-        "protocol": "http",
-        "path": "/",
-    },
-    {
-        "id": "autobot-postgres",
-        "running": [],
-        "assigned": ["npu-worker"],
-        "ip": "172.30.0.11",
-        "port": 5432,
-        "protocol": "tcp",
-        "path": None,
-    },
-    {
-        "id": "autobot-redis",
-        "running": ["redis"],
-        "assigned": [],
-        "ip": "172.30.0.10",
-        "port": 6379,
-        "protocol": "redis",
-        "path": None,
-    },
-    {
-        "id": "autobot-chromadb",
-        "running": ["chromadb"],
-        "assigned": [],
-        "ip": "172.30.0.12",
-        "port": 8000,
-        "protocol": "http",
-        "path": "/api/v2/heartbeat",
-    },
-]
-
-
-def _compose_nodes_enabled() -> bool:
-    """True when each compose container should be surfaced as a fleet node."""
-    return os.getenv("SLM_COMPOSE_NODES", "false").strip().lower() in ("1", "true", "yes")
-
-
-async def _probe_tcp(host: str, port: int, timeout: float = 2.0) -> bool:
-    """Return True if a TCP connection to host:port succeeds within timeout."""
-    try:
-        _, writer = await asyncio.wait_for(asyncio.open_connection(host, port), timeout=timeout)
-        writer.close()
-        try:
-            await writer.wait_closed()
-        except Exception:
-            pass
-        return True
-    except Exception:
-        return False
-
-
-async def _node_reachable(node_id: str) -> bool:
-    """Liveness check for a self-managed node before heartbeating it.
-
-    The SLM manager node is the SLM itself (always up). Compose container nodes
-    with a known port are TCP-probed; port-less ones (celery worker/beat) can't be
-    probed and are assumed up while the stack runs.
-    """
-    if node_id == "00-SLM-Manager":
-        return True
-    spec = next((s for s in _COMPOSE_NODE_SPECS if s["id"] == node_id), None)
-    if not spec or not spec["port"]:
-        return True
-    return await _probe_tcp(node_id, spec["port"])
-
-
-async def _ensure_compose_nodes() -> None:
-    """Register each compose service container as a fleet node (#9761).
-
-    Idempotent and gated by SLM_COMPOSE_NODES. Mirrors _ensure_local_node but for
-    the sibling containers, so the fleet view lists every service in the stack and
-    the self-heartbeat loop keeps them online via the same path VM nodes use.
-    """
-    if not _compose_nodes_enabled():
-        return
-
-    from sqlalchemy import delete, select
-
-    from models.database import Node, NodeRole, NodeStatus, Service, ServiceCategory, ServiceStatus
-
-    node_ids = [spec["id"] for spec in _COMPOSE_NODE_SPECS]
-    async with db_service.session() as session:
-        # These nodes are fully seeder-managed: drop all their existing role rows
-        # up front (any assignment_type) and flush, so the re-add below can't hit
-        # the uq_node_role unique constraint or premature-autoflush ordering.
-        await session.execute(delete(NodeRole).where(NodeRole.node_id.in_(node_ids)))
-        await session.flush()
-        for spec in _COMPOSE_NODE_SPECS:
-            node_id = spec["id"]
-            _SELF_MANAGED_NODE_IDS.add(node_id)
-            running = spec["running"]  # has a live container -> detected_roles (green)
-            all_roles = running + spec["assigned"]  # + mandatory roles parked here (yellow)
-            existing = (await session.execute(select(Node).where(Node.node_id == node_id))).scalar_one_or_none()
-            if existing:
-                existing.ip_address = spec["ip"]
-                existing.roles = all_roles
-                existing.detected_roles = running
-            else:
-                session.add(
-                    Node(
-                        node_id=node_id,
-                        ansible_name=node_id,
-                        hostname=node_id,
-                        ip_address=spec["ip"],
-                        auth_method="none",
-                        status=NodeStatus.PENDING.value,
-                        roles=all_roles,
-                        detected_roles=running,
-                    )
-                )
-                session.add(
-                    Service(
-                        node_id=node_id,
-                        service_name=(running[0] if running else node_id),
-                        status=ServiceStatus.UNKNOWN.value,
-                        category=ServiceCategory.AUTOBOT.value,
-                        port=spec["port"],
-                        protocol=spec["protocol"],
-                        endpoint_path=spec["path"],
-                        is_discoverable=True,
-                    )
-                )
-            for role_name in all_roles:
-                session.add(NodeRole(node_id=node_id, role_name=role_name, status="active", assignment_type="auto"))
-        await session.commit()
-    logger.info("Registered/updated %d compose fleet nodes", len(_COMPOSE_NODE_SPECS))
-
-
 async def _ensure_admin_user():
     """Create or sync the admin user.
 
@@ -621,6 +427,43 @@ async def _ensure_admin_user():
             logger.info("Admin user already exists (race condition avoided)")
 
 
+async def _ensure_internal_api_key() -> None:
+    """Ensure the shared internal API key exists (#10263).
+
+    The SLM personality/voice proxies authenticate to the main backend with an
+    X-Internal-API-Key header; the value must match on both sides. It is
+    distributed to deploys via fetch_deploy_secrets() -> the
+    autobot_internal_api_key extra_var -> slm-secrets.env + backend.env.
+
+    Historically the value was only present if an admin manually created the
+    secret in the SLM UI, so a fresh deployment left it empty and every
+    personality/voice request 503'd. Generate a strong key once and store it;
+    idempotent thereafter (never overwrites an existing value).
+    """
+    import secrets as _secrets
+
+    from sqlalchemy import select
+    from sqlalchemy.exc import IntegrityError
+
+    from models.database import SystemSecret
+    from services.encryption import encrypt_data
+
+    key_name = "autobot_internal_api_key"  # nosec B105 - secret-store key name, not a credential
+    async with db_service.session() as db:
+        result = await db.execute(select(SystemSecret).where(SystemSecret.key == key_name))
+        if result.scalar_one_or_none() is not None:
+            return
+        db.add(SystemSecret(key=key_name, encrypted_value=encrypt_data(_secrets.token_hex(32))))
+        try:
+            await db.commit()
+        except IntegrityError:
+            # Concurrent startup seeded it first (unique key) — keep theirs.
+            await db.rollback()
+            logger.info("Internal API key already created concurrently — keeping existing (#10263)")
+            return
+        logger.info("Generated shared internal API key — personality/voice proxies enabled (#10263)")
+
+
 async def _seed_default_roles():
     """Seed default roles if they don't exist (Issue #779)."""
     from services.role_registry import seed_default_roles
@@ -665,60 +508,74 @@ app.add_middleware(
 # Registered after CORSMiddleware so CORS headers are already present.
 app.add_middleware(SecurityHeadersMiddleware)
 
+# Routers intentionally left open (no service.management gate):
+#   health_router   — liveness/readiness probes; must be reachable without credentials
+#   auth_router     — login, /me, refresh, JWKS consumer; authentication entry points
+#   sso_router      — SSO provider list; accessed before credentials are available
+#   sso_auth_router — OAuth callback; must complete before a token exists
+#   websocket_router — out of scope (#10198); has separate async auth handling
+
+# Service-management gate (#10198, epic #10193): all other routers require
+# Permission.SERVICE_MANAGEMENT.  Ordinary users (role=user/readonly/analyst/editor)
+# do not have this permission and receive 403.  Admin and Operator do.
+_SM = [Depends(require_service_management)]
+
 app.include_router(health_router, prefix="/api")
-app.include_router(browser_router, prefix="/api")
-app.include_router(agents_router, prefix="/api")
 app.include_router(auth_router, prefix="/api")
-app.include_router(nodes_router, prefix="/api")
-app.include_router(nodes_execution_router, prefix="/api")  # Issue #3406
-app.include_router(services_router, prefix="/api")
-app.include_router(fleet_services_router, prefix="/api")
-app.include_router(deployments_router, prefix="/api")
-app.include_router(blue_green_router, prefix="/api")
-app.include_router(settings_router, prefix="/api")
-app.include_router(stateful_router, prefix="/api")
-app.include_router(updates_router, prefix="/api")
-app.include_router(maintenance_router, prefix="/api")
-app.include_router(monitoring_router, prefix="/api")
-app.include_router(performance_router, prefix="/api")
-app.include_router(errors_router, prefix="/api")
-app.include_router(events_router, prefix="/api")
-app.include_router(external_agents_router, prefix="/api")
 app.include_router(websocket_router, prefix="/api")
-app.include_router(node_rdp_router, prefix="/api")
-app.include_router(rdp_router, prefix="/api")
-app.include_router(node_vnc_router, prefix="/api")
-app.include_router(vnc_router, prefix="/api")
-app.include_router(node_tls_router, prefix="/api")
-app.include_router(tls_router, prefix="/api")
-app.include_router(secrets_router, prefix="/api")
-app.include_router(security_router, prefix="/api")
-app.include_router(code_sync_router, prefix="/api")
-app.include_router(roles_router, prefix="/api")
-app.include_router(code_source_router, prefix="/api")
-app.include_router(personality_proxy_router, prefix="/api")  # Issue #1145
-app.include_router(voice_proxy_router, prefix="/api")  # Voice proxy for personality voice assignment
-app.include_router(orchestration_router, prefix="/api")
-app.include_router(discovery_router, prefix="/api")
-app.include_router(config_router, prefix="/api")
-app.include_router(node_config_router, prefix="/api/nodes")
-app.include_router(npu_router, prefix="/api")
-# Issue #786: Infrastructure setup playbooks
-app.include_router(infrastructure_router, prefix="/api")
-# User Management routers (Issue #576)
-app.include_router(slm_users_router, prefix="/api")
-app.include_router(autobot_users_router, prefix="/api")
-app.include_router(autobot_teams_router, prefix="/api")
-# SSO Integration (Issue #576 Phase 4)
+# SSO Integration (Issue #576 Phase 4) — open: auth entry points
 app.include_router(sso_router, prefix="/api")
 app.include_router(sso_auth_router, prefix="/api")
+
+# --- Service-management–gated routers ---
+app.include_router(browser_router, prefix="/api", dependencies=_SM)
+app.include_router(agents_router, prefix="/api", dependencies=_SM)
+app.include_router(nodes_router, prefix="/api", dependencies=_SM)
+app.include_router(nodes_execution_router, prefix="/api", dependencies=_SM)  # Issue #3406
+app.include_router(services_router, prefix="/api", dependencies=_SM)
+app.include_router(fleet_services_router, prefix="/api", dependencies=_SM)
+app.include_router(deployments_router, prefix="/api", dependencies=_SM)
+app.include_router(blue_green_router, prefix="/api", dependencies=_SM)
+app.include_router(settings_router, prefix="/api", dependencies=_SM)
+app.include_router(stateful_router, prefix="/api", dependencies=_SM)
+app.include_router(updates_router, prefix="/api", dependencies=_SM)
+app.include_router(maintenance_router, prefix="/api", dependencies=_SM)
+app.include_router(monitoring_router, prefix="/api", dependencies=_SM)
+app.include_router(performance_router, prefix="/api", dependencies=_SM)
+app.include_router(errors_router, prefix="/api", dependencies=_SM)
+app.include_router(events_router, prefix="/api", dependencies=_SM)
+app.include_router(external_agents_router, prefix="/api", dependencies=_SM)
+app.include_router(node_rdp_router, prefix="/api", dependencies=_SM)
+app.include_router(rdp_router, prefix="/api", dependencies=_SM)
+app.include_router(node_vnc_router, prefix="/api", dependencies=_SM)
+app.include_router(vnc_router, prefix="/api", dependencies=_SM)
+app.include_router(node_tls_router, prefix="/api", dependencies=_SM)
+app.include_router(tls_router, prefix="/api", dependencies=_SM)
+app.include_router(secrets_router, prefix="/api", dependencies=_SM)
+app.include_router(security_router, prefix="/api", dependencies=_SM)
+app.include_router(code_sync_router, prefix="/api", dependencies=_SM)
+app.include_router(roles_router, prefix="/api", dependencies=_SM)
+app.include_router(code_source_router, prefix="/api", dependencies=_SM)
+app.include_router(personality_proxy_router, prefix="/api", dependencies=_SM)  # Issue #1145
+app.include_router(voice_proxy_router, prefix="/api", dependencies=_SM)  # Voice proxy for personality voice assignment
+app.include_router(orchestration_router, prefix="/api", dependencies=_SM)
+app.include_router(discovery_router, prefix="/api", dependencies=_SM)
+app.include_router(config_router, prefix="/api", dependencies=_SM)
+app.include_router(node_config_router, prefix="/api/nodes", dependencies=_SM)
+app.include_router(npu_router, prefix="/api", dependencies=_SM)
+# Issue #786: Infrastructure setup playbooks
+app.include_router(infrastructure_router, prefix="/api", dependencies=_SM)
+# User Management routers (Issue #576)
+app.include_router(slm_users_router, prefix="/api", dependencies=_SM)
+app.include_router(autobot_users_router, prefix="/api", dependencies=_SM)
+app.include_router(autobot_teams_router, prefix="/api", dependencies=_SM)
 # MFA and API Keys (Issue #576 Phase 5)
-app.include_router(mfa_router, prefix="/api")
-app.include_router(api_keys_router, prefix="/api")
+app.include_router(mfa_router, prefix="/api", dependencies=_SM)
+app.include_router(api_keys_router, prefix="/api", dependencies=_SM)
 # Setup Wizard (Issue #1294)
-app.include_router(setup_wizard_router, prefix="/api")
+app.include_router(setup_wizard_router, prefix="/api", dependencies=_SM)
 # LLM Configuration (Issue #2371)
-app.include_router(llm_config_router, prefix="/api")
+app.include_router(llm_config_router, prefix="/api", dependencies=_SM)
 
 
 @app.get("/")

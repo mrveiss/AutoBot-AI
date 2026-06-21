@@ -113,6 +113,7 @@
 </template>
 
 <script setup lang="ts">
+import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -133,7 +134,7 @@ const emit = defineEmits<{
 interface StatusMessage {
   type: 'success' | 'error' | 'warning' | 'info'
   text: string
-  icon: string
+  icon: IconName
 }
 
 // Composable
@@ -150,7 +151,7 @@ const statusMessage = ref<StatusMessage | null>(null)
 
 // Methods
 const showStatus = (type: StatusMessage['type'], text: string) => {
-  const icons = {
+  const icons: Record<StatusMessage['type'], IconName> = {
     success: 'check-circle',
     error: 'exclamation-circle',
     warning: 'exclamation-triangle',
@@ -223,6 +224,8 @@ const cleanupOrphans = async () => {
 }
 </script>
 
+<style scoped src="@/design-system/styles/orphan-manager-shared.css"></style>
+
 <style scoped>
 /**
  * Issue #704: CSS Design System - Using design tokens
@@ -258,43 +261,11 @@ const cleanupOrphans = async () => {
   font-size: var(--text-sm);
 }
 
-.orphan-content {
-  padding: var(--spacing-5);
-}
-
-.orphan-summary {
-  margin-bottom: var(--spacing-6);
-}
-
-.summary-stats {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: var(--spacing-4);
-  margin-bottom: var(--spacing-6);
-}
-
-.stat-item {
-  text-align: center;
-  padding: var(--spacing-4);
-  background: var(--bg-secondary);
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--border-default);
-}
-
-.stat-item.highlight {
-  background: var(--color-warning-bg);
-  border-color: var(--color-warning);
-}
-
 .stat-value {
   display: block;
   font-size: var(--text-2xl);
   font-weight: var(--font-bold);
   color: var(--text-primary);
-}
-
-.stat-item.highlight .stat-value {
-  color: var(--color-warning-dark);
 }
 
 .stat-label {
@@ -318,27 +289,6 @@ const cleanupOrphans = async () => {
   margin: 0 0 var(--spacing-3) 0;
 }
 
-.orphan-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-3);
-  max-height: 300px;
-  overflow-y: auto;
-}
-
-.orphan-item {
-  background: var(--bg-card);
-  border: 1px solid var(--color-warning-light);
-  border-radius: var(--radius-md);
-  padding: var(--spacing-3);
-}
-
-.orphan-meta {
-  display: flex;
-  gap: var(--spacing-2);
-  margin-bottom: var(--spacing-2);
-}
-
 .orphan-name {
   font-size: var(--text-sm);
   font-weight: var(--font-semibold);
@@ -359,23 +309,12 @@ const cleanupOrphans = async () => {
   white-space: nowrap;
 }
 
-.orphan-session {
-  font-size: var(--text-xs);
-  color: var(--text-muted);
-}
-
 .orphan-more {
   font-size: var(--text-sm);
   color: var(--text-secondary);
   font-style: italic;
   margin: var(--spacing-3) 0 0 0;
   text-align: center;
-}
-
-.orphan-actions {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: var(--spacing-6);
 }
 
 .action-card {
@@ -390,43 +329,14 @@ const cleanupOrphans = async () => {
   background: var(--bg-card);
 }
 
-.action-card:hover {
-  border-color: var(--color-primary);
-  box-shadow: var(--shadow-md);
-}
-
 .action-card.warning {
   border-color: var(--color-warning-light);
   background: var(--color-warning-bg);
 }
 
-.action-card.warning:hover {
-  border-color: var(--color-warning);
-}
-
-.action-content {
-  flex: 1;
-}
-
-.action-icon {
-  width: 3rem;
-  height: 3rem;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: var(--text-xl);
-  margin-bottom: var(--spacing-4);
-}
-
 .action-icon.scan {
   background: var(--color-info-bg);
   color: var(--color-info);
-}
-
-.action-icon.cleanup {
-  background: var(--color-warning-bg);
-  color: var(--color-warning);
 }
 
 .action-card h5 {
@@ -442,39 +352,6 @@ const cleanupOrphans = async () => {
   line-height: var(--leading-normal);
 }
 
-.action-meta {
-  color: var(--text-muted);
-  font-size: var(--text-xs);
-  display: block;
-  margin-bottom: var(--spacing-4);
-}
-
-.action-btn {
-  width: 100%;
-}
-
-/* Status Messages */
-.status-message {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-3);
-  padding: var(--spacing-4);
-  border-radius: var(--radius-lg);
-  margin-top: var(--spacing-6);
-}
-
-.status-message.success {
-  background: var(--color-success-bg);
-  border: 1px solid var(--color-success);
-  color: var(--color-success-dark);
-}
-
-.status-message.error {
-  background: var(--color-error-bg);
-  border: 1px solid var(--color-error);
-  color: var(--color-error-dark);
-}
-
 .status-message.warning {
   background: var(--color-warning-bg);
   border: 1px solid var(--color-warning);
@@ -487,10 +364,6 @@ const cleanupOrphans = async () => {
   color: var(--color-info-dark);
 }
 
-.status-message span {
-  flex: 1;
-}
-
 .dismiss-btn {
   background: none;
   border: none;
@@ -499,20 +372,5 @@ const cleanupOrphans = async () => {
   color: inherit;
   opacity: 0.7;
   transition: opacity var(--duration-200);
-}
-
-.dismiss-btn:hover {
-  opacity: 1;
-}
-
-/* Responsive */
-@media (max-width: 768px) {
-  .orphan-actions {
-    grid-template-columns: 1fr;
-  }
-
-  .summary-stats {
-    grid-template-columns: repeat(2, 1fr);
-  }
 }
 </style>

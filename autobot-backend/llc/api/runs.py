@@ -28,6 +28,11 @@ from ..models.heartbeat_run import LLCHeartbeatRun
 
 router = APIRouter(prefix="/agents", tags=["llc-runs"])
 
+# GH#9851: org-scoped heartbeat-run feed for the company dashboard. The
+# per-agent feed lives under /agents/{agent_id}/runs; this is the unfiltered
+# org view the dashboard's "recent runs" panel needs.
+heartbeat_runs_router = APIRouter(prefix="/heartbeat-runs", tags=["llc-runs"])
+
 
 def _run_to_dict(run: LLCHeartbeatRun) -> Dict[str, Any]:
     return {
@@ -60,6 +65,24 @@ async def list_runs(
         LLCHeartbeatRun.agent_id == agent_id,
         LLCHeartbeatRun.company_id == ctx.org_id,
     )
+    if status:
+        q = q.where(LLCHeartbeatRun.status == status)
+    q = q.order_by(LLCHeartbeatRun.created_at.desc()).limit(limit).offset(offset)
+    result = await session.execute(q)
+    return [_run_to_dict(r) for r in result.scalars().all()]
+
+
+@heartbeat_runs_router.get("", response_model=List[Dict[str, Any]])
+async def list_org_heartbeat_runs(
+    status: Optional[str] = Query(None),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    session: AsyncSession = Depends(get_async_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
+) -> List[Dict[str, Any]]:
+    """List heartbeat runs across the whole org, newest first (GH#9851)."""
+    q = select(LLCHeartbeatRun).where(LLCHeartbeatRun.company_id == ctx.org_id)
     if status:
         q = q.where(LLCHeartbeatRun.status == status)
     q = q.order_by(LLCHeartbeatRun.created_at.desc()).limit(limit).offset(offset)

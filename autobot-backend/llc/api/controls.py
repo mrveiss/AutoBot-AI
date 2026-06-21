@@ -20,13 +20,13 @@ These routes bypass the approval workflow entirely (FR-GOV-05).
 import uuid
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user
 from autobot_shared.singleton_factory import lazy_singleton
-from user_management.database import get_async_session_factory
+from llc.deps import get_session, require_board_role
 
 from ..models.enums import MembershipRole
 from ..services.controls_service import (
@@ -45,12 +45,6 @@ _get_membership = lazy_singleton(MembershipService)
 _ALLOWED_ROLES = {MembershipRole.OWNER, MembershipRole.ADMIN}
 
 
-async def get_session() -> AsyncSession:
-    factory = get_async_session_factory()
-    async with factory() as session:
-        yield session
-
-
 def _controls_svc() -> ControlsService:
     return _get_controls()
 
@@ -67,27 +61,17 @@ async def _require_board_role(
 ) -> str:
     """Raise 403 if the user is not OWNER or ADMIN of the company.
 
-    Returns actor_user_id for activity log.
+    Returns actor_user_id for activity log.  Delegates to the canonical
+    llc.deps.require_board_role (GH#9034 M7) keeping this router's message.
     """
-    user_id = current_user.get("id") or current_user.get("user_id")
-    if not user_id:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-
-    try:
-        members = await membership_svc.list_members(session, str(company_id))
-        role = next(
-            (m.role for m in members if str(m.user_id) == str(user_id)),
-            None,
-        )
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Membership lookup failed: {exc}") from exc
-
-    if role not in _ALLOWED_ROLES:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only board members (owner/admin) can use instant controls",
-        )
-    return str(user_id)
+    return await require_board_role(
+        company_id,
+        current_user,
+        session,
+        _ALLOWED_ROLES,
+        membership_svc,
+        detail="Only board members (owner/admin) can use instant controls",
+    )
 
 
 # ------------------------------------------------------------------

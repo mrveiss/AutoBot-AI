@@ -11,11 +11,12 @@ asyncssh>=2.23.0
 # Bumped to 5.29.6+ for JSON recursion depth bypass fix (#3933)
 protobuf>=5.29.6,<7.0.0
 
-# vLLM - High-performance LLM inference with prefix caching
-# Provides 3-4x throughput improvement with 98.7% cache efficiency
-# Requires: CUDA-compatible GPU, Python 3.12
-# Enable in config: llm.vllm.enabled = true
-vllm>=0.21.0
+# vLLM (GPU inference) is an OPTIONAL extra — NOT a default dependency (#10251).
+# It pulls the full CUDA toolkit (cuda-toolkit, nvidia-*, flashinfer, CUDA torch),
+# bloating the CPU backend image by several GB and exhausting CI disk. The vLLM
+# provider lazy-/guard-imports it (llm_shared/providers/vllm.py, vllm_base.py) and
+# is opt-in (llm.vllm.enabled = true), so the default image works without it.
+# For GPU deployments that enable vLLM: pip install -r requirements-gpu.txt
 
 # Document parsing libraries for knowledge base
 # Supports PDF, Word, Excel, PowerPoint, OpenDocument formats

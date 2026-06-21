@@ -229,6 +229,16 @@ class Database:
         if cur.rowcount == 0:
             raise KeyError(f"no recording with id={recording_id}")
 
+    async def update_recording_duration(self, recording_id: int, duration: float) -> None:
+        """Set the audio duration for a recording after ffmpeg probe."""
+        cur = await self._db().execute(
+            "UPDATE recordings SET duration=? WHERE id=?",
+            (duration, recording_id),
+        )
+        await self._db().commit()
+        if cur.rowcount == 0:
+            raise KeyError(f"no recording with id={recording_id}")
+
     async def delete_recording(self, recording_id: int) -> None:
         cur = await self._db().execute("DELETE FROM recordings WHERE id=?", (recording_id,))
         await self._db().commit()
@@ -393,15 +403,16 @@ _db_instance: Database | None = None
 async def get_transcriber_db() -> Database:
     """Get or create the singleton transcriber database instance.
 
+    Migrations are applied inside ``connect()``. Callers do not need to call
+    ``migrate()`` separately.
+
     Returns:
         Database: The shared database connection instance
     """
     global _db_instance
     if _db_instance is None:
-        # Get database path from environment, default to data/transcriber.db
         db_path = os.getenv("AUTOBOT_TRANSCRIBER_DB_PATH", "data/transcriber.db")
         _db_instance = Database(db_path)
         await _db_instance.connect()
-        await _db_instance.migrate()
-        logger.info(f"Transcriber database initialized at {db_path}")
+        logger.info("Transcriber database initialized at %s", db_path)
     return _db_instance

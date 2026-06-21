@@ -216,6 +216,10 @@ class CreateConnectorRequest(BaseModel):
     exclude_patterns: List[str] = Field(default_factory=list)
     # Issue #8148: optional per-instance concurrency override (None = class default).
     max_concurrency: int | None = None
+    # Issue #9003 / ADR-007 §10: pre-existing secret reference from the OAuth
+    # "Connect" flow. When set, the connector attaches it by reference (the token
+    # bundle is already stored via store_oauth) instead of re-storing credentials.
+    secret_id: str | None = None
 
 
 class UpdateConnectorRequest(BaseModel):

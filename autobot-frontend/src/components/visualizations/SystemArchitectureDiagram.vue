@@ -509,6 +509,7 @@
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
 
+import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -574,7 +575,7 @@ interface ComponentGroup {
 interface ViewMode {
   id: string
   label: string
-  icon: string
+  icon: IconName
 }
 
 // ============================================================================

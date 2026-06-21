@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """Add desktop_mobile_devices table for mobile device pairing (GH#4463).
 
 Revision ID: 20260529_047
@@ -19,7 +21,10 @@ def upgrade() -> None:
     op.create_table(
         "desktop_mobile_devices",
         sa.Column("id", sa.Uuid(as_uuid=True), primary_key=True),
-        sa.Column("user_id", sa.String(64), nullable=False, index=True),
+        # No index=True: the explicit op.create_index below builds the same
+        # ix_desktop_mobile_devices_user_id, and the duplicate CREATE INDEX
+        # aborted fresh-database upgrades (#9759).
+        sa.Column("user_id", sa.String(64), nullable=False),
         sa.Column("device_name", sa.String(255), nullable=False),
         sa.Column("device_token", sa.Text, nullable=False),
         sa.Column("platform", sa.String(16), nullable=False),

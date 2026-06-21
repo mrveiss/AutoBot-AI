@@ -15,10 +15,18 @@ def _fmt_vtt_time(seconds: float) -> str:
 
 
 def segments_to_vtt(segments: list[dict], *, include_speaker: bool = True) -> str:
+    """Convert segment dicts (as returned by build_segment_list) to WebVTT text.
+
+    Segment keys: start_time, end_time, text, speaker_name (optional).
+    """
     lines = ["WEBVTT", ""]
     for seg in segments:
-        start = _fmt_vtt_time(seg["start"])
-        end = _fmt_vtt_time(seg["end"])
-        text = f"{seg['speaker']}: {seg['text']}" if include_speaker else seg["text"]
+        start = _fmt_vtt_time(seg["start_time"])
+        end = _fmt_vtt_time(seg["end_time"])
+        speaker = seg.get("speaker_name") or seg.get("speaker", "")
+        if include_speaker and speaker:
+            text = f"<v {speaker}>{seg['text']}"
+        else:
+            text = seg["text"]
         lines.append(f"{start} --> {end}\n{text}\n")
     return "\n".join(lines)

@@ -37,7 +37,7 @@ def _resolve_storage_path() -> Path:
         )
         raw = _DEFAULT_SNAPSHOT_PATH
     path = Path(raw)
-    if str(path).startswith("/tmp"):
+    if str(path).startswith("/tmp"):  # nosec B108 - intentional check to warn operator about non-persistent tmp path
         logger.warning(
             "Snapshot storage path %s is under /tmp — snapshots will not survive a host restart. "
             "Set AUTOBOT_SNAPSHOT_STORAGE_PATH to a persistent directory (e.g. /opt/autobot/snapshots).",

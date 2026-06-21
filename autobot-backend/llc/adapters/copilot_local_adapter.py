@@ -75,6 +75,7 @@ class CopilotLocalAdapter(SubprocessLifecycleAdapter):
 
     _LOG_NAME = "CopilotLocalAdapter"
     _state_path = staticmethod(_state_path)
+    _required_cli = "gh"  # GH#9793: CLI-availability gate in heartbeat dispatch
 
     async def _invoke(self, agent_config: dict, context: dict) -> str:
         gh_cli = _resolve_gh_cli()
@@ -106,13 +107,17 @@ class CopilotLocalAdapter(SubprocessLifecycleAdapter):
         # GH#9623/GH#9789: forward the run-scoped LLC bearer token + API base.
         inject_agent_credentials(env, context)
 
+        # GH#9992: capture stderr to a sidecar file instead of discarding it to
+        # DEVNULL, so CLI errors on a failed/killed run are diagnosable.
+        stderr_file = f"{output_file}.stderr.log"
         out_fh = open(output_file, "w", encoding="utf-8")
+        err_fh = open(stderr_file, "w", encoding="utf-8")
         try:
             try:
                 proc = await asyncio.create_subprocess_exec(
                     *cmd,
                     stdout=out_fh,
-                    stderr=asyncio.subprocess.DEVNULL,
+                    stderr=err_fh,
                     env=env,
                     cwd=workspace_dir or None,
                 )
@@ -128,11 +133,12 @@ class CopilotLocalAdapter(SubprocessLifecycleAdapter):
                 proc = await asyncio.create_subprocess_exec(
                     *cmd,
                     stdout=out_fh,
-                    stderr=asyncio.subprocess.DEVNULL,
+                    stderr=err_fh,
                     env=env,
                 )
         finally:
             out_fh.close()
+            err_fh.close()
 
         run_id = f"{proc.pid}/{session_id}"
         logger.info(
@@ -145,6 +151,7 @@ class CopilotLocalAdapter(SubprocessLifecycleAdapter):
 
         state = {
             "pid": proc.pid,
+            "stderr_file": stderr_file,  # GH#9992
             "session_id": session_id,
             "agent_id": agent_id,
             "output_file": output_file,

@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """Add velocity_actual, capacity_points, projection to llc_sprints (GH#8474).
 
 Revision ID: 20260525_041

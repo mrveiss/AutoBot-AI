@@ -76,7 +76,7 @@
             :key="item.id"
             class="backlog-row"
             :class="{ selected: selectedIds.has(item.id) }"
-            draggable="true"
+            :draggable="true"
             @dragstart="onDragStart(item)"
             @dragover.prevent
             @drop="onDrop(item)"
@@ -247,20 +247,7 @@ const PRIORITIES = [
   { value: 'low', label: 'Low' },
 ]
 
-interface WorkItem {
-  id: string
-  identifier: string
-  type: string
-  title: string
-  description: string
-  priority: string
-  story_points: number | null
-  assignee_name: string | null
-  sprint_id: string | null
-  status: string
-  labels: string[]
-  acceptance_criteria: string[]
-}
+import type { WorkItem } from './workItemTypes'
 
 const items = ref<WorkItem[]>([])
 const isLoading = ref(false)
@@ -338,34 +325,45 @@ async function onDrop(target: WorkItem) {
   const toIdx = items.value.findIndex(i => i.id === target.id)
   if (fromIdx === -1 || toIdx === -1) return
 
+  const previous = [...items.value]
   const reordered = [...items.value]
   const [moved] = reordered.splice(fromIdx, 1)
   reordered.splice(toIdx, 0, moved)
   items.value = reordered
   draggedItem.value = null
 
+  await persistBacklogOrder(reordered, previous)
+}
+
+// Persist the new ordering (full desired order; backend assigns positions
+// 0..n-1). On failure, revert to the pre-drag order so the UI never diverges
+// from the server. Backend: POST /api/llc/companies/{id}/backlog/reorder (#9861).
+async function persistBacklogOrder(ordered: WorkItem[], previous: WorkItem[]): Promise<void> {
   try {
-    await api.post<unknown>(`/api/llc/companies/${companyId.value}/backlog/reorder`, {
-      ordered_ids: reordered.map(i => i.id),
+    await api.post(`/api/llc/companies/${companyId.value}/backlog/reorder`, {
+      work_item_ids: ordered.map(i => i.id),
     })
   } catch (err) {
-    logger.error('Reorder failed', err)
-    await fetchBacklog()
+    logger.error('Backlog reorder failed; reverting order', err)
+    items.value = previous
   }
 }
 
+// Request advisory acceptance criteria for the in-progress new item. Company
+// scope is derived from the org context server-side — never send company_id.
+// Backend: POST /api/llc/work-items/suggest-ac (#9861); empty list on LLM-down.
 async function suggestAC() {
   if (!newItem.value.title) return
   isSuggestingAC.value = true
   try {
-    const result = await api.post<{ suggestions: string[] }>(`/api/llc/work-items/suggest-ac`, {
+    const res = await api.post<{ suggestions: string[] }>(`/api/llc/work-items/suggest-ac`, {
       title: newItem.value.title,
-      type: newItem.value.type,
       description: newItem.value.description,
     })
-    suggestedACs.value = result.suggestions.map(text => ({ text, selected: true }))
+    suggestedACs.value = (res.suggestions ?? []).map(text => ({ text, selected: true }))
   } catch (err) {
     logger.error('AC suggestion failed', err)
+    suggestedACs.value = []
   } finally {
     isSuggestingAC.value = false
   }

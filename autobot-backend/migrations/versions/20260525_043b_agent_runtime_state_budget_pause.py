@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """Add budget pause fields to agent_runtime_state (GH#6470).
 
 Renamed from 20260525_043 → 20260525_043b to resolve duplicate revision ID

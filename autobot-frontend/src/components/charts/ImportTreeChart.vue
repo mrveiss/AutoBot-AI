@@ -237,6 +237,22 @@ import { useDebounce } from '@/composables/useTimeout'
 
 // Type imports only — runtime load handled by the shared composable (#5206)
 import type { Core, NodeSingular } from 'cytoscape'
+
+// fcose is a third-party cytoscape layout — its options are not part of the
+// core LayoutOptions union (#9724).
+interface FcoseLayoutOptions extends cytoscape.BaseLayoutOptions {
+  quality?: 'draft' | 'default' | 'proof'
+  randomize?: boolean
+  componentSpacing?: number
+  nodeRepulsion?: number
+  edgeElasticity?: number
+  nestingFactor?: number
+  gravity?: number
+  numIter?: number
+  animate?: boolean
+  fit?: boolean
+  padding?: number
+}
 import { useCytoscapeLibrary } from '@/composables/charts/useCytoscapeLibrary'
 
 const { t } = useI18n()
@@ -679,7 +695,7 @@ function updateCytoscapeElements() {
       gravityRangeCompound: 1.5,
       initialEnergyOnMultiLevel: 0.15,
       multiLevelSpacing: 1.5
-    }).run()
+    } as FcoseLayoutOptions).run()
   } else {
     const cols = Math.ceil(Math.sqrt(nodeIds.size))
     let i = 0

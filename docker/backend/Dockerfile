@@ -25,12 +25,17 @@ RUN python3 -m pip install --no-cache-dir /app/autobot_shared
 # Copy root requirements (referenced by backend via -r ../requirements.txt)
 COPY requirements.txt /app/requirements-root.txt
 
-# Install backend dependencies (filter out local refs, install root deps separately)
+# Install backend dependencies (filter out local refs, install root deps separately).
+# torch/torchvision are excluded from the filtered list and installed explicitly from
+# the CPU index, so the default-PyPI CUDA build (libtorch_cuda.so) is never pulled into
+# this CPU image (#10251). vLLM + its CUDA stack are no longer default deps; GPU
+# deployments add them via requirements-gpu.txt.
 COPY autobot-backend/requirements.txt /tmp/requirements.txt
-RUN grep -v -E "(autobot.shared|^-r )" /tmp/requirements.txt > /app/requirements-filtered.txt \
+RUN grep -v -E "(autobot.shared|^-r |^torch==|^torchvision==)" /tmp/requirements.txt \
+        > /app/requirements-filtered.txt \
     && python3 -m pip install --no-cache-dir -r /app/requirements-root.txt \
     && python3 -m pip install --no-cache-dir \
-        "torch>=2.11.0" "torchvision>=0.26.0" \
+        torch==2.12.1 torchvision==0.27.1 \
         --index-url https://download.pytorch.org/whl/cpu \
     && python3 -m pip install --no-cache-dir -r /app/requirements-filtered.txt
 
@@ -40,13 +45,55 @@ FROM python:3.12-slim-bookworm AS production
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install runtime deps
+# --- claude CLI install (GH#9950) ---
+# Replaces the prior unpinned `curl | bash` supply-chain risk with Anthropic's
+# official SIGNED apt repository — the same keyring + sources-list + apt-get
+# pattern used for `gh` below. apt verifies every package against the Claude Code
+# release signing key on every install, so there is no manual sha256 to supply
+# and no self-updating-installer hash to chase. The signing key (fingerprint
+# 31DD DE24 DDFA B679 F42D 7BD2 BAA9 29FF 1A7E CACE) is the stable trust anchor;
+# new releases are just newer signed packages, so the build never fails-closed on
+# an upstream installer refresh. apt installs do not auto-update (correct for an
+# immutable image — the native curl|bash installer auto-updates in the background).
+#
+# CLAUDE_CLI_VERSION pins an exact package version for reproducible builds
+# (e.g. 2.1.89); leave empty to take the current build from the stable channel.
+ARG CLAUDE_CLI_VERSION=""
+
+# Install runtime deps + LLC agent CLIs (GH#9793) from signed apt repos — no
+# pipe-to-bash for either CLI. `claude` lands on the system PATH (no HOME
+# redirect / symlink needed); the build-time `--version` checks prove both
+# resolve, so an install regression fails the build instead of silently
+# breaking LLC dispatch.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl \
+    curl ca-certificates \
+    && install -m 0755 -d /etc/apt/keyrings \
+    # gh — official GitHub signed apt repo
+    && curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+       | tee /etc/apt/keyrings/githubcli-archive-keyring.gpg > /dev/null \
+    && chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
+       > /etc/apt/sources.list.d/github-cli.list \
+    # claude-code — official Anthropic signed apt repo (stable channel)
+    && curl -fsSL https://downloads.claude.ai/keys/claude-code.asc \
+       -o /etc/apt/keyrings/claude-code.asc \
+    && chmod go+r /etc/apt/keyrings/claude-code.asc \
+    && echo "deb [signed-by=/etc/apt/keyrings/claude-code.asc] https://downloads.claude.ai/claude-code/apt/stable stable main" \
+       > /etc/apt/sources.list.d/claude-code.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends gh \
+    && if [ -n "$CLAUDE_CLI_VERSION" ]; then \
+         apt-get install -y --no-install-recommends "claude-code=${CLAUDE_CLI_VERSION}"; \
+       else \
+         apt-get install -y --no-install-recommends claude-code; \
+       fi \
+    && gh --version \
+    && claude --version \
     && rm -rf /var/lib/apt/lists/*
 
-# Create non-root user
-RUN groupadd -r autobot && useradd -r -g autobot -d /app autobot
+# Create non-root user. Pin uid/gid 999 to match the SLM image (#9905) so the
+# shared autobot_secrets volume is owned/readable consistently across services.
+RUN groupadd -r --gid 999 autobot && useradd -r --uid 999 -g autobot -d /app autobot
 
 WORKDIR /app
 
@@ -63,6 +110,9 @@ COPY autobot-backend/ /app/autobot-backend/
 # Copy shared config files (llm_models, permission_rules) into backend config dir
 COPY autobot-infrastructure/shared/config/llm_models.yaml /app/autobot-backend/config/llm_models.yaml
 COPY autobot-infrastructure/shared/config/permission_rules.yaml /app/autobot-backend/config/permission_rules.yaml
+
+# Copy entrypoint script (runs migrations before app start, #9759)
+COPY docker/backend/entrypoint.sh /app/entrypoint.sh
 
 # Create required directories (including /opt/autobot for model storage)
 RUN mkdir -p /app/data /app/logs /app/autobot-backend/data /opt/autobot/data \
@@ -84,6 +134,9 @@ EXPOSE 8001
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=3 \
     CMD curl -f http://localhost:8001/api/system/health || exit 1
+
+# Runs Alembic migrations for Postgres-backed user modes, then exec's CMD (#9759)
+ENTRYPOINT ["/app/entrypoint.sh"]
 
 CMD ["python3", "-m", "uvicorn", "main:app", \
      "--host", "0.0.0.0", "--port", "8001", \

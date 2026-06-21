@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 /**
  * Vite Configuration for AutoBot Frontend - SIMPLIFIED to fix circular dependencies
  */

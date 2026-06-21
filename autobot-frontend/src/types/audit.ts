@@ -11,6 +11,8 @@
 /**
  * Audit result types matching backend AuditResult enum
  */
+import type { IconName } from '@/components/ui/Icon.vue'
+
 export type AuditResult = 'success' | 'denied' | 'failed' | 'error'
 
 /**
@@ -132,7 +134,7 @@ export interface AuditFilter {
 export interface AuditResultConfig {
   label: string
   color: string
-  icon: string
+  icon: IconName
   bgClass: string
   textClass: string
 }
@@ -144,28 +146,28 @@ export const AUDIT_RESULT_CONFIG: Record<AuditResult, AuditResultConfig> = {
   success: {
     label: 'Success',
     color: 'green',
-    icon: 'fas fa-check-circle',
+    icon: 'check-circle',
     bgClass: 'bg-green-100',
     textClass: 'text-green-700'
   },
   denied: {
     label: 'Denied',
     color: 'red',
-    icon: 'fas fa-ban',
+    icon: 'ban',
     bgClass: 'bg-red-100',
     textClass: 'text-red-700'
   },
   failed: {
     label: 'Failed',
     color: 'orange',
-    icon: 'fas fa-times-circle',
+    icon: 'times-circle',
     bgClass: 'bg-orange-100',
     textClass: 'text-orange-700'
   },
   error: {
     label: 'Error',
     color: 'yellow',
-    icon: 'fas fa-exclamation-triangle',
+    icon: 'exclamation-triangle',
     bgClass: 'bg-yellow-100',
     textClass: 'text-yellow-700'
   }

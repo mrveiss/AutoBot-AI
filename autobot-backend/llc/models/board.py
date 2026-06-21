@@ -28,7 +28,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from user_management.models.base import Base
 
-from .enums import BoardType
+from .enums import BoardType, pg_enum_values
 
 
 class LLCBoard(Base):
@@ -49,7 +49,7 @@ class LLCBoard(Base):
     project_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True, index=True)
     sprint_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True, index=True)
     type: Mapped[str] = mapped_column(
-        sa.Enum(BoardType, name="boardtype", create_type=False),
+        sa.Enum(BoardType, name="boardtype", create_type=False, values_callable=pg_enum_values),
         nullable=False,
         index=True,
     )

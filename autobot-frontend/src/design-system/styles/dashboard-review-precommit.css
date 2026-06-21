@@ -1,0 +1,70 @@
+/* Copyright 2025-2026 mrveiss
+ * SPDX-License-Identifier: Apache-2.0
+ * AutoBot - AI-Powered Automation Platform
+ * Author: mrveiss
+ *
+ * Shared styles for the code-review + precommit dashboards (#10301, part of #9859).
+ * Byte-identical scoped-CSS rule blocks; selectors are disjoint from each
+ * including component's remaining rules ⇒ <style scoped src> is order-
+ * independent and identical to inlining.
+ */
+
+.header-content .icon {
+  font-size: 1.75rem;
+}
+
+.action-btn.secondary:hover:not(:disabled) {
+  background: var(--bg-quaternary);
+}
+
+.action-btn.text {
+  background: transparent;
+  color: var(--accent-color);
+  padding: var(--spacing-1) var(--spacing-2);
+}
+
+.summary-card {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-3);
+  padding: var(--spacing-4);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-color);
+}
+
+.card-icon {
+  font-size: var(--text-2xl);
+}
+
+.card-content {
+  display: flex;
+  flex-direction: column;
+}
+
+.card-label {
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+}
+
+.severity-badge {
+  font-size: var(--text-sm);
+}
+
+.history-item:hover {
+  background: var(--bg-quaternary);
+}
+
+.history-stats {
+  display: flex;
+  gap: var(--spacing-2);
+}
+
+.empty-state.small {
+  padding: var(--spacing-6) var(--spacing-4);
+}
+
+.empty-state p {
+  margin: var(--spacing-0);
+  font-size: var(--text-sm);
+}

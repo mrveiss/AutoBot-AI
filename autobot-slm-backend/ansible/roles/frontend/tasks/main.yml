@@ -156,6 +156,23 @@
   changed_when: true
   tags: ['frontend', 'npm']
 
+# #10084: Vite bakes VITE_* into the bundle at BUILD time from .env* files in
+# the project root (vite.config.js → loadEnv(mode, cwd)). The /etc/autobot copy
+# above is not on that path, so without this the bundle ships with NO VITE_*
+# values — the app only survives on vite.config's `|| '127.0.0.1'` fallbacks and
+# any flag without a fallback (e.g. VITE_FEATURE_*) is silently absent. Deploy
+# the same template to the build root as .env.production (loaded by `vite build`,
+# which runs in production mode) immediately before the build.
+- name: "Frontend | Deploy build-time .env.production for Vite (#10084)"
+  ansible.builtin.template:
+    src: frontend.env.j2
+    dest: "{{ frontend_install_dir }}/autobot-frontend/.env.production"
+    mode: "0640"
+    owner: "{{ frontend_user }}"
+    group: "{{ frontend_group }}"
+  when: package_json_path.stat.exists
+  tags: ['frontend', 'build', 'config']
+
 - name: "Frontend | Build production frontend"
   command: npx vite build
   args:
@@ -164,6 +181,28 @@
   become_user: "{{ frontend_user }}"
   when: package_json_path.stat.exists
   tags: ['frontend', 'build']
+
+# #9952: Resolve co-location from the filesystem BEFORE the nginx tasks.
+# The slm_colocated_frontend fact is otherwise only set in Phase 4c
+# (provision-fleet-roles.yml) — during Phase 4b it is undefined, so this role
+# used to enable the standalone site on a co-located manager, the restart
+# handler hit nginx's duplicate-upstream emerg, and the host was dropped
+# before 4c's cleanup. Same detection method Phase 4c uses.
+- name: "Frontend | Stat SLM nginx config to detect co-location (#9952)"
+  ansible.builtin.stat:
+    path: "/etc/nginx/sites-available/{{ slm_nginx_config | default('autobot-slm') }}"
+  register: _frontend_slm_nginx_stat
+  become: true
+  tags: ['frontend', 'nginx']
+
+- name: "Frontend | Set co-location flag from filesystem (#9952)"
+  ansible.builtin.set_fact:
+    slm_colocated_frontend: >-
+      {{
+        (slm_colocated_frontend | default(false) | bool) or
+        (_frontend_slm_nginx_stat.stat.exists | default(false) | bool)
+      }}
+  tags: ['frontend', 'nginx']
 
 # Skip nginx config when co-located with SLM — SLM nginx handles both (#2829)
 - name: "Frontend | Configure nginx"

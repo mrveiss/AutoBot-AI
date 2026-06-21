@@ -655,18 +655,21 @@ class VisionStatusFeaturesResponse(BaseModel):
 
 
 class VisionStatusResponse(BaseModel):
-    """Response for GET /vision/status.
+    """Response for GET /vision/status (api/vision.py::get_vision_status).
 
-    Error path returns only service+status+error — extra fields allowed."""
+    Success path: service, status, features, supported_element_types,
+                  supported_interaction_types.
+    Error path:   service, status, error  (features/counts absent).
+    All success-only fields are Optional so the model validates both shapes.
+    """
 
-    model_config = {"extra": "allow"}
-
-    timestamp: float | None = None
-    overall_status: str | None = None
-    total_services: int | None = None
-    healthy_services: int | None = None
-    degraded_services: int | None = None
-    critical_services: int | None = None
+    service: str
+    status: str
+    features: VisionStatusFeaturesResponse | None = None
+    supported_element_types: int | None = None
+    supported_interaction_types: int | None = None
+    # Present only on the error path
+    error: str | None = None
 
 
 class VMStatusItem(BaseModel):
@@ -3972,6 +3975,25 @@ class TelegramBotConfigResponse(BaseModel):
     status: str
     message: str
     webhook_url: Optional[str] = None
+
+
+class WhatsAppConfigRequest(BaseModel):
+    """Request to configure the WhatsApp Business API channel (GH#9007)."""
+
+    access_token: str = Field(..., description="Meta WhatsApp Business API access token")
+    phone_number_id: str = Field(..., description="WhatsApp Business phone number ID")
+    app_secret: str = Field(..., description="Meta app secret for webhook signature verification")
+    verify_token: str = Field(..., description="Token echoed during Meta webhook subscription challenge")
+    business_account_id: Optional[str] = Field(None, description="WhatsApp Business Account ID (optional)")
+    base_url: Optional[str] = Field(None, description="Override API base URL for self-hosted deployments")
+
+
+class WhatsAppConfigResponse(BaseModel):
+    """Response for WhatsApp Business API configuration (GH#9007)."""
+
+    status: str
+    message: str
+    phone_number: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------

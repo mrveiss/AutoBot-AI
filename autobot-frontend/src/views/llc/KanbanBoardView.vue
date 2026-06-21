@@ -131,22 +131,7 @@ const route = useRoute()
 const companyId = computed(() => route.params.companyId as string)
 const boardId = computed(() => route.params.boardId as string)
 
-interface WorkItem {
-  id: string
-  identifier: string
-  type: string
-  title: string
-  priority: string
-  story_points: number | null
-  assignee_name: string | null
-  assignee_type: 'human' | 'agent' | null
-  sprint_id: string | null
-  column_id: string
-  status: string
-  labels: string[]
-  acceptance_criteria: string[]
-  description: string
-}
+import type { WorkItem } from './workItemTypes'
 
 interface BoardColumn {
   id: string
@@ -263,6 +248,9 @@ const KanbanCard = defineComponent({
       h('div', { class: 'card-header-row' }, [
         h('span', { class: 'card-id' }, props.item.identifier),
         h('span', { class: `card-type type-${props.item.type}` }, props.item.type),
+        props.item.linked_pr_urls?.length
+          ? h('span', { class: 'pr-badge', title: `${props.item.linked_pr_urls.length} PR(s) linked` }, '🔗')
+          : null,
       ]),
       h('p', { class: 'card-title' }, props.item.title),
       h('div', { class: 'card-footer-row' }, [
@@ -461,6 +449,17 @@ onUnmounted(() => ws?.close())
   border-radius: 9999px;
   font-weight: 500;
   text-transform: capitalize;
+}
+
+.pr-badge {
+  font-size: 0.7rem;
+  cursor: help;
+  opacity: 0.8;
+  transition: opacity 0.15s;
+}
+
+.pr-badge:hover {
+  opacity: 1;
 }
 
 .type-epic { background: #ddd6fe; color: #5b21b6; }

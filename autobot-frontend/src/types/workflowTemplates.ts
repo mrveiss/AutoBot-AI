@@ -31,7 +31,7 @@ import type {
   WorkflowStepStatus,
   RiskLevel,
 } from './_generated/workflow'
-export type { PromptSpec, WorkflowTask, WorkflowPlan, RiskLevel }
+export type { PromptSpec, WorkflowTask, WorkflowPlan, WorkflowStepStatus, RiskLevel }
 
 /**
  * Static template step — matches backend `_template_step_dict()` from
@@ -63,15 +63,8 @@ export interface TemplateStep {
  * declaration in `composables/useWorkflowBuilder.ts` is now a re-export
  * pointing at this definition (single source of truth).
  */
-export type WorkflowStepStatus =
-  | 'pending'
-  | 'waiting_approval'
-  | 'approved'
-  | 'executing'
-  | 'completed'
-  | 'skipped'
-  | 'failed'
-  | 'paused'
+// #9724: the union itself is generated (see import above) — the previous
+// duplicate local declaration conflicted with the import (TS2440).
 
 /**
  * Runtime workflow step — matches backend

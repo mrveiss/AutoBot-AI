@@ -98,7 +98,7 @@
             <template v-else-if="node.type === 'switch'">
               <input v-model="(node.data as any).switch_on" :placeholder="$t('workflow.canvas.switchOnPlaceholder')" class="mono" @click.stop />
               <div class="switch-cases">
-                <div v-for="(c, i) in ((node.data as any).cases || [])" :key="i" class="switch-case-row">
+                <div v-for="(c, i) in (((node.data as any).cases || []) as string[])" :key="i" class="switch-case-row">
                   <input v-model="(node.data as any).cases[i]" :placeholder="`case ${i + 1}`" class="mono" @click.stop />
                   <button class="delete-case-btn" @click.stop="removeCase(node, i)">×</button>
                 </div>
@@ -208,6 +208,8 @@ const nodeLabels = computed(() => ({
   condition: t('workflow.canvas.conditionLabel'),
   switch: t('workflow.canvas.switchLabel'),
   parallel: t('workflow.canvas.parallelLabel'),
+  // #9724: 'loop' is part of WorkflowNode['type'] but had no label entry
+  loop: t('workflow.canvas.loopLabel', 'Loop'),
   'vision-capture': t('workflow.canvas.visionCapture'),
   'vision-find-element': t('workflow.canvas.visionFindElement'),
   'vision-click': t('workflow.canvas.visionClick'),

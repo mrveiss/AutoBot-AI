@@ -14,7 +14,7 @@ backend_code_dir: /opt/autobot/autobot-backend
 backend_log_dir: /var/log/autobot
 backend_data_dir: /var/lib/autobot
 backend_host: "0.0.0.0"
-backend_port: 8443
+backend_port: 8001
 backend_workers: 1  # Issue #876: Single worker to prevent deadlock
 backend_redis_host: "{{ hostvars[groups['database'][0]]['ansible_host'] | default('127.0.0.1') }}"
 backend_redis_port: 6379

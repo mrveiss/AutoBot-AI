@@ -2,9 +2,12 @@
 # SPDX-License-Identifier: Apache-2.0
 """LLC API router (GH#8251)."""
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+
+from llc.deps import postgres_required
 
 from .activity import router as activity_router
+from .adapters import router as adapters_router
 from .agent_api import router as agent_router
 from .agent_hires import router as agent_hires_router
 from .agent_wiki import router as agent_wiki_router
@@ -21,21 +24,28 @@ from .context import router as context_router
 from .controls import router as controls_router
 from .costs import router as costs_router
 from .decisions import router as decisions_router
+from .github_webhooks import router as github_webhooks_router
 from .goals import router as goals_router
 from .health import router as health_router
 from .labels import router as labels_router
 from .portability import router as portability_router
+from .replay import router as replay_router
 from .review_gate_policies import router as review_gate_router
 from .routines import router as routines_router
+from .runs import heartbeat_runs_router
 from .runs import router as runs_router
 from .secrets import router as secrets_router
 from .sprints import router as sprints_router
 from .templates import router as templates_router
 from .work_items import router as work_items_router
 
-router = APIRouter(prefix="/llc", tags=["llc"])
+# GH#10010: All LLC routes require Postgres.  In single_user mode the session
+# factory hard-raises; the postgres_required dependency converts that to a
+# clean 503 Service Unavailable before any handler or sub-dependency runs.
+router = APIRouter(prefix="/llc", tags=["llc"], dependencies=[Depends(postgres_required)])
 router.include_router(activity_router)
 router.include_router(boards_router)
+router.include_router(adapters_router)
 router.include_router(approvals_router)
 router.include_router(backlog_router)
 router.include_router(budget_router)
@@ -48,11 +58,14 @@ router.include_router(health_router)
 router.include_router(secrets_router)
 router.include_router(sprints_router)
 router.include_router(work_items_router)
+router.include_router(github_webhooks_router)
 router.include_router(api_keys_router)
 router.include_router(agent_router)
 router.include_router(agents_router)
 router.include_router(agent_wiki_router)
 router.include_router(runs_router)
+router.include_router(heartbeat_runs_router)
+router.include_router(replay_router)
 router.include_router(ceo_chat_router)
 router.include_router(decisions_router)
 router.include_router(routines_router)

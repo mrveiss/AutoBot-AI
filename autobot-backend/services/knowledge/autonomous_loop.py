@@ -563,14 +563,20 @@ class AutonomousLoopRunner:
 
             fallback = []
             for _ in range(min(3, self.max_variants)):
-                sem_w = round(random.uniform(0.5, 0.9), 2)
+                sem_w = round(random.uniform(0.5, 0.9), 2)  # nosec B311 - UCB1 exploration weight, not cryptographic
                 fallback.append(
                     {
                         "hybrid_weight_semantic": sem_w,
                         "hybrid_weight_keyword": round(1.0 - sem_w, 2),
-                        "diversity_threshold": round(random.uniform(0.1, 0.8), 2),
-                        "ucb1_exploration_constant": round(random.uniform(0.5, 3.0), 2),
-                        "max_results_per_stage": random.choice([5, 10, 20, 30]),
+                        "diversity_threshold": round(
+                            random.uniform(0.1, 0.8), 2  # nosec B311 - diversity sampling, not cryptographic
+                        ),
+                        "ucb1_exploration_constant": round(
+                            random.uniform(0.5, 3.0), 2  # nosec B311 - UCB1 exploration constant, not cryptographic
+                        ),
+                        "max_results_per_stage": random.choice(
+                            [5, 10, 20, 30]
+                        ),  # nosec B311 - variant selection for autonomous loop, not cryptographic
                     }
                 )
             logger.info("AutonomousLoop[%s] HYPOTHESIZE: using %d fallback variants", run_id, len(fallback))

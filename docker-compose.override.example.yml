@@ -30,7 +30,10 @@ services:
   autobot-backend:
     # Dev entrypoint restores symlinks and pip packages before starting
     # the application. See docker/backend/dev-entrypoint.sh for details.
-    entrypoint: ["/app/docker/backend/dev-entrypoint.sh"]
+    # GH#9910: chained through with-secrets.sh so dev mode also loads the
+    # auto-provisioned signing secret (GH#9905); the /secrets volume and
+    # with-secrets.sh mounts are inherited from the base compose file.
+    entrypoint: ["/bin/sh", "/usr/local/bin/with-secrets.sh", "/app/docker/backend/dev-entrypoint.sh"]
     volumes:
       - ./autobot-backend:/app/autobot-backend
       - ./autobot_shared:/app/autobot_shared
@@ -66,7 +69,10 @@ services:
   autobot-slm:
     # Dev entrypoint restores symlinks, pip packages, and runs migrations
     # before starting the application. Replaces the production entrypoint.
-    entrypoint: ["/app/docker/slm/dev-entrypoint.sh"]
+    # GH#9910: chained through with-secrets.sh so dev mode also loads the
+    # auto-provisioned signing secret (GH#9905); the /secrets volume and
+    # with-secrets.sh mounts are inherited from the base compose file.
+    entrypoint: ["/bin/sh", "/usr/local/bin/with-secrets.sh", "/app/docker/slm/dev-entrypoint.sh"]
     volumes:
       - ./autobot-slm-backend:/app/autobot-slm-backend
       - ./autobot_shared:/app/autobot_shared

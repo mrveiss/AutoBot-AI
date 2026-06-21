@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """sh-echo-debug-smoke — infra-runner smoke-test rule.
 
 Detects `echo "DEBUG: ..."` in shell scripts. Exists only to prove the infra
@@ -14,7 +16,7 @@ from tools.lint.canonical.diagnostic import Diagnostic
 RULE_ID = "sh-echo-debug-smoke"
 ISSUE = "#7458"
 SEVERITY = "warn"
-TARGETS = ["scripts", "tests/lint/canonical/fixtures"]
+TARGETS = ["scripts", "repo_tests/lint/canonical/fixtures"]
 DESCRIPTION = "echo DEBUG: in shell scripts — pipeline smoke-test rule"
 FIX_HINT = "Use a structured logger or remove debug echoes before shipping."
 

@@ -27,7 +27,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from user_management.models.base import Base
 
-from .enums import WorkItemPriority, WorkItemRelationType, WorkItemStatus, WorkItemType
+from .enums import WorkItemPriority, WorkItemRelationType, WorkItemStatus, WorkItemType, pg_enum_values
 
 
 class LLCWorkItem(Base):
@@ -58,7 +58,7 @@ class LLCWorkItem(Base):
 
     # Hierarchy discriminator
     type: Mapped[str] = mapped_column(
-        sa.Enum(WorkItemType, name="workitemtype", create_type=False),
+        sa.Enum(WorkItemType, name="workitemtype", create_type=False, values_callable=pg_enum_values),
         nullable=False,
     )
 
@@ -69,15 +69,23 @@ class LLCWorkItem(Base):
     acceptance_criteria: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
     labels: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=sa.text("'[]'::jsonb"))
 
+    # GitHub PR linking (GH#9625)
+    linked_pr_urls: Mapped[list] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=list,
+        server_default=sa.text("'[]'::jsonb"),
+    )
+
     # Status / priority
     status: Mapped[str] = mapped_column(
-        sa.Enum(WorkItemStatus, name="workitemstatus", create_type=False),
+        sa.Enum(WorkItemStatus, name="workitemstatus", create_type=False, values_callable=pg_enum_values),
         nullable=False,
         server_default=WorkItemStatus.BACKLOG.value,
         index=True,
     )
     priority: Mapped[str] = mapped_column(
-        sa.Enum(WorkItemPriority, name="workitempriority", create_type=False),
+        sa.Enum(WorkItemPriority, name="workitempriority", create_type=False, values_callable=pg_enum_values),
         nullable=False,
         server_default=WorkItemPriority.MEDIUM.value,
         index=True,
@@ -100,6 +108,8 @@ class LLCWorkItem(Base):
     # Atomic checkout lock fields
     checkout_run_id: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     checkout_locked_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Free-text intent supplied at checkout time — audit trail (GH#9532)
+    checkout_intent: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Optimistic concurrency version counter
     version: Mapped[int] = mapped_column(Integer, nullable=False, server_default="1")
@@ -112,6 +122,11 @@ class LLCWorkItem(Base):
     reviewer_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True, index=True)
     reviewer_agent_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True, index=True)
     review_brief: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+
+    # Planned schedule for Gantt/timeline view (GH#9020) — distinct from the
+    # actual started_at/completed_at timestamps below.
+    scheduled_start: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    scheduled_end: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Lifecycle timestamps
     started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -213,7 +228,7 @@ class LLCWorkItemRelation(Base):
         index=True,
     )
     relation_type: Mapped[str] = mapped_column(
-        sa.Enum(WorkItemRelationType, name="workitemrelationtype", create_type=False),
+        sa.Enum(WorkItemRelationType, name="workitemrelationtype", create_type=False, values_callable=pg_enum_values),
         nullable=False,
     )
     created_by_agent_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)

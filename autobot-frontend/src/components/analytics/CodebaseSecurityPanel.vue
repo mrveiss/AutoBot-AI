@@ -134,17 +134,17 @@ const tabs = [
   {
     id: 'security' as const,
     labelKey: 'analytics.codebase.intelligence.security',
-    icon: 'shield-alt',
+    icon: 'shield-alt' as const,
   },
   {
     id: 'performance' as const,
     labelKey: 'analytics.codebase.intelligence.performanceLabel',
-    icon: 'tachometer-alt',
+    icon: 'tachometer-alt' as const,
   },
   {
     id: 'redis' as const,
     labelKey: 'analytics.codebase.intelligence.redisLabel',
-    icon: 'database',
+    icon: 'database' as const,
   },
 ]
 
