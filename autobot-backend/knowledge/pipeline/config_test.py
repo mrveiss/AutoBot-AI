@@ -123,3 +123,50 @@ class TestGetDefaultConfig:
         assert "classify_document" in task_names
         assert "chunk_text" in task_names
         assert "extract_metadata" in task_names
+
+
+# ---------------------------------------------------------------------------
+# Issue #9018 Phase 2 — KAG ingestion pipeline profile
+# ---------------------------------------------------------------------------
+
+from knowledge.pipeline.config import (  # noqa: E402
+    KAG_KNOWLEDGE_PIPELINE,
+    get_kag_pipeline_config,
+    load_pipeline_config as _load_pipeline_config,
+    select_pipeline_config,
+)
+
+
+class TestKAGPipelineProfile:
+    """Tests for the configurable KAG ingestion profile (#9018 Phase 2)."""
+
+    def test_kag_config_validates(self):
+        """KAG profile passes pipeline config validation."""
+        assert _load_pipeline_config(get_kag_pipeline_config())["name"] == "kag_knowledge_enrichment"
+
+    def test_kag_seeds_graph_loaders(self):
+        """KAG profile adds mesh_seeder + redis_graph loaders alongside chromadb."""
+        loaders = {t["task"] for t in get_kag_pipeline_config()["load"]}
+        assert {"chromadb", "mesh_seeder", "redis_graph"} <= loaders
+
+    def test_kag_reuses_entity_relationship_cognifiers(self):
+        """KAG profile reuses existing ECL entity/relationship cognifiers."""
+        cognify = {t["task"] for t in get_kag_pipeline_config()["cognify"]}
+        assert {"extract_entities", "extract_relationships"} <= cognify
+
+    def test_get_kag_config_returns_copy(self):
+        """Each call returns an independent deep copy."""
+        a = get_kag_pipeline_config()
+        a["load"].clear()
+        assert KAG_KNOWLEDGE_PIPELINE["load"], "module-level template must not mutate"
+
+    def test_select_default_when_kag_disabled(self):
+        """Inert default: kag_enabled=False → standard pipeline, no graph loaders."""
+        cfg = select_pipeline_config(kag_enabled=False)
+        loaders = {t["task"] for t in cfg["load"]}
+        assert cfg["name"] == "knowledge_enrichment"
+        assert "mesh_seeder" not in loaders
+
+    def test_select_kag_when_enabled(self):
+        """kag_enabled=True → KAG profile selected."""
+        assert select_pipeline_config(kag_enabled=True)["name"] == "kag_knowledge_enrichment"
