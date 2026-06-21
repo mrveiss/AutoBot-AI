@@ -93,3 +93,17 @@ class SSOTestResponse(BaseModel):
     success: bool
     message: str
     details: dict[str, Any] | None = None
+
+
+class SSOProviderHealthResponse(BaseModel):
+    """Response model for a single provider's health summary."""
+
+    provider_id: uuid.UUID
+    name: str
+    success_count: int
+    failure_count: int
+    last_success_at: datetime | None
+    health_status: str  # healthy | warning | error | unknown
+
+    class Config:
+        from_attributes = True
