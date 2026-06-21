@@ -665,7 +665,7 @@ export function useAutobotApi() {
     uptime_seconds?: number
     services?: { name: string; status: string }[]
   }> {
-    const response = await client.get('/health/detailed')
+    const response = await client.get('/system/health/detailed')
     const data = response.data
     // Issue #997: Backend returns metrics nested in components as "12.5%" strings.
     // Transform to flat numeric fields expected by AdminMonitoringView.
@@ -716,8 +716,26 @@ export function useAutobotApi() {
       trend?: 'up' | 'down' | 'stable'
     }>
   }> {
-    const response = await client.get('/metrics/summary')
-    return response.data
+    // #10379: no backend /metrics/summary exists; derive CPU/Memory/Disk metric
+    // cards from the detailed system-health endpoint (same data, correct path).
+    const response = await client.get('/system/health/detailed')
+    const components: Record<string, string> = response.data?.components || {}
+    const pct = (s?: string): number => {
+      const n = parseFloat(s ?? '')
+      return isNaN(n) ? 0 : n
+    }
+    const card = (name: string, v: number) => ({
+      name,
+      value: `${v}%`,
+      status: (v > 90 ? 'critical' : v > 75 ? 'warning' : 'good') as 'good' | 'warning' | 'critical',
+    })
+    return {
+      metrics: [
+        card('CPU', pct(components.cpu_usage)),
+        card('Memory', pct(components.memory_usage)),
+        card('Disk', pct(components.disk_usage)),
+      ],
+    }
   }
 
   // =============================================================================
