@@ -310,6 +310,7 @@ async def get_domain_security_stats(request: Request):
         # Get threat intel status
         threat_status = await threat_service.get_service_status()
 
+        _dsec_cfg = domain_manager.config.config.get("domain_security", {})
         stats = {
             "whitelist_count": len(domain_manager.whitelist_patterns),
             "blacklist_count": len(domain_manager.blacklist_patterns),
@@ -321,9 +322,11 @@ async def get_domain_security_stats(request: Request):
                 "cache_size": threat_status.get("cache", {}).get("size", 0),
             },
             "settings": {
-                "require_https": domain_manager._require_https,
-                "max_redirects": domain_manager._max_redirects,
-                "check_dns": domain_manager._check_dns,
+                # Read from the domain_security config with safe defaults — these
+                # are not manager attributes (#10384-cascade).
+                "require_https": _dsec_cfg.get("require_https", False),
+                "max_redirects": _dsec_cfg.get("max_redirects", 0),
+                "check_dns": _dsec_cfg.get("check_dns", False),
             },
         }
 
