@@ -235,7 +235,7 @@ Lifecycle of one `getHealth()` call:
 
 ### Minimal Usage
 
-`useProbeBackedHealth<R>(options)` is a factory: it returns a `getHealth: () => Promise<R | null>` function you expose from your API composable and call from `setup()`.
+`useProbeBackedHealth<R>(options)` is a factory: it returns a `getHealth: () => Promise<R>` function you expose from your API composable and call from `setup()`. It always resolves to `R` (the error path yields `buildUnavailable(...)`, never `null`).
 
 ```typescript
 import { ref } from 'vue'
