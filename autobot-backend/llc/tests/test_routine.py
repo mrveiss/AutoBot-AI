@@ -120,7 +120,6 @@ async def test_routine_create() -> None:
 @pytest.mark.asyncio
 async def test_routine_list() -> None:
     active = _routine(status=RoutineStatus.ACTIVE)
-    archived = _routine(status=RoutineStatus.ARCHIVED)
     session = _session(scalars=[active])
     session.execute.return_value.scalars.return_value.all.return_value = [active]
 
@@ -265,20 +264,13 @@ async def test_routine_runs_list() -> None:
 
 @pytest.mark.asyncio
 async def test_api_create_routine() -> None:
-    import importlib
-    import sys
-
     from fastapi import FastAPI
 
-    # Import directly from the module file to avoid llc/api/__init__.py
-    # which triggers the full app import chain (pre-existing environment constraint).
-    spec = importlib.util.spec_from_file_location(
-        "llc.api.routines",
-        str(__file__).replace("/tests/test_routine.py", "/api/routines.py"),
-    )
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules.setdefault("llc.api.routines", mod)
-    spec.loader.exec_module(mod)
+    # GH#9995/GH#10140: llc.api.routines imports cleanly now; the old
+    # spec_from_file_location + sys.modules.setdefault hack leaked a half-loaded
+    # module into the global registry.
+    import llc.api.routines as mod
+
     router = mod.router
 
     routine_row = _routine()
@@ -318,18 +310,10 @@ async def test_api_create_routine() -> None:
 
 @pytest.mark.asyncio
 async def test_api_trigger() -> None:
-    import importlib
-    import sys
-
     from fastapi import FastAPI
 
-    spec = importlib.util.spec_from_file_location(
-        "llc.api.routines",
-        str(__file__).replace("/tests/test_routine.py", "/api/routines.py"),
-    )
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules.setdefault("llc.api.routines", mod)
-    spec.loader.exec_module(mod)
+    import llc.api.routines as mod
+
     router = mod.router
 
     app = FastAPI()
@@ -355,9 +339,11 @@ async def test_api_trigger() -> None:
         client = TestClient(app, raise_server_exceptions=True)
         resp = client.post(f"/api/llc/routines/{routine_row.id}/trigger")
 
-    assert resp.status_code == 201
+    # The trigger endpoint enqueues asynchronously → 202 Accepted.
+    assert resp.status_code == 202
     data = resp.json()
-    assert data["status"] == "queued"
+    assert data["routine_id"] == str(routine_row.id)
+    assert "message" in data
 
 
 # ---------------------------------------------------------------------------

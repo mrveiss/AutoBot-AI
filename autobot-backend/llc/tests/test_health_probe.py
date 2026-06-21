@@ -5,26 +5,15 @@
 """Unit tests for LLC health probe (GH#8259)."""
 
 import asyncio
-import sys
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-# Pre-stub modules involved in the circular-import chain that exists in the
-# test environment (GH#8259-disc).  This is needed so direct imports of
-# HeartbeatScheduler / LivenessMonitor do not trigger:
-#   llc.scheduler.__init__ → budget_watchdog → llc.services.budget
-#   → llc.services.__init__ → approval → from . import LLCServiceBase  (circular)
-# Using setdefault so we don't clobber a module that was already imported fine.
-for _stub_mod in (
-    "llc.services",
-    "llc.services.budget",
-    "llc.services.approval",
-    "llc.services.activity_log",
-    "llc.services.work_item_service",
-    "llc.scheduler.budget_watchdog",
-):
-    sys.modules.setdefault(_stub_mod, MagicMock())
+# GH#9995/GH#10140: the scheduler circular-import that once required pre-stubbing
+# llc.services here is resolved — HeartbeatScheduler / LivenessMonitor / the
+# health probe all import cleanly in the test environment. The old module-level
+# ``sys.modules.setdefault("llc.services", MagicMock())`` block leaked MagicMock
+# stubs into every test module collected after this one, masking regressions.
 
 
 # ---------------------------------------------------------------------------
@@ -49,6 +38,7 @@ def _base_metrics(**overrides) -> dict:
     base = {
         "heartbeat_scheduler_running": True,
         "liveness_monitor_running": True,
+        "session_checkpointer_running": True,
         "scheduler_last_tick_age_seconds": 2.5,
         "agents_overdue_degraded": 0,
         "agents_overdue_critical": 0,
@@ -125,7 +115,8 @@ def test_heartbeat_scheduler_is_running_when_task_alive():
     s._running = True
     mock_task = MagicMock(spec=asyncio.Task)
     mock_task.done.return_value = False
-    s._task = mock_task
+    # HeartbeatScheduler.is_running checks _poll_task (not the base _task).
+    s._poll_task = mock_task
     assert s.is_running is True
 
 
