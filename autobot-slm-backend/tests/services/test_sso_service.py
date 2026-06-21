@@ -1147,6 +1147,8 @@ class TestFindOrProvisionUserGroupSync:
         assert len(synced_args) == 1
         _, _, groups = synced_args[0]
         assert groups is None
+
+
 # Service return-signature: complete_oauth_login / complete_saml_login (C1 fix)
 # ---------------------------------------------------------------------------
 

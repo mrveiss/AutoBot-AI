@@ -759,12 +759,11 @@ def test_health_route_not_shadowed_by_provider_id_route():
     directly inspects api/sso.py's route path list to confirm the ordering
     constraint is satisfied in the production router definition.
     """
-    from pathlib import Path as _Path
-
     # --- Part 1: structural check — inspect the route paths in api/sso.py ---
     # We parse the file AST to find the order of @router.get() decorators
     # without executing the module (which would require all heavy deps).
     import ast as _ast
+    from pathlib import Path as _Path
 
     sso_py = _Path(__file__).parent.parent.parent / "api" / "sso.py"
     source = sso_py.read_text(encoding="utf-8")
