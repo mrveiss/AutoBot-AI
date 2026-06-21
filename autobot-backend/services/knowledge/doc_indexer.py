@@ -37,6 +37,35 @@ from services.knowledge.synthesis_schema_loader import SynthesisSchema, load_syn
 logger = get_logger(__name__)
 
 # ============================================================================
+# EMBEDDING-DIMENSION GUARD (Issue #10420)
+# ============================================================================
+
+# Map of embedding model name -> vector dimension. A Chroma collection's
+# dimension is fixed at creation, so swapping models (e.g. all-minilm 384 ->
+# nomic-embed-text 768) without migrating makes every upsert fail with a
+# dimension-mismatch error. We compare the active model's dimension against the
+# dimension recorded in an existing collection's provenance metadata.
+_KNOWN_DIMS: Dict[str, int] = {
+    "nomic-embed-text": 768,
+    "mxbai-embed-large": 1024,
+    "all-minilm": 384,
+    "bge-small-en-v1.5": 384,
+    "bge-large-en-v1.5": 1024,
+    "text-embedding-ada-002": 1536,
+}
+
+# Destructive recreate is OPT-IN only. Default is safe (off): on a mismatch the
+# operator gets a single actionable error instead of an index that is silently
+# wiped. Mirrors the connector-store env-bool convention (credential_store.py).
+AUTO_REINDEX_ON_DIM_MISMATCH_ENV = "AUTOBOT_KNOWLEDGE_AUTO_REINDEX_ON_DIM_MISMATCH"
+
+
+def _auto_reindex_on_dim_mismatch() -> bool:
+    """Return True when the operator has opted into destructive dim-mismatch recreate."""
+    return os.environ.get(AUTO_REINDEX_ON_DIM_MISMATCH_ENV, "false").strip().lower() in ("1", "true", "yes")
+
+
+# ============================================================================
 # TIER DEFINITIONS (from CLI tool)
 # ============================================================================
 
@@ -645,6 +674,9 @@ class DocIndexerService:
         # Issue #4451: per-org embedding model selection (None => __default__)
         self._org_id = org_id
         self.embedding_model_name: str | None = None
+        # Issue #10420: set when a dimension-mismatch recreate wiped the
+        # collection, so the next index_all() forces a full re-embed.
+        self._needs_reindex = False
         self.synthesis_schema: SynthesisSchema = self._load_schema()
 
     def _load_schema(self) -> SynthesisSchema:
@@ -673,10 +705,6 @@ class DocIndexerService:
 
             from llama_index.embeddings.ollama import OllamaEmbedding
 
-            from autobot_shared.embedding_provenance import (
-                EmbeddingProvenance,
-                provenance_to_metadata,
-            )
             from knowledge.backends import get_default_client
 
             chromadb_path = self._root_dir / "data" / "chromadb"
@@ -698,27 +726,16 @@ class DocIndexerService:
             embed_model_name = effective.embedding_model or "nomic-embed-text"
             self.embedding_model_name = embed_model_name
 
-            _KNOWN_DIMS: dict = {
-                "nomic-embed-text": 768,
-                "mxbai-embed-large": 1024,
-                "all-minilm": 384,
-                "bge-small-en-v1.5": 384,
-                "bge-large-en-v1.5": 1024,
-                "text-embedding-ada-002": 1536,
-            }
-            embed_dim = _KNOWN_DIMS.get(embed_model_name)
-
-            provenance_meta = (
-                provenance_to_metadata(EmbeddingProvenance(embed_model_name, embed_dim))
-                if embed_dim is not None
-                else {}
-            )
-            self._collection = self._client.get_or_create_collection(
-                name=self.COLLECTION_NAME,
-                metadata={"hnsw:space": "cosine", **provenance_meta},
-            )
-
+            # Embed model is created first so the collection guard can probe the
+            # model's true dimension when it is not in _KNOWN_DIMS (#10420).
             self._embed_model = OllamaEmbedding(model_name=embed_model_name, base_url=ollama_url)
+
+            embed_dim = await asyncio.to_thread(
+                self._resolve_embed_dim, embed_model_name, effective.embedding_dimension
+            )
+            self._collection = await asyncio.to_thread(
+                self._resolve_collection, embed_model_name, embed_dim
+            )
 
             doc_count = self._collection.count()
             logger.info(
@@ -737,9 +754,126 @@ class DocIndexerService:
             logger.error("Failed to initialize DocIndexerService: %s", e)
             return False
 
+    def _read_collection_provenance(self, name: str):
+        """Return stored EmbeddingProvenance of an existing collection, else None (#10420)."""
+        from autobot_shared.embedding_provenance import provenance_from_metadata
+
+        existing = [c for c in self._client.list_collections() if getattr(c, "name", None) == name]
+        if not existing:
+            return None
+        return provenance_from_metadata(getattr(existing[0], "metadata", None))
+
+    def _create_collection(self, name: str, model_name: str, embed_dim):
+        """Create (or get) the collection, writing embedding provenance metadata (#10420)."""
+        from autobot_shared.embedding_provenance import (
+            EmbeddingProvenance,
+            provenance_to_metadata,
+        )
+
+        provenance_meta = (
+            provenance_to_metadata(EmbeddingProvenance(model_name, embed_dim)) if embed_dim is not None else {}
+        )
+        return self._client.get_or_create_collection(
+            name=name,
+            metadata={"hnsw:space": "cosine", **provenance_meta},
+        )
+
+    def _peek_collection_dim(self, name: str):
+        """Return an existing collection's actual vector dimension, or None (#10420).
+
+        Fallback for legacy collections created before provenance metadata: the
+        dimension is read directly from a stored vector so a mismatch is still
+        detected instead of dropping every chunk.
+        """
+        try:
+            coll = self._client.get_collection(name)
+            if coll.count() == 0:
+                return None
+            peek = coll.peek(limit=1)
+            embs = peek.get("embeddings") if isinstance(peek, dict) else None
+            if embs is not None and len(embs) > 0 and embs[0] is not None:
+                return len(embs[0])
+        except Exception as e:  # collection absent / peek unsupported — no guard
+            logger.debug("#10420: could not peek collection dim for '%s': %s", name, e)
+        return None
+
+    def _handle_dim_mismatch(self, old_model: str, old_dim: int, model_name: str, embed_dim: int) -> None:
+        """Recreate the collection (flag ON) or raise once (flag OFF) on a dim mismatch (#10420)."""
+        from autobot_shared.embedding_provenance import EmbeddingMismatchError
+
+        if not _auto_reindex_on_dim_mismatch():
+            raise EmbeddingMismatchError(
+                f"#10420: collection '{self.COLLECTION_NAME}' was built with model "
+                f"'{old_model}' (dim {old_dim}) but the active model "
+                f"'{model_name}' produces dim {embed_dim}. Every upsert would be rejected. "
+                f"Set {AUTO_REINDEX_ON_DIM_MISMATCH_ENV}=true to delete and re-index the "
+                f"collection at the new dimension (old vectors are unusable), or revert to "
+                f"the original embedding model."
+            )
+        logger.warning(
+            "#10420: embedding dimension changed for collection '%s' "
+            "(%s dim %d -> %s dim %d); %s is set — deleting and re-indexing "
+            "(old vectors are unusable at the new dimension)",
+            self.COLLECTION_NAME,
+            old_model,
+            old_dim,
+            model_name,
+            embed_dim,
+            AUTO_REINDEX_ON_DIM_MISMATCH_ENV,
+        )
+        self._client.delete_collection(self.COLLECTION_NAME)
+        self._needs_reindex = True
+
+    def _resolve_embed_dim(self, model_name: str, configured_dim):
+        """Resolve the active model's embedding dimension (#10420).
+
+        Priority: explicit org config > _KNOWN_DIMS lookup > live probe. The
+        probe makes mismatch detection work for any model (e.g. a 3072-dim
+        model not in _KNOWN_DIMS), instead of silently skipping the guard and
+        dropping every chunk.
+        """
+        if configured_dim:
+            return int(configured_dim)
+        known = _KNOWN_DIMS.get(model_name)
+        if known is not None:
+            return known
+        try:
+            vec = self._embed_model.get_text_embedding("dimension probe")
+            return len(vec) if vec else None
+        except Exception as e:  # ollama unavailable / model error — fall back to no guard
+            logger.warning("#10420: could not probe embedding dimension for '%s': %s", model_name, e)
+            return None
+
+    def _resolve_collection(self, model_name: str, embed_dim=None):
+        """Resolve the docs collection, guarding against an embedding-dimension mismatch (#10420).
+
+        A Chroma collection's dimension is fixed at creation. If the active
+        model's dimension differs from the existing collection's recorded
+        dimension, every upsert would be rejected. ``_handle_dim_mismatch``
+        either recreates the collection (opt-in, destructive) or raises once
+        with an actionable message instead of flooding the log per chunk.
+
+        ``embed_dim`` is the active model's dimension (probed by the caller for
+        models outside ``_KNOWN_DIMS``); it falls back to the static lookup.
+        """
+        if embed_dim is None:
+            embed_dim = _KNOWN_DIMS.get(model_name)
+        stored = self._read_collection_provenance(self.COLLECTION_NAME)
+        if stored is not None:
+            old_dim, old_model = stored.dim, stored.model_name
+        else:
+            old_dim, old_model = self._peek_collection_dim(self.COLLECTION_NAME), "(legacy/unknown)"
+        if old_dim is not None and embed_dim is not None and old_dim != embed_dim:
+            self._handle_dim_mismatch(old_model, old_dim, model_name, embed_dim)
+        return self._create_collection(self.COLLECTION_NAME, model_name, embed_dim)
+
     def needs_indexing(self) -> bool:
         """Check if collection is empty and needs initial indexing."""
         if not self._initialized or not self._collection:
+            return True
+        # Issue #10420: a dim-mismatch recreate wiped the index — force re-embed.
+        # getattr guard keeps __new__-built fixtures (which skip __init__) safe.
+        if getattr(self, "_needs_reindex", False):
             return True
         return self._collection.count() == 0
 
@@ -1146,6 +1280,9 @@ class DocIndexerService:
                 "Collection empty — forcing full indexing despite cache to ensure " "documentation is available"
             )
             force = True
+        # Issue #10420: a dim-mismatch recreate has now been honoured by forcing
+        # a full re-embed; clear the flag so a later init is idempotent.
+        self._needs_reindex = False
 
         # Incremental mode: filter to changed files
         new_hashes: Dict[str, str] = {}
