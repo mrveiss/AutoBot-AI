@@ -12,6 +12,7 @@ Part of Issue #716 - Refactored from monolithic autobot_memory_graph.py
 """
 
 import asyncio
+import inspect
 from typing import Any, Dict, List, Set
 
 from autobot_shared.logging_manager import get_logger
@@ -172,7 +173,14 @@ class AutoBotMemoryGraphCore:
         """Close Redis connection and cleanup resources."""
         if self.redis_client:
             try:
-                await self.redis_client.close()
+                # redis-py's async client deprecated close() (which now returns
+                # None) in favour of aclose(); awaiting the None return raised
+                # "object NoneType can't be used in 'await' expression" on every
+                # shutdown. Prefer aclose() and only await an awaitable result.
+                closer = getattr(self.redis_client, "aclose", None) or self.redis_client.close
+                result = closer()
+                if inspect.isawaitable(result):
+                    await result
                 logger.info("AutoBotMemoryGraph closed successfully")
             except Exception as e:
                 logger.error(f"Error closing AutoBotMemoryGraph: {e}")
