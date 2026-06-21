@@ -73,17 +73,17 @@ export interface ProbeBackedHealthOptions<R> {
  * Returns a `getHealth()` async function that wraps the
  * `/api/system/health` + probe-name-lookup + status-mapping template.
  *
- * The returned function is null-on-fetch-error (consistent with existing
- * consumers using `withErrorHandling`'s `silent: true` mode); it never
- * throws to the caller.
+ * The returned function ALWAYS resolves to `R` and never throws: on a fetch
+ * error (or any failure) it returns `options.buildUnavailable(...)` rather
+ * than `null`, so consumers never need a null branch (#10119).
  */
 export function useProbeBackedHealth<R>(
   options: ProbeBackedHealthOptions<R>,
-): () => Promise<R | null> {
+): () => Promise<R> {
   const api = useApiClient()
   const errorMessage = options.errorMessage ?? `Failed to check ${options.probeName} service health`
 
-  return async (): Promise<R | null> => {
+  return async (): Promise<R> => {
     try {
       const payload = await api.get<any>(`${getApiBase()}/system/health`)
       const probe = await findProbeByName<ProbeResponse>(payload?.probes, options.probeName)
