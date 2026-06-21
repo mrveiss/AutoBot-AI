@@ -585,7 +585,9 @@ class TestAlertRulesYaml:
         import yaml
 
         repo_root = pathlib.Path(__file__).parent.parent.parent
-        rules_path = repo_root / "autobot-infrastructure" / "shared" / "config" / "prometheus" / "alertmanager_rules.yml"
+        rules_path = (
+            repo_root / "autobot-infrastructure" / "shared" / "config" / "prometheus" / "alertmanager_rules.yml"
+        )
         with open(rules_path, "r", encoding="utf-8") as f:
             return yaml.safe_load(f)
 
