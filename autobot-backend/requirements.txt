@@ -3,12 +3,12 @@
 # Core
 apscheduler>=3.10.4             # Issue #6590: hourly LLM key rotation job
 croniter>=2.0.0                 # GH#9027: required by LLC RoutineScheduler and routines API
-fastapi>=0.136.3                # SECURITY UPDATE - requires starlette >=0.52.1
-uvicorn>=0.47.0
+fastapi>=0.138.0                # SECURITY UPDATE - requires starlette >=0.52.1
+uvicorn>=0.49.0
 websockets>=16.0           # Issue #3098: required for WebSocket protocol support (desktop_streaming_manager, slm_client)
 python-dotenv>=1.2.2
 aiofiles>=25.1.0
-pydantic>=2.12.5
+pydantic>=2.13.4
 email-validator>=2.2.0  # Issue #2953: required by pydantic for EmailStr validation
 cachetools>=7.1.4
 celery>=5.6.3  # Issue #892: Background task processing
@@ -16,7 +16,7 @@ vulture>=2.16  # MVA-1065: dead code scanner for audit_dead_code task
 psutil>=7.2.2  # Issue #927: CPU monitoring for wake word optimization
 
 # Database
-sqlalchemy>=2.0.50
+sqlalchemy>=2.0.51
 alembic>=1.18.4
 aiosqlite>=0.21.0
 asyncpg>=0.31.0  # Async PostgreSQL driver — required for RBAC user modes (single_company+) (#9713)
@@ -30,7 +30,7 @@ python-pptx>=0.6.23 # PowerPoint file parsing for OneDrive connector (GH#9004)
 
 # AI/ML
 openai>=2.41.0
-anthropic>=0.105.2
+anthropic>=0.111.0
 boto3>=1.43.25                       # GH#9010: AWS Bedrock provider
 chromadb>=1.5.9,<2.0.0             # upper bound guards against breaking API changes; 1.5.5+ uses regenerated protos compatible with protobuf 5.x (#4053)
 protobuf>=5.29.6,<8.0.0           # required floor for chromadb 1.5.5+ opentelemetry exporter; resolves googleapis-common-protos conflict (#4061)
@@ -60,7 +60,7 @@ tree-sitter-javascript>=0.25.0
 xxhash>=3.7.0          # Hash functions for LLM caching
 structlog>=25.5.0      # Structured logging for service auth
 llama-index>=0.14.22,<0.15.0          # Migrated from 0.13.x; floor aligned to 0.14.19 (#2642)
-llama-index-core>=0.14.21,<0.15.0     # Explicit core pin matching ecosystem (#2642)
+llama-index-core>=0.14.22,<0.15.0     # Explicit core pin matching ecosystem (#2642)
 llama-index-llms-ollama>=0.10.1,<1.0.0       # Ollama LLM integration
 llama-index-embeddings-ollama>=0.9.0,<1.0.0  # Ollama embeddings
 llama-index-vector-stores-chroma>=0.5.5,<1.0.0  # ChromaDB vector store
@@ -72,7 +72,7 @@ langchain-ollama>=1.1.0,<2.0.0        # Issue #1572: ChatOllama for QA chain
 langgraph>=1.2.0,<2.0.0               # Issue #1043: StateGraph for chat orchestration
 langgraph-checkpoint-redis>=0.4.1,<1.0.0  # Issue #1043: Redis checkpointer for thread persistence
 markdownify>=1.2.2  # HTML to Markdown conversion
-mcp>=1.27.2            # MCP protocol for skill subprocesses (Issue #731)
+mcp>=1.28.0            # MCP protocol for skill subprocesses (Issue #731)
 PyYAML>=6.0.3            # SKILL.md frontmatter parsing (Phase 3 sync engine)
 
 # Community growth skill (Issue #1161)
@@ -98,8 +98,8 @@ watchdog>=6.0.0
 aiohttp>=3.14.1         # Async HTTP client - SECURITY UPDATE
 httpx>=0.28.1           # Issue #4412: hub registry fetches (async HTTP)
 pywebpush>=2.0.0        # VAPID/RFC8291 browser push delivery (GH#4459)
-beautifulsoup4>=4.14.3  # HTML parsing for link pipeline
-Pillow>=12.1.1          # Image processing - SECURITY UPDATE (OOB write fix)
+beautifulsoup4>=4.15.0  # HTML parsing for link pipeline
+Pillow>=12.2.0          # Image processing - SECURITY UPDATE (OOB write fix)
 jsonschema>=4.26.0      # Issue #7405: JSON Schema validation for /knowledge/extract
 defusedxml>=0.7.1       # MVA-2039: XML parsing for WebDAV (Nextcloud connector)
 # Optional (install separately for full media support):

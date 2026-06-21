@@ -334,7 +334,11 @@ export function formatPercentage(
 export function formatCategoryName(category: string): string {
   if (!category) return ''
 
-  return category
+  // #10208: this shared formatter is called across knowledge/analytics views
+  // with backend-sourced category values that aren't guaranteed strings at
+  // runtime (a non-string would throw "e.split is not a function" and crash
+  // the component into its ErrorBoundary). Coerce so .split() is always safe.
+  return String(category)
     .split(/[_-]/)
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(' ')
