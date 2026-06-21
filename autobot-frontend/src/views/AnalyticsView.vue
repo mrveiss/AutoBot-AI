@@ -105,6 +105,18 @@
             <Icon name="exclamation-triangle" class="tab-icon" aria-hidden="true" />
             <span>{{ $t('analytics.views.tabs.errors') }}</span>
           </router-link>
+          <!-- Issue #9024: LLM model-comparison / benchmark dashboard -->
+          <router-link
+            to="/analytics/benchmark"
+            class="nav-tab"
+            :class="{ 'nav-tab-active': isBenchmarkActive }"
+            role="tab"
+            :aria-selected="isBenchmarkActive"
+            :aria-label="$t('analytics.views.tabs.benchmarkAria')"
+          >
+            <Icon name="chart-bar" class="tab-icon" aria-hidden="true" />
+            <span>{{ $t('analytics.views.tabs.benchmark') }}</span>
+          </router-link>
           <!-- Issue #9892: Failure Analysis / causal-inference engine -->
           <router-link
             to="/analytics/diagnostics"
@@ -173,6 +185,11 @@ const isErrorsActive = computed(() => {
 // Issue #9892: Diagnostics / failure analysis tab
 const isDiagnosticsActive = computed(() => {
   return route.path === '/analytics/diagnostics' || route.path.startsWith('/analytics/diagnostics/')
+})
+
+// Issue #9024: Model benchmark / comparison tab
+const isBenchmarkActive = computed(() => {
+  return route.path === '/analytics/benchmark' || route.path.startsWith('/analytics/benchmark/')
 })
 </script>
 
