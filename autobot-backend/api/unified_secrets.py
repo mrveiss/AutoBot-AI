@@ -135,6 +135,31 @@ class SecretAccessOut(BaseModel):
         )
 
 
+class DependentOut(BaseModel):
+    dependent_kind: str
+    dependent_id: str
+    company_id: str | None
+
+
+class SecretDependenciesOut(BaseModel):
+    secret_id: str
+    dependents: list[DependentOut]
+
+    @classmethod
+    def of(cls, secret_id: uuid.UUID, deps) -> "SecretDependenciesOut":
+        return cls(
+            secret_id=str(secret_id),
+            dependents=[
+                DependentOut(
+                    dependent_kind=d.dependent_kind,
+                    dependent_id=d.dependent_id,
+                    company_id=str(d.company_id) if d.company_id else None,
+                )
+                for d in deps
+            ],
+        )
+
+
 @router.post("", response_model=SecretMetadata, status_code=status.HTTP_201_CREATED)
 async def create_secret(
     body: CreateSecretBody,
@@ -199,6 +224,22 @@ async def secret_access(
     except (SecretAccessError, SecretNotFoundError, ValueError) as exc:
         raise _mapped(exc)
     return SecretAccessOut.of(report)
+
+
+@router.get("/{secret_id}/dependencies", response_model=SecretDependenciesOut)
+async def secret_dependencies(
+    secret_id: uuid.UUID,
+    who: tuple[uuid.UUID, set[str]] = Depends(principal),
+    session: AsyncSession = Depends(get_session),
+    coordinator: SecretsCoordinator = Depends(get_coordinator),
+) -> SecretDependenciesOut:
+    """What depends on this secret: every service/agent/workflow consumer (rotation-impact list)."""
+    user_id, perms = who
+    try:
+        deps = await coordinator.describe_dependencies(session, user_id=user_id, permissions=perms, secret_id=secret_id)
+    except (SecretAccessError, SecretNotFoundError, ValueError) as exc:
+        raise _mapped(exc)
+    return SecretDependenciesOut.of(secret_id, deps)
 
 
 @router.put("/{secret_id}", response_model=SecretMetadata)
